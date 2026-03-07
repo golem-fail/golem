@@ -22,3 +22,6 @@ target
 
 # For agent research findings, e.g. markdown files and downloaded data files
 findings
+
+# Golem working directory
+.golem/

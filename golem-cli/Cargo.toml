@@ -1,0 +1,22 @@
+[package]
+name = "golem-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "golem"
+path = "src/main.rs"
+
+[dependencies]
+golem-runner = { path = "../golem-runner" }
+golem-parser = { path = "../golem-parser" }
+golem-driver = { path = "../golem-driver" }
+golem-element = { path = "../golem-element" }
+golem-devices = { path = "../golem-devices" }
+golem-vars = { path = "../golem-vars" }
+golem-report = { path = "../golem-report" }
+golem-email = { path = "../golem-email" }
+clap = { workspace = true }
+
+[lints]
+workspace = true

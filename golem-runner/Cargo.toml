@@ -1,0 +1,18 @@
+[package]
+name = "golem-runner"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+golem-parser = { path = "../golem-parser" }
+golem-driver = { path = "../golem-driver" }
+golem-element = { path = "../golem-element" }
+golem-vars = { path = "../golem-vars" }
+golem-devices = { path = "../golem-devices" }
+golem-report = { path = "../golem-report" }
+golem-email = { path = "../golem-email" }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+
+[lints]
+workspace = true
