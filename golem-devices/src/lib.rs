@@ -1,5 +1,6 @@
 // golem-devices: device management
 
+pub mod ios;
 pub mod version;
 
 use serde::{Deserialize, Serialize};
