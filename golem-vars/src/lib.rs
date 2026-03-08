@@ -2,6 +2,22 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use thiserror::Error;
+
+/// Errors that can occur during variable resolution and interpolation.
+#[derive(Error, Debug)]
+pub enum VarError {
+    #[error("undefined variable: {0}")]
+    Undefined(String),
+    #[error("property \"{property}\" not found on \"{object}\"")]
+    PropertyNotFound { object: String, property: String },
+    #[error("\"{0}\" is not a structured object")]
+    NotAnObject(String),
+    #[error("unclosed variable reference")]
+    UnclosedReference,
+    #[error("{0}")]
+    Other(String),
+}
 
 /// A variable value — either a plain string or a nested object map.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -66,6 +82,20 @@ pub enum ScopeLevel {
     Fixture,
     Project,
     Generator,
+}
+
+impl ScopeLevel {
+    /// Returns the numeric priority for this scope level.
+    /// Higher values indicate higher priority.
+    fn priority(self) -> u8 {
+        match self {
+            ScopeLevel::Cli => 5,
+            ScopeLevel::Flow => 4,
+            ScopeLevel::Fixture => 3,
+            ScopeLevel::Project => 2,
+            ScopeLevel::Generator => 1,
+        }
+    }
 }
 
 /// A named scope containing variables at a given priority level.
@@ -141,6 +171,69 @@ impl VariableStore {
             }
         }
         None
+    }
+
+    /// Resolve a variable by searching scopes in priority order (highest first).
+    /// Returns an error if the variable is not found in any scope.
+    pub fn resolve(&self, key: &str) -> Result<&VarValue, VarError> {
+        // Sort conceptually by priority: iterate all scopes and pick the one
+        // with the highest ScopeLevel priority that contains the key.
+        let mut best: Option<(&VarValue, u8)> = None;
+        for scope in &self.scopes {
+            if let Some(val) = scope.get(key) {
+                let prio = scope.level.priority();
+                match best {
+                    Some((_, current_prio)) if prio <= current_prio => {}
+                    _ => best = Some((val, prio)),
+                }
+            }
+        }
+        best.map(|(val, _)| val)
+            .ok_or_else(|| VarError::Undefined(key.to_string()))
+    }
+
+    /// Set a variable in a specific scope level.
+    /// If a scope with the given level exists, the variable is added to it.
+    /// If no scope with that level exists, a new scope is created and pushed.
+    pub fn set_in_scope(&mut self, level: ScopeLevel, key: impl Into<String>, value: VarValue) {
+        let key = key.into();
+        for scope in &mut self.scopes {
+            if scope.level == level {
+                scope.set(key, value);
+                return;
+            }
+        }
+        // No scope with this level exists; create one and push it
+        let mut scope = Scope::new(level);
+        scope.set(key, value);
+        self.push_scope(scope);
+    }
+
+    /// Check if a variable exists in any scope.
+    pub fn has(&self, key: &str) -> bool {
+        self.scopes.iter().any(|scope| scope.get(key).is_some())
+    }
+
+    /// Remove a variable from all scopes.
+    pub fn remove(&mut self, key: &str) {
+        for scope in &mut self.scopes {
+            scope.vars.remove(key);
+        }
+    }
+
+    /// Merge variables from a scope into an existing scope of the same level.
+    /// If no scope with the same level exists, the scope is pushed as a new entry.
+    pub fn merge_scope(&mut self, incoming: Scope) {
+        for scope in &mut self.scopes {
+            if scope.level == incoming.level {
+                for (key, value) in incoming.vars {
+                    scope.vars.insert(key, value);
+                }
+                return;
+            }
+        }
+        // No matching level found; push as new scope
+        self.push_scope(incoming);
     }
 
     /// Returns a slice of all scopes, in priority order (highest first).
@@ -325,5 +418,219 @@ mod tests {
         let json = serde_json::to_string(&val).expect("should serialize");
         let deserialized: VarValue = serde_json::from_str(&json).expect("should deserialize");
         assert_eq!(val, deserialized);
+    }
+
+    // --- resolve tests ---
+
+    #[test]
+    fn resolve_returns_value_from_highest_priority_scope() {
+        let mut store = VariableStore::new();
+
+        let mut project = Scope::new(ScopeLevel::Project);
+        project.set("url", VarValue::string("project-url"));
+        store.push_scope(project);
+
+        let mut cli = Scope::new(ScopeLevel::Cli);
+        cli.set("url", VarValue::string("cli-url"));
+        store.push_scope(cli);
+
+        let result = store.resolve("url").expect("should resolve");
+        assert_eq!(result, &VarValue::string("cli-url"));
+    }
+
+    #[test]
+    fn resolve_returns_error_for_undefined_variable() {
+        let store = VariableStore::new();
+        let result = store.resolve("missing");
+        assert!(result.is_err());
+        let err = result.expect_err("should be error");
+        assert!(
+            matches!(err, VarError::Undefined(ref name) if name == "missing"),
+            "expected Undefined error, got: {err}"
+        );
+    }
+
+    // --- set_in_scope tests ---
+
+    #[test]
+    fn set_in_scope_creates_scope_if_not_present() {
+        let mut store = VariableStore::new();
+        store.set_in_scope(ScopeLevel::Flow, "token", VarValue::string("abc123"));
+
+        let result = store.resolve("token").expect("should resolve");
+        assert_eq!(result, &VarValue::string("abc123"));
+        assert_eq!(store.scopes().len(), 1);
+        assert_eq!(store.scopes()[0].level, ScopeLevel::Flow);
+    }
+
+    #[test]
+    fn set_in_scope_adds_to_existing_scope() {
+        let mut store = VariableStore::new();
+        let scope = Scope::new(ScopeLevel::Project);
+        store.push_scope(scope);
+
+        store.set_in_scope(ScopeLevel::Project, "key1", VarValue::string("val1"));
+        store.set_in_scope(ScopeLevel::Project, "key2", VarValue::string("val2"));
+
+        // Should still only have one scope
+        assert_eq!(store.scopes().len(), 1);
+        assert_eq!(
+            store.resolve("key1").expect("should resolve"),
+            &VarValue::string("val1")
+        );
+        assert_eq!(
+            store.resolve("key2").expect("should resolve"),
+            &VarValue::string("val2")
+        );
+    }
+
+    // --- has tests ---
+
+    #[test]
+    fn has_returns_true_for_existing_false_for_missing() {
+        let mut store = VariableStore::new();
+        let mut scope = Scope::new(ScopeLevel::Project);
+        scope.set("host", VarValue::string("localhost"));
+        store.push_scope(scope);
+
+        assert!(store.has("host"));
+        assert!(!store.has("port"));
+    }
+
+    // --- remove tests ---
+
+    #[test]
+    fn remove_clears_from_all_scopes() {
+        let mut store = VariableStore::new();
+
+        let mut project = Scope::new(ScopeLevel::Project);
+        project.set("env", VarValue::string("production"));
+        store.push_scope(project);
+
+        let mut cli = Scope::new(ScopeLevel::Cli);
+        cli.set("env", VarValue::string("staging"));
+        store.push_scope(cli);
+
+        assert!(store.has("env"));
+        store.remove("env");
+        assert!(!store.has("env"));
+        assert!(store.resolve("env").is_err());
+    }
+
+    // --- merge_scope tests ---
+
+    #[test]
+    fn merge_scope_merges_into_existing_scope_of_same_level() {
+        let mut store = VariableStore::new();
+
+        let mut existing = Scope::new(ScopeLevel::Project);
+        existing.set("key1", VarValue::string("val1"));
+        store.push_scope(existing);
+
+        let mut incoming = Scope::new(ScopeLevel::Project);
+        incoming.set("key2", VarValue::string("val2"));
+        store.merge_scope(incoming);
+
+        // Should still be one scope
+        assert_eq!(store.scopes().len(), 1);
+        assert_eq!(
+            store.resolve("key1").expect("should resolve"),
+            &VarValue::string("val1")
+        );
+        assert_eq!(
+            store.resolve("key2").expect("should resolve"),
+            &VarValue::string("val2")
+        );
+    }
+
+    #[test]
+    fn merge_scope_pushes_new_scope_if_no_matching_level() {
+        let mut store = VariableStore::new();
+
+        let mut project = Scope::new(ScopeLevel::Project);
+        project.set("key1", VarValue::string("val1"));
+        store.push_scope(project);
+
+        let mut cli = Scope::new(ScopeLevel::Cli);
+        cli.set("key2", VarValue::string("val2"));
+        store.merge_scope(cli);
+
+        assert_eq!(store.scopes().len(), 2);
+        assert!(store.has("key1"));
+        assert!(store.has("key2"));
+    }
+
+    // --- scope priority ordering tests ---
+
+    #[test]
+    fn cli_scope_wins_over_flow_scope() {
+        let mut store = VariableStore::new();
+
+        let mut flow = Scope::new(ScopeLevel::Flow);
+        flow.set("x", VarValue::string("flow"));
+        store.push_scope(flow);
+
+        let mut cli = Scope::new(ScopeLevel::Cli);
+        cli.set("x", VarValue::string("cli"));
+        store.push_scope(cli);
+
+        assert_eq!(
+            store.resolve("x").expect("should resolve"),
+            &VarValue::string("cli")
+        );
+    }
+
+    #[test]
+    fn flow_scope_wins_over_fixture_scope() {
+        let mut store = VariableStore::new();
+
+        let mut fixture = Scope::new(ScopeLevel::Fixture);
+        fixture.set("x", VarValue::string("fixture"));
+        store.push_scope(fixture);
+
+        let mut flow = Scope::new(ScopeLevel::Flow);
+        flow.set("x", VarValue::string("flow"));
+        store.push_scope(flow);
+
+        assert_eq!(
+            store.resolve("x").expect("should resolve"),
+            &VarValue::string("flow")
+        );
+    }
+
+    #[test]
+    fn fixture_scope_wins_over_project_scope() {
+        let mut store = VariableStore::new();
+
+        let mut project = Scope::new(ScopeLevel::Project);
+        project.set("x", VarValue::string("project"));
+        store.push_scope(project);
+
+        let mut fixture = Scope::new(ScopeLevel::Fixture);
+        fixture.set("x", VarValue::string("fixture"));
+        store.push_scope(fixture);
+
+        assert_eq!(
+            store.resolve("x").expect("should resolve"),
+            &VarValue::string("fixture")
+        );
+    }
+
+    #[test]
+    fn project_scope_wins_over_generator_scope() {
+        let mut store = VariableStore::new();
+
+        let mut generator = Scope::new(ScopeLevel::Generator);
+        generator.set("x", VarValue::string("generator"));
+        store.push_scope(generator);
+
+        let mut project = Scope::new(ScopeLevel::Project);
+        project.set("x", VarValue::string("project"));
+        store.push_scope(project);
+
+        assert_eq!(
+            store.resolve("x").expect("should resolve"),
+            &VarValue::string("project")
+        );
     }
 }
