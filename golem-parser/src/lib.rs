@@ -1,5 +1,7 @@
 // golem-parser: test file parser
 
+pub mod validation;
+
 use serde::Deserialize;
 use std::collections::HashMap;
 
