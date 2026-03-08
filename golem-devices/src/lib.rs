@@ -1,5 +1,7 @@
 // golem-devices: device management
 
+pub mod version;
+
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
