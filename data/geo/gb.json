@@ -1,0 +1,1401 @@
+{
+  "country": {
+    "name": "United Kingdom",
+    "name_en": "United Kingdom",
+    "iso_code": "GB",
+    "phone_prefix": "+44",
+    "phone_formats": ["+44-####-######", "+44-###-####-####"],
+    "postcode_format": "A#[#] #AA | A## #AA | AA# #AA | AA## #AA",
+    "name_order": "given_first"
+  },
+  "states": [
+    {
+      "name": "Greater London",
+      "name_en": "Greater London",
+      "region_tags": ["South East", "England", "Greater London"],
+      "cities": [
+        {
+          "name": "London",
+          "name_en": "London",
+          "lat": 51.5074,
+          "lon": -0.1278,
+          "postcodes": [
+            {
+              "code": "W1U 6SG",
+              "street": "Baker Street",
+              "street_en": "Baker Street",
+              "pattern": "n{1,221} Baker Street"
+            },
+            {
+              "code": "SW1A 1AA",
+              "street": "Buckingham Palace Road",
+              "street_en": "Buckingham Palace Road",
+              "pattern": "n{1,170} Buckingham Palace Road"
+            },
+            {
+              "code": "EC2R 8AH",
+              "street": "Threadneedle Street",
+              "street_en": "Threadneedle Street",
+              "pattern": "n{1,50} Threadneedle Street"
+            },
+            {
+              "code": "WC2N 5DU",
+              "street": "Strand",
+              "street_en": "Strand",
+              "pattern": "n{1,450} Strand"
+            },
+            {
+              "code": "W1D 4FA",
+              "street": "Oxford Street",
+              "street_en": "Oxford Street",
+              "pattern": "n{1,548} Oxford Street"
+            },
+            {
+              "code": "SW1A 2AA",
+              "street": "Whitehall",
+              "street_en": "Whitehall",
+              "pattern": "n{1,80} Whitehall"
+            },
+            {
+              "code": "EC4M 7LS",
+              "street": "Cannon Street",
+              "street_en": "Cannon Street",
+              "pattern": "n{1,150} Cannon Street"
+            },
+            {
+              "code": "N1 9GU",
+              "street": "Upper Street",
+              "street_en": "Upper Street",
+              "pattern": "n{1,359} Upper Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Greater Manchester",
+      "name_en": "Greater Manchester",
+      "region_tags": ["North West", "England"],
+      "cities": [
+        {
+          "name": "Manchester",
+          "name_en": "Manchester",
+          "lat": 53.4808,
+          "lon": -2.2426,
+          "postcodes": [
+            {
+              "code": "M1 1AE",
+              "street": "Piccadilly",
+              "street_en": "Piccadilly",
+              "pattern": "n{1,120} Piccadilly"
+            },
+            {
+              "code": "M2 5DB",
+              "street": "Deansgate",
+              "street_en": "Deansgate",
+              "pattern": "n{1,300} Deansgate"
+            },
+            {
+              "code": "M3 4LZ",
+              "street": "Bridge Street",
+              "street_en": "Bridge Street",
+              "pattern": "n{1,50} Bridge Street"
+            },
+            {
+              "code": "M4 1LE",
+              "street": "Oldham Street",
+              "street_en": "Oldham Street",
+              "pattern": "n{1,80} Oldham Street"
+            },
+            {
+              "code": "M60 7RA",
+              "street": "Market Street",
+              "street_en": "Market Street",
+              "pattern": "n{1,100} Market Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "West Midlands",
+      "name_en": "West Midlands",
+      "region_tags": ["West Midlands", "Midlands", "England"],
+      "cities": [
+        {
+          "name": "Birmingham",
+          "name_en": "Birmingham",
+          "lat": 52.4862,
+          "lon": -1.8904,
+          "postcodes": [
+            {
+              "code": "B1 1BB",
+              "street": "Bull Street",
+              "street_en": "Bull Street",
+              "pattern": "n{1,60} Bull Street"
+            },
+            {
+              "code": "B2 4QA",
+              "street": "New Street",
+              "street_en": "New Street",
+              "pattern": "n{1,130} New Street"
+            },
+            {
+              "code": "B3 1SD",
+              "street": "Colmore Row",
+              "street_en": "Colmore Row",
+              "pattern": "n{1,50} Colmore Row"
+            },
+            {
+              "code": "B4 7ET",
+              "street": "Corporation Street",
+              "street_en": "Corporation Street",
+              "pattern": "n{1,150} Corporation Street"
+            },
+            {
+              "code": "B5 4BU",
+              "street": "Broad Street",
+              "street_en": "Broad Street",
+              "pattern": "n{1,250} Broad Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "West Yorkshire",
+      "name_en": "West Yorkshire",
+      "region_tags": ["Yorkshire", "England"],
+      "cities": [
+        {
+          "name": "Leeds",
+          "name_en": "Leeds",
+          "lat": 53.8008,
+          "lon": -1.5491,
+          "postcodes": [
+            {
+              "code": "LS1 1UR",
+              "street": "Briggate",
+              "street_en": "Briggate",
+              "pattern": "n{1,120} Briggate"
+            },
+            {
+              "code": "LS1 4BR",
+              "street": "The Headrow",
+              "street_en": "The Headrow",
+              "pattern": "n{1,80} The Headrow"
+            },
+            {
+              "code": "LS2 7EW",
+              "street": "Park Row",
+              "street_en": "Park Row",
+              "pattern": "n{1,50} Park Row"
+            },
+            {
+              "code": "LS1 5DL",
+              "street": "Boar Lane",
+              "street_en": "Boar Lane",
+              "pattern": "n{1,60} Boar Lane"
+            },
+            {
+              "code": "LS9 8AH",
+              "street": "York Road",
+              "street_en": "York Road",
+              "pattern": "n{1,200} York Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "City of Glasgow",
+      "name_en": "City of Glasgow",
+      "region_tags": ["Scotland", "Central Belt", "Lowlands"],
+      "cities": [
+        {
+          "name": "Glasgow",
+          "name_en": "Glasgow",
+          "lat": 55.8642,
+          "lon": -4.2518,
+          "postcodes": [
+            {
+              "code": "G1 1XQ",
+              "street": "Buchanan Street",
+              "street_en": "Buchanan Street",
+              "pattern": "n{1,220} Buchanan Street"
+            },
+            {
+              "code": "G1 3SL",
+              "street": "Argyle Street",
+              "street_en": "Argyle Street",
+              "pattern": "n{1,500} Argyle Street"
+            },
+            {
+              "code": "G2 1DY",
+              "street": "Sauchiehall Street",
+              "street_en": "Sauchiehall Street",
+              "pattern": "n{1,400} Sauchiehall Street"
+            },
+            {
+              "code": "G2 4JR",
+              "street": "St Vincent Street",
+              "street_en": "St Vincent Street",
+              "pattern": "n{1,200} St Vincent Street"
+            },
+            {
+              "code": "G4 0TQ",
+              "street": "Great Western Road",
+              "street_en": "Great Western Road",
+              "pattern": "n{1,600} Great Western Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "City of Edinburgh",
+      "name_en": "City of Edinburgh",
+      "region_tags": ["Scotland", "Central Belt", "Lowlands"],
+      "cities": [
+        {
+          "name": "Edinburgh",
+          "name_en": "Edinburgh",
+          "lat": 55.9533,
+          "lon": -3.1883,
+          "postcodes": [
+            {
+              "code": "EH1 1YZ",
+              "street": "Princes Street",
+              "street_en": "Princes Street",
+              "pattern": "n{1,160} Princes Street"
+            },
+            {
+              "code": "EH1 1RE",
+              "street": "Royal Mile",
+              "street_en": "Royal Mile",
+              "pattern": "n{1,500} Royal Mile"
+            },
+            {
+              "code": "EH2 2AF",
+              "street": "George Street",
+              "street_en": "George Street",
+              "pattern": "n{1,140} George Street"
+            },
+            {
+              "code": "EH3 9EP",
+              "street": "Lothian Road",
+              "street_en": "Lothian Road",
+              "pattern": "n{1,100} Lothian Road"
+            },
+            {
+              "code": "EH8 9BJ",
+              "street": "Nicolson Street",
+              "street_en": "Nicolson Street",
+              "pattern": "n{1,80} Nicolson Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Cardiff",
+      "name_en": "Cardiff",
+      "region_tags": ["Wales", "South Wales"],
+      "cities": [
+        {
+          "name": "Cardiff",
+          "name_en": "Cardiff",
+          "lat": 51.4816,
+          "lon": -3.1791,
+          "postcodes": [
+            {
+              "code": "CF10 1EP",
+              "street": "Queen Street",
+              "street_en": "Queen Street",
+              "pattern": "n{1,80} Queen Street"
+            },
+            {
+              "code": "CF10 2HQ",
+              "street": "St Mary Street",
+              "street_en": "St Mary Street",
+              "pattern": "n{1,100} St Mary Street"
+            },
+            {
+              "code": "CF10 1BH",
+              "street": "High Street",
+              "street_en": "High Street",
+              "pattern": "n{1,60} High Street"
+            },
+            {
+              "code": "CF24 4TJ",
+              "street": "City Road",
+              "street_en": "City Road",
+              "pattern": "n{1,180} City Road"
+            },
+            {
+              "code": "CF11 9LL",
+              "street": "Cathedral Road",
+              "street_en": "Cathedral Road",
+              "pattern": "n{1,120} Cathedral Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Belfast",
+      "name_en": "Belfast",
+      "region_tags": ["Northern Ireland"],
+      "cities": [
+        {
+          "name": "Belfast",
+          "name_en": "Belfast",
+          "lat": 54.5973,
+          "lon": -5.9301,
+          "postcodes": [
+            {
+              "code": "BT1 1AA",
+              "street": "Donegall Place",
+              "street_en": "Donegall Place",
+              "pattern": "n{1,50} Donegall Place"
+            },
+            {
+              "code": "BT1 5GS",
+              "street": "Royal Avenue",
+              "street_en": "Royal Avenue",
+              "pattern": "n{1,80} Royal Avenue"
+            },
+            {
+              "code": "BT2 7BA",
+              "street": "Great Victoria Street",
+              "street_en": "Great Victoria Street",
+              "pattern": "n{1,100} Great Victoria Street"
+            },
+            {
+              "code": "BT7 1NN",
+              "street": "Ormeau Road",
+              "street_en": "Ormeau Road",
+              "pattern": "n{1,400} Ormeau Road"
+            },
+            {
+              "code": "BT9 6AW",
+              "street": "Lisburn Road",
+              "street_en": "Lisburn Road",
+              "pattern": "n{1,500} Lisburn Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Merseyside",
+      "name_en": "Merseyside",
+      "region_tags": ["North West", "England"],
+      "cities": [
+        {
+          "name": "Liverpool",
+          "name_en": "Liverpool",
+          "lat": 53.4084,
+          "lon": -2.9916,
+          "postcodes": [
+            {
+              "code": "L1 1JQ",
+              "street": "Bold Street",
+              "street_en": "Bold Street",
+              "pattern": "n{1,80} Bold Street"
+            },
+            {
+              "code": "L2 2QP",
+              "street": "Castle Street",
+              "street_en": "Castle Street",
+              "pattern": "n{1,60} Castle Street"
+            },
+            {
+              "code": "L1 4JN",
+              "street": "Church Street",
+              "street_en": "Church Street",
+              "pattern": "n{1,80} Church Street"
+            },
+            {
+              "code": "L3 9PP",
+              "street": "Dale Street",
+              "street_en": "Dale Street",
+              "pattern": "n{1,100} Dale Street"
+            },
+            {
+              "code": "L1 9BG",
+              "street": "Lime Street",
+              "street_en": "Lime Street",
+              "pattern": "n{1,50} Lime Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "City of Bristol",
+      "name_en": "City of Bristol",
+      "region_tags": ["South West", "England"],
+      "cities": [
+        {
+          "name": "Bristol",
+          "name_en": "Bristol",
+          "lat": 51.4545,
+          "lon": -2.5879,
+          "postcodes": [
+            {
+              "code": "BS1 3XD",
+              "street": "Corn Street",
+              "street_en": "Corn Street",
+              "pattern": "n{1,50} Corn Street"
+            },
+            {
+              "code": "BS1 4DJ",
+              "street": "Park Street",
+              "street_en": "Park Street",
+              "pattern": "n{1,80} Park Street"
+            },
+            {
+              "code": "BS2 0JA",
+              "street": "Old Market Street",
+              "street_en": "Old Market Street",
+              "pattern": "n{1,100} Old Market Street"
+            },
+            {
+              "code": "BS8 1HH",
+              "street": "Whiteladies Road",
+              "street_en": "Whiteladies Road",
+              "pattern": "n{1,160} Whiteladies Road"
+            },
+            {
+              "code": "BS1 6QF",
+              "street": "Queen Square",
+              "street_en": "Queen Square",
+              "pattern": "n{1,70} Queen Square"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "South Yorkshire",
+      "name_en": "South Yorkshire",
+      "region_tags": ["Yorkshire", "England"],
+      "cities": [
+        {
+          "name": "Sheffield",
+          "name_en": "Sheffield",
+          "lat": 53.3811,
+          "lon": -1.4701,
+          "postcodes": [
+            {
+              "code": "S1 2GE",
+              "street": "The Moor",
+              "street_en": "The Moor",
+              "pattern": "n{1,120} The Moor"
+            },
+            {
+              "code": "S1 1WB",
+              "street": "High Street",
+              "street_en": "High Street",
+              "pattern": "n{1,100} High Street"
+            },
+            {
+              "code": "S3 7EF",
+              "street": "West Street",
+              "street_en": "West Street",
+              "pattern": "n{1,200} West Street"
+            },
+            {
+              "code": "S1 4QW",
+              "street": "Fargate",
+              "street_en": "Fargate",
+              "pattern": "n{1,40} Fargate"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tyne and Wear",
+      "name_en": "Tyne and Wear",
+      "region_tags": ["North East", "England"],
+      "cities": [
+        {
+          "name": "Newcastle upon Tyne",
+          "name_en": "Newcastle upon Tyne",
+          "lat": 54.9783,
+          "lon": -1.6178,
+          "postcodes": [
+            {
+              "code": "NE1 7RU",
+              "street": "Northumberland Street",
+              "street_en": "Northumberland Street",
+              "pattern": "n{1,120} Northumberland Street"
+            },
+            {
+              "code": "NE1 5DW",
+              "street": "Grey Street",
+              "street_en": "Grey Street",
+              "pattern": "n{1,80} Grey Street"
+            },
+            {
+              "code": "NE1 4XF",
+              "street": "Grainger Street",
+              "street_en": "Grainger Street",
+              "pattern": "n{1,100} Grainger Street"
+            },
+            {
+              "code": "NE1 1EE",
+              "street": "Quayside",
+              "street_en": "Quayside",
+              "pattern": "n{1,60} Quayside"
+            },
+            {
+              "code": "NE2 1AP",
+              "street": "Jesmond Road",
+              "street_en": "Jesmond Road",
+              "pattern": "n{1,150} Jesmond Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Nottinghamshire",
+      "name_en": "Nottinghamshire",
+      "region_tags": ["East Midlands", "Midlands", "England"],
+      "cities": [
+        {
+          "name": "Nottingham",
+          "name_en": "Nottingham",
+          "lat": 52.9548,
+          "lon": -1.1581,
+          "postcodes": [
+            {
+              "code": "NG1 5AW",
+              "street": "Long Row",
+              "street_en": "Long Row",
+              "pattern": "n{1,60} Long Row"
+            },
+            {
+              "code": "NG1 7AT",
+              "street": "Parliament Street",
+              "street_en": "Parliament Street",
+              "pattern": "n{1,40} Parliament Street"
+            },
+            {
+              "code": "NG1 6HA",
+              "street": "Victoria Street",
+              "street_en": "Victoria Street",
+              "pattern": "n{1,50} Victoria Street"
+            },
+            {
+              "code": "NG1 2GP",
+              "street": "Maid Marian Way",
+              "street_en": "Maid Marian Way",
+              "pattern": "n{1,80} Maid Marian Way"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Leicestershire",
+      "name_en": "Leicestershire",
+      "region_tags": ["East Midlands", "Midlands", "England"],
+      "cities": [
+        {
+          "name": "Leicester",
+          "name_en": "Leicester",
+          "lat": 52.6369,
+          "lon": -1.1398,
+          "postcodes": [
+            {
+              "code": "LE1 5AP",
+              "street": "Granby Street",
+              "street_en": "Granby Street",
+              "pattern": "n{1,80} Granby Street"
+            },
+            {
+              "code": "LE1 4FQ",
+              "street": "High Street",
+              "street_en": "High Street",
+              "pattern": "n{1,100} High Street"
+            },
+            {
+              "code": "LE1 3GD",
+              "street": "Belgrave Gate",
+              "street_en": "Belgrave Gate",
+              "pattern": "n{1,120} Belgrave Gate"
+            },
+            {
+              "code": "LE2 7FL",
+              "street": "London Road",
+              "street_en": "London Road",
+              "pattern": "n{1,300} London Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Hampshire",
+      "name_en": "Hampshire",
+      "region_tags": ["South East", "England"],
+      "cities": [
+        {
+          "name": "Southampton",
+          "name_en": "Southampton",
+          "lat": 50.9097,
+          "lon": -1.4044,
+          "postcodes": [
+            {
+              "code": "SO14 2AQ",
+              "street": "High Street",
+              "street_en": "High Street",
+              "pattern": "n{1,150} High Street"
+            },
+            {
+              "code": "SO14 7DW",
+              "street": "Above Bar Street",
+              "street_en": "Above Bar Street",
+              "pattern": "n{1,100} Above Bar Street"
+            },
+            {
+              "code": "SO15 2BE",
+              "street": "Shirley Road",
+              "street_en": "Shirley Road",
+              "pattern": "n{1,200} Shirley Road"
+            },
+            {
+              "code": "SO14 3HM",
+              "street": "Oxford Street",
+              "street_en": "Oxford Street",
+              "pattern": "n{1,60} Oxford Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Oxfordshire",
+      "name_en": "Oxfordshire",
+      "region_tags": ["South East", "England"],
+      "cities": [
+        {
+          "name": "Oxford",
+          "name_en": "Oxford",
+          "lat": 51.7520,
+          "lon": -1.2577,
+          "postcodes": [
+            {
+              "code": "OX1 3HA",
+              "street": "High Street",
+              "street_en": "High Street",
+              "pattern": "n{1,250} High Street"
+            },
+            {
+              "code": "OX1 1BX",
+              "street": "Cornmarket Street",
+              "street_en": "Cornmarket Street",
+              "pattern": "n{1,40} Cornmarket Street"
+            },
+            {
+              "code": "OX1 2JD",
+              "street": "Broad Street",
+              "street_en": "Broad Street",
+              "pattern": "n{1,30} Broad Street"
+            },
+            {
+              "code": "OX2 6DP",
+              "street": "Banbury Road",
+              "street_en": "Banbury Road",
+              "pattern": "n{1,350} Banbury Road"
+            },
+            {
+              "code": "OX4 1JE",
+              "street": "Cowley Road",
+              "street_en": "Cowley Road",
+              "pattern": "n{1,300} Cowley Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Cambridgeshire",
+      "name_en": "Cambridgeshire",
+      "region_tags": ["East Anglia", "England"],
+      "cities": [
+        {
+          "name": "Cambridge",
+          "name_en": "Cambridge",
+          "lat": 52.2053,
+          "lon": 0.1218,
+          "postcodes": [
+            {
+              "code": "CB2 1TN",
+              "street": "Trumpington Street",
+              "street_en": "Trumpington Street",
+              "pattern": "n{1,60} Trumpington Street"
+            },
+            {
+              "code": "CB2 3QJ",
+              "street": "Hills Road",
+              "street_en": "Hills Road",
+              "pattern": "n{1,200} Hills Road"
+            },
+            {
+              "code": "CB1 1LN",
+              "street": "Regent Street",
+              "street_en": "Regent Street",
+              "pattern": "n{1,50} Regent Street"
+            },
+            {
+              "code": "CB2 1SJ",
+              "street": "King's Parade",
+              "street_en": "King's Parade",
+              "pattern": "n{1,30} King's Parade"
+            },
+            {
+              "code": "CB5 8AB",
+              "street": "Newmarket Road",
+              "street_en": "Newmarket Road",
+              "pattern": "n{1,250} Newmarket Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "East Sussex",
+      "name_en": "East Sussex",
+      "region_tags": ["South East", "England"],
+      "cities": [
+        {
+          "name": "Brighton",
+          "name_en": "Brighton",
+          "lat": 50.8225,
+          "lon": -0.1372,
+          "postcodes": [
+            {
+              "code": "BN1 1EE",
+              "street": "North Street",
+              "street_en": "North Street",
+              "pattern": "n{1,100} North Street"
+            },
+            {
+              "code": "BN1 1ND",
+              "street": "Western Road",
+              "street_en": "Western Road",
+              "pattern": "n{1,180} Western Road"
+            },
+            {
+              "code": "BN2 1TF",
+              "street": "St James's Street",
+              "street_en": "St James's Street",
+              "pattern": "n{1,120} St James's Street"
+            },
+            {
+              "code": "BN1 3XJ",
+              "street": "London Road",
+              "street_en": "London Road",
+              "pattern": "n{1,200} London Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "North Yorkshire",
+      "name_en": "North Yorkshire",
+      "region_tags": ["Yorkshire", "England"],
+      "cities": [
+        {
+          "name": "York",
+          "name_en": "York",
+          "lat": 53.9591,
+          "lon": -1.0815,
+          "postcodes": [
+            {
+              "code": "YO1 8QG",
+              "street": "Stonegate",
+              "street_en": "Stonegate",
+              "pattern": "n{1,50} Stonegate"
+            },
+            {
+              "code": "YO1 9TL",
+              "street": "Coney Street",
+              "street_en": "Coney Street",
+              "pattern": "n{1,40} Coney Street"
+            },
+            {
+              "code": "YO1 7LS",
+              "street": "The Shambles",
+              "street_en": "The Shambles",
+              "pattern": "n{1,35} The Shambles"
+            },
+            {
+              "code": "YO10 4AH",
+              "street": "Walmgate",
+              "street_en": "Walmgate",
+              "pattern": "n{1,80} Walmgate"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Aberdeen City",
+      "name_en": "Aberdeen City",
+      "region_tags": ["Scotland", "Highlands"],
+      "cities": [
+        {
+          "name": "Aberdeen",
+          "name_en": "Aberdeen",
+          "lat": 57.1497,
+          "lon": -2.0943,
+          "postcodes": [
+            {
+              "code": "AB10 1AP",
+              "street": "Union Street",
+              "street_en": "Union Street",
+              "pattern": "n{1,500} Union Street"
+            },
+            {
+              "code": "AB11 5BN",
+              "street": "Market Street",
+              "street_en": "Market Street",
+              "pattern": "n{1,80} Market Street"
+            },
+            {
+              "code": "AB25 1BJ",
+              "street": "King Street",
+              "street_en": "King Street",
+              "pattern": "n{1,300} King Street"
+            },
+            {
+              "code": "AB24 5AB",
+              "street": "George Street",
+              "street_en": "George Street",
+              "pattern": "n{1,200} George Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Highland",
+      "name_en": "Highland",
+      "region_tags": ["Scotland", "Highlands"],
+      "cities": [
+        {
+          "name": "Inverness",
+          "name_en": "Inverness",
+          "lat": 57.4778,
+          "lon": -4.2247,
+          "postcodes": [
+            {
+              "code": "IV1 1HN",
+              "street": "High Street",
+              "street_en": "High Street",
+              "pattern": "n{1,80} High Street"
+            },
+            {
+              "code": "IV1 1QQ",
+              "street": "Academy Street",
+              "street_en": "Academy Street",
+              "pattern": "n{1,60} Academy Street"
+            },
+            {
+              "code": "IV1 1PJ",
+              "street": "Church Street",
+              "street_en": "Church Street",
+              "pattern": "n{1,40} Church Street"
+            },
+            {
+              "code": "IV3 5NN",
+              "street": "Kenneth Street",
+              "street_en": "Kenneth Street",
+              "pattern": "n{1,50} Kenneth Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Swansea",
+      "name_en": "Swansea",
+      "region_tags": ["Wales", "South Wales"],
+      "cities": [
+        {
+          "name": "Swansea",
+          "name_en": "Swansea",
+          "lat": 51.6214,
+          "lon": -3.9436,
+          "postcodes": [
+            {
+              "code": "SA1 3QQ",
+              "street": "High Street",
+              "street_en": "High Street",
+              "pattern": "n{1,120} High Street"
+            },
+            {
+              "code": "SA1 1NW",
+              "street": "Wind Street",
+              "street_en": "Wind Street",
+              "pattern": "n{1,60} Wind Street"
+            },
+            {
+              "code": "SA1 5AL",
+              "street": "Oxford Street",
+              "street_en": "Oxford Street",
+              "pattern": "n{1,80} Oxford Street"
+            },
+            {
+              "code": "SA2 0AA",
+              "street": "Gower Road",
+              "street_en": "Gower Road",
+              "pattern": "n{1,150} Gower Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Dundee City",
+      "name_en": "Dundee City",
+      "region_tags": ["Scotland", "Central Belt"],
+      "cities": [
+        {
+          "name": "Dundee",
+          "name_en": "Dundee",
+          "lat": 56.4620,
+          "lon": -2.9707,
+          "postcodes": [
+            {
+              "code": "DD1 1DB",
+              "street": "High Street",
+              "street_en": "High Street",
+              "pattern": "n{1,100} High Street"
+            },
+            {
+              "code": "DD1 4QB",
+              "street": "Nethergate",
+              "street_en": "Nethergate",
+              "pattern": "n{1,180} Nethergate"
+            },
+            {
+              "code": "DD1 5AH",
+              "street": "Reform Street",
+              "street_en": "Reform Street",
+              "pattern": "n{1,40} Reform Street"
+            },
+            {
+              "code": "DD2 1NH",
+              "street": "Perth Road",
+              "street_en": "Perth Road",
+              "pattern": "n{1,300} Perth Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Bath and North East Somerset",
+      "name_en": "Bath and North East Somerset",
+      "region_tags": ["South West", "England"],
+      "cities": [
+        {
+          "name": "Bath",
+          "name_en": "Bath",
+          "lat": 51.3811,
+          "lon": -2.3590,
+          "postcodes": [
+            {
+              "code": "BA1 1AX",
+              "street": "Milsom Street",
+              "street_en": "Milsom Street",
+              "pattern": "n{1,40} Milsom Street"
+            },
+            {
+              "code": "BA1 5BG",
+              "street": "Pulteney Street",
+              "street_en": "Pulteney Street",
+              "pattern": "n{1,36} Pulteney Street"
+            },
+            {
+              "code": "BA1 1RG",
+              "street": "Stall Street",
+              "street_en": "Stall Street",
+              "pattern": "n{1,30} Stall Street"
+            },
+            {
+              "code": "BA2 4QF",
+              "street": "Wells Road",
+              "street_en": "Wells Road",
+              "pattern": "n{1,200} Wells Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Norfolk",
+      "name_en": "Norfolk",
+      "region_tags": ["East Anglia", "England"],
+      "cities": [
+        {
+          "name": "Norwich",
+          "name_en": "Norwich",
+          "lat": 52.6309,
+          "lon": 1.2974,
+          "postcodes": [
+            {
+              "code": "NR1 3QD",
+              "street": "Prince of Wales Road",
+              "street_en": "Prince of Wales Road",
+              "pattern": "n{1,100} Prince of Wales Road"
+            },
+            {
+              "code": "NR2 1RH",
+              "street": "St Benedicts Street",
+              "street_en": "St Benedicts Street",
+              "pattern": "n{1,60} St Benedicts Street"
+            },
+            {
+              "code": "NR1 1EF",
+              "street": "London Street",
+              "street_en": "London Street",
+              "pattern": "n{1,50} London Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Devon",
+      "name_en": "Devon",
+      "region_tags": ["South West", "England"],
+      "cities": [
+        {
+          "name": "Exeter",
+          "name_en": "Exeter",
+          "lat": 50.7184,
+          "lon": -3.5339,
+          "postcodes": [
+            {
+              "code": "EX1 1EE",
+              "street": "High Street",
+              "street_en": "High Street",
+              "pattern": "n{1,250} High Street"
+            },
+            {
+              "code": "EX4 3PZ",
+              "street": "Fore Street",
+              "street_en": "Fore Street",
+              "pattern": "n{1,80} Fore Street"
+            },
+            {
+              "code": "EX1 1GN",
+              "street": "Sidwell Street",
+              "street_en": "Sidwell Street",
+              "pattern": "n{1,100} Sidwell Street"
+            }
+          ]
+        },
+        {
+          "name": "Plymouth",
+          "name_en": "Plymouth",
+          "lat": 50.3755,
+          "lon": -4.1427,
+          "postcodes": [
+            {
+              "code": "PL1 1EA",
+              "street": "Royal Parade",
+              "street_en": "Royal Parade",
+              "pattern": "n{1,60} Royal Parade"
+            },
+            {
+              "code": "PL1 2RW",
+              "street": "Union Street",
+              "street_en": "Union Street",
+              "pattern": "n{1,150} Union Street"
+            },
+            {
+              "code": "PL4 8AA",
+              "street": "Mutley Plain",
+              "street_en": "Mutley Plain",
+              "pattern": "n{1,120} Mutley Plain"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Gwynedd",
+      "name_en": "Gwynedd",
+      "region_tags": ["Wales", "North Wales"],
+      "cities": [
+        {
+          "name": "Bangor",
+          "name_en": "Bangor",
+          "lat": 53.2274,
+          "lon": -4.1293,
+          "postcodes": [
+            {
+              "code": "LL57 1NW",
+              "street": "High Street",
+              "street_en": "High Street",
+              "pattern": "n{1,80} High Street"
+            },
+            {
+              "code": "LL57 2DF",
+              "street": "Holyhead Road",
+              "street_en": "Holyhead Road",
+              "pattern": "n{1,150} Holyhead Road"
+            },
+            {
+              "code": "LL57 1PA",
+              "street": "Garth Road",
+              "street_en": "Garth Road",
+              "pattern": "n{1,60} Garth Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "County Antrim",
+      "name_en": "County Antrim",
+      "region_tags": ["Northern Ireland"],
+      "cities": [
+        {
+          "name": "Lisburn",
+          "name_en": "Lisburn",
+          "lat": 54.5162,
+          "lon": -6.0580,
+          "postcodes": [
+            {
+              "code": "BT28 1AJ",
+              "street": "Bow Street",
+              "street_en": "Bow Street",
+              "pattern": "n{1,50} Bow Street"
+            },
+            {
+              "code": "BT28 1BG",
+              "street": "Market Square",
+              "street_en": "Market Square",
+              "pattern": "n{1,30} Market Square"
+            },
+            {
+              "code": "BT27 4AA",
+              "street": "Hillsborough Road",
+              "street_en": "Hillsborough Road",
+              "pattern": "n{1,100} Hillsborough Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "County Londonderry",
+      "name_en": "County Londonderry",
+      "region_tags": ["Northern Ireland"],
+      "cities": [
+        {
+          "name": "Derry",
+          "name_en": "Derry",
+          "lat": 54.9966,
+          "lon": -7.3086,
+          "postcodes": [
+            {
+              "code": "BT48 6HJ",
+              "street": "Strand Road",
+              "street_en": "Strand Road",
+              "pattern": "n{1,200} Strand Road"
+            },
+            {
+              "code": "BT48 7BB",
+              "street": "Shipquay Street",
+              "street_en": "Shipquay Street",
+              "pattern": "n{1,40} Shipquay Street"
+            },
+            {
+              "code": "BT47 2AB",
+              "street": "Spencer Road",
+              "street_en": "Spencer Road",
+              "pattern": "n{1,150} Spencer Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Perth and Kinross",
+      "name_en": "Perth and Kinross",
+      "region_tags": ["Scotland", "Central Belt"],
+      "cities": [
+        {
+          "name": "Perth",
+          "name_en": "Perth",
+          "lat": 56.3950,
+          "lon": -3.4308,
+          "postcodes": [
+            {
+              "code": "PH1 5HZ",
+              "street": "High Street",
+              "street_en": "High Street",
+              "pattern": "n{1,100} High Street"
+            },
+            {
+              "code": "PH1 5TJ",
+              "street": "South Street",
+              "street_en": "South Street",
+              "pattern": "n{1,80} South Street"
+            },
+            {
+              "code": "PH2 8PA",
+              "street": "Glasgow Road",
+              "street_en": "Glasgow Road",
+              "pattern": "n{1,200} Glasgow Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Stirling",
+      "name_en": "Stirling",
+      "region_tags": ["Scotland", "Central Belt"],
+      "cities": [
+        {
+          "name": "Stirling",
+          "name_en": "Stirling",
+          "lat": 56.1166,
+          "lon": -3.9369,
+          "postcodes": [
+            {
+              "code": "FK8 1JX",
+              "street": "King Street",
+              "street_en": "King Street",
+              "pattern": "n{1,40} King Street"
+            },
+            {
+              "code": "FK8 2DS",
+              "street": "Port Street",
+              "street_en": "Port Street",
+              "pattern": "n{1,30} Port Street"
+            },
+            {
+              "code": "FK7 7RP",
+              "street": "Bannockburn Road",
+              "street_en": "Bannockburn Road",
+              "pattern": "n{1,100} Bannockburn Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Warwickshire",
+      "name_en": "Warwickshire",
+      "region_tags": ["West Midlands", "Midlands", "England"],
+      "cities": [
+        {
+          "name": "Coventry",
+          "name_en": "Coventry",
+          "lat": 52.4068,
+          "lon": -1.5197,
+          "postcodes": [
+            {
+              "code": "CV1 1FY",
+              "street": "Broadgate",
+              "street_en": "Broadgate",
+              "pattern": "n{1,30} Broadgate"
+            },
+            {
+              "code": "CV1 1GX",
+              "street": "High Street",
+              "street_en": "High Street",
+              "pattern": "n{1,100} High Street"
+            },
+            {
+              "code": "CV5 6AP",
+              "street": "Tile Hill Lane",
+              "street_en": "Tile Hill Lane",
+              "pattern": "n{1,150} Tile Hill Lane"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Derbyshire",
+      "name_en": "Derbyshire",
+      "region_tags": ["East Midlands", "Midlands", "England"],
+      "cities": [
+        {
+          "name": "Derby",
+          "name_en": "Derby",
+          "lat": 52.9225,
+          "lon": -1.4746,
+          "postcodes": [
+            {
+              "code": "DE1 1QH",
+              "street": "St Peter's Street",
+              "street_en": "St Peter's Street",
+              "pattern": "n{1,50} St Peter's Street"
+            },
+            {
+              "code": "DE1 2QE",
+              "street": "Friar Gate",
+              "street_en": "Friar Gate",
+              "pattern": "n{1,120} Friar Gate"
+            },
+            {
+              "code": "DE1 3GL",
+              "street": "London Road",
+              "street_en": "London Road",
+              "pattern": "n{1,200} London Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Staffordshire",
+      "name_en": "Staffordshire",
+      "region_tags": ["West Midlands", "Midlands", "England"],
+      "cities": [
+        {
+          "name": "Stoke-on-Trent",
+          "name_en": "Stoke-on-Trent",
+          "lat": 53.0027,
+          "lon": -2.1794,
+          "postcodes": [
+            {
+              "code": "ST1 1LQ",
+              "street": "Stafford Street",
+              "street_en": "Stafford Street",
+              "pattern": "n{1,80} Stafford Street"
+            },
+            {
+              "code": "ST4 1DQ",
+              "street": "London Road",
+              "street_en": "London Road",
+              "pattern": "n{1,300} London Road"
+            },
+            {
+              "code": "ST1 1NP",
+              "street": "Piccadilly",
+              "street_en": "Piccadilly",
+              "pattern": "n{1,40} Piccadilly"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
