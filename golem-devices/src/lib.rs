@@ -1,5 +1,6 @@
 // golem-devices: device management
 
+pub mod android;
 pub mod ios;
 pub mod version;
 
