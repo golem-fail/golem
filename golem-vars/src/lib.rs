@@ -1,5 +1,7 @@
 // golem-vars: variable and data generation
 
+pub mod interpolation;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
