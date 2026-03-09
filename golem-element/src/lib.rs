@@ -1,4 +1,5 @@
 pub mod glob;
+pub mod selector;
 
 use serde::{Deserialize, Serialize};
 
