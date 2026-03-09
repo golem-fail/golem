@@ -1,5 +1,6 @@
 // golem-vars: variable and data generation
 
+pub mod generators;
 pub mod interpolation;
 
 use serde::{Deserialize, Serialize};
