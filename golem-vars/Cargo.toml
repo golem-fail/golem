@@ -9,12 +9,10 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 rand = { workspace = true }
+rand_chacha = "0.3"
 uuid = { workspace = true }
 chrono = { workspace = true }
 toml = { workspace = true }
 
 [lints]
 workspace = true
-
-[dev-dependencies]
-rand_chacha = "0.3"
