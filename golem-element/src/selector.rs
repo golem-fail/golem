@@ -15,16 +15,29 @@ pub struct Selector {
     pub checked: Option<bool>,
     pub clickable: Option<bool>,
     pub placeholder: Option<String>,
-    // Relational fields will be added in Wave 8
+    /// Keep only elements whose bounds.y > anchor.bottom()
+    pub below: Option<String>,
+    /// Keep only elements whose bounds.bottom() < anchor.y
+    pub above: Option<String>,
+    /// Keep only elements whose bounds.x > anchor.right()
+    pub right_of: Option<String>,
+    /// Keep only elements whose bounds.right() < anchor.x
+    pub left_of: Option<String>,
+    /// Keep only elements that are descendants of an element matching this text
+    pub child_of: Option<String>,
 }
 
 /// Find all elements matching the selector in the hierarchy tree.
 ///
 /// Traverses the entire tree recursively (depth-first), collecting all matches.
-/// Then applies the index filter if present.
+/// Then applies relational filters (below, above, right_of, left_of, child_of)
+/// and the index filter if present.
 pub fn find_elements(root: &Element, selector: &Selector) -> Vec<FindResult> {
     let mut results = Vec::new();
     collect_matches(root, selector, &mut results);
+
+    // Apply relational filters
+    results = apply_relational_filters(root, selector, results);
 
     if let Some(idx) = selector.index {
         if idx < results.len() {
@@ -35,6 +48,116 @@ pub fn find_elements(root: &Element, selector: &Selector) -> Vec<FindResult> {
     } else {
         results
     }
+}
+
+/// Find the first element in the tree whose text matches the given glob pattern.
+fn find_anchor<'a>(root: &'a Element, pattern: &str) -> Option<&'a Element> {
+    let matcher = GlobMatcher::new(pattern);
+    find_anchor_recursive(root, &matcher)
+}
+
+fn find_anchor_recursive<'a>(element: &'a Element, matcher: &GlobMatcher) -> Option<&'a Element> {
+    if let Some(ref text) = element.text {
+        if matcher.is_match(text) {
+            return Some(element);
+        }
+    }
+    for child in &element.children {
+        if let Some(found) = find_anchor_recursive(child, matcher) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+/// Check whether an element (identified by its bounds) is a descendant of
+/// any element matching the `child_of` pattern in the tree.
+/// We collect all elements under the anchor and check if the candidate is among them.
+fn is_element_descendant_of_anchor(root: &Element, anchor_pattern: &str, candidate: &Element) -> bool {
+    let matcher = GlobMatcher::new(anchor_pattern);
+    // Find the anchor element
+    if let Some(anchor) = find_anchor_recursive(root, &matcher) {
+        // Check if candidate is a descendant of anchor
+        element_exists_in_subtree(anchor, candidate)
+    } else {
+        false
+    }
+}
+
+/// Check if an element with matching bounds/text/type/id exists in the subtree
+/// (excluding the root itself, only checking descendants).
+fn element_exists_in_subtree(subtree_root: &Element, candidate: &Element) -> bool {
+    for child in &subtree_root.children {
+        if elements_match(child, candidate) {
+            return true;
+        }
+        if element_exists_in_subtree(child, candidate) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Check if two elements are the same by comparing all their identifying fields.
+fn elements_match(a: &Element, b: &Element) -> bool {
+    a.element_type == b.element_type
+        && a.text == b.text
+        && a.id == b.id
+        && a.bounds == b.bounds
+        && a.enabled == b.enabled
+        && a.checked == b.checked
+        && a.clickable == b.clickable
+        && a.focused == b.focused
+        && a.placeholder == b.placeholder
+}
+
+/// Apply all relational filters to the results.
+fn apply_relational_filters(
+    root: &Element,
+    selector: &Selector,
+    mut results: Vec<FindResult>,
+) -> Vec<FindResult> {
+    if let Some(ref pattern) = selector.below {
+        if let Some(anchor) = find_anchor(root, pattern) {
+            let anchor_bottom = anchor.bounds.bottom();
+            results.retain(|r| r.element.bounds.y > anchor_bottom);
+        } else {
+            return Vec::new();
+        }
+    }
+
+    if let Some(ref pattern) = selector.above {
+        if let Some(anchor) = find_anchor(root, pattern) {
+            let anchor_y = anchor.bounds.y;
+            results.retain(|r| r.element.bounds.bottom() < anchor_y);
+        } else {
+            return Vec::new();
+        }
+    }
+
+    if let Some(ref pattern) = selector.right_of {
+        if let Some(anchor) = find_anchor(root, pattern) {
+            let anchor_right = anchor.bounds.right();
+            results.retain(|r| r.element.bounds.x > anchor_right);
+        } else {
+            return Vec::new();
+        }
+    }
+
+    if let Some(ref pattern) = selector.left_of {
+        if let Some(anchor) = find_anchor(root, pattern) {
+            let anchor_x = anchor.bounds.x;
+            results.retain(|r| r.element.bounds.right() < anchor_x);
+        } else {
+            return Vec::new();
+        }
+    }
+
+    if let Some(ref pattern) = selector.child_of {
+        results.retain(|r| is_element_descendant_of_anchor(root, pattern, &r.element));
+    }
+
+    results
 }
 
 /// Recursively traverse the element tree depth-first, collecting matching elements.
@@ -598,5 +721,265 @@ mod tests {
         let results = find_elements(&root, &s);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].element.text.as_deref(), Some("Item C"));
+    }
+
+    // ── Relational filter helpers ───────────────────────────────────
+
+    fn elem_at(element_type: &str, text: &str, x: f64, y: f64, w: f64, h: f64) -> Element {
+        let mut e = elem(element_type);
+        e.text = Some(text.to_string());
+        e.bounds = bounds(x, y, w, h);
+        e
+    }
+
+    // ── 25. below — elements below "Header" returned ────────────────
+
+    #[test]
+    fn relational_below() {
+        let mut root = elem("View");
+        root.bounds = bounds(0.0, 0.0, 400.0, 600.0);
+        // Header at top: y=0, height=50 => bottom=50
+        root.children.push(elem_at("Label", "Header", 0.0, 0.0, 400.0, 50.0));
+        // Content below header: y=60 > 50
+        root.children.push(elem_at("Button", "Content", 0.0, 60.0, 400.0, 40.0));
+        // Sidebar at same level as header: y=10 (not below)
+        root.children.push(elem_at("Label", "Sidebar", 0.0, 10.0, 100.0, 40.0));
+
+        let s = Selector {
+            below: Some("Header".to_string()),
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].element.text.as_deref(), Some("Content"));
+    }
+
+    // ── 26. above — elements above "Footer" returned ────────────────
+
+    #[test]
+    fn relational_above() {
+        let mut root = elem("View");
+        root.bounds = bounds(0.0, 0.0, 400.0, 600.0);
+        // Title at top: y=0, height=30 => bottom=30
+        root.children.push(elem_at("Label", "Title", 0.0, 0.0, 400.0, 30.0));
+        // Footer at bottom: y=500
+        root.children.push(elem_at("Label", "Footer", 0.0, 500.0, 400.0, 50.0));
+        // Body in middle: y=100, height=200 => bottom=300 < 500
+        root.children.push(elem_at("Label", "Body", 0.0, 100.0, 400.0, 200.0));
+
+        let s = Selector {
+            above: Some("Footer".to_string()),
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        // Title (bottom=30 < 500) and Body (bottom=300 < 500) qualify
+        assert_eq!(results.len(), 2);
+        let texts: Vec<_> = results.iter().filter_map(|r| r.element.text.as_deref()).collect();
+        assert!(texts.contains(&"Title"));
+        assert!(texts.contains(&"Body"));
+    }
+
+    // ── 27. right_of — elements right of "Label" returned ───────────
+
+    #[test]
+    fn relational_right_of() {
+        let mut root = elem("View");
+        root.bounds = bounds(0.0, 0.0, 800.0, 100.0);
+        // Label on the left: x=0, width=100 => right=100
+        root.children.push(elem_at("Label", "Label", 0.0, 0.0, 100.0, 40.0));
+        // Input to the right: x=120 > 100
+        root.children.push(elem_at("TextField", "Input", 120.0, 0.0, 200.0, 40.0));
+        // Another label overlapping: x=50 (not to the right)
+        root.children.push(elem_at("Label", "Other", 50.0, 0.0, 80.0, 40.0));
+
+        let s = Selector {
+            right_of: Some("Label".to_string()),
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].element.text.as_deref(), Some("Input"));
+    }
+
+    // ── 28. left_of — elements left of "Button" returned ────────────
+
+    #[test]
+    fn relational_left_of() {
+        let mut root = elem("View");
+        root.bounds = bounds(0.0, 0.0, 800.0, 100.0);
+        // Icon on the left: x=0, width=30 => right=30
+        root.children.push(elem_at("Image", "Icon", 0.0, 0.0, 30.0, 30.0));
+        // Button on the right: x=200
+        root.children.push(elem_at("Button", "Button", 200.0, 0.0, 100.0, 40.0));
+        // Another element overlapping: x=180, width=50 => right=230 (not to the left)
+        root.children.push(elem_at("Label", "Near", 180.0, 0.0, 50.0, 40.0));
+
+        let s = Selector {
+            left_of: Some("Button".to_string()),
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].element.text.as_deref(), Some("Icon"));
+    }
+
+    // ── 29. child_of — only children of "List" returned ─────────────
+
+    #[test]
+    fn relational_child_of() {
+        let mut root = elem("View");
+        root.bounds = bounds(0.0, 0.0, 400.0, 600.0);
+
+        let mut list = elem("View");
+        list.text = Some("List".to_string());
+        list.bounds = bounds(0.0, 100.0, 400.0, 300.0);
+        list.children.push(elem_at("Label", "Item 1", 0.0, 100.0, 400.0, 40.0));
+        list.children.push(elem_at("Label", "Item 2", 0.0, 150.0, 400.0, 40.0));
+        root.children.push(list);
+
+        // Sibling of list, not a child
+        root.children.push(elem_at("Label", "Item 3", 0.0, 450.0, 400.0, 40.0));
+
+        let s = Selector {
+            element_type: Some("Label".to_string()),
+            child_of: Some("List".to_string()),
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        assert_eq!(results.len(), 2);
+        let texts: Vec<_> = results.iter().filter_map(|r| r.element.text.as_deref()).collect();
+        assert!(texts.contains(&"Item 1"));
+        assert!(texts.contains(&"Item 2"));
+    }
+
+    // ── 30. Relational anchor not found — empty results ─────────────
+
+    #[test]
+    fn relational_anchor_not_found() {
+        let mut root = elem("View");
+        root.children.push(elem_at("Button", "Submit", 0.0, 100.0, 100.0, 40.0));
+
+        let s = Selector {
+            below: Some("Nonexistent".to_string()),
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        assert!(results.is_empty());
+    }
+
+    // ── 31. Combined type + below + enabled ─────────────────────────
+
+    #[test]
+    fn combined_type_below_enabled() {
+        let mut root = elem("View");
+        root.bounds = bounds(0.0, 0.0, 400.0, 600.0);
+        // Header at top
+        root.children.push(elem_at("Label", "Header", 0.0, 0.0, 400.0, 50.0));
+
+        // Enabled button below header
+        let mut btn1 = elem_at("Button", "Enabled Btn", 0.0, 60.0, 200.0, 40.0);
+        btn1.enabled = true;
+        root.children.push(btn1);
+
+        // Disabled button below header
+        let mut btn2 = elem_at("Button", "Disabled Btn", 0.0, 110.0, 200.0, 40.0);
+        btn2.enabled = false;
+        root.children.push(btn2);
+
+        // Enabled label below header (wrong type)
+        root.children.push(elem_at("Label", "Info", 0.0, 160.0, 200.0, 40.0));
+
+        let s = Selector {
+            element_type: Some("Button".to_string()),
+            below: Some("Header".to_string()),
+            enabled: Some(true),
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].element.text.as_deref(), Some("Enabled Btn"));
+    }
+
+    // ── 32. below with multiple results ─────────────────────────────
+
+    #[test]
+    fn below_with_multiple_results() {
+        let mut root = elem("View");
+        root.bounds = bounds(0.0, 0.0, 400.0, 600.0);
+        // Header: bottom = 50
+        root.children.push(elem_at("Label", "Header", 0.0, 0.0, 400.0, 50.0));
+        // Three buttons below header
+        root.children.push(elem_at("Button", "Btn A", 0.0, 60.0, 200.0, 40.0));
+        root.children.push(elem_at("Button", "Btn B", 0.0, 110.0, 200.0, 40.0));
+        root.children.push(elem_at("Button", "Btn C", 0.0, 160.0, 200.0, 40.0));
+
+        let s = Selector {
+            element_type: Some("Button".to_string()),
+            below: Some("Header".to_string()),
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        assert_eq!(results.len(), 3);
+    }
+
+    // ── 33. child_of excludes siblings ──────────────────────────────
+
+    #[test]
+    fn child_of_excludes_siblings() {
+        let mut root = elem("View");
+        root.bounds = bounds(0.0, 0.0, 400.0, 600.0);
+
+        // Container "Panel"
+        let mut panel = elem("View");
+        panel.text = Some("Panel".to_string());
+        panel.bounds = bounds(0.0, 0.0, 200.0, 300.0);
+        panel.children.push(elem_at("Button", "Inside", 10.0, 10.0, 80.0, 30.0));
+        root.children.push(panel);
+
+        // Sibling button (not inside Panel)
+        root.children.push(elem_at("Button", "Outside", 210.0, 10.0, 80.0, 30.0));
+
+        let s = Selector {
+            element_type: Some("Button".to_string()),
+            child_of: Some("Panel".to_string()),
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].element.text.as_deref(), Some("Inside"));
+    }
+
+    // ── 34. Deep descendant found by child_of ───────────────────────
+
+    #[test]
+    fn deep_descendant_found_by_child_of() {
+        let mut root = elem("View");
+        root.bounds = bounds(0.0, 0.0, 400.0, 600.0);
+
+        // Container "Wrapper" > View > View > deep Button
+        let deep_btn = elem_at("Button", "Deep Button", 10.0, 10.0, 80.0, 30.0);
+        let mut inner2 = elem("View");
+        inner2.bounds = bounds(5.0, 5.0, 190.0, 190.0);
+        inner2.children.push(deep_btn);
+        let mut inner1 = elem("View");
+        inner1.bounds = bounds(0.0, 0.0, 195.0, 195.0);
+        inner1.children.push(inner2);
+        let mut wrapper = elem("View");
+        wrapper.text = Some("Wrapper".to_string());
+        wrapper.bounds = bounds(0.0, 0.0, 200.0, 200.0);
+        wrapper.children.push(inner1);
+        root.children.push(wrapper);
+
+        // Sibling button (not inside Wrapper)
+        root.children.push(elem_at("Button", "Shallow Button", 300.0, 10.0, 80.0, 30.0));
+
+        let s = Selector {
+            element_type: Some("Button".to_string()),
+            child_of: Some("Wrapper".to_string()),
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].element.text.as_deref(), Some("Deep Button"));
     }
 }
