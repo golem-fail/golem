@@ -1,5 +1,6 @@
 // golem-parser: test file parser
 
+pub mod fixture;
 pub mod mixin;
 pub mod validation;
 
