@@ -3,6 +3,7 @@
 pub mod generators;
 pub mod interpolation;
 pub mod seed;
+pub mod structured;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
