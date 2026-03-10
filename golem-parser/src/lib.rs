@@ -1,5 +1,6 @@
 // golem-parser: test file parser
 
+pub mod mixin;
 pub mod validation;
 
 use serde::Deserialize;
