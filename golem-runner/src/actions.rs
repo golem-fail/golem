@@ -1,9 +1,12 @@
+use std::time::Duration;
+
 use anyhow::{bail, Result};
 use golem_driver::{Direction, PlatformDriver};
 use golem_element::selector::find_elements;
 use golem_element::Element;
 use golem_parser::Step;
 use golem_vars::{ScopeLevel, VarValue, VariableStore};
+use tokio::time::Instant;
 
 use crate::resolution::{build_selector, resolve_element};
 
@@ -50,6 +53,14 @@ pub async fn execute_action(
         "swipe" => handle_swipe(step, driver).await,
         "read" => handle_read(step, driver, vars).await,
         "hide_keyboard" => handle_hide_keyboard(driver).await,
+        "assert_visible" => handle_assert_visible(step, driver).await,
+        "assert_not_visible" => handle_assert_not_visible(step, driver).await,
+        "assert_text" => handle_assert_text(step, driver).await,
+        "assert_enabled" => handle_assert_enabled(step, driver).await,
+        "assert_checked" => handle_assert_checked(step, driver).await,
+        "wait" => handle_wait(step, driver).await,
+        "wait_not" => handle_wait_not(step, driver).await,
+        "fail" => handle_fail(step),
         _ => bail!("Unknown action: {}", action),
     }
 }
@@ -147,6 +158,142 @@ async fn handle_read(
 /// Dismiss the on-screen keyboard. No element resolution needed.
 async fn handle_hide_keyboard(driver: &dyn PlatformDriver) -> Result<()> {
     driver.hide_keyboard().await
+}
+
+/// Assert that an element matching the step's selectors exists in the hierarchy.
+async fn handle_assert_visible(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    resolve_element(step, driver).await?;
+    Ok(())
+}
+
+/// Assert that NO element matches the step's selectors.
+async fn handle_assert_not_visible(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let selector = build_selector(step);
+    let root = driver.get_hierarchy().await?;
+    let results = find_elements(&root, &selector);
+
+    if results.is_empty() {
+        Ok(())
+    } else {
+        bail!(
+            "Expected no element matching selector but found {}: text={:?}, id={:?}, type={:?}",
+            results.len(),
+            selector.text,
+            selector.id,
+            selector.element_type,
+        )
+    }
+}
+
+/// Assert that an element's text exactly matches the expected value.
+///
+/// The element is located by `id` (or other non-text selectors).
+/// The step's `text` field is used as the expected text to compare against.
+async fn handle_assert_text(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let expected = step
+        .text
+        .as_deref()
+        .unwrap_or("");
+
+    // Find element using selectors other than text
+    let (elem, _coords) = resolve_element_ignore_text(step, driver).await?;
+    let actual = elem.text.as_deref().unwrap_or("");
+
+    if actual == expected {
+        Ok(())
+    } else {
+        bail!(
+            "assert_text failed: expected {:?}, got {:?}",
+            expected,
+            actual,
+        )
+    }
+}
+
+/// Assert that the matched element is enabled.
+async fn handle_assert_enabled(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let (elem, _coords) = resolve_element(step, driver).await?;
+    if elem.enabled {
+        Ok(())
+    } else {
+        bail!(
+            "assert_enabled failed: element is disabled (id={:?}, text={:?})",
+            elem.id,
+            elem.text,
+        )
+    }
+}
+
+/// Assert that the matched element is checked.
+async fn handle_assert_checked(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let (elem, _coords) = resolve_element(step, driver).await?;
+    if elem.checked {
+        Ok(())
+    } else {
+        bail!(
+            "assert_checked failed: element is not checked (id={:?}, text={:?})",
+            elem.id,
+            elem.text,
+        )
+    }
+}
+
+/// Wait for an element to appear, polling the hierarchy until found or timeout.
+///
+/// Default timeout is 10000ms. Poll interval is 500ms.
+async fn handle_wait(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let timeout_ms = step.timeout.unwrap_or(10000);
+    let poll_interval = Duration::from_millis(500);
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+
+    loop {
+        match resolve_element(step, driver).await {
+            Ok(_) => return Ok(()),
+            Err(_) if Instant::now() < deadline => {
+                tokio::time::sleep(poll_interval).await;
+            }
+            Err(e) => return Err(anyhow::anyhow!("Timed out waiting for element: {}", e)),
+        }
+    }
+}
+
+/// Wait for an element to disappear, polling the hierarchy until not found or timeout.
+///
+/// Default timeout is 10000ms. Poll interval is 500ms.
+async fn handle_wait_not(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let timeout_ms = step.timeout.unwrap_or(10000);
+    let poll_interval = Duration::from_millis(500);
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+    let selector = build_selector(step);
+
+    loop {
+        let root = driver.get_hierarchy().await?;
+        let results = find_elements(&root, &selector);
+
+        if results.is_empty() {
+            return Ok(());
+        }
+
+        if Instant::now() >= deadline {
+            bail!(
+                "Timed out waiting for element to disappear: text={:?}, id={:?}, type={:?}",
+                selector.text,
+                selector.id,
+                selector.element_type,
+            );
+        }
+
+        tokio::time::sleep(poll_interval).await;
+    }
+}
+
+/// Immediately fail the flow with a message from the step's `text` field.
+fn handle_fail(step: &Step) -> Result<()> {
+    let message = step
+        .text
+        .as_deref()
+        .unwrap_or("Flow failed (no message provided)");
+    bail!("{}", message)
 }
 
 #[cfg(test)]
@@ -635,5 +782,275 @@ mod tests {
             err_msg.contains("Invalid swipe direction"),
             "error should mention invalid direction, got: {err_msg}"
         );
+    }
+
+    // ── Assertion action tests ──────────────────────────────────────
+
+    // ── assert_visible succeeds when element exists ─────────────────
+
+    #[tokio::test]
+    async fn assert_visible_succeeds_when_element_exists() {
+        let root = root_with_button("Welcome");
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("assert_visible");
+        step.text = Some("Welcome".to_string());
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("assert_visible should succeed when element exists");
+    }
+
+    // ── assert_visible fails when element not found ─────────────────
+
+    #[tokio::test]
+    async fn assert_visible_fails_when_element_not_found() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("assert_visible");
+        step.text = Some("Nonexistent".to_string());
+
+        let result = execute_action(&step, &driver, &mut vars).await;
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("No element found"),
+            "error should mention no element found, got: {err_msg}"
+        );
+    }
+
+    // ── assert_not_visible succeeds when element not found ──────────
+
+    #[tokio::test]
+    async fn assert_not_visible_succeeds_when_element_not_found() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("assert_not_visible");
+        step.text = Some("Error*".to_string());
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("assert_not_visible should succeed when element absent");
+    }
+
+    // ── assert_not_visible fails when element exists ────────────────
+
+    #[tokio::test]
+    async fn assert_not_visible_fails_when_element_exists() {
+        let root = root_with_button("Error occurred");
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("assert_not_visible");
+        step.text = Some("Error*".to_string());
+
+        let result = execute_action(&step, &driver, &mut vars).await;
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("Expected no element"),
+            "error should mention unexpected element, got: {err_msg}"
+        );
+    }
+
+    // ── assert_text succeeds when text matches ──────────────────────
+
+    #[tokio::test]
+    async fn assert_text_succeeds_when_text_matches() {
+        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        root.children.push(make_element_with_id_and_text(
+            "Label",
+            "total",
+            "$42.00",
+            Bounds::new(50.0, 100.0, 200.0, 30.0),
+        ));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("assert_text");
+        step.id = Some("total".to_string());
+        step.text = Some("$42.00".to_string());
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("assert_text should succeed when text matches");
+    }
+
+    // ── assert_text fails when text doesn't match ───────────────────
+
+    #[tokio::test]
+    async fn assert_text_fails_when_text_does_not_match() {
+        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        root.children.push(make_element_with_id_and_text(
+            "Label",
+            "total",
+            "$99.99",
+            Bounds::new(50.0, 100.0, 200.0, 30.0),
+        ));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("assert_text");
+        step.id = Some("total".to_string());
+        step.text = Some("$42.00".to_string());
+
+        let result = execute_action(&step, &driver, &mut vars).await;
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("assert_text failed"),
+            "error should mention assert_text failed, got: {err_msg}"
+        );
+        assert!(
+            err_msg.contains("$42.00"),
+            "error should mention expected value, got: {err_msg}"
+        );
+        assert!(
+            err_msg.contains("$99.99"),
+            "error should mention actual value, got: {err_msg}"
+        );
+    }
+
+    // ── assert_enabled succeeds when element is enabled ─────────────
+
+    #[tokio::test]
+    async fn assert_enabled_succeeds_when_element_is_enabled() {
+        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let mut btn = make_element_with_id("Button", "submit-button", Bounds::new(50.0, 200.0, 100.0, 44.0));
+        btn.enabled = true;
+        root.children.push(btn);
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("assert_enabled");
+        step.id = Some("submit-button".to_string());
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("assert_enabled should succeed when element is enabled");
+    }
+
+    // ── assert_enabled fails when element is disabled ───────────────
+
+    #[tokio::test]
+    async fn assert_enabled_fails_when_element_is_disabled() {
+        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let mut btn = make_element_with_id("Button", "submit-button", Bounds::new(50.0, 200.0, 100.0, 44.0));
+        btn.enabled = false;
+        root.children.push(btn);
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("assert_enabled");
+        step.id = Some("submit-button".to_string());
+
+        let result = execute_action(&step, &driver, &mut vars).await;
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("assert_enabled failed"),
+            "error should mention assert_enabled failed, got: {err_msg}"
+        );
+    }
+
+    // ── assert_checked succeeds when element is checked ─────────────
+
+    #[tokio::test]
+    async fn assert_checked_succeeds_when_element_is_checked() {
+        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let mut cb = make_element_with_id("Checkbox", "agree-checkbox", Bounds::new(50.0, 300.0, 30.0, 30.0));
+        cb.checked = true;
+        root.children.push(cb);
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("assert_checked");
+        step.id = Some("agree-checkbox".to_string());
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("assert_checked should succeed when element is checked");
+    }
+
+    // ── assert_checked fails when element is unchecked ──────────────
+
+    #[tokio::test]
+    async fn assert_checked_fails_when_element_is_unchecked() {
+        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let mut cb = make_element_with_id("Checkbox", "agree-checkbox", Bounds::new(50.0, 300.0, 30.0, 30.0));
+        cb.checked = false;
+        root.children.push(cb);
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("assert_checked");
+        step.id = Some("agree-checkbox".to_string());
+
+        let result = execute_action(&step, &driver, &mut vars).await;
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("assert_checked failed"),
+            "error should mention assert_checked failed, got: {err_msg}"
+        );
+    }
+
+    // ── fail action always returns error with message ────────────────
+
+    #[tokio::test]
+    async fn fail_action_always_returns_error_with_message() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("fail");
+        step.text = Some("Should not reach here".to_string());
+
+        let result = execute_action(&step, &driver, &mut vars).await;
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("Should not reach here"),
+            "error should contain the fail message, got: {err_msg}"
+        );
+    }
+
+    // ── wait succeeds immediately when element present ──────────────
+
+    #[tokio::test]
+    async fn wait_succeeds_immediately_when_element_present() {
+        let root = root_with_button("Welcome");
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("wait");
+        step.text = Some("Welcome".to_string());
+        step.timeout = Some(1000);
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("wait should succeed immediately when element is present");
+    }
+
+    // ── wait_not succeeds immediately when element absent ───────────
+
+    #[tokio::test]
+    async fn wait_not_succeeds_immediately_when_element_absent() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("wait_not");
+        step.text = Some("Loading...".to_string());
+        step.timeout = Some(1000);
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("wait_not should succeed immediately when element is absent");
     }
 }
