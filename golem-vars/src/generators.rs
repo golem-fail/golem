@@ -14,6 +14,10 @@ pub fn generate_simple(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValu
         "number" => generate_number(def, rng),
         "sentence" => generate_sentence(rng),
         "timestamp" => generate_timestamp(rng),
+        "phone" => crate::geo::generate_phone(&def.params, rng),
+        "city" => crate::geo::generate_city(&def.params, rng),
+        "postcode" => crate::geo::generate_postcode(&def.params, rng),
+        "street" => crate::geo::generate_street(&def.params, rng),
         _ => Err(VarError::Other(format!("unknown generator: {}", def.name))),
     }
 }

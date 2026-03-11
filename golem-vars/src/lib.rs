@@ -1,6 +1,7 @@
 // golem-vars: variable and data generation
 
 pub mod generators;
+pub mod geo;
 pub mod interpolation;
 pub mod seed;
 pub mod structured;
