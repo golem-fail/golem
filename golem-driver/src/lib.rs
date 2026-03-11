@@ -1,3 +1,5 @@
+pub mod ios;
+
 use async_trait::async_trait;
 use golem_element::Element;
 use std::sync::Mutex;
