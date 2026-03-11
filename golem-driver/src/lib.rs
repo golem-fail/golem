@@ -1,3 +1,4 @@
+pub mod android;
 pub mod ios;
 
 use async_trait::async_trait;
