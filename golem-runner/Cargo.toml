@@ -13,6 +13,7 @@ golem-report = { path = "../golem-report" }
 golem-email = { path = "../golem-email" }
 tokio = { workspace = true }
 anyhow = { workspace = true }
+toml = { workspace = true }
 
 [lints]
 workspace = true
