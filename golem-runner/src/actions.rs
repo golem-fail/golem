@@ -70,6 +70,18 @@ pub async fn execute_action(
         "press" => handle_press(step, driver).await,
         "grant_permission" => handle_grant_permission(step, driver).await,
         "revoke_permission" => handle_revoke_permission(step, driver).await,
+        "screenshot" => handle_screenshot(step, driver).await,
+        "start_recording" => handle_start_recording(step, driver).await,
+        "stop_recording" => handle_stop_recording(step, driver).await,
+        "add_media" => handle_add_media(step, driver).await,
+        "open_link" => handle_open_link(step, driver).await,
+        "push_notification" => handle_push_notification(step, driver).await,
+        "bash" | "run" => handle_bash(step, vars).await,
+        "http_get" => handle_http(step, vars, "GET").await,
+        "http_post" => handle_http(step, vars, "POST").await,
+        "http_put" => handle_http(step, vars, "PUT").await,
+        "http_patch" => handle_http(step, vars, "PATCH").await,
+        "http_delete" => handle_http(step, vars, "DELETE").await,
         _ => bail!("Unknown action: {}", action),
     }
 }
@@ -397,6 +409,169 @@ async fn handle_revoke_permission(step: &Step, driver: &dyn PlatformDriver) -> R
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("revoke_permission action requires 'permission' param"))?;
     driver.revoke_permission(bundle_id, permission).await
+}
+
+// ── Media, link, and external action helpers ────────────────────────
+
+/// Take a screenshot, optionally saving to a specific path.
+async fn handle_screenshot(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let result = driver.screenshot().await?;
+
+    if let Some(path) = step.params.get("path").and_then(|v| v.as_str()) {
+        tokio::fs::write(path, &result.data).await?;
+    }
+
+    Ok(())
+}
+
+/// Start screen recording. Uses a name from the `path` param or defaults to "recording".
+async fn handle_start_recording(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let name = step
+        .params
+        .get("path")
+        .and_then(|v| v.as_str())
+        .unwrap_or("recording");
+    driver.start_recording(name).await
+}
+
+/// Stop screen recording, optionally copying the result to a given path.
+async fn handle_stop_recording(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let recording_path = driver.stop_recording().await?;
+
+    if let Some(dest) = step.params.get("path").and_then(|v| v.as_str()) {
+        tokio::fs::copy(&recording_path, dest).await?;
+    }
+
+    Ok(())
+}
+
+/// Push a media file to the device.
+async fn handle_add_media(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let path = step
+        .params
+        .get("path")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("add_media action requires 'path' param"))?;
+    driver.add_media(path).await
+}
+
+/// Open a deep link or URL on the device.
+async fn handle_open_link(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let url = step
+        .params
+        .get("url")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("open_link action requires 'url' param"))?;
+    driver.open_url(url).await
+}
+
+/// Send a push notification to the device.
+async fn handle_push_notification(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let title = step
+        .params
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let body = step
+        .params
+        .get("body")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let payload = step
+        .params
+        .get("payload")
+        .and_then(|v| v.as_str());
+    driver.push_notification(title, body, payload).await
+}
+
+/// Execute a shell command on the host, optionally saving the output.
+async fn handle_bash(step: &Step, vars: &mut VariableStore) -> Result<()> {
+    let command = step
+        .params
+        .get("command")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("bash/run action requires 'command' param"))?;
+
+    let output = tokio::process::Command::new("sh")
+        .arg("-c")
+        .arg(command)
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!(
+            "Command failed with exit code {}: {}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
+        );
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    if let Some(ref var_name) = step.save_to {
+        vars.set_in_scope(ScopeLevel::Flow, var_name, VarValue::string(&stdout));
+    }
+
+    Ok(())
+}
+
+/// Make an HTTP request and optionally save the response body.
+async fn handle_http(step: &Step, vars: &mut VariableStore, method: &str) -> Result<()> {
+    let url = step
+        .params
+        .get("url")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("{} action requires 'url' param", step.action))?;
+
+    let client = reqwest::Client::new();
+
+    let mut request = match method {
+        "GET" => client.get(url),
+        "POST" => client.post(url),
+        "PUT" => client.put(url),
+        "PATCH" => client.patch(url),
+        "DELETE" => client.delete(url),
+        _ => bail!("Unsupported HTTP method: {}", method),
+    };
+
+    // Add body for methods that support it
+    if let Some(body) = step.params.get("body").and_then(|v| v.as_str()) {
+        request = request
+            .header("Content-Type", "application/json")
+            .body(body.to_string());
+    }
+
+    // Add custom headers from params
+    if let Some(headers) = step.params.get("headers") {
+        if let Some(table) = headers.as_table() {
+            for (key, value) in table {
+                if let Some(val_str) = value.as_str() {
+                    request = request.header(key.as_str(), val_str);
+                }
+            }
+        }
+    }
+
+    let response = request.send().await?;
+    let status = response.status();
+    let body = response.text().await?;
+
+    if !status.is_success() {
+        bail!(
+            "HTTP {} {} returned status {}: {}",
+            method,
+            url,
+            status.as_u16(),
+            body
+        );
+    }
+
+    if let Some(ref var_name) = step.save_to {
+        vars.set_in_scope(ScopeLevel::Flow, var_name, VarValue::string(&body));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1428,6 +1603,344 @@ mod tests {
         assert!(
             err_msg.contains("orientation"),
             "error should mention orientation, got: {err_msg}"
+        );
+    }
+
+    // ── Media, link, and external action tests ────────────────────────
+
+    // ── screenshot calls driver.screenshot ─────────────────────────────
+
+    #[tokio::test]
+    async fn screenshot_calls_driver_screenshot() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let step = make_step("screenshot");
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("screenshot should succeed");
+
+        let calls = driver.get_calls();
+        let sc_calls: Vec<_> = calls.iter().filter(|c| c.0 == "screenshot").collect();
+        assert_eq!(sc_calls.len(), 1);
+    }
+
+    // ── start_recording calls driver.start_recording ──────────────────
+
+    #[tokio::test]
+    async fn start_recording_calls_driver_start_recording() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let step = make_step("start_recording");
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("start_recording should succeed");
+
+        let calls = driver.get_calls();
+        let sr_calls: Vec<_> = calls.iter().filter(|c| c.0 == "start_recording").collect();
+        assert_eq!(sr_calls.len(), 1);
+        // Default name is "recording"
+        assert_eq!(sr_calls[0].1, vec!["recording"]);
+    }
+
+    // ── stop_recording calls driver.stop_recording ────────────────────
+
+    #[tokio::test]
+    async fn stop_recording_calls_driver_stop_recording() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let step = make_step("stop_recording");
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("stop_recording should succeed");
+
+        let calls = driver.get_calls();
+        let sr_calls: Vec<_> = calls.iter().filter(|c| c.0 == "stop_recording").collect();
+        assert_eq!(sr_calls.len(), 1);
+    }
+
+    // ── add_media calls driver.add_media ──────────────────────────────
+
+    #[tokio::test]
+    async fn add_media_calls_driver_add_media() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("add_media");
+        step.params.insert(
+            "path".to_string(),
+            toml::Value::String("test_data/photo.jpg".to_string()),
+        );
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("add_media should succeed");
+
+        let calls = driver.get_calls();
+        let am_calls: Vec<_> = calls.iter().filter(|c| c.0 == "add_media").collect();
+        assert_eq!(am_calls.len(), 1);
+        assert_eq!(am_calls[0].1, vec!["test_data/photo.jpg"]);
+    }
+
+    // ── open_link calls driver.open_url ───────────────────────────────
+
+    #[tokio::test]
+    async fn open_link_calls_driver_open_url() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("open_link");
+        step.params.insert(
+            "url".to_string(),
+            toml::Value::String("myapp://profile/123".to_string()),
+        );
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("open_link should succeed");
+
+        let calls = driver.get_calls();
+        let ol_calls: Vec<_> = calls.iter().filter(|c| c.0 == "open_url").collect();
+        assert_eq!(ol_calls.len(), 1);
+        assert_eq!(ol_calls[0].1, vec!["myapp://profile/123"]);
+    }
+
+    // ── push_notification calls driver.push_notification ──────────────
+
+    #[tokio::test]
+    async fn push_notification_calls_driver_push_notification() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("push_notification");
+        step.params.insert(
+            "title".to_string(),
+            toml::Value::String("Test Title".to_string()),
+        );
+        step.params.insert(
+            "body".to_string(),
+            toml::Value::String("Test Body".to_string()),
+        );
+        step.params.insert(
+            "payload".to_string(),
+            toml::Value::String("notification.json".to_string()),
+        );
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("push_notification should succeed");
+
+        let calls = driver.get_calls();
+        let pn_calls: Vec<_> = calls
+            .iter()
+            .filter(|c| c.0 == "push_notification")
+            .collect();
+        assert_eq!(pn_calls.len(), 1);
+        assert_eq!(
+            pn_calls[0].1,
+            vec!["Test Title", "Test Body", "notification.json"]
+        );
+    }
+
+    // ── bash/run executes command and captures output ─────────────────
+
+    #[tokio::test]
+    async fn bash_executes_command_and_captures_output() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("bash");
+        step.params.insert(
+            "command".to_string(),
+            toml::Value::String("echo hello".to_string()),
+        );
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("bash should succeed");
+
+        // No save_to, so no variable should be set
+        assert!(!vars.has("output"));
+    }
+
+    // ── bash with save_to stores result in vars ──────────────────────
+
+    #[tokio::test]
+    async fn bash_with_save_to_stores_result_in_vars() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("bash");
+        step.params.insert(
+            "command".to_string(),
+            toml::Value::String("echo hello".to_string()),
+        );
+        step.save_to = Some("output".to_string());
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("bash should succeed");
+
+        let saved = vars.get("output").expect("output variable should exist");
+        assert_eq!(saved, &VarValue::string("hello"));
+    }
+
+    // ── run action (alias for bash) works the same ───────────────────
+
+    #[tokio::test]
+    async fn run_action_executes_command() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("run");
+        step.params.insert(
+            "command".to_string(),
+            toml::Value::String("echo world".to_string()),
+        );
+        step.save_to = Some("result".to_string());
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("run should succeed");
+
+        let saved = vars.get("result").expect("result variable should exist");
+        assert_eq!(saved, &VarValue::string("world"));
+    }
+
+    // ── http_get dispatches correctly ────────────────────────────────
+
+    #[tokio::test]
+    async fn http_get_requires_url_param() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let step = make_step("http_get");
+        // No url param
+
+        let result = execute_action(&step, &driver, &mut vars).await;
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("requires 'url' param"),
+            "error should mention url param required, got: {err_msg}"
+        );
+    }
+
+    // ── http_post dispatches correctly ───────────────────────────────
+
+    #[tokio::test]
+    async fn http_post_requires_url_param() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let step = make_step("http_post");
+        // No url param
+
+        let result = execute_action(&step, &driver, &mut vars).await;
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("requires 'url' param"),
+            "error should mention url param required, got: {err_msg}"
+        );
+    }
+
+    // ── unknown action still returns error ───────────────────────────
+
+    #[tokio::test]
+    async fn unknown_action_still_returns_error_after_new_actions() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let step = make_step("teleport");
+
+        let result = execute_action(&step, &driver, &mut vars).await;
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("Unknown action"),
+            "error should mention unknown action, got: {err_msg}"
+        );
+        assert!(
+            err_msg.contains("teleport"),
+            "error should mention the action name, got: {err_msg}"
+        );
+    }
+
+    // ── add_media without path param returns error ────────────────────
+
+    #[tokio::test]
+    async fn add_media_without_path_returns_error() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let step = make_step("add_media");
+        // No path param
+
+        let result = execute_action(&step, &driver, &mut vars).await;
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("path"),
+            "error should mention path param, got: {err_msg}"
+        );
+    }
+
+    // ── open_link without url param returns error ─────────────────────
+
+    #[tokio::test]
+    async fn open_link_without_url_returns_error() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let step = make_step("open_link");
+        // No url param
+
+        let result = execute_action(&step, &driver, &mut vars).await;
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("url"),
+            "error should mention url param, got: {err_msg}"
+        );
+    }
+
+    // ── bash without command param returns error ──────────────────────
+
+    #[tokio::test]
+    async fn bash_without_command_returns_error() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let step = make_step("bash");
+        // No command param
+
+        let result = execute_action(&step, &driver, &mut vars).await;
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("command"),
+            "error should mention command param, got: {err_msg}"
         );
     }
 }

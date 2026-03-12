@@ -456,6 +456,7 @@ dependencies = [
  "golem-parser",
  "golem-report",
  "golem-vars",
+ "reqwest",
  "tokio",
  "toml",
 ]
