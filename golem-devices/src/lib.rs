@@ -2,6 +2,7 @@
 
 pub mod android;
 pub mod ios;
+pub mod lifecycle;
 pub mod resolver;
 pub mod version;
 
