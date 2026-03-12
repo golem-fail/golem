@@ -366,6 +366,7 @@ dependencies = [
 name = "golem-cli"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "clap",
  "golem-devices",
  "golem-driver",
@@ -375,6 +376,7 @@ dependencies = [
  "golem-report",
  "golem-runner",
  "golem-vars",
+ "tempfile",
 ]
 
 [[package]]

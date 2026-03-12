@@ -17,6 +17,10 @@ golem-vars = { path = "../golem-vars" }
 golem-report = { path = "../golem-report" }
 golem-email = { path = "../golem-email" }
 clap = { workspace = true }
+anyhow = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
 
 [lints]
 workspace = true
