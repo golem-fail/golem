@@ -61,6 +61,15 @@ pub async fn execute_action(
         "wait" => handle_wait(step, driver).await,
         "wait_not" => handle_wait_not(step, driver).await,
         "fail" => handle_fail(step),
+        "launch" => handle_launch(step, driver).await,
+        "stop" => handle_stop(step, driver).await,
+        "clear_data" => handle_clear_data(step, driver).await,
+        "rotate" => handle_rotate(step, driver).await,
+        "dark_mode" => handle_dark_mode(step, driver).await,
+        "set_location" => handle_set_location(step, driver).await,
+        "press" => handle_press(step, driver).await,
+        "grant_permission" => handle_grant_permission(step, driver).await,
+        "revoke_permission" => handle_revoke_permission(step, driver).await,
         _ => bail!("Unknown action: {}", action),
     }
 }
@@ -294,6 +303,100 @@ fn handle_fail(step: &Step) -> Result<()> {
         .as_deref()
         .unwrap_or("Flow failed (no message provided)");
     bail!("{}", message)
+}
+
+// ── Environment action helpers ──────────────────────────────────────
+
+/// Helper to get the app bundle_id from step.app, falling back to an error.
+fn get_app_bundle(step: &Step) -> Result<&str> {
+    step.app
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("No app specified for {} action", step.action))
+}
+
+/// Launch the app with the given bundle_id.
+async fn handle_launch(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let bundle_id = get_app_bundle(step)?;
+    driver.launch_app(bundle_id).await
+}
+
+/// Stop/terminate the app.
+async fn handle_stop(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let bundle_id = get_app_bundle(step)?;
+    driver.stop_app(bundle_id).await
+}
+
+/// Clear app data/cache.
+async fn handle_clear_data(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let bundle_id = get_app_bundle(step)?;
+    driver.clear_app_data(bundle_id).await
+}
+
+/// Set device orientation (portrait or landscape).
+async fn handle_rotate(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let orientation = step
+        .params
+        .get("orientation")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("rotate action requires 'orientation' param"))?;
+    driver.set_orientation(orientation).await
+}
+
+/// Toggle dark mode on or off.
+async fn handle_dark_mode(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let enabled = step
+        .params
+        .get("enabled")
+        .and_then(|v| v.as_bool())
+        .ok_or_else(|| anyhow::anyhow!("dark_mode action requires 'enabled' param"))?;
+    driver.set_dark_mode(enabled).await
+}
+
+/// Set GPS coordinates on the device.
+async fn handle_set_location(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let latitude = step
+        .params
+        .get("latitude")
+        .and_then(|v| v.as_float().or_else(|| v.as_integer().map(|i| i as f64)))
+        .ok_or_else(|| anyhow::anyhow!("set_location action requires 'latitude' param"))?;
+    let longitude = step
+        .params
+        .get("longitude")
+        .and_then(|v| v.as_float().or_else(|| v.as_integer().map(|i| i as f64)))
+        .ok_or_else(|| anyhow::anyhow!("set_location action requires 'longitude' param"))?;
+    driver.set_location(latitude, longitude).await
+}
+
+/// Press a hardware button (home, back, volume_up, etc.).
+async fn handle_press(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let button = step
+        .params
+        .get("button")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("press action requires 'button' param"))?;
+    driver.press_button(button).await
+}
+
+/// Grant an app permission.
+async fn handle_grant_permission(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let bundle_id = get_app_bundle(step)?;
+    let permission = step
+        .params
+        .get("permission")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("grant_permission action requires 'permission' param"))?;
+    driver.grant_permission(bundle_id, permission).await
+}
+
+/// Revoke an app permission.
+async fn handle_revoke_permission(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let bundle_id = get_app_bundle(step)?;
+    let permission = step
+        .params
+        .get("permission")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("revoke_permission action requires 'permission' param"))?;
+    driver.revoke_permission(bundle_id, permission).await
 }
 
 #[cfg(test)]
@@ -1052,5 +1155,279 @@ mod tests {
         execute_action(&step, &driver, &mut vars)
             .await
             .expect("wait_not should succeed immediately when element is absent");
+    }
+
+    // ── Environment action tests ─────────────────────────────────────
+
+    // ── launch action calls driver.launch_app ─────────────────────────
+
+    #[tokio::test]
+    async fn launch_action_calls_driver_launch_app() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("launch");
+        step.app = Some("com.example.app".to_string());
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("launch should succeed");
+
+        let calls = driver.get_calls();
+        let launch_calls: Vec<_> = calls.iter().filter(|c| c.0 == "launch_app").collect();
+        assert_eq!(launch_calls.len(), 1);
+        assert_eq!(launch_calls[0].1, vec!["com.example.app"]);
+    }
+
+    // ── stop action calls driver.stop_app ─────────────────────────────
+
+    #[tokio::test]
+    async fn stop_action_calls_driver_stop_app() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("stop");
+        step.app = Some("com.example.app".to_string());
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("stop should succeed");
+
+        let calls = driver.get_calls();
+        let stop_calls: Vec<_> = calls.iter().filter(|c| c.0 == "stop_app").collect();
+        assert_eq!(stop_calls.len(), 1);
+        assert_eq!(stop_calls[0].1, vec!["com.example.app"]);
+    }
+
+    // ── clear_data action calls driver.clear_app_data ─────────────────
+
+    #[tokio::test]
+    async fn clear_data_action_calls_driver_clear_app_data() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("clear_data");
+        step.app = Some("com.example.app".to_string());
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("clear_data should succeed");
+
+        let calls = driver.get_calls();
+        let clear_calls: Vec<_> = calls.iter().filter(|c| c.0 == "clear_app_data").collect();
+        assert_eq!(clear_calls.len(), 1);
+        assert_eq!(clear_calls[0].1, vec!["com.example.app"]);
+    }
+
+    // ── rotate landscape calls driver.set_orientation ──────────────────
+
+    #[tokio::test]
+    async fn rotate_landscape_calls_driver_set_orientation() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("rotate");
+        step.params.insert(
+            "orientation".to_string(),
+            toml::Value::String("landscape".to_string()),
+        );
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("rotate should succeed");
+
+        let calls = driver.get_calls();
+        let orient_calls: Vec<_> = calls.iter().filter(|c| c.0 == "set_orientation").collect();
+        assert_eq!(orient_calls.len(), 1);
+        assert_eq!(orient_calls[0].1, vec!["landscape"]);
+    }
+
+    // ── dark_mode enabled calls driver.set_dark_mode(true) ────────────
+
+    #[tokio::test]
+    async fn dark_mode_enabled_calls_driver_set_dark_mode_true() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("dark_mode");
+        step.params
+            .insert("enabled".to_string(), toml::Value::Boolean(true));
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("dark_mode should succeed");
+
+        let calls = driver.get_calls();
+        let dm_calls: Vec<_> = calls.iter().filter(|c| c.0 == "set_dark_mode").collect();
+        assert_eq!(dm_calls.len(), 1);
+        assert_eq!(dm_calls[0].1, vec!["true"]);
+    }
+
+    // ── dark_mode disabled calls driver.set_dark_mode(false) ──────────
+
+    #[tokio::test]
+    async fn dark_mode_disabled_calls_driver_set_dark_mode_false() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("dark_mode");
+        step.params
+            .insert("enabled".to_string(), toml::Value::Boolean(false));
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("dark_mode should succeed");
+
+        let calls = driver.get_calls();
+        let dm_calls: Vec<_> = calls.iter().filter(|c| c.0 == "set_dark_mode").collect();
+        assert_eq!(dm_calls.len(), 1);
+        assert_eq!(dm_calls[0].1, vec!["false"]);
+    }
+
+    // ── set_location calls driver.set_location with correct coords ────
+
+    #[tokio::test]
+    async fn set_location_calls_driver_set_location_with_correct_coords() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("set_location");
+        step.params
+            .insert("latitude".to_string(), toml::Value::Float(35.6762));
+        step.params
+            .insert("longitude".to_string(), toml::Value::Float(139.6503));
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("set_location should succeed");
+
+        let calls = driver.get_calls();
+        let loc_calls: Vec<_> = calls.iter().filter(|c| c.0 == "set_location").collect();
+        assert_eq!(loc_calls.len(), 1);
+        assert_eq!(loc_calls[0].1, vec!["35.6762", "139.6503"]);
+    }
+
+    // ── press home calls driver.press_button("home") ──────────────────
+
+    #[tokio::test]
+    async fn press_home_calls_driver_press_button() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("press");
+        step.params.insert(
+            "button".to_string(),
+            toml::Value::String("home".to_string()),
+        );
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("press should succeed");
+
+        let calls = driver.get_calls();
+        let press_calls: Vec<_> = calls.iter().filter(|c| c.0 == "press_button").collect();
+        assert_eq!(press_calls.len(), 1);
+        assert_eq!(press_calls[0].1, vec!["home"]);
+    }
+
+    // ── grant_permission calls driver.grant_permission ────────────────
+
+    #[tokio::test]
+    async fn grant_permission_calls_driver_grant_permission() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("grant_permission");
+        step.app = Some("com.example.app".to_string());
+        step.params.insert(
+            "permission".to_string(),
+            toml::Value::String("camera".to_string()),
+        );
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("grant_permission should succeed");
+
+        let calls = driver.get_calls();
+        let gp_calls: Vec<_> = calls.iter().filter(|c| c.0 == "grant_permission").collect();
+        assert_eq!(gp_calls.len(), 1);
+        assert_eq!(gp_calls[0].1, vec!["com.example.app", "camera"]);
+    }
+
+    // ── revoke_permission calls driver.revoke_permission ──────────────
+
+    #[tokio::test]
+    async fn revoke_permission_calls_driver_revoke_permission() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let mut step = make_step("revoke_permission");
+        step.app = Some("com.example.app".to_string());
+        step.params.insert(
+            "permission".to_string(),
+            toml::Value::String("location".to_string()),
+        );
+
+        execute_action(&step, &driver, &mut vars)
+            .await
+            .expect("revoke_permission should succeed");
+
+        let calls = driver.get_calls();
+        let rp_calls: Vec<_> = calls
+            .iter()
+            .filter(|c| c.0 == "revoke_permission")
+            .collect();
+        assert_eq!(rp_calls.len(), 1);
+        assert_eq!(rp_calls[0].1, vec!["com.example.app", "location"]);
+    }
+
+    // ── launch without app param returns error ────────────────────────
+
+    #[tokio::test]
+    async fn launch_without_app_param_returns_error() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let step = make_step("launch");
+        // No app set
+
+        let result = execute_action(&step, &driver, &mut vars).await;
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("No app specified"),
+            "error should mention no app specified, got: {err_msg}"
+        );
+    }
+
+    // ── rotate without orientation param returns error ─────────────────
+
+    #[tokio::test]
+    async fn rotate_without_orientation_returns_error() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+
+        let step = make_step("rotate");
+        // No orientation param
+
+        let result = execute_action(&step, &driver, &mut vars).await;
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("orientation"),
+            "error should mention orientation, got: {err_msg}"
+        );
     }
 }
