@@ -2,3 +2,4 @@
 
 pub mod actions;
 pub mod resolution;
+pub mod scroll;

@@ -449,6 +449,7 @@ name = "golem-runner"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "golem-devices",
  "golem-driver",
  "golem-element",
