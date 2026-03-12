@@ -2,6 +2,7 @@
 
 pub mod android;
 pub mod ios;
+pub mod resolver;
 pub mod version;
 
 use serde::{Deserialize, Serialize};
