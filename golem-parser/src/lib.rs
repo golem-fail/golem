@@ -96,6 +96,8 @@ pub struct Block {
     pub max_iterations: Option<u64>,
     #[serde(default)]
     pub vars: HashMap<String, String>,
+    #[serde(default)]
+    pub save_to: HashMap<String, String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]

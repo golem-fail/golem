@@ -198,6 +198,7 @@ mod tests {
             run_flow: None,
             max_iterations: None,
             vars: HashMap::new(),
+            save_to: HashMap::new(),
         }
     }
 
