@@ -3,7 +3,31 @@ use std::collections::HashSet;
 use anyhow::{bail, Context};
 
 use crate::version::{matches_version, parse_os_version};
-use crate::{DeviceInfo, DeviceType, ResolvedDevice};
+use crate::{DeviceInfo, DeviceState, DeviceType, Platform, ResolvedDevice};
+
+/// Options controlling device resolution behavior.
+#[derive(Default)]
+pub struct ResolveOptions {
+    /// When true, if no existing device matches a constraint but a
+    /// simulator/emulator could be created, include a synthetic
+    /// `NeedsCreation` device in the results instead of returning an error.
+    pub create_if_missing: bool,
+    /// When true, if a constraint requires a physical device type that is
+    /// not connected, skip it silently instead of returning an error.
+    pub ignore_missing_physical: bool,
+}
+
+/// Return a preference score for a device state (lower is better).
+///
+/// Preference order: Booted (0) > Shutdown (1) > Connected (2) > NeedsCreation (3).
+fn state_preference(state: &DeviceState) -> u8 {
+    match state {
+        DeviceState::Booted => 0,
+        DeviceState::Shutdown => 1,
+        DeviceState::Connected => 2,
+        DeviceState::NeedsCreation => 3,
+    }
+}
 
 /// How to expand a device constraint with multiple values.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -89,6 +113,7 @@ fn covered_requirements(device: &DeviceInfo, requirements: &[Requirement]) -> Ha
 pub fn resolve_devices(
     constraints: &[DeviceConstraint],
     available: &[DeviceInfo],
+    options: &ResolveOptions,
 ) -> anyhow::Result<Vec<ResolvedDevice>> {
     let mut result: Vec<ResolvedDevice> = Vec::new();
 
@@ -98,10 +123,10 @@ pub fn resolve_devices(
         } else {
             match constraint.expand {
                 ExpandMode::Full => {
-                    resolve_full(constraint, available, &mut result)?;
+                    resolve_full(constraint, available, &mut result, options)?;
                 }
                 ExpandMode::MinCoverage => {
-                    resolve_min_coverage(constraint, available, &mut result)?;
+                    resolve_min_coverage(constraint, available, &mut result, options)?;
                 }
             }
         }
@@ -143,6 +168,7 @@ fn resolve_full(
     constraint: &DeviceConstraint,
     available: &[DeviceInfo],
     result: &mut Vec<ResolvedDevice>,
+    options: &ResolveOptions,
 ) -> anyhow::Result<()> {
     let os_versions = &constraint.os_versions;
     let device_types = &constraint.device_types;
@@ -186,14 +212,14 @@ fn resolve_full(
             continue;
         }
 
-        // Find a matching available device that isn't already selected.
+        // Find matching available devices that aren't already selected, sorted by preference.
         let selected_udids: HashSet<&str> =
             result.iter().map(|r| r.device.udid.as_str()).collect();
 
-        let device = available
+        let mut candidates: Vec<&DeviceInfo> = available
             .iter()
             .filter(|d| !selected_udids.contains(d.udid.as_str()))
-            .find(|d| {
+            .filter(|d| {
                 let os_ok = match os_opt {
                     Some(os_str) => {
                         device_satisfies(d, &Requirement::OsVersion((*os_str).clone()))
@@ -206,18 +232,41 @@ fn resolve_full(
                 };
                 os_ok && dt_ok
             })
-            .with_context(|| {
-                format!(
-                    "no available device matching os={:?}, type={:?}",
-                    os_opt, dt_opt
-                )
-            })?;
+            .collect();
 
-        result.push(ResolvedDevice {
-            device: device.clone(),
-            apps: Vec::new(),
-            created: false,
-        });
+        // Sort by state preference: Booted > Shutdown > Connected > NeedsCreation.
+        candidates.sort_by_key(|d| state_preference(&d.state));
+
+        if let Some(device) = candidates.first() {
+            result.push(ResolvedDevice {
+                device: (*device).clone(),
+                apps: Vec::new(),
+                created: false,
+            });
+        } else if requires_physical(os_opt, dt_opt, available) && options.ignore_missing_physical {
+            // Physical device required but not connected -- skip silently.
+            continue;
+        } else if options.create_if_missing {
+            if let Some(synthetic) = make_synthetic_device(os_opt, dt_opt) {
+                result.push(ResolvedDevice {
+                    device: synthetic,
+                    apps: Vec::new(),
+                    created: true,
+                });
+            } else {
+                bail!(
+                    "no available device matching os={:?}, type={:?}",
+                    os_opt,
+                    dt_opt
+                );
+            }
+        } else {
+            bail!(
+                "no available device matching os={:?}, type={:?}",
+                os_opt,
+                dt_opt
+            );
+        }
     }
 
     Ok(())
@@ -233,6 +282,7 @@ fn resolve_min_coverage(
     constraint: &DeviceConstraint,
     available: &[DeviceInfo],
     result: &mut Vec<ResolvedDevice>,
+    options: &ResolveOptions,
 ) -> anyhow::Result<()> {
     // Build the full set of requirements.
     let mut requirements: Vec<Requirement> = Vec::new();
@@ -258,14 +308,22 @@ fn resolve_min_coverage(
     let selected_udids: HashSet<String> =
         result.iter().map(|r| r.device.udid.clone()).collect();
 
-    // Build a pool of candidates (available devices not already selected).
-    let candidates: Vec<&DeviceInfo> = available
+    // Build a pool of candidates (available devices not already selected),
+    // sorted by state preference so ties favor better states.
+    let mut candidates: Vec<&DeviceInfo> = available
         .iter()
         .filter(|d| !selected_udids.contains(&d.udid))
         .collect();
+    candidates.sort_by_key(|d| state_preference(&d.state));
 
     while covered.len() < requirements.len() {
         // For each candidate, compute how many *uncovered* requirements it covers.
+        // When there is a tie in coverage count, prefer the device with the
+        // better state (lower state_preference value). Because candidates are
+        // already sorted by state preference, max_by_key with stable ordering
+        // on (new_covers.len()) would pick the *last* equal element.  To
+        // prefer the *first* (best state), we use a tuple that also includes
+        // (new_count, inverse_state_preference) so the best state wins ties.
         let best = candidates
             .iter()
             .filter(|d| !result.iter().any(|r| r.device.udid == d.udid))
@@ -273,13 +331,16 @@ fn resolve_min_coverage(
                 let device_covers = covered_requirements(d, &requirements);
                 let new_covers: HashSet<usize> =
                     device_covers.difference(&covered).copied().collect();
-                (d, new_covers)
+                let new_count = new_covers.len();
+                // Higher inverse_pref => better state => preferred in tie.
+                let inverse_pref = 255 - state_preference(&d.state);
+                (d, new_covers, new_count, inverse_pref)
             })
-            .filter(|(_, new)| !new.is_empty())
-            .max_by_key(|(_, new)| new.len());
+            .filter(|(_, _, count, _)| *count > 0)
+            .max_by_key(|(_, _, count, inv_pref)| (*count, *inv_pref));
 
         match best {
-            Some((device, new_covers)) => {
+            Some((device, new_covers, _, _)) => {
                 covered = covered.union(&new_covers).copied().collect();
                 result.push(ResolvedDevice {
                     device: (*device).clone(),
@@ -289,6 +350,48 @@ fn resolve_min_coverage(
             }
             None => {
                 // Collect uncovered requirements for the error message.
+                let uncovered_reqs: Vec<&Requirement> = requirements
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| !covered.contains(i))
+                    .map(|(_, req)| req)
+                    .collect();
+
+                // Check if all uncovered requirements involve physical devices.
+                if options.ignore_missing_physical
+                    && uncovered_reqs_are_physical_only(&uncovered_reqs, available)
+                {
+                    break;
+                }
+
+                // Try create_if_missing: generate synthetic devices for remaining requirements.
+                if options.create_if_missing {
+                    let mut created_any = false;
+                    for (i, req) in requirements.iter().enumerate() {
+                        if covered.contains(&i) {
+                            continue;
+                        }
+                        if let Some(synthetic) = make_synthetic_for_requirement(req) {
+                            // Check if a previously created synthetic already covers this.
+                            let syn_covers = covered_requirements(&synthetic, &requirements);
+                            let new: HashSet<usize> =
+                                syn_covers.difference(&covered).copied().collect();
+                            if !new.is_empty() {
+                                covered = covered.union(&new).copied().collect();
+                                result.push(ResolvedDevice {
+                                    device: synthetic,
+                                    apps: Vec::new(),
+                                    created: true,
+                                });
+                                created_any = true;
+                            }
+                        }
+                    }
+                    if created_any {
+                        continue;
+                    }
+                }
+
                 let uncovered: Vec<String> = requirements
                     .iter()
                     .enumerate()
@@ -304,6 +407,124 @@ fn resolve_min_coverage(
     }
 
     Ok(())
+}
+
+/// Check whether uncovered requirements involve only physical devices.
+fn uncovered_reqs_are_physical_only(reqs: &[&Requirement], available: &[DeviceInfo]) -> bool {
+    // If available has any physical devices, the missing ones are physical.
+    // We consider a requirement "physical-only" when it's a DeviceType requirement
+    // and the only devices of that type in `available` are physical, OR there are
+    // no matching devices at all (meaning the constraint targets a physical device).
+    // For simplicity: if no available device (including virtual) satisfies any of the
+    // uncovered reqs, and the constraint could reference a physical device, treat as physical.
+    for req in reqs {
+        let any_virtual_match = available.iter().any(|d| !d.physical && device_satisfies(d, req));
+        if any_virtual_match {
+            return false;
+        }
+    }
+    true
+}
+
+/// Check whether a particular combo targets a physical device.
+fn requires_physical(
+    _os_opt: &Option<&String>,
+    _dt_opt: &Option<&DeviceType>,
+    available: &[DeviceInfo],
+) -> bool {
+    // If all devices in the pool are physical, we treat it as physical-required.
+    available.iter().all(|d| d.physical)
+}
+
+/// Build a synthetic `NeedsCreation` device from OS + type combo (for `resolve_full`).
+fn make_synthetic_device(
+    os_opt: &Option<&String>,
+    dt_opt: &Option<&DeviceType>,
+) -> Option<DeviceInfo> {
+    let (platform, os_major) = match os_opt {
+        Some(os_str) => {
+            let spec = parse_os_version(os_str).ok()?;
+            let (p, m) = match spec {
+                crate::OsVersionSpec::Exact { platform, major } => (platform, major),
+                crate::OsVersionSpec::Minimum { platform, major } => (platform, major),
+                crate::OsVersionSpec::Latest { platform, .. } => (platform, 0),
+            };
+            (p, m)
+        }
+        None => (Platform::Ios, 0),
+    };
+
+    let device_type = match dt_opt {
+        Some(dt) => **dt,
+        None => DeviceType::Phone,
+    };
+
+    Some(DeviceInfo {
+        name: format!("synthetic-{}-{}-{}", platform, device_type, os_major),
+        udid: format!("synthetic-{}-{}-{}", platform, device_type, os_major),
+        platform,
+        device_type,
+        os_major,
+        os_version: format!("{os_major}.0"),
+        state: DeviceState::NeedsCreation,
+        physical: false,
+        playstore: false,
+        screen_width: None,
+        screen_height: None,
+        screen_scale: None,
+        last_booted: None,
+        runtime_id: None,
+        device_type_id: None,
+    })
+}
+
+/// Build a synthetic `NeedsCreation` device for a single requirement
+/// (used in `resolve_min_coverage`).
+fn make_synthetic_for_requirement(req: &Requirement) -> Option<DeviceInfo> {
+    match req {
+        Requirement::OsVersion(os_str) => {
+            let spec = parse_os_version(os_str).ok()?;
+            let (platform, major) = match spec {
+                crate::OsVersionSpec::Exact { platform, major } => (platform, major),
+                crate::OsVersionSpec::Minimum { platform, major } => (platform, major),
+                crate::OsVersionSpec::Latest { platform, .. } => (platform, 0),
+            };
+            Some(DeviceInfo {
+                name: format!("synthetic-{}-{}", platform, major),
+                udid: format!("synthetic-{}-{}", platform, major),
+                platform,
+                device_type: DeviceType::Phone,
+                os_major: major,
+                os_version: format!("{major}.0"),
+                state: DeviceState::NeedsCreation,
+                physical: false,
+                playstore: false,
+                screen_width: None,
+                screen_height: None,
+                screen_scale: None,
+                last_booted: None,
+                runtime_id: None,
+                device_type_id: None,
+            })
+        }
+        Requirement::DeviceType(dt) => Some(DeviceInfo {
+            name: format!("synthetic-{dt}"),
+            udid: format!("synthetic-{dt}"),
+            platform: Platform::Ios,
+            device_type: *dt,
+            os_major: 0,
+            os_version: "0.0".to_string(),
+            state: DeviceState::NeedsCreation,
+            physical: false,
+            playstore: false,
+            screen_width: None,
+            screen_height: None,
+            screen_scale: None,
+            last_booted: None,
+            runtime_id: None,
+            device_type_id: None,
+        }),
+    }
 }
 
 #[cfg(test)]
@@ -352,7 +573,8 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available).expect("should resolve");
+        let opts = ResolveOptions::default();
+        let result = resolve_devices(&constraints, &available, &opts).expect("should resolve");
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].device.name, "iPhone 15 Pro");
         assert_eq!(result[0].device.udid, "uid-1");
@@ -372,7 +594,7 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].device.os_major, 18);
     }
@@ -391,7 +613,7 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].device.device_type, DeviceType::Tablet);
     }
@@ -411,7 +633,7 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
         assert_eq!(result.len(), 2);
         let majors: HashSet<u32> = result.iter().map(|r| r.device.os_major).collect();
         assert!(majors.contains(&17));
@@ -432,7 +654,7 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
         assert_eq!(result.len(), 2);
         let types: HashSet<DeviceType> = result.iter().map(|r| r.device.device_type).collect();
         assert!(types.contains(&DeviceType::Phone));
@@ -459,7 +681,7 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
         assert_eq!(result.len(), 2);
 
         // Verify all requirements are satisfied.
@@ -493,7 +715,7 @@ mod tests {
             expand: ExpandMode::Full,
         }];
 
-        let result = resolve_devices(&constraints, &available).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
         // 2 OS versions x 2 types = 4 devices
         assert_eq!(result.len(), 4);
     }
@@ -524,7 +746,7 @@ mod tests {
             },
         ];
 
-        let result = resolve_devices(&constraints, &available).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
         // iPhone 15 Pro covers ios:18 + phone. Only need one more for ios:17.
         assert_eq!(result.len(), 2);
         assert!(result.iter().any(|r| r.device.name == "iPhone 15 Pro"));
@@ -548,7 +770,7 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available);
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default());
         assert!(result.is_err());
     }
 
@@ -564,7 +786,7 @@ mod tests {
         )];
         let constraints: Vec<DeviceConstraint> = vec![];
 
-        let result = resolve_devices(&constraints, &available).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
         assert!(result.is_empty());
     }
 
@@ -594,7 +816,7 @@ mod tests {
             },
         ];
 
-        let result = resolve_devices(&constraints, &available).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
         assert_eq!(result.len(), 1);
     }
 
@@ -622,7 +844,7 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
         // Greedy should find a 2-device solution (not 3).
         assert_eq!(result.len(), 2);
         // Both OS versions covered.
@@ -645,7 +867,7 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
         // Only one requirement (ios:17+), so one device suffices.
         assert_eq!(result.len(), 1);
         // The picked device should have os_major >= 17.
@@ -674,7 +896,7 @@ mod tests {
             },
         ];
 
-        let result = resolve_devices(&constraints, &available).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
         assert_eq!(result.len(), 2);
         let platforms: HashSet<Platform> = result.iter().map(|r| r.device.platform).collect();
         assert!(platforms.contains(&Platform::Ios));
@@ -698,7 +920,7 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available);
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default());
         assert!(result.is_err());
         let err_msg = result.expect_err("should fail").to_string();
         assert!(
@@ -721,7 +943,7 @@ mod tests {
             expand: ExpandMode::Full,
         }];
 
-        let result = resolve_devices(&constraints, &available).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
         assert_eq!(result.len(), 2);
     }
 
@@ -739,7 +961,7 @@ mod tests {
             expand: ExpandMode::Full,
         }];
 
-        let result = resolve_devices(&constraints, &available).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
         assert_eq!(result.len(), 2);
     }
 
@@ -760,7 +982,359 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
         assert!(result.is_empty());
+    }
+
+    // ─── Preference ordering tests ───────────────────────────────────
+
+    /// Helper: build a DeviceInfo with a specific state.
+    fn make_device_with_state(
+        name: &str,
+        udid: &str,
+        platform: Platform,
+        device_type: DeviceType,
+        os_major: u32,
+        state: DeviceState,
+    ) -> DeviceInfo {
+        DeviceInfo {
+            name: name.to_string(),
+            udid: udid.to_string(),
+            platform,
+            device_type,
+            os_major,
+            os_version: format!("{os_major}.0"),
+            state,
+            physical: false,
+            playstore: false,
+            screen_width: None,
+            screen_height: None,
+            screen_scale: None,
+            last_booted: None,
+            runtime_id: None,
+            device_type_id: None,
+        }
+    }
+
+    /// Helper: build a physical DeviceInfo.
+    fn make_physical_device(
+        name: &str,
+        udid: &str,
+        platform: Platform,
+        device_type: DeviceType,
+        os_major: u32,
+        state: DeviceState,
+    ) -> DeviceInfo {
+        let mut d = make_device_with_state(name, udid, platform, device_type, os_major, state);
+        d.physical = true;
+        d
+    }
+
+    // 19. Prefer running (booted) device over shutdown device
+    #[test]
+    fn prefer_running_over_shutdown() {
+        let available = vec![
+            make_device_with_state(
+                "iPhone Shutdown",
+                "uid-1",
+                Platform::Ios,
+                DeviceType::Phone,
+                18,
+                DeviceState::Shutdown,
+            ),
+            make_device_with_state(
+                "iPhone Booted",
+                "uid-2",
+                Platform::Ios,
+                DeviceType::Phone,
+                18,
+                DeviceState::Booted,
+            ),
+        ];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["ios:18".to_string()],
+            device_types: vec![],
+            expand: ExpandMode::MinCoverage,
+        }];
+
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].device.name, "iPhone Booted");
+        assert_eq!(result[0].device.state, DeviceState::Booted);
+    }
+
+    // 20. Prefer shutdown device over needs-creation
+    #[test]
+    fn prefer_shutdown_over_needs_creation() {
+        let available = vec![
+            make_device_with_state(
+                "iPhone NeedsCreation",
+                "uid-1",
+                Platform::Ios,
+                DeviceType::Phone,
+                18,
+                DeviceState::NeedsCreation,
+            ),
+            make_device_with_state(
+                "iPhone Shutdown",
+                "uid-2",
+                Platform::Ios,
+                DeviceType::Phone,
+                18,
+                DeviceState::Shutdown,
+            ),
+        ];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["ios:18".to_string()],
+            device_types: vec![],
+            expand: ExpandMode::MinCoverage,
+        }];
+
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].device.name, "iPhone Shutdown");
+        assert_eq!(result[0].device.state, DeviceState::Shutdown);
+    }
+
+    // 21. create_if_missing=true adds synthetic device when no match exists
+    #[test]
+    fn create_if_missing_true_adds_synthetic() {
+        let available = vec![make_device(
+            "iPhone 16",
+            "uid-1",
+            Platform::Ios,
+            DeviceType::Phone,
+            18,
+        )];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["android:34".to_string()],
+            device_types: vec![],
+            expand: ExpandMode::MinCoverage,
+        }];
+        let opts = ResolveOptions {
+            create_if_missing: true,
+            ignore_missing_physical: false,
+        };
+
+        let result = resolve_devices(&constraints, &available, &opts).expect("should resolve");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].device.state, DeviceState::NeedsCreation);
+        assert_eq!(result[0].device.platform, Platform::Android);
+        assert!(result[0].created);
+    }
+
+    // 22. create_if_missing=false errors when no match exists
+    #[test]
+    fn create_if_missing_false_errors_on_no_match() {
+        let available = vec![make_device(
+            "iPhone 16",
+            "uid-1",
+            Platform::Ios,
+            DeviceType::Phone,
+            18,
+        )];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["android:34".to_string()],
+            device_types: vec![],
+            expand: ExpandMode::MinCoverage,
+        }];
+        let opts = ResolveOptions {
+            create_if_missing: false,
+            ignore_missing_physical: false,
+        };
+
+        let result = resolve_devices(&constraints, &available, &opts);
+        assert!(result.is_err());
+    }
+
+    // 23. ignore_missing_physical=true skips missing physical devices
+    #[test]
+    fn ignore_missing_physical_true_skips() {
+        // Only physical devices in available, but none match android:34.
+        // With ignore_missing_physical=true, should skip silently.
+        let available = vec![make_physical_device(
+            "Pixel 8",
+            "uid-1",
+            Platform::Android,
+            DeviceType::Phone,
+            33,
+            DeviceState::Connected,
+        )];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["android:34".to_string()],
+            device_types: vec![],
+            expand: ExpandMode::MinCoverage,
+        }];
+        let opts = ResolveOptions {
+            create_if_missing: false,
+            ignore_missing_physical: true,
+        };
+
+        let result = resolve_devices(&constraints, &available, &opts).expect("should resolve");
+        // No device matched, but skipped silently instead of erroring.
+        assert!(result.is_empty());
+    }
+
+    // 24. ignore_missing_physical=false errors on missing physical device
+    #[test]
+    fn ignore_missing_physical_false_errors() {
+        let available = vec![make_physical_device(
+            "Pixel 8",
+            "uid-1",
+            Platform::Android,
+            DeviceType::Phone,
+            33,
+            DeviceState::Connected,
+        )];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["android:34".to_string()],
+            device_types: vec![],
+            expand: ExpandMode::MinCoverage,
+        }];
+        let opts = ResolveOptions {
+            create_if_missing: false,
+            ignore_missing_physical: false,
+        };
+
+        let result = resolve_devices(&constraints, &available, &opts);
+        assert!(result.is_err());
+    }
+
+    // 25. Mixed states: running + shutdown + needs-creation, picks optimally
+    #[test]
+    fn mixed_states_picks_optimal() {
+        // Two ios:18 phones available: one booted, one shutdown, one needs-creation.
+        // Also need ios:17 -- only shutdown available.
+        let available = vec![
+            make_device_with_state(
+                "iPhone NeedsCreation",
+                "uid-1",
+                Platform::Ios,
+                DeviceType::Phone,
+                18,
+                DeviceState::NeedsCreation,
+            ),
+            make_device_with_state(
+                "iPhone Shutdown 18",
+                "uid-2",
+                Platform::Ios,
+                DeviceType::Phone,
+                18,
+                DeviceState::Shutdown,
+            ),
+            make_device_with_state(
+                "iPhone Booted 18",
+                "uid-3",
+                Platform::Ios,
+                DeviceType::Phone,
+                18,
+                DeviceState::Booted,
+            ),
+            make_device_with_state(
+                "iPhone Shutdown 17",
+                "uid-4",
+                Platform::Ios,
+                DeviceType::Phone,
+                17,
+                DeviceState::Shutdown,
+            ),
+        ];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["ios:17".to_string(), "ios:18".to_string()],
+            device_types: vec![DeviceType::Phone],
+            expand: ExpandMode::MinCoverage,
+        }];
+
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
+        assert_eq!(result.len(), 2);
+
+        // The ios:18 device should be the booted one.
+        let ios18 = result
+            .iter()
+            .find(|r| r.device.os_major == 18)
+            .expect("should have ios:18 device");
+        assert_eq!(ios18.device.state, DeviceState::Booted);
+        assert_eq!(ios18.device.name, "iPhone Booted 18");
+
+        // ios:17 should be the shutdown one (only option).
+        let ios17 = result
+            .iter()
+            .find(|r| r.device.os_major == 17)
+            .expect("should have ios:17 device");
+        assert_eq!(ios17.device.state, DeviceState::Shutdown);
+    }
+
+    // 26. ResolveOptions defaults to false for both fields
+    #[test]
+    fn resolve_options_default_is_false() {
+        let opts = ResolveOptions::default();
+        assert!(!opts.create_if_missing);
+        assert!(!opts.ignore_missing_physical);
+    }
+
+    // 27. Preference ordering works in expand=Full mode too
+    #[test]
+    fn preference_ordering_in_full_mode() {
+        let available = vec![
+            make_device_with_state(
+                "iPhone Shutdown",
+                "uid-1",
+                Platform::Ios,
+                DeviceType::Phone,
+                18,
+                DeviceState::Shutdown,
+            ),
+            make_device_with_state(
+                "iPhone Booted",
+                "uid-2",
+                Platform::Ios,
+                DeviceType::Phone,
+                18,
+                DeviceState::Booted,
+            ),
+        ];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["ios:18".to_string()],
+            device_types: vec![DeviceType::Phone],
+            expand: ExpandMode::Full,
+        }];
+
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].device.state, DeviceState::Booted);
+        assert_eq!(result[0].device.name, "iPhone Booted");
+    }
+
+    // 28. create_if_missing with expand=Full adds synthetic device
+    #[test]
+    fn create_if_missing_full_mode() {
+        let available: Vec<DeviceInfo> = vec![];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["ios:18".to_string()],
+            device_types: vec![],
+            expand: ExpandMode::Full,
+        }];
+        let opts = ResolveOptions {
+            create_if_missing: true,
+            ignore_missing_physical: false,
+        };
+
+        let result = resolve_devices(&constraints, &available, &opts).expect("should resolve");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].device.state, DeviceState::NeedsCreation);
+        assert!(result[0].created);
     }
 }
