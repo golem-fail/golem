@@ -6,7 +6,9 @@ edition = "2021"
 [dependencies]
 anyhow = { workspace = true }
 thiserror = { workspace = true }
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+regex = "1"
+async-trait = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
