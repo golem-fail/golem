@@ -2,6 +2,7 @@
 
 pub mod actions;
 pub mod branch;
+pub mod executor;
 pub mod policy;
 pub mod resolution;
 pub mod scroll;
