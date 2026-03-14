@@ -377,6 +377,7 @@ dependencies = [
  "golem-runner",
  "golem-vars",
  "tempfile",
+ "toml",
 ]
 
 [[package]]
