@@ -471,7 +471,10 @@ dependencies = [
  "golem-parser",
  "golem-report",
  "golem-vars",
+ "rand",
+ "rand_chacha",
  "reqwest",
+ "tempfile",
  "tokio",
  "toml",
 ]

@@ -3,6 +3,7 @@
 pub mod actions;
 pub mod cleanup;
 pub mod branch;
+pub mod fixture_loader;
 pub mod data_driven;
 pub mod device_vars;
 pub mod executor;
