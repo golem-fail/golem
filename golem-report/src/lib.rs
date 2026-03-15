@@ -3,6 +3,7 @@
 
 pub mod human;
 pub mod json;
+pub mod junit;
 
 /// Result of a single step within a flow.
 pub struct StepReport {
