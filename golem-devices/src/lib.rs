@@ -1,6 +1,7 @@
 // golem-devices: device management
 
 pub mod android;
+pub mod concurrency;
 pub mod ios;
 pub mod lifecycle;
 pub mod resolver;
