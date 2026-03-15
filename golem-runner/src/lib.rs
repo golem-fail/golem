@@ -4,6 +4,7 @@ pub mod actions;
 pub mod cleanup;
 pub mod branch;
 pub mod data_driven;
+pub mod device_vars;
 pub mod executor;
 pub mod loops;
 pub mod policy;
