@@ -1,6 +1,7 @@
 // golem-runner: test execution orchestrator
 
 pub mod actions;
+pub mod cleanup;
 pub mod branch;
 pub mod data_driven;
 pub mod executor;
