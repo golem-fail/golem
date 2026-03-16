@@ -386,6 +386,7 @@ dependencies = [
  "golem-runner",
  "golem-vars",
  "tempfile",
+ "tokio",
  "toml",
 ]
 
