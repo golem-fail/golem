@@ -4,6 +4,7 @@
 pub mod human;
 pub mod json;
 pub mod junit;
+pub mod output;
 pub mod toon;
 
 /// Result of a single step within a flow.
