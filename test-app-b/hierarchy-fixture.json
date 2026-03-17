@@ -1,0 +1,99 @@
+{
+  "element_type": "View",
+  "text": null,
+  "id": "root",
+  "placeholder": null,
+  "enabled": true,
+  "checked": false,
+  "clickable": false,
+  "focused": false,
+  "bounds": { "x": 0, "y": 0, "width": 390, "height": 844 },
+  "children": [
+    {
+      "element_type": "View",
+      "text": null,
+      "id": "header-section",
+      "placeholder": null,
+      "enabled": true,
+      "checked": false,
+      "clickable": false,
+      "focused": false,
+      "bounds": { "x": 0, "y": 44, "width": 390, "height": 60 },
+      "children": [
+        {
+          "element_type": "Label",
+          "text": "GOLEM Test B",
+          "id": "app-b-title",
+          "placeholder": null,
+          "enabled": true,
+          "checked": false,
+          "clickable": false,
+          "focused": false,
+          "bounds": { "x": 95, "y": 54, "width": 200, "height": 40 },
+          "children": []
+        }
+      ]
+    },
+    {
+      "element_type": "View",
+      "text": null,
+      "id": "content-section",
+      "placeholder": null,
+      "enabled": true,
+      "checked": false,
+      "clickable": false,
+      "focused": false,
+      "bounds": { "x": 0, "y": 114, "width": 390, "height": 400 },
+      "children": [
+        {
+          "element_type": "Label",
+          "text": "",
+          "id": "shared-data-display",
+          "placeholder": null,
+          "enabled": true,
+          "checked": false,
+          "clickable": false,
+          "focused": false,
+          "bounds": { "x": 20, "y": 124, "width": 350, "height": 44 },
+          "children": []
+        },
+        {
+          "element_type": "Button",
+          "text": "Refresh",
+          "id": "refresh-button",
+          "placeholder": null,
+          "enabled": true,
+          "checked": false,
+          "clickable": true,
+          "focused": false,
+          "bounds": { "x": 120, "y": 188, "width": 150, "height": 44 },
+          "children": []
+        },
+        {
+          "element_type": "Label",
+          "text": "Ready",
+          "id": "status-label",
+          "placeholder": null,
+          "enabled": true,
+          "checked": false,
+          "clickable": false,
+          "focused": false,
+          "bounds": { "x": 145, "y": 252, "width": 100, "height": 30 },
+          "children": []
+        },
+        {
+          "element_type": "Label",
+          "text": "",
+          "id": "deeplink-display-b",
+          "placeholder": null,
+          "enabled": true,
+          "checked": false,
+          "clickable": false,
+          "focused": false,
+          "bounds": { "x": 20, "y": 302, "width": 350, "height": 44 },
+          "children": []
+        }
+      ]
+    }
+  ]
+}
