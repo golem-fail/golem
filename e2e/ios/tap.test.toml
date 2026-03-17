@@ -1,0 +1,23 @@
+[flow]
+name = "iOS tap test"
+tags = ["ios", "interaction", "smoke"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[block]]
+name = "tap_tests"
+steps = [
+  { action = "launch", app = "com.golem.test" },
+  { action = "tap", id = "submit-button" },
+  { action = "tap", text = "Action", index = 0 },
+  { action = "tap", id = "increment-button" },
+  { action = "tap", id = "increment-button" },
+  { action = "tap", id = "decrement-button" },
+  { action = "assert_text", id = "counter-display", text = "1" },
+]

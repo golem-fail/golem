@@ -1,0 +1,45 @@
+[flow]
+name = "iOS assertions test"
+tags = ["ios", "assertions", "smoke"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[block]]
+name = "visibility_assertions"
+steps = [
+  { action = "launch", app = "com.golem.test" },
+
+  # assert_visible: elements that should be on screen
+  { action = "assert_visible", id = "submit-button" },
+  { action = "assert_visible", id = "email-input" },
+  { action = "assert_visible", id = "counter-display" },
+  { action = "assert_visible", text = "Submit" },
+
+  # assert_not_visible: elements that should not be on screen
+  # (deep link display is empty by default, companion app elements are not present)
+  { action = "assert_not_visible", text = "GOLEM Test B" },
+  { action = "assert_not_visible", id = "app-b-title" },
+
+  # assert_text: verify exact text content
+  { action = "assert_text", id = "counter-display", text = "0" },
+  { action = "assert_text", id = "orientation-label", text = "Portrait" },
+  { action = "assert_text", id = "theme-label", text = "Light" },
+  { action = "assert_text", id = "list-item-0", text = "Item 0" },
+  { action = "assert_text", id = "list-item-3", text = "Item 3" },
+
+  # assert_enabled: verify elements are enabled
+  { action = "assert_enabled", id = "submit-button" },
+  { action = "assert_enabled", id = "increment-button" },
+  { action = "assert_enabled", id = "email-input" },
+  { action = "assert_enabled", id = "dark-mode-toggle" },
+
+  # assert_checked: toggle a checkbox then verify it is checked
+  { action = "tap", id = "agree-checkbox" },
+  { action = "assert_checked", id = "agree-checkbox" },
+]

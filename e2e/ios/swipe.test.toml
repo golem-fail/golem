@@ -1,0 +1,34 @@
+[flow]
+name = "iOS swipe test"
+tags = ["ios", "interaction", "gesture"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[block]]
+name = "swipe_all_directions"
+steps = [
+  { action = "launch", app = "com.golem.test" },
+
+  # Swipe down to scroll the page
+  { action = "swipe", direction = "down" },
+  { action = "swipe", direction = "down" },
+
+  # Swipe up to scroll back
+  { action = "swipe", direction = "up" },
+
+  # Swipe left on the carousel
+  { action = "swipe", direction = "left" },
+  { action = "swipe", direction = "left" },
+
+  # Swipe right on the carousel to go back
+  { action = "swipe", direction = "right" },
+
+  # Verify we can still see a known element after swiping
+  { action = "assert_visible", id = "submit-button" },
+]

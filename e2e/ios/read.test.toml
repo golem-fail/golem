@@ -1,0 +1,39 @@
+[flow]
+name = "iOS read element text test"
+tags = ["ios", "data", "variables"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[block]]
+name = "read_and_save"
+steps = [
+  { action = "launch", app = "com.golem.test" },
+
+  # Read the initial counter value and save it to a variable
+  { action = "read", id = "counter-display", save_to = "initial_count" },
+
+  # Increment the counter twice
+  { action = "tap", id = "increment-button" },
+  { action = "tap", id = "increment-button" },
+
+  # Read the updated counter value
+  { action = "read", id = "counter-display", save_to = "updated_count" },
+
+  # Read the orientation label
+  { action = "read", id = "orientation-label", save_to = "device_orientation" },
+
+  # Read the theme label
+  { action = "read", id = "theme-label", save_to = "current_theme" },
+
+  # Read text from a list item
+  { action = "read", id = "list-item-0", save_to = "first_item_text" },
+
+  # Verify the counter was updated correctly
+  { action = "assert_text", id = "counter-display", text = "2" },
+]

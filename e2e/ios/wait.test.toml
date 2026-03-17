@@ -1,0 +1,36 @@
+[flow]
+name = "iOS wait and wait_not test"
+tags = ["ios", "synchronization"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[block]]
+name = "wait_for_elements"
+steps = [
+  { action = "launch", app = "com.golem.test" },
+
+  # Wait for the main UI to be ready
+  { action = "wait", id = "submit-button", timeout = 10000 },
+  { action = "wait", id = "counter-display", timeout = 5000 },
+  { action = "wait", id = "email-input", timeout = 5000 },
+
+  # Wait for a specific text to be visible
+  { action = "wait", text = "Item 0", timeout = 5000 },
+
+  # Trigger an alert, then wait for it to appear, then dismiss it
+  { action = "tap", id = "alert-button" },
+  { action = "wait", text = "OK", timeout = 5000 },
+  { action = "tap", text = "OK" },
+
+  # wait_not: wait for the alert to disappear after dismissal
+  { action = "wait_not", text = "Show Alert", timeout = 5000, on_fail = "skip" },
+
+  # Wait for the counter to show initial value
+  { action = "wait", id = "counter-display", timeout = 3000 },
+]

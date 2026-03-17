@@ -1,0 +1,35 @@
+[flow]
+name = "iOS deep link test"
+tags = ["ios", "navigation", "deep-link"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[block]]
+name = "deep_link_tests"
+steps = [
+  { action = "launch", app = "com.golem.test" },
+
+  # Verify the deep link display is initially empty
+  { action = "assert_text", id = "deeplink-display", text = "" },
+
+  # Open a deep link with the golem-test scheme
+  { action = "open_link", url = "golem-test://home" },
+  { action = "wait", id = "deeplink-display", timeout = 5000 },
+  { action = "assert_text", id = "deeplink-display", text = "golem-test://home" },
+
+  # Open a deep link with a path and query parameters
+  { action = "open_link", url = "golem-test://profile?user=42&tab=settings" },
+  { action = "wait", id = "deeplink-display", timeout = 5000 },
+  { action = "assert_text", id = "deeplink-display", text = "golem-test://profile?user=42&tab=settings" },
+
+  # Open a deep link to a specific content item
+  { action = "open_link", url = "golem-test://item/12345" },
+  { action = "wait", id = "deeplink-display", timeout = 5000 },
+  { action = "assert_text", id = "deeplink-display", text = "golem-test://item/12345" },
+]

@@ -1,0 +1,43 @@
+[flow]
+name = "iOS alerts test"
+tags = ["ios", "interaction", "alerts"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[block]]
+name = "alert_tests"
+steps = [
+  { action = "launch", app = "com.golem.test" },
+
+  # Trigger a simple alert
+  { action = "tap", id = "alert-button" },
+
+  # Wait for the alert to appear and dismiss it
+  { action = "wait", text = "OK", timeout = 5000 },
+  { action = "tap", text = "OK" },
+
+  # Trigger a confirmation dialog
+  { action = "tap", id = "confirm-button" },
+
+  # Wait for the confirm dialog and accept it
+  { action = "wait", text = "Confirm", timeout = 5000 },
+  { action = "tap", text = "Confirm" },
+
+  # Trigger the confirmation dialog again and cancel it
+  { action = "tap", id = "confirm-button" },
+  { action = "wait", text = "Cancel", timeout = 5000 },
+  { action = "tap", text = "Cancel" },
+
+  # Trigger an action sheet
+  { action = "tap", id = "action-sheet-button" },
+  { action = "wait", text = "Action Sheet", timeout = 5000 },
+
+  # Dismiss the action sheet
+  { action = "tap", text = "Cancel" },
+]
