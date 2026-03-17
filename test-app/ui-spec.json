@@ -1,0 +1,276 @@
+{
+  "app": {
+    "name": "GOLEM Test App",
+    "bundle_id": "com.golem.testapp",
+    "url_scheme": "golem-test://",
+    "screen_size": {
+      "width": 390,
+      "height": 844
+    }
+  },
+  "sections": {
+    "text_fields": {
+      "description": "Text input fields for testing type_text, clear, and placeholder verification",
+      "elements": [
+        {
+          "id": "email-input",
+          "type": "TextField",
+          "placeholder": "Enter email",
+          "enabled": true,
+          "default_text": ""
+        },
+        {
+          "id": "password-input",
+          "type": "TextField",
+          "placeholder": "Enter password",
+          "enabled": true,
+          "secure": true,
+          "default_text": ""
+        },
+        {
+          "id": "search-input",
+          "type": "TextField",
+          "placeholder": "Search...",
+          "enabled": true,
+          "default_text": ""
+        },
+        {
+          "id": "multiline-input",
+          "type": "TextArea",
+          "placeholder": null,
+          "enabled": true,
+          "default_text": ""
+        }
+      ]
+    },
+    "buttons": {
+      "description": "Buttons for testing tap, enabled/disabled state, and duplicate text resolution",
+      "elements": [
+        {
+          "id": "submit-button",
+          "type": "Button",
+          "text": "Submit",
+          "enabled": true
+        },
+        {
+          "id": "disabled-button",
+          "type": "Button",
+          "text": "Disabled",
+          "enabled": false
+        },
+        {
+          "id": "duplicate-button-1",
+          "type": "Button",
+          "text": "Action",
+          "enabled": true
+        },
+        {
+          "id": "duplicate-button-2",
+          "type": "Button",
+          "text": "Action",
+          "enabled": true
+        }
+      ]
+    },
+    "toggles": {
+      "description": "Toggle switches and checkboxes for testing checked state",
+      "elements": [
+        {
+          "id": "dark-mode-toggle",
+          "type": "Switch",
+          "text": "Dark Mode",
+          "enabled": true,
+          "default_checked": false
+        },
+        {
+          "id": "notifications-toggle",
+          "type": "Switch",
+          "text": "Notifications",
+          "enabled": true,
+          "default_checked": false
+        },
+        {
+          "id": "agree-checkbox",
+          "type": "CheckBox",
+          "text": "I agree to terms",
+          "enabled": true,
+          "default_checked": false
+        }
+      ]
+    },
+    "counter": {
+      "description": "Counter widget for testing sequential tap actions and text assertion",
+      "elements": [
+        {
+          "id": "counter-display",
+          "type": "Label",
+          "text": "0",
+          "enabled": true
+        },
+        {
+          "id": "increment-button",
+          "type": "Button",
+          "text": "+",
+          "enabled": true
+        },
+        {
+          "id": "decrement-button",
+          "type": "Button",
+          "text": "-",
+          "enabled": true
+        }
+      ]
+    },
+    "scroll_list": {
+      "description": "Vertical scrollable list with 50 items for testing scroll-to-find",
+      "container": {
+        "id": "scroll-list",
+        "type": "ScrollView",
+        "direction": "vertical",
+        "item_count": 50
+      },
+      "item_pattern": {
+        "id_template": "list-item-{index}",
+        "type": "Label",
+        "text_template": "Item {index}",
+        "index_range": [0, 49]
+      }
+    },
+    "carousel": {
+      "description": "Horizontal scrollable carousel for testing horizontal swipe",
+      "container": {
+        "id": "carousel",
+        "type": "ScrollView",
+        "direction": "horizontal",
+        "item_count": 10
+      },
+      "item_pattern": {
+        "id_template": "carousel-item-{index}",
+        "type": "View",
+        "text_template": "Card {index}",
+        "index_range": [0, 9]
+      }
+    },
+    "nested_layout": {
+      "description": "Nested view hierarchy for testing relational selectors (above, below, left_of, right_of, inside)",
+      "elements": [
+        {
+          "id": "header-section",
+          "type": "View",
+          "children_text": ["App Title"]
+        },
+        {
+          "id": "content-section",
+          "type": "View",
+          "children": ["left-panel", "right-panel"]
+        },
+        {
+          "id": "footer-section",
+          "type": "View",
+          "children_text": ["Footer Text"]
+        },
+        {
+          "id": "left-panel",
+          "type": "View",
+          "parent": "content-section",
+          "position": "left"
+        },
+        {
+          "id": "right-panel",
+          "type": "View",
+          "parent": "content-section",
+          "position": "right"
+        }
+      ]
+    },
+    "alert_triggers": {
+      "description": "Buttons that trigger system alerts, confirmation dialogs, and action sheets",
+      "elements": [
+        {
+          "id": "alert-button",
+          "type": "Button",
+          "text": "Show Alert",
+          "triggers": "alert",
+          "alert_title": "Test Alert",
+          "alert_message": "This is a test alert",
+          "alert_buttons": ["OK"]
+        },
+        {
+          "id": "confirm-button",
+          "type": "Button",
+          "text": "Confirm",
+          "triggers": "confirmation",
+          "alert_title": "Confirm Action",
+          "alert_message": "Are you sure?",
+          "alert_buttons": ["Cancel", "OK"]
+        },
+        {
+          "id": "action-sheet-button",
+          "type": "Button",
+          "text": "Action Sheet",
+          "triggers": "action_sheet",
+          "alert_title": "Choose Action",
+          "alert_buttons": ["Option A", "Option B", "Cancel"]
+        }
+      ]
+    },
+    "device_state": {
+      "description": "Labels that reflect device state changes (orientation, theme, location, deep links, notifications, media)",
+      "elements": [
+        {
+          "id": "orientation-label",
+          "type": "Label",
+          "default_text": "Portrait",
+          "responds_to": "orientation_change"
+        },
+        {
+          "id": "theme-label",
+          "type": "Label",
+          "default_text": "Light",
+          "responds_to": "dark_mode_change"
+        },
+        {
+          "id": "location-label",
+          "type": "Label",
+          "default_text": "0.0, 0.0",
+          "responds_to": "location_update"
+        },
+        {
+          "id": "deeplink-display",
+          "type": "Label",
+          "default_text": "",
+          "responds_to": "deep_link"
+        },
+        {
+          "id": "notification-display",
+          "type": "Label",
+          "default_text": "",
+          "responds_to": "push_notification"
+        },
+        {
+          "id": "media-count-label",
+          "type": "Label",
+          "default_text": "0",
+          "responds_to": "media_added"
+        }
+      ]
+    },
+    "permissions": {
+      "description": "Buttons to request device permissions for testing grant/revoke flows",
+      "elements": [
+        {
+          "id": "camera-permission-button",
+          "type": "Button",
+          "text": "Request Camera",
+          "permission": "camera"
+        },
+        {
+          "id": "location-permission-button",
+          "type": "Button",
+          "text": "Request Location",
+          "permission": "location"
+        }
+      ]
+    }
+  }
+}
