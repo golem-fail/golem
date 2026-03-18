@@ -1,0 +1,98 @@
+[flow]
+name = "Cross-platform multi-app switching with variable passing"
+tags = ["cross-platform", "multi-app", "variables"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[flow.apps]]
+name = "app-b"
+bundle = "com.golem.test-b"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "set_state_in_primary_app"
+steps = [
+  # Launch the primary app
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", id = "submit-button", timeout = 10000 },
+
+  # Set state by incrementing the counter
+  { action = "tap", id = "increment-button" },
+  { action = "tap", id = "increment-button" },
+  { action = "tap", id = "increment-button" },
+  { action = "tap", id = "increment-button" },
+  { action = "tap", id = "increment-button" },
+  { action = "assert_text", id = "counter-display", text = "5" },
+
+  # Type into a form field to set additional state
+  { action = "type", id = "email-input", text = "cross-test@golem.com" },
+  { action = "hide_keyboard" },
+
+  # Read the counter value into a variable for later verification
+  { action = "read", id = "counter-display", save_to = "primary_counter" },
+  { action = "read", id = "email-input", save_to = "primary_email" },
+]
+
+[[block]]
+name = "switch_to_companion_and_verify"
+steps = [
+  # Switch to the companion app
+  { action = "launch", app = "com.golem.test-b" },
+  { action = "wait", id = "app-b-title", timeout = 10000 },
+
+  # Verify companion app elements are visible
+  { action = "assert_visible", id = "app-b-title" },
+  { action = "assert_visible", id = "shared-data-display" },
+  { action = "assert_visible", id = "refresh-button" },
+  { action = "assert_visible", id = "status-label" },
+
+  # Verify companion app initial state
+  { action = "assert_text", id = "status-label", text = "Ready" },
+
+  # Interact with the companion app
+  { action = "tap", id = "refresh-button" },
+
+  # Read companion app state
+  { action = "read", id = "status-label", save_to = "companion_status" },
+]
+
+[[block]]
+name = "switch_back_and_verify_state_preserved"
+steps = [
+  # Switch back to the primary app
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", id = "counter-display", timeout = 10000 },
+
+  # Verify primary app state is preserved after app switching
+  { action = "assert_text", id = "counter-display", text = "5" },
+  { action = "assert_text", id = "email-input", text = "cross-test@golem.com" },
+
+  # Verify UI elements are still enabled and functional
+  { action = "assert_enabled", id = "increment-button" },
+  { action = "assert_enabled", id = "decrement-button" },
+  { action = "assert_enabled", id = "submit-button" },
+
+  # Perform one more interaction to confirm app is responsive
+  { action = "tap", id = "decrement-button" },
+  { action = "assert_text", id = "counter-display", text = "4" },
+
+  # Stop the companion app
+  { action = "stop", app = "com.golem.test-b" },
+]

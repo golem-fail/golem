@@ -1,0 +1,111 @@
+[flow]
+name = "Cross-platform scroll search with element finding"
+tags = ["cross-platform", "scroll", "search", "gesture"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "vertical_list_scroll"
+steps = [
+  # Launch the app
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", id = "submit-button", timeout = 10000 },
+
+  # Verify initial state - first list items should be visible
+  { action = "assert_visible", id = "list-item-0" },
+  { action = "assert_text", id = "list-item-0", text = "Item 0" },
+  { action = "assert_visible", id = "list-item-3" },
+  { action = "assert_text", id = "list-item-3", text = "Item 3" },
+
+  # Scroll down to find elements deeper in the list
+  { action = "swipe", direction = "down" },
+  { action = "swipe", direction = "down" },
+  { action = "swipe", direction = "down" },
+  { action = "swipe", direction = "down" },
+  { action = "swipe", direction = "down" },
+
+  # Wait for a mid-list element to appear
+  { action = "wait", id = "list-item-25", timeout = 5000 },
+  { action = "tap", id = "list-item-25" },
+
+  # Continue scrolling to reach the end of the list
+  { action = "swipe", direction = "down" },
+  { action = "swipe", direction = "down" },
+  { action = "swipe", direction = "down" },
+  { action = "swipe", direction = "down" },
+  { action = "swipe", direction = "down" },
+
+  # Verify the last list item is reachable
+  { action = "wait", id = "list-item-49", timeout = 5000 },
+  { action = "assert_text", id = "list-item-49", text = "Item 49" },
+  { action = "tap", id = "list-item-49" },
+
+  # Scroll back up to the top
+  { action = "swipe", direction = "up" },
+  { action = "swipe", direction = "up" },
+  { action = "swipe", direction = "up" },
+  { action = "swipe", direction = "up" },
+  { action = "swipe", direction = "up" },
+  { action = "swipe", direction = "up" },
+  { action = "swipe", direction = "up" },
+  { action = "swipe", direction = "up" },
+  { action = "swipe", direction = "up" },
+  { action = "swipe", direction = "up" },
+
+  # Verify return to the top of the list
+  { action = "wait", id = "list-item-0", timeout = 5000 },
+  { action = "assert_visible", id = "list-item-0" },
+  { action = "assert_text", id = "list-item-0", text = "Item 0" },
+]
+
+[[block]]
+name = "horizontal_carousel_swipe"
+steps = [
+  # Verify the carousel is visible
+  { action = "assert_visible", id = "carousel" },
+  { action = "assert_visible", id = "carousel-item-0" },
+
+  # Swipe left to advance through the carousel
+  { action = "swipe", direction = "left" },
+  { action = "swipe", direction = "left" },
+  { action = "swipe", direction = "left" },
+  { action = "swipe", direction = "left" },
+  { action = "swipe", direction = "left" },
+
+  # Wait for a carousel item near the middle
+  { action = "wait", id = "carousel-item-5", timeout = 5000 },
+
+  # Continue swiping to reach the end of the carousel
+  { action = "swipe", direction = "left" },
+  { action = "swipe", direction = "left" },
+  { action = "swipe", direction = "left" },
+  { action = "swipe", direction = "left" },
+
+  # Verify the last carousel item is reachable
+  { action = "wait", id = "carousel-item-9", timeout = 5000 },
+
+  # Swipe right to go back through the carousel
+  { action = "swipe", direction = "right" },
+  { action = "swipe", direction = "right" },
+  { action = "swipe", direction = "right" },
+  { action = "swipe", direction = "right" },
+  { action = "swipe", direction = "right" },
+  { action = "swipe", direction = "right" },
+  { action = "swipe", direction = "right" },
+  { action = "swipe", direction = "right" },
+  { action = "swipe", direction = "right" },
+
+  # Verify return to the beginning of the carousel
+  { action = "wait", id = "carousel-item-0", timeout = 5000 },
+  { action = "assert_visible", id = "carousel-item-0" },
+]

@@ -1,0 +1,71 @@
+[flow]
+name = "Cross-platform complete form fill flow"
+tags = ["cross-platform", "form", "text-input", "interaction"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "fill_form_fields"
+steps = [
+  # Launch the app
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", id = "email-input", timeout = 10000 },
+
+  # Type into the email field and verify
+  { action = "type", id = "email-input", text = "testuser@golem.com" },
+  { action = "assert_text", id = "email-input", text = "testuser@golem.com" },
+
+  # Type into the password field
+  { action = "type", id = "password-input", text = "P@ssw0rd!123" },
+
+  # Type into the search field with a deliberate typo
+  { action = "type", id = "search-input", text = "golem testt" },
+  { action = "assert_text", id = "search-input", text = "golem testt" },
+
+  # Use backspace to correct the typo
+  { action = "backspace", id = "search-input", count = 1 },
+  { action = "assert_text", id = "search-input", text = "golem test" },
+
+  # Type the correct ending
+  { action = "type", id = "search-input", text = " query" },
+  { action = "assert_text", id = "search-input", text = "golem test query" },
+
+  # Hide the keyboard
+  { action = "hide_keyboard" },
+]
+
+[[block]]
+name = "fill_multiline_and_submit"
+steps = [
+  # Type into the multiline text area
+  { action = "type", id = "multiline-input", text = "First line of input\nSecond line with details\nThird line conclusion" },
+
+  # Hide the keyboard
+  { action = "hide_keyboard" },
+
+  # Read back form values to verify
+  { action = "read", id = "email-input", save_to = "filled_email" },
+  { action = "read", id = "search-input", save_to = "filled_search" },
+
+  # Take a screenshot before submitting
+  { action = "screenshot", path = "/tmp/golem-cross-form-filled.png" },
+
+  # Verify the submit button is enabled
+  { action = "assert_enabled", id = "submit-button" },
+
+  # Submit the form
+  { action = "tap", id = "submit-button" },
+
+  # Take a screenshot after submission
+  { action = "screenshot", path = "/tmp/golem-cross-form-submitted.png" },
+]

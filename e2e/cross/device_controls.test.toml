@@ -1,0 +1,82 @@
+[flow]
+name = "Cross-platform device controls test"
+tags = ["cross-platform", "device", "controls", "rotation", "dark-mode"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "orientation_controls"
+steps = [
+  # Launch the app
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", id = "orientation-label", timeout = 10000 },
+
+  # Verify initial portrait orientation
+  { action = "assert_text", id = "orientation-label", text = "Portrait" },
+
+  # Rotate to landscape and verify
+  { action = "rotate", orientation = "landscape" },
+  { action = "assert_text", id = "orientation-label", text = "Landscape" },
+
+  # Verify core elements are still accessible in landscape
+  { action = "assert_visible", id = "submit-button" },
+  { action = "assert_visible", id = "counter-display" },
+
+  # Rotate back to portrait and verify
+  { action = "rotate", orientation = "portrait" },
+  { action = "assert_text", id = "orientation-label", text = "Portrait" },
+]
+
+[[block]]
+name = "dark_mode_controls"
+steps = [
+  # Verify initial light theme
+  { action = "assert_text", id = "theme-label", text = "Light" },
+
+  # Enable dark mode and verify
+  { action = "dark_mode", enabled = true },
+  { action = "assert_text", id = "theme-label", text = "Dark" },
+
+  # Take a screenshot in dark mode
+  { action = "screenshot", path = "/tmp/golem-cross-dark-mode.png" },
+
+  # Verify elements are still functional in dark mode
+  { action = "tap", id = "increment-button" },
+  { action = "assert_text", id = "counter-display", text = "1" },
+
+  # Disable dark mode and verify return to light theme
+  { action = "dark_mode", enabled = false },
+  { action = "assert_text", id = "theme-label", text = "Light" },
+]
+
+[[block]]
+name = "location_controls"
+steps = [
+  # Verify initial location
+  { action = "assert_text", id = "location-label", text = "0.0, 0.0" },
+
+  # Set GPS location to San Francisco
+  { action = "set_location", latitude = 37.7749, longitude = -122.4194 },
+  { action = "assert_text", id = "location-label", text = "37.7749, -122.4194" },
+
+  # Set GPS location to Tokyo
+  { action = "set_location", latitude = 35.6762, longitude = 139.6503 },
+  { action = "assert_text", id = "location-label", text = "35.6762, 139.6503" },
+
+  # Set GPS location to London
+  { action = "set_location", latitude = 51.5074, longitude = -0.1278 },
+  { action = "assert_text", id = "location-label", text = "51.5074, -0.1278" },
+
+  # Read the final location value
+  { action = "read", id = "location-label", save_to = "final_location" },
+]
