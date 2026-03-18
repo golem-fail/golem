@@ -1,0 +1,34 @@
+[flow]
+name = "Android screenshot test"
+tags = ["android", "capture"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "screenshot_tests"
+steps = [
+  { action = "launch", app = "com.golem.test" },
+
+  # Take a screenshot of the initial state
+  { action = "screenshot", path = "/tmp/golem-android-initial.png" },
+
+  # Interact with the app to change state
+  { action = "tap", id = "increment-button" },
+  { action = "tap", id = "increment-button" },
+  { action = "tap", id = "increment-button" },
+  { action = "type", id = "email-input", text = "screenshot@test.com" },
+  { action = "hide_keyboard" },
+
+  # Take a screenshot after changes
+  { action = "screenshot", path = "/tmp/golem-android-after-interaction.png" },
+
+  # Toggle dark mode and capture
+  { action = "tap", id = "dark-mode-toggle" },
+  { action = "screenshot", path = "/tmp/golem-android-dark-mode.png" },
+]

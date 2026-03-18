@@ -1,0 +1,36 @@
+[flow]
+name = "Android app lifecycle test"
+tags = ["android", "lifecycle"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "launch_and_stop"
+steps = [
+  # Launch the app
+  { action = "launch", app = "com.golem.test" },
+
+  # Verify the app is running by checking for a known element
+  { action = "wait", id = "submit-button", timeout = 10000 },
+  { action = "assert_visible", id = "counter-display" },
+
+  # Interact to set some state
+  { action = "tap", id = "increment-button" },
+  { action = "assert_text", id = "counter-display", text = "1" },
+
+  # Stop the app
+  { action = "stop", app = "com.golem.test" },
+
+  # Re-launch the app (state may be reset)
+  { action = "launch", app = "com.golem.test" },
+
+  # Verify the app is running again
+  { action = "wait", id = "submit-button", timeout = 10000 },
+  { action = "assert_visible", id = "counter-display" },
+]

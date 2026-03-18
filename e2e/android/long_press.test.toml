@@ -1,0 +1,26 @@
+[flow]
+name = "Android long press test"
+tags = ["android", "interaction", "gesture"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "long_press_tests"
+steps = [
+  { action = "launch", app = "com.golem.test" },
+
+  # Long press on list item with default duration (1000ms)
+  { action = "long_press", id = "list-item-0" },
+
+  # Long press on submit button with custom duration
+  { action = "long_press", id = "submit-button", duration = 2000 },
+
+  # Long press on a carousel card
+  { action = "long_press", id = "carousel-item-0", duration = 1500 },
+]
