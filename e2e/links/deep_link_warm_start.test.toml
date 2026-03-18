@@ -1,0 +1,52 @@
+[flow]
+name = "Deep link warm start"
+tags = ["deep-link", "warm-start", "cross-platform"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "set_app_state"
+steps = [
+  # Launch the app and wait for it to be ready
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", id = "counter-display", timeout = 10000 },
+
+  # Set some state by incrementing the counter
+  { action = "tap", id = "increment-button" },
+  { action = "tap", id = "increment-button" },
+  { action = "tap", id = "increment-button" },
+  { action = "assert_text", id = "counter-display", text = "3" },
+
+  # Verify deep link display is empty before receiving a link
+  { action = "assert_text", id = "deeplink-display", text = "" },
+]
+
+[[block]]
+name = "receive_deep_link_while_running"
+steps = [
+  # Open a deep link while the app is already running (warm start)
+  { action = "open_link", url = "golem-test://warm-start" },
+  { action = "wait", id = "deeplink-display", timeout = 5000 },
+  { action = "assert_text", id = "deeplink-display", text = "golem-test://warm-start" },
+]
+
+[[block]]
+name = "verify_state_preserved"
+steps = [
+  # Verify that the counter state set before the deep link is still intact
+  { action = "assert_text", id = "counter-display", text = "3" },
+
+  # Verify the app is still functional after receiving the deep link
+  { action = "tap", id = "increment-button" },
+  { action = "assert_text", id = "counter-display", text = "4" },
+]

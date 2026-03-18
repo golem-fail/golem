@@ -1,0 +1,29 @@
+[flow]
+name = "Deep link cold start"
+tags = ["deep-link", "cold-start", "cross-platform"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "cold_start_via_deep_link"
+steps = [
+  # Ensure the app is not running by stopping it first
+  { action = "stop", app = "com.golem.test" },
+
+  # Open a deep link while the app is not running (cold start)
+  { action = "open_link", url = "golem-test://cold-start-test" },
+
+  # Wait for the app to launch from cold and display the deep link
+  { action = "wait", id = "deeplink-display", timeout = 15000 },
+  { action = "assert_text", id = "deeplink-display", text = "golem-test://cold-start-test" },
+]

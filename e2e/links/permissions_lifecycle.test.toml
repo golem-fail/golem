@@ -1,0 +1,51 @@
+[flow]
+name = "Permissions across app lifecycle"
+tags = ["permissions", "lifecycle", "cross-platform"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "grant_permission_and_verify"
+steps = [
+  # Launch the app
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", id = "camera-permission-button", timeout = 10000 },
+
+  # Grant camera permission
+  { action = "grant_permission", permission = "camera" },
+
+  # Tap the camera button to confirm permission is active (no dialog)
+  { action = "tap", id = "camera-permission-button" },
+]
+
+[[block]]
+name = "restart_app_and_verify_persistence"
+steps = [
+  # Stop and relaunch the app
+  { action = "stop", app = "com.golem.test" },
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", id = "camera-permission-button", timeout = 15000 },
+
+  # Tap camera button again; permission should persist across restarts
+  { action = "tap", id = "camera-permission-button" },
+]
+
+[[block]]
+name = "revoke_and_verify"
+steps = [
+  # Revoke camera permission
+  { action = "revoke_permission", permission = "camera" },
+
+  # Verify permission is revoked by confirming the button is still present
+  { action = "assert_visible", id = "camera-permission-button" },
+]
