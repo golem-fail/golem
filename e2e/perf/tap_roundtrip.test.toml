@@ -1,0 +1,118 @@
+[flow]
+name = "Tap round-trip latency"
+tags = ["perf", "tap", "roundtrip", "latency"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "launch_and_verify_initial"
+steps = [
+  # Launch the app and wait for initial load
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", id = "counter-display", timeout = 10000 },
+
+  # Verify counter starts at zero
+  { action = "assert_text", id = "counter-display", text = "0" },
+  { action = "screenshot" },
+]
+
+[[block]]
+name = "increment_roundtrip_1_to_5"
+steps = [
+  # Tap 1: tap increment, assert counter updated within 2s
+  { action = "tap", id = "increment-button" },
+  { action = "wait", id = "counter-display", timeout = 2000 },
+  { action = "assert_text", id = "counter-display", text = "1" },
+
+  # Tap 2
+  { action = "tap", id = "increment-button" },
+  { action = "wait", id = "counter-display", timeout = 2000 },
+  { action = "assert_text", id = "counter-display", text = "2" },
+
+  # Tap 3
+  { action = "tap", id = "increment-button" },
+  { action = "wait", id = "counter-display", timeout = 2000 },
+  { action = "assert_text", id = "counter-display", text = "3" },
+
+  # Tap 4
+  { action = "tap", id = "increment-button" },
+  { action = "wait", id = "counter-display", timeout = 2000 },
+  { action = "assert_text", id = "counter-display", text = "4" },
+
+  # Tap 5
+  { action = "tap", id = "increment-button" },
+  { action = "wait", id = "counter-display", timeout = 2000 },
+  { action = "assert_text", id = "counter-display", text = "5" },
+]
+
+[[block]]
+name = "increment_roundtrip_6_to_10"
+steps = [
+  # Tap 6
+  { action = "tap", id = "increment-button" },
+  { action = "wait", id = "counter-display", timeout = 2000 },
+  { action = "assert_text", id = "counter-display", text = "6" },
+
+  # Tap 7
+  { action = "tap", id = "increment-button" },
+  { action = "wait", id = "counter-display", timeout = 2000 },
+  { action = "assert_text", id = "counter-display", text = "7" },
+
+  # Tap 8
+  { action = "tap", id = "increment-button" },
+  { action = "wait", id = "counter-display", timeout = 2000 },
+  { action = "assert_text", id = "counter-display", text = "8" },
+
+  # Tap 9
+  { action = "tap", id = "increment-button" },
+  { action = "wait", id = "counter-display", timeout = 2000 },
+  { action = "assert_text", id = "counter-display", text = "9" },
+
+  # Tap 10
+  { action = "tap", id = "increment-button" },
+  { action = "wait", id = "counter-display", timeout = 2000 },
+  { action = "assert_text", id = "counter-display", text = "10" },
+
+  # Read the final counter value
+  { action = "read", id = "counter-display", save_to = "final_count" },
+  { action = "screenshot" },
+]
+
+[[block]]
+name = "decrement_roundtrip"
+steps = [
+  # Rapidly decrement back down to verify round-trip in the other direction
+  { action = "tap", id = "decrement-button" },
+  { action = "wait", id = "counter-display", timeout = 2000 },
+  { action = "assert_text", id = "counter-display", text = "9" },
+
+  { action = "tap", id = "decrement-button" },
+  { action = "wait", id = "counter-display", timeout = 2000 },
+  { action = "assert_text", id = "counter-display", text = "8" },
+
+  { action = "tap", id = "decrement-button" },
+  { action = "wait", id = "counter-display", timeout = 2000 },
+  { action = "assert_text", id = "counter-display", text = "7" },
+
+  { action = "tap", id = "decrement-button" },
+  { action = "wait", id = "counter-display", timeout = 2000 },
+  { action = "assert_text", id = "counter-display", text = "6" },
+
+  { action = "tap", id = "decrement-button" },
+  { action = "wait", id = "counter-display", timeout = 2000 },
+  { action = "assert_text", id = "counter-display", text = "5" },
+
+  # Final read to confirm state
+  { action = "read", id = "counter-display", save_to = "decremented_count" },
+  { action = "screenshot" },
+]

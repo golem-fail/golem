@@ -1,0 +1,114 @@
+[flow]
+name = "Element find latency"
+tags = ["perf", "element-find", "latency"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "launch_and_wait"
+steps = [
+  # Launch the app and wait for initial load
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", id = "submit-button", timeout = 10000 },
+]
+
+[[block]]
+name = "find_by_id_buttons"
+steps = [
+  # Rapidly assert visibility of button elements by ID (fast path)
+  { action = "assert_visible", id = "submit-button" },
+  { action = "assert_visible", id = "increment-button" },
+  { action = "assert_visible", id = "decrement-button" },
+
+  # Tight-timeout waits to enforce speed
+  { action = "wait", id = "submit-button", timeout = 2000 },
+  { action = "wait", id = "increment-button", timeout = 2000 },
+  { action = "wait", id = "decrement-button", timeout = 2000 },
+]
+
+[[block]]
+name = "find_by_id_inputs"
+steps = [
+  # Assert visibility of input fields by ID
+  { action = "assert_visible", id = "email-input" },
+  { action = "assert_visible", id = "password-input" },
+  { action = "assert_visible", id = "search-input" },
+
+  # Tight-timeout waits on input fields
+  { action = "wait", id = "email-input", timeout = 2000 },
+  { action = "wait", id = "password-input", timeout = 2000 },
+  { action = "wait", id = "search-input", timeout = 2000 },
+]
+
+[[block]]
+name = "find_by_id_display_and_containers"
+steps = [
+  # Assert visibility of display and container elements
+  { action = "assert_visible", id = "counter-display" },
+  { action = "assert_visible", id = "scroll-list" },
+  { action = "assert_visible", id = "carousel" },
+
+  { action = "wait", id = "counter-display", timeout = 2000 },
+  { action = "wait", id = "scroll-list", timeout = 2000 },
+  { action = "wait", id = "carousel", timeout = 2000 },
+]
+
+[[block]]
+name = "find_list_items_rapid"
+steps = [
+  # Rapidly find list items scattered throughout the hierarchy
+  { action = "assert_visible", id = "list-item-0" },
+  { action = "assert_visible", id = "list-item-1" },
+  { action = "assert_visible", id = "list-item-2" },
+  { action = "assert_visible", id = "list-item-3" },
+  { action = "assert_visible", id = "list-item-4" },
+
+  # Tight-timeout waits on each list item
+  { action = "wait", id = "list-item-0", timeout = 2000 },
+  { action = "wait", id = "list-item-1", timeout = 2000 },
+  { action = "wait", id = "list-item-2", timeout = 2000 },
+  { action = "wait", id = "list-item-3", timeout = 2000 },
+  { action = "wait", id = "list-item-4", timeout = 2000 },
+]
+
+[[block]]
+name = "find_carousel_items_rapid"
+steps = [
+  # Rapidly find carousel items
+  { action = "assert_visible", id = "carousel-item-0" },
+  { action = "assert_visible", id = "carousel-item-1" },
+  { action = "assert_visible", id = "carousel-item-2" },
+  { action = "assert_visible", id = "carousel-item-3" },
+  { action = "assert_visible", id = "carousel-item-4" },
+
+  { action = "wait", id = "carousel-item-0", timeout = 2000 },
+  { action = "wait", id = "carousel-item-1", timeout = 2000 },
+  { action = "wait", id = "carousel-item-2", timeout = 2000 },
+  { action = "wait", id = "carousel-item-3", timeout = 2000 },
+  { action = "wait", id = "carousel-item-4", timeout = 2000 },
+]
+
+[[block]]
+name = "find_by_text_content"
+steps = [
+  # Assert text on elements — exercises the slower text-matching path
+  { action = "assert_text", id = "counter-display", text = "0" },
+  { action = "assert_text", id = "list-item-0", text = "Item 0" },
+  { action = "assert_text", id = "list-item-1", text = "Item 1" },
+  { action = "assert_text", id = "list-item-2", text = "Item 2" },
+  { action = "assert_text", id = "list-item-3", text = "Item 3" },
+  { action = "assert_text", id = "list-item-4", text = "Item 4" },
+
+  # Final screenshot
+  { action = "screenshot" },
+]
