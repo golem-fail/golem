@@ -1,0 +1,1282 @@
+{
+  "country": {
+    "name": "대한민국",
+    "name_en": "South Korea",
+    "iso_code": "KR",
+    "phone_prefix": "+82",
+    "phone_formats": ["+82-10-####-####", "+82-2-####-####", "+82-##-####-####"],
+    "postcode_format": "#####",
+    "name_order": "family_first"
+  },
+  "states": [
+    {
+      "name": "서울특별시",
+      "name_en": "Seoul",
+      "region_tags": ["Special City", "Capital Area", "Seoul"],
+      "cities": [
+        {
+          "name": "서울",
+          "name_en": "Seoul",
+          "lat": 37.5665,
+          "lon": 126.9780,
+          "postcodes": [
+            {
+              "code": "03154",
+              "street": "종로",
+              "street_en": "Jongno",
+              "pattern": "n{1,200} Jongno"
+            },
+            {
+              "code": "04524",
+              "street": "세종대로",
+              "street_en": "Sejong-daero",
+              "pattern": "n{1,300} Sejong-daero"
+            },
+            {
+              "code": "04637",
+              "street": "을지로",
+              "street_en": "Eulji-ro",
+              "pattern": "n{1,400} Eulji-ro"
+            },
+            {
+              "code": "06236",
+              "street": "테헤란로",
+              "street_en": "Teheran-ro",
+              "pattern": "n{1,600} Teheran-ro"
+            },
+            {
+              "code": "06164",
+              "street": "강남대로",
+              "street_en": "Gangnam-daero",
+              "pattern": "n{1,500} Gangnam-daero"
+            },
+            {
+              "code": "04101",
+              "street": "삼일대로",
+              "street_en": "Samil-daero",
+              "pattern": "n{1,350} Samil-daero"
+            },
+            {
+              "code": "07236",
+              "street": "영등포로",
+              "street_en": "Yeongdeungpo-ro",
+              "pattern": "n{1,250} Yeongdeungpo-ro"
+            },
+            {
+              "code": "01689",
+              "street": "도봉로",
+              "street_en": "Dobong-ro",
+              "pattern": "n{1,600} Dobong-ro"
+            },
+            {
+              "code": "02558",
+              "street": "노원로",
+              "street_en": "Nowon-ro",
+              "pattern": "n{1,400} Nowon-ro"
+            },
+            {
+              "code": "05500",
+              "street": "천호대로",
+              "street_en": "Cheonho-daero",
+              "pattern": "n{1,500} Cheonho-daero"
+            },
+            {
+              "code": "03925",
+              "street": "마포대로",
+              "street_en": "Mapo-daero",
+              "pattern": "n{1,200} Mapo-daero"
+            },
+            {
+              "code": "04778",
+              "street": "명동길",
+              "street_en": "Myeongdong-gil",
+              "fixed": ["명동길 14", "명동길 26", "명동길 53", "명동길 74"]
+            },
+            {
+              "code": "06130",
+              "street": "압구정로",
+              "street_en": "Apgujeong-ro",
+              "pattern": "n{1,500} Apgujeong-ro"
+            },
+            {
+              "code": "04515",
+              "street": "청계천로",
+              "street_en": "Cheonggyecheon-ro",
+              "pattern": "n{1,400} Cheonggyecheon-ro"
+            },
+            {
+              "code": "06035",
+              "street": "도산대로",
+              "street_en": "Dosan-daero",
+              "pattern": "n{1,500} Dosan-daero"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "부산광역시",
+      "name_en": "Busan",
+      "region_tags": ["Metropolitan City", "Yeongnam", "Southeast"],
+      "cities": [
+        {
+          "name": "부산",
+          "name_en": "Busan",
+          "lat": 35.1796,
+          "lon": 129.0756,
+          "postcodes": [
+            {
+              "code": "48058",
+              "street": "중앙대로",
+              "street_en": "Jungang-daero",
+              "pattern": "n{1,700} Jungang-daero"
+            },
+            {
+              "code": "48060",
+              "street": "해운대해변로",
+              "street_en": "Haeundae Haebyeon-ro",
+              "pattern": "n{1,300} Haeundae Haebyeon-ro"
+            },
+            {
+              "code": "48094",
+              "street": "광안해변로",
+              "street_en": "Gwangan Haebyeon-ro",
+              "pattern": "n{1,400} Gwangan Haebyeon-ro"
+            },
+            {
+              "code": "47340",
+              "street": "낙동대로",
+              "street_en": "Nakdong-daero",
+              "pattern": "n{1,1500} Nakdong-daero"
+            },
+            {
+              "code": "48792",
+              "street": "센텀중앙로",
+              "street_en": "Centum Jungang-ro",
+              "pattern": "n{1,200} Centum Jungang-ro"
+            },
+            {
+              "code": "48513",
+              "street": "구덕로",
+              "street_en": "Gudeok-ro",
+              "pattern": "n{1,350} Gudeok-ro"
+            },
+            {
+              "code": "48891",
+              "street": "수영로",
+              "street_en": "Suyeong-ro",
+              "pattern": "n{1,600} Suyeong-ro"
+            },
+            {
+              "code": "48206",
+              "street": "자갈치해안로",
+              "street_en": "Jagalchi Haean-ro",
+              "fixed": ["자갈치해안로 36", "자갈치해안로 52", "자갈치해안로 80"]
+            },
+            {
+              "code": "48735",
+              "street": "해운대로",
+              "street_en": "Haeundae-ro",
+              "pattern": "n{1,700} Haeundae-ro"
+            },
+            {
+              "code": "46768",
+              "street": "강서대로",
+              "street_en": "Gangseo-daero",
+              "pattern": "n{1,400} Gangseo-daero"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "인천광역시",
+      "name_en": "Incheon",
+      "region_tags": ["Metropolitan City", "Capital Area", "Incheon"],
+      "cities": [
+        {
+          "name": "인천",
+          "name_en": "Incheon",
+          "lat": 37.4563,
+          "lon": 126.7052,
+          "postcodes": [
+            {
+              "code": "21573",
+              "street": "인천대로",
+              "street_en": "Incheon-daero",
+              "pattern": "n{1,900} Incheon-daero"
+            },
+            {
+              "code": "22320",
+              "street": "경인로",
+              "street_en": "Gyeongin-ro",
+              "pattern": "n{1,600} Gyeongin-ro"
+            },
+            {
+              "code": "21998",
+              "street": "남동대로",
+              "street_en": "Namdong-daero",
+              "pattern": "n{1,800} Namdong-daero"
+            },
+            {
+              "code": "22004",
+              "street": "소성로",
+              "street_en": "Soseong-ro",
+              "pattern": "n{1,200} Soseong-ro"
+            },
+            {
+              "code": "22726",
+              "street": "구월로",
+              "street_en": "Guwol-ro",
+              "pattern": "n{1,250} Guwol-ro"
+            },
+            {
+              "code": "22185",
+              "street": "부평대로",
+              "street_en": "Bupyeong-daero",
+              "pattern": "n{1,400} Bupyeong-daero"
+            },
+            {
+              "code": "23049",
+              "street": "송도과학로",
+              "street_en": "Songdo Gwahak-ro",
+              "pattern": "n{1,150} Songdo Gwahak-ro"
+            },
+            {
+              "code": "23021",
+              "street": "컨벤시아대로",
+              "street_en": "Convensia-daero",
+              "pattern": "n{1,200} Convensia-daero"
+            },
+            {
+              "code": "22380",
+              "street": "주안로",
+              "street_en": "Juan-ro",
+              "pattern": "n{1,300} Juan-ro"
+            },
+            {
+              "code": "21050",
+              "street": "경명대로",
+              "street_en": "Gyeongmyeong-daero",
+              "pattern": "n{1,500} Gyeongmyeong-daero"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "대구광역시",
+      "name_en": "Daegu",
+      "region_tags": ["Metropolitan City", "Yeongnam", "Southeast"],
+      "cities": [
+        {
+          "name": "대구",
+          "name_en": "Daegu",
+          "lat": 35.8714,
+          "lon": 128.6014,
+          "postcodes": [
+            {
+              "code": "41908",
+              "street": "동대구로",
+              "street_en": "Dongdaegu-ro",
+              "pattern": "n{1,500} Dongdaegu-ro"
+            },
+            {
+              "code": "41911",
+              "street": "국채보상로",
+              "street_en": "Gukchae-bosang-ro",
+              "pattern": "n{1,700} Gukchae-bosang-ro"
+            },
+            {
+              "code": "42020",
+              "street": "달구벌대로",
+              "street_en": "Dalgubeol-daero",
+              "pattern": "n{1,2000} Dalgubeol-daero"
+            },
+            {
+              "code": "41585",
+              "street": "성서로",
+              "street_en": "Seongseo-ro",
+              "pattern": "n{1,300} Seongseo-ro"
+            },
+            {
+              "code": "42180",
+              "street": "팔공로",
+              "street_en": "Palgong-ro",
+              "pattern": "n{1,500} Palgong-ro"
+            },
+            {
+              "code": "41166",
+              "street": "수성로",
+              "street_en": "Suseong-ro",
+              "pattern": "n{1,350} Suseong-ro"
+            },
+            {
+              "code": "42601",
+              "street": "앞산순환로",
+              "street_en": "Apsan Sunhwan-ro",
+              "pattern": "n{1,600} Apsan Sunhwan-ro"
+            },
+            {
+              "code": "41255",
+              "street": "중앙대로",
+              "street_en": "Jungang-daero",
+              "pattern": "n{1,400} Jungang-daero"
+            },
+            {
+              "code": "42411",
+              "street": "동화사로",
+              "street_en": "Donghwasa-ro",
+              "fixed": ["동화사로 1", "동화사로 243", "동화사로 537"]
+            },
+            {
+              "code": "42018",
+              "street": "신천동로",
+              "street_en": "Sincheondong-ro",
+              "pattern": "n{1,250} Sincheondong-ro"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "대전광역시",
+      "name_en": "Daejeon",
+      "region_tags": ["Metropolitan City", "Chungcheong", "Central"],
+      "cities": [
+        {
+          "name": "대전",
+          "name_en": "Daejeon",
+          "lat": 36.3504,
+          "lon": 127.3845,
+          "postcodes": [
+            {
+              "code": "34126",
+              "street": "둔산로",
+              "street_en": "Dunsan-ro",
+              "pattern": "n{1,300} Dunsan-ro"
+            },
+            {
+              "code": "35204",
+              "street": "대덕대로",
+              "street_en": "Daedeok-daero",
+              "pattern": "n{1,600} Daedeok-daero"
+            },
+            {
+              "code": "34134",
+              "street": "한밭대로",
+              "street_en": "Hanbat-daero",
+              "pattern": "n{1,1000} Hanbat-daero"
+            },
+            {
+              "code": "35254",
+              "street": "유성대로",
+              "street_en": "Yuseong-daero",
+              "pattern": "n{1,700} Yuseong-daero"
+            },
+            {
+              "code": "34018",
+              "street": "계룡로",
+              "street_en": "Gyeryong-ro",
+              "pattern": "n{1,600} Gyeryong-ro"
+            },
+            {
+              "code": "34059",
+              "street": "오류로",
+              "street_en": "Oryu-ro",
+              "pattern": "n{1,200} Oryu-ro"
+            },
+            {
+              "code": "35208",
+              "street": "엑스포로",
+              "street_en": "Expo-ro",
+              "pattern": "n{1,150} Expo-ro"
+            },
+            {
+              "code": "35220",
+              "street": "대학로",
+              "street_en": "Daehak-ro",
+              "pattern": "n{1,300} Daehak-ro"
+            },
+            {
+              "code": "34843",
+              "street": "중앙로",
+              "street_en": "Jungang-ro",
+              "pattern": "n{1,400} Jungang-ro"
+            },
+            {
+              "code": "35262",
+              "street": "온천로",
+              "street_en": "Oncheon-ro",
+              "pattern": "n{1,150} Oncheon-ro"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "광주광역시",
+      "name_en": "Gwangju",
+      "region_tags": ["Metropolitan City", "Honam", "Southwest"],
+      "cities": [
+        {
+          "name": "광주",
+          "name_en": "Gwangju",
+          "lat": 35.1595,
+          "lon": 126.8526,
+          "postcodes": [
+            {
+              "code": "61477",
+              "street": "금남로",
+              "street_en": "Geumnam-ro",
+              "pattern": "n{1,400} Geumnam-ro"
+            },
+            {
+              "code": "61186",
+              "street": "상무대로",
+              "street_en": "Sangmu-daero",
+              "pattern": "n{1,700} Sangmu-daero"
+            },
+            {
+              "code": "61946",
+              "street": "무등로",
+              "street_en": "Mudeung-ro",
+              "pattern": "n{1,300} Mudeung-ro"
+            },
+            {
+              "code": "62048",
+              "street": "첨단과기로",
+              "street_en": "Cheomdan Gwagi-ro",
+              "pattern": "n{1,300} Cheomdan Gwagi-ro"
+            },
+            {
+              "code": "62271",
+              "street": "하남대로",
+              "street_en": "Hanam-daero",
+              "pattern": "n{1,800} Hanam-daero"
+            },
+            {
+              "code": "61060",
+              "street": "서문대로",
+              "street_en": "Seomun-daero",
+              "pattern": "n{1,500} Seomun-daero"
+            },
+            {
+              "code": "61475",
+              "street": "충장로",
+              "street_en": "Chungjang-ro",
+              "fixed": ["충장로 1가", "충장로 2가", "충장로 3가", "충장로 4가", "충장로 5가"]
+            },
+            {
+              "code": "62223",
+              "street": "빛고을로",
+              "street_en": "Bitgoeul-ro",
+              "pattern": "n{1,200} Bitgoeul-ro"
+            },
+            {
+              "code": "61766",
+              "street": "필문대로",
+              "street_en": "Pilmun-daero",
+              "pattern": "n{1,400} Pilmun-daero"
+            },
+            {
+              "code": "61009",
+              "street": "운천로",
+              "street_en": "Uncheon-ro",
+              "pattern": "n{1,250} Uncheon-ro"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "울산광역시",
+      "name_en": "Ulsan",
+      "region_tags": ["Metropolitan City", "Yeongnam", "Southeast"],
+      "cities": [
+        {
+          "name": "울산",
+          "name_en": "Ulsan",
+          "lat": 35.5384,
+          "lon": 129.3114,
+          "postcodes": [
+            {
+              "code": "44677",
+              "street": "삼산로",
+              "street_en": "Samsan-ro",
+              "pattern": "n{1,350} Samsan-ro"
+            },
+            {
+              "code": "44720",
+              "street": "번영로",
+              "street_en": "Beonyeong-ro",
+              "pattern": "n{1,700} Beonyeong-ro"
+            },
+            {
+              "code": "44539",
+              "street": "북부순환도로",
+              "street_en": "Bukbu Sunhwan-doro",
+              "pattern": "n{1,600} Bukbu Sunhwan-doro"
+            },
+            {
+              "code": "44978",
+              "street": "대공원로",
+              "street_en": "Daegongwon-ro",
+              "pattern": "n{1,200} Daegongwon-ro"
+            },
+            {
+              "code": "45012",
+              "street": "문수로",
+              "street_en": "Munsu-ro",
+              "pattern": "n{1,300} Munsu-ro"
+            },
+            {
+              "code": "44956",
+              "street": "태화로",
+              "street_en": "Taehwa-ro",
+              "pattern": "n{1,250} Taehwa-ro"
+            },
+            {
+              "code": "44210",
+              "street": "산업로",
+              "street_en": "Saneop-ro",
+              "pattern": "n{1,500} Saneop-ro"
+            },
+            {
+              "code": "45110",
+              "street": "중앙로",
+              "street_en": "Jungang-ro",
+              "pattern": "n{1,300} Jungang-ro"
+            },
+            {
+              "code": "44611",
+              "street": "신정로",
+              "street_en": "Sinjeong-ro",
+              "pattern": "n{1,200} Sinjeong-ro"
+            },
+            {
+              "code": "44245",
+              "street": "방어진순환도로",
+              "street_en": "Bangeojin Sunhwan-doro",
+              "fixed": ["방어진순환도로 100", "방어진순환도로 285", "방어진순환도로 512"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "세종특별자치시",
+      "name_en": "Sejong",
+      "region_tags": ["Special Autonomous City", "Chungcheong", "Central"],
+      "cities": [
+        {
+          "name": "세종",
+          "name_en": "Sejong",
+          "lat": 36.4800,
+          "lon": 127.0000,
+          "postcodes": [
+            {
+              "code": "30151",
+              "street": "한누리대로",
+              "street_en": "Hannuri-daero",
+              "pattern": "n{1,2000} Hannuri-daero"
+            },
+            {
+              "code": "30128",
+              "street": "도움로",
+              "street_en": "Doum-ro",
+              "pattern": "n{1,100} Doum-ro"
+            },
+            {
+              "code": "30121",
+              "street": "갈매로",
+              "street_en": "Galmae-ro",
+              "pattern": "n{1,400} Galmae-ro"
+            },
+            {
+              "code": "30064",
+              "street": "보듬로",
+              "street_en": "Bodeum-ro",
+              "pattern": "n{1,200} Bodeum-ro"
+            },
+            {
+              "code": "30100",
+              "street": "나성로",
+              "street_en": "Naseong-ro",
+              "pattern": "n{1,150} Naseong-ro"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "경기도",
+      "name_en": "Gyeonggi-do",
+      "region_tags": ["Province", "Capital Area", "Gyeonggi"],
+      "cities": [
+        {
+          "name": "수원시",
+          "name_en": "Suwon",
+          "lat": 37.2636,
+          "lon": 127.0286,
+          "postcodes": [
+            {
+              "code": "16499",
+              "street": "효원로",
+              "street_en": "Hyowon-ro",
+              "pattern": "n{1,400} Hyowon-ro"
+            },
+            {
+              "code": "16517",
+              "street": "정조로",
+              "street_en": "Jeongjo-ro",
+              "pattern": "n{1,900} Jeongjo-ro"
+            },
+            {
+              "code": "16289",
+              "street": "영통로",
+              "street_en": "Yeongtong-ro",
+              "pattern": "n{1,500} Yeongtong-ro"
+            },
+            {
+              "code": "16226",
+              "street": "덕영대로",
+              "street_en": "Deogyeong-daero",
+              "pattern": "n{1,1500} Deogyeong-daero"
+            },
+            {
+              "code": "16605",
+              "street": "인계로",
+              "street_en": "Ingye-ro",
+              "pattern": "n{1,250} Ingye-ro"
+            }
+          ]
+        },
+        {
+          "name": "성남시",
+          "name_en": "Seongnam",
+          "lat": 37.4200,
+          "lon": 127.1267,
+          "postcodes": [
+            {
+              "code": "13494",
+              "street": "판교역로",
+              "street_en": "Pangyo-yeok-ro",
+              "pattern": "n{1,250} Pangyo-yeok-ro"
+            },
+            {
+              "code": "13631",
+              "street": "성남대로",
+              "street_en": "Seongnam-daero",
+              "pattern": "n{1,1000} Seongnam-daero"
+            },
+            {
+              "code": "13439",
+              "street": "분당내곡로",
+              "street_en": "Bundang Naegok-ro",
+              "pattern": "n{1,200} Bundang Naegok-ro"
+            },
+            {
+              "code": "13553",
+              "street": "돌마로",
+              "street_en": "Dolma-ro",
+              "pattern": "n{1,300} Dolma-ro"
+            },
+            {
+              "code": "13210",
+              "street": "모란로",
+              "street_en": "Moran-ro",
+              "pattern": "n{1,150} Moran-ro"
+            }
+          ]
+        },
+        {
+          "name": "고양시",
+          "name_en": "Goyang",
+          "lat": 37.6584,
+          "lon": 126.8320,
+          "postcodes": [
+            {
+              "code": "10326",
+              "street": "중앙로",
+              "street_en": "Jungang-ro",
+              "pattern": "n{1,1400} Jungang-ro"
+            },
+            {
+              "code": "10223",
+              "street": "킨텍스로",
+              "street_en": "Kintex-ro",
+              "pattern": "n{1,250} Kintex-ro"
+            },
+            {
+              "code": "10413",
+              "street": "호수로",
+              "street_en": "Hosu-ro",
+              "pattern": "n{1,600} Hosu-ro"
+            },
+            {
+              "code": "10594",
+              "street": "화중로",
+              "street_en": "Hwajung-ro",
+              "pattern": "n{1,200} Hwajung-ro"
+            },
+            {
+              "code": "10497",
+              "street": "대화로",
+              "street_en": "Daehwa-ro",
+              "pattern": "n{1,200} Daehwa-ro"
+            }
+          ]
+        },
+        {
+          "name": "용인시",
+          "name_en": "Yongin",
+          "lat": 37.2411,
+          "lon": 127.1776,
+          "postcodes": [
+            {
+              "code": "16890",
+              "street": "처인대로",
+              "street_en": "Cheoin-daero",
+              "pattern": "n{1,400} Cheoin-daero"
+            },
+            {
+              "code": "16954",
+              "street": "에버랜드로",
+              "street_en": "Everland-ro",
+              "pattern": "n{1,500} Everland-ro"
+            },
+            {
+              "code": "16827",
+              "street": "수지로",
+              "street_en": "Suji-ro",
+              "pattern": "n{1,300} Suji-ro"
+            },
+            {
+              "code": "17058",
+              "street": "기흥로",
+              "street_en": "Giheung-ro",
+              "pattern": "n{1,200} Giheung-ro"
+            },
+            {
+              "code": "16977",
+              "street": "동백중앙로",
+              "street_en": "Dongbaek Jungang-ro",
+              "pattern": "n{1,200} Dongbaek Jungang-ro"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "강원특별자치도",
+      "name_en": "Gangwon-do",
+      "region_tags": ["Special Autonomous Province", "Gangwon", "Northeast"],
+      "cities": [
+        {
+          "name": "춘천시",
+          "name_en": "Chuncheon",
+          "lat": 37.8813,
+          "lon": 127.7298,
+          "postcodes": [
+            {
+              "code": "24427",
+              "street": "중앙로",
+              "street_en": "Jungang-ro",
+              "pattern": "n{1,250} Jungang-ro"
+            },
+            {
+              "code": "24347",
+              "street": "금강로",
+              "street_en": "Geumgang-ro",
+              "pattern": "n{1,150} Geumgang-ro"
+            },
+            {
+              "code": "24239",
+              "street": "스포츠타운길",
+              "street_en": "Sports Town-gil",
+              "pattern": "n{1,200} Sports Town-gil"
+            },
+            {
+              "code": "24408",
+              "street": "효자로",
+              "street_en": "Hyoja-ro",
+              "pattern": "n{1,150} Hyoja-ro"
+            },
+            {
+              "code": "24254",
+              "street": "영서로",
+              "street_en": "Yeongseo-ro",
+              "pattern": "n{1,2500} Yeongseo-ro"
+            }
+          ]
+        },
+        {
+          "name": "강릉시",
+          "name_en": "Gangneung",
+          "lat": 37.7519,
+          "lon": 128.8761,
+          "postcodes": [
+            {
+              "code": "25543",
+              "street": "경강로",
+              "street_en": "Gyeonggang-ro",
+              "pattern": "n{1,2200} Gyeonggang-ro"
+            },
+            {
+              "code": "25467",
+              "street": "하슬라로",
+              "street_en": "Haslla-ro",
+              "pattern": "n{1,200} Haslla-ro"
+            },
+            {
+              "code": "25503",
+              "street": "율곡로",
+              "street_en": "Yulgok-ro",
+              "pattern": "n{1,300} Yulgok-ro"
+            },
+            {
+              "code": "25475",
+              "street": "토성로",
+              "street_en": "Toseong-ro",
+              "pattern": "n{1,150} Toseong-ro"
+            },
+            {
+              "code": "25583",
+              "street": "주문진읍",
+              "street_en": "Jumunjin-eup",
+              "fixed": ["주문진읍 해안로 15", "주문진읍 해안로 78", "주문진읍 해안로 155"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "충청남도",
+      "name_en": "Chungcheongnam-do",
+      "region_tags": ["Province", "Chungcheong", "Central West"],
+      "cities": [
+        {
+          "name": "천안시",
+          "name_en": "Cheonan",
+          "lat": 36.8151,
+          "lon": 127.1139,
+          "postcodes": [
+            {
+              "code": "31081",
+              "street": "불당로",
+              "street_en": "Buldang-ro",
+              "pattern": "n{1,200} Buldang-ro"
+            },
+            {
+              "code": "31116",
+              "street": "천안대로",
+              "street_en": "Cheonan-daero",
+              "pattern": "n{1,1100} Cheonan-daero"
+            },
+            {
+              "code": "31257",
+              "street": "쌍용대로",
+              "street_en": "Ssangyong-daero",
+              "pattern": "n{1,400} Ssangyong-daero"
+            },
+            {
+              "code": "31169",
+              "street": "두정로",
+              "street_en": "Dujeong-ro",
+              "pattern": "n{1,200} Dujeong-ro"
+            },
+            {
+              "code": "31089",
+              "street": "삼거리로",
+              "street_en": "Samgeori-ro",
+              "pattern": "n{1,100} Samgeori-ro"
+            }
+          ]
+        },
+        {
+          "name": "아산시",
+          "name_en": "Asan",
+          "lat": 36.7898,
+          "lon": 127.0018,
+          "postcodes": [
+            {
+              "code": "31521",
+              "street": "배방로",
+              "street_en": "Baebang-ro",
+              "pattern": "n{1,250} Baebang-ro"
+            },
+            {
+              "code": "31460",
+              "street": "온천대로",
+              "street_en": "Oncheon-daero",
+              "pattern": "n{1,1400} Oncheon-daero"
+            },
+            {
+              "code": "31492",
+              "street": "탕정면",
+              "street_en": "Tangjeong-myeon",
+              "fixed": ["탕정면 삼성로 1", "탕정면 삼성로 129", "탕정면 삼성로 산51"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "충청북도",
+      "name_en": "Chungcheongbuk-do",
+      "region_tags": ["Province", "Chungcheong", "Central"],
+      "cities": [
+        {
+          "name": "청주시",
+          "name_en": "Cheongju",
+          "lat": 36.6424,
+          "lon": 127.4890,
+          "postcodes": [
+            {
+              "code": "28515",
+              "street": "상당로",
+              "street_en": "Sangdang-ro",
+              "pattern": "n{1,300} Sangdang-ro"
+            },
+            {
+              "code": "28561",
+              "street": "사직대로",
+              "street_en": "Sajik-daero",
+              "pattern": "n{1,500} Sajik-daero"
+            },
+            {
+              "code": "28644",
+              "street": "오창읍",
+              "street_en": "Ochang-eup",
+              "fixed": ["오창읍 양청로 35", "오창읍 양청로 89", "오창읍 과학산업로 100"]
+            },
+            {
+              "code": "28656",
+              "street": "1순환로",
+              "street_en": "1 Sunhwan-ro",
+              "pattern": "n{1,800} 1 Sunhwan-ro"
+            },
+            {
+              "code": "28397",
+              "street": "흥덕로",
+              "street_en": "Heungdeok-ro",
+              "pattern": "n{1,250} Heungdeok-ro"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "경상북도",
+      "name_en": "Gyeongsangbuk-do",
+      "region_tags": ["Province", "Yeongnam", "Southeast"],
+      "cities": [
+        {
+          "name": "포항시",
+          "name_en": "Pohang",
+          "lat": 36.0190,
+          "lon": 129.3435,
+          "postcodes": [
+            {
+              "code": "37654",
+              "street": "중앙로",
+              "street_en": "Jungang-ro",
+              "pattern": "n{1,300} Jungang-ro"
+            },
+            {
+              "code": "37605",
+              "street": "대잠동길",
+              "street_en": "Daejamdong-gil",
+              "pattern": "n{1,200} Daejamdong-gil"
+            },
+            {
+              "code": "37729",
+              "street": "철강로",
+              "street_en": "Cheolgang-ro",
+              "pattern": "n{1,200} Cheolgang-ro"
+            }
+          ]
+        },
+        {
+          "name": "경주시",
+          "name_en": "Gyeongju",
+          "lat": 35.8562,
+          "lon": 129.2247,
+          "postcodes": [
+            {
+              "code": "38169",
+              "street": "태종로",
+              "street_en": "Taejong-ro",
+              "pattern": "n{1,800} Taejong-ro"
+            },
+            {
+              "code": "38065",
+              "street": "보문로",
+              "street_en": "Bomun-ro",
+              "pattern": "n{1,500} Bomun-ro"
+            },
+            {
+              "code": "38168",
+              "street": "원화로",
+              "street_en": "Wonhwa-ro",
+              "fixed": ["원화로 275", "원화로 342", "원화로 411"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "경상남도",
+      "name_en": "Gyeongsangnam-do",
+      "region_tags": ["Province", "Yeongnam", "Southeast"],
+      "cities": [
+        {
+          "name": "창원시",
+          "name_en": "Changwon",
+          "lat": 35.2272,
+          "lon": 128.6811,
+          "postcodes": [
+            {
+              "code": "51395",
+              "street": "용지로",
+              "street_en": "Yongji-ro",
+              "pattern": "n{1,250} Yongji-ro"
+            },
+            {
+              "code": "51440",
+              "street": "창원대로",
+              "street_en": "Changwon-daero",
+              "pattern": "n{1,500} Changwon-daero"
+            },
+            {
+              "code": "51542",
+              "street": "원이대로",
+              "street_en": "Woni-daero",
+              "pattern": "n{1,600} Woni-daero"
+            },
+            {
+              "code": "51126",
+              "street": "마산합포구 해안대로",
+              "street_en": "Masan Happo-gu Haean-daero",
+              "fixed": ["마산합포구 해안대로 56", "마산합포구 해안대로 210", "마산합포구 해안대로 384"]
+            }
+          ]
+        },
+        {
+          "name": "김해시",
+          "name_en": "Gimhae",
+          "lat": 35.2285,
+          "lon": 128.8894,
+          "postcodes": [
+            {
+              "code": "50924",
+              "street": "김해대로",
+              "street_en": "Gimhae-daero",
+              "pattern": "n{1,2400} Gimhae-daero"
+            },
+            {
+              "code": "50835",
+              "street": "율하로",
+              "street_en": "Yulha-ro",
+              "pattern": "n{1,200} Yulha-ro"
+            },
+            {
+              "code": "50826",
+              "street": "주촌면",
+              "street_en": "Juchon-myeon",
+              "fixed": ["주촌면 골든루트로 32", "주촌면 골든루트로 128"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "전라남도",
+      "name_en": "Jeollanam-do",
+      "region_tags": ["Province", "Honam", "Southwest"],
+      "cities": [
+        {
+          "name": "여수시",
+          "name_en": "Yeosu",
+          "lat": 34.7604,
+          "lon": 127.6622,
+          "postcodes": [
+            {
+              "code": "59614",
+              "street": "좌수영로",
+              "street_en": "Jwasuyeong-ro",
+              "pattern": "n{1,600} Jwasuyeong-ro"
+            },
+            {
+              "code": "59678",
+              "street": "여서로",
+              "street_en": "Yeoseo-ro",
+              "pattern": "n{1,200} Yeoseo-ro"
+            },
+            {
+              "code": "59631",
+              "street": "이순신광장로",
+              "street_en": "Yi Sunsin Gwangjang-ro",
+              "fixed": ["이순신광장로 15", "이순신광장로 33", "이순신광장로 67"]
+            }
+          ]
+        },
+        {
+          "name": "목포시",
+          "name_en": "Mokpo",
+          "lat": 34.8118,
+          "lon": 126.3922,
+          "postcodes": [
+            {
+              "code": "58613",
+              "street": "영산로",
+              "street_en": "Yeongsan-ro",
+              "pattern": "n{1,500} Yeongsan-ro"
+            },
+            {
+              "code": "58658",
+              "street": "평화로",
+              "street_en": "Pyeonghwa-ro",
+              "pattern": "n{1,300} Pyeonghwa-ro"
+            },
+            {
+              "code": "58752",
+              "street": "하당로",
+              "street_en": "Hadang-ro",
+              "pattern": "n{1,100} Hadang-ro"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "전북특별자치도",
+      "name_en": "Jeollabuk-do",
+      "region_tags": ["Special Autonomous Province", "Honam", "Southwest"],
+      "cities": [
+        {
+          "name": "전주시",
+          "name_en": "Jeonju",
+          "lat": 35.8242,
+          "lon": 127.1480,
+          "postcodes": [
+            {
+              "code": "54999",
+              "street": "기린대로",
+              "street_en": "Girin-daero",
+              "pattern": "n{1,500} Girin-daero"
+            },
+            {
+              "code": "55043",
+              "street": "풍남문로",
+              "street_en": "Pungnammun-ro",
+              "pattern": "n{1,100} Pungnammun-ro"
+            },
+            {
+              "code": "54876",
+              "street": "백제대로",
+              "street_en": "Baekje-daero",
+              "pattern": "n{1,700} Baekje-daero"
+            },
+            {
+              "code": "55069",
+              "street": "전주객사길",
+              "street_en": "Jeonju Gaeksa-gil",
+              "fixed": ["전주객사길 14", "전주객사길 28", "전주객사길 68"]
+            },
+            {
+              "code": "54907",
+              "street": "송천중앙로",
+              "street_en": "Songcheon Jungang-ro",
+              "pattern": "n{1,200} Songcheon Jungang-ro"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "제주특별자치도",
+      "name_en": "Jeju-do",
+      "region_tags": ["Special Autonomous Province", "Jeju", "Island"],
+      "cities": [
+        {
+          "name": "제주시",
+          "name_en": "Jeju",
+          "lat": 33.4996,
+          "lon": 126.5312,
+          "postcodes": [
+            {
+              "code": "63122",
+              "street": "중앙로",
+              "street_en": "Jungang-ro",
+              "pattern": "n{1,300} Jungang-ro"
+            },
+            {
+              "code": "63167",
+              "street": "연삼로",
+              "street_en": "Yeonsam-ro",
+              "pattern": "n{1,200} Yeonsam-ro"
+            },
+            {
+              "code": "63243",
+              "street": "1100로",
+              "street_en": "1100-ro",
+              "pattern": "n{1,3000} 1100-ro"
+            },
+            {
+              "code": "63081",
+              "street": "탑동로",
+              "street_en": "Tapdong-ro",
+              "pattern": "n{1,100} Tapdong-ro"
+            },
+            {
+              "code": "63276",
+              "street": "노형로",
+              "street_en": "Nohyeong-ro",
+              "pattern": "n{1,200} Nohyeong-ro"
+            }
+          ]
+        },
+        {
+          "name": "서귀포시",
+          "name_en": "Seogwipo",
+          "lat": 33.2530,
+          "lon": 126.5597,
+          "postcodes": [
+            {
+              "code": "63593",
+              "street": "중앙로",
+              "street_en": "Jungang-ro",
+              "pattern": "n{1,300} Jungang-ro"
+            },
+            {
+              "code": "63565",
+              "street": "일주동로",
+              "street_en": "Ilju Dong-ro",
+              "pattern": "n{1,7000} Ilju Dong-ro"
+            },
+            {
+              "code": "63541",
+              "street": "중문관광로",
+              "street_en": "Jungmun Gwangwang-ro",
+              "pattern": "n{1,400} Jungmun Gwangwang-ro"
+            },
+            {
+              "code": "63600",
+              "street": "천지로",
+              "street_en": "Cheonji-ro",
+              "fixed": ["천지로 10", "천지로 28", "천지로 56", "천지로 91"]
+            },
+            {
+              "code": "63523",
+              "street": "태평로",
+              "street_en": "Taepyeong-ro",
+              "pattern": "n{1,500} Taepyeong-ro"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

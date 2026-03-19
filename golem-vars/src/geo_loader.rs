@@ -19,6 +19,7 @@ use serde::Deserialize;
 static RAW_ENTRIES: &[(&str, &str)] = &[
     ("jp.json", include_str!("../../data/geo/jp.json")),
     ("gb.json", include_str!("../../data/geo/gb.json")),
+    ("kr.json", include_str!("../../data/geo/kr.json")),
 ];
 
 // ---------------------------------------------------------------------------
