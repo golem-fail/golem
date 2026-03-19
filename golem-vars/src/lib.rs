@@ -3,6 +3,7 @@
 pub mod evaluate;
 pub mod generators;
 pub mod geo;
+pub mod geo_loader;
 pub mod interpolation;
 pub mod seed;
 pub mod structured;

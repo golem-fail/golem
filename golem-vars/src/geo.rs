@@ -5,102 +5,20 @@
 //! generator names.
 
 use std::collections::HashMap;
-use std::sync::OnceLock;
 
 use rand::Rng;
-use serde::Deserialize;
 
+use crate::geo_loader::{geo_database, GeoData, GeoPostcode};
 use crate::{VarError, VarValue};
 
 // ---------------------------------------------------------------------------
-// Compile-time data loading
+// Country resolution
 // ---------------------------------------------------------------------------
-
-static GEO_JP_JSON: &str = include_str!("../../data/geo/jp.json");
-static GEO_GB_JSON: &str = include_str!("../../data/geo/gb.json");
-
-// ---------------------------------------------------------------------------
-// Data models
-// ---------------------------------------------------------------------------
-
-#[derive(Deserialize)]
-struct GeoData {
-    country: GeoCountry,
-    states: Vec<GeoState>,
-}
-
-#[derive(Deserialize)]
-struct GeoCountry {
-    #[allow(dead_code)]
-    name_en: String,
-    #[allow(dead_code)]
-    iso_code: String,
-    #[allow(dead_code)]
-    phone_prefix: String,
-    phone_formats: Vec<String>,
-    #[allow(dead_code)]
-    postcode_format: String,
-    #[allow(dead_code)]
-    name_order: String,
-}
-
-#[derive(Deserialize)]
-struct GeoState {
-    #[allow(dead_code)]
-    name: String,
-    #[allow(dead_code)]
-    name_en: String,
-    region_tags: Vec<String>,
-    cities: Vec<GeoCity>,
-}
-
-#[derive(Deserialize)]
-struct GeoCity {
-    #[allow(dead_code)]
-    name: String,
-    name_en: String,
-    #[allow(dead_code)]
-    lat: f64,
-    #[allow(dead_code)]
-    lon: f64,
-    postcodes: Vec<GeoPostcode>,
-}
-
-#[derive(Deserialize)]
-struct GeoPostcode {
-    code: String,
-    #[allow(dead_code)]
-    street: String,
-    street_en: String,
-    pattern: Option<String>,
-    fixed: Option<Vec<String>>,
-}
-
-// ---------------------------------------------------------------------------
-// Lazy-parsed singletons
-// ---------------------------------------------------------------------------
-
-fn geo_jp() -> &'static GeoData {
-    static INSTANCE: OnceLock<GeoData> = OnceLock::new();
-    INSTANCE.get_or_init(|| {
-        serde_json::from_str(GEO_JP_JSON).expect("data/geo/jp.json should be valid JSON")
-    })
-}
-
-fn geo_gb() -> &'static GeoData {
-    static INSTANCE: OnceLock<GeoData> = OnceLock::new();
-    INSTANCE.get_or_init(|| {
-        serde_json::from_str(GEO_GB_JSON).expect("data/geo/gb.json should be valid JSON")
-    })
-}
 
 /// Resolve an optional country param to a `&GeoData`, or `None` for default/US.
 fn resolve_geo(params: &HashMap<String, String>) -> Option<&'static GeoData> {
-    match params.get("country").map(|s| s.as_str()) {
-        Some("JP") => Some(geo_jp()),
-        Some("GB") => Some(geo_gb()),
-        _ => None,
-    }
+    let code = params.get("country")?;
+    geo_database().get(code)
 }
 
 // ---------------------------------------------------------------------------
@@ -186,9 +104,9 @@ fn collect_city_names(geo: Option<&GeoData>, region: Option<&str>) -> Vec<String
             names
         }
         None => {
-            // No country specified: pull from both JP and GB.
+            // No country specified: pull from all loaded geo data.
             let mut names = Vec::new();
-            for g in &[geo_jp(), geo_gb()] {
+            for g in geo_database().all() {
                 for state in &g.states {
                     if let Some(r) = region {
                         if !state.region_tags.iter().any(|t| t.eq_ignore_ascii_case(r)) {
@@ -247,7 +165,7 @@ fn collect_postcodes(geo: Option<&GeoData>) -> Vec<String> {
         }
         None => {
             let mut codes = Vec::new();
-            for g in &[geo_jp(), geo_gb()] {
+            for g in geo_database().all() {
                 for state in &g.states {
                     for city in &state.cities {
                         for pc in &city.postcodes {
@@ -424,6 +342,16 @@ mod tests {
 
     fn empty_params() -> HashMap<String, String> {
         HashMap::new()
+    }
+
+    /// Convenience: get JP GeoData from the database.
+    fn geo_jp() -> &'static GeoData {
+        geo_database().get("JP").expect("JP should be loaded")
+    }
+
+    /// Convenience: get GB GeoData from the database.
+    fn geo_gb() -> &'static GeoData {
+        geo_database().get("GB").expect("GB should be loaded")
     }
 
     // -----------------------------------------------------------------------
