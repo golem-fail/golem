@@ -21,6 +21,7 @@ static RAW_ENTRIES: &[(&str, &str)] = &[
     ("gb.json", include_str!("../../data/geo/gb.json")),
     ("kr.json", include_str!("../../data/geo/kr.json")),
     ("fr.json", include_str!("../../data/geo/fr.json")),
+    ("ie.json", include_str!("../../data/geo/ie.json")),
 ];
 
 // ---------------------------------------------------------------------------

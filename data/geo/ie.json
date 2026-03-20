@@ -1,0 +1,1143 @@
+{
+  "country": {
+    "name": "Éire / Ireland",
+    "name_en": "Ireland",
+    "iso_code": "IE",
+    "phone_prefix": "+353",
+    "phone_formats": ["+353-##-###-####", "+353-#-###-####"],
+    "postcode_format": "A## A#A# (Eircode)",
+    "name_order": "given_first"
+  },
+  "states": [
+    {
+      "name": "Contae Bhaile Átha Cliath",
+      "name_en": "County Dublin",
+      "region_tags": ["Leinster", "Dublin"],
+      "cities": [
+        {
+          "name": "Baile Átha Cliath",
+          "name_en": "Dublin",
+          "lat": 53.3498,
+          "lon": -6.2603,
+          "postcodes": [
+            {
+              "code": "D01 F5P2",
+              "street": "O'Connell Street",
+              "street_en": "O'Connell Street",
+              "pattern": "n{1,100} O'Connell Street"
+            },
+            {
+              "code": "D02 X285",
+              "street": "Grafton Street",
+              "street_en": "Grafton Street",
+              "pattern": "n{1,120} Grafton Street"
+            },
+            {
+              "code": "D02 VR66",
+              "street": "Dawson Street",
+              "street_en": "Dawson Street",
+              "pattern": "n{1,80} Dawson Street"
+            },
+            {
+              "code": "D01 R2P0",
+              "street": "Henry Street",
+              "street_en": "Henry Street",
+              "pattern": "n{1,60} Henry Street"
+            },
+            {
+              "code": "D02 HW86",
+              "street": "Nassau Street",
+              "street_en": "Nassau Street",
+              "pattern": "n{1,50} Nassau Street"
+            },
+            {
+              "code": "D08 X9CR",
+              "street": "Thomas Street",
+              "street_en": "Thomas Street",
+              "pattern": "n{1,180} Thomas Street"
+            },
+            {
+              "code": "D01 W6X0",
+              "street": "Parnell Street",
+              "street_en": "Parnell Street",
+              "pattern": "n{1,150} Parnell Street"
+            },
+            {
+              "code": "D04 V3W8",
+              "street": "Merrion Road",
+              "street_en": "Merrion Road",
+              "pattern": "n{1,90} Merrion Road"
+            },
+            {
+              "code": "D02 YK24",
+              "street": "Kildare Street",
+              "street_en": "Kildare Street",
+              "pattern": "n{1,40} Kildare Street"
+            },
+            {
+              "code": "D07 T6K8",
+              "street": "Manor Street",
+              "street_en": "Manor Street",
+              "pattern": "n{1,100} Manor Street"
+            },
+            {
+              "code": "D06 W260",
+              "street": "Rathmines Road",
+              "street_en": "Rathmines Road",
+              "pattern": "n{1,70} Rathmines Road"
+            },
+            {
+              "code": "D03 A6N8",
+              "street": "Pearse Street",
+              "street_en": "Pearse Street",
+              "pattern": "n{1,200} Pearse Street"
+            },
+            {
+              "code": "D08 FW31",
+              "street": "Cork Street",
+              "street_en": "Cork Street",
+              "pattern": "n{1,120} Cork Street"
+            },
+            {
+              "code": "D09 K6W2",
+              "street": "Drumcondra Road",
+              "street_en": "Drumcondra Road",
+              "fixed": ["1 Drumcondra Road Upper", "15 Drumcondra Road Upper", "42 Drumcondra Road Lower", "88 Drumcondra Road Lower"]
+            },
+            {
+              "code": "D12 HX28",
+              "street": "Walkinstown Road",
+              "street_en": "Walkinstown Road",
+              "pattern": "n{1,60} Walkinstown Road"
+            }
+          ]
+        },
+        {
+          "name": "Dún Laoghaire",
+          "name_en": "Dun Laoghaire",
+          "lat": 53.2946,
+          "lon": -6.1348,
+          "postcodes": [
+            {
+              "code": "A96 D3T2",
+              "street": "George's Street Upper",
+              "street_en": "George's Street Upper",
+              "pattern": "n{1,60} George's Street Upper"
+            },
+            {
+              "code": "A96 K5F3",
+              "street": "Marine Road",
+              "street_en": "Marine Road",
+              "pattern": "n{1,40} Marine Road"
+            },
+            {
+              "code": "A96 W2N7",
+              "street": "Cumberland Street",
+              "street_en": "Cumberland Street",
+              "pattern": "n{1,30} Cumberland Street"
+            }
+          ]
+        },
+        {
+          "name": "Sord",
+          "name_en": "Swords",
+          "lat": 53.4597,
+          "lon": -6.2181,
+          "postcodes": [
+            {
+              "code": "K67 E2A8",
+              "street": "Main Street",
+              "street_en": "Main Street",
+              "pattern": "n{1,80} Main Street"
+            },
+            {
+              "code": "K67 P3W5",
+              "street": "North Street",
+              "street_en": "North Street",
+              "pattern": "n{1,50} North Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Contae Chorcaí",
+      "name_en": "County Cork",
+      "region_tags": ["Munster", "Cork"],
+      "cities": [
+        {
+          "name": "Corcaigh",
+          "name_en": "Cork",
+          "lat": 51.8969,
+          "lon": -8.4863,
+          "postcodes": [
+            {
+              "code": "T12 RW26",
+              "street": "Patrick Street",
+              "street_en": "Patrick Street",
+              "pattern": "n{1,120} Patrick Street"
+            },
+            {
+              "code": "T12 V20H",
+              "street": "Grand Parade",
+              "street_en": "Grand Parade",
+              "pattern": "n{1,80} Grand Parade"
+            },
+            {
+              "code": "T12 EH30",
+              "street": "Oliver Plunkett Street",
+              "street_en": "Oliver Plunkett Street",
+              "pattern": "n{1,100} Oliver Plunkett Street"
+            },
+            {
+              "code": "T12 W8YD",
+              "street": "Washington Street",
+              "street_en": "Washington Street",
+              "pattern": "n{1,60} Washington Street"
+            },
+            {
+              "code": "T12 K3F7",
+              "street": "MacCurtain Street",
+              "street_en": "MacCurtain Street",
+              "pattern": "n{1,90} MacCurtain Street"
+            },
+            {
+              "code": "T12 D4P8",
+              "street": "South Mall",
+              "street_en": "South Mall",
+              "pattern": "n{1,50} South Mall"
+            },
+            {
+              "code": "T12 XY4H",
+              "street": "North Main Street",
+              "street_en": "North Main Street",
+              "pattern": "n{1,100} North Main Street"
+            },
+            {
+              "code": "T12 P6W2",
+              "street": "Barrack Street",
+              "street_en": "Barrack Street",
+              "pattern": "n{1,70} Barrack Street"
+            },
+            {
+              "code": "T23 A8R6",
+              "street": "Douglas Road",
+              "street_en": "Douglas Road",
+              "pattern": "n{1,80} Douglas Road"
+            },
+            {
+              "code": "T12 NY82",
+              "street": "Shandon Street",
+              "street_en": "Shandon Street",
+              "pattern": "n{1,60} Shandon Street"
+            },
+            {
+              "code": "T12 F3V5",
+              "street": "Blarney Street",
+              "street_en": "Blarney Street",
+              "pattern": "n{1,50} Blarney Street"
+            },
+            {
+              "code": "T12 AW43",
+              "street": "Cornmarket Street",
+              "street_en": "Cornmarket Street",
+              "pattern": "n{1,30} Cornmarket Street"
+            }
+          ]
+        },
+        {
+          "name": "Cobh",
+          "name_en": "Cobh",
+          "lat": 51.8513,
+          "lon": -8.2967,
+          "postcodes": [
+            {
+              "code": "P24 K6F1",
+              "street": "West Beach",
+              "street_en": "West Beach",
+              "fixed": ["The Promenade, West Beach", "Harbour View, West Beach", "Seaview Terrace, West Beach"]
+            },
+            {
+              "code": "P24 T2D8",
+              "street": "Midleton Street",
+              "street_en": "Midleton Street",
+              "pattern": "n{1,30} Midleton Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Contae na Gaillimhe",
+      "name_en": "County Galway",
+      "region_tags": ["Connacht", "Galway"],
+      "cities": [
+        {
+          "name": "Gaillimh",
+          "name_en": "Galway",
+          "lat": 53.2707,
+          "lon": -9.0568,
+          "postcodes": [
+            {
+              "code": "H91 E2XF",
+              "street": "Shop Street",
+              "street_en": "Shop Street",
+              "pattern": "n{1,40} Shop Street"
+            },
+            {
+              "code": "H91 X4P7",
+              "street": "Quay Street",
+              "street_en": "Quay Street",
+              "pattern": "n{1,30} Quay Street"
+            },
+            {
+              "code": "H91 K7W3",
+              "street": "Eyre Square",
+              "street_en": "Eyre Square",
+              "fixed": ["1 Eyre Square", "5 Eyre Square", "12 Eyre Square", "18 Eyre Square"]
+            },
+            {
+              "code": "H91 R8D2",
+              "street": "Dominick Street",
+              "street_en": "Dominick Street",
+              "pattern": "n{1,60} Dominick Street"
+            },
+            {
+              "code": "H91 A3Y6",
+              "street": "Salthill Road",
+              "street_en": "Salthill Road",
+              "pattern": "n{1,100} Salthill Road"
+            },
+            {
+              "code": "H91 V5E8",
+              "street": "Bohermore",
+              "street_en": "Bohermore",
+              "pattern": "n{1,80} Bohermore"
+            },
+            {
+              "code": "H91 PW52",
+              "street": "Cross Street",
+              "street_en": "Cross Street",
+              "pattern": "n{1,20} Cross Street"
+            },
+            {
+              "code": "H91 N2K9",
+              "street": "Prospect Hill",
+              "street_en": "Prospect Hill",
+              "pattern": "n{1,40} Prospect Hill"
+            },
+            {
+              "code": "H91 W4T6",
+              "street": "Forster Street",
+              "street_en": "Forster Street",
+              "pattern": "n{1,30} Forster Street"
+            },
+            {
+              "code": "H91 F6A3",
+              "street": "William Street",
+              "street_en": "William Street",
+              "pattern": "n{1,50} William Street"
+            },
+            {
+              "code": "H91 D8V1",
+              "street": "Mainguard Street",
+              "street_en": "Mainguard Street",
+              "pattern": "n{1,20} Mainguard Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Contae Luimnigh",
+      "name_en": "County Limerick",
+      "region_tags": ["Munster", "Limerick"],
+      "cities": [
+        {
+          "name": "Luimneach",
+          "name_en": "Limerick",
+          "lat": 52.6638,
+          "lon": -8.6267,
+          "postcodes": [
+            {
+              "code": "V94 X3P2",
+              "street": "O'Connell Street",
+              "street_en": "O'Connell Street",
+              "pattern": "n{1,80} O'Connell Street"
+            },
+            {
+              "code": "V94 H2W8",
+              "street": "William Street",
+              "street_en": "William Street",
+              "pattern": "n{1,60} William Street"
+            },
+            {
+              "code": "V94 T6Y4",
+              "street": "Henry Street",
+              "street_en": "Henry Street",
+              "pattern": "n{1,50} Henry Street"
+            },
+            {
+              "code": "V94 K8R3",
+              "street": "Catherine Street",
+              "street_en": "Catherine Street",
+              "pattern": "n{1,40} Catherine Street"
+            },
+            {
+              "code": "V94 D7N5",
+              "street": "Thomas Street",
+              "street_en": "Thomas Street",
+              "pattern": "n{1,70} Thomas Street"
+            },
+            {
+              "code": "V94 A2E9",
+              "street": "Mallow Street",
+              "street_en": "Mallow Street",
+              "pattern": "n{1,30} Mallow Street"
+            },
+            {
+              "code": "V94 W3F6",
+              "street": "Parnell Street",
+              "street_en": "Parnell Street",
+              "pattern": "n{1,50} Parnell Street"
+            },
+            {
+              "code": "V94 P5K1",
+              "street": "Roches Street",
+              "street_en": "Roches Street",
+              "pattern": "n{1,40} Roches Street"
+            },
+            {
+              "code": "V94 R9T7",
+              "street": "Denmark Street",
+              "street_en": "Denmark Street",
+              "pattern": "n{1,30} Denmark Street"
+            },
+            {
+              "code": "V94 Y6H2",
+              "street": "Ennis Road",
+              "street_en": "Ennis Road",
+              "pattern": "n{1,120} Ennis Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Contae Phort Láirge",
+      "name_en": "County Waterford",
+      "region_tags": ["Munster", "Waterford"],
+      "cities": [
+        {
+          "name": "Port Láirge",
+          "name_en": "Waterford",
+          "lat": 52.2593,
+          "lon": -7.1101,
+          "postcodes": [
+            {
+              "code": "X91 W3P8",
+              "street": "The Quay",
+              "street_en": "The Quay",
+              "pattern": "n{1,100} The Quay"
+            },
+            {
+              "code": "X91 K6T2",
+              "street": "Barronstrand Street",
+              "street_en": "Barronstrand Street",
+              "pattern": "n{1,50} Barronstrand Street"
+            },
+            {
+              "code": "X91 H8R5",
+              "street": "Broad Street",
+              "street_en": "Broad Street",
+              "pattern": "n{1,40} Broad Street"
+            },
+            {
+              "code": "X91 V2N7",
+              "street": "Michael Street",
+              "street_en": "Michael Street",
+              "pattern": "n{1,30} Michael Street"
+            },
+            {
+              "code": "X91 D4Y9",
+              "street": "John Street",
+              "street_en": "John Street",
+              "pattern": "n{1,60} John Street"
+            },
+            {
+              "code": "X91 A7F3",
+              "street": "George's Street",
+              "street_en": "George's Street",
+              "pattern": "n{1,40} George's Street"
+            },
+            {
+              "code": "X91 E5W1",
+              "street": "O'Connell Street",
+              "street_en": "O'Connell Street",
+              "pattern": "n{1,50} O'Connell Street"
+            },
+            {
+              "code": "X91 P3K6",
+              "street": "The Mall",
+              "street_en": "The Mall",
+              "fixed": ["1 The Mall", "4 The Mall", "8 The Mall", "12 The Mall", "16 The Mall"]
+            },
+            {
+              "code": "X91 T9R4",
+              "street": "Parnell Street",
+              "street_en": "Parnell Street",
+              "pattern": "n{1,40} Parnell Street"
+            },
+            {
+              "code": "X91 N1H8",
+              "street": "Manor Street",
+              "street_en": "Manor Street",
+              "pattern": "n{1,30} Manor Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Contae Chill Chainnigh",
+      "name_en": "County Kilkenny",
+      "region_tags": ["Leinster", "Kilkenny"],
+      "cities": [
+        {
+          "name": "Cill Chainnigh",
+          "name_en": "Kilkenny",
+          "lat": 52.6541,
+          "lon": -7.2448,
+          "postcodes": [
+            {
+              "code": "R95 X4D7",
+              "street": "High Street",
+              "street_en": "High Street",
+              "pattern": "n{1,80} High Street"
+            },
+            {
+              "code": "R95 K2W9",
+              "street": "Parliament Street",
+              "street_en": "Parliament Street",
+              "pattern": "n{1,50} Parliament Street"
+            },
+            {
+              "code": "R95 T8A3",
+              "street": "Rose Inn Street",
+              "street_en": "Rose Inn Street",
+              "pattern": "n{1,40} Rose Inn Street"
+            },
+            {
+              "code": "R95 V6P1",
+              "street": "John Street",
+              "street_en": "John Street",
+              "pattern": "n{1,60} John Street"
+            },
+            {
+              "code": "R95 H3N5",
+              "street": "Patrick Street",
+              "street_en": "Patrick Street",
+              "pattern": "n{1,40} Patrick Street"
+            },
+            {
+              "code": "R95 E9Y2",
+              "street": "The Parade",
+              "street_en": "The Parade",
+              "fixed": ["Castle View, The Parade", "1 The Parade", "6 The Parade", "10 The Parade"]
+            },
+            {
+              "code": "R95 W7R4",
+              "street": "Kieran Street",
+              "street_en": "Kieran Street",
+              "pattern": "n{1,60} Kieran Street"
+            },
+            {
+              "code": "R95 A5F8",
+              "street": "Dean Street",
+              "street_en": "Dean Street",
+              "pattern": "n{1,30} Dean Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Contae Chiarraí",
+      "name_en": "County Kerry",
+      "region_tags": ["Munster", "Kerry"],
+      "cities": [
+        {
+          "name": "Trá Lí",
+          "name_en": "Tralee",
+          "lat": 52.2713,
+          "lon": -9.6992,
+          "postcodes": [
+            {
+              "code": "V92 HD62",
+              "street": "The Mall",
+              "street_en": "The Mall",
+              "fixed": ["1 The Mall", "3 The Mall", "7 The Mall", "12 The Mall"]
+            },
+            {
+              "code": "V92 W3T8",
+              "street": "Castle Street",
+              "street_en": "Castle Street",
+              "pattern": "n{1,30} Castle Street"
+            },
+            {
+              "code": "V92 K5R2",
+              "street": "Denny Street",
+              "street_en": "Denny Street",
+              "pattern": "n{1,40} Denny Street"
+            },
+            {
+              "code": "V92 A7N4",
+              "street": "Bridge Street",
+              "street_en": "Bridge Street",
+              "pattern": "n{1,30} Bridge Street"
+            },
+            {
+              "code": "V92 P8Y6",
+              "street": "Rock Street",
+              "street_en": "Rock Street",
+              "pattern": "n{1,40} Rock Street"
+            },
+            {
+              "code": "V92 D2E9",
+              "street": "Boherbee",
+              "street_en": "Boherbee",
+              "pattern": "n{1,50} Boherbee"
+            }
+          ]
+        },
+        {
+          "name": "Cill Airne",
+          "name_en": "Killarney",
+          "lat": 52.0599,
+          "lon": -9.5044,
+          "postcodes": [
+            {
+              "code": "V93 HY62",
+              "street": "Main Street",
+              "street_en": "Main Street",
+              "pattern": "n{1,60} Main Street"
+            },
+            {
+              "code": "V93 K4P8",
+              "street": "High Street",
+              "street_en": "High Street",
+              "pattern": "n{1,40} High Street"
+            },
+            {
+              "code": "V93 W7R1",
+              "street": "Plunkett Street",
+              "street_en": "Plunkett Street",
+              "pattern": "n{1,30} Plunkett Street"
+            },
+            {
+              "code": "V93 T2D5",
+              "street": "New Street",
+              "street_en": "New Street",
+              "pattern": "n{1,40} New Street"
+            },
+            {
+              "code": "V93 A6N3",
+              "street": "College Street",
+              "street_en": "College Street",
+              "pattern": "n{1,25} College Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Contae Dhún na nGall",
+      "name_en": "County Donegal",
+      "region_tags": ["Ulster", "Donegal"],
+      "cities": [
+        {
+          "name": "Leitir Ceanainn",
+          "name_en": "Letterkenny",
+          "lat": 54.9558,
+          "lon": -7.7342,
+          "postcodes": [
+            {
+              "code": "F92 X2K7",
+              "street": "Main Street",
+              "street_en": "Main Street",
+              "pattern": "n{1,60} Main Street"
+            },
+            {
+              "code": "F92 P4W1",
+              "street": "Port Road",
+              "street_en": "Port Road",
+              "pattern": "n{1,80} Port Road"
+            },
+            {
+              "code": "F92 T6R3",
+              "street": "Upper Main Street",
+              "street_en": "Upper Main Street",
+              "pattern": "n{1,40} Upper Main Street"
+            },
+            {
+              "code": "F92 H8D5",
+              "street": "Pearse Road",
+              "street_en": "Pearse Road",
+              "pattern": "n{1,50} Pearse Road"
+            },
+            {
+              "code": "F92 A3Y9",
+              "street": "Church Lane",
+              "street_en": "Church Lane",
+              "fixed": ["1 Church Lane", "3 Church Lane", "5 Church Lane", "8 Church Lane"]
+            }
+          ]
+        },
+        {
+          "name": "Bun Cranncha",
+          "name_en": "Buncrana",
+          "lat": 55.1372,
+          "lon": -7.4494,
+          "postcodes": [
+            {
+              "code": "F93 V5T2",
+              "street": "Main Street",
+              "street_en": "Main Street",
+              "pattern": "n{1,40} Main Street"
+            },
+            {
+              "code": "F93 K7W4",
+              "street": "Castle Avenue",
+              "street_en": "Castle Avenue",
+              "pattern": "n{1,20} Castle Avenue"
+            },
+            {
+              "code": "F93 R8P6",
+              "street": "The Shore Front",
+              "street_en": "The Shore Front",
+              "fixed": ["Seaview House, The Shore Front", "Harbour Cottage, The Shore Front", "Bay View, The Shore Front"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Contae Chill Mhantáin",
+      "name_en": "County Wicklow",
+      "region_tags": ["Leinster", "Wicklow"],
+      "cities": [
+        {
+          "name": "Cill Mhantáin",
+          "name_en": "Wicklow",
+          "lat": 52.9808,
+          "lon": -6.0446,
+          "postcodes": [
+            {
+              "code": "A67 X3P8",
+              "street": "Main Street",
+              "street_en": "Main Street",
+              "pattern": "n{1,50} Main Street"
+            },
+            {
+              "code": "A67 K5T2",
+              "street": "Abbey Street",
+              "street_en": "Abbey Street",
+              "pattern": "n{1,30} Abbey Street"
+            },
+            {
+              "code": "A67 W7R4",
+              "street": "Church Street",
+              "street_en": "Church Street",
+              "pattern": "n{1,25} Church Street"
+            },
+            {
+              "code": "A67 D2N6",
+              "street": "Bridge Street",
+              "street_en": "Bridge Street",
+              "pattern": "n{1,20} Bridge Street"
+            },
+            {
+              "code": "A67 V8F1",
+              "street": "Fitzwilliam Square",
+              "street_en": "Fitzwilliam Square",
+              "fixed": ["1 Fitzwilliam Square", "4 Fitzwilliam Square", "8 Fitzwilliam Square", "12 Fitzwilliam Square"]
+            }
+          ]
+        },
+        {
+          "name": "Bré",
+          "name_en": "Bray",
+          "lat": 53.2009,
+          "lon": -6.0985,
+          "postcodes": [
+            {
+              "code": "A98 E4K7",
+              "street": "Main Street",
+              "street_en": "Main Street",
+              "pattern": "n{1,80} Main Street"
+            },
+            {
+              "code": "A98 T6W2",
+              "street": "Quinsborough Road",
+              "street_en": "Quinsborough Road",
+              "pattern": "n{1,50} Quinsborough Road"
+            },
+            {
+              "code": "A98 P3R9",
+              "street": "Strand Road",
+              "street_en": "Strand Road",
+              "pattern": "n{1,60} Strand Road"
+            },
+            {
+              "code": "A98 H5D1",
+              "street": "Castle Street",
+              "street_en": "Castle Street",
+              "pattern": "n{1,30} Castle Street"
+            },
+            {
+              "code": "A98 N8F4",
+              "street": "Florence Road",
+              "street_en": "Florence Road",
+              "pattern": "n{1,40} Florence Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Contae Lú",
+      "name_en": "County Louth",
+      "region_tags": ["Leinster", "Louth"],
+      "cities": [
+        {
+          "name": "Droichead Átha",
+          "name_en": "Drogheda",
+          "lat": 53.7179,
+          "lon": -6.3487,
+          "postcodes": [
+            {
+              "code": "A92 X7T3",
+              "street": "West Street",
+              "street_en": "West Street",
+              "pattern": "n{1,60} West Street"
+            },
+            {
+              "code": "A92 K4P8",
+              "street": "Shop Street",
+              "street_en": "Shop Street",
+              "pattern": "n{1,30} Shop Street"
+            },
+            {
+              "code": "A92 D6W2",
+              "street": "Peter Street",
+              "street_en": "Peter Street",
+              "pattern": "n{1,40} Peter Street"
+            },
+            {
+              "code": "A92 H3R5",
+              "street": "Laurence Street",
+              "street_en": "Laurence Street",
+              "pattern": "n{1,50} Laurence Street"
+            },
+            {
+              "code": "A92 V9N1",
+              "street": "Fair Street",
+              "street_en": "Fair Street",
+              "pattern": "n{1,25} Fair Street"
+            }
+          ]
+        },
+        {
+          "name": "Dún Dealgan",
+          "name_en": "Dundalk",
+          "lat": 54.0037,
+          "lon": -6.4016,
+          "postcodes": [
+            {
+              "code": "A91 W2K6",
+              "street": "Clanbrassil Street",
+              "street_en": "Clanbrassil Street",
+              "pattern": "n{1,80} Clanbrassil Street"
+            },
+            {
+              "code": "A91 T5P9",
+              "street": "Park Street",
+              "street_en": "Park Street",
+              "pattern": "n{1,60} Park Street"
+            },
+            {
+              "code": "A91 R8D3",
+              "street": "Earl Street",
+              "street_en": "Earl Street",
+              "pattern": "n{1,40} Earl Street"
+            },
+            {
+              "code": "A91 F4N7",
+              "street": "Francis Street",
+              "street_en": "Francis Street",
+              "pattern": "n{1,30} Francis Street"
+            },
+            {
+              "code": "A91 H6W1",
+              "street": "Dublin Street",
+              "street_en": "Dublin Street",
+              "pattern": "n{1,50} Dublin Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Contae Mhaigh Eo",
+      "name_en": "County Mayo",
+      "region_tags": ["Connacht", "Mayo"],
+      "cities": [
+        {
+          "name": "Caisleán an Bharraigh",
+          "name_en": "Castlebar",
+          "lat": 53.7610,
+          "lon": -9.2988,
+          "postcodes": [
+            {
+              "code": "F23 X8K4",
+              "street": "Main Street",
+              "street_en": "Main Street",
+              "pattern": "n{1,60} Main Street"
+            },
+            {
+              "code": "F23 T3W7",
+              "street": "Castle Street",
+              "street_en": "Castle Street",
+              "pattern": "n{1,40} Castle Street"
+            },
+            {
+              "code": "F23 P6R2",
+              "street": "Ellison Street",
+              "street_en": "Ellison Street",
+              "pattern": "n{1,30} Ellison Street"
+            },
+            {
+              "code": "F23 V9D5",
+              "street": "Rush Street",
+              "street_en": "Rush Street",
+              "pattern": "n{1,25} Rush Street"
+            },
+            {
+              "code": "F23 H2N8",
+              "street": "New Antrim Street",
+              "street_en": "New Antrim Street",
+              "pattern": "n{1,30} New Antrim Street"
+            }
+          ]
+        },
+        {
+          "name": "Cathair na Mart",
+          "name_en": "Westport",
+          "lat": 53.8003,
+          "lon": -9.5178,
+          "postcodes": [
+            {
+              "code": "F28 K4P6",
+              "street": "Bridge Street",
+              "street_en": "Bridge Street",
+              "pattern": "n{1,40} Bridge Street"
+            },
+            {
+              "code": "F28 T7W1",
+              "street": "Shop Street",
+              "street_en": "Shop Street",
+              "pattern": "n{1,30} Shop Street"
+            },
+            {
+              "code": "F28 D2R9",
+              "street": "James Street",
+              "street_en": "James Street",
+              "pattern": "n{1,25} James Street"
+            },
+            {
+              "code": "F28 A5N3",
+              "street": "The Octagon",
+              "street_en": "The Octagon",
+              "fixed": ["1 The Octagon", "3 The Octagon", "5 The Octagon", "8 The Octagon"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Contae Thiobraid Árann",
+      "name_en": "County Tipperary",
+      "region_tags": ["Munster", "Tipperary"],
+      "cities": [
+        {
+          "name": "Cluain Meala",
+          "name_en": "Clonmel",
+          "lat": 52.3553,
+          "lon": -7.7022,
+          "postcodes": [
+            {
+              "code": "E91 X6T4",
+              "street": "O'Connell Street",
+              "street_en": "O'Connell Street",
+              "pattern": "n{1,60} O'Connell Street"
+            },
+            {
+              "code": "E91 K3W8",
+              "street": "Gladstone Street",
+              "street_en": "Gladstone Street",
+              "pattern": "n{1,40} Gladstone Street"
+            },
+            {
+              "code": "E91 P7R2",
+              "street": "Mitchell Street",
+              "street_en": "Mitchell Street",
+              "pattern": "n{1,30} Mitchell Street"
+            },
+            {
+              "code": "E91 V2D6",
+              "street": "Mary Street",
+              "street_en": "Mary Street",
+              "pattern": "n{1,35} Mary Street"
+            },
+            {
+              "code": "E91 H9N1",
+              "street": "Irishtown",
+              "street_en": "Irishtown",
+              "pattern": "n{1,50} Irishtown"
+            }
+          ]
+        },
+        {
+          "name": "Durlas",
+          "name_en": "Thurles",
+          "lat": 52.6819,
+          "lon": -7.8004,
+          "postcodes": [
+            {
+              "code": "E41 W5K3",
+              "street": "Liberty Square",
+              "street_en": "Liberty Square",
+              "fixed": ["1 Liberty Square", "4 Liberty Square", "7 Liberty Square", "11 Liberty Square", "15 Liberty Square"]
+            },
+            {
+              "code": "E41 T8P6",
+              "street": "Friar Street",
+              "street_en": "Friar Street",
+              "pattern": "n{1,30} Friar Street"
+            },
+            {
+              "code": "E41 R2D9",
+              "street": "Parnell Street",
+              "street_en": "Parnell Street",
+              "pattern": "n{1,40} Parnell Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Contae na Mí",
+      "name_en": "County Meath",
+      "region_tags": ["Leinster", "Meath"],
+      "cities": [
+        {
+          "name": "An Uaimh",
+          "name_en": "Navan",
+          "lat": 53.6527,
+          "lon": -6.6816,
+          "postcodes": [
+            {
+              "code": "C15 X4T7",
+              "street": "Trimgate Street",
+              "street_en": "Trimgate Street",
+              "pattern": "n{1,50} Trimgate Street"
+            },
+            {
+              "code": "C15 K8W3",
+              "street": "Market Square",
+              "street_en": "Market Square",
+              "fixed": ["1 Market Square", "3 Market Square", "6 Market Square", "9 Market Square"]
+            },
+            {
+              "code": "C15 P2R6",
+              "street": "Watergate Street",
+              "street_en": "Watergate Street",
+              "pattern": "n{1,30} Watergate Street"
+            },
+            {
+              "code": "C15 V5D1",
+              "street": "Bridge Street",
+              "street_en": "Bridge Street",
+              "pattern": "n{1,20} Bridge Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Contae Chill Dara",
+      "name_en": "County Kildare",
+      "region_tags": ["Leinster", "Kildare"],
+      "cities": [
+        {
+          "name": "Nas na Ríogh",
+          "name_en": "Naas",
+          "lat": 53.2159,
+          "lon": -6.6592,
+          "postcodes": [
+            {
+              "code": "W91 X3K8",
+              "street": "Main Street",
+              "street_en": "Main Street",
+              "pattern": "n{1,60} Main Street"
+            },
+            {
+              "code": "W91 T6P2",
+              "street": "South Main Street",
+              "street_en": "South Main Street",
+              "pattern": "n{1,40} South Main Street"
+            },
+            {
+              "code": "W91 V4R7",
+              "street": "Dublin Road",
+              "street_en": "Dublin Road",
+              "pattern": "n{1,80} Dublin Road"
+            },
+            {
+              "code": "W91 H9D5",
+              "street": "North Main Street",
+              "street_en": "North Main Street",
+              "pattern": "n{1,40} North Main Street"
+            }
+          ]
+        },
+        {
+          "name": "Maigh Nuad",
+          "name_en": "Maynooth",
+          "lat": 53.3815,
+          "lon": -6.5913,
+          "postcodes": [
+            {
+              "code": "W23 F2K6",
+              "street": "Main Street",
+              "street_en": "Main Street",
+              "pattern": "n{1,50} Main Street"
+            },
+            {
+              "code": "W23 T8W4",
+              "street": "Mill Street",
+              "street_en": "Mill Street",
+              "pattern": "n{1,30} Mill Street"
+            },
+            {
+              "code": "W23 R5P1",
+              "street": "Parson Street",
+              "street_en": "Parson Street",
+              "pattern": "n{1,20} Parson Street"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
