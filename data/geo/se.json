@@ -1,0 +1,1030 @@
+{
+  "country": {
+    "name": "Sverige",
+    "name_en": "Sweden",
+    "iso_code": "SE",
+    "phone_prefix": "+46",
+    "phone_formats": ["+46-7#-###-##-##", "+46-8-###-##-##", "+46-##-###-##-##"],
+    "postcode_format": "### ##",
+    "name_order": "given_first"
+  },
+  "states": [
+    {
+      "name": "Stockholms län",
+      "name_en": "Stockholm County",
+      "region_tags": ["Svealand"],
+      "cities": [
+        {
+          "name": "Stockholm",
+          "name_en": "Stockholm",
+          "lat": 59.3293,
+          "lon": 18.0686,
+          "postcodes": [
+            {
+              "code": "100 05",
+              "street": "Drottninggatan",
+              "street_en": "Drottninggatan",
+              "pattern": "n{1,100} Drottninggatan"
+            },
+            {
+              "code": "111 22",
+              "street": "Kungsgatan",
+              "street_en": "Kungsgatan",
+              "pattern": "n{1,60} Kungsgatan"
+            },
+            {
+              "code": "111 57",
+              "street": "Sveavägen",
+              "street_en": "Sveavagen",
+              "pattern": "n{1,166} Sveavägen"
+            },
+            {
+              "code": "114 51",
+              "street": "Strandvägen",
+              "street_en": "Strandvagen",
+              "pattern": "n{1,50} Strandvägen"
+            },
+            {
+              "code": "114 29",
+              "street": "Birger Jarlsgatan",
+              "street_en": "Birger Jarlsgatan",
+              "pattern": "n{1,135} Birger Jarlsgatan"
+            },
+            {
+              "code": "116 45",
+              "street": "Götgatan",
+              "street_en": "Gotgatan",
+              "pattern": "n{1,100} Götgatan"
+            },
+            {
+              "code": "117 34",
+              "street": "Hornsgatan",
+              "street_en": "Hornsgatan",
+              "pattern": "n{1,180} Hornsgatan"
+            },
+            {
+              "code": "112 20",
+              "street": "Odengatan",
+              "street_en": "Odengatan",
+              "pattern": "n{1,100} Odengatan"
+            },
+            {
+              "code": "113 50",
+              "street": "Valhallavägen",
+              "street_en": "Valhallavagen",
+              "pattern": "n{1,190} Valhallavägen"
+            },
+            {
+              "code": "115 21",
+              "street": "Karlavägen",
+              "street_en": "Karlavagen",
+              "pattern": "n{1,100} Karlavägen"
+            },
+            {
+              "code": "118 26",
+              "street": "Ringvägen",
+              "street_en": "Ringvagen",
+              "pattern": "n{1,150} Ringvägen"
+            },
+            {
+              "code": "120 44",
+              "street": "Folkungagatan",
+              "street_en": "Folkungagatan",
+              "pattern": "n{1,140} Folkungagatan"
+            },
+            {
+              "code": "104 51",
+              "street": "Vasagatan",
+              "street_en": "Vasagatan",
+              "pattern": "n{1,48} Vasagatan"
+            },
+            {
+              "code": "111 49",
+              "street": "Gamla Stan",
+              "street_en": "Old Town",
+              "pattern": "n{1,30} Västerlånggatan"
+            },
+            {
+              "code": "171 71",
+              "street": "Solnavägen",
+              "street_en": "Solnavagen",
+              "pattern": "n{1,60} Solnavägen"
+            },
+            {
+              "code": "131 34",
+              "street": "Nynäsvägen",
+              "street_en": "Nynasvagen",
+              "pattern": "n{1,100} Nynäsvägen"
+            }
+          ]
+        },
+        {
+          "name": "Solna",
+          "name_en": "Solna",
+          "lat": 59.3600,
+          "lon": 18.0000,
+          "postcodes": [
+            {
+              "code": "169 56",
+              "street": "Råsundavägen",
+              "street_en": "Rasundavagen",
+              "pattern": "n{1,80} Råsundavägen"
+            },
+            {
+              "code": "171 45",
+              "street": "Huvudstagatan",
+              "street_en": "Huvudstagatan",
+              "pattern": "n{1,30} Huvudstagatan"
+            }
+          ]
+        },
+        {
+          "name": "Södertälje",
+          "name_en": "Sodertalje",
+          "lat": 59.1955,
+          "lon": 17.6253,
+          "postcodes": [
+            {
+              "code": "151 36",
+              "street": "Storgatan",
+              "street_en": "Storgatan",
+              "pattern": "n{1,50} Storgatan"
+            },
+            {
+              "code": "152 42",
+              "street": "Nyköpingsvägen",
+              "street_en": "Nykopingsvagen",
+              "pattern": "n{1,80} Nyköpingsvägen"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Västra Götalands län",
+      "name_en": "Vastra Gotaland County",
+      "region_tags": ["Götaland"],
+      "cities": [
+        {
+          "name": "Göteborg",
+          "name_en": "Gothenburg",
+          "lat": 57.7089,
+          "lon": 11.9746,
+          "postcodes": [
+            {
+              "code": "411 36",
+              "street": "Kungsportsavenyen",
+              "street_en": "Kungsportsavenyen",
+              "pattern": "n{1,50} Kungsportsavenyen"
+            },
+            {
+              "code": "411 06",
+              "street": "Östra Hamngatan",
+              "street_en": "Ostra Hamngatan",
+              "pattern": "n{1,50} Östra Hamngatan"
+            },
+            {
+              "code": "413 04",
+              "street": "Linnégatan",
+              "street_en": "Linnegatan",
+              "pattern": "n{1,70} Linnégatan"
+            },
+            {
+              "code": "414 51",
+              "street": "Haga Nygata",
+              "street_en": "Haga Nygata",
+              "pattern": "n{1,40} Haga Nygata"
+            },
+            {
+              "code": "415 02",
+              "street": "Vasagatan",
+              "street_en": "Vasagatan",
+              "pattern": "n{1,50} Vasagatan"
+            },
+            {
+              "code": "416 64",
+              "street": "Första Långgatan",
+              "street_en": "Forsta Langgatan",
+              "pattern": "n{1,40} Första Långgatan"
+            },
+            {
+              "code": "417 03",
+              "street": "Redbergsvägen",
+              "street_en": "Redbergsvagen",
+              "pattern": "n{1,60} Redbergsvägen"
+            },
+            {
+              "code": "418 78",
+              "street": "Wieselgrensplatsen",
+              "street_en": "Wieselgrensplatsen",
+              "pattern": "n{1,20} Wieselgrensplatsen"
+            },
+            {
+              "code": "421 32",
+              "street": "Frölundagatan",
+              "street_en": "Frolundagatan",
+              "pattern": "n{1,50} Frölundagatan"
+            },
+            {
+              "code": "422 42",
+              "street": "Mölndalsvägen",
+              "street_en": "Molndalsvagen",
+              "pattern": "n{1,120} Mölndalsvägen"
+            },
+            {
+              "code": "412 56",
+              "street": "Sprängkullsgatan",
+              "street_en": "Sprangkullsgatan",
+              "pattern": "n{1,30} Sprängkullsgatan"
+            }
+          ]
+        },
+        {
+          "name": "Borås",
+          "name_en": "Boras",
+          "lat": 57.7210,
+          "lon": 12.9401,
+          "postcodes": [
+            {
+              "code": "503 32",
+              "street": "Allégatan",
+              "street_en": "Allegatan",
+              "pattern": "n{1,40} Allégatan"
+            },
+            {
+              "code": "504 42",
+              "street": "Bryggaregatan",
+              "street_en": "Bryggaregatan",
+              "pattern": "n{1,30} Bryggaregatan"
+            }
+          ]
+        },
+        {
+          "name": "Trollhättan",
+          "name_en": "Trollhattan",
+          "lat": 58.2837,
+          "lon": 12.2886,
+          "postcodes": [
+            {
+              "code": "461 30",
+              "street": "Storgatan",
+              "street_en": "Storgatan",
+              "pattern": "n{1,80} Storgatan"
+            },
+            {
+              "code": "461 53",
+              "street": "Drottninggatan",
+              "street_en": "Drottninggatan",
+              "pattern": "n{1,40} Drottninggatan"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Skåne län",
+      "name_en": "Skane County",
+      "region_tags": ["Götaland", "Skåne"],
+      "cities": [
+        {
+          "name": "Malmö",
+          "name_en": "Malmo",
+          "lat": 55.6050,
+          "lon": 13.0038,
+          "postcodes": [
+            {
+              "code": "211 34",
+              "street": "Södra Förstadsgatan",
+              "street_en": "Sodra Forstadsgatan",
+              "pattern": "n{1,50} Södra Förstadsgatan"
+            },
+            {
+              "code": "211 22",
+              "street": "Storgatan",
+              "street_en": "Storgatan",
+              "pattern": "n{1,40} Storgatan"
+            },
+            {
+              "code": "214 22",
+              "street": "Amiralsgatan",
+              "street_en": "Amiralsgatan",
+              "pattern": "n{1,60} Amiralsgatan"
+            },
+            {
+              "code": "211 46",
+              "street": "Baltzarsgatan",
+              "street_en": "Baltzarsgatan",
+              "pattern": "n{1,40} Baltzarsgatan"
+            },
+            {
+              "code": "212 11",
+              "street": "Kungsgatan",
+              "street_en": "Kungsgatan",
+              "pattern": "n{1,30} Kungsgatan"
+            },
+            {
+              "code": "215 32",
+              "street": "Eriksfältsgatan",
+              "street_en": "Eriksfaltsgatan",
+              "pattern": "n{1,50} Eriksfältsgatan"
+            },
+            {
+              "code": "217 41",
+              "street": "Limhamnsvägen",
+              "street_en": "Limhamnsvagen",
+              "pattern": "n{1,80} Limhamnsvägen"
+            },
+            {
+              "code": "213 63",
+              "street": "Regementsgatan",
+              "street_en": "Regementsgatan",
+              "pattern": "n{1,40} Regementsgatan"
+            }
+          ]
+        },
+        {
+          "name": "Lund",
+          "name_en": "Lund",
+          "lat": 55.7047,
+          "lon": 13.1910,
+          "postcodes": [
+            {
+              "code": "222 22",
+              "street": "Stora Södergatan",
+              "street_en": "Stora Sodergatan",
+              "pattern": "n{1,40} Stora Södergatan"
+            },
+            {
+              "code": "223 50",
+              "street": "Sölvegatan",
+              "street_en": "Solvegatan",
+              "pattern": "n{1,30} Sölvegatan"
+            }
+          ]
+        },
+        {
+          "name": "Helsingborg",
+          "name_en": "Helsingborg",
+          "lat": 56.0465,
+          "lon": 12.6945,
+          "postcodes": [
+            {
+              "code": "252 23",
+              "street": "Kullagatan",
+              "street_en": "Kullagatan",
+              "pattern": "n{1,40} Kullagatan"
+            },
+            {
+              "code": "254 40",
+              "street": "Drottninggatan",
+              "street_en": "Drottninggatan",
+              "pattern": "n{1,60} Drottninggatan"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Uppsala län",
+      "name_en": "Uppsala County",
+      "region_tags": ["Svealand"],
+      "cities": [
+        {
+          "name": "Uppsala",
+          "name_en": "Uppsala",
+          "lat": 59.8586,
+          "lon": 17.6389,
+          "postcodes": [
+            {
+              "code": "753 09",
+              "street": "Svartbäcksgatan",
+              "street_en": "Svartbacksgatan",
+              "pattern": "n{1,60} Svartbäcksgatan"
+            },
+            {
+              "code": "752 20",
+              "street": "Kungsängsgatan",
+              "street_en": "Kungsangsgatan",
+              "pattern": "n{1,40} Kungsängsgatan"
+            },
+            {
+              "code": "752 37",
+              "street": "Östra Ågatan",
+              "street_en": "Ostra Agatan",
+              "pattern": "n{1,50} Östra Ågatan"
+            },
+            {
+              "code": "754 21",
+              "street": "Sysslomansgatan",
+              "street_en": "Sysslomansgatan",
+              "pattern": "n{1,30} Sysslomansgatan"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Östergötlands län",
+      "name_en": "Ostergotland County",
+      "region_tags": ["Götaland"],
+      "cities": [
+        {
+          "name": "Linköping",
+          "name_en": "Linkoping",
+          "lat": 58.4108,
+          "lon": 15.6214,
+          "postcodes": [
+            {
+              "code": "582 22",
+              "street": "Storgatan",
+              "street_en": "Storgatan",
+              "pattern": "n{1,50} Storgatan"
+            },
+            {
+              "code": "582 46",
+              "street": "Ågatan",
+              "street_en": "Agatan",
+              "pattern": "n{1,40} Ågatan"
+            },
+            {
+              "code": "583 31",
+              "street": "Drottninggatan",
+              "street_en": "Drottninggatan",
+              "pattern": "n{1,50} Drottninggatan"
+            }
+          ]
+        },
+        {
+          "name": "Norrköping",
+          "name_en": "Norrkoping",
+          "lat": 58.5942,
+          "lon": 16.1826,
+          "postcodes": [
+            {
+              "code": "602 21",
+              "street": "Drottninggatan",
+              "street_en": "Drottninggatan",
+              "pattern": "n{1,80} Drottninggatan"
+            },
+            {
+              "code": "603 36",
+              "street": "Kungsgatan",
+              "street_en": "Kungsgatan",
+              "pattern": "n{1,40} Kungsgatan"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Jönköpings län",
+      "name_en": "Jonkoping County",
+      "region_tags": ["Götaland", "Småland"],
+      "cities": [
+        {
+          "name": "Jönköping",
+          "name_en": "Jonkoping",
+          "lat": 57.7826,
+          "lon": 14.1618,
+          "postcodes": [
+            {
+              "code": "553 20",
+              "street": "Västra Storgatan",
+              "street_en": "Vastra Storgatan",
+              "pattern": "n{1,60} Västra Storgatan"
+            },
+            {
+              "code": "554 46",
+              "street": "Barnarpsgatan",
+              "street_en": "Barnarpsgatan",
+              "pattern": "n{1,50} Barnarpsgatan"
+            },
+            {
+              "code": "553 36",
+              "street": "Östra Storgatan",
+              "street_en": "Ostra Storgatan",
+              "pattern": "n{1,60} Östra Storgatan"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kronobergs län",
+      "name_en": "Kronoberg County",
+      "region_tags": ["Götaland", "Småland"],
+      "cities": [
+        {
+          "name": "Växjö",
+          "name_en": "Vaxjo",
+          "lat": 56.8790,
+          "lon": 14.8059,
+          "postcodes": [
+            {
+              "code": "352 30",
+              "street": "Storgatan",
+              "street_en": "Storgatan",
+              "pattern": "n{1,50} Storgatan"
+            },
+            {
+              "code": "352 46",
+              "street": "Kungsgatan",
+              "street_en": "Kungsgatan",
+              "pattern": "n{1,30} Kungsgatan"
+            },
+            {
+              "code": "353 33",
+              "street": "Norra Järnvägsgatan",
+              "street_en": "Norra Jarnvagsgatan",
+              "pattern": "n{1,30} Norra Järnvägsgatan"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kalmar län",
+      "name_en": "Kalmar County",
+      "region_tags": ["Götaland", "Småland"],
+      "cities": [
+        {
+          "name": "Kalmar",
+          "name_en": "Kalmar",
+          "lat": 56.6634,
+          "lon": 16.3568,
+          "postcodes": [
+            {
+              "code": "392 32",
+              "street": "Storgatan",
+              "street_en": "Storgatan",
+              "pattern": "n{1,40} Storgatan"
+            },
+            {
+              "code": "393 52",
+              "street": "Norra Vägen",
+              "street_en": "Norra Vagen",
+              "pattern": "n{1,80} Norra Vägen"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Gotlands län",
+      "name_en": "Gotland County",
+      "region_tags": ["Götaland", "Gotland"],
+      "cities": [
+        {
+          "name": "Visby",
+          "name_en": "Visby",
+          "lat": 57.6348,
+          "lon": 18.2948,
+          "postcodes": [
+            {
+              "code": "621 55",
+              "street": "Adelsgatan",
+              "street_en": "Adelsgatan",
+              "pattern": "n{1,40} Adelsgatan"
+            },
+            {
+              "code": "621 57",
+              "street": "Strandgatan",
+              "street_en": "Strandgatan",
+              "pattern": "n{1,30} Strandgatan"
+            },
+            {
+              "code": "624 66",
+              "street": "Färjeleden",
+              "street_en": "Farjeleden",
+              "pattern": "n{1,20} Färjeleden"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Blekinge län",
+      "name_en": "Blekinge County",
+      "region_tags": ["Götaland"],
+      "cities": [
+        {
+          "name": "Karlskrona",
+          "name_en": "Karlskrona",
+          "lat": 56.1612,
+          "lon": 15.5869,
+          "postcodes": [
+            {
+              "code": "371 33",
+              "street": "Ronnebygatan",
+              "street_en": "Ronnebygatan",
+              "pattern": "n{1,40} Ronnebygatan"
+            },
+            {
+              "code": "371 62",
+              "street": "Storgatan",
+              "street_en": "Storgatan",
+              "pattern": "n{1,30} Storgatan"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Hallands län",
+      "name_en": "Halland County",
+      "region_tags": ["Götaland"],
+      "cities": [
+        {
+          "name": "Halmstad",
+          "name_en": "Halmstad",
+          "lat": 56.6745,
+          "lon": 12.8578,
+          "postcodes": [
+            {
+              "code": "302 43",
+              "street": "Storgatan",
+              "street_en": "Storgatan",
+              "pattern": "n{1,50} Storgatan"
+            },
+            {
+              "code": "302 48",
+              "street": "Brogatan",
+              "street_en": "Brogatan",
+              "pattern": "n{1,30} Brogatan"
+            },
+            {
+              "code": "303 21",
+              "street": "Laholmsvägen",
+              "street_en": "Laholmsvagen",
+              "pattern": "n{1,80} Laholmsvägen"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Värmlands län",
+      "name_en": "Varmland County",
+      "region_tags": ["Svealand"],
+      "cities": [
+        {
+          "name": "Karlstad",
+          "name_en": "Karlstad",
+          "lat": 59.3793,
+          "lon": 13.5036,
+          "postcodes": [
+            {
+              "code": "652 24",
+              "street": "Kungsgatan",
+              "street_en": "Kungsgatan",
+              "pattern": "n{1,40} Kungsgatan"
+            },
+            {
+              "code": "653 40",
+              "street": "Drottninggatan",
+              "street_en": "Drottninggatan",
+              "pattern": "n{1,50} Drottninggatan"
+            },
+            {
+              "code": "654 64",
+              "street": "Hammarö",
+              "street_en": "Hammaro",
+              "pattern": "n{1,30} Säterivägen"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Örebro län",
+      "name_en": "Orebro County",
+      "region_tags": ["Svealand"],
+      "cities": [
+        {
+          "name": "Örebro",
+          "name_en": "Orebro",
+          "lat": 59.2753,
+          "lon": 15.2134,
+          "postcodes": [
+            {
+              "code": "702 11",
+              "street": "Drottninggatan",
+              "street_en": "Drottninggatan",
+              "pattern": "n{1,50} Drottninggatan"
+            },
+            {
+              "code": "702 23",
+              "street": "Storgatan",
+              "street_en": "Storgatan",
+              "pattern": "n{1,40} Storgatan"
+            },
+            {
+              "code": "703 61",
+              "street": "Rudbecksgatan",
+              "street_en": "Rudbecksgatan",
+              "pattern": "n{1,40} Rudbecksgatan"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Västmanlands län",
+      "name_en": "Vastmanland County",
+      "region_tags": ["Svealand"],
+      "cities": [
+        {
+          "name": "Västerås",
+          "name_en": "Vasteras",
+          "lat": 59.6099,
+          "lon": 16.5448,
+          "postcodes": [
+            {
+              "code": "722 11",
+              "street": "Stora Gatan",
+              "street_en": "Stora Gatan",
+              "pattern": "n{1,50} Stora Gatan"
+            },
+            {
+              "code": "722 15",
+              "street": "Vasagatan",
+              "street_en": "Vasagatan",
+              "pattern": "n{1,30} Vasagatan"
+            },
+            {
+              "code": "723 35",
+              "street": "Kopparbergsvägen",
+              "street_en": "Kopparbergsvagen",
+              "pattern": "n{1,60} Kopparbergsvägen"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Dalarnas län",
+      "name_en": "Dalarna County",
+      "region_tags": ["Svealand", "Dalarna"],
+      "cities": [
+        {
+          "name": "Falun",
+          "name_en": "Falun",
+          "lat": 60.6065,
+          "lon": 15.6355,
+          "postcodes": [
+            {
+              "code": "791 71",
+              "street": "Åsgatan",
+              "street_en": "Asgatan",
+              "pattern": "n{1,40} Åsgatan"
+            },
+            {
+              "code": "791 30",
+              "street": "Holmgatan",
+              "street_en": "Holmgatan",
+              "pattern": "n{1,30} Holmgatan"
+            }
+          ]
+        },
+        {
+          "name": "Borlänge",
+          "name_en": "Borlange",
+          "lat": 60.4856,
+          "lon": 15.4364,
+          "postcodes": [
+            {
+              "code": "781 70",
+              "street": "Sveagatan",
+              "street_en": "Sveagatan",
+              "pattern": "n{1,30} Sveagatan"
+            },
+            {
+              "code": "784 33",
+              "street": "Stationsgatan",
+              "street_en": "Stationsgatan",
+              "pattern": "n{1,20} Stationsgatan"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Gävleborgs län",
+      "name_en": "Gavleborg County",
+      "region_tags": ["Norrland"],
+      "cities": [
+        {
+          "name": "Gävle",
+          "name_en": "Gavle",
+          "lat": 60.6749,
+          "lon": 17.1413,
+          "postcodes": [
+            {
+              "code": "802 50",
+              "street": "Norra Strandgatan",
+              "street_en": "Norra Strandgatan",
+              "pattern": "n{1,30} Norra Strandgatan"
+            },
+            {
+              "code": "803 20",
+              "street": "Drottninggatan",
+              "street_en": "Drottninggatan",
+              "pattern": "n{1,40} Drottninggatan"
+            },
+            {
+              "code": "803 11",
+              "street": "Norra Kungsgatan",
+              "street_en": "Norra Kungsgatan",
+              "pattern": "n{1,30} Norra Kungsgatan"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Västernorrlands län",
+      "name_en": "Vasternorrland County",
+      "region_tags": ["Norrland"],
+      "cities": [
+        {
+          "name": "Sundsvall",
+          "name_en": "Sundsvall",
+          "lat": 62.3908,
+          "lon": 17.3069,
+          "postcodes": [
+            {
+              "code": "852 30",
+              "street": "Storgatan",
+              "street_en": "Storgatan",
+              "pattern": "n{1,60} Storgatan"
+            },
+            {
+              "code": "852 34",
+              "street": "Sjögatan",
+              "street_en": "Sjogatan",
+              "pattern": "n{1,30} Sjögatan"
+            },
+            {
+              "code": "856 41",
+              "street": "Norra Vägen",
+              "street_en": "Norra Vagen",
+              "pattern": "n{1,40} Norra Vägen"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Jämtlands län",
+      "name_en": "Jamtland County",
+      "region_tags": ["Norrland"],
+      "cities": [
+        {
+          "name": "Östersund",
+          "name_en": "Ostersund",
+          "lat": 63.1792,
+          "lon": 14.6357,
+          "postcodes": [
+            {
+              "code": "831 31",
+              "street": "Storgatan",
+              "street_en": "Storgatan",
+              "pattern": "n{1,50} Storgatan"
+            },
+            {
+              "code": "831 34",
+              "street": "Prästgatan",
+              "street_en": "Prastgatan",
+              "pattern": "n{1,40} Prästgatan"
+            },
+            {
+              "code": "832 51",
+              "street": "Krondikesvägen",
+              "street_en": "Krondikesvagen",
+              "pattern": "n{1,30} Krondikesvägen"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Västerbottens län",
+      "name_en": "Vasterbotten County",
+      "region_tags": ["Norrland"],
+      "cities": [
+        {
+          "name": "Umeå",
+          "name_en": "Umea",
+          "lat": 63.8258,
+          "lon": 20.2630,
+          "postcodes": [
+            {
+              "code": "903 26",
+              "street": "Kungsgatan",
+              "street_en": "Kungsgatan",
+              "pattern": "n{1,50} Kungsgatan"
+            },
+            {
+              "code": "903 30",
+              "street": "Storgatan",
+              "street_en": "Storgatan",
+              "pattern": "n{1,60} Storgatan"
+            },
+            {
+              "code": "904 20",
+              "street": "Västra Norrlandsgatan",
+              "street_en": "Vastra Norrlandsgatan",
+              "pattern": "n{1,30} Västra Norrlandsgatan"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Norrbottens län",
+      "name_en": "Norrbotten County",
+      "region_tags": ["Norrland"],
+      "cities": [
+        {
+          "name": "Luleå",
+          "name_en": "Lulea",
+          "lat": 65.5848,
+          "lon": 22.1547,
+          "postcodes": [
+            {
+              "code": "972 31",
+              "street": "Storgatan",
+              "street_en": "Storgatan",
+              "pattern": "n{1,60} Storgatan"
+            },
+            {
+              "code": "972 34",
+              "street": "Kungsgatan",
+              "street_en": "Kungsgatan",
+              "pattern": "n{1,40} Kungsgatan"
+            },
+            {
+              "code": "973 31",
+              "street": "Smedjegatan",
+              "street_en": "Smedjegatan",
+              "pattern": "n{1,20} Smedjegatan"
+            }
+          ]
+        },
+        {
+          "name": "Kiruna",
+          "name_en": "Kiruna",
+          "lat": 67.8558,
+          "lon": 20.2253,
+          "postcodes": [
+            {
+              "code": "981 31",
+              "street": "Föreningsgatan",
+              "street_en": "Foreningsgatan",
+              "pattern": "n{1,30} Föreningsgatan"
+            },
+            {
+              "code": "981 38",
+              "street": "Hjalmar Lundbohmsvägen",
+              "street_en": "Hjalmar Lundbohmsvagen",
+              "pattern": "n{1,20} Hjalmar Lundbohmsvägen"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Södermanlands län",
+      "name_en": "Sodermanland County",
+      "region_tags": ["Svealand"],
+      "cities": [
+        {
+          "name": "Eskilstuna",
+          "name_en": "Eskilstuna",
+          "lat": 59.3666,
+          "lon": 16.5077,
+          "postcodes": [
+            {
+              "code": "632 20",
+              "street": "Drottninggatan",
+              "street_en": "Drottninggatan",
+              "pattern": "n{1,40} Drottninggatan"
+            },
+            {
+              "code": "633 42",
+              "street": "Kungsgatan",
+              "street_en": "Kungsgatan",
+              "pattern": "n{1,50} Kungsgatan"
+            },
+            {
+              "code": "633 44",
+              "street": "Rademachergatan",
+              "street_en": "Rademachergatan",
+              "pattern": "n{1,30} Rademachergatan"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
