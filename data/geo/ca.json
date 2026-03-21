@@ -1,0 +1,423 @@
+{
+  "country": {
+    "name": "Canada",
+    "name_en": "Canada",
+    "iso_code": "CA",
+    "phone_prefix": "+1",
+    "phone_formats": ["+1-###-###-####"],
+    "postcode_format": "A#A #A#",
+    "name_order": "given_first"
+  },
+  "states": [
+    {
+      "name": "Ontario",
+      "name_en": "Ontario",
+      "region_tags": ["Central Canada"],
+      "cities": [
+        {
+          "name": "Toronto",
+          "name_en": "Toronto",
+          "lat": 43.6532,
+          "lon": -79.3832,
+          "postcodes": [
+            { "code": "M5V 3L9", "street": "Yonge Street", "street_en": "Yonge Street", "pattern": "n{1,500} Yonge Street" },
+            { "code": "M5H 2N2", "street": "Bay Street", "street_en": "Bay Street", "pattern": "n{1,400} Bay Street" },
+            { "code": "M4W 1A8", "street": "Bloor Street East", "street_en": "Bloor Street East", "pattern": "n{1,350} Bloor Street East" },
+            { "code": "M5B 1T8", "street": "Queen Street East", "street_en": "Queen Street East", "pattern": "n{1,500} Queen Street East" },
+            { "code": "M5C 2W7", "street": "King Street East", "street_en": "King Street East", "pattern": "n{1,400} King Street East" },
+            { "code": "M5G 1Z8", "street": "College Street", "street_en": "College Street", "pattern": "n{1,350} College Street" },
+            { "code": "M5S 1A1", "street": "Spadina Avenue", "street_en": "Spadina Avenue", "pattern": "n{1,500} Spadina Avenue" },
+            { "code": "M5T 1R4", "street": "Dundas Street West", "street_en": "Dundas Street West", "pattern": "n{1,450} Dundas Street West" },
+            { "code": "M6J 1E6", "street": "Queen Street West", "street_en": "Queen Street West", "pattern": "n{1,500} Queen Street West" },
+            { "code": "M5R 2T8", "street": "Avenue Road", "street_en": "Avenue Road", "pattern": "n{1,300} Avenue Road" },
+            { "code": "M4Y 1N5", "street": "Church Street", "street_en": "Church Street", "pattern": "n{1,350} Church Street" }
+          ]
+        },
+        {
+          "name": "Ottawa",
+          "name_en": "Ottawa",
+          "lat": 45.4215,
+          "lon": -75.6972,
+          "postcodes": [
+            { "code": "K1A 0A6", "street": "Wellington Street", "street_en": "Wellington Street", "pattern": "n{1,300} Wellington Street" },
+            { "code": "K1N 5W8", "street": "Rideau Street", "street_en": "Rideau Street", "pattern": "n{1,400} Rideau Street" },
+            { "code": "K1P 5G3", "street": "Elgin Street", "street_en": "Elgin Street", "pattern": "n{1,250} Elgin Street" },
+            { "code": "K2P 1L4", "street": "Bank Street", "street_en": "Bank Street", "pattern": "n{1,500} Bank Street" },
+            { "code": "K1S 3W9", "street": "Bronson Avenue", "street_en": "Bronson Avenue", "pattern": "n{1,350} Bronson Avenue" }
+          ]
+        },
+        {
+          "name": "Hamilton",
+          "name_en": "Hamilton",
+          "lat": 43.2557,
+          "lon": -79.8711,
+          "postcodes": [
+            { "code": "L8P 4S6", "street": "King Street West", "street_en": "King Street West", "pattern": "n{1,400} King Street West" },
+            { "code": "L8N 3T2", "street": "James Street North", "street_en": "James Street North", "pattern": "n{1,300} James Street North" },
+            { "code": "L8R 2K3", "street": "Main Street West", "street_en": "Main Street West", "pattern": "n{1,350} Main Street West" }
+          ]
+        },
+        {
+          "name": "Mississauga",
+          "name_en": "Mississauga",
+          "lat": 43.5890,
+          "lon": -79.6441,
+          "postcodes": [
+            { "code": "L5B 3C2", "street": "Hurontario Street", "street_en": "Hurontario Street", "pattern": "n{1,500} Hurontario Street" },
+            { "code": "L5A 1W5", "street": "Dundas Street West", "street_en": "Dundas Street West", "pattern": "n{1,400} Dundas Street West" },
+            { "code": "L5G 4S1", "street": "Lakeshore Road East", "street_en": "Lakeshore Road East", "pattern": "n{1,350} Lakeshore Road East" }
+          ]
+        },
+        {
+          "name": "London",
+          "name_en": "London",
+          "lat": 42.9849,
+          "lon": -81.2453,
+          "postcodes": [
+            { "code": "N6A 3K7", "street": "Richmond Street", "street_en": "Richmond Street", "pattern": "n{1,400} Richmond Street" },
+            { "code": "N6B 1T6", "street": "Dundas Street", "street_en": "Dundas Street", "pattern": "n{1,450} Dundas Street" },
+            { "code": "N6C 2P4", "street": "Wharncliffe Road South", "street_en": "Wharncliffe Road South", "pattern": "n{1,300} Wharncliffe Road South" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Quebec",
+      "name_en": "Quebec",
+      "region_tags": ["Central Canada", "French Canada"],
+      "cities": [
+        {
+          "name": "Montréal",
+          "name_en": "Montreal",
+          "lat": 45.5017,
+          "lon": -73.5673,
+          "postcodes": [
+            { "code": "H2X 1K4", "street": "Rue Sainte-Catherine Est", "street_en": "Sainte-Catherine Street East", "pattern": "n{1,500} Rue Sainte-Catherine Est" },
+            { "code": "H3A 1T1", "street": "Boulevard Robert-Bourassa", "street_en": "Robert-Bourassa Boulevard", "pattern": "n{1,300} Boulevard Robert-Bourassa" },
+            { "code": "H2Y 1C6", "street": "Rue Saint-Paul Ouest", "street_en": "Saint-Paul Street West", "pattern": "n{1,250} Rue Saint-Paul Ouest" },
+            { "code": "H3B 4W5", "street": "Boulevard René-Lévesque Ouest", "street_en": "Rene-Levesque Boulevard West", "pattern": "n{1,400} Boulevard René-Lévesque Ouest" },
+            { "code": "H2L 3K9", "street": "Rue Sherbrooke Est", "street_en": "Sherbrooke Street East", "pattern": "n{1,500} Rue Sherbrooke Est" },
+            { "code": "H2T 1S6", "street": "Boulevard Saint-Laurent", "street_en": "Saint-Laurent Boulevard", "pattern": "n{1,500} Boulevard Saint-Laurent" },
+            { "code": "H3C 1K3", "street": "Rue de la Commune Ouest", "street_en": "de la Commune Street West", "pattern": "n{1,200} Rue de la Commune Ouest" },
+            { "code": "H2W 1Z3", "street": "Avenue du Mont-Royal Est", "street_en": "Mont-Royal Avenue East", "pattern": "n{1,350} Avenue du Mont-Royal Est" },
+            { "code": "H3G 1M8", "street": "Rue Sainte-Catherine Ouest", "street_en": "Sainte-Catherine Street West", "pattern": "n{1,500} Rue Sainte-Catherine Ouest" },
+            { "code": "H2J 2W5", "street": "Avenue Papineau", "street_en": "Papineau Avenue", "pattern": "n{1,400} Avenue Papineau" }
+          ]
+        },
+        {
+          "name": "Québec City",
+          "name_en": "Quebec City",
+          "lat": 46.8139,
+          "lon": -71.2080,
+          "postcodes": [
+            { "code": "G1R 4P5", "street": "Rue Saint-Jean", "street_en": "Saint-Jean Street", "pattern": "n{1,300} Rue Saint-Jean" },
+            { "code": "G1K 3X2", "street": "Boulevard Charest Est", "street_en": "Charest Boulevard East", "pattern": "n{1,400} Boulevard Charest Est" },
+            { "code": "G1N 2C9", "street": "Chemin Sainte-Foy", "street_en": "Sainte-Foy Road", "pattern": "n{1,500} Chemin Sainte-Foy" },
+            { "code": "G1L 1L2", "street": "Boulevard Wilfrid-Hamel", "street_en": "Wilfrid-Hamel Boulevard", "pattern": "n{1,350} Boulevard Wilfrid-Hamel" }
+          ]
+        },
+        {
+          "name": "Laval",
+          "name_en": "Laval",
+          "lat": 45.6066,
+          "lon": -73.7124,
+          "postcodes": [
+            { "code": "H7V 3Y4", "street": "Boulevard des Laurentides", "street_en": "des Laurentides Boulevard", "pattern": "n{1,500} Boulevard des Laurentides" },
+            { "code": "H7T 2R3", "street": "Boulevard Le Carrefour", "street_en": "Le Carrefour Boulevard", "pattern": "n{1,300} Boulevard Le Carrefour" },
+            { "code": "H7G 2W2", "street": "Boulevard de la Concorde Est", "street_en": "de la Concorde Boulevard East", "pattern": "n{1,400} Boulevard de la Concorde Est" }
+          ]
+        },
+        {
+          "name": "Gatineau",
+          "name_en": "Gatineau",
+          "lat": 45.4765,
+          "lon": -75.7013,
+          "postcodes": [
+            { "code": "J8T 6K1", "street": "Boulevard Maloney Est", "street_en": "Maloney Boulevard East", "pattern": "n{1,400} Boulevard Maloney Est" },
+            { "code": "J8X 3X7", "street": "Rue Principale", "street_en": "Principale Street", "pattern": "n{1,300} Rue Principale" },
+            { "code": "J8Y 3S2", "street": "Boulevard Saint-Joseph", "street_en": "Saint-Joseph Boulevard", "pattern": "n{1,350} Boulevard Saint-Joseph" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "British Columbia",
+      "name_en": "British Columbia",
+      "region_tags": ["Western Canada", "Pacific"],
+      "cities": [
+        {
+          "name": "Vancouver",
+          "name_en": "Vancouver",
+          "lat": 49.2827,
+          "lon": -123.1207,
+          "postcodes": [
+            { "code": "V6B 3K9", "street": "Granville Street", "street_en": "Granville Street", "pattern": "n{1,400} Granville Street" },
+            { "code": "V6E 1B5", "street": "Robson Street", "street_en": "Robson Street", "pattern": "n{1,350} Robson Street" },
+            { "code": "V6A 1N6", "street": "Hastings Street East", "street_en": "Hastings Street East", "pattern": "n{1,500} Hastings Street East" },
+            { "code": "V5K 2A1", "street": "Commercial Drive", "street_en": "Commercial Drive", "pattern": "n{1,400} Commercial Drive" },
+            { "code": "V6H 3S4", "street": "West Broadway", "street_en": "West Broadway", "pattern": "n{1,350} West Broadway" },
+            { "code": "V6G 1Z4", "street": "Denman Street", "street_en": "Denman Street", "pattern": "n{1,250} Denman Street" },
+            { "code": "V5T 3J7", "street": "Main Street", "street_en": "Main Street", "pattern": "n{1,500} Main Street" },
+            { "code": "V6J 1R3", "street": "West 4th Avenue", "street_en": "West 4th Avenue", "pattern": "n{1,350} West 4th Avenue" },
+            { "code": "V6Z 2E7", "street": "Burrard Street", "street_en": "Burrard Street", "pattern": "n{1,300} Burrard Street" }
+          ]
+        },
+        {
+          "name": "Victoria",
+          "name_en": "Victoria",
+          "lat": 48.4284,
+          "lon": -123.3656,
+          "postcodes": [
+            { "code": "V8W 1N3", "street": "Government Street", "street_en": "Government Street", "pattern": "n{1,350} Government Street" },
+            { "code": "V8V 3K4", "street": "Douglas Street", "street_en": "Douglas Street", "pattern": "n{1,400} Douglas Street" },
+            { "code": "V8T 4E8", "street": "Fort Street", "street_en": "Fort Street", "pattern": "n{1,300} Fort Street" },
+            { "code": "V8R 1J8", "street": "Oak Bay Avenue", "street_en": "Oak Bay Avenue", "pattern": "n{1,250} Oak Bay Avenue" }
+          ]
+        },
+        {
+          "name": "Surrey",
+          "name_en": "Surrey",
+          "lat": 49.1913,
+          "lon": -122.8490,
+          "postcodes": [
+            { "code": "V3T 4C1", "street": "King George Boulevard", "street_en": "King George Boulevard", "pattern": "n{1,500} King George Boulevard" },
+            { "code": "V3R 7C1", "street": "Scott Road", "street_en": "Scott Road", "pattern": "n{1,400} Scott Road" },
+            { "code": "V3S 5J9", "street": "Fraser Highway", "street_en": "Fraser Highway", "pattern": "n{1,450} Fraser Highway" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Alberta",
+      "name_en": "Alberta",
+      "region_tags": ["Western Canada", "Prairies"],
+      "cities": [
+        {
+          "name": "Calgary",
+          "name_en": "Calgary",
+          "lat": 51.0447,
+          "lon": -114.0719,
+          "postcodes": [
+            { "code": "T2P 3N4", "street": "Centre Street South", "street_en": "Centre Street South", "pattern": "n{1,400} Centre Street South" },
+            { "code": "T2G 4Y6", "street": "Macleod Trail South", "street_en": "Macleod Trail South", "pattern": "n{1,500} Macleod Trail South" },
+            { "code": "T2R 0C5", "street": "17th Avenue Southwest", "street_en": "17th Avenue Southwest", "pattern": "n{1,350} 17th Avenue Southwest" },
+            { "code": "T3C 0J4", "street": "Crowchild Trail Northwest", "street_en": "Crowchild Trail Northwest", "pattern": "n{1,400} Crowchild Trail Northwest" },
+            { "code": "T2E 6L1", "street": "Edmonton Trail Northeast", "street_en": "Edmonton Trail Northeast", "pattern": "n{1,350} Edmonton Trail Northeast" },
+            { "code": "T2H 1J9", "street": "Elbow Drive Southwest", "street_en": "Elbow Drive Southwest", "pattern": "n{1,300} Elbow Drive Southwest" }
+          ]
+        },
+        {
+          "name": "Edmonton",
+          "name_en": "Edmonton",
+          "lat": 53.5461,
+          "lon": -113.4938,
+          "postcodes": [
+            { "code": "T5J 2R7", "street": "Jasper Avenue", "street_en": "Jasper Avenue", "pattern": "n{1,500} Jasper Avenue" },
+            { "code": "T5K 1M9", "street": "109th Street Northwest", "street_en": "109th Street Northwest", "pattern": "n{1,350} 109th Street Northwest" },
+            { "code": "T6E 4T2", "street": "Whyte Avenue", "street_en": "Whyte Avenue", "pattern": "n{1,400} Whyte Avenue" },
+            { "code": "T5H 3P7", "street": "97th Street Northwest", "street_en": "97th Street Northwest", "pattern": "n{1,450} 97th Street Northwest" },
+            { "code": "T6G 2R3", "street": "University Avenue", "street_en": "University Avenue", "pattern": "n{1,300} University Avenue" },
+            { "code": "T5N 3V9", "street": "124th Street Northwest", "street_en": "124th Street Northwest", "pattern": "n{1,350} 124th Street Northwest" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Manitoba",
+      "name_en": "Manitoba",
+      "region_tags": ["Central Canada", "Prairies"],
+      "cities": [
+        {
+          "name": "Winnipeg",
+          "name_en": "Winnipeg",
+          "lat": 49.8951,
+          "lon": -97.1384,
+          "postcodes": [
+            { "code": "R3C 4A5", "street": "Portage Avenue", "street_en": "Portage Avenue", "pattern": "n{1,500} Portage Avenue" },
+            { "code": "R3B 2E9", "street": "Main Street", "street_en": "Main Street", "pattern": "n{1,450} Main Street" },
+            { "code": "R3L 0A1", "street": "Pembina Highway", "street_en": "Pembina Highway", "pattern": "n{1,500} Pembina Highway" },
+            { "code": "R3M 3V3", "street": "Corydon Avenue", "street_en": "Corydon Avenue", "pattern": "n{1,300} Corydon Avenue" },
+            { "code": "R2W 3L4", "street": "Henderson Highway", "street_en": "Henderson Highway", "pattern": "n{1,400} Henderson Highway" },
+            { "code": "R2H 0H6", "street": "Marion Street", "street_en": "Marion Street", "pattern": "n{1,350} Marion Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Saskatchewan",
+      "name_en": "Saskatchewan",
+      "region_tags": ["Central Canada", "Prairies"],
+      "cities": [
+        {
+          "name": "Saskatoon",
+          "name_en": "Saskatoon",
+          "lat": 52.1332,
+          "lon": -106.6700,
+          "postcodes": [
+            { "code": "S7K 1M7", "street": "2nd Avenue North", "street_en": "2nd Avenue North", "pattern": "n{1,350} 2nd Avenue North" },
+            { "code": "S7H 0W3", "street": "Broadway Avenue", "street_en": "Broadway Avenue", "pattern": "n{1,400} Broadway Avenue" },
+            { "code": "S7L 5X2", "street": "22nd Street West", "street_en": "22nd Street West", "pattern": "n{1,450} 22nd Street West" },
+            { "code": "S7N 0W8", "street": "College Drive", "street_en": "College Drive", "pattern": "n{1,300} College Drive" }
+          ]
+        },
+        {
+          "name": "Regina",
+          "name_en": "Regina",
+          "lat": 50.4452,
+          "lon": -104.6189,
+          "postcodes": [
+            { "code": "S4P 3Y2", "street": "Albert Street", "street_en": "Albert Street", "pattern": "n{1,400} Albert Street" },
+            { "code": "S4R 2N7", "street": "Broad Street", "street_en": "Broad Street", "pattern": "n{1,350} Broad Street" },
+            { "code": "S4S 3B3", "street": "Victoria Avenue East", "street_en": "Victoria Avenue East", "pattern": "n{1,450} Victoria Avenue East" },
+            { "code": "S4T 1K2", "street": "13th Avenue", "street_en": "13th Avenue", "pattern": "n{1,300} 13th Avenue" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Nova Scotia",
+      "name_en": "Nova Scotia",
+      "region_tags": ["Atlantic Canada", "Maritimes"],
+      "cities": [
+        {
+          "name": "Halifax",
+          "name_en": "Halifax",
+          "lat": 44.6488,
+          "lon": -63.5752,
+          "postcodes": [
+            { "code": "B3H 1A6", "street": "Spring Garden Road", "street_en": "Spring Garden Road", "pattern": "n{1,300} Spring Garden Road" },
+            { "code": "B3J 3N9", "street": "Barrington Street", "street_en": "Barrington Street", "pattern": "n{1,350} Barrington Street" },
+            { "code": "B3K 4K3", "street": "Gottingen Street", "street_en": "Gottingen Street", "pattern": "n{1,250} Gottingen Street" },
+            { "code": "B3L 2B6", "street": "Quinpool Road", "street_en": "Quinpool Road", "pattern": "n{1,200} Quinpool Road" },
+            { "code": "B3M 3Y3", "street": "Lacewood Drive", "street_en": "Lacewood Drive", "pattern": "n{1,300} Lacewood Drive" },
+            { "code": "B3N 1R6", "street": "Portland Street", "street_en": "Portland Street", "pattern": "n{1,350} Portland Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "New Brunswick",
+      "name_en": "New Brunswick",
+      "region_tags": ["Atlantic Canada", "Maritimes"],
+      "cities": [
+        {
+          "name": "Saint John",
+          "name_en": "Saint John",
+          "lat": 45.2733,
+          "lon": -66.0633,
+          "postcodes": [
+            { "code": "E2L 4Z6", "street": "King Street", "street_en": "King Street", "pattern": "n{1,250} King Street" },
+            { "code": "E2K 2Y5", "street": "Main Street", "street_en": "Main Street", "pattern": "n{1,350} Main Street" },
+            { "code": "E2M 3V6", "street": "Rothesay Avenue", "street_en": "Rothesay Avenue", "pattern": "n{1,300} Rothesay Avenue" }
+          ]
+        },
+        {
+          "name": "Fredericton",
+          "name_en": "Fredericton",
+          "lat": 45.9636,
+          "lon": -66.6431,
+          "postcodes": [
+            { "code": "E3B 1C6", "street": "Queen Street", "street_en": "Queen Street", "pattern": "n{1,300} Queen Street" },
+            { "code": "E3A 3Z1", "street": "Regent Street", "street_en": "Regent Street", "pattern": "n{1,250} Regent Street" },
+            { "code": "E3C 1N8", "street": "Prospect Street", "street_en": "Prospect Street", "pattern": "n{1,200} Prospect Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Newfoundland and Labrador",
+      "name_en": "Newfoundland and Labrador",
+      "region_tags": ["Atlantic Canada"],
+      "cities": [
+        {
+          "name": "St. John's",
+          "name_en": "St. John's",
+          "lat": 47.5615,
+          "lon": -52.7126,
+          "postcodes": [
+            { "code": "A1C 5S7", "street": "Water Street", "street_en": "Water Street", "pattern": "n{1,350} Water Street" },
+            { "code": "A1B 3P7", "street": "Topsail Road", "street_en": "Topsail Road", "pattern": "n{1,400} Topsail Road" },
+            { "code": "A1E 1C2", "street": "Thorburn Road", "street_en": "Thorburn Road", "pattern": "n{1,300} Thorburn Road" },
+            { "code": "A1A 1B3", "street": "Duckworth Street", "street_en": "Duckworth Street", "pattern": "n{1,250} Duckworth Street" },
+            { "code": "A1H 3J1", "street": "Kenmount Road", "street_en": "Kenmount Road", "pattern": "n{1,350} Kenmount Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Prince Edward Island",
+      "name_en": "Prince Edward Island",
+      "region_tags": ["Atlantic Canada", "Maritimes"],
+      "cities": [
+        {
+          "name": "Charlottetown",
+          "name_en": "Charlottetown",
+          "lat": 46.2382,
+          "lon": -63.1311,
+          "postcodes": [
+            { "code": "C1A 4J6", "street": "University Avenue", "street_en": "University Avenue", "pattern": "n{1,250} University Avenue" },
+            { "code": "C1E 1E6", "street": "Trans-Canada Highway", "street_en": "Trans-Canada Highway", "pattern": "n{1,300} Trans-Canada Highway" },
+            { "code": "C1A 1N3", "street": "Queen Street", "street_en": "Queen Street", "pattern": "n{1,200} Queen Street" },
+            { "code": "C1A 7K7", "street": "Grafton Street", "street_en": "Grafton Street", "pattern": "n{1,150} Grafton Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Yukon",
+      "name_en": "Yukon",
+      "region_tags": ["Northern Canada"],
+      "cities": [
+        {
+          "name": "Whitehorse",
+          "name_en": "Whitehorse",
+          "lat": 60.7212,
+          "lon": -135.0568,
+          "postcodes": [
+            { "code": "Y1A 1B5", "street": "Main Street", "street_en": "Main Street", "pattern": "n{1,250} Main Street" },
+            { "code": "Y1A 2C6", "street": "2nd Avenue", "street_en": "2nd Avenue", "pattern": "n{1,200} 2nd Avenue" },
+            { "code": "Y1A 3S4", "street": "4th Avenue", "street_en": "4th Avenue", "pattern": "n{1,200} 4th Avenue" },
+            { "code": "Y1A 5H4", "street": "Range Road", "street_en": "Range Road", "pattern": "n{1,300} Range Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Northwest Territories",
+      "name_en": "Northwest Territories",
+      "region_tags": ["Northern Canada"],
+      "cities": [
+        {
+          "name": "Yellowknife",
+          "name_en": "Yellowknife",
+          "lat": 62.4540,
+          "lon": -114.3718,
+          "postcodes": [
+            { "code": "X1A 1E4", "street": "Franklin Avenue", "street_en": "Franklin Avenue", "pattern": "n{1,200} Franklin Avenue" },
+            { "code": "X1A 2N3", "street": "Old Airport Road", "street_en": "Old Airport Road", "pattern": "n{1,150} Old Airport Road" },
+            { "code": "X1A 3S4", "street": "48th Street", "street_en": "48th Street", "pattern": "n{1,200} 48th Street" },
+            { "code": "X1A 2P7", "street": "Range Lake Road", "street_en": "Range Lake Road", "pattern": "n{1,180} Range Lake Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Nunavut",
+      "name_en": "Nunavut",
+      "region_tags": ["Northern Canada", "Arctic"],
+      "cities": [
+        {
+          "name": "Iqaluit",
+          "name_en": "Iqaluit",
+          "lat": 63.7467,
+          "lon": -68.5170,
+          "postcodes": [
+            { "code": "X0A 0H0", "street": "Federal Road", "street_en": "Federal Road", "pattern": "n{1,100} Federal Road" },
+            { "code": "X0A 1H0", "street": "Queen Elizabeth Way", "street_en": "Queen Elizabeth Way", "pattern": "n{1,120} Queen Elizabeth Way" },
+            { "code": "X0A 0R0", "street": "Niaqunngusiariaq Street", "street_en": "Niaqunngusiariaq Street", "pattern": "n{1,80} Niaqunngusiariaq Street" }
+          ]
+        }
+      ]
+    }
+  ]
+}
