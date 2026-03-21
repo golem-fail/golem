@@ -1,0 +1,1206 @@
+{
+  "country": {
+    "name": "België / Belgique / Belgien",
+    "name_en": "Belgium",
+    "iso_code": "BE",
+    "phone_prefix": "+32",
+    "phone_formats": ["+32-#-###-##-##", "+32-##-##-##-##", "+32-###-##-##-##"],
+    "postcode_format": "####",
+    "name_order": "given_first"
+  },
+  "states": [
+    {
+      "name": "Bruxelles-Capitale / Brussels Hoofdstedelijk Gewest",
+      "name_en": "Brussels-Capital Region",
+      "region_tags": ["Brussels", "Brussels-Capital", "French community", "Dutch community"],
+      "cities": [
+        {
+          "name": "Bruxelles / Brussel",
+          "name_en": "Brussels",
+          "lat": 50.8503,
+          "lon": 4.3517,
+          "postcodes": [
+            {
+              "code": "1000",
+              "street": "Rue de la Loi / Wetstraat",
+              "street_en": "Law Street",
+              "pattern": "n{1,200} Rue de la Loi"
+            },
+            {
+              "code": "1000",
+              "street": "Grand-Place / Grote Markt",
+              "street_en": "Grand Place",
+              "fixed": ["1 Grand-Place", "5 Grand-Place", "10 Grand-Place", "15 Grand-Place"]
+            },
+            {
+              "code": "1000",
+              "street": "Boulevard Anspach / Anspachlaan",
+              "street_en": "Anspach Boulevard",
+              "pattern": "n{1,150} Boulevard Anspach"
+            },
+            {
+              "code": "1000",
+              "street": "Rue Neuve / Nieuwstraat",
+              "street_en": "New Street",
+              "pattern": "n{1,123} Rue Neuve"
+            },
+            {
+              "code": "1000",
+              "street": "Rue Royale / Koningsstraat",
+              "street_en": "Royal Street",
+              "pattern": "n{1,264} Rue Royale"
+            },
+            {
+              "code": "1000",
+              "street": "Boulevard du Jardin Botanique / Kruidtuinlaan",
+              "street_en": "Botanic Garden Boulevard",
+              "pattern": "n{1,50} Boulevard du Jardin Botanique"
+            },
+            {
+              "code": "1000",
+              "street": "Rue de Flandre / Vlaamsesteenweg",
+              "street_en": "Flanders Street",
+              "pattern": "n{1,180} Rue de Flandre"
+            },
+            {
+              "code": "1000",
+              "street": "Rue du Marché aux Herbes / Grasmarkt",
+              "street_en": "Herb Market Street",
+              "pattern": "n{1,110} Rue du Marché aux Herbes"
+            },
+            {
+              "code": "1000",
+              "street": "Boulevard de Waterloo / Waterloolaan",
+              "street_en": "Waterloo Boulevard",
+              "pattern": "n{1,80} Boulevard de Waterloo"
+            },
+            {
+              "code": "1000",
+              "street": "Rue Haute / Hoogstraat",
+              "street_en": "High Street",
+              "pattern": "n{1,350} Rue Haute"
+            }
+          ]
+        },
+        {
+          "name": "Schaerbeek / Schaarbeek",
+          "name_en": "Schaerbeek",
+          "lat": 50.8676,
+          "lon": 4.3792,
+          "postcodes": [
+            {
+              "code": "1030",
+              "street": "Chaussée de Haecht / Haachtsesteenweg",
+              "street_en": "Haecht Road",
+              "pattern": "n{1,300} Chaussée de Haecht"
+            },
+            {
+              "code": "1030",
+              "street": "Rue Royale Sainte-Marie / Koninklijke Sinte-Mariastraat",
+              "street_en": "Royal Saint Mary Street",
+              "pattern": "n{1,100} Rue Royale Sainte-Marie"
+            }
+          ]
+        },
+        {
+          "name": "Ixelles / Elsene",
+          "name_en": "Ixelles",
+          "lat": 50.8279,
+          "lon": 4.3716,
+          "postcodes": [
+            {
+              "code": "1050",
+              "street": "Chaussée d'Ixelles / Elsensesteenweg",
+              "street_en": "Ixelles Road",
+              "pattern": "n{1,250} Chaussée d'Ixelles"
+            },
+            {
+              "code": "1050",
+              "street": "Avenue Louise / Louizalaan",
+              "street_en": "Louise Avenue",
+              "pattern": "n{1,500} Avenue Louise"
+            }
+          ]
+        },
+        {
+          "name": "Etterbeek",
+          "name_en": "Etterbeek",
+          "lat": 50.8365,
+          "lon": 4.3889,
+          "postcodes": [
+            {
+              "code": "1040",
+              "street": "Chaussée de Wavre / Waversesteenweg",
+              "street_en": "Wavre Road",
+              "pattern": "n{1,200} Chaussée de Wavre"
+            }
+          ]
+        },
+        {
+          "name": "Uccle / Ukkel",
+          "name_en": "Uccle",
+          "lat": 50.8003,
+          "lon": 4.3367,
+          "postcodes": [
+            {
+              "code": "1180",
+              "street": "Chaussée d'Alsemberg / Alsembergsesteenweg",
+              "street_en": "Alsemberg Road",
+              "pattern": "n{1,400} Chaussée d'Alsemberg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Antwerpen",
+      "name_en": "Antwerp",
+      "region_tags": ["Flanders", "Antwerp", "Dutch community"],
+      "cities": [
+        {
+          "name": "Antwerpen",
+          "name_en": "Antwerp",
+          "lat": 51.2194,
+          "lon": 4.4025,
+          "postcodes": [
+            {
+              "code": "2000",
+              "street": "Meir",
+              "street_en": "Meir",
+              "pattern": "n{1,150} Meir"
+            },
+            {
+              "code": "2000",
+              "street": "Grote Markt",
+              "street_en": "Grand Place",
+              "fixed": ["1 Grote Markt", "7 Grote Markt", "15 Grote Markt", "22 Grote Markt"]
+            },
+            {
+              "code": "2000",
+              "street": "Nationalestraat",
+              "street_en": "National Street",
+              "pattern": "n{1,120} Nationalestraat"
+            },
+            {
+              "code": "2000",
+              "street": "Frankrijklei",
+              "street_en": "France Avenue",
+              "pattern": "n{1,100} Frankrijklei"
+            },
+            {
+              "code": "2000",
+              "street": "Schoenmarkt",
+              "street_en": "Shoe Market",
+              "pattern": "n{1,35} Schoenmarkt"
+            },
+            {
+              "code": "2000",
+              "street": "Lange Gasthuisstraat",
+              "street_en": "Long Hospital Street",
+              "pattern": "n{1,55} Lange Gasthuisstraat"
+            },
+            {
+              "code": "2018",
+              "street": "Provinciestraat",
+              "street_en": "Province Street",
+              "pattern": "n{1,250} Provinciestraat"
+            },
+            {
+              "code": "2060",
+              "street": "Turnhoutsebaan",
+              "street_en": "Turnhout Road",
+              "pattern": "n{1,300} Turnhoutsebaan"
+            },
+            {
+              "code": "2140",
+              "street": "Bredabaan",
+              "street_en": "Breda Road",
+              "pattern": "n{1,400} Bredabaan"
+            },
+            {
+              "code": "2100",
+              "street": "Herentalsebaan",
+              "street_en": "Herentals Road",
+              "pattern": "n{1,350} Herentalsebaan"
+            },
+            {
+              "code": "2050",
+              "street": "Scheldelaan",
+              "street_en": "Scheldt Avenue",
+              "pattern": "n{1,100} Scheldelaan"
+            },
+            {
+              "code": "2020",
+              "street": "Kerkstraat",
+              "street_en": "Church Street",
+              "pattern": "n{1,80} Kerkstraat"
+            }
+          ]
+        },
+        {
+          "name": "Mechelen",
+          "name_en": "Mechelen",
+          "lat": 51.0259,
+          "lon": 4.4776,
+          "postcodes": [
+            {
+              "code": "2800",
+              "street": "IJzerenleen",
+              "street_en": "Iron Lane",
+              "pattern": "n{1,40} IJzerenleen"
+            },
+            {
+              "code": "2800",
+              "street": "Bruul",
+              "street_en": "Bruul",
+              "pattern": "n{1,90} Bruul"
+            },
+            {
+              "code": "2800",
+              "street": "Befferstraat",
+              "street_en": "Beffer Street",
+              "pattern": "n{1,50} Befferstraat"
+            },
+            {
+              "code": "2800",
+              "street": "Hoogstraat",
+              "street_en": "High Street",
+              "pattern": "n{1,30} Hoogstraat"
+            },
+            {
+              "code": "2800",
+              "street": "Grote Markt",
+              "street_en": "Grand Place",
+              "fixed": ["1 Grote Markt", "3 Grote Markt", "10 Grote Markt", "21 Grote Markt"]
+            }
+          ]
+        },
+        {
+          "name": "Turnhout",
+          "name_en": "Turnhout",
+          "lat": 51.3224,
+          "lon": 4.9449,
+          "postcodes": [
+            {
+              "code": "2300",
+              "street": "Gasthuisstraat",
+              "street_en": "Hospital Street",
+              "pattern": "n{1,60} Gasthuisstraat"
+            },
+            {
+              "code": "2300",
+              "street": "Grote Markt",
+              "street_en": "Grand Place",
+              "pattern": "n{1,45} Grote Markt"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Oost-Vlaanderen",
+      "name_en": "East Flanders",
+      "region_tags": ["Flanders", "East Flanders", "Dutch community"],
+      "cities": [
+        {
+          "name": "Gent",
+          "name_en": "Ghent",
+          "lat": 51.0543,
+          "lon": 3.7174,
+          "postcodes": [
+            {
+              "code": "9000",
+              "street": "Veldstraat",
+              "street_en": "Field Street",
+              "pattern": "n{1,90} Veldstraat"
+            },
+            {
+              "code": "9000",
+              "street": "Korenmarkt",
+              "street_en": "Corn Market",
+              "fixed": ["1 Korenmarkt", "5 Korenmarkt", "12 Korenmarkt", "16 Korenmarkt"]
+            },
+            {
+              "code": "9000",
+              "street": "Graslei",
+              "street_en": "Herb Quay",
+              "pattern": "n{1,15} Graslei"
+            },
+            {
+              "code": "9000",
+              "street": "Vrijdagmarkt",
+              "street_en": "Friday Market",
+              "pattern": "n{1,50} Vrijdagmarkt"
+            },
+            {
+              "code": "9000",
+              "street": "Vlaanderenstraat",
+              "street_en": "Flanders Street",
+              "pattern": "n{1,80} Vlaanderenstraat"
+            },
+            {
+              "code": "9000",
+              "street": "Sint-Pietersnieuwstraat",
+              "street_en": "Saint Peter New Street",
+              "pattern": "n{1,260} Sint-Pietersnieuwstraat"
+            },
+            {
+              "code": "9000",
+              "street": "Coupure",
+              "street_en": "Coupure",
+              "pattern": "n{1,200} Coupure"
+            },
+            {
+              "code": "9000",
+              "street": "Brabantdam",
+              "street_en": "Brabant Dam",
+              "pattern": "n{1,100} Brabantdam"
+            },
+            {
+              "code": "9000",
+              "street": "Lange Steenstraat",
+              "street_en": "Long Stone Street",
+              "pattern": "n{1,30} Lange Steenstraat"
+            },
+            {
+              "code": "9000",
+              "street": "Kortrijksesteenweg",
+              "street_en": "Kortrijk Road",
+              "pattern": "n{1,400} Kortrijksesteenweg"
+            }
+          ]
+        },
+        {
+          "name": "Aalst",
+          "name_en": "Aalst",
+          "lat": 50.9375,
+          "lon": 4.0388,
+          "postcodes": [
+            {
+              "code": "9300",
+              "street": "Grote Markt",
+              "street_en": "Grand Place",
+              "pattern": "n{1,40} Grote Markt"
+            },
+            {
+              "code": "9300",
+              "street": "Nieuwstraat",
+              "street_en": "New Street",
+              "pattern": "n{1,60} Nieuwstraat"
+            }
+          ]
+        },
+        {
+          "name": "Sint-Niklaas",
+          "name_en": "Sint-Niklaas",
+          "lat": 51.1565,
+          "lon": 4.1435,
+          "postcodes": [
+            {
+              "code": "9100",
+              "street": "Grote Markt",
+              "street_en": "Grand Place",
+              "pattern": "n{1,50} Grote Markt"
+            },
+            {
+              "code": "9100",
+              "street": "Stationsstraat",
+              "street_en": "Station Street",
+              "pattern": "n{1,80} Stationsstraat"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "West-Vlaanderen",
+      "name_en": "West Flanders",
+      "region_tags": ["Flanders", "West Flanders", "Dutch community"],
+      "cities": [
+        {
+          "name": "Brugge",
+          "name_en": "Bruges",
+          "lat": 51.2093,
+          "lon": 3.2247,
+          "postcodes": [
+            {
+              "code": "8000",
+              "street": "Markt",
+              "street_en": "Market Square",
+              "pattern": "n{1,30} Markt"
+            },
+            {
+              "code": "8000",
+              "street": "Steenstraat",
+              "street_en": "Stone Street",
+              "pattern": "n{1,80} Steenstraat"
+            },
+            {
+              "code": "8000",
+              "street": "Noordzandstraat",
+              "street_en": "North Sand Street",
+              "pattern": "n{1,60} Noordzandstraat"
+            },
+            {
+              "code": "8000",
+              "street": "Langestraat",
+              "street_en": "Long Street",
+              "pattern": "n{1,70} Langestraat"
+            },
+            {
+              "code": "8000",
+              "street": "Katelijnestraat",
+              "street_en": "Katelijne Street",
+              "pattern": "n{1,120} Katelijnestraat"
+            },
+            {
+              "code": "8000",
+              "street": "Smedenstraat",
+              "street_en": "Smiths Street",
+              "pattern": "n{1,50} Smedenstraat"
+            },
+            {
+              "code": "8000",
+              "street": "Geldmuntstraat",
+              "street_en": "Money Mint Street",
+              "pattern": "n{1,25} Geldmuntstraat"
+            },
+            {
+              "code": "8000",
+              "street": "Wollestraat",
+              "street_en": "Wool Street",
+              "pattern": "n{1,50} Wollestraat"
+            },
+            {
+              "code": "8000",
+              "street": "Simon Stevinplein",
+              "street_en": "Simon Stevin Square",
+              "fixed": ["1 Simon Stevinplein", "3 Simon Stevinplein", "9 Simon Stevinplein", "15 Simon Stevinplein"]
+            },
+            {
+              "code": "8200",
+              "street": "Torhoutsesteenweg",
+              "street_en": "Torhout Road",
+              "pattern": "n{1,500} Torhoutsesteenweg"
+            }
+          ]
+        },
+        {
+          "name": "Oostende",
+          "name_en": "Ostend",
+          "lat": 51.2254,
+          "lon": 2.9263,
+          "postcodes": [
+            {
+              "code": "8400",
+              "street": "Kapellestraat",
+              "street_en": "Chapel Street",
+              "pattern": "n{1,100} Kapellestraat"
+            },
+            {
+              "code": "8400",
+              "street": "Albert I-Promenade",
+              "street_en": "Albert I Promenade",
+              "pattern": "n{1,80} Albert I-Promenade"
+            },
+            {
+              "code": "8400",
+              "street": "Torhoutsesteenweg",
+              "street_en": "Torhout Road",
+              "pattern": "n{1,400} Torhoutsesteenweg"
+            }
+          ]
+        },
+        {
+          "name": "Kortrijk",
+          "name_en": "Kortrijk",
+          "lat": 50.8279,
+          "lon": 3.2649,
+          "postcodes": [
+            {
+              "code": "8500",
+              "street": "Grote Markt",
+              "street_en": "Grand Place",
+              "pattern": "n{1,50} Grote Markt"
+            },
+            {
+              "code": "8500",
+              "street": "Lange Steenstraat",
+              "street_en": "Long Stone Street",
+              "pattern": "n{1,60} Lange Steenstraat"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Vlaams-Brabant",
+      "name_en": "Flemish Brabant",
+      "region_tags": ["Flanders", "Flemish Brabant", "Dutch community"],
+      "cities": [
+        {
+          "name": "Leuven / Louvain",
+          "name_en": "Leuven",
+          "lat": 50.8798,
+          "lon": 4.7005,
+          "postcodes": [
+            {
+              "code": "3000",
+              "street": "Bondgenotenlaan",
+              "street_en": "Allies Avenue",
+              "pattern": "n{1,150} Bondgenotenlaan"
+            },
+            {
+              "code": "3000",
+              "street": "Naamsestraat",
+              "street_en": "Namur Street",
+              "pattern": "n{1,120} Naamsestraat"
+            },
+            {
+              "code": "3000",
+              "street": "Diestsestraat",
+              "street_en": "Diest Street",
+              "pattern": "n{1,200} Diestsestraat"
+            },
+            {
+              "code": "3000",
+              "street": "Grote Markt",
+              "street_en": "Grand Place",
+              "fixed": ["1 Grote Markt", "5 Grote Markt", "8 Grote Markt", "13 Grote Markt"]
+            },
+            {
+              "code": "3000",
+              "street": "Tiensestraat",
+              "street_en": "Tienen Street",
+              "pattern": "n{1,180} Tiensestraat"
+            },
+            {
+              "code": "3000",
+              "street": "Oude Markt",
+              "street_en": "Old Market",
+              "pattern": "n{1,60} Oude Markt"
+            },
+            {
+              "code": "3001",
+              "street": "Tervuursevest",
+              "street_en": "Tervuren Rampart",
+              "pattern": "n{1,200} Tervuursevest"
+            },
+            {
+              "code": "3010",
+              "street": "Naamsesteenweg",
+              "street_en": "Namur Road",
+              "pattern": "n{1,350} Naamsesteenweg"
+            },
+            {
+              "code": "3012",
+              "street": "Geldenaaksebaan",
+              "street_en": "Geldenaakse Road",
+              "pattern": "n{1,250} Geldenaaksebaan"
+            },
+            {
+              "code": "3018",
+              "street": "Celestijnenlaan",
+              "street_en": "Celestijn Lane",
+              "pattern": "n{1,200} Celestijnenlaan"
+            }
+          ]
+        },
+        {
+          "name": "Vilvoorde",
+          "name_en": "Vilvoorde",
+          "lat": 50.9267,
+          "lon": 4.4251,
+          "postcodes": [
+            {
+              "code": "1800",
+              "street": "Leuvensestraat",
+              "street_en": "Leuven Street",
+              "pattern": "n{1,100} Leuvensestraat"
+            },
+            {
+              "code": "1800",
+              "street": "Grote Markt",
+              "street_en": "Grand Place",
+              "pattern": "n{1,40} Grote Markt"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Limburg",
+      "name_en": "Limburg",
+      "region_tags": ["Flanders", "Limburg", "Dutch community"],
+      "cities": [
+        {
+          "name": "Hasselt",
+          "name_en": "Hasselt",
+          "lat": 50.9311,
+          "lon": 5.3378,
+          "postcodes": [
+            {
+              "code": "3500",
+              "street": "Grote Markt",
+              "street_en": "Grand Place",
+              "pattern": "n{1,40} Grote Markt"
+            },
+            {
+              "code": "3500",
+              "street": "Hoogstraat",
+              "street_en": "High Street",
+              "pattern": "n{1,60} Hoogstraat"
+            },
+            {
+              "code": "3500",
+              "street": "Maastrichterstraat",
+              "street_en": "Maastricht Street",
+              "pattern": "n{1,80} Maastrichterstraat"
+            },
+            {
+              "code": "3500",
+              "street": "Aldestraat",
+              "street_en": "Old Street",
+              "pattern": "n{1,50} Aldestraat"
+            },
+            {
+              "code": "3500",
+              "street": "Kuringersteenweg",
+              "street_en": "Kuringen Road",
+              "pattern": "n{1,200} Kuringersteenweg"
+            }
+          ]
+        },
+        {
+          "name": "Genk",
+          "name_en": "Genk",
+          "lat": 50.9651,
+          "lon": 5.5003,
+          "postcodes": [
+            {
+              "code": "3600",
+              "street": "Stationsstraat",
+              "street_en": "Station Street",
+              "pattern": "n{1,60} Stationsstraat"
+            },
+            {
+              "code": "3600",
+              "street": "Europalaan",
+              "street_en": "Europe Avenue",
+              "pattern": "n{1,100} Europalaan"
+            }
+          ]
+        },
+        {
+          "name": "Tongeren / Tongres",
+          "name_en": "Tongeren",
+          "lat": 50.7804,
+          "lon": 5.4646,
+          "postcodes": [
+            {
+              "code": "3700",
+              "street": "Grote Markt",
+              "street_en": "Grand Place",
+              "pattern": "n{1,30} Grote Markt"
+            },
+            {
+              "code": "3700",
+              "street": "Maastrichterstraat",
+              "street_en": "Maastricht Street",
+              "pattern": "n{1,100} Maastrichterstraat"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Hainaut / Henegouwen",
+      "name_en": "Hainaut",
+      "region_tags": ["Wallonia", "Hainaut", "French community"],
+      "cities": [
+        {
+          "name": "Mons / Bergen",
+          "name_en": "Mons",
+          "lat": 50.4542,
+          "lon": 3.9567,
+          "postcodes": [
+            {
+              "code": "7000",
+              "street": "Grand-Place",
+              "street_en": "Grand Place",
+              "fixed": ["1 Grand-Place", "6 Grand-Place", "12 Grand-Place", "20 Grand-Place"]
+            },
+            {
+              "code": "7000",
+              "street": "Rue de la Chaussée",
+              "street_en": "Road Street",
+              "pattern": "n{1,50} Rue de la Chaussée"
+            },
+            {
+              "code": "7000",
+              "street": "Rue d'Havré",
+              "street_en": "Havre Street",
+              "pattern": "n{1,80} Rue d'Havré"
+            },
+            {
+              "code": "7000",
+              "street": "Rue de Nimy",
+              "street_en": "Nimy Street",
+              "pattern": "n{1,100} Rue de Nimy"
+            },
+            {
+              "code": "7000",
+              "street": "Boulevard Dolez",
+              "street_en": "Dolez Boulevard",
+              "pattern": "n{1,60} Boulevard Dolez"
+            }
+          ]
+        },
+        {
+          "name": "Charleroi",
+          "name_en": "Charleroi",
+          "lat": 50.4108,
+          "lon": 4.4446,
+          "postcodes": [
+            {
+              "code": "6000",
+              "street": "Rue de la Montagne",
+              "street_en": "Mountain Street",
+              "pattern": "n{1,100} Rue de la Montagne"
+            },
+            {
+              "code": "6000",
+              "street": "Boulevard Tirou",
+              "street_en": "Tirou Boulevard",
+              "pattern": "n{1,80} Boulevard Tirou"
+            },
+            {
+              "code": "6000",
+              "street": "Rue de Marcinelle",
+              "street_en": "Marcinelle Street",
+              "pattern": "n{1,150} Rue de Marcinelle"
+            },
+            {
+              "code": "6000",
+              "street": "Place Charles II",
+              "street_en": "Charles II Square",
+              "fixed": ["1 Place Charles II", "5 Place Charles II", "10 Place Charles II"]
+            },
+            {
+              "code": "6000",
+              "street": "Boulevard Joseph Tirou",
+              "street_en": "Joseph Tirou Boulevard",
+              "pattern": "n{1,100} Boulevard Joseph Tirou"
+            },
+            {
+              "code": "6001",
+              "street": "Rue de Marcinelle",
+              "street_en": "Marcinelle Street",
+              "pattern": "n{1,200} Rue de Marcinelle"
+            },
+            {
+              "code": "6010",
+              "street": "Chaussée de Bruxelles",
+              "street_en": "Brussels Road",
+              "pattern": "n{1,350} Chaussée de Bruxelles"
+            },
+            {
+              "code": "6040",
+              "street": "Rue Grande",
+              "street_en": "Great Street",
+              "pattern": "n{1,150} Rue Grande"
+            },
+            {
+              "code": "6030",
+              "street": "Chaussée de Fleurus",
+              "street_en": "Fleurus Road",
+              "pattern": "n{1,200} Chaussée de Fleurus"
+            },
+            {
+              "code": "6020",
+              "street": "Rue de Dampremy",
+              "street_en": "Dampremy Street",
+              "pattern": "n{1,150} Rue de Dampremy"
+            }
+          ]
+        },
+        {
+          "name": "Tournai / Doornik",
+          "name_en": "Tournai",
+          "lat": 50.6054,
+          "lon": 3.3881,
+          "postcodes": [
+            {
+              "code": "7500",
+              "street": "Grand-Place",
+              "street_en": "Grand Place",
+              "pattern": "n{1,40} Grand-Place"
+            },
+            {
+              "code": "7500",
+              "street": "Rue Royale",
+              "street_en": "Royal Street",
+              "pattern": "n{1,60} Rue Royale"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Liège / Luik",
+      "name_en": "Liège",
+      "region_tags": ["Wallonia", "Liège", "French community", "German community"],
+      "cities": [
+        {
+          "name": "Liège / Luik",
+          "name_en": "Liège",
+          "lat": 50.6326,
+          "lon": 5.5797,
+          "postcodes": [
+            {
+              "code": "4000",
+              "street": "Rue de la Cathédrale",
+              "street_en": "Cathedral Street",
+              "pattern": "n{1,80} Rue de la Cathédrale"
+            },
+            {
+              "code": "4000",
+              "street": "Place Saint-Lambert",
+              "street_en": "Saint Lambert Square",
+              "fixed": ["1 Place Saint-Lambert", "5 Place Saint-Lambert", "10 Place Saint-Lambert", "20 Place Saint-Lambert"]
+            },
+            {
+              "code": "4000",
+              "street": "Rue Pont d'Avroy",
+              "street_en": "Avroy Bridge Street",
+              "pattern": "n{1,60} Rue Pont d'Avroy"
+            },
+            {
+              "code": "4000",
+              "street": "Boulevard d'Avroy",
+              "street_en": "Avroy Boulevard",
+              "pattern": "n{1,100} Boulevard d'Avroy"
+            },
+            {
+              "code": "4000",
+              "street": "Rue de l'Université",
+              "street_en": "University Street",
+              "pattern": "n{1,50} Rue de l'Université"
+            },
+            {
+              "code": "4000",
+              "street": "Rue Saint-Gilles",
+              "street_en": "Saint Gilles Street",
+              "pattern": "n{1,100} Rue Saint-Gilles"
+            },
+            {
+              "code": "4000",
+              "street": "Quai de la Batte",
+              "street_en": "Batte Quay",
+              "pattern": "n{1,40} Quai de la Batte"
+            },
+            {
+              "code": "4020",
+              "street": "Rue Ernest de Bavière",
+              "street_en": "Ernest of Bavaria Street",
+              "pattern": "n{1,120} Rue Ernest de Bavière"
+            },
+            {
+              "code": "4020",
+              "street": "Rue de Campine",
+              "street_en": "Campine Street",
+              "pattern": "n{1,80} Rue de Campine"
+            },
+            {
+              "code": "4030",
+              "street": "Rue de Fétinne",
+              "street_en": "Fetinne Street",
+              "pattern": "n{1,60} Rue de Fétinne"
+            }
+          ]
+        },
+        {
+          "name": "Verviers",
+          "name_en": "Verviers",
+          "lat": 50.5891,
+          "lon": 5.8625,
+          "postcodes": [
+            {
+              "code": "4800",
+              "street": "Rue du Collège",
+              "street_en": "College Street",
+              "pattern": "n{1,60} Rue du Collège"
+            },
+            {
+              "code": "4800",
+              "street": "Place Verte",
+              "street_en": "Green Square",
+              "pattern": "n{1,30} Place Verte"
+            }
+          ]
+        },
+        {
+          "name": "Eupen",
+          "name_en": "Eupen",
+          "lat": 50.6322,
+          "lon": 6.0368,
+          "postcodes": [
+            {
+              "code": "4700",
+              "street": "Hauptstraße",
+              "street_en": "Main Street",
+              "pattern": "n{1,80} Hauptstraße"
+            },
+            {
+              "code": "4700",
+              "street": "Klötzerbahn",
+              "street_en": "Klotzer Path",
+              "pattern": "n{1,50} Klötzerbahn"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Luxembourg / Luxemburg",
+      "name_en": "Luxembourg",
+      "region_tags": ["Wallonia", "Luxembourg", "French community"],
+      "cities": [
+        {
+          "name": "Arlon / Aarlen",
+          "name_en": "Arlon",
+          "lat": 49.6835,
+          "lon": 5.8167,
+          "postcodes": [
+            {
+              "code": "6700",
+              "street": "Grand-Rue",
+              "street_en": "Grand Street",
+              "pattern": "n{1,80} Grand-Rue"
+            },
+            {
+              "code": "6700",
+              "street": "Rue de la Station",
+              "street_en": "Station Street",
+              "pattern": "n{1,40} Rue de la Station"
+            },
+            {
+              "code": "6700",
+              "street": "Place Léopold",
+              "street_en": "Leopold Square",
+              "fixed": ["1 Place Léopold", "4 Place Léopold", "8 Place Léopold", "12 Place Léopold"]
+            }
+          ]
+        },
+        {
+          "name": "Bastogne / Bastenaken",
+          "name_en": "Bastogne",
+          "lat": 50.0007,
+          "lon": 5.7175,
+          "postcodes": [
+            {
+              "code": "6600",
+              "street": "Rue du Sablon",
+              "street_en": "Sand Street",
+              "pattern": "n{1,50} Rue du Sablon"
+            },
+            {
+              "code": "6600",
+              "street": "Place McAuliffe",
+              "street_en": "McAuliffe Square",
+              "fixed": ["1 Place McAuliffe", "5 Place McAuliffe", "10 Place McAuliffe"]
+            }
+          ]
+        },
+        {
+          "name": "Marche-en-Famenne",
+          "name_en": "Marche-en-Famenne",
+          "lat": 50.2267,
+          "lon": 5.3446,
+          "postcodes": [
+            {
+              "code": "6900",
+              "street": "Rue du Commerce",
+              "street_en": "Commerce Street",
+              "pattern": "n{1,60} Rue du Commerce"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Namur / Namen",
+      "name_en": "Namur",
+      "region_tags": ["Wallonia", "Namur", "French community"],
+      "cities": [
+        {
+          "name": "Namur / Namen",
+          "name_en": "Namur",
+          "lat": 50.4669,
+          "lon": 4.8675,
+          "postcodes": [
+            {
+              "code": "5000",
+              "street": "Rue de Fer",
+              "street_en": "Iron Street",
+              "pattern": "n{1,80} Rue de Fer"
+            },
+            {
+              "code": "5000",
+              "street": "Rue de l'Ange",
+              "street_en": "Angel Street",
+              "pattern": "n{1,60} Rue de l'Ange"
+            },
+            {
+              "code": "5000",
+              "street": "Place d'Armes",
+              "street_en": "Arms Square",
+              "fixed": ["1 Place d'Armes", "3 Place d'Armes", "8 Place d'Armes", "12 Place d'Armes"]
+            },
+            {
+              "code": "5000",
+              "street": "Rue de Bruxelles",
+              "street_en": "Brussels Street",
+              "pattern": "n{1,100} Rue de Bruxelles"
+            },
+            {
+              "code": "5000",
+              "street": "Boulevard de la Meuse",
+              "street_en": "Meuse Boulevard",
+              "pattern": "n{1,50} Boulevard de la Meuse"
+            },
+            {
+              "code": "5000",
+              "street": "Rue de Marchovelette",
+              "street_en": "Marchovelette Street",
+              "pattern": "n{1,80} Rue de Marchovelette"
+            },
+            {
+              "code": "5000",
+              "street": "Rue Emile Cuvelier",
+              "street_en": "Emile Cuvelier Street",
+              "pattern": "n{1,40} Rue Emile Cuvelier"
+            },
+            {
+              "code": "5001",
+              "street": "Chaussée de Liège",
+              "street_en": "Liege Road",
+              "pattern": "n{1,200} Chaussée de Liège"
+            },
+            {
+              "code": "5002",
+              "street": "Rue de Géronsart",
+              "street_en": "Geronsart Street",
+              "pattern": "n{1,80} Rue de Géronsart"
+            },
+            {
+              "code": "5003",
+              "street": "Chaussée de Dinant",
+              "street_en": "Dinant Road",
+              "pattern": "n{1,300} Chaussée de Dinant"
+            }
+          ]
+        },
+        {
+          "name": "Dinant",
+          "name_en": "Dinant",
+          "lat": 50.2613,
+          "lon": 4.9126,
+          "postcodes": [
+            {
+              "code": "5500",
+              "street": "Rue Grande",
+              "street_en": "Great Street",
+              "pattern": "n{1,100} Rue Grande"
+            },
+            {
+              "code": "5500",
+              "street": "Rue Adolphe Sax",
+              "street_en": "Adolphe Sax Street",
+              "pattern": "n{1,40} Rue Adolphe Sax"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Brabant wallon / Waals-Brabant",
+      "name_en": "Walloon Brabant",
+      "region_tags": ["Wallonia", "Walloon Brabant", "French community"],
+      "cities": [
+        {
+          "name": "Wavre / Waver",
+          "name_en": "Wavre",
+          "lat": 50.7159,
+          "lon": 4.6063,
+          "postcodes": [
+            {
+              "code": "1300",
+              "street": "Rue de Namur",
+              "street_en": "Namur Street",
+              "pattern": "n{1,80} Rue de Namur"
+            },
+            {
+              "code": "1300",
+              "street": "Place Alphonse Bosch",
+              "street_en": "Alphonse Bosch Square",
+              "fixed": ["1 Place Alphonse Bosch", "3 Place Alphonse Bosch", "7 Place Alphonse Bosch"]
+            },
+            {
+              "code": "1300",
+              "street": "Rue du Commerce",
+              "street_en": "Commerce Street",
+              "pattern": "n{1,50} Rue du Commerce"
+            }
+          ]
+        },
+        {
+          "name": "Ottignies-Louvain-la-Neuve",
+          "name_en": "Ottignies-Louvain-la-Neuve",
+          "lat": 50.6692,
+          "lon": 4.5665,
+          "postcodes": [
+            {
+              "code": "1348",
+              "street": "Place de l'Université",
+              "street_en": "University Square",
+              "fixed": ["1 Place de l'Université", "3 Place de l'Université", "5 Place de l'Université"]
+            },
+            {
+              "code": "1348",
+              "street": "Rue Charlemagne",
+              "street_en": "Charlemagne Street",
+              "pattern": "n{1,40} Rue Charlemagne"
+            },
+            {
+              "code": "1340",
+              "street": "Avenue des Combattants",
+              "street_en": "Veterans Avenue",
+              "pattern": "n{1,100} Avenue des Combattants"
+            }
+          ]
+        },
+        {
+          "name": "Nivelles / Nijvel",
+          "name_en": "Nivelles",
+          "lat": 50.5986,
+          "lon": 4.3280,
+          "postcodes": [
+            {
+              "code": "1400",
+              "street": "Rue de Namur",
+              "street_en": "Namur Street",
+              "pattern": "n{1,60} Rue de Namur"
+            },
+            {
+              "code": "1400",
+              "street": "Grand-Place",
+              "street_en": "Grand Place",
+              "fixed": ["1 Grand-Place", "5 Grand-Place", "10 Grand-Place", "18 Grand-Place"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
