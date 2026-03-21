@@ -1,0 +1,1129 @@
+{
+  "country": {
+    "name": "Polska",
+    "name_en": "Poland",
+    "iso_code": "PL",
+    "phone_prefix": "+48",
+    "phone_formats": ["+48-##-###-##-##", "+48-###-###-###"],
+    "postcode_format": "##-###",
+    "name_order": "given_first"
+  },
+  "states": [
+    {
+      "name": "Mazowieckie",
+      "name_en": "Masovian Voivodeship",
+      "region_tags": ["Mazowieckie", "Mazowsze", "Central Poland"],
+      "cities": [
+        {
+          "name": "Warszawa",
+          "name_en": "Warsaw",
+          "lat": 52.2297,
+          "lon": 21.0122,
+          "postcodes": [
+            {
+              "code": "00-001",
+              "street": "ul. Marszałkowska",
+              "street_en": "Marszalkowska Street",
+              "pattern": "n{1,150} ul. Marszałkowska"
+            },
+            {
+              "code": "00-040",
+              "street": "ul. Nowy Świat",
+              "street_en": "Nowy Swiat Street",
+              "pattern": "n{1,72} ul. Nowy Świat"
+            },
+            {
+              "code": "00-325",
+              "street": "ul. Krakowskie Przedmieście",
+              "street_en": "Krakowskie Przedmiescie Street",
+              "pattern": "n{1,89} ul. Krakowskie Przedmieście"
+            },
+            {
+              "code": "00-520",
+              "street": "ul. Mokotowska",
+              "street_en": "Mokotowska Street",
+              "pattern": "n{1,75} ul. Mokotowska"
+            },
+            {
+              "code": "00-660",
+              "street": "al. Jerozolimskie",
+              "street_en": "Jerozolimskie Avenue",
+              "pattern": "n{1,200} al. Jerozolimskie"
+            },
+            {
+              "code": "00-116",
+              "street": "ul. Świętokrzyska",
+              "street_en": "Swietokrzyska Street",
+              "pattern": "n{1,38} ul. Świętokrzyska"
+            },
+            {
+              "code": "00-950",
+              "street": "pl. Piłsudskiego",
+              "street_en": "Pilsudski Square",
+              "pattern": "n{1,10} pl. Piłsudskiego"
+            },
+            {
+              "code": "01-001",
+              "street": "ul. Wolska",
+              "street_en": "Wolska Street",
+              "pattern": "n{1,160} ul. Wolska"
+            },
+            {
+              "code": "02-001",
+              "street": "ul. Puławska",
+              "street_en": "Pulawska Street",
+              "pattern": "n{1,380} ul. Puławska"
+            },
+            {
+              "code": "03-301",
+              "street": "ul. Targowa",
+              "street_en": "Targowa Street",
+              "pattern": "n{1,86} ul. Targowa"
+            },
+            {
+              "code": "00-189",
+              "street": "ul. Miodowa",
+              "street_en": "Miodowa Street",
+              "pattern": "n{1,50} ul. Miodowa"
+            },
+            {
+              "code": "00-375",
+              "street": "ul. Tamka",
+              "street_en": "Tamka Street",
+              "pattern": "n{1,49} ul. Tamka"
+            }
+          ]
+        },
+        {
+          "name": "Radom",
+          "name_en": "Radom",
+          "lat": 51.4027,
+          "lon": 21.1471,
+          "postcodes": [
+            {
+              "code": "26-600",
+              "street": "ul. Żeromskiego",
+              "street_en": "Zeromskiego Street",
+              "pattern": "n{1,120} ul. Żeromskiego"
+            },
+            {
+              "code": "26-610",
+              "street": "ul. Słowackiego",
+              "street_en": "Slowackiego Street",
+              "pattern": "n{1,80} ul. Słowackiego"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Małopolskie",
+      "name_en": "Lesser Poland Voivodeship",
+      "region_tags": ["Małopolskie", "Małopolska", "Southern Poland"],
+      "cities": [
+        {
+          "name": "Kraków",
+          "name_en": "Krakow",
+          "lat": 50.0647,
+          "lon": 19.9450,
+          "postcodes": [
+            {
+              "code": "31-001",
+              "street": "ul. Floriańska",
+              "street_en": "Florianska Street",
+              "pattern": "n{1,57} ul. Floriańska"
+            },
+            {
+              "code": "31-010",
+              "street": "ul. Grodzka",
+              "street_en": "Grodzka Street",
+              "pattern": "n{1,68} ul. Grodzka"
+            },
+            {
+              "code": "31-042",
+              "street": "ul. Długa",
+              "street_en": "Dluga Street",
+              "pattern": "n{1,75} ul. Długa"
+            },
+            {
+              "code": "30-001",
+              "street": "ul. Dietla",
+              "street_en": "Dietla Street",
+              "pattern": "n{1,108} ul. Dietla"
+            },
+            {
+              "code": "30-059",
+              "street": "ul. Zwierzyniecka",
+              "street_en": "Zwierzyniecka Street",
+              "pattern": "n{1,34} ul. Zwierzyniecka"
+            },
+            {
+              "code": "31-069",
+              "street": "ul. Szewska",
+              "street_en": "Szewska Street",
+              "pattern": "n{1,28} ul. Szewska"
+            },
+            {
+              "code": "31-116",
+              "street": "ul. Karmelicka",
+              "street_en": "Karmelicka Street",
+              "pattern": "n{1,66} ul. Karmelicka"
+            },
+            {
+              "code": "30-150",
+              "street": "al. Krasińskiego",
+              "street_en": "Krasinskiego Avenue",
+              "pattern": "n{1,46} al. Krasińskiego"
+            },
+            {
+              "code": "31-150",
+              "street": "ul. Mikołajska",
+              "street_en": "Mikolajska Street",
+              "pattern": "n{1,30} ul. Mikołajska"
+            },
+            {
+              "code": "30-503",
+              "street": "ul. Wielicka",
+              "street_en": "Wielicka Street",
+              "pattern": "n{1,265} ul. Wielicka"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Wielkopolskie",
+      "name_en": "Greater Poland Voivodeship",
+      "region_tags": ["Wielkopolskie", "Wielkopolska", "Western Poland"],
+      "cities": [
+        {
+          "name": "Poznań",
+          "name_en": "Poznan",
+          "lat": 52.4064,
+          "lon": 16.9252,
+          "postcodes": [
+            {
+              "code": "61-001",
+              "street": "ul. Święty Marcin",
+              "street_en": "Swiety Marcin Street",
+              "pattern": "n{1,80} ul. Święty Marcin"
+            },
+            {
+              "code": "61-101",
+              "street": "ul. Półwiejska",
+              "street_en": "Polwiejska Street",
+              "pattern": "n{1,42} ul. Półwiejska"
+            },
+            {
+              "code": "60-101",
+              "street": "ul. Garbary",
+              "street_en": "Garbary Street",
+              "pattern": "n{1,124} ul. Garbary"
+            },
+            {
+              "code": "60-201",
+              "street": "ul. Głogowska",
+              "street_en": "Glogowska Street",
+              "pattern": "n{1,300} ul. Głogowska"
+            },
+            {
+              "code": "61-512",
+              "street": "ul. Ratajczaka",
+              "street_en": "Ratajczaka Street",
+              "pattern": "n{1,44} ul. Ratajczaka"
+            },
+            {
+              "code": "60-311",
+              "street": "ul. Grunwaldzka",
+              "street_en": "Grunwaldzka Street",
+              "pattern": "n{1,411} ul. Grunwaldzka"
+            },
+            {
+              "code": "61-729",
+              "street": "ul. Dąbrowskiego",
+              "street_en": "Dabrowskiego Street",
+              "pattern": "n{1,550} ul. Dąbrowskiego"
+            },
+            {
+              "code": "60-501",
+              "street": "ul. Kościuszki",
+              "street_en": "Kosciuszki Street",
+              "pattern": "n{1,115} ul. Kościuszki"
+            },
+            {
+              "code": "61-816",
+              "street": "ul. Winogrady",
+              "street_en": "Winogrady Street",
+              "pattern": "n{1,150} ul. Winogrady"
+            },
+            {
+              "code": "60-681",
+              "street": "ul. Hetmańska",
+              "street_en": "Hetmanska Street",
+              "pattern": "n{1,180} ul. Hetmańska"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Dolnośląskie",
+      "name_en": "Lower Silesian Voivodeship",
+      "region_tags": ["Dolnośląskie", "Dolny Śląsk", "Silesia"],
+      "cities": [
+        {
+          "name": "Wrocław",
+          "name_en": "Wroclaw",
+          "lat": 51.1079,
+          "lon": 17.0385,
+          "postcodes": [
+            {
+              "code": "50-001",
+              "street": "ul. Świdnicka",
+              "street_en": "Swidnicka Street",
+              "pattern": "n{1,40} ul. Świdnicka"
+            },
+            {
+              "code": "50-028",
+              "street": "ul. Oławska",
+              "street_en": "Olawska Street",
+              "pattern": "n{1,25} ul. Oławska"
+            },
+            {
+              "code": "50-079",
+              "street": "ul. Ruska",
+              "street_en": "Ruska Street",
+              "pattern": "n{1,65} ul. Ruska"
+            },
+            {
+              "code": "50-137",
+              "street": "ul. Piłsudskiego",
+              "street_en": "Pilsudskiego Street",
+              "pattern": "n{1,105} ul. Piłsudskiego"
+            },
+            {
+              "code": "50-201",
+              "street": "ul. Legnicka",
+              "street_en": "Legnicka Street",
+              "pattern": "n{1,160} ul. Legnicka"
+            },
+            {
+              "code": "50-304",
+              "street": "ul. Powstańców Śląskich",
+              "street_en": "Powstancow Slaskich Street",
+              "pattern": "n{1,210} ul. Powstańców Śląskich"
+            },
+            {
+              "code": "50-370",
+              "street": "ul. Grunwaldzka",
+              "street_en": "Grunwaldzka Street",
+              "pattern": "n{1,100} ul. Grunwaldzka"
+            },
+            {
+              "code": "51-601",
+              "street": "ul. Krakowska",
+              "street_en": "Krakowska Street",
+              "pattern": "n{1,225} ul. Krakowska"
+            },
+            {
+              "code": "50-424",
+              "street": "ul. Podwale",
+              "street_en": "Podwale Street",
+              "pattern": "n{1,83} ul. Podwale"
+            },
+            {
+              "code": "53-611",
+              "street": "ul. Ślężna",
+              "street_en": "Slezna Street",
+              "pattern": "n{1,146} ul. Ślężna"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Łódzkie",
+      "name_en": "Lodz Voivodeship",
+      "region_tags": ["Łódzkie", "Central Poland"],
+      "cities": [
+        {
+          "name": "Łódź",
+          "name_en": "Lodz",
+          "lat": 51.7592,
+          "lon": 19.4560,
+          "postcodes": [
+            {
+              "code": "90-001",
+              "street": "ul. Piotrkowska",
+              "street_en": "Piotrkowska Street",
+              "pattern": "n{1,320} ul. Piotrkowska"
+            },
+            {
+              "code": "90-135",
+              "street": "ul. Narutowicza",
+              "street_en": "Narutowicza Street",
+              "pattern": "n{1,145} ul. Narutowicza"
+            },
+            {
+              "code": "90-249",
+              "street": "ul. Kilińskiego",
+              "street_en": "Kilinskiego Street",
+              "pattern": "n{1,230} ul. Kilińskiego"
+            },
+            {
+              "code": "90-361",
+              "street": "ul. Sienkiewicza",
+              "street_en": "Sienkiewicza Street",
+              "pattern": "n{1,145} ul. Sienkiewicza"
+            },
+            {
+              "code": "91-002",
+              "street": "ul. Limanowskiego",
+              "street_en": "Limanowskiego Street",
+              "pattern": "n{1,200} ul. Limanowskiego"
+            },
+            {
+              "code": "90-507",
+              "street": "ul. Żeromskiego",
+              "street_en": "Zeromskiego Street",
+              "pattern": "n{1,116} ul. Żeromskiego"
+            },
+            {
+              "code": "93-005",
+              "street": "ul. Rzgowska",
+              "street_en": "Rzgowska Street",
+              "pattern": "n{1,280} ul. Rzgowska"
+            },
+            {
+              "code": "90-608",
+              "street": "ul. Tuwima",
+              "street_en": "Tuwima Street",
+              "pattern": "n{1,60} ul. Tuwima"
+            },
+            {
+              "code": "91-341",
+              "street": "ul. Zgierska",
+              "street_en": "Zgierska Street",
+              "pattern": "n{1,305} ul. Zgierska"
+            },
+            {
+              "code": "92-003",
+              "street": "al. Piłsudskiego",
+              "street_en": "Pilsudskiego Avenue",
+              "pattern": "n{1,150} al. Piłsudskiego"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Pomorskie",
+      "name_en": "Pomeranian Voivodeship",
+      "region_tags": ["Pomorskie", "Pomorze", "Northern Poland"],
+      "cities": [
+        {
+          "name": "Gdańsk",
+          "name_en": "Gdansk",
+          "lat": 54.3520,
+          "lon": 18.6466,
+          "postcodes": [
+            {
+              "code": "80-001",
+              "street": "ul. Długa",
+              "street_en": "Dluga Street",
+              "pattern": "n{1,90} ul. Długa"
+            },
+            {
+              "code": "80-830",
+              "street": "ul. Wały Jagiellońskie",
+              "street_en": "Waly Jagiellonskie Street",
+              "pattern": "n{1,20} ul. Wały Jagiellońskie"
+            },
+            {
+              "code": "80-244",
+              "street": "al. Grunwaldzka",
+              "street_en": "Grunwaldzka Avenue",
+              "pattern": "n{1,510} al. Grunwaldzka"
+            },
+            {
+              "code": "80-340",
+              "street": "ul. Kartuska",
+              "street_en": "Kartuska Street",
+              "pattern": "n{1,420} ul. Kartuska"
+            },
+            {
+              "code": "80-557",
+              "street": "ul. Podwale Grodzkie",
+              "street_en": "Podwale Grodzkie Street",
+              "pattern": "n{1,16} ul. Podwale Grodzkie"
+            },
+            {
+              "code": "80-755",
+              "street": "ul. Chłopska",
+              "street_en": "Chlopska Street",
+              "pattern": "n{1,40} ul. Chłopska"
+            },
+            {
+              "code": "80-172",
+              "street": "ul. Jaśkowa Dolina",
+              "street_en": "Jaskowa Dolina Street",
+              "pattern": "n{1,105} ul. Jaśkowa Dolina"
+            },
+            {
+              "code": "80-890",
+              "street": "ul. Rajska",
+              "street_en": "Rajska Street",
+              "pattern": "n{1,12} ul. Rajska"
+            },
+            {
+              "code": "80-432",
+              "street": "ul. Pańska",
+              "street_en": "Panska Street",
+              "pattern": "n{1,20} ul. Pańska"
+            },
+            {
+              "code": "80-958",
+              "street": "ul. Marynarki Polskiej",
+              "street_en": "Marynarki Polskiej Street",
+              "pattern": "n{1,180} ul. Marynarki Polskiej"
+            }
+          ]
+        },
+        {
+          "name": "Gdynia",
+          "name_en": "Gdynia",
+          "lat": 54.5189,
+          "lon": 18.5305,
+          "postcodes": [
+            {
+              "code": "81-300",
+              "street": "ul. Świętojańska",
+              "street_en": "Swietojanska Street",
+              "pattern": "n{1,150} ul. Świętojańska"
+            },
+            {
+              "code": "81-372",
+              "street": "ul. Starowiejska",
+              "street_en": "Starowiejska Street",
+              "pattern": "n{1,50} ul. Starowiejska"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Śląskie",
+      "name_en": "Silesian Voivodeship",
+      "region_tags": ["Śląskie", "Górny Śląsk", "Upper Silesia"],
+      "cities": [
+        {
+          "name": "Katowice",
+          "name_en": "Katowice",
+          "lat": 50.2649,
+          "lon": 19.0238,
+          "postcodes": [
+            {
+              "code": "40-001",
+              "street": "ul. Mariacka",
+              "street_en": "Mariacka Street",
+              "pattern": "n{1,20} ul. Mariacka"
+            },
+            {
+              "code": "40-032",
+              "street": "ul. Stawowa",
+              "street_en": "Stawowa Street",
+              "pattern": "n{1,18} ul. Stawowa"
+            },
+            {
+              "code": "40-085",
+              "street": "ul. Korfantego",
+              "street_en": "Korfantego Street",
+              "pattern": "n{1,51} ul. Korfantego"
+            },
+            {
+              "code": "40-161",
+              "street": "ul. Chorzowska",
+              "street_en": "Chorzowska Street",
+              "pattern": "n{1,115} ul. Chorzowska"
+            },
+            {
+              "code": "40-203",
+              "street": "ul. Mikołowska",
+              "street_en": "Mikolowska Street",
+              "pattern": "n{1,120} ul. Mikołowska"
+            },
+            {
+              "code": "40-301",
+              "street": "ul. Piotrowicka",
+              "street_en": "Piotrowicka Street",
+              "pattern": "n{1,120} ul. Piotrowicka"
+            },
+            {
+              "code": "40-507",
+              "street": "ul. Sokolska",
+              "street_en": "Sokolska Street",
+              "pattern": "n{1,65} ul. Sokolska"
+            },
+            {
+              "code": "40-599",
+              "street": "ul. Murckowska",
+              "street_en": "Murckowska Street",
+              "pattern": "n{1,50} ul. Murckowska"
+            },
+            {
+              "code": "40-752",
+              "street": "ul. Tysiąclecia",
+              "street_en": "Tysiaclecia Street",
+              "pattern": "n{1,99} ul. Tysiąclecia"
+            },
+            {
+              "code": "40-870",
+              "street": "ul. Szopienicka",
+              "street_en": "Szopienicka Street",
+              "pattern": "n{1,90} ul. Szopienicka"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Lubelskie",
+      "name_en": "Lublin Voivodeship",
+      "region_tags": ["Lubelskie", "Lubelszczyzna", "Eastern Poland"],
+      "cities": [
+        {
+          "name": "Lublin",
+          "name_en": "Lublin",
+          "lat": 51.2465,
+          "lon": 22.5684,
+          "postcodes": [
+            {
+              "code": "20-001",
+              "street": "ul. Krakowskie Przedmieście",
+              "street_en": "Krakowskie Przedmiescie Street",
+              "pattern": "n{1,78} ul. Krakowskie Przedmieście"
+            },
+            {
+              "code": "20-022",
+              "street": "ul. Narutowicza",
+              "street_en": "Narutowicza Street",
+              "pattern": "n{1,80} ul. Narutowicza"
+            },
+            {
+              "code": "20-076",
+              "street": "ul. Lipowa",
+              "street_en": "Lipowa Street",
+              "pattern": "n{1,21} ul. Lipowa"
+            },
+            {
+              "code": "20-109",
+              "street": "ul. Zamojska",
+              "street_en": "Zamojska Street",
+              "pattern": "n{1,32} ul. Zamojska"
+            },
+            {
+              "code": "20-301",
+              "street": "ul. Głęboka",
+              "street_en": "Gleboka Street",
+              "pattern": "n{1,60} ul. Głęboka"
+            },
+            {
+              "code": "20-400",
+              "street": "ul. Lubartowska",
+              "street_en": "Lubartowska Street",
+              "pattern": "n{1,85} ul. Lubartowska"
+            },
+            {
+              "code": "20-601",
+              "street": "ul. Zana",
+              "street_en": "Zana Street",
+              "pattern": "n{1,41} ul. Zana"
+            },
+            {
+              "code": "20-704",
+              "street": "al. Kraśnicka",
+              "street_en": "Krasnicka Avenue",
+              "pattern": "n{1,108} al. Kraśnicka"
+            },
+            {
+              "code": "20-810",
+              "street": "ul. Filaretów",
+              "street_en": "Filaretow Street",
+              "pattern": "n{1,50} ul. Filaretów"
+            },
+            {
+              "code": "20-950",
+              "street": "ul. Racławicka",
+              "street_en": "Raclawicka Street",
+              "pattern": "n{1,28} ul. Racławicka"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Podkarpackie",
+      "name_en": "Subcarpathian Voivodeship",
+      "region_tags": ["Podkarpackie", "Podkarpacie", "South-Eastern Poland"],
+      "cities": [
+        {
+          "name": "Rzeszów",
+          "name_en": "Rzeszow",
+          "lat": 50.0412,
+          "lon": 21.9991,
+          "postcodes": [
+            {
+              "code": "35-001",
+              "street": "ul. 3 Maja",
+              "street_en": "3 Maja Street",
+              "pattern": "n{1,30} ul. 3 Maja"
+            },
+            {
+              "code": "35-064",
+              "street": "ul. Piłsudskiego",
+              "street_en": "Pilsudskiego Street",
+              "pattern": "n{1,44} ul. Piłsudskiego"
+            },
+            {
+              "code": "35-205",
+              "street": "ul. Krakowska",
+              "street_en": "Krakowska Street",
+              "pattern": "n{1,200} ul. Krakowska"
+            },
+            {
+              "code": "35-310",
+              "street": "ul. Rejtana",
+              "street_en": "Rejtana Street",
+              "pattern": "n{1,80} ul. Rejtana"
+            },
+            {
+              "code": "35-002",
+              "street": "ul. Kościuszki",
+              "street_en": "Kosciuszki Street",
+              "pattern": "n{1,19} ul. Kościuszki"
+            },
+            {
+              "code": "35-073",
+              "street": "ul. Słowackiego",
+              "street_en": "Slowackiego Street",
+              "pattern": "n{1,24} ul. Słowackiego"
+            },
+            {
+              "code": "35-110",
+              "street": "ul. Dąbrowskiego",
+              "street_en": "Dabrowskiego Street",
+              "pattern": "n{1,75} ul. Dąbrowskiego"
+            },
+            {
+              "code": "35-328",
+              "street": "ul. Podkarpacka",
+              "street_en": "Podkarpacka Street",
+              "pattern": "n{1,50} ul. Podkarpacka"
+            },
+            {
+              "code": "35-612",
+              "street": "ul. Kwiatkowskiego",
+              "street_en": "Kwiatkowskiego Street",
+              "pattern": "n{1,60} ul. Kwiatkowskiego"
+            },
+            {
+              "code": "35-959",
+              "street": "al. Powstańców Warszawy",
+              "street_en": "Powstancow Warszawy Avenue",
+              "pattern": "n{1,14} al. Powstańców Warszawy"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Zachodniopomorskie",
+      "name_en": "West Pomeranian Voivodeship",
+      "region_tags": ["Zachodniopomorskie", "Pomorze Zachodnie", "North-Western Poland"],
+      "cities": [
+        {
+          "name": "Szczecin",
+          "name_en": "Szczecin",
+          "lat": 53.4285,
+          "lon": 14.5528,
+          "postcodes": [
+            {
+              "code": "70-001",
+              "street": "al. Wyzwolenia",
+              "street_en": "Wyzwolenia Avenue",
+              "pattern": "n{1,58} al. Wyzwolenia"
+            },
+            {
+              "code": "70-215",
+              "street": "ul. Jagiellońska",
+              "street_en": "Jagiellonska Street",
+              "pattern": "n{1,92} ul. Jagiellońska"
+            },
+            {
+              "code": "70-410",
+              "street": "al. Niepodległości",
+              "street_en": "Niepodleglosci Avenue",
+              "pattern": "n{1,60} al. Niepodległości"
+            },
+            {
+              "code": "70-506",
+              "street": "ul. Bohaterów Warszawy",
+              "street_en": "Bohaterow Warszawy Street",
+              "pattern": "n{1,63} ul. Bohaterów Warszawy"
+            },
+            {
+              "code": "70-632",
+              "street": "ul. Ku Słońcu",
+              "street_en": "Ku Sloncu Street",
+              "pattern": "n{1,80} ul. Ku Słońcu"
+            },
+            {
+              "code": "71-001",
+              "street": "ul. Mickiewicza",
+              "street_en": "Mickiewicza Street",
+              "pattern": "n{1,60} ul. Mickiewicza"
+            },
+            {
+              "code": "71-245",
+              "street": "ul. Wojska Polskiego",
+              "street_en": "Wojska Polskiego Street",
+              "pattern": "n{1,200} ul. Wojska Polskiego"
+            },
+            {
+              "code": "71-515",
+              "street": "ul. Krzywoustego",
+              "street_en": "Krzywoustego Street",
+              "pattern": "n{1,120} ul. Krzywoustego"
+            },
+            {
+              "code": "70-786",
+              "street": "ul. Energetyków",
+              "street_en": "Energetykow Street",
+              "pattern": "n{1,24} ul. Energetyków"
+            },
+            {
+              "code": "71-790",
+              "street": "ul. Welecka",
+              "street_en": "Welecka Street",
+              "pattern": "n{1,50} ul. Welecka"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Podlaskie",
+      "name_en": "Podlaskie Voivodeship",
+      "region_tags": ["Podlaskie", "Podlasie", "North-Eastern Poland"],
+      "cities": [
+        {
+          "name": "Białystok",
+          "name_en": "Bialystok",
+          "lat": 53.1325,
+          "lon": 23.1688,
+          "postcodes": [
+            {
+              "code": "15-001",
+              "street": "ul. Lipowa",
+              "street_en": "Lipowa Street",
+              "pattern": "n{1,75} ul. Lipowa"
+            },
+            {
+              "code": "15-062",
+              "street": "ul. Sienkiewicza",
+              "street_en": "Sienkiewicza Street",
+              "pattern": "n{1,30} ul. Sienkiewicza"
+            },
+            {
+              "code": "15-281",
+              "street": "ul. Branickiego",
+              "street_en": "Branickiego Street",
+              "pattern": "n{1,24} ul. Branickiego"
+            },
+            {
+              "code": "15-328",
+              "street": "ul. Poleska",
+              "street_en": "Poleska Street",
+              "pattern": "n{1,89} ul. Poleska"
+            },
+            {
+              "code": "15-403",
+              "street": "ul. Legionowa",
+              "street_en": "Legionowa Street",
+              "pattern": "n{1,14} ul. Legionowa"
+            },
+            {
+              "code": "15-660",
+              "street": "ul. Żurawia",
+              "street_en": "Zurawia Street",
+              "pattern": "n{1,20} ul. Żurawia"
+            },
+            {
+              "code": "15-741",
+              "street": "ul. Wyszyńskiego",
+              "street_en": "Wyszynskiego Street",
+              "pattern": "n{1,2} ul. Wyszyńskiego"
+            },
+            {
+              "code": "15-089",
+              "street": "ul. Malmeda",
+              "street_en": "Malmeda Street",
+              "pattern": "n{1,15} ul. Malmeda"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Warmińsko-Mazurskie",
+      "name_en": "Warmian-Masurian Voivodeship",
+      "region_tags": ["Warmińsko-Mazurskie", "Warmia", "Mazury"],
+      "cities": [
+        {
+          "name": "Olsztyn",
+          "name_en": "Olsztyn",
+          "lat": 53.7784,
+          "lon": 20.4801,
+          "postcodes": [
+            {
+              "code": "10-001",
+              "street": "ul. Staromiejska",
+              "street_en": "Staromiejska Street",
+              "pattern": "n{1,18} ul. Staromiejska"
+            },
+            {
+              "code": "10-101",
+              "street": "al. Piłsudskiego",
+              "street_en": "Pilsudskiego Avenue",
+              "pattern": "n{1,74} al. Piłsudskiego"
+            },
+            {
+              "code": "10-228",
+              "street": "ul. Kętrzyńskiego",
+              "street_en": "Ketrzynskiego Street",
+              "pattern": "n{1,24} ul. Kętrzyńskiego"
+            },
+            {
+              "code": "10-405",
+              "street": "ul. Lubelska",
+              "street_en": "Lubelska Street",
+              "pattern": "n{1,50} ul. Lubelska"
+            },
+            {
+              "code": "10-540",
+              "street": "ul. Bałtycka",
+              "street_en": "Baltycka Street",
+              "pattern": "n{1,110} ul. Bałtycka"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kujawsko-Pomorskie",
+      "name_en": "Kuyavian-Pomeranian Voivodeship",
+      "region_tags": ["Kujawsko-Pomorskie", "Kujawy", "Pomorze"],
+      "cities": [
+        {
+          "name": "Bydgoszcz",
+          "name_en": "Bydgoszcz",
+          "lat": 53.1235,
+          "lon": 18.0084,
+          "postcodes": [
+            {
+              "code": "85-001",
+              "street": "ul. Dworcowa",
+              "street_en": "Dworcowa Street",
+              "pattern": "n{1,100} ul. Dworcowa"
+            },
+            {
+              "code": "85-064",
+              "street": "ul. Gdańska",
+              "street_en": "Gdanska Street",
+              "pattern": "n{1,170} ul. Gdańska"
+            },
+            {
+              "code": "85-201",
+              "street": "ul. Nakielska",
+              "street_en": "Nakielska Street",
+              "pattern": "n{1,260} ul. Nakielska"
+            },
+            {
+              "code": "85-326",
+              "street": "ul. Fordońska",
+              "street_en": "Fordonska Street",
+              "pattern": "n{1,440} ul. Fordońska"
+            },
+            {
+              "code": "85-601",
+              "street": "ul. Jagiellońska",
+              "street_en": "Jagiellonska Street",
+              "pattern": "n{1,75} ul. Jagiellońska"
+            }
+          ]
+        },
+        {
+          "name": "Toruń",
+          "name_en": "Torun",
+          "lat": 53.0138,
+          "lon": 18.5984,
+          "postcodes": [
+            {
+              "code": "87-100",
+              "street": "ul. Szeroka",
+              "street_en": "Szeroka Street",
+              "pattern": "n{1,46} ul. Szeroka"
+            },
+            {
+              "code": "87-109",
+              "street": "ul. Grudziądzka",
+              "street_en": "Grudziadzka Street",
+              "pattern": "n{1,200} ul. Grudziądzka"
+            },
+            {
+              "code": "87-116",
+              "street": "ul. Szosa Chełmińska",
+              "street_en": "Szosa Chelminska Street",
+              "pattern": "n{1,210} ul. Szosa Chełmińska"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Świętokrzyskie",
+      "name_en": "Holy Cross Voivodeship",
+      "region_tags": ["Świętokrzyskie", "Central Poland"],
+      "cities": [
+        {
+          "name": "Kielce",
+          "name_en": "Kielce",
+          "lat": 50.8661,
+          "lon": 20.6286,
+          "postcodes": [
+            {
+              "code": "25-001",
+              "street": "ul. Sienkiewicza",
+              "street_en": "Sienkiewicza Street",
+              "pattern": "n{1,80} ul. Sienkiewicza"
+            },
+            {
+              "code": "25-035",
+              "street": "ul. Żelazna",
+              "street_en": "Zelazna Street",
+              "pattern": "n{1,40} ul. Żelazna"
+            },
+            {
+              "code": "25-312",
+              "street": "ul. Krakowska",
+              "street_en": "Krakowska Street",
+              "pattern": "n{1,200} ul. Krakowska"
+            },
+            {
+              "code": "25-501",
+              "street": "al. IX Wieków Kielc",
+              "street_en": "IX Wiekow Kielc Avenue",
+              "pattern": "n{1,10} al. IX Wieków Kielc"
+            },
+            {
+              "code": "25-659",
+              "street": "ul. Warszawska",
+              "street_en": "Warszawska Street",
+              "pattern": "n{1,430} ul. Warszawska"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Lubuskie",
+      "name_en": "Lubusz Voivodeship",
+      "region_tags": ["Lubuskie", "Ziemia Lubuska", "Western Poland"],
+      "cities": [
+        {
+          "name": "Zielona Góra",
+          "name_en": "Zielona Gora",
+          "lat": 51.9356,
+          "lon": 15.5062,
+          "postcodes": [
+            {
+              "code": "65-001",
+              "street": "ul. Żeromskiego",
+              "street_en": "Zeromskiego Street",
+              "pattern": "n{1,14} ul. Żeromskiego"
+            },
+            {
+              "code": "65-075",
+              "street": "ul. Kupiecka",
+              "street_en": "Kupiecka Street",
+              "pattern": "n{1,36} ul. Kupiecka"
+            },
+            {
+              "code": "65-220",
+              "street": "ul. Wrocławska",
+              "street_en": "Wroclawska Street",
+              "pattern": "n{1,60} ul. Wrocławska"
+            },
+            {
+              "code": "65-410",
+              "street": "ul. Poznańska",
+              "street_en": "Poznanska Street",
+              "pattern": "n{1,42} ul. Poznańska"
+            },
+            {
+              "code": "65-552",
+              "street": "al. Zjednoczenia",
+              "street_en": "Zjednoczenia Avenue",
+              "pattern": "n{1,120} al. Zjednoczenia"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Opolskie",
+      "name_en": "Opole Voivodeship",
+      "region_tags": ["Opolskie", "Śląsk Opolski", "Upper Silesia"],
+      "cities": [
+        {
+          "name": "Opole",
+          "name_en": "Opole",
+          "lat": 50.6751,
+          "lon": 17.9213,
+          "postcodes": [
+            {
+              "code": "45-001",
+              "street": "ul. Krakowska",
+              "street_en": "Krakowska Street",
+              "pattern": "n{1,100} ul. Krakowska"
+            },
+            {
+              "code": "45-064",
+              "street": "ul. Ozimska",
+              "street_en": "Ozimska Street",
+              "pattern": "n{1,215} ul. Ozimska"
+            },
+            {
+              "code": "45-265",
+              "street": "ul. Niemodlińska",
+              "street_en": "Niemodlinska Street",
+              "pattern": "n{1,94} ul. Niemodlińska"
+            },
+            {
+              "code": "45-370",
+              "street": "ul. Wrocławska",
+              "street_en": "Wroclawska Street",
+              "pattern": "n{1,195} ul. Wrocławska"
+            },
+            {
+              "code": "45-512",
+              "street": "ul. Oleska",
+              "street_en": "Oleska Street",
+              "pattern": "n{1,125} ul. Oleska"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
