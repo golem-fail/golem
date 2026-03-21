@@ -1,0 +1,1178 @@
+{
+  "country": {
+    "name": "United States",
+    "name_en": "United States",
+    "iso_code": "US",
+    "phone_prefix": "+1",
+    "phone_formats": ["+1-###-###-####"],
+    "postcode_format": "#####",
+    "name_order": "given_first"
+  },
+  "states": [
+    {
+      "name": "Connecticut",
+      "name_en": "Connecticut",
+      "region_tags": ["Northeast", "New England"],
+      "cities": [
+        {
+          "name": "Hartford",
+          "name_en": "Hartford",
+          "lat": 41.7658,
+          "lon": -72.6734,
+          "postcodes": [
+            { "code": "06103", "street": "Main Street", "street_en": "Main Street", "pattern": "n{1,500} Main Street" },
+            { "code": "06105", "street": "Asylum Avenue", "street_en": "Asylum Avenue", "pattern": "n{1,400} Asylum Avenue" }
+          ]
+        },
+        {
+          "name": "New Haven",
+          "name_en": "New Haven",
+          "lat": 41.3083,
+          "lon": -72.9279,
+          "postcodes": [
+            { "code": "06510", "street": "Chapel Street", "street_en": "Chapel Street", "pattern": "n{1,400} Chapel Street" },
+            { "code": "06511", "street": "Whitney Avenue", "street_en": "Whitney Avenue", "pattern": "n{1,350} Whitney Avenue" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Maine",
+      "name_en": "Maine",
+      "region_tags": ["Northeast", "New England"],
+      "cities": [
+        {
+          "name": "Portland",
+          "name_en": "Portland",
+          "lat": 43.6591,
+          "lon": -70.2568,
+          "postcodes": [
+            { "code": "04101", "street": "Congress Street", "street_en": "Congress Street", "pattern": "n{1,500} Congress Street" },
+            { "code": "04102", "street": "Forest Avenue", "street_en": "Forest Avenue", "pattern": "n{1,400} Forest Avenue" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Massachusetts",
+      "name_en": "Massachusetts",
+      "region_tags": ["Northeast", "New England"],
+      "cities": [
+        {
+          "name": "Boston",
+          "name_en": "Boston",
+          "lat": 42.3601,
+          "lon": -71.0589,
+          "postcodes": [
+            { "code": "02101", "street": "Beacon Street", "street_en": "Beacon Street", "pattern": "n{1,400} Beacon Street" },
+            { "code": "02108", "street": "Tremont Street", "street_en": "Tremont Street", "pattern": "n{1,350} Tremont Street" },
+            { "code": "02110", "street": "State Street", "street_en": "State Street", "pattern": "n{1,300} State Street" }
+          ]
+        },
+        {
+          "name": "Cambridge",
+          "name_en": "Cambridge",
+          "lat": 42.3736,
+          "lon": -71.1097,
+          "postcodes": [
+            { "code": "02138", "street": "Massachusetts Avenue", "street_en": "Massachusetts Avenue", "pattern": "n{1,500} Massachusetts Avenue" },
+            { "code": "02139", "street": "Broadway", "street_en": "Broadway", "pattern": "n{1,400} Broadway" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "New Hampshire",
+      "name_en": "New Hampshire",
+      "region_tags": ["Northeast", "New England"],
+      "cities": [
+        {
+          "name": "Manchester",
+          "name_en": "Manchester",
+          "lat": 42.9956,
+          "lon": -71.4548,
+          "postcodes": [
+            { "code": "03101", "street": "Elm Street", "street_en": "Elm Street", "pattern": "n{1,500} Elm Street" },
+            { "code": "03102", "street": "Hanover Street", "street_en": "Hanover Street", "pattern": "n{1,350} Hanover Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "New Jersey",
+      "name_en": "New Jersey",
+      "region_tags": ["Northeast", "Mid-Atlantic"],
+      "cities": [
+        {
+          "name": "Newark",
+          "name_en": "Newark",
+          "lat": 40.7357,
+          "lon": -74.1724,
+          "postcodes": [
+            { "code": "07102", "street": "Broad Street", "street_en": "Broad Street", "pattern": "n{1,500} Broad Street" },
+            { "code": "07103", "street": "Market Street", "street_en": "Market Street", "pattern": "n{1,400} Market Street" }
+          ]
+        },
+        {
+          "name": "Jersey City",
+          "name_en": "Jersey City",
+          "lat": 40.7178,
+          "lon": -74.0431,
+          "postcodes": [
+            { "code": "07302", "street": "Grove Street", "street_en": "Grove Street", "pattern": "n{1,400} Grove Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "New York",
+      "name_en": "New York",
+      "region_tags": ["Northeast", "Mid-Atlantic"],
+      "cities": [
+        {
+          "name": "New York City",
+          "name_en": "New York City",
+          "lat": 40.7128,
+          "lon": -74.0060,
+          "postcodes": [
+            { "code": "10001", "street": "Broadway", "street_en": "Broadway", "pattern": "n{1,500} Broadway" },
+            { "code": "10002", "street": "Delancey Street", "street_en": "Delancey Street", "pattern": "n{1,300} Delancey Street" },
+            { "code": "10003", "street": "3rd Avenue", "street_en": "3rd Avenue", "pattern": "n{1,400} 3rd Avenue" },
+            { "code": "10010", "street": "Park Avenue South", "street_en": "Park Avenue South", "pattern": "n{1,500} Park Avenue South" },
+            { "code": "10016", "street": "Madison Avenue", "street_en": "Madison Avenue", "pattern": "n{1,500} Madison Avenue" },
+            { "code": "10019", "street": "5th Avenue", "street_en": "5th Avenue", "pattern": "n{1,500} 5th Avenue" },
+            { "code": "10022", "street": "Park Avenue", "street_en": "Park Avenue", "pattern": "n{1,500} Park Avenue" },
+            { "code": "10036", "street": "Times Square", "street_en": "Times Square", "pattern": "n{1,200} Times Square" },
+            { "code": "10128", "street": "Lexington Avenue", "street_en": "Lexington Avenue", "pattern": "n{1,500} Lexington Avenue" },
+            { "code": "10013", "street": "Canal Street", "street_en": "Canal Street", "pattern": "n{1,400} Canal Street" }
+          ]
+        },
+        {
+          "name": "Buffalo",
+          "name_en": "Buffalo",
+          "lat": 42.8864,
+          "lon": -78.8784,
+          "postcodes": [
+            { "code": "14201", "street": "Delaware Avenue", "street_en": "Delaware Avenue", "pattern": "n{1,500} Delaware Avenue" },
+            { "code": "14202", "street": "Main Street", "street_en": "Main Street", "pattern": "n{1,400} Main Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Pennsylvania",
+      "name_en": "Pennsylvania",
+      "region_tags": ["Northeast", "Mid-Atlantic"],
+      "cities": [
+        {
+          "name": "Philadelphia",
+          "name_en": "Philadelphia",
+          "lat": 39.9526,
+          "lon": -75.1652,
+          "postcodes": [
+            { "code": "19101", "street": "Market Street", "street_en": "Market Street", "pattern": "n{1,500} Market Street" },
+            { "code": "19102", "street": "Chestnut Street", "street_en": "Chestnut Street", "pattern": "n{1,400} Chestnut Street" },
+            { "code": "19103", "street": "Walnut Street", "street_en": "Walnut Street", "pattern": "n{1,400} Walnut Street" },
+            { "code": "19104", "street": "Spruce Street", "street_en": "Spruce Street", "pattern": "n{1,350} Spruce Street" }
+          ]
+        },
+        {
+          "name": "Pittsburgh",
+          "name_en": "Pittsburgh",
+          "lat": 40.4406,
+          "lon": -79.9959,
+          "postcodes": [
+            { "code": "15201", "street": "Butler Street", "street_en": "Butler Street", "pattern": "n{1,400} Butler Street" },
+            { "code": "15213", "street": "Forbes Avenue", "street_en": "Forbes Avenue", "pattern": "n{1,500} Forbes Avenue" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Rhode Island",
+      "name_en": "Rhode Island",
+      "region_tags": ["Northeast", "New England"],
+      "cities": [
+        {
+          "name": "Providence",
+          "name_en": "Providence",
+          "lat": 41.8240,
+          "lon": -71.4128,
+          "postcodes": [
+            { "code": "02901", "street": "Westminster Street", "street_en": "Westminster Street", "pattern": "n{1,400} Westminster Street" },
+            { "code": "02903", "street": "Weybosset Street", "street_en": "Weybosset Street", "pattern": "n{1,300} Weybosset Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Vermont",
+      "name_en": "Vermont",
+      "region_tags": ["Northeast", "New England"],
+      "cities": [
+        {
+          "name": "Burlington",
+          "name_en": "Burlington",
+          "lat": 44.4759,
+          "lon": -73.2121,
+          "postcodes": [
+            { "code": "05401", "street": "Church Street", "street_en": "Church Street", "pattern": "n{1,300} Church Street" },
+            { "code": "05402", "street": "Main Street", "street_en": "Main Street", "pattern": "n{1,350} Main Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Alabama",
+      "name_en": "Alabama",
+      "region_tags": ["Southeast", "Deep South"],
+      "cities": [
+        {
+          "name": "Birmingham",
+          "name_en": "Birmingham",
+          "lat": 33.5207,
+          "lon": -86.8025,
+          "postcodes": [
+            { "code": "35203", "street": "20th Street North", "street_en": "20th Street North", "pattern": "n{1,400} 20th Street North" },
+            { "code": "35205", "street": "Highland Avenue", "street_en": "Highland Avenue", "pattern": "n{1,350} Highland Avenue" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Arkansas",
+      "name_en": "Arkansas",
+      "region_tags": ["Southeast", "South Central"],
+      "cities": [
+        {
+          "name": "Little Rock",
+          "name_en": "Little Rock",
+          "lat": 34.7465,
+          "lon": -92.2896,
+          "postcodes": [
+            { "code": "72201", "street": "Main Street", "street_en": "Main Street", "pattern": "n{1,500} Main Street" },
+            { "code": "72202", "street": "Broadway Street", "street_en": "Broadway Street", "pattern": "n{1,400} Broadway Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Delaware",
+      "name_en": "Delaware",
+      "region_tags": ["Southeast", "Mid-Atlantic"],
+      "cities": [
+        {
+          "name": "Wilmington",
+          "name_en": "Wilmington",
+          "lat": 39.7391,
+          "lon": -75.5398,
+          "postcodes": [
+            { "code": "19801", "street": "Market Street", "street_en": "Market Street", "pattern": "n{1,400} Market Street" },
+            { "code": "19802", "street": "North Market Street", "street_en": "North Market Street", "pattern": "n{1,350} North Market Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Florida",
+      "name_en": "Florida",
+      "region_tags": ["Southeast", "Sun Belt"],
+      "cities": [
+        {
+          "name": "Miami",
+          "name_en": "Miami",
+          "lat": 25.7617,
+          "lon": -80.1918,
+          "postcodes": [
+            { "code": "33101", "street": "Biscayne Boulevard", "street_en": "Biscayne Boulevard", "pattern": "n{1,500} Biscayne Boulevard" },
+            { "code": "33125", "street": "Flagler Street", "street_en": "Flagler Street", "pattern": "n{1,400} Flagler Street" },
+            { "code": "33130", "street": "Brickell Avenue", "street_en": "Brickell Avenue", "pattern": "n{1,400} Brickell Avenue" }
+          ]
+        },
+        {
+          "name": "Orlando",
+          "name_en": "Orlando",
+          "lat": 28.5383,
+          "lon": -81.3792,
+          "postcodes": [
+            { "code": "32801", "street": "Orange Avenue", "street_en": "Orange Avenue", "pattern": "n{1,500} Orange Avenue" },
+            { "code": "32803", "street": "Colonial Drive", "street_en": "Colonial Drive", "pattern": "n{1,400} Colonial Drive" }
+          ]
+        },
+        {
+          "name": "Tampa",
+          "name_en": "Tampa",
+          "lat": 27.9506,
+          "lon": -82.4572,
+          "postcodes": [
+            { "code": "33601", "street": "Kennedy Boulevard", "street_en": "Kennedy Boulevard", "pattern": "n{1,500} Kennedy Boulevard" },
+            { "code": "33602", "street": "Franklin Street", "street_en": "Franklin Street", "pattern": "n{1,400} Franklin Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Georgia",
+      "name_en": "Georgia",
+      "region_tags": ["Southeast", "Deep South"],
+      "cities": [
+        {
+          "name": "Atlanta",
+          "name_en": "Atlanta",
+          "lat": 33.7490,
+          "lon": -84.3880,
+          "postcodes": [
+            { "code": "30301", "street": "Peachtree Street", "street_en": "Peachtree Street", "pattern": "n{1,500} Peachtree Street" },
+            { "code": "30303", "street": "Marietta Street", "street_en": "Marietta Street", "pattern": "n{1,400} Marietta Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kentucky",
+      "name_en": "Kentucky",
+      "region_tags": ["Southeast", "Upper South"],
+      "cities": [
+        {
+          "name": "Louisville",
+          "name_en": "Louisville",
+          "lat": 38.2527,
+          "lon": -85.7585,
+          "postcodes": [
+            { "code": "40202", "street": "Main Street", "street_en": "Main Street", "pattern": "n{1,500} Main Street" },
+            { "code": "40203", "street": "Bardstown Road", "street_en": "Bardstown Road", "pattern": "n{1,400} Bardstown Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Louisiana",
+      "name_en": "Louisiana",
+      "region_tags": ["Southeast", "Gulf Coast"],
+      "cities": [
+        {
+          "name": "New Orleans",
+          "name_en": "New Orleans",
+          "lat": 29.9511,
+          "lon": -90.0715,
+          "postcodes": [
+            { "code": "70112", "street": "Canal Street", "street_en": "Canal Street", "pattern": "n{1,500} Canal Street" },
+            { "code": "70116", "street": "Royal Street", "street_en": "Royal Street", "pattern": "n{1,400} Royal Street" },
+            { "code": "70130", "street": "Magazine Street", "street_en": "Magazine Street", "pattern": "n{1,500} Magazine Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Maryland",
+      "name_en": "Maryland",
+      "region_tags": ["Southeast", "Mid-Atlantic"],
+      "cities": [
+        {
+          "name": "Baltimore",
+          "name_en": "Baltimore",
+          "lat": 39.2904,
+          "lon": -76.6122,
+          "postcodes": [
+            { "code": "21201", "street": "Charles Street", "street_en": "Charles Street", "pattern": "n{1,500} Charles Street" },
+            { "code": "21202", "street": "Pratt Street", "street_en": "Pratt Street", "pattern": "n{1,400} Pratt Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Mississippi",
+      "name_en": "Mississippi",
+      "region_tags": ["Southeast", "Deep South"],
+      "cities": [
+        {
+          "name": "Jackson",
+          "name_en": "Jackson",
+          "lat": 32.2988,
+          "lon": -90.1848,
+          "postcodes": [
+            { "code": "39201", "street": "Capitol Street", "street_en": "Capitol Street", "pattern": "n{1,400} Capitol Street" },
+            { "code": "39202", "street": "State Street", "street_en": "State Street", "pattern": "n{1,350} State Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "North Carolina",
+      "name_en": "North Carolina",
+      "region_tags": ["Southeast", "South Atlantic"],
+      "cities": [
+        {
+          "name": "Charlotte",
+          "name_en": "Charlotte",
+          "lat": 35.2271,
+          "lon": -80.8431,
+          "postcodes": [
+            { "code": "28202", "street": "Tryon Street", "street_en": "Tryon Street", "pattern": "n{1,500} Tryon Street" },
+            { "code": "28203", "street": "South Boulevard", "street_en": "South Boulevard", "pattern": "n{1,400} South Boulevard" }
+          ]
+        },
+        {
+          "name": "Raleigh",
+          "name_en": "Raleigh",
+          "lat": 35.7796,
+          "lon": -78.6382,
+          "postcodes": [
+            { "code": "27601", "street": "Fayetteville Street", "street_en": "Fayetteville Street", "pattern": "n{1,400} Fayetteville Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "South Carolina",
+      "name_en": "South Carolina",
+      "region_tags": ["Southeast", "South Atlantic"],
+      "cities": [
+        {
+          "name": "Charleston",
+          "name_en": "Charleston",
+          "lat": 32.7765,
+          "lon": -79.9311,
+          "postcodes": [
+            { "code": "29401", "street": "King Street", "street_en": "King Street", "pattern": "n{1,500} King Street" },
+            { "code": "29403", "street": "Meeting Street", "street_en": "Meeting Street", "pattern": "n{1,400} Meeting Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tennessee",
+      "name_en": "Tennessee",
+      "region_tags": ["Southeast", "Upper South"],
+      "cities": [
+        {
+          "name": "Nashville",
+          "name_en": "Nashville",
+          "lat": 36.1627,
+          "lon": -86.7816,
+          "postcodes": [
+            { "code": "37201", "street": "Broadway", "street_en": "Broadway", "pattern": "n{1,500} Broadway" },
+            { "code": "37203", "street": "West End Avenue", "street_en": "West End Avenue", "pattern": "n{1,400} West End Avenue" }
+          ]
+        },
+        {
+          "name": "Memphis",
+          "name_en": "Memphis",
+          "lat": 35.1495,
+          "lon": -90.0490,
+          "postcodes": [
+            { "code": "38103", "street": "Beale Street", "street_en": "Beale Street", "pattern": "n{1,400} Beale Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Virginia",
+      "name_en": "Virginia",
+      "region_tags": ["Southeast", "South Atlantic"],
+      "cities": [
+        {
+          "name": "Richmond",
+          "name_en": "Richmond",
+          "lat": 37.5407,
+          "lon": -77.4360,
+          "postcodes": [
+            { "code": "23219", "street": "Broad Street", "street_en": "Broad Street", "pattern": "n{1,500} Broad Street" },
+            { "code": "23220", "street": "Cary Street", "street_en": "Cary Street", "pattern": "n{1,400} Cary Street" }
+          ]
+        },
+        {
+          "name": "Virginia Beach",
+          "name_en": "Virginia Beach",
+          "lat": 36.8529,
+          "lon": -75.9780,
+          "postcodes": [
+            { "code": "23451", "street": "Atlantic Avenue", "street_en": "Atlantic Avenue", "pattern": "n{1,400} Atlantic Avenue" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "West Virginia",
+      "name_en": "West Virginia",
+      "region_tags": ["Southeast", "Appalachia"],
+      "cities": [
+        {
+          "name": "Charleston",
+          "name_en": "Charleston",
+          "lat": 38.3498,
+          "lon": -81.6326,
+          "postcodes": [
+            { "code": "25301", "street": "Capitol Street", "street_en": "Capitol Street", "pattern": "n{1,400} Capitol Street" },
+            { "code": "25302", "street": "Kanawha Boulevard", "street_en": "Kanawha Boulevard", "pattern": "n{1,350} Kanawha Boulevard" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Illinois",
+      "name_en": "Illinois",
+      "region_tags": ["Midwest", "Great Lakes"],
+      "cities": [
+        {
+          "name": "Chicago",
+          "name_en": "Chicago",
+          "lat": 41.8781,
+          "lon": -87.6298,
+          "postcodes": [
+            { "code": "60601", "street": "Michigan Avenue", "street_en": "Michigan Avenue", "pattern": "n{1,500} Michigan Avenue" },
+            { "code": "60602", "street": "State Street", "street_en": "State Street", "pattern": "n{1,500} State Street" },
+            { "code": "60603", "street": "Wabash Avenue", "street_en": "Wabash Avenue", "pattern": "n{1,400} Wabash Avenue" },
+            { "code": "60604", "street": "LaSalle Street", "street_en": "LaSalle Street", "pattern": "n{1,400} LaSalle Street" },
+            { "code": "60605", "street": "Clark Street", "street_en": "Clark Street", "pattern": "n{1,500} Clark Street" },
+            { "code": "60606", "street": "Jackson Boulevard", "street_en": "Jackson Boulevard", "pattern": "n{1,400} Jackson Boulevard" },
+            { "code": "60607", "street": "Halsted Street", "street_en": "Halsted Street", "pattern": "n{1,400} Halsted Street" },
+            { "code": "60611", "street": "North Michigan Avenue", "street_en": "North Michigan Avenue", "pattern": "n{1,500} North Michigan Avenue" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Indiana",
+      "name_en": "Indiana",
+      "region_tags": ["Midwest", "Great Lakes"],
+      "cities": [
+        {
+          "name": "Indianapolis",
+          "name_en": "Indianapolis",
+          "lat": 39.7684,
+          "lon": -86.1581,
+          "postcodes": [
+            { "code": "46202", "street": "Meridian Street", "street_en": "Meridian Street", "pattern": "n{1,500} Meridian Street" },
+            { "code": "46204", "street": "Pennsylvania Street", "street_en": "Pennsylvania Street", "pattern": "n{1,400} Pennsylvania Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Iowa",
+      "name_en": "Iowa",
+      "region_tags": ["Midwest", "Great Plains"],
+      "cities": [
+        {
+          "name": "Des Moines",
+          "name_en": "Des Moines",
+          "lat": 41.5868,
+          "lon": -93.6250,
+          "postcodes": [
+            { "code": "50309", "street": "Grand Avenue", "street_en": "Grand Avenue", "pattern": "n{1,500} Grand Avenue" },
+            { "code": "50310", "street": "Ingersoll Avenue", "street_en": "Ingersoll Avenue", "pattern": "n{1,400} Ingersoll Avenue" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kansas",
+      "name_en": "Kansas",
+      "region_tags": ["Midwest", "Great Plains"],
+      "cities": [
+        {
+          "name": "Wichita",
+          "name_en": "Wichita",
+          "lat": 37.6872,
+          "lon": -97.3301,
+          "postcodes": [
+            { "code": "67202", "street": "Douglas Avenue", "street_en": "Douglas Avenue", "pattern": "n{1,500} Douglas Avenue" },
+            { "code": "67203", "street": "Central Avenue", "street_en": "Central Avenue", "pattern": "n{1,400} Central Avenue" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Michigan",
+      "name_en": "Michigan",
+      "region_tags": ["Midwest", "Great Lakes"],
+      "cities": [
+        {
+          "name": "Detroit",
+          "name_en": "Detroit",
+          "lat": 42.3314,
+          "lon": -83.0458,
+          "postcodes": [
+            { "code": "48201", "street": "Woodward Avenue", "street_en": "Woodward Avenue", "pattern": "n{1,500} Woodward Avenue" },
+            { "code": "48202", "street": "Cass Avenue", "street_en": "Cass Avenue", "pattern": "n{1,400} Cass Avenue" },
+            { "code": "48226", "street": "Michigan Avenue", "street_en": "Michigan Avenue", "pattern": "n{1,400} Michigan Avenue" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Minnesota",
+      "name_en": "Minnesota",
+      "region_tags": ["Midwest", "Upper Midwest"],
+      "cities": [
+        {
+          "name": "Minneapolis",
+          "name_en": "Minneapolis",
+          "lat": 44.9778,
+          "lon": -93.2650,
+          "postcodes": [
+            { "code": "55401", "street": "Hennepin Avenue", "street_en": "Hennepin Avenue", "pattern": "n{1,500} Hennepin Avenue" },
+            { "code": "55402", "street": "Nicollet Mall", "street_en": "Nicollet Mall", "pattern": "n{1,300} Nicollet Mall" }
+          ]
+        },
+        {
+          "name": "Saint Paul",
+          "name_en": "Saint Paul",
+          "lat": 44.9537,
+          "lon": -93.0900,
+          "postcodes": [
+            { "code": "55101", "street": "Robert Street", "street_en": "Robert Street", "pattern": "n{1,400} Robert Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Missouri",
+      "name_en": "Missouri",
+      "region_tags": ["Midwest", "Great Plains"],
+      "cities": [
+        {
+          "name": "Kansas City",
+          "name_en": "Kansas City",
+          "lat": 39.0997,
+          "lon": -94.5786,
+          "postcodes": [
+            { "code": "64105", "street": "Grand Boulevard", "street_en": "Grand Boulevard", "pattern": "n{1,500} Grand Boulevard" },
+            { "code": "64106", "street": "Main Street", "street_en": "Main Street", "pattern": "n{1,500} Main Street" }
+          ]
+        },
+        {
+          "name": "Saint Louis",
+          "name_en": "Saint Louis",
+          "lat": 38.6270,
+          "lon": -90.1994,
+          "postcodes": [
+            { "code": "63101", "street": "Washington Avenue", "street_en": "Washington Avenue", "pattern": "n{1,400} Washington Avenue" },
+            { "code": "63102", "street": "Market Street", "street_en": "Market Street", "pattern": "n{1,400} Market Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Nebraska",
+      "name_en": "Nebraska",
+      "region_tags": ["Midwest", "Great Plains"],
+      "cities": [
+        {
+          "name": "Omaha",
+          "name_en": "Omaha",
+          "lat": 41.2565,
+          "lon": -95.9345,
+          "postcodes": [
+            { "code": "68102", "street": "Dodge Street", "street_en": "Dodge Street", "pattern": "n{1,500} Dodge Street" },
+            { "code": "68104", "street": "Farnam Street", "street_en": "Farnam Street", "pattern": "n{1,400} Farnam Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "North Dakota",
+      "name_en": "North Dakota",
+      "region_tags": ["Midwest", "Great Plains"],
+      "cities": [
+        {
+          "name": "Fargo",
+          "name_en": "Fargo",
+          "lat": 46.8772,
+          "lon": -96.7898,
+          "postcodes": [
+            { "code": "58102", "street": "Broadway North", "street_en": "Broadway North", "pattern": "n{1,400} Broadway North" },
+            { "code": "58103", "street": "13th Avenue South", "street_en": "13th Avenue South", "pattern": "n{1,350} 13th Avenue South" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ohio",
+      "name_en": "Ohio",
+      "region_tags": ["Midwest", "Great Lakes"],
+      "cities": [
+        {
+          "name": "Columbus",
+          "name_en": "Columbus",
+          "lat": 39.9612,
+          "lon": -82.9988,
+          "postcodes": [
+            { "code": "43215", "street": "High Street", "street_en": "High Street", "pattern": "n{1,500} High Street" },
+            { "code": "43201", "street": "North High Street", "street_en": "North High Street", "pattern": "n{1,500} North High Street" }
+          ]
+        },
+        {
+          "name": "Cleveland",
+          "name_en": "Cleveland",
+          "lat": 41.4993,
+          "lon": -81.6944,
+          "postcodes": [
+            { "code": "44113", "street": "West 25th Street", "street_en": "West 25th Street", "pattern": "n{1,400} West 25th Street" },
+            { "code": "44114", "street": "Euclid Avenue", "street_en": "Euclid Avenue", "pattern": "n{1,500} Euclid Avenue" }
+          ]
+        },
+        {
+          "name": "Cincinnati",
+          "name_en": "Cincinnati",
+          "lat": 39.1031,
+          "lon": -84.5120,
+          "postcodes": [
+            { "code": "45202", "street": "Vine Street", "street_en": "Vine Street", "pattern": "n{1,400} Vine Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "South Dakota",
+      "name_en": "South Dakota",
+      "region_tags": ["Midwest", "Great Plains"],
+      "cities": [
+        {
+          "name": "Sioux Falls",
+          "name_en": "Sioux Falls",
+          "lat": 43.5446,
+          "lon": -96.7311,
+          "postcodes": [
+            { "code": "57104", "street": "Phillips Avenue", "street_en": "Phillips Avenue", "pattern": "n{1,400} Phillips Avenue" },
+            { "code": "57105", "street": "Minnesota Avenue", "street_en": "Minnesota Avenue", "pattern": "n{1,350} Minnesota Avenue" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Wisconsin",
+      "name_en": "Wisconsin",
+      "region_tags": ["Midwest", "Great Lakes"],
+      "cities": [
+        {
+          "name": "Milwaukee",
+          "name_en": "Milwaukee",
+          "lat": 43.0389,
+          "lon": -87.9065,
+          "postcodes": [
+            { "code": "53202", "street": "Water Street", "street_en": "Water Street", "pattern": "n{1,400} Water Street" },
+            { "code": "53203", "street": "Wisconsin Avenue", "street_en": "Wisconsin Avenue", "pattern": "n{1,500} Wisconsin Avenue" }
+          ]
+        },
+        {
+          "name": "Madison",
+          "name_en": "Madison",
+          "lat": 43.0731,
+          "lon": -89.4012,
+          "postcodes": [
+            { "code": "53703", "street": "State Street", "street_en": "State Street", "pattern": "n{1,400} State Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Arizona",
+      "name_en": "Arizona",
+      "region_tags": ["Southwest", "Sun Belt"],
+      "cities": [
+        {
+          "name": "Phoenix",
+          "name_en": "Phoenix",
+          "lat": 33.4484,
+          "lon": -112.0740,
+          "postcodes": [
+            { "code": "85001", "street": "Central Avenue", "street_en": "Central Avenue", "pattern": "n{1,500} Central Avenue" },
+            { "code": "85003", "street": "Van Buren Street", "street_en": "Van Buren Street", "pattern": "n{1,400} Van Buren Street" },
+            { "code": "85004", "street": "Washington Street", "street_en": "Washington Street", "pattern": "n{1,500} Washington Street" }
+          ]
+        },
+        {
+          "name": "Tucson",
+          "name_en": "Tucson",
+          "lat": 32.2226,
+          "lon": -110.9747,
+          "postcodes": [
+            { "code": "85701", "street": "Congress Street", "street_en": "Congress Street", "pattern": "n{1,400} Congress Street" },
+            { "code": "85705", "street": "Oracle Road", "street_en": "Oracle Road", "pattern": "n{1,500} Oracle Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "New Mexico",
+      "name_en": "New Mexico",
+      "region_tags": ["Southwest", "Mountain West"],
+      "cities": [
+        {
+          "name": "Albuquerque",
+          "name_en": "Albuquerque",
+          "lat": 35.0844,
+          "lon": -106.6504,
+          "postcodes": [
+            { "code": "87101", "street": "Central Avenue", "street_en": "Central Avenue", "pattern": "n{1,500} Central Avenue" },
+            { "code": "87102", "street": "Lead Avenue", "street_en": "Lead Avenue", "pattern": "n{1,400} Lead Avenue" }
+          ]
+        },
+        {
+          "name": "Santa Fe",
+          "name_en": "Santa Fe",
+          "lat": 35.6870,
+          "lon": -105.9378,
+          "postcodes": [
+            { "code": "87501", "street": "Cerrillos Road", "street_en": "Cerrillos Road", "pattern": "n{1,400} Cerrillos Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Oklahoma",
+      "name_en": "Oklahoma",
+      "region_tags": ["Southwest", "South Central"],
+      "cities": [
+        {
+          "name": "Oklahoma City",
+          "name_en": "Oklahoma City",
+          "lat": 35.4676,
+          "lon": -97.5164,
+          "postcodes": [
+            { "code": "73102", "street": "Robinson Avenue", "street_en": "Robinson Avenue", "pattern": "n{1,400} Robinson Avenue" },
+            { "code": "73104", "street": "Lincoln Boulevard", "street_en": "Lincoln Boulevard", "pattern": "n{1,400} Lincoln Boulevard" }
+          ]
+        },
+        {
+          "name": "Tulsa",
+          "name_en": "Tulsa",
+          "lat": 36.1540,
+          "lon": -95.9928,
+          "postcodes": [
+            { "code": "74103", "street": "Boston Avenue", "street_en": "Boston Avenue", "pattern": "n{1,400} Boston Avenue" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Texas",
+      "name_en": "Texas",
+      "region_tags": ["Southwest", "Sun Belt"],
+      "cities": [
+        {
+          "name": "Houston",
+          "name_en": "Houston",
+          "lat": 29.7604,
+          "lon": -95.3698,
+          "postcodes": [
+            { "code": "77001", "street": "Main Street", "street_en": "Main Street", "pattern": "n{1,500} Main Street" },
+            { "code": "77002", "street": "Texas Avenue", "street_en": "Texas Avenue", "pattern": "n{1,400} Texas Avenue" },
+            { "code": "77003", "street": "Harrisburg Boulevard", "street_en": "Harrisburg Boulevard", "pattern": "n{1,400} Harrisburg Boulevard" },
+            { "code": "77006", "street": "Westheimer Road", "street_en": "Westheimer Road", "pattern": "n{1,500} Westheimer Road" }
+          ]
+        },
+        {
+          "name": "Dallas",
+          "name_en": "Dallas",
+          "lat": 32.7767,
+          "lon": -96.7970,
+          "postcodes": [
+            { "code": "75201", "street": "Main Street", "street_en": "Main Street", "pattern": "n{1,500} Main Street" },
+            { "code": "75202", "street": "Commerce Street", "street_en": "Commerce Street", "pattern": "n{1,400} Commerce Street" },
+            { "code": "75204", "street": "McKinney Avenue", "street_en": "McKinney Avenue", "pattern": "n{1,400} McKinney Avenue" }
+          ]
+        },
+        {
+          "name": "Austin",
+          "name_en": "Austin",
+          "lat": 30.2672,
+          "lon": -97.7431,
+          "postcodes": [
+            { "code": "78701", "street": "Congress Avenue", "street_en": "Congress Avenue", "pattern": "n{1,500} Congress Avenue" },
+            { "code": "78702", "street": "East 6th Street", "street_en": "East 6th Street", "pattern": "n{1,400} East 6th Street" },
+            { "code": "78703", "street": "Lamar Boulevard", "street_en": "Lamar Boulevard", "pattern": "n{1,500} Lamar Boulevard" }
+          ]
+        },
+        {
+          "name": "San Antonio",
+          "name_en": "San Antonio",
+          "lat": 29.4241,
+          "lon": -98.4936,
+          "postcodes": [
+            { "code": "78201", "street": "Fredericksburg Road", "street_en": "Fredericksburg Road", "pattern": "n{1,500} Fredericksburg Road" },
+            { "code": "78204", "street": "South Alamo Street", "street_en": "South Alamo Street", "pattern": "n{1,400} South Alamo Street" },
+            { "code": "78205", "street": "Commerce Street", "street_en": "Commerce Street", "pattern": "n{1,400} Commerce Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Alaska",
+      "name_en": "Alaska",
+      "region_tags": ["West", "Pacific"],
+      "cities": [
+        {
+          "name": "Anchorage",
+          "name_en": "Anchorage",
+          "lat": 61.2181,
+          "lon": -149.9003,
+          "postcodes": [
+            { "code": "99501", "street": "C Street", "street_en": "C Street", "pattern": "n{1,400} C Street" },
+            { "code": "99502", "street": "Northern Lights Boulevard", "street_en": "Northern Lights Boulevard", "pattern": "n{1,350} Northern Lights Boulevard" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "California",
+      "name_en": "California",
+      "region_tags": ["West", "Pacific"],
+      "cities": [
+        {
+          "name": "Los Angeles",
+          "name_en": "Los Angeles",
+          "lat": 34.0522,
+          "lon": -118.2437,
+          "postcodes": [
+            { "code": "90001", "street": "Sunset Boulevard", "street_en": "Sunset Boulevard", "pattern": "n{1,500} Sunset Boulevard" },
+            { "code": "90012", "street": "Hollywood Boulevard", "street_en": "Hollywood Boulevard", "pattern": "n{1,500} Hollywood Boulevard" },
+            { "code": "90024", "street": "Wilshire Boulevard", "street_en": "Wilshire Boulevard", "pattern": "n{1,500} Wilshire Boulevard" },
+            { "code": "90036", "street": "3rd Street", "street_en": "3rd Street", "pattern": "n{1,400} 3rd Street" },
+            { "code": "90046", "street": "La Brea Avenue", "street_en": "La Brea Avenue", "pattern": "n{1,400} La Brea Avenue" },
+            { "code": "90048", "street": "Beverly Boulevard", "street_en": "Beverly Boulevard", "pattern": "n{1,400} Beverly Boulevard" },
+            { "code": "90064", "street": "Santa Monica Boulevard", "street_en": "Santa Monica Boulevard", "pattern": "n{1,500} Santa Monica Boulevard" },
+            { "code": "90071", "street": "Grand Avenue", "street_en": "Grand Avenue", "pattern": "n{1,400} Grand Avenue" }
+          ]
+        },
+        {
+          "name": "San Francisco",
+          "name_en": "San Francisco",
+          "lat": 37.7749,
+          "lon": -122.4194,
+          "postcodes": [
+            { "code": "94102", "street": "Market Street", "street_en": "Market Street", "pattern": "n{1,500} Market Street" },
+            { "code": "94103", "street": "Mission Street", "street_en": "Mission Street", "pattern": "n{1,500} Mission Street" },
+            { "code": "94104", "street": "Montgomery Street", "street_en": "Montgomery Street", "pattern": "n{1,400} Montgomery Street" },
+            { "code": "94108", "street": "Grant Avenue", "street_en": "Grant Avenue", "pattern": "n{1,400} Grant Avenue" },
+            { "code": "94109", "street": "Van Ness Avenue", "street_en": "Van Ness Avenue", "pattern": "n{1,400} Van Ness Avenue" },
+            { "code": "94110", "street": "Valencia Street", "street_en": "Valencia Street", "pattern": "n{1,400} Valencia Street" }
+          ]
+        },
+        {
+          "name": "San Diego",
+          "name_en": "San Diego",
+          "lat": 32.7157,
+          "lon": -117.1611,
+          "postcodes": [
+            { "code": "92101", "street": "Broadway", "street_en": "Broadway", "pattern": "n{1,500} Broadway" },
+            { "code": "92102", "street": "Market Street", "street_en": "Market Street", "pattern": "n{1,400} Market Street" },
+            { "code": "92103", "street": "University Avenue", "street_en": "University Avenue", "pattern": "n{1,400} University Avenue" },
+            { "code": "92104", "street": "El Cajon Boulevard", "street_en": "El Cajon Boulevard", "pattern": "n{1,400} El Cajon Boulevard" }
+          ]
+        },
+        {
+          "name": "San Jose",
+          "name_en": "San Jose",
+          "lat": 37.3382,
+          "lon": -121.8863,
+          "postcodes": [
+            { "code": "95110", "street": "Santa Clara Street", "street_en": "Santa Clara Street", "pattern": "n{1,500} Santa Clara Street" },
+            { "code": "95112", "street": "San Fernando Street", "street_en": "San Fernando Street", "pattern": "n{1,400} San Fernando Street" },
+            { "code": "95113", "street": "1st Street", "street_en": "1st Street", "pattern": "n{1,400} 1st Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Colorado",
+      "name_en": "Colorado",
+      "region_tags": ["West", "Mountain West"],
+      "cities": [
+        {
+          "name": "Denver",
+          "name_en": "Denver",
+          "lat": 39.7392,
+          "lon": -104.9903,
+          "postcodes": [
+            { "code": "80202", "street": "16th Street", "street_en": "16th Street", "pattern": "n{1,400} 16th Street" },
+            { "code": "80203", "street": "Broadway", "street_en": "Broadway", "pattern": "n{1,500} Broadway" },
+            { "code": "80204", "street": "Colfax Avenue", "street_en": "Colfax Avenue", "pattern": "n{1,500} Colfax Avenue" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Hawaii",
+      "name_en": "Hawaii",
+      "region_tags": ["West", "Pacific"],
+      "cities": [
+        {
+          "name": "Honolulu",
+          "name_en": "Honolulu",
+          "lat": 21.3069,
+          "lon": -157.8583,
+          "postcodes": [
+            { "code": "96813", "street": "King Street", "street_en": "King Street", "pattern": "n{1,400} King Street" },
+            { "code": "96814", "street": "Kalakaua Avenue", "street_en": "Kalakaua Avenue", "pattern": "n{1,400} Kalakaua Avenue" },
+            { "code": "96815", "street": "Ala Moana Boulevard", "street_en": "Ala Moana Boulevard", "pattern": "n{1,400} Ala Moana Boulevard" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Idaho",
+      "name_en": "Idaho",
+      "region_tags": ["West", "Mountain West"],
+      "cities": [
+        {
+          "name": "Boise",
+          "name_en": "Boise",
+          "lat": 43.6150,
+          "lon": -116.2023,
+          "postcodes": [
+            { "code": "83702", "street": "Main Street", "street_en": "Main Street", "pattern": "n{1,500} Main Street" },
+            { "code": "83704", "street": "State Street", "street_en": "State Street", "pattern": "n{1,400} State Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Montana",
+      "name_en": "Montana",
+      "region_tags": ["West", "Mountain West"],
+      "cities": [
+        {
+          "name": "Billings",
+          "name_en": "Billings",
+          "lat": 45.7833,
+          "lon": -108.5007,
+          "postcodes": [
+            { "code": "59101", "street": "Broadway Avenue", "street_en": "Broadway Avenue", "pattern": "n{1,400} Broadway Avenue" },
+            { "code": "59102", "street": "Grand Avenue", "street_en": "Grand Avenue", "pattern": "n{1,350} Grand Avenue" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Nevada",
+      "name_en": "Nevada",
+      "region_tags": ["West", "Mountain West"],
+      "cities": [
+        {
+          "name": "Las Vegas",
+          "name_en": "Las Vegas",
+          "lat": 36.1699,
+          "lon": -115.1398,
+          "postcodes": [
+            { "code": "89101", "street": "Las Vegas Boulevard", "street_en": "Las Vegas Boulevard", "pattern": "n{1,500} Las Vegas Boulevard" },
+            { "code": "89102", "street": "Sahara Avenue", "street_en": "Sahara Avenue", "pattern": "n{1,400} Sahara Avenue" },
+            { "code": "89109", "street": "Paradise Road", "street_en": "Paradise Road", "pattern": "n{1,400} Paradise Road" }
+          ]
+        },
+        {
+          "name": "Reno",
+          "name_en": "Reno",
+          "lat": 39.5296,
+          "lon": -119.8138,
+          "postcodes": [
+            { "code": "89501", "street": "Virginia Street", "street_en": "Virginia Street", "pattern": "n{1,400} Virginia Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Oregon",
+      "name_en": "Oregon",
+      "region_tags": ["West", "Pacific Northwest"],
+      "cities": [
+        {
+          "name": "Portland",
+          "name_en": "Portland",
+          "lat": 45.5152,
+          "lon": -122.6784,
+          "postcodes": [
+            { "code": "97201", "street": "Southwest Broadway", "street_en": "Southwest Broadway", "pattern": "n{1,400} Southwest Broadway" },
+            { "code": "97204", "street": "Southwest 5th Avenue", "street_en": "Southwest 5th Avenue", "pattern": "n{1,400} Southwest 5th Avenue" },
+            { "code": "97209", "street": "Northwest 23rd Avenue", "street_en": "Northwest 23rd Avenue", "pattern": "n{1,400} Northwest 23rd Avenue" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Utah",
+      "name_en": "Utah",
+      "region_tags": ["West", "Mountain West"],
+      "cities": [
+        {
+          "name": "Salt Lake City",
+          "name_en": "Salt Lake City",
+          "lat": 40.7608,
+          "lon": -111.8910,
+          "postcodes": [
+            { "code": "84101", "street": "State Street", "street_en": "State Street", "pattern": "n{1,500} State Street" },
+            { "code": "84102", "street": "South Temple Street", "street_en": "South Temple Street", "pattern": "n{1,400} South Temple Street" },
+            { "code": "84103", "street": "Capitol Boulevard", "street_en": "Capitol Boulevard", "pattern": "n{1,350} Capitol Boulevard" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Washington",
+      "name_en": "Washington",
+      "region_tags": ["West", "Pacific Northwest"],
+      "cities": [
+        {
+          "name": "Seattle",
+          "name_en": "Seattle",
+          "lat": 47.6062,
+          "lon": -122.3321,
+          "postcodes": [
+            { "code": "98101", "street": "Pike Street", "street_en": "Pike Street", "pattern": "n{1,400} Pike Street" },
+            { "code": "98102", "street": "Broadway East", "street_en": "Broadway East", "pattern": "n{1,400} Broadway East" },
+            { "code": "98104", "street": "1st Avenue", "street_en": "1st Avenue", "pattern": "n{1,500} 1st Avenue" }
+          ]
+        },
+        {
+          "name": "Spokane",
+          "name_en": "Spokane",
+          "lat": 47.6588,
+          "lon": -117.4260,
+          "postcodes": [
+            { "code": "99201", "street": "West Riverside Avenue", "street_en": "West Riverside Avenue", "pattern": "n{1,400} West Riverside Avenue" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Wyoming",
+      "name_en": "Wyoming",
+      "region_tags": ["West", "Mountain West"],
+      "cities": [
+        {
+          "name": "Cheyenne",
+          "name_en": "Cheyenne",
+          "lat": 41.1400,
+          "lon": -104.8202,
+          "postcodes": [
+            { "code": "82001", "street": "Capitol Avenue", "street_en": "Capitol Avenue", "pattern": "n{1,400} Capitol Avenue" },
+            { "code": "82003", "street": "Dell Range Boulevard", "street_en": "Dell Range Boulevard", "pattern": "n{1,350} Dell Range Boulevard" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "District of Columbia",
+      "name_en": "District of Columbia",
+      "region_tags": ["East Coast", "Mid-Atlantic"],
+      "cities": [
+        {
+          "name": "Washington",
+          "name_en": "Washington",
+          "lat": 38.9072,
+          "lon": -77.0369,
+          "postcodes": [
+            { "code": "20001", "street": "North Capitol Street", "street_en": "North Capitol Street", "pattern": "n{1,500} North Capitol Street" },
+            { "code": "20002", "street": "East Capitol Street", "street_en": "East Capitol Street", "pattern": "n{1,400} East Capitol Street" },
+            { "code": "20003", "street": "Pennsylvania Avenue SE", "street_en": "Pennsylvania Avenue SE", "pattern": "n{1,400} Pennsylvania Avenue SE" },
+            { "code": "20004", "street": "Pennsylvania Avenue NW", "street_en": "Pennsylvania Avenue NW", "pattern": "n{1,500} Pennsylvania Avenue NW" },
+            { "code": "20005", "street": "K Street NW", "street_en": "K Street NW", "pattern": "n{1,400} K Street NW" },
+            { "code": "20006", "street": "Connecticut Avenue NW", "street_en": "Connecticut Avenue NW", "pattern": "n{1,500} Connecticut Avenue NW" }
+          ]
+        }
+      ]
+    }
+  ]
+}
