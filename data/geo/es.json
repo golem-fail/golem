@@ -1,0 +1,655 @@
+{
+  "country": {
+    "name": "España",
+    "name_en": "Spain",
+    "iso_code": "ES",
+    "phone_prefix": "+34",
+    "phone_formats": ["+34-6##-###-###", "+34-9##-###-###"],
+    "postcode_format": "#####",
+    "name_order": "given_first"
+  },
+  "states": [
+    {
+      "name": "Andalucía",
+      "name_en": "Andalusia",
+      "region_tags": ["Southern Spain"],
+      "cities": [
+        {
+          "name": "Sevilla",
+          "name_en": "Seville",
+          "lat": 37.3891,
+          "lon": -5.9845,
+          "postcodes": [
+            { "code": "41001", "street": "Calle Sierpes", "street_en": "Sierpes Street", "pattern": "Calle Sierpes n{1,80}" },
+            { "code": "41002", "street": "Avenida de la Constitución", "street_en": "Constitution Avenue", "pattern": "Avenida de la Constitución n{1,50}" },
+            { "code": "41003", "street": "Calle Feria", "street_en": "Feria Street", "pattern": "Calle Feria n{1,120}" },
+            { "code": "41004", "street": "Calle San Fernando", "street_en": "San Fernando Street", "pattern": "Calle San Fernando n{1,60}" },
+            { "code": "41005", "street": "Calle Betis", "street_en": "Betis Street", "pattern": "Calle Betis n{1,80}" },
+            { "code": "41006", "street": "Avenida de la Palmera", "street_en": "La Palmera Avenue", "pattern": "Avenida de la Palmera n{1,50}" },
+            { "code": "41007", "street": "Calle San Jacinto", "street_en": "San Jacinto Street", "pattern": "Calle San Jacinto n{1,90}" },
+            { "code": "41008", "street": "Ronda de Capuchinos", "street_en": "Capuchinos Ring Road", "pattern": "Ronda de Capuchinos n{1,40}" },
+            { "code": "41009", "street": "Calle Torneo", "street_en": "Torneo Street", "pattern": "Calle Torneo n{1,60}" },
+            { "code": "41010", "street": "Avenida de Kansas City", "street_en": "Kansas City Avenue", "pattern": "Avenida de Kansas City n{1,30}" }
+          ]
+        },
+        {
+          "name": "Málaga",
+          "name_en": "Malaga",
+          "lat": 36.7213,
+          "lon": -4.4214,
+          "postcodes": [
+            { "code": "29001", "street": "Calle Marqués de Larios", "street_en": "Marques de Larios Street", "pattern": "Calle Marqués de Larios n{1,30}" },
+            { "code": "29002", "street": "Calle Carretería", "street_en": "Carreteria Street", "pattern": "Calle Carretería n{1,100}" },
+            { "code": "29003", "street": "Paseo de los Tilos", "street_en": "Tilos Promenade", "pattern": "Paseo de los Tilos n{1,40}" },
+            { "code": "29004", "street": "Avenida de Andalucía", "street_en": "Andalusia Avenue", "pattern": "Avenida de Andalucía n{1,50}" },
+            { "code": "29005", "street": "Calle Victoria", "street_en": "Victoria Street", "pattern": "Calle Victoria n{1,80}" },
+            { "code": "29006", "street": "Paseo de Reding", "street_en": "Reding Promenade", "pattern": "Paseo de Reding n{1,50}" },
+            { "code": "29007", "street": "Calle Hilera", "street_en": "Hilera Street", "pattern": "Calle Hilera n{1,30}" }
+          ]
+        },
+        {
+          "name": "Granada",
+          "name_en": "Granada",
+          "lat": 37.1773,
+          "lon": -3.5986,
+          "postcodes": [
+            { "code": "18001", "street": "Gran Vía de Colón", "street_en": "Gran Via de Colon", "pattern": "Gran Vía de Colón n{1,60}" },
+            { "code": "18002", "street": "Calle Reyes Católicos", "street_en": "Catholic Monarchs Street", "pattern": "Calle Reyes Católicos n{1,50}" },
+            { "code": "18003", "street": "Calle Elvira", "street_en": "Elvira Street", "pattern": "Calle Elvira n{1,140}" },
+            { "code": "18004", "street": "Paseo del Salón", "street_en": "Salon Promenade", "pattern": "Paseo del Salón n{1,30}" },
+            { "code": "18005", "street": "Calle Recogidas", "street_en": "Recogidas Street", "pattern": "Calle Recogidas n{1,70}" },
+            { "code": "18006", "street": "Avenida de la Constitución", "street_en": "Constitution Avenue", "pattern": "Avenida de la Constitución n{1,50}" }
+          ]
+        },
+        {
+          "name": "Córdoba",
+          "name_en": "Cordoba",
+          "lat": 37.8882,
+          "lon": -4.7794,
+          "postcodes": [
+            { "code": "14001", "street": "Calle Claudio Marcelo", "street_en": "Claudio Marcelo Street", "pattern": "Calle Claudio Marcelo n{1,30}" },
+            { "code": "14002", "street": "Calle San Fernando", "street_en": "San Fernando Street", "pattern": "Calle San Fernando n{1,50}" },
+            { "code": "14003", "street": "Avenida del Gran Capitán", "street_en": "Gran Capitan Avenue", "pattern": "Avenida del Gran Capitán n{1,40}" },
+            { "code": "14004", "street": "Ronda de los Tejares", "street_en": "Tejares Ring Road", "pattern": "Ronda de los Tejares n{1,40}" },
+            { "code": "14005", "street": "Calle Alfonso XIII", "street_en": "Alfonso XIII Street", "pattern": "Calle Alfonso XIII n{1,30}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Aragón",
+      "name_en": "Aragon",
+      "region_tags": ["Northern Spain"],
+      "cities": [
+        {
+          "name": "Zaragoza",
+          "name_en": "Zaragoza",
+          "lat": 41.6488,
+          "lon": -0.8891,
+          "postcodes": [
+            { "code": "50001", "street": "Calle Alfonso I", "street_en": "Alfonso I Street", "pattern": "Calle Alfonso I n{1,50}" },
+            { "code": "50002", "street": "Paseo de la Independencia", "street_en": "Independence Promenade", "pattern": "Paseo de la Independencia n{1,40}" },
+            { "code": "50003", "street": "Calle del Coso", "street_en": "Coso Street", "pattern": "Calle del Coso n{1,100}" },
+            { "code": "50004", "street": "Avenida de César Augusto", "street_en": "Cesar Augusto Avenue", "pattern": "Avenida de César Augusto n{1,40}" },
+            { "code": "50005", "street": "Gran Vía", "street_en": "Gran Via", "pattern": "Gran Vía n{1,50}" },
+            { "code": "50006", "street": "Paseo de Sagasta", "street_en": "Sagasta Promenade", "pattern": "Paseo de Sagasta n{1,50}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Asturias",
+      "name_en": "Asturias",
+      "region_tags": ["Northern Spain", "Cantabrian Coast"],
+      "cities": [
+        {
+          "name": "Oviedo",
+          "name_en": "Oviedo",
+          "lat": 43.3614,
+          "lon": -5.8493,
+          "postcodes": [
+            { "code": "33001", "street": "Calle Uría", "street_en": "Uria Street", "pattern": "Calle Uría n{1,80}" },
+            { "code": "33002", "street": "Calle Pelayo", "street_en": "Pelayo Street", "pattern": "Calle Pelayo n{1,30}" },
+            { "code": "33003", "street": "Calle Gil de Jaz", "street_en": "Gil de Jaz Street", "pattern": "Calle Gil de Jaz n{1,20}" },
+            { "code": "33004", "street": "Avenida de Galicia", "street_en": "Galicia Avenue", "pattern": "Avenida de Galicia n{1,30}" }
+          ]
+        },
+        {
+          "name": "Gijón",
+          "name_en": "Gijon",
+          "lat": 43.5322,
+          "lon": -5.6611,
+          "postcodes": [
+            { "code": "33201", "street": "Calle Corrida", "street_en": "Corrida Street", "pattern": "Calle Corrida n{1,60}" },
+            { "code": "33202", "street": "Paseo de Begoña", "street_en": "Begona Promenade", "pattern": "Paseo de Begoña n{1,30}" },
+            { "code": "33203", "street": "Avenida de la Costa", "street_en": "Costa Avenue", "pattern": "Avenida de la Costa n{1,40}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Islas Baleares",
+      "name_en": "Balearic Islands",
+      "region_tags": ["Mediterranean", "Balearic Islands"],
+      "cities": [
+        {
+          "name": "Palma de Mallorca",
+          "name_en": "Palma de Mallorca",
+          "lat": 39.5696,
+          "lon": 2.6502,
+          "postcodes": [
+            { "code": "07001", "street": "Paseo del Borne", "street_en": "Borne Promenade", "pattern": "Paseo del Borne n{1,30}" },
+            { "code": "07002", "street": "Calle San Miguel", "street_en": "San Miguel Street", "pattern": "Calle San Miguel n{1,80}" },
+            { "code": "07003", "street": "Avenida de Jaime III", "street_en": "Jaime III Avenue", "pattern": "Avenida de Jaime III n{1,40}" },
+            { "code": "07004", "street": "Calle Sindicato", "street_en": "Sindicato Street", "pattern": "Calle Sindicato n{1,60}" },
+            { "code": "07005", "street": "Calle Blanquerna", "street_en": "Blanquerna Street", "pattern": "Calle Blanquerna n{1,50}" },
+            { "code": "07006", "street": "Avenida de Gabriel Alomar", "street_en": "Gabriel Alomar Avenue", "pattern": "Avenida de Gabriel Alomar n{1,30}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Canarias",
+      "name_en": "Canary Islands",
+      "region_tags": ["Canary Islands", "Atlantic"],
+      "cities": [
+        {
+          "name": "Las Palmas de Gran Canaria",
+          "name_en": "Las Palmas",
+          "lat": 28.1235,
+          "lon": -15.4363,
+          "postcodes": [
+            { "code": "35001", "street": "Calle Mayor de Triana", "street_en": "Mayor de Triana Street", "pattern": "Calle Mayor de Triana n{1,100}" },
+            { "code": "35002", "street": "Calle León y Castillo", "street_en": "Leon y Castillo Street", "pattern": "Calle León y Castillo n{1,80}" },
+            { "code": "35003", "street": "Avenida Mesa y López", "street_en": "Mesa y Lopez Avenue", "pattern": "Avenida Mesa y López n{1,60}" },
+            { "code": "35004", "street": "Calle Tomás Morales", "street_en": "Tomas Morales Street", "pattern": "Calle Tomás Morales n{1,50}" }
+          ]
+        },
+        {
+          "name": "Santa Cruz de Tenerife",
+          "name_en": "Santa Cruz de Tenerife",
+          "lat": 28.4636,
+          "lon": -16.2518,
+          "postcodes": [
+            { "code": "38001", "street": "Calle del Castillo", "street_en": "Castle Street", "pattern": "Calle del Castillo n{1,60}" },
+            { "code": "38002", "street": "Avenida de Anaga", "street_en": "Anaga Avenue", "pattern": "Avenida de Anaga n{1,40}" },
+            { "code": "38003", "street": "Rambla de Santa Cruz", "street_en": "Santa Cruz Rambla", "pattern": "Rambla de Santa Cruz n{1,100}" },
+            { "code": "38004", "street": "Calle San Sebastián", "street_en": "San Sebastian Street", "pattern": "Calle San Sebastián n{1,30}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Cantabria",
+      "name_en": "Cantabria",
+      "region_tags": ["Northern Spain", "Cantabrian Coast"],
+      "cities": [
+        {
+          "name": "Santander",
+          "name_en": "Santander",
+          "lat": 43.4623,
+          "lon": -3.8099,
+          "postcodes": [
+            { "code": "39001", "street": "Paseo de Pereda", "street_en": "Pereda Promenade", "pattern": "Paseo de Pereda n{1,40}" },
+            { "code": "39002", "street": "Calle Burgos", "street_en": "Burgos Street", "pattern": "Calle Burgos n{1,50}" },
+            { "code": "39003", "street": "Avenida de los Castros", "street_en": "Los Castros Avenue", "pattern": "Avenida de los Castros n{1,30}" },
+            { "code": "39004", "street": "Calle Calvo Sotelo", "street_en": "Calvo Sotelo Street", "pattern": "Calle Calvo Sotelo n{1,40}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Castilla y León",
+      "name_en": "Castile and Leon",
+      "region_tags": ["Central Spain"],
+      "cities": [
+        {
+          "name": "Valladolid",
+          "name_en": "Valladolid",
+          "lat": 41.6523,
+          "lon": -4.7245,
+          "postcodes": [
+            { "code": "47001", "street": "Calle Santiago", "street_en": "Santiago Street", "pattern": "Calle Santiago n{1,50}" },
+            { "code": "47002", "street": "Paseo de Zorrilla", "street_en": "Zorrilla Promenade", "pattern": "Paseo de Zorrilla n{1,100}" },
+            { "code": "47003", "street": "Calle Miguel Íscar", "street_en": "Miguel Iscar Street", "pattern": "Calle Miguel Íscar n{1,30}" },
+            { "code": "47004", "street": "Avenida de Salamanca", "street_en": "Salamanca Avenue", "pattern": "Avenida de Salamanca n{1,40}" }
+          ]
+        },
+        {
+          "name": "Burgos",
+          "name_en": "Burgos",
+          "lat": 42.3439,
+          "lon": -3.6969,
+          "postcodes": [
+            { "code": "09001", "street": "Paseo del Espolón", "street_en": "Espolon Promenade", "pattern": "Paseo del Espolón n{1,30}" },
+            { "code": "09002", "street": "Calle Vitoria", "street_en": "Vitoria Street", "pattern": "Calle Vitoria n{1,80}" },
+            { "code": "09003", "street": "Calle San Juan", "street_en": "San Juan Street", "pattern": "Calle San Juan n{1,50}" }
+          ]
+        },
+        {
+          "name": "Salamanca",
+          "name_en": "Salamanca",
+          "lat": 40.9701,
+          "lon": -5.6635,
+          "postcodes": [
+            { "code": "37001", "street": "Calle Toro", "street_en": "Toro Street", "pattern": "Calle Toro n{1,80}" },
+            { "code": "37002", "street": "Gran Vía", "street_en": "Gran Via", "pattern": "Gran Vía n{1,60}" },
+            { "code": "37003", "street": "Avenida de Portugal", "street_en": "Portugal Avenue", "pattern": "Avenida de Portugal n{1,40}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Castilla-La Mancha",
+      "name_en": "Castilla-La Mancha",
+      "region_tags": ["Central Spain"],
+      "cities": [
+        {
+          "name": "Toledo",
+          "name_en": "Toledo",
+          "lat": 39.8628,
+          "lon": -4.0273,
+          "postcodes": [
+            { "code": "45001", "street": "Calle Comercio", "street_en": "Comercio Street", "pattern": "Calle Comercio n{1,50}" },
+            { "code": "45002", "street": "Calle de la Sillería", "street_en": "Silleria Street", "pattern": "Calle de la Sillería n{1,30}" },
+            { "code": "45003", "street": "Paseo de la Rosa", "street_en": "La Rosa Promenade", "pattern": "Paseo de la Rosa n{1,40}" },
+            { "code": "45004", "street": "Avenida de Europa", "street_en": "Europe Avenue", "pattern": "Avenida de Europa n{1,50}" }
+          ]
+        },
+        {
+          "name": "Albacete",
+          "name_en": "Albacete",
+          "lat": 38.9942,
+          "lon": -1.8585,
+          "postcodes": [
+            { "code": "02001", "street": "Calle Mayor", "street_en": "Main Street", "pattern": "Calle Mayor n{1,60}" },
+            { "code": "02002", "street": "Paseo de la Libertad", "street_en": "Liberty Promenade", "pattern": "Paseo de la Libertad n{1,30}" },
+            { "code": "02003", "street": "Avenida de España", "street_en": "Spain Avenue", "pattern": "Avenida de España n{1,40}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Cataluña",
+      "name_en": "Catalonia",
+      "region_tags": ["Catalonia", "Mediterranean"],
+      "cities": [
+        {
+          "name": "Barcelona",
+          "name_en": "Barcelona",
+          "lat": 41.3874,
+          "lon": 2.1686,
+          "postcodes": [
+            { "code": "08001", "street": "La Rambla", "street_en": "La Rambla", "pattern": "La Rambla n{1,130}" },
+            { "code": "08002", "street": "Carrer de Ferran", "street_en": "Ferran Street", "pattern": "Carrer de Ferran n{1,50}" },
+            { "code": "08003", "street": "Passeig de Colom", "street_en": "Columbus Promenade", "pattern": "Passeig de Colom n{1,30}" },
+            { "code": "08004", "street": "Avinguda del Paral·lel", "street_en": "Parallel Avenue", "pattern": "Avinguda del Paral·lel n{1,180}" },
+            { "code": "08005", "street": "Passeig Marítim", "street_en": "Maritime Promenade", "pattern": "Passeig Marítim n{1,50}" },
+            { "code": "08006", "street": "Passeig de Gràcia", "street_en": "Gracia Promenade", "pattern": "Passeig de Gràcia n{1,120}" },
+            { "code": "08007", "street": "Rambla de Catalunya", "street_en": "Catalonia Rambla", "pattern": "Rambla de Catalunya n{1,140}" },
+            { "code": "08008", "street": "Carrer de Balmes", "street_en": "Balmes Street", "pattern": "Carrer de Balmes n{1,450}" },
+            { "code": "08009", "street": "Carrer de Pau Claris", "street_en": "Pau Claris Street", "pattern": "Carrer de Pau Claris n{1,175}" },
+            { "code": "08010", "street": "Carrer de Trafalgar", "street_en": "Trafalgar Street", "pattern": "Carrer de Trafalgar n{1,80}" },
+            { "code": "08011", "street": "Carrer del Comte d'Urgell", "street_en": "Count of Urgell Street", "pattern": "Carrer del Comte d'Urgell n{1,330}" },
+            { "code": "08012", "street": "Carrer Gran de Gràcia", "street_en": "Gran de Gracia Street", "pattern": "Carrer Gran de Gràcia n{1,250}" },
+            { "code": "08013", "street": "Avinguda Meridiana", "street_en": "Meridiana Avenue", "pattern": "Avinguda Meridiana n{1,200}" },
+            { "code": "08014", "street": "Carrer de Sants", "street_en": "Sants Street", "pattern": "Carrer de Sants n{1,400}" },
+            { "code": "08015", "street": "Carrer de Tarragona", "street_en": "Tarragona Street", "pattern": "Carrer de Tarragona n{1,100}" },
+            { "code": "08017", "street": "Avinguda de Sarrià", "street_en": "Sarria Avenue", "pattern": "Avinguda de Sarrià n{1,80}" },
+            { "code": "08018", "street": "Carrer de Pallars", "street_en": "Pallars Street", "pattern": "Carrer de Pallars n{1,500}" },
+            { "code": "08019", "street": "Rambla de Prim", "street_en": "Prim Rambla", "pattern": "Rambla de Prim n{1,200}" },
+            { "code": "08020", "street": "Carrer de Guipúscoa", "street_en": "Guipuzcoa Street", "pattern": "Carrer de Guipúscoa n{1,150}" },
+            { "code": "08021", "street": "Carrer de Muntaner", "street_en": "Muntaner Street", "pattern": "Carrer de Muntaner n{1,550}" },
+            { "code": "08022", "street": "Ronda de Dalt", "street_en": "Dalt Ring Road", "pattern": "Ronda de Dalt n{1,100}" },
+            { "code": "08023", "street": "Travessera de Dalt", "street_en": "Dalt Cross Street", "pattern": "Travessera de Dalt n{1,150}" },
+            { "code": "08024", "street": "Carrer del Torrent de l'Olla", "street_en": "Torrent de l'Olla Street", "pattern": "Carrer del Torrent de l'Olla n{1,220}" },
+            { "code": "08025", "street": "Carrer de la Indústria", "street_en": "Industry Street", "pattern": "Carrer de la Indústria n{1,300}" },
+            { "code": "08026", "street": "Carrer de Lepant", "street_en": "Lepant Street", "pattern": "Carrer de Lepant n{1,380}" },
+            { "code": "08027", "street": "Carrer de Concepció Arenal", "street_en": "Concepcion Arenal Street", "pattern": "Carrer de Concepció Arenal n{1,200}" },
+            { "code": "08028", "street": "Travessera de les Corts", "street_en": "Les Corts Cross Street", "pattern": "Travessera de les Corts n{1,350}" },
+            { "code": "08029", "street": "Avinguda Diagonal", "street_en": "Diagonal Avenue", "pattern": "Avinguda Diagonal n{1,640}" },
+            { "code": "08030", "street": "Carrer de Felip II", "street_en": "Felipe II Street", "pattern": "Carrer de Felip II n{1,100}" },
+            { "code": "08031", "street": "Passeig de Maragall", "street_en": "Maragall Promenade", "pattern": "Passeig de Maragall n{1,200}" },
+            { "code": "08032", "street": "Passeig de Valldaura", "street_en": "Valldaura Promenade", "pattern": "Passeig de Valldaura n{1,200}" },
+            { "code": "08033", "street": "Carrer de Prat de la Riba", "street_en": "Prat de la Riba Street", "pattern": "Carrer de Prat de la Riba n{1,100}" },
+            { "code": "08034", "street": "Carrer de Capità Arenas", "street_en": "Capitan Arenas Street", "pattern": "Carrer de Capità Arenas n{1,80}" },
+            { "code": "08035", "street": "Carrer del Santuari", "street_en": "Santuari Street", "pattern": "Carrer del Santuari n{1,50}" },
+            { "code": "08036", "street": "Carrer d'Aragó", "street_en": "Aragon Street", "pattern": "Carrer d'Aragó n{1,620}" },
+            { "code": "08037", "street": "Carrer de Provença", "street_en": "Provenca Street", "pattern": "Carrer de Provença n{1,560}" },
+            { "code": "08038", "street": "Passeig de la Zona Franca", "street_en": "Free Zone Promenade", "pattern": "Passeig de la Zona Franca n{1,250}" },
+            { "code": "08039", "street": "Passeig de Joan de Borbó", "street_en": "Joan de Borbo Promenade", "pattern": "Passeig de Joan de Borbó n{1,80}" },
+            { "code": "08040", "street": "Carrer de la Mare de Déu de Port", "street_en": "Mare de Deu de Port Street", "pattern": "Carrer de la Mare de Déu de Port n{1,300}" },
+            { "code": "08041", "street": "Carrer de Dante Alighieri", "street_en": "Dante Alighieri Street", "pattern": "Carrer de Dante Alighieri n{1,80}" },
+            { "code": "08042", "street": "Carrer de l'Aldea", "street_en": "Aldea Street", "pattern": "Carrer de l'Aldea n{1,50}" }
+          ]
+        },
+        {
+          "name": "Tarragona",
+          "name_en": "Tarragona",
+          "lat": 41.1189,
+          "lon": 1.2445,
+          "postcodes": [
+            { "code": "43001", "street": "Rambla Nova", "street_en": "Rambla Nova", "pattern": "Rambla Nova n{1,80}" },
+            { "code": "43002", "street": "Carrer Major", "street_en": "Main Street", "pattern": "Carrer Major n{1,40}" },
+            { "code": "43003", "street": "Avinguda de Roma", "street_en": "Rome Avenue", "pattern": "Avinguda de Roma n{1,60}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Comunidad Valenciana",
+      "name_en": "Valencian Community",
+      "region_tags": ["Mediterranean", "Valencia"],
+      "cities": [
+        {
+          "name": "Valencia",
+          "name_en": "Valencia",
+          "lat": 39.4699,
+          "lon": -0.3763,
+          "postcodes": [
+            { "code": "46001", "street": "Plaza del Ayuntamiento", "street_en": "City Hall Square", "pattern": "Plaza del Ayuntamiento n{1,30}" },
+            { "code": "46002", "street": "Calle de la Paz", "street_en": "Peace Street", "pattern": "Calle de la Paz n{1,50}" },
+            { "code": "46003", "street": "Calle de las Barcas", "street_en": "Barcas Street", "pattern": "Calle de las Barcas n{1,20}" },
+            { "code": "46004", "street": "Calle Colón", "street_en": "Colon Street", "pattern": "Calle Colón n{1,80}" },
+            { "code": "46005", "street": "Gran Vía Marqués del Turia", "street_en": "Marques del Turia Gran Via", "pattern": "Gran Vía Marqués del Turia n{1,80}" },
+            { "code": "46006", "street": "Avenida del Puerto", "street_en": "Port Avenue", "pattern": "Avenida del Puerto n{1,100}" },
+            { "code": "46007", "street": "Calle de Sagunto", "street_en": "Sagunto Street", "pattern": "Calle de Sagunto n{1,60}" },
+            { "code": "46008", "street": "Gran Vía de Fernando el Católico", "street_en": "Fernando el Catolico Gran Via", "pattern": "Gran Vía de Fernando el Católico n{1,80}" },
+            { "code": "46009", "street": "Avenida del Cid", "street_en": "El Cid Avenue", "pattern": "Avenida del Cid n{1,100}" },
+            { "code": "46010", "street": "Avenida de Blasco Ibáñez", "street_en": "Blasco Ibanez Avenue", "pattern": "Avenida de Blasco Ibáñez n{1,120}" },
+            { "code": "46011", "street": "Calle de Sueca", "street_en": "Sueca Street", "pattern": "Calle de Sueca n{1,60}" },
+            { "code": "46012", "street": "Avenida de la Malvarrosa", "street_en": "Malvarrosa Avenue", "pattern": "Avenida de la Malvarrosa n{1,50}" },
+            { "code": "46013", "street": "Calle de San Vicente Mártir", "street_en": "San Vicente Martir Street", "pattern": "Calle de San Vicente Mártir n{1,200}" },
+            { "code": "46014", "street": "Avenida de Tres Cruces", "street_en": "Three Crosses Avenue", "pattern": "Avenida de Tres Cruces n{1,50}" },
+            { "code": "46015", "street": "Avenida de Burjassot", "street_en": "Burjassot Avenue", "pattern": "Avenida de Burjassot n{1,150}" },
+            { "code": "46016", "street": "Avenida de las Cortes Valencianas", "street_en": "Valencian Courts Avenue", "pattern": "Avenida de las Cortes Valencianas n{1,60}" },
+            { "code": "46017", "street": "Carretera de Malilla", "street_en": "Malilla Road", "pattern": "Carretera de Malilla n{1,40}" },
+            { "code": "46018", "street": "Calle de Eolo", "street_en": "Eolo Street", "pattern": "Calle de Eolo n{1,30}" },
+            { "code": "46019", "street": "Avenida de los Naranjos", "street_en": "Orange Tree Avenue", "pattern": "Avenida de los Naranjos n{1,30}" },
+            { "code": "46020", "street": "Avenida de Aragón", "street_en": "Aragon Avenue", "pattern": "Avenida de Aragón n{1,60}" },
+            { "code": "46021", "street": "Calle del Doctor Waksman", "street_en": "Doctor Waksman Street", "pattern": "Calle del Doctor Waksman n{1,20}" },
+            { "code": "46022", "street": "Avenida de Francia", "street_en": "France Avenue", "pattern": "Avenida de Francia n{1,50}" },
+            { "code": "46023", "street": "Calle del Músico Ginés", "street_en": "Musico Gines Street", "pattern": "Calle del Músico Ginés n{1,20}" },
+            { "code": "46024", "street": "Calle de Río Tajo", "street_en": "Tajo River Street", "pattern": "Calle de Río Tajo n{1,30}" },
+            { "code": "46025", "street": "Calle de Micer Mascó", "street_en": "Micer Masco Street", "pattern": "Calle de Micer Mascó n{1,30}" },
+            { "code": "46026", "street": "Calle de Luis Peixó", "street_en": "Luis Peixo Street", "pattern": "Calle de Luis Peixó n{1,20}" }
+          ]
+        },
+        {
+          "name": "Alicante",
+          "name_en": "Alicante",
+          "lat": 38.3452,
+          "lon": -0.4810,
+          "postcodes": [
+            { "code": "03001", "street": "Rambla de Méndez Núñez", "street_en": "Mendez Nunez Rambla", "pattern": "Rambla de Méndez Núñez n{1,50}" },
+            { "code": "03002", "street": "Calle Mayor", "street_en": "Main Street", "pattern": "Calle Mayor n{1,40}" },
+            { "code": "03003", "street": "Avenida de Alfonso el Sabio", "street_en": "Alfonso el Sabio Avenue", "pattern": "Avenida de Alfonso el Sabio n{1,30}" },
+            { "code": "03004", "street": "Avenida de Denia", "street_en": "Denia Avenue", "pattern": "Avenida de Denia n{1,60}" },
+            { "code": "03005", "street": "Calle de San Fernando", "street_en": "San Fernando Street", "pattern": "Calle de San Fernando n{1,50}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Extremadura",
+      "name_en": "Extremadura",
+      "region_tags": ["Western Spain"],
+      "cities": [
+        {
+          "name": "Mérida",
+          "name_en": "Merida",
+          "lat": 38.9163,
+          "lon": -6.3436,
+          "postcodes": [
+            { "code": "06800", "street": "Calle Santa Eulalia", "street_en": "Santa Eulalia Street", "pattern": "Calle Santa Eulalia n{1,50}" },
+            { "code": "06810", "street": "Avenida de Juan Carlos I", "street_en": "Juan Carlos I Avenue", "pattern": "Avenida de Juan Carlos I n{1,30}" }
+          ]
+        },
+        {
+          "name": "Badajoz",
+          "name_en": "Badajoz",
+          "lat": 38.8794,
+          "lon": -6.9707,
+          "postcodes": [
+            { "code": "06001", "street": "Calle Menacho", "street_en": "Menacho Street", "pattern": "Calle Menacho n{1,30}" },
+            { "code": "06002", "street": "Paseo de San Francisco", "street_en": "San Francisco Promenade", "pattern": "Paseo de San Francisco n{1,40}" },
+            { "code": "06003", "street": "Avenida de Elvas", "street_en": "Elvas Avenue", "pattern": "Avenida de Elvas n{1,50}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Galicia",
+      "name_en": "Galicia",
+      "region_tags": ["Northwestern Spain", "Atlantic"],
+      "cities": [
+        {
+          "name": "Santiago de Compostela",
+          "name_en": "Santiago de Compostela",
+          "lat": 42.8782,
+          "lon": -8.5448,
+          "postcodes": [
+            { "code": "15701", "street": "Rúa do Franco", "street_en": "Franco Street", "pattern": "Rúa do Franco n{1,50}" },
+            { "code": "15702", "street": "Rúa do Vilar", "street_en": "Vilar Street", "pattern": "Rúa do Vilar n{1,40}" },
+            { "code": "15703", "street": "Rúa Nova", "street_en": "New Street", "pattern": "Rúa Nova n{1,50}" },
+            { "code": "15704", "street": "Avenida de Xoán XXIII", "street_en": "John XXIII Avenue", "pattern": "Avenida de Xoán XXIII n{1,30}" }
+          ]
+        },
+        {
+          "name": "Vigo",
+          "name_en": "Vigo",
+          "lat": 42.2314,
+          "lon": -8.7124,
+          "postcodes": [
+            { "code": "36201", "street": "Rúa do Príncipe", "street_en": "Prince Street", "pattern": "Rúa do Príncipe n{1,60}" },
+            { "code": "36202", "street": "Gran Vía", "street_en": "Gran Via", "pattern": "Gran Vía n{1,40}" },
+            { "code": "36203", "street": "Avenida de García Barbón", "street_en": "Garcia Barbon Avenue", "pattern": "Avenida de García Barbón n{1,50}" }
+          ]
+        },
+        {
+          "name": "A Coruña",
+          "name_en": "A Coruna",
+          "lat": 43.3623,
+          "lon": -8.4115,
+          "postcodes": [
+            { "code": "15001", "street": "Calle Real", "street_en": "Royal Street", "pattern": "Calle Real n{1,80}" },
+            { "code": "15002", "street": "Avenida de la Marina", "street_en": "Marina Avenue", "pattern": "Avenida de la Marina n{1,30}" },
+            { "code": "15003", "street": "Calle San Andrés", "street_en": "San Andres Street", "pattern": "Calle San Andrés n{1,60}" },
+            { "code": "15004", "street": "Paseo de los Puentes", "street_en": "Bridges Promenade", "pattern": "Paseo de los Puentes n{1,20}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Comunidad de Madrid",
+      "name_en": "Community of Madrid",
+      "region_tags": ["Central Spain"],
+      "cities": [
+        {
+          "name": "Madrid",
+          "name_en": "Madrid",
+          "lat": 40.4168,
+          "lon": -3.7038,
+          "postcodes": [
+            { "code": "28001", "street": "Calle de Serrano", "street_en": "Serrano Street", "pattern": "Calle de Serrano n{1,220}" },
+            { "code": "28002", "street": "Paseo de la Castellana", "street_en": "Castellana Promenade", "pattern": "Paseo de la Castellana n{1,280}" },
+            { "code": "28003", "street": "Calle de Bravo Murillo", "street_en": "Bravo Murillo Street", "pattern": "Calle de Bravo Murillo n{1,380}" },
+            { "code": "28004", "street": "Calle de Fuencarral", "street_en": "Fuencarral Street", "pattern": "Calle de Fuencarral n{1,155}" },
+            { "code": "28005", "street": "Calle de Toledo", "street_en": "Toledo Street", "pattern": "Calle de Toledo n{1,150}" },
+            { "code": "28006", "street": "Calle de Velázquez", "street_en": "Velazquez Street", "pattern": "Calle de Velázquez n{1,160}" },
+            { "code": "28007", "street": "Calle de Alcalá", "street_en": "Alcala Street", "pattern": "Calle de Alcalá n{1,480}" },
+            { "code": "28008", "street": "Calle de la Princesa", "street_en": "Princess Street", "pattern": "Calle de la Princesa n{1,80}" },
+            { "code": "28009", "street": "Calle de O'Donnell", "street_en": "O'Donnell Street", "pattern": "Calle de O'Donnell n{1,60}" },
+            { "code": "28010", "street": "Calle de Sagasta", "street_en": "Sagasta Street", "pattern": "Calle de Sagasta n{1,35}" },
+            { "code": "28011", "street": "Carretera de Extremadura", "street_en": "Extremadura Road", "pattern": "Carretera de Extremadura n{1,200}" },
+            { "code": "28012", "street": "Calle de Atocha", "street_en": "Atocha Street", "pattern": "Calle de Atocha n{1,130}" },
+            { "code": "28013", "street": "Gran Vía", "street_en": "Gran Via", "pattern": "Gran Vía n{1,80}" },
+            { "code": "28014", "street": "Paseo del Prado", "street_en": "Prado Promenade", "pattern": "Paseo del Prado n{1,50}" },
+            { "code": "28015", "street": "Calle de Alberto Aguilera", "street_en": "Alberto Aguilera Street", "pattern": "Calle de Alberto Aguilera n{1,70}" },
+            { "code": "28016", "street": "Avenida de América", "street_en": "America Avenue", "pattern": "Avenida de América n{1,40}" },
+            { "code": "28017", "street": "Calle de Alcalá", "street_en": "Alcala Street", "pattern": "Calle de Alcalá n{200,480}" },
+            { "code": "28018", "street": "Avenida de la Albufera", "street_en": "Albufera Avenue", "pattern": "Avenida de la Albufera n{1,150}" },
+            { "code": "28019", "street": "Paseo de las Delicias", "street_en": "Delicias Promenade", "pattern": "Paseo de las Delicias n{1,60}" },
+            { "code": "28020", "street": "Paseo de la Castellana", "street_en": "Castellana Promenade", "pattern": "Paseo de la Castellana n{100,280}" },
+            { "code": "28021", "street": "Avenida de Orcasitas", "street_en": "Orcasitas Avenue", "pattern": "Avenida de Orcasitas n{1,50}" },
+            { "code": "28022", "street": "Avenida de Canillejas a Vicálvaro", "street_en": "Canillejas to Vicalvaro Avenue", "pattern": "Avenida de Canillejas a Vicálvaro n{1,50}" },
+            { "code": "28023", "street": "Carretera de La Coruña", "street_en": "La Coruna Road", "pattern": "Carretera de La Coruña n{1,100}" },
+            { "code": "28024", "street": "Calle de Camarena", "street_en": "Camarena Street", "pattern": "Calle de Camarena n{1,200}" },
+            { "code": "28025", "street": "Paseo de los Olmos", "street_en": "Elm Tree Promenade", "pattern": "Paseo de los Olmos n{1,30}" },
+            { "code": "28026", "street": "Avenida de Córdoba", "street_en": "Cordoba Avenue", "pattern": "Avenida de Córdoba n{1,50}" },
+            { "code": "28027", "street": "Calle de Arturo Soria", "street_en": "Arturo Soria Street", "pattern": "Calle de Arturo Soria n{1,320}" },
+            { "code": "28028", "street": "Calle de Cartagena", "street_en": "Cartagena Street", "pattern": "Calle de Cartagena n{1,180}" },
+            { "code": "28029", "street": "Avenida de Asturias", "street_en": "Asturias Avenue", "pattern": "Avenida de Asturias n{1,50}" },
+            { "code": "28030", "street": "Calle del Doctor Esquerdo", "street_en": "Doctor Esquerdo Street", "pattern": "Calle del Doctor Esquerdo n{1,190}" },
+            { "code": "28031", "street": "Avenida de la Democracia", "street_en": "Democracy Avenue", "pattern": "Avenida de la Democracia n{1,40}" },
+            { "code": "28032", "street": "Calle de Sierra Gorda", "street_en": "Sierra Gorda Street", "pattern": "Calle de Sierra Gorda n{1,30}" },
+            { "code": "28033", "street": "Calle de Sinesio Delgado", "street_en": "Sinesio Delgado Street", "pattern": "Calle de Sinesio Delgado n{1,30}" },
+            { "code": "28034", "street": "Avenida de la Ilustración", "street_en": "Illustration Avenue", "pattern": "Avenida de la Ilustración n{1,50}" },
+            { "code": "28035", "street": "Carretera de El Pardo", "street_en": "El Pardo Road", "pattern": "Carretera de El Pardo n{1,100}" },
+            { "code": "28036", "street": "Paseo de la Castellana", "street_en": "Castellana Promenade", "pattern": "Paseo de la Castellana n{200,280}" },
+            { "code": "28037", "street": "Calle de Hermanos García Noblejas", "street_en": "Hermanos Garcia Noblejas Street", "pattern": "Calle de Hermanos García Noblejas n{1,80}" },
+            { "code": "28038", "street": "Avenida de la Albufera", "street_en": "Albufera Avenue", "pattern": "Avenida de la Albufera n{50,150}" },
+            { "code": "28039", "street": "Calle de Francos Rodríguez", "street_en": "Francos Rodriguez Street", "pattern": "Calle de Francos Rodríguez n{1,80}" },
+            { "code": "28040", "street": "Avenida Complutense", "street_en": "Complutense Avenue", "pattern": "Avenida Complutense n{1,30}" },
+            { "code": "28041", "street": "Avenida de Orcasur", "street_en": "Orcasur Avenue", "pattern": "Avenida de Orcasur n{1,40}" },
+            { "code": "28042", "street": "Avenida de la Hispanidad", "street_en": "Hispanidad Avenue", "pattern": "Avenida de la Hispanidad n{1,40}" },
+            { "code": "28043", "street": "Calle de Arturo Soria", "street_en": "Arturo Soria Street", "pattern": "Calle de Arturo Soria n{200,320}" },
+            { "code": "28044", "street": "Calle de Aluche", "street_en": "Aluche Street", "pattern": "Calle de Aluche n{1,30}" },
+            { "code": "28045", "street": "Ronda de Valencia", "street_en": "Valencia Ring Road", "pattern": "Ronda de Valencia n{1,20}" },
+            { "code": "28046", "street": "Paseo de la Castellana", "street_en": "Castellana Promenade", "pattern": "Paseo de la Castellana n{1,100}" },
+            { "code": "28047", "street": "Paseo de Extremadura", "street_en": "Extremadura Promenade", "pattern": "Paseo de Extremadura n{1,200}" },
+            { "code": "28048", "street": "Carretera de El Pardo", "street_en": "El Pardo Road", "pattern": "Carretera de El Pardo n{50,100}" },
+            { "code": "28049", "street": "Calle de Einstein", "street_en": "Einstein Street", "pattern": "Calle de Einstein n{1,20}" },
+            { "code": "28050", "street": "Avenida de Bruselas", "street_en": "Brussels Avenue", "pattern": "Avenida de Bruselas n{1,40}" },
+            { "code": "28051", "street": "Avenida de las Suertes", "street_en": "Las Suertes Avenue", "pattern": "Avenida de las Suertes n{1,30}" },
+            { "code": "28052", "street": "Avenida de la Gavia", "street_en": "La Gavia Avenue", "pattern": "Avenida de la Gavia n{1,30}" },
+            { "code": "28053", "street": "Calle del Olvido", "street_en": "Olvido Street", "pattern": "Calle del Olvido n{1,20}" },
+            { "code": "28054", "street": "Carretera de San Martín de la Vega", "street_en": "San Martin de la Vega Road", "pattern": "Carretera de San Martín de la Vega n{1,40}" },
+            { "code": "28055", "street": "Calle de Mirasierra", "street_en": "Mirasierra Street", "pattern": "Calle de Mirasierra n{1,30}" }
+          ]
+        },
+        {
+          "name": "Alcalá de Henares",
+          "name_en": "Alcala de Henares",
+          "lat": 40.4819,
+          "lon": -3.3635,
+          "postcodes": [
+            { "code": "28801", "street": "Calle Mayor", "street_en": "Main Street", "pattern": "Calle Mayor n{1,100}" },
+            { "code": "28802", "street": "Calle Libreros", "street_en": "Libreros Street", "pattern": "Calle Libreros n{1,40}" },
+            { "code": "28803", "street": "Avenida de Guadalajara", "street_en": "Guadalajara Avenue", "pattern": "Avenida de Guadalajara n{1,50}" },
+            { "code": "28804", "street": "Calle de la Victoria", "street_en": "Victoria Street", "pattern": "Calle de la Victoria n{1,30}" },
+            { "code": "28805", "street": "Calle de Santiago", "street_en": "Santiago Street", "pattern": "Calle de Santiago n{1,50}" },
+            { "code": "28806", "street": "Avenida de Madrid", "street_en": "Madrid Avenue", "pattern": "Avenida de Madrid n{1,60}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Región de Murcia",
+      "name_en": "Region of Murcia",
+      "region_tags": ["Southern Spain", "Mediterranean"],
+      "cities": [
+        {
+          "name": "Murcia",
+          "name_en": "Murcia",
+          "lat": 37.9922,
+          "lon": -1.1307,
+          "postcodes": [
+            { "code": "30001", "street": "Calle Trapería", "street_en": "Traperia Street", "pattern": "Calle Trapería n{1,30}" },
+            { "code": "30002", "street": "Gran Vía Escultor Salzillo", "street_en": "Sculptor Salzillo Gran Via", "pattern": "Gran Vía Escultor Salzillo n{1,40}" },
+            { "code": "30003", "street": "Avenida de la Constitución", "street_en": "Constitution Avenue", "pattern": "Avenida de la Constitución n{1,50}" },
+            { "code": "30004", "street": "Calle Platería", "street_en": "Plateria Street", "pattern": "Calle Platería n{1,30}" },
+            { "code": "30005", "street": "Avenida de Juan Carlos I", "street_en": "Juan Carlos I Avenue", "pattern": "Avenida de Juan Carlos I n{1,40}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Navarra",
+      "name_en": "Navarre",
+      "region_tags": ["Northern Spain", "Basque Region"],
+      "cities": [
+        {
+          "name": "Pamplona",
+          "name_en": "Pamplona",
+          "lat": 42.8125,
+          "lon": -1.6458,
+          "postcodes": [
+            { "code": "31001", "street": "Calle Estafeta", "street_en": "Estafeta Street", "pattern": "Calle Estafeta n{1,80}" },
+            { "code": "31002", "street": "Avenida de Carlos III", "street_en": "Carlos III Avenue", "pattern": "Avenida de Carlos III n{1,40}" },
+            { "code": "31003", "street": "Calle San Nicolás", "street_en": "San Nicolas Street", "pattern": "Calle San Nicolás n{1,60}" },
+            { "code": "31004", "street": "Avenida de Pío XII", "street_en": "Pius XII Avenue", "pattern": "Avenida de Pío XII n{1,50}" },
+            { "code": "31005", "street": "Avenida de Bayona", "street_en": "Bayonne Avenue", "pattern": "Avenida de Bayona n{1,40}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "País Vasco",
+      "name_en": "Basque Country",
+      "region_tags": ["Northern Spain", "Basque Country"],
+      "cities": [
+        {
+          "name": "Bilbao",
+          "name_en": "Bilbao",
+          "lat": 43.2630,
+          "lon": -2.9350,
+          "postcodes": [
+            { "code": "48001", "street": "Gran Vía de Don Diego López de Haro", "street_en": "Gran Via de Don Diego Lopez de Haro", "pattern": "Gran Vía de Don Diego López de Haro n{1,80}" },
+            { "code": "48002", "street": "Alameda de Mazarredo", "street_en": "Mazarredo Boulevard", "pattern": "Alameda de Mazarredo n{1,80}" },
+            { "code": "48003", "street": "Calle Bidebarrieta", "street_en": "Bidebarrieta Street", "pattern": "Calle Bidebarrieta n{1,20}" },
+            { "code": "48004", "street": "Calle Autonomía", "street_en": "Autonomia Street", "pattern": "Calle Autonomía n{1,80}" },
+            { "code": "48005", "street": "Calle Somera", "street_en": "Somera Street", "pattern": "Calle Somera n{1,40}" },
+            { "code": "48006", "street": "Alameda de Recalde", "street_en": "Recalde Boulevard", "pattern": "Alameda de Recalde n{1,70}" }
+          ]
+        },
+        {
+          "name": "San Sebastián",
+          "name_en": "San Sebastian",
+          "lat": 43.3183,
+          "lon": -1.9812,
+          "postcodes": [
+            { "code": "20001", "street": "Avenida de la Libertad", "street_en": "Liberty Avenue", "pattern": "Avenida de la Libertad n{1,40}" },
+            { "code": "20002", "street": "Calle San Martín", "street_en": "San Martin Street", "pattern": "Calle San Martín n{1,50}" },
+            { "code": "20003", "street": "Paseo de la Concha", "street_en": "La Concha Promenade", "pattern": "Paseo de la Concha n{1,30}" },
+            { "code": "20004", "street": "Calle Narrica", "street_en": "Narrica Street", "pattern": "Calle Narrica n{1,30}" },
+            { "code": "20005", "street": "Avenida de Tolosa", "street_en": "Tolosa Avenue", "pattern": "Avenida de Tolosa n{1,80}" }
+          ]
+        },
+        {
+          "name": "Vitoria-Gasteiz",
+          "name_en": "Vitoria-Gasteiz",
+          "lat": 42.8469,
+          "lon": -2.6716,
+          "postcodes": [
+            { "code": "01001", "street": "Calle Dato", "street_en": "Dato Street", "pattern": "Calle Dato n{1,50}" },
+            { "code": "01002", "street": "Calle Postas", "street_en": "Postas Street", "pattern": "Calle Postas n{1,30}" },
+            { "code": "01003", "street": "Avenida de Gasteiz", "street_en": "Gasteiz Avenue", "pattern": "Avenida de Gasteiz n{1,80}" },
+            { "code": "01004", "street": "Calle San Prudencio", "street_en": "San Prudencio Street", "pattern": "Calle San Prudencio n{1,30}" },
+            { "code": "01005", "street": "Calle Portal de Castilla", "street_en": "Castilla Gate Street", "pattern": "Calle Portal de Castilla n{1,40}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "La Rioja",
+      "name_en": "La Rioja",
+      "region_tags": ["Northern Spain"],
+      "cities": [
+        {
+          "name": "Logroño",
+          "name_en": "Logrono",
+          "lat": 42.4627,
+          "lon": -2.4445,
+          "postcodes": [
+            { "code": "26001", "street": "Calle Portales", "street_en": "Portales Street", "pattern": "Calle Portales n{1,60}" },
+            { "code": "26002", "street": "Gran Vía del Rey Juan Carlos I", "street_en": "King Juan Carlos I Gran Via", "pattern": "Gran Vía del Rey Juan Carlos I n{1,30}" },
+            { "code": "26003", "street": "Calle Laurel", "street_en": "Laurel Street", "pattern": "Calle Laurel n{1,30}" },
+            { "code": "26004", "street": "Avenida de la Paz", "street_en": "Peace Avenue", "pattern": "Avenida de la Paz n{1,40}" },
+            { "code": "26005", "street": "Calle de Chile", "street_en": "Chile Street", "pattern": "Calle de Chile n{1,30}" }
+          ]
+        }
+      ]
+    }
+  ]
+}
