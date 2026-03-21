@@ -1,0 +1,1125 @@
+{
+  "country": {
+    "name": "Россия",
+    "name_en": "Russia",
+    "iso_code": "RU",
+    "phone_prefix": "+7",
+    "phone_formats": ["+7-9##-###-##-##", "+7-###-###-##-##"],
+    "postcode_format": "######",
+    "name_order": "given_first"
+  },
+  "states": [
+    {
+      "name": "Москва",
+      "name_en": "Moscow",
+      "region_tags": ["Central Russia"],
+      "cities": [
+        {
+          "name": "Москва",
+          "name_en": "Moscow",
+          "lat": 55.7558,
+          "lon": 37.6173,
+          "postcodes": [
+            {
+              "code": "101000",
+              "street": "ул. Мясницкая",
+              "street_en": "Myasnitskaya St.",
+              "pattern": "ул. Мясницкая, д. n{1,50}"
+            },
+            {
+              "code": "103132",
+              "street": "ул. Тверская",
+              "street_en": "Tverskaya St.",
+              "pattern": "ул. Тверская, д. n{1,86}"
+            },
+            {
+              "code": "109012",
+              "street": "ул. Варварка",
+              "street_en": "Varvarka St.",
+              "pattern": "ул. Варварка, д. n{1,14}"
+            },
+            {
+              "code": "115054",
+              "street": "ул. Большая Пионерская",
+              "street_en": "Bolshaya Pionerskaya St.",
+              "pattern": "ул. Большая Пионерская, д. n{1,40}"
+            },
+            {
+              "code": "119019",
+              "street": "ул. Новый Арбат",
+              "street_en": "Novy Arbat St.",
+              "pattern": "ул. Новый Арбат, д. n{1,36}"
+            },
+            {
+              "code": "105064",
+              "street": "ул. Земляной Вал",
+              "street_en": "Zemlyanoy Val St.",
+              "pattern": "ул. Земляной Вал, д. n{1,75}"
+            },
+            {
+              "code": "107045",
+              "street": "ул. Сретенка",
+              "street_en": "Sretenka St.",
+              "pattern": "ул. Сретенка, д. n{1,36}"
+            },
+            {
+              "code": "109004",
+              "street": "ул. Большая Коммунистическая",
+              "street_en": "Bolshaya Kommunisticheskaya St.",
+              "pattern": "ул. Большая Коммунистическая, д. n{1,34}"
+            },
+            {
+              "code": "119049",
+              "street": "ул. Большая Якиманка",
+              "street_en": "Bolshaya Yakimanka St.",
+              "pattern": "ул. Большая Якиманка, д. n{1,56}"
+            },
+            {
+              "code": "121069",
+              "street": "ул. Поварская",
+              "street_en": "Povarskaya St.",
+              "pattern": "ул. Поварская, д. n{1,44}"
+            },
+            {
+              "code": "123001",
+              "street": "ул. Большая Садовая",
+              "street_en": "Bolshaya Sadovaya St.",
+              "pattern": "ул. Большая Садовая, д. n{1,18}"
+            },
+            {
+              "code": "125009",
+              "street": "ул. Тверская",
+              "street_en": "Tverskaya St.",
+              "pattern": "ул. Тверская, д. n{1,30}"
+            },
+            {
+              "code": "127006",
+              "street": "ул. Долгоруковская",
+              "street_en": "Dolgorukovskaya St.",
+              "pattern": "ул. Долгоруковская, д. n{1,40}"
+            },
+            {
+              "code": "129090",
+              "street": "пр. Мира",
+              "street_en": "Mira Prospekt",
+              "pattern": "пр. Мира, д. n{1,120}"
+            },
+            {
+              "code": "117218",
+              "street": "ул. Кржижановского",
+              "street_en": "Krzhizhanovskogo St.",
+              "pattern": "ул. Кржижановского, д. n{1,32}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Московская область",
+      "name_en": "Moscow Oblast",
+      "region_tags": ["Central Russia"],
+      "cities": [
+        {
+          "name": "Химки",
+          "name_en": "Khimki",
+          "lat": 55.8970,
+          "lon": 37.4297,
+          "postcodes": [
+            {
+              "code": "141400",
+              "street": "ул. Ленинградская",
+              "street_en": "Leningradskaya St.",
+              "pattern": "ул. Ленинградская, д. n{1,30}"
+            },
+            {
+              "code": "141407",
+              "street": "ул. Московская",
+              "street_en": "Moskovskaya St.",
+              "pattern": "ул. Московская, д. n{1,44}"
+            },
+            {
+              "code": "141402",
+              "street": "ул. Калинина",
+              "street_en": "Kalinina St.",
+              "pattern": "ул. Калинина, д. n{1,28}"
+            },
+            {
+              "code": "141411",
+              "street": "б-р Менделеева",
+              "street_en": "Mendeleev Blvd.",
+              "pattern": "б-р Менделеева, д. n{1,18}"
+            }
+          ]
+        },
+        {
+          "name": "Подольск",
+          "name_en": "Podolsk",
+          "lat": 55.4242,
+          "lon": 37.5547,
+          "postcodes": [
+            {
+              "code": "142100",
+              "street": "пр. Ленина",
+              "street_en": "Lenin Prospekt",
+              "pattern": "пр. Ленина, д. n{1,60}"
+            },
+            {
+              "code": "142114",
+              "street": "ул. Кирова",
+              "street_en": "Kirova St.",
+              "pattern": "ул. Кирова, д. n{1,78}"
+            },
+            {
+              "code": "142116",
+              "street": "ул. Свердлова",
+              "street_en": "Sverdlova St.",
+              "pattern": "ул. Свердлова, д. n{1,36}"
+            },
+            {
+              "code": "142103",
+              "street": "ул. Февральская",
+              "street_en": "Fevralskaya St.",
+              "pattern": "ул. Февральская, д. n{1,52}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Воронежская область",
+      "name_en": "Voronezh Oblast",
+      "region_tags": ["Central Russia"],
+      "cities": [
+        {
+          "name": "Воронеж",
+          "name_en": "Voronezh",
+          "lat": 51.6720,
+          "lon": 39.1843,
+          "postcodes": [
+            {
+              "code": "394000",
+              "street": "пр. Революции",
+              "street_en": "Revolyutsii Prospekt",
+              "pattern": "пр. Революции, д. n{1,58}"
+            },
+            {
+              "code": "394018",
+              "street": "ул. Кольцовская",
+              "street_en": "Koltsovskaya St.",
+              "pattern": "ул. Кольцовская, д. n{1,46}"
+            },
+            {
+              "code": "394036",
+              "street": "ул. Плехановская",
+              "street_en": "Plekhanovskaya St.",
+              "pattern": "ул. Плехановская, д. n{1,70}"
+            },
+            {
+              "code": "394006",
+              "street": "ул. 20-летия Октября",
+              "street_en": "20-letiya Oktyabrya St.",
+              "pattern": "ул. 20-летия Октября, д. n{1,120}"
+            },
+            {
+              "code": "394024",
+              "street": "Московский пр.",
+              "street_en": "Moskovsky Prospekt",
+              "pattern": "Московский пр., д. n{1,100}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Санкт-Петербург",
+      "name_en": "St. Petersburg",
+      "region_tags": ["Northwest"],
+      "cities": [
+        {
+          "name": "Санкт-Петербург",
+          "name_en": "St. Petersburg",
+          "lat": 59.9343,
+          "lon": 30.3351,
+          "postcodes": [
+            {
+              "code": "190000",
+              "street": "Невский пр.",
+              "street_en": "Nevsky Prospekt",
+              "pattern": "Невский пр., д. n{1,190}"
+            },
+            {
+              "code": "191186",
+              "street": "Дворцовая пл.",
+              "street_en": "Dvortsovaya Ploshchad",
+              "pattern": "Дворцовая пл., д. n{1,10}"
+            },
+            {
+              "code": "191025",
+              "street": "Литейный пр.",
+              "street_en": "Liteiny Prospekt",
+              "pattern": "Литейный пр., д. n{1,64}"
+            },
+            {
+              "code": "191119",
+              "street": "ул. Марата",
+              "street_en": "Marata St.",
+              "pattern": "ул. Марата, д. n{1,86}"
+            },
+            {
+              "code": "197101",
+              "street": "Каменноостровский пр.",
+              "street_en": "Kamennoostrovsky Prospekt",
+              "pattern": "Каменноостровский пр., д. n{1,74}"
+            },
+            {
+              "code": "199034",
+              "street": "Университетская наб.",
+              "street_en": "Universitetskaya Embankment",
+              "pattern": "Университетская наб., д. n{1,17}"
+            },
+            {
+              "code": "191014",
+              "street": "ул. Жуковского",
+              "street_en": "Zhukovskogo St.",
+              "pattern": "ул. Жуковского, д. n{1,63}"
+            },
+            {
+              "code": "191036",
+              "street": "Суворовский пр.",
+              "street_en": "Suvorovsky Prospekt",
+              "pattern": "Суворовский пр., д. n{1,65}"
+            },
+            {
+              "code": "198005",
+              "street": "Измайловский пр.",
+              "street_en": "Izmaylovsky Prospekt",
+              "pattern": "Измайловский пр., д. n{1,29}"
+            },
+            {
+              "code": "195009",
+              "street": "пр. Металлистов",
+              "street_en": "Metallistov Prospekt",
+              "pattern": "пр. Металлистов, д. n{1,60}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ленинградская область",
+      "name_en": "Leningrad Oblast",
+      "region_tags": ["Northwest"],
+      "cities": [
+        {
+          "name": "Гатчина",
+          "name_en": "Gatchina",
+          "lat": 59.5762,
+          "lon": 30.1286,
+          "postcodes": [
+            {
+              "code": "188300",
+              "street": "пр. 25-го Октября",
+              "street_en": "25-go Oktyabrya Prospekt",
+              "pattern": "пр. 25-го Октября, д. n{1,76}"
+            },
+            {
+              "code": "188306",
+              "street": "ул. Чехова",
+              "street_en": "Chekhova St.",
+              "pattern": "ул. Чехова, д. n{1,26}"
+            },
+            {
+              "code": "188302",
+              "street": "ул. Карла Маркса",
+              "street_en": "Karla Marksa St.",
+              "pattern": "ул. Карла Маркса, д. n{1,48}"
+            },
+            {
+              "code": "188309",
+              "street": "б-р Рощинский",
+              "street_en": "Roshchinsky Blvd.",
+              "pattern": "б-р Рощинский, д. n{1,20}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Республика Татарстан",
+      "name_en": "Republic of Tatarstan",
+      "region_tags": ["Volga"],
+      "cities": [
+        {
+          "name": "Казань",
+          "name_en": "Kazan",
+          "lat": 55.7879,
+          "lon": 49.1233,
+          "postcodes": [
+            {
+              "code": "420000",
+              "street": "ул. Кремлёвская",
+              "street_en": "Kremlyovskaya St.",
+              "pattern": "ул. Кремлёвская, д. n{1,35}"
+            },
+            {
+              "code": "420015",
+              "street": "ул. Пушкина",
+              "street_en": "Pushkina St.",
+              "pattern": "ул. Пушкина, д. n{1,52}"
+            },
+            {
+              "code": "420111",
+              "street": "ул. Баумана",
+              "street_en": "Baumana St.",
+              "pattern": "ул. Баумана, д. n{1,82}"
+            },
+            {
+              "code": "420029",
+              "street": "ул. Сибирский тракт",
+              "street_en": "Sibirsky Trakt St.",
+              "pattern": "ул. Сибирский тракт, д. n{1,50}"
+            },
+            {
+              "code": "420066",
+              "street": "пр. Победы",
+              "street_en": "Pobedy Prospekt",
+              "pattern": "пр. Победы, д. n{1,100}"
+            },
+            {
+              "code": "420061",
+              "street": "ул. Декабристов",
+              "street_en": "Dekabristov St.",
+              "pattern": "ул. Декабристов, д. n{1,186}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Республика Башкортостан",
+      "name_en": "Republic of Bashkortostan",
+      "region_tags": ["Volga"],
+      "cities": [
+        {
+          "name": "Уфа",
+          "name_en": "Ufa",
+          "lat": 54.7388,
+          "lon": 55.9721,
+          "postcodes": [
+            {
+              "code": "450000",
+              "street": "ул. Ленина",
+              "street_en": "Lenina St.",
+              "pattern": "ул. Ленина, д. n{1,42}"
+            },
+            {
+              "code": "450015",
+              "street": "пр. Октября",
+              "street_en": "Oktyabrya Prospekt",
+              "pattern": "пр. Октября, д. n{1,168}"
+            },
+            {
+              "code": "450076",
+              "street": "ул. Первомайская",
+              "street_en": "Pervomayskaya St.",
+              "pattern": "ул. Первомайская, д. n{1,100}"
+            },
+            {
+              "code": "450005",
+              "street": "ул. Цюрупы",
+              "street_en": "Tsyurupy St.",
+              "pattern": "ул. Цюрупы, д. n{1,132}"
+            },
+            {
+              "code": "450022",
+              "street": "ул. Менделеева",
+              "street_en": "Mendeleeva St.",
+              "pattern": "ул. Менделеева, д. n{1,229}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Нижегородская область",
+      "name_en": "Nizhny Novgorod Oblast",
+      "region_tags": ["Volga"],
+      "cities": [
+        {
+          "name": "Нижний Новгород",
+          "name_en": "Nizhny Novgorod",
+          "lat": 56.2965,
+          "lon": 43.9361,
+          "postcodes": [
+            {
+              "code": "603000",
+              "street": "ул. Большая Покровская",
+              "street_en": "Bolshaya Pokrovskaya St.",
+              "pattern": "ул. Большая Покровская, д. n{1,82}"
+            },
+            {
+              "code": "603005",
+              "street": "ул. Минина",
+              "street_en": "Minina St.",
+              "pattern": "ул. Минина, д. n{1,45}"
+            },
+            {
+              "code": "603155",
+              "street": "пр. Гагарина",
+              "street_en": "Gagarina Prospekt",
+              "pattern": "пр. Гагарина, д. n{1,230}"
+            },
+            {
+              "code": "603022",
+              "street": "ул. Белинского",
+              "street_en": "Belinskogo St.",
+              "pattern": "ул. Белинского, д. n{1,120}"
+            },
+            {
+              "code": "603093",
+              "street": "Московское ш.",
+              "street_en": "Moskovskoye Shosse",
+              "pattern": "Московское ш., д. n{1,300}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Самарская область",
+      "name_en": "Samara Oblast",
+      "region_tags": ["Volga"],
+      "cities": [
+        {
+          "name": "Самара",
+          "name_en": "Samara",
+          "lat": 53.1959,
+          "lon": 50.1002,
+          "postcodes": [
+            {
+              "code": "443000",
+              "street": "ул. Куйбышева",
+              "street_en": "Kuybysheva St.",
+              "pattern": "ул. Куйбышева, д. n{1,181}"
+            },
+            {
+              "code": "443010",
+              "street": "ул. Молодогвардейская",
+              "street_en": "Molodogvardeyskaya St.",
+              "pattern": "ул. Молодогвардейская, д. n{1,244}"
+            },
+            {
+              "code": "443041",
+              "street": "Московское ш.",
+              "street_en": "Moskovskoye Shosse",
+              "pattern": "Московское ш., д. n{1,300}"
+            },
+            {
+              "code": "443090",
+              "street": "ул. Ново-Садовая",
+              "street_en": "Novo-Sadovaya St.",
+              "pattern": "ул. Ново-Садовая, д. n{1,371}"
+            },
+            {
+              "code": "443030",
+              "street": "ул. Гагарина",
+              "street_en": "Gagarina St.",
+              "pattern": "ул. Гагарина, д. n{1,119}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Свердловская область",
+      "name_en": "Sverdlovsk Oblast",
+      "region_tags": ["Ural"],
+      "cities": [
+        {
+          "name": "Екатеринбург",
+          "name_en": "Yekaterinburg",
+          "lat": 56.8389,
+          "lon": 60.6057,
+          "postcodes": [
+            {
+              "code": "620000",
+              "street": "пр. Ленина",
+              "street_en": "Lenina Prospekt",
+              "pattern": "пр. Ленина, д. n{1,101}"
+            },
+            {
+              "code": "620014",
+              "street": "ул. 8 Марта",
+              "street_en": "8 Marta St.",
+              "pattern": "ул. 8 Марта, д. n{1,212}"
+            },
+            {
+              "code": "620026",
+              "street": "ул. Малышева",
+              "street_en": "Malysheva St.",
+              "pattern": "ул. Малышева, д. n{1,150}"
+            },
+            {
+              "code": "620075",
+              "street": "ул. Белинского",
+              "street_en": "Belinskogo St.",
+              "pattern": "ул. Белинского, д. n{1,250}"
+            },
+            {
+              "code": "620100",
+              "street": "ул. Восточная",
+              "street_en": "Vostochnaya St.",
+              "pattern": "ул. Восточная, д. n{1,176}"
+            },
+            {
+              "code": "620043",
+              "street": "ул. Куйбышева",
+              "street_en": "Kuybysheva St.",
+              "pattern": "ул. Куйбышева, д. n{1,175}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Челябинская область",
+      "name_en": "Chelyabinsk Oblast",
+      "region_tags": ["Ural"],
+      "cities": [
+        {
+          "name": "Челябинск",
+          "name_en": "Chelyabinsk",
+          "lat": 55.1644,
+          "lon": 61.4368,
+          "postcodes": [
+            {
+              "code": "454000",
+              "street": "ул. Кирова",
+              "street_en": "Kirova St.",
+              "pattern": "ул. Кирова, д. n{1,167}"
+            },
+            {
+              "code": "454080",
+              "street": "пр. Ленина",
+              "street_en": "Lenina Prospekt",
+              "pattern": "пр. Ленина, д. n{1,89}"
+            },
+            {
+              "code": "454091",
+              "street": "ул. Братьев Кашириных",
+              "street_en": "Bratyev Kashirinykh St.",
+              "pattern": "ул. Братьев Кашириных, д. n{1,160}"
+            },
+            {
+              "code": "454014",
+              "street": "Комсомольский пр.",
+              "street_en": "Komsomolsky Prospekt",
+              "pattern": "Комсомольский пр., д. n{1,74}"
+            },
+            {
+              "code": "454048",
+              "street": "ул. Цвиллинга",
+              "street_en": "Tsvillinga St.",
+              "pattern": "ул. Цвиллинга, д. n{1,66}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Пермский край",
+      "name_en": "Perm Krai",
+      "region_tags": ["Ural"],
+      "cities": [
+        {
+          "name": "Пермь",
+          "name_en": "Perm",
+          "lat": 58.0105,
+          "lon": 56.2502,
+          "postcodes": [
+            {
+              "code": "614000",
+              "street": "Комсомольский пр.",
+              "street_en": "Komsomolsky Prospekt",
+              "pattern": "Комсомольский пр., д. n{1,83}"
+            },
+            {
+              "code": "614068",
+              "street": "ул. Ленина",
+              "street_en": "Lenina St.",
+              "pattern": "ул. Ленина, д. n{1,98}"
+            },
+            {
+              "code": "614990",
+              "street": "ул. Петропавловская",
+              "street_en": "Petropavlovskaya St.",
+              "pattern": "ул. Петропавловская, д. n{1,120}"
+            },
+            {
+              "code": "614007",
+              "street": "ул. Куйбышева",
+              "street_en": "Kuybysheva St.",
+              "pattern": "ул. Куйбышева, д. n{1,135}"
+            },
+            {
+              "code": "614039",
+              "street": "Шоссе Космонавтов",
+              "street_en": "Kosmonavtov Shosse",
+              "pattern": "Шоссе Космонавтов, д. n{1,340}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Новосибирская область",
+      "name_en": "Novosibirsk Oblast",
+      "region_tags": ["Siberia", "Western Siberia"],
+      "cities": [
+        {
+          "name": "Новосибирск",
+          "name_en": "Novosibirsk",
+          "lat": 55.0084,
+          "lon": 82.9357,
+          "postcodes": [
+            {
+              "code": "630000",
+              "street": "Красный пр.",
+              "street_en": "Krasny Prospekt",
+              "pattern": "Красный пр., д. n{1,301}"
+            },
+            {
+              "code": "630007",
+              "street": "ул. Советская",
+              "street_en": "Sovetskaya St.",
+              "pattern": "ул. Советская, д. n{1,64}"
+            },
+            {
+              "code": "630091",
+              "street": "ул. Ленина",
+              "street_en": "Lenina St.",
+              "pattern": "ул. Ленина, д. n{1,28}"
+            },
+            {
+              "code": "630049",
+              "street": "ул. Кирова",
+              "street_en": "Kirova St.",
+              "pattern": "ул. Кирова, д. n{1,110}"
+            },
+            {
+              "code": "630110",
+              "street": "ул. Большевистская",
+              "street_en": "Bolshevistskaya St.",
+              "pattern": "ул. Большевистская, д. n{1,250}"
+            },
+            {
+              "code": "630132",
+              "street": "ул. Немировича-Данченко",
+              "street_en": "Nemirovicha-Danchenko St.",
+              "pattern": "ул. Немировича-Данченко, д. n{1,169}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Красноярский край",
+      "name_en": "Krasnoyarsk Krai",
+      "region_tags": ["Siberia", "Eastern Siberia"],
+      "cities": [
+        {
+          "name": "Красноярск",
+          "name_en": "Krasnoyarsk",
+          "lat": 56.0153,
+          "lon": 92.8932,
+          "postcodes": [
+            {
+              "code": "660000",
+              "street": "пр. Мира",
+              "street_en": "Mira Prospekt",
+              "pattern": "пр. Мира, д. n{1,150}"
+            },
+            {
+              "code": "660017",
+              "street": "ул. Ленина",
+              "street_en": "Lenina St.",
+              "pattern": "ул. Ленина, д. n{1,155}"
+            },
+            {
+              "code": "660049",
+              "street": "ул. Карла Маркса",
+              "street_en": "Karla Marksa St.",
+              "pattern": "ул. Карла Маркса, д. n{1,200}"
+            },
+            {
+              "code": "660075",
+              "street": "ул. Маерчака",
+              "street_en": "Maerchaka St.",
+              "pattern": "ул. Маерчака, д. n{1,65}"
+            },
+            {
+              "code": "660100",
+              "street": "ул. Свободный пр.",
+              "street_en": "Svobodny Prospekt",
+              "pattern": "Свободный пр., д. n{1,79}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Омская область",
+      "name_en": "Omsk Oblast",
+      "region_tags": ["Siberia", "Western Siberia"],
+      "cities": [
+        {
+          "name": "Омск",
+          "name_en": "Omsk",
+          "lat": 54.9885,
+          "lon": 73.3242,
+          "postcodes": [
+            {
+              "code": "644000",
+              "street": "ул. Ленина",
+              "street_en": "Lenina St.",
+              "pattern": "ул. Ленина, д. n{1,39}"
+            },
+            {
+              "code": "644024",
+              "street": "ул. Герцена",
+              "street_en": "Gertsena St.",
+              "pattern": "ул. Герцена, д. n{1,30}"
+            },
+            {
+              "code": "644043",
+              "street": "пр. Карла Маркса",
+              "street_en": "Karla Marksa Prospekt",
+              "pattern": "пр. Карла Маркса, д. n{1,50}"
+            },
+            {
+              "code": "644070",
+              "street": "ул. 70 лет Октября",
+              "street_en": "70 let Oktyabrya St.",
+              "pattern": "ул. 70 лет Октября, д. n{1,28}"
+            },
+            {
+              "code": "644105",
+              "street": "ул. Дмитриева",
+              "street_en": "Dmitrieva St.",
+              "pattern": "ул. Дмитриева, д. n{1,22}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Иркутская область",
+      "name_en": "Irkutsk Oblast",
+      "region_tags": ["Siberia", "Eastern Siberia"],
+      "cities": [
+        {
+          "name": "Иркутск",
+          "name_en": "Irkutsk",
+          "lat": 52.2978,
+          "lon": 104.2964,
+          "postcodes": [
+            {
+              "code": "664000",
+              "street": "ул. Карла Маркса",
+              "street_en": "Karla Marksa St.",
+              "pattern": "ул. Карла Маркса, д. n{1,47}"
+            },
+            {
+              "code": "664003",
+              "street": "ул. Ленина",
+              "street_en": "Lenina St.",
+              "pattern": "ул. Ленина, д. n{1,36}"
+            },
+            {
+              "code": "664025",
+              "street": "ул. 5-й Армии",
+              "street_en": "5-y Armii St.",
+              "pattern": "ул. 5-й Армии, д. n{1,68}"
+            },
+            {
+              "code": "664047",
+              "street": "б-р Гагарина",
+              "street_en": "Gagarina Blvd.",
+              "pattern": "б-р Гагарина, д. n{1,80}"
+            },
+            {
+              "code": "664081",
+              "street": "ул. Байкальская",
+              "street_en": "Baykalskaya St.",
+              "pattern": "ул. Байкальская, д. n{1,295}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ростовская область",
+      "name_en": "Rostov Oblast",
+      "region_tags": ["South"],
+      "cities": [
+        {
+          "name": "Ростов-на-Дону",
+          "name_en": "Rostov-on-Don",
+          "lat": 47.2357,
+          "lon": 39.7015,
+          "postcodes": [
+            {
+              "code": "344000",
+              "street": "ул. Большая Садовая",
+              "street_en": "Bolshaya Sadovaya St.",
+              "pattern": "ул. Большая Садовая, д. n{1,188}"
+            },
+            {
+              "code": "344002",
+              "street": "пр. Ворошиловский",
+              "street_en": "Voroshilovsky Prospekt",
+              "pattern": "пр. Ворошиловский, д. n{1,100}"
+            },
+            {
+              "code": "344010",
+              "street": "пр. Будённовский",
+              "street_en": "Budyonnovsky Prospekt",
+              "pattern": "пр. Будённовский, д. n{1,120}"
+            },
+            {
+              "code": "344018",
+              "street": "ул. Пушкинская",
+              "street_en": "Pushkinskaya St.",
+              "pattern": "ул. Пушкинская, д. n{1,250}"
+            },
+            {
+              "code": "344065",
+              "street": "пр. Стачки",
+              "street_en": "Stachki Prospekt",
+              "pattern": "пр. Стачки, д. n{1,270}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Волгоградская область",
+      "name_en": "Volgograd Oblast",
+      "region_tags": ["South"],
+      "cities": [
+        {
+          "name": "Волгоград",
+          "name_en": "Volgograd",
+          "lat": 48.7080,
+          "lon": 44.5133,
+          "postcodes": [
+            {
+              "code": "400000",
+              "street": "пр. Ленина",
+              "street_en": "Lenina Prospekt",
+              "pattern": "пр. Ленина, д. n{1,30}"
+            },
+            {
+              "code": "400005",
+              "street": "ул. Мира",
+              "street_en": "Mira St.",
+              "pattern": "ул. Мира, д. n{1,28}"
+            },
+            {
+              "code": "400066",
+              "street": "пр. Героев Сталинграда",
+              "street_en": "Geroev Stalingrada Prospekt",
+              "pattern": "пр. Героев Сталинграда, д. n{1,60}"
+            },
+            {
+              "code": "400078",
+              "street": "ул. Рабоче-Крестьянская",
+              "street_en": "Raboche-Krestyanskaya St.",
+              "pattern": "ул. Рабоче-Крестьянская, д. n{1,75}"
+            },
+            {
+              "code": "400131",
+              "street": "ул. Советская",
+              "street_en": "Sovetskaya St.",
+              "pattern": "ул. Советская, д. n{1,47}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Краснодарский край",
+      "name_en": "Krasnodar Krai",
+      "region_tags": ["South"],
+      "cities": [
+        {
+          "name": "Краснодар",
+          "name_en": "Krasnodar",
+          "lat": 45.0355,
+          "lon": 38.9753,
+          "postcodes": [
+            {
+              "code": "350000",
+              "street": "ул. Красная",
+              "street_en": "Krasnaya St.",
+              "pattern": "ул. Красная, д. n{1,200}"
+            },
+            {
+              "code": "350020",
+              "street": "ул. Северная",
+              "street_en": "Severnaya St.",
+              "pattern": "ул. Северная, д. n{1,600}"
+            },
+            {
+              "code": "350033",
+              "street": "ул. Ставропольская",
+              "street_en": "Stavropolskaya St.",
+              "pattern": "ул. Ставропольская, д. n{1,336}"
+            },
+            {
+              "code": "350059",
+              "street": "ул. Российская",
+              "street_en": "Rossiyskaya St.",
+              "pattern": "ул. Российская, д. n{1,548}"
+            },
+            {
+              "code": "350080",
+              "street": "ул. Тургенева",
+              "street_en": "Turgeneva St.",
+              "pattern": "ул. Тургенева, д. n{1,189}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Республика Дагестан",
+      "name_en": "Republic of Dagestan",
+      "region_tags": ["North Caucasus"],
+      "cities": [
+        {
+          "name": "Махачкала",
+          "name_en": "Makhachkala",
+          "lat": 42.9849,
+          "lon": 47.5047,
+          "postcodes": [
+            {
+              "code": "367000",
+              "street": "пр. Расула Гамзатова",
+              "street_en": "Rasula Gamzatova Prospekt",
+              "pattern": "пр. Расула Гамзатова, д. n{1,120}"
+            },
+            {
+              "code": "367012",
+              "street": "ул. Дахадаева",
+              "street_en": "Dakhadaeva St.",
+              "pattern": "ул. Дахадаева, д. n{1,90}"
+            },
+            {
+              "code": "367008",
+              "street": "пр. Имама Шамиля",
+              "street_en": "Imama Shamilya Prospekt",
+              "pattern": "пр. Имама Шамиля, д. n{1,78}"
+            },
+            {
+              "code": "367015",
+              "street": "ул. Ярагского",
+              "street_en": "Yaragskogo St.",
+              "pattern": "ул. Ярагского, д. n{1,100}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Приморский край",
+      "name_en": "Primorsky Krai",
+      "region_tags": ["Far East"],
+      "cities": [
+        {
+          "name": "Владивосток",
+          "name_en": "Vladivostok",
+          "lat": 43.1155,
+          "lon": 131.8855,
+          "postcodes": [
+            {
+              "code": "690000",
+              "street": "ул. Светланская",
+              "street_en": "Svetlanskaya St.",
+              "pattern": "ул. Светланская, д. n{1,225}"
+            },
+            {
+              "code": "690001",
+              "street": "ул. Алеутская",
+              "street_en": "Aleutskaya St.",
+              "pattern": "ул. Алеутская, д. n{1,66}"
+            },
+            {
+              "code": "690003",
+              "street": "Океанский пр.",
+              "street_en": "Okeansky Prospekt",
+              "pattern": "Океанский пр., д. n{1,141}"
+            },
+            {
+              "code": "690091",
+              "street": "пр. 100-летия Владивостока",
+              "street_en": "100-letiya Vladivostoka Prospekt",
+              "pattern": "пр. 100-летия Владивостока, д. n{1,160}"
+            },
+            {
+              "code": "690014",
+              "street": "ул. Русская",
+              "street_en": "Russkaya St.",
+              "pattern": "ул. Русская, д. n{1,100}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Хабаровский край",
+      "name_en": "Khabarovsk Krai",
+      "region_tags": ["Far East"],
+      "cities": [
+        {
+          "name": "Хабаровск",
+          "name_en": "Khabarovsk",
+          "lat": 48.4827,
+          "lon": 135.0838,
+          "postcodes": [
+            {
+              "code": "680000",
+              "street": "ул. Муравьёва-Амурского",
+              "street_en": "Muravyova-Amurskogo St.",
+              "pattern": "ул. Муравьёва-Амурского, д. n{1,56}"
+            },
+            {
+              "code": "680013",
+              "street": "ул. Карла Маркса",
+              "street_en": "Karla Marksa St.",
+              "pattern": "ул. Карла Маркса, д. n{1,143}"
+            },
+            {
+              "code": "680028",
+              "street": "ул. Ленина",
+              "street_en": "Lenina St.",
+              "pattern": "ул. Ленина, д. n{1,85}"
+            },
+            {
+              "code": "680030",
+              "street": "ул. Серышева",
+              "street_en": "Serysheva St.",
+              "pattern": "ул. Серышева, д. n{1,60}"
+            },
+            {
+              "code": "680038",
+              "street": "ул. Краснореченская",
+              "street_en": "Krasnorechenskaya St.",
+              "pattern": "ул. Краснореченская, д. n{1,200}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
