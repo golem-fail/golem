@@ -3,6 +3,7 @@
 pub mod actions;
 pub mod capture;
 pub mod cleanup;
+pub mod context;
 pub mod branch;
 pub mod fixture_loader;
 pub mod data_driven;

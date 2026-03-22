@@ -1,14 +1,22 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
 use anyhow::{bail, Result};
 use golem_driver::{Direction, PlatformDriver};
+use golem_element::glob::glob_match;
 use golem_element::selector::find_elements;
 use golem_element::Element;
+use golem_email::ImapPoller;
 use golem_parser::Step;
 use golem_vars::{ScopeLevel, VarValue, VariableStore};
+use rand::SeedableRng;
+use rand_chacha::ChaCha8Rng;
+use regex::Regex;
 use tokio::time::Instant;
 
+use crate::context::ExecutionContext;
 use crate::resolution::{build_selector, resolve_element};
+use crate::scroll::{scroll_to_element, DEFAULT_MAX_SCROLLS};
 
 /// Resolve an element using all step selectors except `text`.
 ///
@@ -43,6 +51,7 @@ pub async fn execute_action(
     step: &Step,
     driver: &dyn PlatformDriver,
     vars: &mut VariableStore,
+    ctx: &ExecutionContext<'_>,
 ) -> Result<()> {
     let action = step.action.as_str();
     match action {
@@ -51,6 +60,7 @@ pub async fn execute_action(
         "backspace" => handle_backspace(step, driver).await,
         "long_press" => handle_long_press(step, driver).await,
         "swipe" => handle_swipe(step, driver).await,
+        "scroll" => handle_scroll(step, driver).await,
         "read" => handle_read(step, driver, vars).await,
         "hide_keyboard" => handle_hide_keyboard(driver).await,
         "assert_visible" => handle_assert_visible(step, driver).await,
@@ -58,6 +68,8 @@ pub async fn execute_action(
         "assert_text" => handle_assert_text(step, driver).await,
         "assert_enabled" => handle_assert_enabled(step, driver).await,
         "assert_checked" => handle_assert_checked(step, driver).await,
+        "assert_alert" => handle_assert_alert(step, driver).await,
+        "dismiss_alert" => handle_dismiss_alert(step, driver).await,
         "wait" => handle_wait(step, driver).await,
         "wait_not" => handle_wait_not(step, driver).await,
         "fail" => handle_fail(step),
@@ -76,7 +88,10 @@ pub async fn execute_action(
         "add_media" => handle_add_media(step, driver).await,
         "open_link" => handle_open_link(step, driver).await,
         "push_notification" => handle_push_notification(step, driver).await,
-        "bash" | "run" => handle_bash(step, vars).await,
+        "bash" => handle_bash(step, vars).await,
+        "run" => handle_run(step, vars, ctx).await,
+        "await_email" => handle_await_email(step, vars).await,
+        "load_fixture" => handle_load_fixture(step, vars, ctx).await,
         "http_get" => handle_http(step, vars, "GET").await,
         "http_post" => handle_http(step, vars, "POST").await,
         "http_put" => handle_http(step, vars, "PUT").await,
@@ -156,6 +171,38 @@ async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
     };
 
     driver.swipe(direction).await
+}
+
+/// Scroll in a direction until an element matching the step's selectors is found.
+///
+/// Params:
+/// - `direction`: up/down/left/right (default "down")
+/// - `max_scrolls`: optional, defaults to `DEFAULT_MAX_SCROLLS`
+async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let direction_str = step
+        .params
+        .get("direction")
+        .and_then(|v| v.as_str())
+        .unwrap_or("down");
+
+    let direction = match direction_str {
+        "up" => Direction::Up,
+        "down" => Direction::Down,
+        "left" => Direction::Left,
+        "right" => Direction::Right,
+        other => bail!("Invalid scroll direction: \"{}\"", other),
+    };
+
+    let max_scrolls = step
+        .params
+        .get("max_scrolls")
+        .and_then(|v| v.as_integer())
+        .map(|n| n as u32)
+        .unwrap_or(DEFAULT_MAX_SCROLLS);
+
+    let selector = build_selector(step);
+    scroll_to_element(&selector, driver, direction, max_scrolls).await?;
+    Ok(())
 }
 
 /// Find the target element, read its text content, and optionally save it
@@ -257,6 +304,41 @@ async fn handle_assert_checked(step: &Step, driver: &dyn PlatformDriver) -> Resu
             elem.text,
         )
     }
+}
+
+/// Assert that an alert/dialog is currently displayed.
+///
+/// If the step has a `text` field, the alert element's text is glob-matched
+/// against it. If no `text` is provided, any alert satisfies the assertion.
+async fn handle_assert_alert(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let alert = driver.get_alert().await?;
+    let alert_elem = alert.ok_or_else(|| anyhow::anyhow!("assert_alert failed: no alert is displayed"))?;
+
+    if let Some(ref expected_pattern) = step.text {
+        let alert_text = alert_elem.text.as_deref().unwrap_or("");
+        if !glob_match(expected_pattern, alert_text) {
+            bail!(
+                "assert_alert failed: alert text {:?} does not match pattern {:?}",
+                alert_text,
+                expected_pattern,
+            );
+        }
+    }
+
+    Ok(())
+}
+
+/// Dismiss the current alert/dialog.
+///
+/// If the step has a `text` param or `button` param, it is passed as the button
+/// label to dismiss with. Otherwise the alert is dismissed with the default action.
+async fn handle_dismiss_alert(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let button = step
+        .text
+        .as_deref()
+        .or_else(|| step.params.get("button").and_then(|v| v.as_str()));
+
+    driver.dismiss_alert(button).await
 }
 
 /// Wait for an element to appear, polling the hierarchy until found or timeout.
@@ -484,13 +566,15 @@ async fn handle_push_notification(step: &Step, driver: &dyn PlatformDriver) -> R
     driver.push_notification(title, body, payload).await
 }
 
-/// Execute a shell command on the host, optionally saving the output.
+/// Execute a shell command on the host via `sh -c`, optionally saving the output.
+///
+/// The command is read from the `run` param.
 async fn handle_bash(step: &Step, vars: &mut VariableStore) -> Result<()> {
     let command = step
         .params
-        .get("command")
+        .get("run")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("bash/run action requires 'command' param"))?;
+        .ok_or_else(|| anyhow::anyhow!("bash action requires 'run' param"))?;
 
     let output = tokio::process::Command::new("sh")
         .arg("-c")
@@ -514,6 +598,223 @@ async fn handle_bash(step: &Step, vars: &mut VariableStore) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Execute a project-scoped script file directly (not through `sh -c`).
+///
+/// - `script` param is required.
+/// - Path traversal (`..`) is rejected.
+/// - Leading `/` means relative to `ctx.project_root`, otherwise relative to `ctx.flow_dir`.
+/// - Optional `args` array of arguments to pass.
+/// - If `save_to` is set, stdout and exit_code are stored as an object.
+async fn handle_run(
+    step: &Step,
+    vars: &mut VariableStore,
+    ctx: &ExecutionContext<'_>,
+) -> Result<()> {
+    let script = step
+        .params
+        .get("script")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("run action requires 'script' param"))?;
+
+    // Reject path traversal
+    if script.contains("..") {
+        bail!("run action: path traversal ('..') is not allowed in script path");
+    }
+
+    // Resolve the script path
+    let script_path = if script.starts_with('/') {
+        ctx.project_root.join(script.trim_start_matches('/'))
+    } else {
+        ctx.flow_dir.join(script)
+    };
+
+    // Check file exists
+    if !script_path.exists() {
+        bail!(
+            "run action: script not found: {}",
+            script_path.display()
+        );
+    }
+
+    // Parse optional args array
+    let args: Vec<&str> = step
+        .params
+        .get("args")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+        .unwrap_or_default();
+
+    let mut cmd = tokio::process::Command::new(&script_path);
+    for arg in &args {
+        cmd.arg(arg);
+    }
+
+    let output = cmd.output().await?;
+
+    let exit_code = output.status.code().unwrap_or(-1);
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    if let Some(ref var_name) = step.save_to {
+        let mut obj = HashMap::new();
+        obj.insert("stdout".to_string(), VarValue::string(&stdout));
+        obj.insert(
+            "exit_code".to_string(),
+            VarValue::string(exit_code.to_string()),
+        );
+        vars.set_in_scope(ScopeLevel::Flow, var_name, VarValue::Object(obj));
+    }
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!(
+            "Script failed with exit code {}: {}",
+            exit_code,
+            stderr.trim()
+        );
+    }
+
+    Ok(())
+}
+
+/// Poll an IMAP inbox waiting for an email.
+///
+/// Reads inbox credentials from the variable store using the `inbox` param as a
+/// namespace (e.g. inbox_name.imap_host, inbox_name.imap_port, etc.).
+/// Optionally filters by `to` address. Applies `extract` regexes to capture
+/// fields from the email body. Stores results under `save_to`.
+async fn handle_await_email(step: &Step, vars: &mut VariableStore) -> Result<()> {
+    let inbox_name = step
+        .params
+        .get("inbox")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("await_email action requires 'inbox' param"))?;
+
+    // Look up inbox credentials from variable store
+    let inbox_val = vars
+        .resolve(inbox_name)
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "await_email: inbox '{}' not found in variables",
+                inbox_name
+            )
+        })?
+        .clone();
+
+    let imap_host = inbox_val
+        .get_path("imap_host")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("await_email: {inbox_name}.imap_host not found"))?
+        .to_string();
+    let imap_port = inbox_val
+        .get_path("imap_port")
+        .and_then(|v| v.as_str())
+        .and_then(|s| s.parse::<u16>().ok())
+        .ok_or_else(|| {
+            anyhow::anyhow!("await_email: {inbox_name}.imap_port not found or invalid")
+        })?;
+    let user = inbox_val
+        .get_path("user")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("await_email: {inbox_name}.user not found"))?
+        .to_string();
+    let pass = inbox_val
+        .get_path("pass")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("await_email: {inbox_name}.pass not found"))?
+        .to_string();
+
+    let to_filter = step.params.get("to").and_then(|v| v.as_str());
+    let timeout = step.timeout.unwrap_or(30000);
+
+    let subject_pattern = step
+        .params
+        .get("subject")
+        .and_then(|v| v.as_str())
+        .unwrap_or("*");
+
+    let poller = ImapPoller::new(imap_host, imap_port, user, pass);
+    let email = poller.await_email(subject_pattern, timeout, 2000).await?;
+
+    // Filter by `to` if specified
+    if let Some(to) = to_filter {
+        if !glob_match(to, &email.to) {
+            bail!(
+                "await_email: email 'to' field {:?} does not match filter {:?}",
+                email.to,
+                to,
+            );
+        }
+    }
+
+    // Apply extract regexes
+    let mut extracted = HashMap::new();
+    if let Some(extract_table) = step.params.get("extract").and_then(|v| v.as_table()) {
+        for (key, pattern_val) in extract_table {
+            if let Some(pattern_str) = pattern_val.as_str() {
+                let re = Regex::new(pattern_str).map_err(|e| {
+                    anyhow::anyhow!("await_email: invalid regex for '{key}': {e}")
+                })?;
+                if let Some(caps) = re.captures(&email.body) {
+                    let captured = caps
+                        .get(1)
+                        .map(|m| m.as_str())
+                        .unwrap_or_else(|| caps.get(0).map_or("", |m| m.as_str()));
+                    extracted.insert(key.clone(), VarValue::string(captured));
+                }
+            }
+        }
+    }
+
+    // Store results
+    if let Some(ref var_name) = step.save_to {
+        let mut obj = HashMap::new();
+        obj.insert("body".to_string(), VarValue::string(&email.body));
+        obj.insert("subject".to_string(), VarValue::string(&email.subject));
+        obj.insert("from".to_string(), VarValue::string(&email.from));
+        obj.insert("to".to_string(), VarValue::string(&email.to));
+        obj.insert("date".to_string(), VarValue::string(&email.date));
+        for (k, v) in extracted {
+            obj.insert(k, v);
+        }
+        vars.set_in_scope(ScopeLevel::Flow, var_name, VarValue::Object(obj));
+    }
+
+    Ok(())
+}
+
+/// Load a fixture file and store its variables under a namespace.
+///
+/// - `fixture` param: name of the fixture to load
+/// - `as` param: namespace to store the fixture variables under
+async fn handle_load_fixture(
+    step: &Step,
+    vars: &mut VariableStore,
+    ctx: &ExecutionContext<'_>,
+) -> Result<()> {
+    let fixture_name = step
+        .params
+        .get("fixture")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("load_fixture action requires 'fixture' param"))?;
+
+    let namespace = step
+        .params
+        .get("as")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("load_fixture action requires 'as' param"))?;
+
+    let mut rng = ChaCha8Rng::from_entropy();
+
+    crate::fixture_loader::load_fixture_into_store(
+        fixture_name,
+        namespace,
+        ctx.flow_dir,
+        ctx.project_root,
+        vars,
+        &mut rng,
+    )
 }
 
 /// Make an HTTP request and optionally save the response body.
@@ -577,10 +878,12 @@ async fn handle_http(step: &Step, vars: &mut VariableStore, method: &str) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::context::test_ctx;
     use golem_driver::MockPlatformDriver;
     use golem_element::{Bounds, Element};
     use golem_vars::Scope;
     use std::collections::HashMap;
+    use std::path::Path;
 
     // ── Test helpers ──────────────────────────────────────────────────
 
@@ -682,11 +985,12 @@ mod tests {
         let root = root_with_button("Submit");
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("tap");
         step.text = Some("Submit".to_string());
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("tap should succeed");
 
@@ -711,12 +1015,13 @@ mod tests {
         ));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("read");
         step.id = Some("otp-code".to_string());
         step.save_to = Some("otp".to_string());
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("read should succeed");
 
@@ -731,12 +1036,13 @@ mod tests {
         let root = root_with_input("email");
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("type");
         step.id = Some("email".to_string());
         step.text = Some("user@example.com".to_string());
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("type should succeed");
 
@@ -759,13 +1065,14 @@ mod tests {
         let root = root_with_input("search");
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("backspace");
         step.id = Some("search".to_string());
         step.params
             .insert("count".to_string(), toml::Value::Integer(5));
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("backspace should succeed");
 
@@ -782,13 +1089,14 @@ mod tests {
         let root = root_with_button("Item to select");
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("long_press");
         step.text = Some("Item to select".to_string());
         step.params
             .insert("duration".to_string(), toml::Value::Integer(2000));
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("long_press should succeed");
 
@@ -806,12 +1114,13 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("swipe");
         step.params
             .insert("direction".to_string(), toml::Value::String("up".to_string()));
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("swipe should succeed");
 
@@ -828,10 +1137,11 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let step = make_step("hide_keyboard");
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("hide_keyboard should succeed");
 
@@ -857,25 +1167,26 @@ mod tests {
         ));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         // Type into username field
         let mut type_step = make_step("type");
         type_step.id = Some("username".to_string());
         type_step.text = Some("admin".to_string());
-        execute_action(&type_step, &driver, &mut vars)
+        execute_action(&type_step, &driver, &mut vars, &ctx)
             .await
             .expect("type should succeed");
 
         // Hide keyboard
         let hk_step = make_step("hide_keyboard");
-        execute_action(&hk_step, &driver, &mut vars)
+        execute_action(&hk_step, &driver, &mut vars, &ctx)
             .await
             .expect("hide_keyboard should succeed");
 
         // Tap login button
         let mut tap_step = make_step("tap");
         tap_step.text = Some("Login".to_string());
-        execute_action(&tap_step, &driver, &mut vars)
+        execute_action(&tap_step, &driver, &mut vars, &ctx)
             .await
             .expect("tap should succeed");
 
@@ -904,10 +1215,11 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let step = make_step("fly_to_moon");
 
-        let result = execute_action(&step, &driver, &mut vars).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -927,11 +1239,12 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("tap");
         step.text = Some("Does Not Exist".to_string());
 
-        let result = execute_action(&step, &driver, &mut vars).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -947,12 +1260,13 @@ mod tests {
         let root = root_with_input("field");
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("backspace");
         step.id = Some("field".to_string());
         // No count param set
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("backspace should succeed");
 
@@ -969,12 +1283,13 @@ mod tests {
         let root = root_with_button("Hold me");
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("long_press");
         step.text = Some("Hold me".to_string());
         // No duration param set
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("long_press should succeed");
 
@@ -997,12 +1312,13 @@ mod tests {
         ));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("read");
         step.id = Some("info".to_string());
         // No save_to set
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("read without save_to should succeed");
     }
@@ -1014,6 +1330,7 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         for (dir_str, expected) in [
             ("up", "Up"),
@@ -1028,7 +1345,7 @@ mod tests {
                 toml::Value::String(dir_str.to_string()),
             );
 
-            execute_action(&step, &driver, &mut vars)
+            execute_action(&step, &driver, &mut vars, &ctx)
                 .await
                 .unwrap_or_else(|_| panic!("swipe {dir_str} should succeed"));
 
@@ -1046,6 +1363,7 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("swipe");
         step.params.insert(
@@ -1053,7 +1371,7 @@ mod tests {
             toml::Value::String("diagonal".to_string()),
         );
 
-        let result = execute_action(&step, &driver, &mut vars).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -1071,11 +1389,12 @@ mod tests {
         let root = root_with_button("Welcome");
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("assert_visible");
         step.text = Some("Welcome".to_string());
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("assert_visible should succeed when element exists");
     }
@@ -1087,11 +1406,12 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("assert_visible");
         step.text = Some("Nonexistent".to_string());
 
-        let result = execute_action(&step, &driver, &mut vars).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -1107,11 +1427,12 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("assert_not_visible");
         step.text = Some("Error*".to_string());
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("assert_not_visible should succeed when element absent");
     }
@@ -1123,11 +1444,12 @@ mod tests {
         let root = root_with_button("Error occurred");
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("assert_not_visible");
         step.text = Some("Error*".to_string());
 
-        let result = execute_action(&step, &driver, &mut vars).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -1149,12 +1471,13 @@ mod tests {
         ));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("assert_text");
         step.id = Some("total".to_string());
         step.text = Some("$42.00".to_string());
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("assert_text should succeed when text matches");
     }
@@ -1172,12 +1495,13 @@ mod tests {
         ));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("assert_text");
         step.id = Some("total".to_string());
         step.text = Some("$42.00".to_string());
 
-        let result = execute_action(&step, &driver, &mut vars).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -1204,11 +1528,12 @@ mod tests {
         root.children.push(btn);
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("assert_enabled");
         step.id = Some("submit-button".to_string());
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("assert_enabled should succeed when element is enabled");
     }
@@ -1223,11 +1548,12 @@ mod tests {
         root.children.push(btn);
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("assert_enabled");
         step.id = Some("submit-button".to_string());
 
-        let result = execute_action(&step, &driver, &mut vars).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -1246,11 +1572,12 @@ mod tests {
         root.children.push(cb);
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("assert_checked");
         step.id = Some("agree-checkbox".to_string());
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("assert_checked should succeed when element is checked");
     }
@@ -1265,11 +1592,12 @@ mod tests {
         root.children.push(cb);
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("assert_checked");
         step.id = Some("agree-checkbox".to_string());
 
-        let result = execute_action(&step, &driver, &mut vars).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -1285,11 +1613,12 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("fail");
         step.text = Some("Should not reach here".to_string());
 
-        let result = execute_action(&step, &driver, &mut vars).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -1305,12 +1634,13 @@ mod tests {
         let root = root_with_button("Welcome");
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("wait");
         step.text = Some("Welcome".to_string());
         step.timeout = Some(1000);
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("wait should succeed immediately when element is present");
     }
@@ -1322,12 +1652,13 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("wait_not");
         step.text = Some("Loading...".to_string());
         step.timeout = Some(1000);
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("wait_not should succeed immediately when element is absent");
     }
@@ -1341,11 +1672,12 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("launch");
         step.app = Some("com.example.app".to_string());
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("launch should succeed");
 
@@ -1362,11 +1694,12 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("stop");
         step.app = Some("com.example.app".to_string());
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("stop should succeed");
 
@@ -1383,11 +1716,12 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("clear_data");
         step.app = Some("com.example.app".to_string());
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("clear_data should succeed");
 
@@ -1404,6 +1738,7 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("rotate");
         step.params.insert(
@@ -1411,7 +1746,7 @@ mod tests {
             toml::Value::String("landscape".to_string()),
         );
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("rotate should succeed");
 
@@ -1428,12 +1763,13 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("dark_mode");
         step.params
             .insert("enabled".to_string(), toml::Value::Boolean(true));
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("dark_mode should succeed");
 
@@ -1450,12 +1786,13 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("dark_mode");
         step.params
             .insert("enabled".to_string(), toml::Value::Boolean(false));
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("dark_mode should succeed");
 
@@ -1472,6 +1809,7 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("set_location");
         step.params
@@ -1479,7 +1817,7 @@ mod tests {
         step.params
             .insert("longitude".to_string(), toml::Value::Float(139.6503));
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("set_location should succeed");
 
@@ -1496,6 +1834,7 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("press");
         step.params.insert(
@@ -1503,7 +1842,7 @@ mod tests {
             toml::Value::String("home".to_string()),
         );
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("press should succeed");
 
@@ -1520,6 +1859,7 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("grant_permission");
         step.app = Some("com.example.app".to_string());
@@ -1528,7 +1868,7 @@ mod tests {
             toml::Value::String("camera".to_string()),
         );
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("grant_permission should succeed");
 
@@ -1545,6 +1885,7 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("revoke_permission");
         step.app = Some("com.example.app".to_string());
@@ -1553,7 +1894,7 @@ mod tests {
             toml::Value::String("location".to_string()),
         );
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("revoke_permission should succeed");
 
@@ -1573,11 +1914,12 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let step = make_step("launch");
         // No app set
 
-        let result = execute_action(&step, &driver, &mut vars).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -1593,11 +1935,12 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let step = make_step("rotate");
         // No orientation param
 
-        let result = execute_action(&step, &driver, &mut vars).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -1615,10 +1958,11 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let step = make_step("screenshot");
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("screenshot should succeed");
 
@@ -1634,10 +1978,11 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let step = make_step("start_recording");
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("start_recording should succeed");
 
@@ -1655,10 +2000,11 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let step = make_step("stop_recording");
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("stop_recording should succeed");
 
@@ -1674,6 +2020,7 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("add_media");
         step.params.insert(
@@ -1681,7 +2028,7 @@ mod tests {
             toml::Value::String("test_data/photo.jpg".to_string()),
         );
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("add_media should succeed");
 
@@ -1698,6 +2045,7 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("open_link");
         step.params.insert(
@@ -1705,7 +2053,7 @@ mod tests {
             toml::Value::String("myapp://profile/123".to_string()),
         );
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("open_link should succeed");
 
@@ -1722,6 +2070,7 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("push_notification");
         step.params.insert(
@@ -1737,7 +2086,7 @@ mod tests {
             toml::Value::String("notification.json".to_string()),
         );
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("push_notification should succeed");
 
@@ -1760,14 +2109,15 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("bash");
         step.params.insert(
-            "command".to_string(),
+            "run".to_string(),
             toml::Value::String("echo hello".to_string()),
         );
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("bash should succeed");
 
@@ -1782,15 +2132,16 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("bash");
         step.params.insert(
-            "command".to_string(),
+            "run".to_string(),
             toml::Value::String("echo hello".to_string()),
         );
         step.save_to = Some("output".to_string());
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("bash should succeed");
 
@@ -1798,27 +2149,45 @@ mod tests {
         assert_eq!(saved, &VarValue::string("hello"));
     }
 
-    // ── run action (alias for bash) works the same ───────────────────
+    // ── run action executes a project-scoped script file ──────────────
 
     #[tokio::test]
-    async fn run_action_executes_command() {
+    async fn run_action_executes_script_file() {
+        let tmp = tempfile::tempdir().expect("temp dir");
+        let script_path = tmp.path().join("hello.sh");
+        std::fs::write(&script_path, "#!/bin/sh\necho world\n").expect("write script");
+
+        // Make executable
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))
+                .expect("set permissions");
+        }
+
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(tmp.path());
 
         let mut step = make_step("run");
         step.params.insert(
-            "command".to_string(),
-            toml::Value::String("echo world".to_string()),
+            "script".to_string(),
+            toml::Value::String("hello.sh".to_string()),
         );
         step.save_to = Some("result".to_string());
 
-        execute_action(&step, &driver, &mut vars)
+        execute_action(&step, &driver, &mut vars, &ctx)
             .await
             .expect("run should succeed");
 
         let saved = vars.get("result").expect("result variable should exist");
-        assert_eq!(saved, &VarValue::string("world"));
+        let obj = saved.as_object().expect("result SHALL be an object");
+        assert_eq!(
+            obj.get("stdout"),
+            Some(&VarValue::string("world")),
+            "stdout SHALL contain the script output"
+        );
     }
 
     // ── http_get dispatches correctly ────────────────────────────────
@@ -1828,11 +2197,12 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let step = make_step("http_get");
         // No url param
 
-        let result = execute_action(&step, &driver, &mut vars).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -1848,11 +2218,12 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let step = make_step("http_post");
         // No url param
 
-        let result = execute_action(&step, &driver, &mut vars).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -1868,10 +2239,11 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let step = make_step("teleport");
 
-        let result = execute_action(&step, &driver, &mut vars).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -1891,11 +2263,12 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let step = make_step("add_media");
         // No path param
 
-        let result = execute_action(&step, &driver, &mut vars).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -1911,11 +2284,12 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let step = make_step("open_link");
         // No url param
 
-        let result = execute_action(&step, &driver, &mut vars).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -1931,16 +2305,17 @@ mod tests {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
 
         let step = make_step("bash");
         // No command param
 
-        let result = execute_action(&step, &driver, &mut vars).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
-            err_msg.contains("command"),
-            "error should mention command param, got: {err_msg}"
+            err_msg.contains("run"),
+            "error should mention 'run' param, got: {err_msg}"
         );
     }
 }

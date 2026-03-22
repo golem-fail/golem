@@ -475,6 +475,7 @@ dependencies = [
  "golem-vars",
  "rand",
  "rand_chacha",
+ "regex",
  "reqwest",
  "tempfile",
  "tokio",

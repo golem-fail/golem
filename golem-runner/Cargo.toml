@@ -17,9 +17,10 @@ toml = { workspace = true }
 reqwest = { workspace = true }
 async-trait = { workspace = true }
 rand = { workspace = true }
+rand_chacha = "0.3"
+regex = "1"
 
 [dev-dependencies]
-rand_chacha = "0.3"
 tempfile = "3"
 
 [lints]

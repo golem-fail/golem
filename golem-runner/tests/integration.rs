@@ -4,14 +4,35 @@
 //! driver -> verify results. They cover linear flows, branching, loops, variable
 //! interpolation, fake data generation, teardown, and on_fail policies.
 
+use std::path::Path;
+use std::sync::LazyLock;
+
 use golem_driver::MockPlatformDriver;
 use golem_element::{Bounds, Element};
 use golem_parser::parse_flow;
+use golem_runner::capture::CaptureConfig;
+use golem_runner::context::ExecutionContext;
 use golem_runner::executor::{execute_flow, FlowResult};
 use golem_runner::teardown::execute_teardown;
 use golem_vars::{Scope, ScopeLevel, VarValue, VariableStore};
 
 const DEFAULT_TIMEOUT: u64 = 10_000;
+
+static DEFAULT_CAPTURE: LazyLock<CaptureConfig> = LazyLock::new(|| CaptureConfig {
+    screenshot_on_failure: false,
+    ..CaptureConfig::default()
+});
+
+fn test_ctx() -> ExecutionContext<'static> {
+    ExecutionContext {
+        flow_dir: Path::new("."),
+        project_root: Path::new("."),
+        capture_config: &DEFAULT_CAPTURE,
+        flow_name: "test",
+        block_name: None,
+        step_index: 0,
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -110,8 +131,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -154,8 +176,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -205,8 +228,9 @@ steps = [
     // "Welcome" is visible in the hierarchy, so the branch should match
     let driver = MockPlatformDriver::new(hierarchy_with_texts(&["Welcome"]));
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -250,6 +274,7 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(hierarchy_with_texts(&["Submit"]));
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
     // Simulate the runner's var initialization: push flow vars into store
     let mut flow_scope = Scope::new(ScopeLevel::Flow);
@@ -258,7 +283,7 @@ steps = [
     }
     vars.push_scope(flow_scope);
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -300,6 +325,7 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
     // Simulate runner's fake data evaluation
     use rand::SeedableRng;
@@ -316,7 +342,7 @@ steps = [
     }
     vars.push_scope(flow_scope);
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -363,9 +389,10 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
     // Execute the main flow
-    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -373,7 +400,7 @@ steps = [
 
     // Now execute teardown (as the runner would)
     let teardown_result =
-        execute_teardown(&flow.teardown, &driver, &mut vars, DEFAULT_TIMEOUT).await;
+        execute_teardown(&flow.teardown, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
 
     assert!(
         teardown_result.warnings.is_empty(),
@@ -416,9 +443,10 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
     // Main flow fails (element not found)
-    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult), not Err");
 
@@ -431,14 +459,15 @@ steps = [
 
     // Teardown still runs after failure
     let teardown_result =
-        execute_teardown(&flow.teardown, &driver, &mut vars, DEFAULT_TIMEOUT).await;
+        execute_teardown(&flow.teardown, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
 
     assert!(
         teardown_result.errors.is_empty(),
         "teardown should succeed"
     );
 
-    // Teardown screenshot should have executed
+    // Teardown screenshot should have executed.
+    // screenshot_on_failure is disabled in test config, so no failure capture.
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
     assert_eq!(
@@ -467,8 +496,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -483,7 +513,8 @@ steps = [
         "warning message should not be empty"
     );
 
-    // Both screenshot steps should have executed
+    // Both screenshot steps should have executed.
+    // screenshot_on_failure is disabled in test config, so no failure capture.
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
     assert_eq!(
@@ -512,8 +543,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -567,8 +599,9 @@ steps = [
     // "Login" is NOT in the hierarchy, so branch won't match
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -603,8 +636,9 @@ steps = [
     let driver =
         MockPlatformDriver::new(hierarchy_with_texts(&["Login", "Submit", "Cancel"]));
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -641,8 +675,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
@@ -685,8 +720,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -736,13 +772,14 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
     // Set the variable that the branch checks
     let mut scope = Scope::new(ScopeLevel::Flow);
     scope.set("env", VarValue::string("staging"));
     vars.push_scope(scope);
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -773,8 +810,9 @@ name = "empty flow"
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -807,14 +845,15 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
     assert_success(&flow_result);
 
     let teardown_result =
-        execute_teardown(&flow.teardown, &driver, &mut vars, DEFAULT_TIMEOUT).await;
+        execute_teardown(&flow.teardown, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
 
     // Failing step in teardown defaults to on_fail="ignore" so it's silent
     assert!(teardown_result.warnings.is_empty());
@@ -872,9 +911,10 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
     let start = flow.flow.start.as_deref();
-    let result = execute_flow(&flow, &driver, &mut vars, start, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, start, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -927,6 +967,7 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(hierarchy_with_texts(&["Continue", "Skip"]));
     let mut vars = VariableStore::new();
+    let mut ctx = test_ctx();
 
     // Initialize flow vars
     let mut flow_scope = Scope::new(ScopeLevel::Flow);
@@ -936,14 +977,14 @@ steps = [
     vars.push_scope(flow_scope);
 
     // Execute flow
-    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
     assert_success(&flow_result);
 
     // Execute teardown
     let teardown_result =
-        execute_teardown(&flow.teardown, &driver, &mut vars, DEFAULT_TIMEOUT).await;
+        execute_teardown(&flow.teardown, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
     assert!(teardown_result.errors.is_empty());
 
     let calls = driver.get_calls();

@@ -6,14 +6,29 @@
 //! public APIs, using full TOML-parsed flows and the mock driver.
 
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use golem_driver::MockPlatformDriver;
 use golem_element::{Bounds, Element};
 use golem_parser::parse_flow;
 use golem_runner::capture::{build_screenshot_path, CaptureConfig};
+use golem_runner::context::ExecutionContext;
 use golem_runner::executor::{execute_flow, FlowResult};
 
 const DEFAULT_TIMEOUT: u64 = 10_000;
+
+static DEFAULT_CAPTURE: LazyLock<CaptureConfig> = LazyLock::new(CaptureConfig::default);
+
+fn test_ctx() -> ExecutionContext<'static> {
+    ExecutionContext {
+        flow_dir: Path::new("."),
+        project_root: Path::new("."),
+        capture_config: &DEFAULT_CAPTURE,
+        flow_name: "test",
+        block_name: None,
+        step_index: 0,
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -99,8 +114,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = golem_vars::VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
@@ -111,12 +127,13 @@ steps = [
         Some("failing_block".to_string()),
     );
 
-    // The third step (second screenshot) should NOT have executed
+    // The third step (second screenshot) should NOT have executed.
+    // Count includes: 1 explicit screenshot step + 1 failure capture = 2
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
     assert_eq!(
-        screenshot_count, 1,
-        "only the first screenshot should execute; error stops flow"
+        screenshot_count, 2,
+        "first screenshot step + failure capture screenshot"
     );
 }
 
@@ -140,8 +157,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = golem_vars::VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -152,10 +170,11 @@ steps = [
         "warning message should contain error details"
     );
 
-    // Both screenshots execute (warn does not stop flow)
+    // Both screenshots execute (warn does not stop flow).
+    // Count includes: 2 explicit screenshot steps + 1 failure capture = 3
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
-    assert_eq!(screenshot_count, 2, "both screenshots should execute around warn step");
+    assert_eq!(screenshot_count, 3, "both screenshot steps + failure capture screenshot");
 }
 
 // ---------------------------------------------------------------------------
@@ -178,8 +197,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = golem_vars::VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -215,8 +235,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = golem_vars::VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
@@ -229,10 +250,10 @@ steps = [
         "warn step should have been collected before the error"
     );
 
-    // Only one screenshot (after the warn step, before the error step)
+    // Count includes: 1 warn capture + 1 explicit screenshot step + 1 error capture = 3
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
-    assert_eq!(screenshot_count, 1, "only one screenshot before the error step");
+    assert_eq!(screenshot_count, 3, "warn capture + screenshot step + error capture");
 }
 
 // ---------------------------------------------------------------------------
@@ -254,8 +275,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = golem_vars::VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
@@ -265,10 +287,10 @@ steps = [
     );
     assert_eq!(result.failed_step, Some(0));
 
-    // Screenshot should not have executed
+    // No explicit screenshot steps executed, but failure capture occurs
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
-    assert_eq!(screenshot_count, 0, "no steps after error should execute");
+    assert_eq!(screenshot_count, 1, "failure capture screenshot only");
 }
 
 // ===========================================================================
@@ -295,8 +317,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = golem_vars::VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -307,10 +330,10 @@ steps = [
         "after exhausting retries, on_fail=warn should produce a warning"
     );
 
-    // The screenshot after the retried step should still execute
+    // Count includes: 1 explicit screenshot step + 1 failure capture = 2
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
-    assert_eq!(screenshot_count, 1, "screenshot should execute after warn");
+    assert_eq!(screenshot_count, 2, "screenshot step + failure capture screenshot");
 }
 
 // ---------------------------------------------------------------------------
@@ -332,8 +355,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = golem_vars::VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
@@ -342,7 +366,7 @@ steps = [
 
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
-    assert_eq!(screenshot_count, 0, "no steps after error should run");
+    assert_eq!(screenshot_count, 1, "failure capture screenshot only");
 }
 
 // ---------------------------------------------------------------------------
@@ -364,8 +388,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = golem_vars::VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -405,8 +430,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = golem_vars::VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -538,8 +564,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = golem_vars::VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -587,8 +614,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = golem_vars::VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
@@ -642,8 +670,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = golem_vars::VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -706,8 +735,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = golem_vars::VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -745,8 +775,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(empty_hierarchy());
     let mut vars = golem_vars::VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -780,8 +811,9 @@ steps = [
     let flow = parse_flow(toml).expect("should parse");
     let driver = MockPlatformDriver::new(hierarchy_with_texts(&["Submit"]));
     let mut vars = golem_vars::VariableStore::new();
+    let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -860,5 +892,325 @@ async fn capture_failure_screenshot_disabled_returns_error() {
     assert!(
         driver.get_calls().is_empty(),
         "driver should not be called when capture is disabled"
+    );
+}
+
+// ===========================================================================
+// Screenshot-on-failure integration: policy.rs calls capture on step failure
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// 22. on_fail="error" triggers screenshot capture via driver
+// ---------------------------------------------------------------------------
+#[tokio::test]
+async fn on_fail_error_triggers_screenshot_capture() {
+    let toml = r#"
+[flow]
+name = "screenshot on error"
+
+[[block]]
+name = "fail_block"
+steps = [
+  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "error" },
+]
+"#;
+    let flow = parse_flow(toml).expect("should parse");
+    let driver = MockPlatformDriver::new(empty_hierarchy());
+    let mut vars = golem_vars::VariableStore::new();
+
+    let tmp = tempfile::tempdir().expect("failed to create tempdir");
+    let capture_config = CaptureConfig {
+        screenshot_on_failure: true,
+        screenshot_dir: tmp.path().to_path_buf(),
+        ..CaptureConfig::default()
+    };
+    let mut ctx = ExecutionContext {
+        flow_dir: Path::new("."),
+        project_root: Path::new("."),
+        capture_config: &capture_config,
+        flow_name: "screenshot on error",
+        block_name: None,
+        step_index: 0,
+    };
+
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        .await
+        .expect("execute_flow should return Ok(FlowResult)");
+
+    assert!(!result.success, "flow SHALL fail with on_fail=error");
+
+    // The driver should have been called for a screenshot (in addition to get_hierarchy)
+    let calls = driver.get_calls();
+    let screenshot_calls: Vec<_> = calls.iter().filter(|c| c.0 == "screenshot").collect();
+    assert_eq!(
+        screenshot_calls.len(),
+        1,
+        "SHALL capture exactly one screenshot on error failure"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 23. on_fail="warn" triggers screenshot capture via driver
+// ---------------------------------------------------------------------------
+#[tokio::test]
+async fn on_fail_warn_triggers_screenshot_capture() {
+    let toml = r#"
+[flow]
+name = "screenshot on warn"
+
+[[block]]
+name = "warn_block"
+steps = [
+  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "warn" },
+]
+"#;
+    let flow = parse_flow(toml).expect("should parse");
+    let driver = MockPlatformDriver::new(empty_hierarchy());
+    let mut vars = golem_vars::VariableStore::new();
+
+    let tmp = tempfile::tempdir().expect("failed to create tempdir");
+    let capture_config = CaptureConfig {
+        screenshot_on_failure: true,
+        screenshot_dir: tmp.path().to_path_buf(),
+        ..CaptureConfig::default()
+    };
+    let mut ctx = ExecutionContext {
+        flow_dir: Path::new("."),
+        project_root: Path::new("."),
+        capture_config: &capture_config,
+        flow_name: "screenshot on warn",
+        block_name: None,
+        step_index: 0,
+    };
+
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        .await
+        .expect("execute_flow should not error");
+
+    assert!(result.success, "flow SHALL succeed with on_fail=warn");
+    assert_eq!(result.warnings.len(), 1, "SHALL collect one warning");
+
+    let calls = driver.get_calls();
+    let screenshot_calls: Vec<_> = calls.iter().filter(|c| c.0 == "screenshot").collect();
+    assert_eq!(
+        screenshot_calls.len(),
+        1,
+        "SHALL capture exactly one screenshot on warn failure"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 24. on_fail="ignore" does NOT trigger screenshot capture
+// ---------------------------------------------------------------------------
+#[tokio::test]
+async fn on_fail_ignore_does_not_trigger_screenshot_capture() {
+    let toml = r#"
+[flow]
+name = "no screenshot on ignore"
+
+[[block]]
+name = "ignore_block"
+steps = [
+  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "ignore" },
+]
+"#;
+    let flow = parse_flow(toml).expect("should parse");
+    let driver = MockPlatformDriver::new(empty_hierarchy());
+    let mut vars = golem_vars::VariableStore::new();
+
+    let tmp = tempfile::tempdir().expect("failed to create tempdir");
+    let capture_config = CaptureConfig {
+        screenshot_on_failure: true,
+        screenshot_dir: tmp.path().to_path_buf(),
+        ..CaptureConfig::default()
+    };
+    let mut ctx = ExecutionContext {
+        flow_dir: Path::new("."),
+        project_root: Path::new("."),
+        capture_config: &capture_config,
+        flow_name: "no screenshot on ignore",
+        block_name: None,
+        step_index: 0,
+    };
+
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        .await
+        .expect("execute_flow should not error");
+
+    assert!(result.success, "flow SHALL succeed with on_fail=ignore");
+
+    let calls = driver.get_calls();
+    let screenshot_calls: Vec<_> = calls.iter().filter(|c| c.0 == "screenshot").collect();
+    assert_eq!(
+        screenshot_calls.len(),
+        0,
+        "SHALL NOT capture screenshot for ignored failures"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 25. Screenshot failure does not mask the step error
+// ---------------------------------------------------------------------------
+#[tokio::test]
+async fn screenshot_failure_does_not_mask_step_error() {
+    let toml = r#"
+[flow]
+name = "screenshot fail resilient"
+
+[[block]]
+name = "fail_block"
+steps = [
+  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "error" },
+]
+"#;
+    let flow = parse_flow(toml).expect("should parse");
+    let driver = MockPlatformDriver::new(empty_hierarchy());
+    let mut vars = golem_vars::VariableStore::new();
+
+    // Use a screenshot_dir that will cause write failure: screenshot_on_failure
+    // is disabled, so capture_failure_screenshot returns Err — but the step
+    // error should still propagate.
+    let capture_config = CaptureConfig {
+        screenshot_on_failure: false,
+        ..CaptureConfig::default()
+    };
+    let mut ctx = ExecutionContext {
+        flow_dir: Path::new("."),
+        project_root: Path::new("."),
+        capture_config: &capture_config,
+        flow_name: "screenshot fail resilient",
+        block_name: None,
+        step_index: 0,
+    };
+
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        .await
+        .expect("execute_flow should return Ok(FlowResult)");
+
+    assert!(
+        !result.success,
+        "flow SHALL still fail even when screenshot capture fails"
+    );
+    assert_eq!(result.failed_step, Some(0), "SHALL report the correct failed step");
+    assert_eq!(
+        result.failed_block,
+        Some("fail_block".to_string()),
+        "SHALL report the correct failed block"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 26. Screenshot file is written to disk on error failure
+// ---------------------------------------------------------------------------
+#[tokio::test]
+async fn screenshot_file_written_to_disk_on_error() {
+    let toml = r#"
+[flow]
+name = "disk write flow"
+
+[[block]]
+name = "disk_block"
+steps = [
+  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "error" },
+]
+"#;
+    let flow = parse_flow(toml).expect("should parse");
+    let driver = MockPlatformDriver::new(empty_hierarchy());
+    let mut vars = golem_vars::VariableStore::new();
+
+    let tmp = tempfile::tempdir().expect("failed to create tempdir");
+    let capture_config = CaptureConfig {
+        screenshot_on_failure: true,
+        screenshot_dir: tmp.path().to_path_buf(),
+        ..CaptureConfig::default()
+    };
+    let mut ctx = ExecutionContext {
+        flow_dir: Path::new("."),
+        project_root: Path::new("."),
+        capture_config: &capture_config,
+        flow_name: "disk write flow",
+        block_name: None,
+        step_index: 0,
+    };
+
+    let _result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        .await
+        .expect("execute_flow should return Ok(FlowResult)");
+
+    // Check that a screenshot file was actually written to the temp dir
+    let entries: Vec<_> = std::fs::read_dir(tmp.path())
+        .expect("should read tempdir")
+        .filter_map(|e| e.ok())
+        .collect();
+
+    assert_eq!(
+        entries.len(),
+        1,
+        "SHALL write exactly one screenshot file to disk"
+    );
+
+    let filename = entries[0]
+        .file_name()
+        .to_str()
+        .expect("should be valid utf-8")
+        .to_string();
+    assert!(filename.ends_with(".png"), "screenshot file SHALL have .png extension");
+    assert!(filename.contains("disk_write_flow"), "filename SHALL contain the flow name");
+    assert!(filename.contains("disk_block"), "filename SHALL contain the block name");
+
+    // Verify the file contains PNG magic bytes
+    let data = std::fs::read(entries[0].path()).expect("should read screenshot file");
+    assert_eq!(
+        &data[..4],
+        &[0x89, 0x50, 0x4E, 0x47],
+        "screenshot file SHALL contain PNG magic bytes"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 27. Screenshot disabled in config skips capture but step error still works
+// ---------------------------------------------------------------------------
+#[tokio::test]
+async fn screenshot_disabled_skips_capture_but_error_propagates() {
+    let toml = r#"
+[flow]
+name = "disabled capture flow"
+
+[[block]]
+name = "disabled_block"
+steps = [
+  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "error" },
+]
+"#;
+    let flow = parse_flow(toml).expect("should parse");
+    let driver = MockPlatformDriver::new(empty_hierarchy());
+    let mut vars = golem_vars::VariableStore::new();
+
+    let capture_config = CaptureConfig {
+        screenshot_on_failure: false,
+        ..CaptureConfig::default()
+    };
+    let mut ctx = ExecutionContext {
+        flow_dir: Path::new("."),
+        project_root: Path::new("."),
+        capture_config: &capture_config,
+        flow_name: "disabled capture flow",
+        block_name: None,
+        step_index: 0,
+    };
+
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        .await
+        .expect("execute_flow should return Ok(FlowResult)");
+
+    assert!(!result.success, "flow SHALL fail with on_fail=error");
+
+    // No screenshot calls should have been made
+    let calls = driver.get_calls();
+    let screenshot_calls: Vec<_> = calls.iter().filter(|c| c.0 == "screenshot").collect();
+    assert_eq!(
+        screenshot_calls.len(),
+        0,
+        "SHALL NOT call driver.screenshot() when capture is disabled"
     );
 }

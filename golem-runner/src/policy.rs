@@ -8,6 +8,8 @@ use golem_parser::Step;
 use golem_vars::VariableStore;
 
 use crate::actions::execute_action;
+use crate::capture::capture_failure_screenshot;
+use crate::context::ExecutionContext;
 
 /// Result of executing a step with policy
 #[derive(Debug, PartialEq, Eq)]
@@ -34,6 +36,7 @@ pub async fn execute_step_with_policy(
     driver: &dyn PlatformDriver,
     vars: &mut VariableStore,
     default_timeout_ms: u64,
+    ctx: &ExecutionContext<'_>,
 ) -> Result<StepOutcome> {
     let timeout_ms = step.timeout.unwrap_or(default_timeout_ms);
     let max_retries = step.retry.unwrap_or(0);
@@ -49,7 +52,7 @@ pub async fn execute_step_with_policy(
 
         match tokio::time::timeout(
             Duration::from_millis(timeout_ms),
-            execute_action(step, driver, vars),
+            execute_action(step, driver, vars, ctx),
         )
         .await
         {
@@ -66,7 +69,20 @@ pub async fn execute_step_with_policy(
         }
     }
 
-    // All attempts exhausted — apply on_fail policy
+    // All attempts exhausted — capture screenshot before applying on_fail policy.
+    // Only capture for "error" and "warn" policies, not "ignore".
+    if on_fail != "ignore" {
+        let _ = capture_failure_screenshot(
+            driver,
+            ctx.capture_config,
+            ctx.flow_name,
+            ctx.block_name.unwrap_or("unnamed"),
+            ctx.step_index,
+            on_fail,
+        )
+        .await;
+    }
+
     let error =
         last_error.unwrap_or_else(|| anyhow::anyhow!("step failed with no error details"));
     match on_fail {
