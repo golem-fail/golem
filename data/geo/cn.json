@@ -1,0 +1,1217 @@
+{
+  "country": {
+    "name": "中国",
+    "name_en": "China",
+    "iso_code": "CN",
+    "phone_prefix": "+86",
+    "phone_formats": ["+86-1##-####-####", "+86-##-####-####"],
+    "postcode_format": "######",
+    "name_order": "family_first"
+  },
+  "states": [
+    {
+      "name": "北京市",
+      "name_en": "Beijing",
+      "region_tags": ["North China"],
+      "cities": [
+        {
+          "name": "北京",
+          "name_en": "Beijing",
+          "lat": 39.9042,
+          "lon": 116.4074,
+          "postcodes": [
+            {
+              "code": "100000",
+              "street": "长安街",
+              "street_en": "Chang'an Jie",
+              "pattern": "长安街n{1,100}号"
+            },
+            {
+              "code": "100006",
+              "street": "王府井大街",
+              "street_en": "Wangfujing Dajie",
+              "pattern": "王府井大街n{1,280}号"
+            },
+            {
+              "code": "100051",
+              "street": "前门大街",
+              "street_en": "Qianmen Dajie",
+              "pattern": "前门大街n{1,200}号"
+            },
+            {
+              "code": "100010",
+              "street": "东单北大街",
+              "street_en": "Dongdan Bei Dajie",
+              "pattern": "东单北大街n{1,150}号"
+            },
+            {
+              "code": "100032",
+              "street": "西单北大街",
+              "street_en": "Xidan Bei Dajie",
+              "pattern": "西单北大街n{1,180}号"
+            },
+            {
+              "code": "100035",
+              "street": "西直门外大街",
+              "street_en": "Xizhimen Wai Dajie",
+              "pattern": "西直门外大街n{1,200}号"
+            },
+            {
+              "code": "100020",
+              "street": "建国门外大街",
+              "street_en": "Jianguomen Wai Dajie",
+              "pattern": "建国门外大街n{1,150}号"
+            },
+            {
+              "code": "100022",
+              "street": "朝阳门外大街",
+              "street_en": "Chaoyangmen Wai Dajie",
+              "pattern": "朝阳门外大街n{1,200}号"
+            },
+            {
+              "code": "100089",
+              "street": "中关村大街",
+              "street_en": "Zhongguancun Dajie",
+              "pattern": "中关村大街n{1,120}号"
+            },
+            {
+              "code": "100071",
+              "street": "丰台路",
+              "street_en": "Fengtai Lu",
+              "pattern": "丰台路n{1,100}号"
+            },
+            {
+              "code": "100041",
+              "street": "石景山路",
+              "street_en": "Shijingshan Lu",
+              "pattern": "石景山路n{1,80}号"
+            },
+            {
+              "code": "100024",
+              "street": "百子湾路",
+              "street_en": "Baiziwan Lu",
+              "pattern": "百子湾路n{1,120}号"
+            },
+            {
+              "code": "101100",
+              "street": "通州新华大街",
+              "street_en": "Tongzhou Xinhua Dajie",
+              "pattern": "新华大街n{1,150}号"
+            },
+            {
+              "code": "102200",
+              "street": "昌平路",
+              "street_en": "Changping Lu",
+              "pattern": "昌平路n{1,100}号"
+            },
+            {
+              "code": "102600",
+              "street": "延庆大街",
+              "street_en": "Yanqing Dajie",
+              "pattern": "延庆大街n{1,80}号"
+            },
+            {
+              "code": "101300",
+              "street": "顺义大街",
+              "street_en": "Shunyi Dajie",
+              "pattern": "顺义大街n{1,100}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "上海市",
+      "name_en": "Shanghai",
+      "region_tags": ["East China"],
+      "cities": [
+        {
+          "name": "上海",
+          "name_en": "Shanghai",
+          "lat": 31.2304,
+          "lon": 121.4737,
+          "postcodes": [
+            {
+              "code": "200001",
+              "street": "南京东路",
+              "street_en": "Nanjing Dong Lu",
+              "pattern": "南京东路n{1,300}号"
+            },
+            {
+              "code": "200020",
+              "street": "南京西路",
+              "street_en": "Nanjing Xi Lu",
+              "pattern": "南京西路n{1,250}号"
+            },
+            {
+              "code": "200031",
+              "street": "淮海中路",
+              "street_en": "Huaihai Zhong Lu",
+              "pattern": "淮海中路n{1,300}号"
+            },
+            {
+              "code": "200040",
+              "street": "延安西路",
+              "street_en": "Yan'an Xi Lu",
+              "pattern": "延安西路n{1,200}号"
+            },
+            {
+              "code": "200120",
+              "street": "陆家嘴环路",
+              "street_en": "Lujiazui Huan Lu",
+              "pattern": "陆家嘴环路n{1,150}号"
+            },
+            {
+              "code": "200050",
+              "street": "虹桥路",
+              "street_en": "Hongqiao Lu",
+              "pattern": "虹桥路n{1,200}号"
+            },
+            {
+              "code": "200070",
+              "street": "中山北路",
+              "street_en": "Zhongshan Bei Lu",
+              "pattern": "中山北路n{1,250}号"
+            },
+            {
+              "code": "200433",
+              "street": "四平路",
+              "street_en": "Siping Lu",
+              "pattern": "四平路n{1,200}号"
+            },
+            {
+              "code": "201100",
+              "street": "沪闵路",
+              "street_en": "Humin Lu",
+              "pattern": "沪闵路n{1,300}号"
+            },
+            {
+              "code": "201200",
+              "street": "浦东大道",
+              "street_en": "Pudong Dadao",
+              "pattern": "浦东大道n{1,250}号"
+            },
+            {
+              "code": "201900",
+              "street": "宝山路",
+              "street_en": "Baoshan Lu",
+              "pattern": "宝山路n{1,150}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "天津市",
+      "name_en": "Tianjin",
+      "region_tags": ["North China"],
+      "cities": [
+        {
+          "name": "天津",
+          "name_en": "Tianjin",
+          "lat": 39.3434,
+          "lon": 117.3616,
+          "postcodes": [
+            {
+              "code": "300000",
+              "street": "南京路",
+              "street_en": "Nanjing Lu",
+              "pattern": "南京路n{1,200}号"
+            },
+            {
+              "code": "300020",
+              "street": "和平路",
+              "street_en": "Heping Lu",
+              "pattern": "和平路n{1,150}号"
+            },
+            {
+              "code": "300070",
+              "street": "解放北路",
+              "street_en": "Jiefang Bei Lu",
+              "pattern": "解放北路n{1,180}号"
+            },
+            {
+              "code": "300100",
+              "street": "中山路",
+              "street_en": "Zhongshan Lu",
+              "pattern": "中山路n{1,200}号"
+            },
+            {
+              "code": "300300",
+              "street": "滨海大道",
+              "street_en": "Binhai Dadao",
+              "pattern": "滨海大道n{1,120}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "重庆市",
+      "name_en": "Chongqing",
+      "region_tags": ["Southwest China"],
+      "cities": [
+        {
+          "name": "重庆",
+          "name_en": "Chongqing",
+          "lat": 29.4316,
+          "lon": 106.9123,
+          "postcodes": [
+            {
+              "code": "400000",
+              "street": "解放碑大街",
+              "street_en": "Jiefangbei Dajie",
+              "pattern": "解放碑大街n{1,200}号"
+            },
+            {
+              "code": "400010",
+              "street": "中山三路",
+              "street_en": "Zhongshan San Lu",
+              "pattern": "中山三路n{1,150}号"
+            },
+            {
+              "code": "400030",
+              "street": "南滨路",
+              "street_en": "Nanbin Lu",
+              "pattern": "南滨路n{1,180}号"
+            },
+            {
+              "code": "400060",
+              "street": "杨家坪大街",
+              "street_en": "Yangjiaping Dajie",
+              "pattern": "杨家坪大街n{1,120}号"
+            },
+            {
+              "code": "400100",
+              "street": "观音桥大街",
+              "street_en": "Guanyinqiao Dajie",
+              "pattern": "观音桥大街n{1,150}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "广东省",
+      "name_en": "Guangdong",
+      "region_tags": ["South China"],
+      "cities": [
+        {
+          "name": "广州",
+          "name_en": "Guangzhou",
+          "lat": 23.1291,
+          "lon": 113.2644,
+          "postcodes": [
+            {
+              "code": "510000",
+              "street": "北京路",
+              "street_en": "Beijing Lu",
+              "pattern": "北京路n{1,200}号"
+            },
+            {
+              "code": "510030",
+              "street": "天河路",
+              "street_en": "Tianhe Lu",
+              "pattern": "天河路n{1,300}号"
+            },
+            {
+              "code": "510600",
+              "street": "中山大道",
+              "street_en": "Zhongshan Dadao",
+              "pattern": "中山大道n{1,250}号"
+            },
+            {
+              "code": "510100",
+              "street": "环市东路",
+              "street_en": "Huanshi Dong Lu",
+              "pattern": "环市东路n{1,180}号"
+            }
+          ]
+        },
+        {
+          "name": "深圳",
+          "name_en": "Shenzhen",
+          "lat": 22.5431,
+          "lon": 114.0579,
+          "postcodes": [
+            {
+              "code": "518000",
+              "street": "深南大道",
+              "street_en": "Shennan Dadao",
+              "pattern": "深南大道n{1,300}号"
+            },
+            {
+              "code": "518028",
+              "street": "华强北路",
+              "street_en": "Huaqiang Bei Lu",
+              "pattern": "华强北路n{1,200}号"
+            },
+            {
+              "code": "518040",
+              "street": "东门老街",
+              "street_en": "Dongmen Lao Jie",
+              "pattern": "东门老街n{1,150}号"
+            },
+            {
+              "code": "518100",
+              "street": "宝安大道",
+              "street_en": "Bao'an Dadao",
+              "pattern": "宝安大道n{1,250}号"
+            }
+          ]
+        },
+        {
+          "name": "东莞",
+          "name_en": "Dongguan",
+          "lat": 23.0430,
+          "lon": 113.7633,
+          "postcodes": [
+            {
+              "code": "523000",
+              "street": "东城大道",
+              "street_en": "Dongcheng Dadao",
+              "pattern": "东城大道n{1,200}号"
+            },
+            {
+              "code": "523100",
+              "street": "莞太路",
+              "street_en": "Guantai Lu",
+              "pattern": "莞太路n{1,150}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "浙江省",
+      "name_en": "Zhejiang",
+      "region_tags": ["East China"],
+      "cities": [
+        {
+          "name": "杭州",
+          "name_en": "Hangzhou",
+          "lat": 30.2741,
+          "lon": 120.1551,
+          "postcodes": [
+            {
+              "code": "310000",
+              "street": "延安路",
+              "street_en": "Yan'an Lu",
+              "pattern": "延安路n{1,200}号"
+            },
+            {
+              "code": "310002",
+              "street": "解放路",
+              "street_en": "Jiefang Lu",
+              "pattern": "解放路n{1,180}号"
+            },
+            {
+              "code": "310006",
+              "street": "湖滨路",
+              "street_en": "Hubin Lu",
+              "pattern": "湖滨路n{1,100}号"
+            }
+          ]
+        },
+        {
+          "name": "宁波",
+          "name_en": "Ningbo",
+          "lat": 29.8683,
+          "lon": 121.5440,
+          "postcodes": [
+            {
+              "code": "315000",
+              "street": "中山东路",
+              "street_en": "Zhongshan Dong Lu",
+              "pattern": "中山东路n{1,200}号"
+            },
+            {
+              "code": "315100",
+              "street": "天一大道",
+              "street_en": "Tianyi Dadao",
+              "pattern": "天一大道n{1,150}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "江苏省",
+      "name_en": "Jiangsu",
+      "region_tags": ["East China"],
+      "cities": [
+        {
+          "name": "南京",
+          "name_en": "Nanjing",
+          "lat": 32.0603,
+          "lon": 118.7969,
+          "postcodes": [
+            {
+              "code": "210000",
+              "street": "中山路",
+              "street_en": "Zhongshan Lu",
+              "pattern": "中山路n{1,300}号"
+            },
+            {
+              "code": "210002",
+              "street": "新街口大街",
+              "street_en": "Xinjiekou Dajie",
+              "pattern": "新街口大街n{1,200}号"
+            },
+            {
+              "code": "210005",
+              "street": "湖南路",
+              "street_en": "Hunan Lu",
+              "pattern": "湖南路n{1,180}号"
+            }
+          ]
+        },
+        {
+          "name": "苏州",
+          "name_en": "Suzhou",
+          "lat": 31.2990,
+          "lon": 120.5853,
+          "postcodes": [
+            {
+              "code": "215000",
+              "street": "人民路",
+              "street_en": "Renmin Lu",
+              "pattern": "人民路n{1,250}号"
+            },
+            {
+              "code": "215006",
+              "street": "观前街",
+              "street_en": "Guanqian Jie",
+              "pattern": "观前街n{1,200}号"
+            }
+          ]
+        },
+        {
+          "name": "无锡",
+          "name_en": "Wuxi",
+          "lat": 31.4912,
+          "lon": 120.3119,
+          "postcodes": [
+            {
+              "code": "214000",
+              "street": "中山路",
+              "street_en": "Zhongshan Lu",
+              "pattern": "中山路n{1,200}号"
+            },
+            {
+              "code": "214100",
+              "street": "太湖大道",
+              "street_en": "Taihu Dadao",
+              "pattern": "太湖大道n{1,150}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "山东省",
+      "name_en": "Shandong",
+      "region_tags": ["East China"],
+      "cities": [
+        {
+          "name": "济南",
+          "name_en": "Jinan",
+          "lat": 36.6512,
+          "lon": 116.9972,
+          "postcodes": [
+            {
+              "code": "250000",
+              "street": "泉城路",
+              "street_en": "Quancheng Lu",
+              "pattern": "泉城路n{1,200}号"
+            },
+            {
+              "code": "250011",
+              "street": "经十路",
+              "street_en": "Jingshi Lu",
+              "pattern": "经十路n{1,300}号"
+            }
+          ]
+        },
+        {
+          "name": "青岛",
+          "name_en": "Qingdao",
+          "lat": 36.0671,
+          "lon": 120.3826,
+          "postcodes": [
+            {
+              "code": "266000",
+              "street": "中山路",
+              "street_en": "Zhongshan Lu",
+              "pattern": "中山路n{1,200}号"
+            },
+            {
+              "code": "266071",
+              "street": "香港中路",
+              "street_en": "Xianggang Zhong Lu",
+              "pattern": "香港中路n{1,250}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "四川省",
+      "name_en": "Sichuan",
+      "region_tags": ["Southwest China"],
+      "cities": [
+        {
+          "name": "成都",
+          "name_en": "Chengdu",
+          "lat": 30.5728,
+          "lon": 104.0668,
+          "postcodes": [
+            {
+              "code": "610000",
+              "street": "春熙路",
+              "street_en": "Chunxi Lu",
+              "pattern": "春熙路n{1,200}号"
+            },
+            {
+              "code": "610012",
+              "street": "人民南路",
+              "street_en": "Renmin Nan Lu",
+              "pattern": "人民南路n{1,250}号"
+            },
+            {
+              "code": "610041",
+              "street": "天府大道",
+              "street_en": "Tianfu Dadao",
+              "pattern": "天府大道n{1,300}号"
+            },
+            {
+              "code": "610100",
+              "street": "蜀都大道",
+              "street_en": "Shudu Dadao",
+              "pattern": "蜀都大道n{1,200}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "湖北省",
+      "name_en": "Hubei",
+      "region_tags": ["Central China"],
+      "cities": [
+        {
+          "name": "武汉",
+          "name_en": "Wuhan",
+          "lat": 30.5928,
+          "lon": 114.3055,
+          "postcodes": [
+            {
+              "code": "430000",
+              "street": "解放大道",
+              "street_en": "Jiefang Dadao",
+              "pattern": "解放大道n{1,300}号"
+            },
+            {
+              "code": "430015",
+              "street": "中山大道",
+              "street_en": "Zhongshan Dadao",
+              "pattern": "中山大道n{1,250}号"
+            },
+            {
+              "code": "430060",
+              "street": "珞瑜路",
+              "street_en": "Luoyu Lu",
+              "pattern": "珞瑜路n{1,200}号"
+            },
+            {
+              "code": "430071",
+              "street": "武珞路",
+              "street_en": "Wuluo Lu",
+              "pattern": "武珞路n{1,200}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "湖南省",
+      "name_en": "Hunan",
+      "region_tags": ["Central China"],
+      "cities": [
+        {
+          "name": "长沙",
+          "name_en": "Changsha",
+          "lat": 28.2280,
+          "lon": 112.9388,
+          "postcodes": [
+            {
+              "code": "410000",
+              "street": "五一大道",
+              "street_en": "Wuyi Dadao",
+              "pattern": "五一大道n{1,200}号"
+            },
+            {
+              "code": "410005",
+              "street": "黄兴路",
+              "street_en": "Huangxing Lu",
+              "pattern": "黄兴路n{1,250}号"
+            },
+            {
+              "code": "410011",
+              "street": "芙蓉路",
+              "street_en": "Furong Lu",
+              "pattern": "芙蓉路n{1,200}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "福建省",
+      "name_en": "Fujian",
+      "region_tags": ["East China"],
+      "cities": [
+        {
+          "name": "福州",
+          "name_en": "Fuzhou",
+          "lat": 26.0745,
+          "lon": 119.2965,
+          "postcodes": [
+            {
+              "code": "350000",
+              "street": "八一七路",
+              "street_en": "Bayiqi Lu",
+              "pattern": "八一七路n{1,200}号"
+            },
+            {
+              "code": "350001",
+              "street": "五四路",
+              "street_en": "Wusi Lu",
+              "pattern": "五四路n{1,180}号"
+            }
+          ]
+        },
+        {
+          "name": "厦门",
+          "name_en": "Xiamen",
+          "lat": 24.4798,
+          "lon": 118.0894,
+          "postcodes": [
+            {
+              "code": "361000",
+              "street": "中山路",
+              "street_en": "Zhongshan Lu",
+              "pattern": "中山路n{1,200}号"
+            },
+            {
+              "code": "361004",
+              "street": "厦禾路",
+              "street_en": "Xiahe Lu",
+              "pattern": "厦禾路n{1,250}号"
+            },
+            {
+              "code": "361100",
+              "street": "嘉禾路",
+              "street_en": "Jiahe Lu",
+              "pattern": "嘉禾路n{1,180}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "河北省",
+      "name_en": "Hebei",
+      "region_tags": ["North China"],
+      "cities": [
+        {
+          "name": "石家庄",
+          "name_en": "Shijiazhuang",
+          "lat": 38.0428,
+          "lon": 114.5149,
+          "postcodes": [
+            {
+              "code": "050000",
+              "street": "中山路",
+              "street_en": "Zhongshan Lu",
+              "pattern": "中山路n{1,200}号"
+            },
+            {
+              "code": "050011",
+              "street": "裕华路",
+              "street_en": "Yuhua Lu",
+              "pattern": "裕华路n{1,180}号"
+            },
+            {
+              "code": "050030",
+              "street": "槐安路",
+              "street_en": "Huai'an Lu",
+              "pattern": "槐安路n{1,150}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "河南省",
+      "name_en": "Henan",
+      "region_tags": ["Central China"],
+      "cities": [
+        {
+          "name": "郑州",
+          "name_en": "Zhengzhou",
+          "lat": 34.7466,
+          "lon": 113.6254,
+          "postcodes": [
+            {
+              "code": "450000",
+              "street": "二七路",
+              "street_en": "Erqi Lu",
+              "pattern": "二七路n{1,200}号"
+            },
+            {
+              "code": "450003",
+              "street": "花园路",
+              "street_en": "Huayuan Lu",
+              "pattern": "花园路n{1,250}号"
+            },
+            {
+              "code": "450007",
+              "street": "金水路",
+              "street_en": "Jinshui Lu",
+              "pattern": "金水路n{1,200}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "辽宁省",
+      "name_en": "Liaoning",
+      "region_tags": ["Northeast China"],
+      "cities": [
+        {
+          "name": "沈阳",
+          "name_en": "Shenyang",
+          "lat": 41.8057,
+          "lon": 123.4315,
+          "postcodes": [
+            {
+              "code": "110000",
+              "street": "中街路",
+              "street_en": "Zhongjie Lu",
+              "pattern": "中街路n{1,200}号"
+            },
+            {
+              "code": "110002",
+              "street": "太原街",
+              "street_en": "Taiyuan Jie",
+              "pattern": "太原街n{1,250}号"
+            },
+            {
+              "code": "110013",
+              "street": "青年大街",
+              "street_en": "Qingnian Dajie",
+              "pattern": "青年大街n{1,300}号"
+            }
+          ]
+        },
+        {
+          "name": "大连",
+          "name_en": "Dalian",
+          "lat": 38.9140,
+          "lon": 121.6147,
+          "postcodes": [
+            {
+              "code": "116000",
+              "street": "中山路",
+              "street_en": "Zhongshan Lu",
+              "pattern": "中山路n{1,200}号"
+            },
+            {
+              "code": "116011",
+              "street": "人民路",
+              "street_en": "Renmin Lu",
+              "pattern": "人民路n{1,180}号"
+            },
+            {
+              "code": "116100",
+              "street": "黄河路",
+              "street_en": "Huanghe Lu",
+              "pattern": "黄河路n{1,150}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "黑龙江省",
+      "name_en": "Heilongjiang",
+      "region_tags": ["Northeast China"],
+      "cities": [
+        {
+          "name": "哈尔滨",
+          "name_en": "Harbin",
+          "lat": 45.8038,
+          "lon": 126.5350,
+          "postcodes": [
+            {
+              "code": "150000",
+              "street": "中央大街",
+              "street_en": "Zhongyang Dajie",
+              "pattern": "中央大街n{1,300}号"
+            },
+            {
+              "code": "150001",
+              "street": "果戈里大街",
+              "street_en": "Guogeli Dajie",
+              "pattern": "果戈里大街n{1,200}号"
+            },
+            {
+              "code": "150010",
+              "street": "红军街",
+              "street_en": "Hongjun Jie",
+              "pattern": "红军街n{1,150}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "吉林省",
+      "name_en": "Jilin",
+      "region_tags": ["Northeast China"],
+      "cities": [
+        {
+          "name": "长春",
+          "name_en": "Changchun",
+          "lat": 43.8171,
+          "lon": 125.3235,
+          "postcodes": [
+            {
+              "code": "130000",
+              "street": "人民大街",
+              "street_en": "Renmin Dajie",
+              "pattern": "人民大街n{1,300}号"
+            },
+            {
+              "code": "130021",
+              "street": "重庆路",
+              "street_en": "Chongqing Lu",
+              "pattern": "重庆路n{1,200}号"
+            },
+            {
+              "code": "130041",
+              "street": "自由大路",
+              "street_en": "Ziyou Da Lu",
+              "pattern": "自由大路n{1,250}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "陕西省",
+      "name_en": "Shaanxi",
+      "region_tags": ["Northwest China"],
+      "cities": [
+        {
+          "name": "西安",
+          "name_en": "Xi'an",
+          "lat": 34.3416,
+          "lon": 108.9398,
+          "postcodes": [
+            {
+              "code": "710000",
+              "street": "东大街",
+              "street_en": "Dong Dajie",
+              "pattern": "东大街n{1,200}号"
+            },
+            {
+              "code": "710001",
+              "street": "南大街",
+              "street_en": "Nan Dajie",
+              "pattern": "南大街n{1,200}号"
+            },
+            {
+              "code": "710004",
+              "street": "钟楼巷",
+              "street_en": "Zhonglou Xiang",
+              "pattern": "钟楼巷n{1,50}号"
+            },
+            {
+              "code": "710061",
+              "street": "长安南路",
+              "street_en": "Chang'an Nan Lu",
+              "pattern": "长安南路n{1,250}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "云南省",
+      "name_en": "Yunnan",
+      "region_tags": ["Southwest China"],
+      "cities": [
+        {
+          "name": "昆明",
+          "name_en": "Kunming",
+          "lat": 25.0389,
+          "lon": 102.7183,
+          "postcodes": [
+            {
+              "code": "650000",
+              "street": "东风东路",
+              "street_en": "Dongfeng Dong Lu",
+              "pattern": "东风东路n{1,200}号"
+            },
+            {
+              "code": "650011",
+              "street": "青年路",
+              "street_en": "Qingnian Lu",
+              "pattern": "青年路n{1,180}号"
+            },
+            {
+              "code": "650032",
+              "street": "滇池路",
+              "street_en": "Dianchi Lu",
+              "pattern": "滇池路n{1,150}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "安徽省",
+      "name_en": "Anhui",
+      "region_tags": ["East China"],
+      "cities": [
+        {
+          "name": "合肥",
+          "name_en": "Hefei",
+          "lat": 31.8206,
+          "lon": 117.2272,
+          "postcodes": [
+            {
+              "code": "230000",
+              "street": "长江路",
+              "street_en": "Changjiang Lu",
+              "pattern": "长江路n{1,250}号"
+            },
+            {
+              "code": "230001",
+              "street": "淮河路",
+              "street_en": "Huaihe Lu",
+              "pattern": "淮河路n{1,200}号"
+            },
+            {
+              "code": "230022",
+              "street": "金寨路",
+              "street_en": "Jinzhai Lu",
+              "pattern": "金寨路n{1,200}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "江西省",
+      "name_en": "Jiangxi",
+      "region_tags": ["East China"],
+      "cities": [
+        {
+          "name": "南昌",
+          "name_en": "Nanchang",
+          "lat": 28.6820,
+          "lon": 115.8579,
+          "postcodes": [
+            {
+              "code": "330000",
+              "street": "八一大道",
+              "street_en": "Bayi Dadao",
+              "pattern": "八一大道n{1,200}号"
+            },
+            {
+              "code": "330003",
+              "street": "中山路",
+              "street_en": "Zhongshan Lu",
+              "pattern": "中山路n{1,180}号"
+            },
+            {
+              "code": "330006",
+              "street": "阳明路",
+              "street_en": "Yangming Lu",
+              "pattern": "阳明路n{1,150}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "广西壮族自治区",
+      "name_en": "Guangxi",
+      "region_tags": ["South China"],
+      "cities": [
+        {
+          "name": "南宁",
+          "name_en": "Nanning",
+          "lat": 22.8170,
+          "lon": 108.3665,
+          "postcodes": [
+            {
+              "code": "530000",
+              "street": "民族大道",
+              "street_en": "Minzu Dadao",
+              "pattern": "民族大道n{1,250}号"
+            },
+            {
+              "code": "530012",
+              "street": "朝阳路",
+              "street_en": "Chaoyang Lu",
+              "pattern": "朝阳路n{1,200}号"
+            },
+            {
+              "code": "530022",
+              "street": "青秀路",
+              "street_en": "Qingxiu Lu",
+              "pattern": "青秀路n{1,150}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "内蒙古自治区",
+      "name_en": "Inner Mongolia",
+      "region_tags": ["North China"],
+      "cities": [
+        {
+          "name": "呼和浩特",
+          "name_en": "Hohhot",
+          "lat": 40.8424,
+          "lon": 111.7490,
+          "postcodes": [
+            {
+              "code": "010000",
+              "street": "中山路",
+              "street_en": "Zhongshan Lu",
+              "pattern": "中山路n{1,200}号"
+            },
+            {
+              "code": "010010",
+              "street": "新华大街",
+              "street_en": "Xinhua Dajie",
+              "pattern": "新华大街n{1,250}号"
+            },
+            {
+              "code": "010020",
+              "street": "大学路",
+              "street_en": "Daxue Lu",
+              "pattern": "大学路n{1,150}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "甘肃省",
+      "name_en": "Gansu",
+      "region_tags": ["Northwest China"],
+      "cities": [
+        {
+          "name": "兰州",
+          "name_en": "Lanzhou",
+          "lat": 36.0611,
+          "lon": 103.8343,
+          "postcodes": [
+            {
+              "code": "730000",
+              "street": "张掖路",
+              "street_en": "Zhangye Lu",
+              "pattern": "张掖路n{1,200}号"
+            },
+            {
+              "code": "730030",
+              "street": "东岗路",
+              "street_en": "Donggang Lu",
+              "pattern": "东岗路n{1,180}号"
+            },
+            {
+              "code": "730050",
+              "street": "天水路",
+              "street_en": "Tianshui Lu",
+              "pattern": "天水路n{1,150}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "新疆维吾尔自治区",
+      "name_en": "Xinjiang",
+      "region_tags": ["Northwest China"],
+      "cities": [
+        {
+          "name": "乌鲁木齐",
+          "name_en": "Urumqi",
+          "lat": 43.8256,
+          "lon": 87.6168,
+          "postcodes": [
+            {
+              "code": "830000",
+              "street": "中山路",
+              "street_en": "Zhongshan Lu",
+              "pattern": "中山路n{1,200}号"
+            },
+            {
+              "code": "830002",
+              "street": "解放路",
+              "street_en": "Jiefang Lu",
+              "pattern": "解放路n{1,180}号"
+            },
+            {
+              "code": "830011",
+              "street": "友好路",
+              "street_en": "Youhao Lu",
+              "pattern": "友好路n{1,150}号"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "西藏自治区",
+      "name_en": "Tibet",
+      "region_tags": ["Southwest China"],
+      "cities": [
+        {
+          "name": "拉萨",
+          "name_en": "Lhasa",
+          "lat": 29.6500,
+          "lon": 91.1000,
+          "postcodes": [
+            {
+              "code": "850000",
+              "street": "北京中路",
+              "street_en": "Beijing Zhong Lu",
+              "pattern": "北京中路n{1,150}号"
+            },
+            {
+              "code": "850001",
+              "street": "八廓街",
+              "street_en": "Barkhor Jie",
+              "pattern": "八廓街n{1,100}号"
+            },
+            {
+              "code": "850003",
+              "street": "金珠路",
+              "street_en": "Jinzhu Lu",
+              "pattern": "金珠路n{1,120}号"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
