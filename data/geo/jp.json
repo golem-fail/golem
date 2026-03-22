@@ -4,7 +4,7 @@
     "name_en": "Japan",
     "iso_code": "JP",
     "phone_prefix": "+81",
-    "phone_formats": ["+81-0##-####-####", "+81-###-###-####"],
+    "phone_formats": ["+81-##-####-####", "+81-###-###-####"],
     "postcode_format": "###-####",
     "name_order": "family_first"
   },

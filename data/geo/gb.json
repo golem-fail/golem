@@ -4,7 +4,7 @@
     "name_en": "United Kingdom",
     "iso_code": "GB",
     "phone_prefix": "+44",
-    "phone_formats": ["+44-####-######", "+44-###-####-####"],
+    "phone_formats": ["+44-####-######", "+44-###-###-####"],
     "postcode_format": "A#[#] #AA | A## #AA | AA# #AA | AA## #AA",
     "name_order": "given_first"
   },
