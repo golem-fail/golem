@@ -2,6 +2,8 @@ use std::path::Path;
 use std::time::Instant;
 
 use anyhow::Result;
+use golem_parser::{parse_flow, FlowFile};
+use golem_parser::mixin::expand_mixins;
 use golem_report::{FlowReport, SuiteReport};
 
 /// Configuration for a suite run.
@@ -49,9 +51,14 @@ impl SuiteRunner {
 
     /// Run a single flow file and return its report.
     ///
-    /// This is currently a stub that extracts the flow name from the file path.
-    /// Full integration with the parser, runner, and driver will be added when
-    /// those components are wired into the CLI.
+    /// Steps:
+    /// 1. Read the TOML flow file.
+    /// 2. Parse it with [`parse_flow`].
+    /// 3. Expand mixins on each block's steps.
+    /// 4. TODO: merge config, connect to device, execute blocks.
+    ///
+    /// Sub-flow execution (via `run_flow` on a block) should also call
+    /// [`expand_mixins`] after parsing the sub-flow.
     async fn run_single_flow(&self, path: &Path) -> FlowReport {
         let flow_name = path
             .file_stem()
@@ -59,16 +66,52 @@ impl SuiteRunner {
             .unwrap_or("unknown")
             .to_string();
 
-        FlowReport {
-            flow_name,
-            success: true,
-            step_results: Vec::new(),
-            warnings: Vec::new(),
-            duration_ms: 0,
-            seed: self.config.seed,
-            screenshot_path: None,
-            device_name: None,
+        let start = Instant::now();
+
+        match self.parse_and_expand(path) {
+            Ok(_flow) => {
+                // TODO: merge config, connect to device, execute blocks with the runner
+                FlowReport {
+                    flow_name,
+                    success: true,
+                    step_results: Vec::new(),
+                    warnings: Vec::new(),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    seed: self.config.seed,
+                    screenshot_path: None,
+                    device_name: None,
+                }
+            }
+            Err(e) => FlowReport {
+                flow_name,
+                success: false,
+                step_results: Vec::new(),
+                warnings: vec![format!("Parse/mixin error: {e}")],
+                duration_ms: start.elapsed().as_millis() as u64,
+                seed: self.config.seed,
+                screenshot_path: None,
+                device_name: None,
+            },
         }
+    }
+
+    /// Read, parse, and expand mixins in a flow file.
+    ///
+    /// Returns the fully-expanded [`FlowFile`] ready for execution.
+    fn parse_and_expand(&self, path: &Path) -> Result<FlowFile> {
+        let content = std::fs::read_to_string(path)?;
+        let mut flow = parse_flow(&content)?;
+
+        let flow_dir = path.parent().unwrap_or(Path::new("."));
+        // Use the flow directory as the project root when not explicitly configured.
+        // TODO: discover the actual project root from config or directory traversal.
+        let project_root = flow_dir;
+
+        for block in &mut flow.block {
+            block.steps = expand_mixins(&block.steps, flow_dir, project_root)?;
+        }
+
+        Ok(flow)
     }
 }
 
@@ -309,5 +352,126 @@ mod tests {
         assert_eq!(stats.total, 0);
         assert_eq!(stats.passed, 0);
         assert_eq!(stats.failed, 0);
+    }
+
+    // ---------------------------------------------------------------
+    // 13. parse_and_expand reads flow and expands mixins
+    // ---------------------------------------------------------------
+    #[test]
+    fn parse_and_expand_reads_flow_file() {
+        let tmp = tempfile::tempdir().expect("temp dir");
+        let flow_toml = r#"
+[flow]
+name = "basic flow"
+
+[[block]]
+name = "block1"
+steps = [
+  { action = "tap", text = "Hello" },
+]
+"#;
+        let flow_path = tmp.path().join("basic.test.toml");
+        std::fs::write(&flow_path, flow_toml).expect("write flow");
+
+        let runner = SuiteRunner::new(SuiteConfig::default());
+        let flow = runner
+            .parse_and_expand(&flow_path)
+            .expect("parse_and_expand SHALL succeed");
+
+        assert_eq!(flow.flow.name, "basic flow");
+        assert_eq!(flow.block.len(), 1);
+        assert_eq!(flow.block[0].steps.len(), 1);
+        assert_eq!(flow.block[0].steps[0].action, "tap");
+    }
+
+    // ---------------------------------------------------------------
+    // 14. parse_and_expand expands load_mixin steps
+    // ---------------------------------------------------------------
+    #[test]
+    fn parse_and_expand_expands_mixins() {
+        let tmp = tempfile::tempdir().expect("temp dir");
+
+        // Create mixin file
+        let mixins_dir = tmp.path().join("__mixins__");
+        std::fs::create_dir_all(&mixins_dir).expect("create mixins dir");
+        std::fs::write(
+            mixins_dir.join("login.toml"),
+            r#"
+[[step]]
+action = "type"
+id = "email_field"
+text = "{{email}}"
+
+[[step]]
+action = "tap"
+text = "Submit"
+"#,
+        )
+        .expect("write mixin");
+
+        // Create flow file referencing the mixin
+        let flow_toml = r#"
+[flow]
+name = "mixin flow"
+
+[[block]]
+name = "login"
+steps = [
+  { action = "load_mixin", mixin = "login" },
+  { action = "screenshot" },
+]
+"#;
+        let flow_path = tmp.path().join("mixin_flow.test.toml");
+        std::fs::write(&flow_path, flow_toml).expect("write flow");
+
+        let runner = SuiteRunner::new(SuiteConfig::default());
+        let flow = runner
+            .parse_and_expand(&flow_path)
+            .expect("parse_and_expand with mixins SHALL succeed");
+
+        // The load_mixin step should be replaced by the mixin's 2 steps + the screenshot step
+        assert_eq!(
+            flow.block[0].steps.len(),
+            3,
+            "load_mixin SHALL be expanded to the mixin's steps"
+        );
+        assert_eq!(flow.block[0].steps[0].action, "type");
+        assert_eq!(flow.block[0].steps[1].action, "tap");
+        assert_eq!(flow.block[0].steps[2].action, "screenshot");
+    }
+
+    // ---------------------------------------------------------------
+    // 15. run_single_flow fails gracefully for missing file
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn run_single_flow_fails_for_missing_file() {
+        let runner = SuiteRunner::new(SuiteConfig::default());
+        let path = PathBuf::from("nonexistent_flow.test.toml");
+        let report = runner.run_single_flow(&path).await;
+
+        assert!(!report.success, "report SHALL indicate failure for missing file");
+        assert!(
+            !report.warnings.is_empty(),
+            "warnings SHALL contain the parse error"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 16. run_single_flow fails gracefully for invalid TOML
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn run_single_flow_fails_for_invalid_toml() {
+        let tmp = tempfile::tempdir().expect("temp dir");
+        let flow_path = tmp.path().join("bad.test.toml");
+        std::fs::write(&flow_path, "this is not [[[valid toml").expect("write bad flow");
+
+        let runner = SuiteRunner::new(SuiteConfig::default());
+        let report = runner.run_single_flow(&flow_path).await;
+
+        assert!(!report.success, "report SHALL indicate failure for invalid TOML");
+        assert!(
+            !report.warnings.is_empty(),
+            "warnings SHALL contain the parse error"
+        );
     }
 }

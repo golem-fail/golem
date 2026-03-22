@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::{FlowFile, FlowOptions};
+use crate::{FlowFile, FlowOptions, TeardownBlock};
 
 /// Project-level options from golem.toml `[options]`.
 /// All fields are optional — missing fields are left as `None`.
@@ -31,6 +31,8 @@ struct ProjectConfigRaw {
     options: ProjectOptions,
     #[serde(default)]
     vars: HashMap<String, String>,
+    #[serde(default)]
+    teardown: Vec<TeardownBlock>,
 }
 
 /// Public project configuration with options and vars.
@@ -38,14 +40,19 @@ struct ProjectConfigRaw {
 pub struct ProjectConfig {
     pub options: ProjectOptions,
     pub vars: HashMap<String, String>,
+    /// Optional project-level teardown block to append to every flow.
+    pub teardown: Option<TeardownBlock>,
 }
 
 /// Parse a golem.toml string into a `ProjectConfig`.
 pub fn parse_project_config(toml_str: &str) -> anyhow::Result<ProjectConfig> {
     let raw: ProjectConfigRaw = toml::from_str(toml_str)?;
+    // Take the first teardown block if present (TOML `[[teardown]]` yields a vec).
+    let teardown = raw.teardown.into_iter().next();
     Ok(ProjectConfig {
         options: raw.options,
         vars: raw.vars,
+        teardown,
     })
 }
 
@@ -162,6 +169,11 @@ pub fn merge_config(project: &ProjectConfig, flow: &FlowFile) -> FlowFile {
     } else {
         None
     };
+
+    // Merge teardown: flow teardown first, then project teardown
+    if let Some(ref project_teardown) = project.teardown {
+        merged.teardown.push(project_teardown.clone());
+    }
 
     merged
 }
@@ -557,7 +569,148 @@ step_timeout = 5000
     }
 
     // ---------------------------------------------------------------
-    // 15. merge_config partial option override
+    // 15. Project config with teardown parses
+    // ---------------------------------------------------------------
+    #[test]
+    fn parse_project_config_with_teardown() {
+        let toml_str = r#"
+[vars]
+token = "abc"
+
+[[teardown]]
+
+[[teardown.steps]]
+action = "screenshot"
+
+[[teardown.steps]]
+action = "back"
+"#;
+        let config =
+            parse_project_config(toml_str).expect("project config with teardown should parse");
+        assert_eq!(config.vars.get("token").map(|s| s.as_str()), Some("abc"));
+        let teardown = config
+            .teardown
+            .as_ref()
+            .expect("SHALL have teardown block");
+        assert_eq!(
+            teardown.steps.len(),
+            2,
+            "SHALL contain both teardown steps"
+        );
+        assert_eq!(teardown.steps[0].action, "screenshot");
+        assert_eq!(teardown.steps[1].action, "back");
+    }
+
+    // ---------------------------------------------------------------
+    // 16. Project teardown merges into flow
+    // ---------------------------------------------------------------
+    #[test]
+    fn merge_project_teardown_into_flow() {
+        let project = parse_project_config(
+            r#"
+[[teardown]]
+
+[[teardown.steps]]
+action = "screenshot"
+"#,
+        )
+        .expect("project config should parse");
+
+        let flow = minimal_flow(
+            r#"
+[flow]
+name = "test"
+"#,
+        );
+
+        let merged = merge_config(&project, &flow);
+        assert_eq!(
+            merged.teardown.len(),
+            1,
+            "SHALL have one teardown block from project"
+        );
+        assert_eq!(merged.teardown[0].steps[0].action, "screenshot");
+    }
+
+    // ---------------------------------------------------------------
+    // 17. Flow's own teardown comes before project teardown
+    // ---------------------------------------------------------------
+    #[test]
+    fn merge_flow_teardown_before_project_teardown() {
+        let project = parse_project_config(
+            r#"
+[[teardown]]
+
+[[teardown.steps]]
+action = "screenshot"
+"#,
+        )
+        .expect("project config should parse");
+
+        let flow = minimal_flow(
+            r#"
+[flow]
+name = "test"
+
+[[teardown]]
+
+[[teardown.steps]]
+action = "back"
+"#,
+        );
+
+        let merged = merge_config(&project, &flow);
+        assert_eq!(
+            merged.teardown.len(),
+            2,
+            "SHALL have flow teardown + project teardown"
+        );
+        assert_eq!(
+            merged.teardown[0].steps[0].action, "back",
+            "SHALL place flow teardown first"
+        );
+        assert_eq!(
+            merged.teardown[1].steps[0].action, "screenshot",
+            "SHALL place project teardown after flow teardown"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 18. No project teardown leaves flow teardown unchanged
+    // ---------------------------------------------------------------
+    #[test]
+    fn merge_no_project_teardown_leaves_flow_unchanged() {
+        let project = parse_project_config(
+            r#"
+[vars]
+token = "abc"
+"#,
+        )
+        .expect("project config should parse");
+
+        let flow = minimal_flow(
+            r#"
+[flow]
+name = "test"
+
+[[teardown]]
+
+[[teardown.steps]]
+action = "back"
+"#,
+        );
+
+        let merged = merge_config(&project, &flow);
+        assert_eq!(
+            merged.teardown.len(),
+            1,
+            "SHALL preserve flow teardown when project has none"
+        );
+        assert_eq!(merged.teardown[0].steps[0].action, "back");
+    }
+
+    // ---------------------------------------------------------------
+    // 19. merge_config partial option override
     // ---------------------------------------------------------------
     #[test]
     fn merge_partial_option_override() {
