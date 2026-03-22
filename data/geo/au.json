@@ -1,0 +1,811 @@
+{
+  "country": {
+    "name": "Australia",
+    "name_en": "Australia",
+    "iso_code": "AU",
+    "phone_prefix": "+61",
+    "phone_formats": ["+61-4##-###-###", "+61-#-####-####"],
+    "postcode_format": "####",
+    "name_order": "given_first"
+  },
+  "states": [
+    {
+      "name": "New South Wales",
+      "name_en": "New South Wales",
+      "region_tags": ["Eastern Australia"],
+      "cities": [
+        {
+          "name": "Sydney",
+          "name_en": "Sydney",
+          "lat": -33.8688,
+          "lon": 151.2093,
+          "postcodes": [
+            {
+              "code": "2000",
+              "street": "George Street",
+              "street_en": "George Street",
+              "pattern": "n{1,300} George Street"
+            },
+            {
+              "code": "2001",
+              "street": "Pitt Street",
+              "street_en": "Pitt Street",
+              "pattern": "n{1,250} Pitt Street"
+            },
+            {
+              "code": "2006",
+              "street": "Elizabeth Street",
+              "street_en": "Elizabeth Street",
+              "pattern": "n{1,280} Elizabeth Street"
+            },
+            {
+              "code": "2007",
+              "street": "Broadway",
+              "street_en": "Broadway",
+              "pattern": "n{1,200} Broadway"
+            },
+            {
+              "code": "2008",
+              "street": "Harris Street",
+              "street_en": "Harris Street",
+              "pattern": "n{1,150} Harris Street"
+            },
+            {
+              "code": "2009",
+              "street": "Pyrmont Bridge Road",
+              "street_en": "Pyrmont Bridge Road",
+              "pattern": "n{1,120} Pyrmont Bridge Road"
+            },
+            {
+              "code": "2010",
+              "street": "Oxford Street",
+              "street_en": "Oxford Street",
+              "pattern": "n{1,300} Oxford Street"
+            },
+            {
+              "code": "2011",
+              "street": "Victoria Street",
+              "street_en": "Victoria Street",
+              "pattern": "n{1,200} Victoria Street"
+            },
+            {
+              "code": "2015",
+              "street": "Botany Road",
+              "street_en": "Botany Road",
+              "pattern": "n{1,250} Botany Road"
+            },
+            {
+              "code": "2016",
+              "street": "Anzac Parade",
+              "street_en": "Anzac Parade",
+              "pattern": "n{1,300} Anzac Parade"
+            },
+            {
+              "code": "2017",
+              "street": "Gardeners Road",
+              "street_en": "Gardeners Road",
+              "pattern": "n{1,180} Gardeners Road"
+            },
+            {
+              "code": "2018",
+              "street": "King Street",
+              "street_en": "King Street",
+              "pattern": "n{1,260} King Street"
+            },
+            {
+              "code": "2019",
+              "street": "Princes Highway",
+              "street_en": "Princes Highway",
+              "pattern": "n{1,300} Princes Highway"
+            },
+            {
+              "code": "2020",
+              "street": "Coward Street",
+              "street_en": "Coward Street",
+              "pattern": "n{1,120} Coward Street"
+            },
+            {
+              "code": "2021",
+              "street": "Bondi Road",
+              "street_en": "Bondi Road",
+              "pattern": "n{1,250} Bondi Road"
+            },
+            {
+              "code": "2025",
+              "street": "Old South Head Road",
+              "street_en": "Old South Head Road",
+              "pattern": "n{1,200} Old South Head Road"
+            },
+            {
+              "code": "2026",
+              "street": "Military Road",
+              "street_en": "Military Road",
+              "pattern": "n{1,220} Military Road"
+            },
+            {
+              "code": "2030",
+              "street": "Campbell Parade",
+              "street_en": "Campbell Parade",
+              "pattern": "n{1,150} Campbell Parade"
+            }
+          ]
+        },
+        {
+          "name": "Newcastle",
+          "name_en": "Newcastle",
+          "lat": -32.9283,
+          "lon": 151.7817,
+          "postcodes": [
+            {
+              "code": "2300",
+              "street": "Hunter Street",
+              "street_en": "Hunter Street",
+              "pattern": "n{1,250} Hunter Street"
+            },
+            {
+              "code": "2302",
+              "street": "Pacific Street",
+              "street_en": "Pacific Street",
+              "pattern": "n{1,120} Pacific Street"
+            },
+            {
+              "code": "2303",
+              "street": "Maitland Road",
+              "street_en": "Maitland Road",
+              "pattern": "n{1,200} Maitland Road"
+            },
+            {
+              "code": "2304",
+              "street": "Industrial Drive",
+              "street_en": "Industrial Drive",
+              "pattern": "n{1,150} Industrial Drive"
+            }
+          ]
+        },
+        {
+          "name": "Wollongong",
+          "name_en": "Wollongong",
+          "lat": -34.4248,
+          "lon": 150.8931,
+          "postcodes": [
+            {
+              "code": "2500",
+              "street": "Crown Street",
+              "street_en": "Crown Street",
+              "pattern": "n{1,200} Crown Street"
+            },
+            {
+              "code": "2502",
+              "street": "Flinders Street",
+              "street_en": "Flinders Street",
+              "pattern": "n{1,180} Flinders Street"
+            },
+            {
+              "code": "2505",
+              "street": "Springhill Road",
+              "street_en": "Springhill Road",
+              "pattern": "n{1,120} Springhill Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Victoria",
+      "name_en": "Victoria",
+      "region_tags": ["Eastern Australia", "Southeast"],
+      "cities": [
+        {
+          "name": "Melbourne",
+          "name_en": "Melbourne",
+          "lat": -37.8136,
+          "lon": 144.9631,
+          "postcodes": [
+            {
+              "code": "3000",
+              "street": "Collins Street",
+              "street_en": "Collins Street",
+              "pattern": "n{1,300} Collins Street"
+            },
+            {
+              "code": "3001",
+              "street": "Bourke Street",
+              "street_en": "Bourke Street",
+              "pattern": "n{1,280} Bourke Street"
+            },
+            {
+              "code": "3002",
+              "street": "Wellington Parade",
+              "street_en": "Wellington Parade",
+              "pattern": "n{1,150} Wellington Parade"
+            },
+            {
+              "code": "3003",
+              "street": "Victoria Street",
+              "street_en": "Victoria Street",
+              "pattern": "n{1,200} Victoria Street"
+            },
+            {
+              "code": "3004",
+              "street": "St Kilda Road",
+              "street_en": "St Kilda Road",
+              "pattern": "n{1,300} St Kilda Road"
+            },
+            {
+              "code": "3006",
+              "street": "Swanston Street",
+              "street_en": "Swanston Street",
+              "pattern": "n{1,250} Swanston Street"
+            },
+            {
+              "code": "3008",
+              "street": "Docklands Drive",
+              "street_en": "Docklands Drive",
+              "pattern": "n{1,120} Docklands Drive"
+            },
+            {
+              "code": "3010",
+              "street": "Flinders Street",
+              "street_en": "Flinders Street",
+              "pattern": "n{1,280} Flinders Street"
+            },
+            {
+              "code": "3011",
+              "street": "Barkly Street",
+              "street_en": "Barkly Street",
+              "pattern": "n{1,200} Barkly Street"
+            },
+            {
+              "code": "3031",
+              "street": "Racecourse Road",
+              "street_en": "Racecourse Road",
+              "pattern": "n{1,180} Racecourse Road"
+            },
+            {
+              "code": "3053",
+              "street": "Lygon Street",
+              "street_en": "Lygon Street",
+              "pattern": "n{1,250} Lygon Street"
+            },
+            {
+              "code": "3065",
+              "street": "Brunswick Street",
+              "street_en": "Brunswick Street",
+              "pattern": "n{1,300} Brunswick Street"
+            }
+          ]
+        },
+        {
+          "name": "Geelong",
+          "name_en": "Geelong",
+          "lat": -38.1499,
+          "lon": 144.3617,
+          "postcodes": [
+            {
+              "code": "3220",
+              "street": "Moorabool Street",
+              "street_en": "Moorabool Street",
+              "pattern": "n{1,200} Moorabool Street"
+            },
+            {
+              "code": "3214",
+              "street": "Bacchus Marsh Road",
+              "street_en": "Bacchus Marsh Road",
+              "pattern": "n{1,150} Bacchus Marsh Road"
+            },
+            {
+              "code": "3216",
+              "street": "Pakington Street",
+              "street_en": "Pakington Street",
+              "pattern": "n{1,180} Pakington Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Queensland",
+      "name_en": "Queensland",
+      "region_tags": ["Eastern Australia", "Tropical"],
+      "cities": [
+        {
+          "name": "Brisbane",
+          "name_en": "Brisbane",
+          "lat": -27.4698,
+          "lon": 153.0251,
+          "postcodes": [
+            {
+              "code": "4000",
+              "street": "Queen Street",
+              "street_en": "Queen Street",
+              "pattern": "n{1,300} Queen Street"
+            },
+            {
+              "code": "4001",
+              "street": "Albert Street",
+              "street_en": "Albert Street",
+              "pattern": "n{1,200} Albert Street"
+            },
+            {
+              "code": "4002",
+              "street": "Adelaide Street",
+              "street_en": "Adelaide Street",
+              "pattern": "n{1,250} Adelaide Street"
+            },
+            {
+              "code": "4005",
+              "street": "Brunswick Street",
+              "street_en": "Brunswick Street",
+              "pattern": "n{1,200} Brunswick Street"
+            },
+            {
+              "code": "4006",
+              "street": "Wickham Street",
+              "street_en": "Wickham Street",
+              "pattern": "n{1,180} Wickham Street"
+            },
+            {
+              "code": "4007",
+              "street": "Kingsford Smith Drive",
+              "street_en": "Kingsford Smith Drive",
+              "pattern": "n{1,250} Kingsford Smith Drive"
+            },
+            {
+              "code": "4010",
+              "street": "Sandgate Road",
+              "street_en": "Sandgate Road",
+              "pattern": "n{1,300} Sandgate Road"
+            },
+            {
+              "code": "4011",
+              "street": "Airport Drive",
+              "street_en": "Airport Drive",
+              "pattern": "n{1,100} Airport Drive"
+            },
+            {
+              "code": "4051",
+              "street": "Waterworks Road",
+              "street_en": "Waterworks Road",
+              "pattern": "n{1,200} Waterworks Road"
+            },
+            {
+              "code": "4101",
+              "street": "Melbourne Street",
+              "street_en": "Melbourne Street",
+              "pattern": "n{1,180} Melbourne Street"
+            }
+          ]
+        },
+        {
+          "name": "Gold Coast",
+          "name_en": "Gold Coast",
+          "lat": -28.0167,
+          "lon": 153.4000,
+          "postcodes": [
+            {
+              "code": "4217",
+              "street": "Gold Coast Highway",
+              "street_en": "Gold Coast Highway",
+              "pattern": "n{1,300} Gold Coast Highway"
+            },
+            {
+              "code": "4218",
+              "street": "Bundall Road",
+              "street_en": "Bundall Road",
+              "pattern": "n{1,150} Bundall Road"
+            },
+            {
+              "code": "4220",
+              "street": "Christine Avenue",
+              "street_en": "Christine Avenue",
+              "pattern": "n{1,120} Christine Avenue"
+            }
+          ]
+        },
+        {
+          "name": "Cairns",
+          "name_en": "Cairns",
+          "lat": -16.9186,
+          "lon": 145.7781,
+          "postcodes": [
+            {
+              "code": "4870",
+              "street": "Sheridan Street",
+              "street_en": "Sheridan Street",
+              "pattern": "n{1,250} Sheridan Street"
+            },
+            {
+              "code": "4868",
+              "street": "Mulgrave Road",
+              "street_en": "Mulgrave Road",
+              "pattern": "n{1,200} Mulgrave Road"
+            },
+            {
+              "code": "4869",
+              "street": "Captain Cook Highway",
+              "street_en": "Captain Cook Highway",
+              "pattern": "n{1,180} Captain Cook Highway"
+            }
+          ]
+        },
+        {
+          "name": "Townsville",
+          "name_en": "Townsville",
+          "lat": -19.2590,
+          "lon": 146.8169,
+          "postcodes": [
+            {
+              "code": "4810",
+              "street": "Flinders Street",
+              "street_en": "Flinders Street",
+              "pattern": "n{1,200} Flinders Street"
+            },
+            {
+              "code": "4811",
+              "street": "Stanley Street",
+              "street_en": "Stanley Street",
+              "pattern": "n{1,150} Stanley Street"
+            },
+            {
+              "code": "4812",
+              "street": "Ross River Road",
+              "street_en": "Ross River Road",
+              "pattern": "n{1,250} Ross River Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Western Australia",
+      "name_en": "Western Australia",
+      "region_tags": ["Western Australia"],
+      "cities": [
+        {
+          "name": "Perth",
+          "name_en": "Perth",
+          "lat": -31.9505,
+          "lon": 115.8605,
+          "postcodes": [
+            {
+              "code": "6000",
+              "street": "St Georges Terrace",
+              "street_en": "St Georges Terrace",
+              "pattern": "n{1,300} St Georges Terrace"
+            },
+            {
+              "code": "6003",
+              "street": "Hay Street",
+              "street_en": "Hay Street",
+              "pattern": "n{1,280} Hay Street"
+            },
+            {
+              "code": "6004",
+              "street": "Murray Street",
+              "street_en": "Murray Street",
+              "pattern": "n{1,250} Murray Street"
+            },
+            {
+              "code": "6005",
+              "street": "Thomas Street",
+              "street_en": "Thomas Street",
+              "pattern": "n{1,180} Thomas Street"
+            },
+            {
+              "code": "6006",
+              "street": "Charles Street",
+              "street_en": "Charles Street",
+              "pattern": "n{1,200} Charles Street"
+            },
+            {
+              "code": "6007",
+              "street": "Oxford Street",
+              "street_en": "Oxford Street",
+              "pattern": "n{1,150} Oxford Street"
+            },
+            {
+              "code": "6008",
+              "street": "Stirling Highway",
+              "street_en": "Stirling Highway",
+              "pattern": "n{1,300} Stirling Highway"
+            },
+            {
+              "code": "6009",
+              "street": "Broadway",
+              "street_en": "Broadway",
+              "pattern": "n{1,120} Broadway"
+            }
+          ]
+        },
+        {
+          "name": "Fremantle",
+          "name_en": "Fremantle",
+          "lat": -32.0569,
+          "lon": 115.7439,
+          "postcodes": [
+            {
+              "code": "6160",
+              "street": "High Street",
+              "street_en": "High Street",
+              "pattern": "n{1,200} High Street"
+            },
+            {
+              "code": "6162",
+              "street": "South Street",
+              "street_en": "South Street",
+              "pattern": "n{1,250} South Street"
+            },
+            {
+              "code": "6163",
+              "street": "Hampton Road",
+              "street_en": "Hampton Road",
+              "pattern": "n{1,180} Hampton Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "South Australia",
+      "name_en": "South Australia",
+      "region_tags": ["Central Australia"],
+      "cities": [
+        {
+          "name": "Adelaide",
+          "name_en": "Adelaide",
+          "lat": -34.9285,
+          "lon": 138.6007,
+          "postcodes": [
+            {
+              "code": "5000",
+              "street": "Rundle Street",
+              "street_en": "Rundle Street",
+              "pattern": "n{1,250} Rundle Street"
+            },
+            {
+              "code": "5001",
+              "street": "King William Street",
+              "street_en": "King William Street",
+              "pattern": "n{1,300} King William Street"
+            },
+            {
+              "code": "5005",
+              "street": "North Terrace",
+              "street_en": "North Terrace",
+              "pattern": "n{1,280} North Terrace"
+            },
+            {
+              "code": "5006",
+              "street": "Port Road",
+              "street_en": "Port Road",
+              "pattern": "n{1,250} Port Road"
+            },
+            {
+              "code": "5007",
+              "street": "Torrens Road",
+              "street_en": "Torrens Road",
+              "pattern": "n{1,200} Torrens Road"
+            },
+            {
+              "code": "5008",
+              "street": "Prospect Road",
+              "street_en": "Prospect Road",
+              "pattern": "n{1,180} Prospect Road"
+            },
+            {
+              "code": "5009",
+              "street": "Findon Road",
+              "street_en": "Findon Road",
+              "pattern": "n{1,150} Findon Road"
+            },
+            {
+              "code": "5010",
+              "street": "Grand Junction Road",
+              "street_en": "Grand Junction Road",
+              "pattern": "n{1,200} Grand Junction Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tasmania",
+      "name_en": "Tasmania",
+      "region_tags": ["Southern Australia"],
+      "cities": [
+        {
+          "name": "Hobart",
+          "name_en": "Hobart",
+          "lat": -42.8821,
+          "lon": 147.3272,
+          "postcodes": [
+            {
+              "code": "7000",
+              "street": "Elizabeth Street",
+              "street_en": "Elizabeth Street",
+              "pattern": "n{1,250} Elizabeth Street"
+            },
+            {
+              "code": "7001",
+              "street": "Liverpool Street",
+              "street_en": "Liverpool Street",
+              "pattern": "n{1,200} Liverpool Street"
+            },
+            {
+              "code": "7004",
+              "street": "Sandy Bay Road",
+              "street_en": "Sandy Bay Road",
+              "pattern": "n{1,300} Sandy Bay Road"
+            },
+            {
+              "code": "7005",
+              "street": "Macquarie Street",
+              "street_en": "Macquarie Street",
+              "pattern": "n{1,180} Macquarie Street"
+            },
+            {
+              "code": "7007",
+              "street": "Davey Street",
+              "street_en": "Davey Street",
+              "pattern": "n{1,150} Davey Street"
+            },
+            {
+              "code": "7008",
+              "street": "Main Road",
+              "street_en": "Main Road",
+              "pattern": "n{1,200} Main Road"
+            }
+          ]
+        },
+        {
+          "name": "Launceston",
+          "name_en": "Launceston",
+          "lat": -41.4332,
+          "lon": 147.1441,
+          "postcodes": [
+            {
+              "code": "7250",
+              "street": "Brisbane Street",
+              "street_en": "Brisbane Street",
+              "pattern": "n{1,200} Brisbane Street"
+            },
+            {
+              "code": "7248",
+              "street": "Wellington Street",
+              "street_en": "Wellington Street",
+              "pattern": "n{1,180} Wellington Street"
+            },
+            {
+              "code": "7249",
+              "street": "Invermay Road",
+              "street_en": "Invermay Road",
+              "pattern": "n{1,200} Invermay Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Australian Capital Territory",
+      "name_en": "Australian Capital Territory",
+      "region_tags": ["Eastern Australia"],
+      "cities": [
+        {
+          "name": "Canberra",
+          "name_en": "Canberra",
+          "lat": -35.2809,
+          "lon": 149.1300,
+          "postcodes": [
+            {
+              "code": "2600",
+              "street": "Northbourne Avenue",
+              "street_en": "Northbourne Avenue",
+              "pattern": "n{1,300} Northbourne Avenue"
+            },
+            {
+              "code": "2601",
+              "street": "Commonwealth Avenue",
+              "street_en": "Commonwealth Avenue",
+              "pattern": "n{1,250} Commonwealth Avenue"
+            },
+            {
+              "code": "2602",
+              "street": "Antill Street",
+              "street_en": "Antill Street",
+              "pattern": "n{1,180} Antill Street"
+            },
+            {
+              "code": "2603",
+              "street": "Manuka Circle",
+              "street_en": "Manuka Circle",
+              "pattern": "n{1,100} Manuka Circle"
+            },
+            {
+              "code": "2604",
+              "street": "Hindmarsh Drive",
+              "street_en": "Hindmarsh Drive",
+              "pattern": "n{1,200} Hindmarsh Drive"
+            },
+            {
+              "code": "2606",
+              "street": "London Circuit",
+              "street_en": "London Circuit",
+              "pattern": "n{1,150} London Circuit"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Northern Territory",
+      "name_en": "Northern Territory",
+      "region_tags": ["Northern Australia", "Outback"],
+      "cities": [
+        {
+          "name": "Darwin",
+          "name_en": "Darwin",
+          "lat": -12.4634,
+          "lon": 130.8456,
+          "postcodes": [
+            {
+              "code": "0800",
+              "street": "Mitchell Street",
+              "street_en": "Mitchell Street",
+              "pattern": "n{1,200} Mitchell Street"
+            },
+            {
+              "code": "0801",
+              "street": "Smith Street",
+              "street_en": "Smith Street",
+              "pattern": "n{1,180} Smith Street"
+            },
+            {
+              "code": "0810",
+              "street": "Cavenagh Street",
+              "street_en": "Cavenagh Street",
+              "pattern": "n{1,150} Cavenagh Street"
+            },
+            {
+              "code": "0812",
+              "street": "Stuart Highway",
+              "street_en": "Stuart Highway",
+              "pattern": "n{1,300} Stuart Highway"
+            },
+            {
+              "code": "0820",
+              "street": "Tiger Brennan Drive",
+              "street_en": "Tiger Brennan Drive",
+              "pattern": "n{1,120} Tiger Brennan Drive"
+            }
+          ]
+        },
+        {
+          "name": "Alice Springs",
+          "name_en": "Alice Springs",
+          "lat": -23.6980,
+          "lon": 133.8807,
+          "postcodes": [
+            {
+              "code": "0870",
+              "street": "Todd Street",
+              "street_en": "Todd Street",
+              "pattern": "n{1,150} Todd Street"
+            },
+            {
+              "code": "0871",
+              "street": "Stuart Highway",
+              "street_en": "Stuart Highway",
+              "pattern": "n{1,300} Stuart Highway"
+            },
+            {
+              "code": "0872",
+              "street": "Larapinta Drive",
+              "street_en": "Larapinta Drive",
+              "pattern": "n{1,200} Larapinta Drive"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
