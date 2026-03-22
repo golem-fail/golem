@@ -1,0 +1,1029 @@
+{
+  "country": {
+    "name": "New Zealand",
+    "name_en": "New Zealand",
+    "iso_code": "NZ",
+    "phone_prefix": "+64",
+    "phone_formats": ["+64-2#-###-####", "+64-#-###-####"],
+    "postcode_format": "####",
+    "name_order": "given_first"
+  },
+  "states": [
+    {
+      "name": "Auckland",
+      "name_en": "Auckland",
+      "region_tags": ["North Island", "Upper North Island"],
+      "cities": [
+        {
+          "name": "Auckland",
+          "name_en": "Auckland",
+          "lat": -36.8485,
+          "lon": 174.7633,
+          "postcodes": [
+            {
+              "code": "1010",
+              "street": "Queen Street",
+              "street_en": "Queen Street",
+              "pattern": "n{1,300} Queen Street"
+            },
+            {
+              "code": "1011",
+              "street": "Symonds Street",
+              "street_en": "Symonds Street",
+              "pattern": "n{1,250} Symonds Street"
+            },
+            {
+              "code": "1021",
+              "street": "Ponsonby Road",
+              "street_en": "Ponsonby Road",
+              "pattern": "n{1,200} Ponsonby Road"
+            },
+            {
+              "code": "1022",
+              "street": "Karangahape Road",
+              "street_en": "Karangahape Road",
+              "pattern": "n{1,280} Karangahape Road"
+            },
+            {
+              "code": "1023",
+              "street": "Dominion Road",
+              "street_en": "Dominion Road",
+              "pattern": "n{1,300} Dominion Road"
+            },
+            {
+              "code": "1024",
+              "street": "Great North Road",
+              "street_en": "Great North Road",
+              "pattern": "n{1,250} Great North Road"
+            },
+            {
+              "code": "1025",
+              "street": "Sandringham Road",
+              "street_en": "Sandringham Road",
+              "pattern": "n{1,180} Sandringham Road"
+            },
+            {
+              "code": "1026",
+              "street": "Mt Eden Road",
+              "street_en": "Mt Eden Road",
+              "pattern": "n{1,220} Mt Eden Road"
+            },
+            {
+              "code": "1030",
+              "street": "Tamaki Drive",
+              "street_en": "Tamaki Drive",
+              "pattern": "n{1,150} Tamaki Drive"
+            },
+            {
+              "code": "1050",
+              "street": "Remuera Road",
+              "street_en": "Remuera Road",
+              "pattern": "n{1,200} Remuera Road"
+            },
+            {
+              "code": "1052",
+              "street": "Meadowbank Road",
+              "street_en": "Meadowbank Road",
+              "pattern": "n{1,120} Meadowbank Road"
+            },
+            {
+              "code": "1060",
+              "street": "Broadway",
+              "street_en": "Broadway",
+              "pattern": "n{1,200} Broadway"
+            },
+            {
+              "code": "1071",
+              "street": "Manukau Road",
+              "street_en": "Manukau Road",
+              "pattern": "n{1,250} Manukau Road"
+            },
+            {
+              "code": "1072",
+              "street": "Great South Road",
+              "street_en": "Great South Road",
+              "pattern": "n{1,300} Great South Road"
+            },
+            {
+              "code": "1100",
+              "street": "Te Irirangi Drive",
+              "street_en": "Te Irirangi Drive",
+              "pattern": "n{1,180} Te Irirangi Drive"
+            },
+            {
+              "code": "1110",
+              "street": "Ormiston Road",
+              "street_en": "Ormiston Road",
+              "pattern": "n{1,150} Ormiston Road"
+            },
+            {
+              "code": "1140",
+              "street": "Henderson Valley Road",
+              "street_en": "Henderson Valley Road",
+              "pattern": "n{1,180} Henderson Valley Road"
+            },
+            {
+              "code": "1142",
+              "street": "Universal Drive",
+              "street_en": "Universal Drive",
+              "pattern": "n{1,200} Universal Drive"
+            },
+            {
+              "code": "1150",
+              "street": "Lincoln Road",
+              "street_en": "Lincoln Road",
+              "pattern": "n{1,200} Lincoln Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Wellington",
+      "name_en": "Wellington",
+      "region_tags": ["North Island", "Lower North Island"],
+      "cities": [
+        {
+          "name": "Wellington",
+          "name_en": "Wellington",
+          "lat": -41.2865,
+          "lon": 174.7762,
+          "postcodes": [
+            {
+              "code": "6011",
+              "street": "Lambton Quay",
+              "street_en": "Lambton Quay",
+              "pattern": "n{1,300} Lambton Quay"
+            },
+            {
+              "code": "6012",
+              "street": "Cuba Street",
+              "street_en": "Cuba Street",
+              "pattern": "n{1,250} Cuba Street"
+            },
+            {
+              "code": "6021",
+              "street": "Courtenay Place",
+              "street_en": "Courtenay Place",
+              "pattern": "n{1,200} Courtenay Place"
+            },
+            {
+              "code": "6022",
+              "street": "Willis Street",
+              "street_en": "Willis Street",
+              "pattern": "n{1,280} Willis Street"
+            },
+            {
+              "code": "6023",
+              "street": "Victoria Street",
+              "street_en": "Victoria Street",
+              "pattern": "n{1,200} Victoria Street"
+            },
+            {
+              "code": "6035",
+              "street": "Tinakori Road",
+              "street_en": "Tinakori Road",
+              "pattern": "n{1,180} Tinakori Road"
+            },
+            {
+              "code": "6037",
+              "street": "Aro Street",
+              "street_en": "Aro Street",
+              "pattern": "n{1,120} Aro Street"
+            },
+            {
+              "code": "6041",
+              "street": "Adelaide Road",
+              "street_en": "Adelaide Road",
+              "pattern": "n{1,250} Adelaide Road"
+            },
+            {
+              "code": "6055",
+              "street": "Riddiford Street",
+              "street_en": "Riddiford Street",
+              "pattern": "n{1,200} Riddiford Street"
+            },
+            {
+              "code": "6061",
+              "street": "Constable Street",
+              "street_en": "Constable Street",
+              "pattern": "n{1,180} Constable Street"
+            },
+            {
+              "code": "6112",
+              "street": "Johnsonville Road",
+              "street_en": "Johnsonville Road",
+              "pattern": "n{1,200} Johnsonville Road"
+            },
+            {
+              "code": "6140",
+              "street": "Mana Esplanade",
+              "street_en": "Mana Esplanade",
+              "pattern": "n{1,150} Mana Esplanade"
+            }
+          ]
+        },
+        {
+          "name": "Lower Hutt",
+          "name_en": "Lower Hutt",
+          "lat": -41.2127,
+          "lon": 174.8997,
+          "postcodes": [
+            {
+              "code": "5010",
+              "street": "High Street",
+              "street_en": "High Street",
+              "pattern": "n{1,250} High Street"
+            },
+            {
+              "code": "5011",
+              "street": "Queens Drive",
+              "street_en": "Queens Drive",
+              "pattern": "n{1,200} Queens Drive"
+            },
+            {
+              "code": "5012",
+              "street": "Woburn Road",
+              "street_en": "Woburn Road",
+              "pattern": "n{1,180} Woburn Road"
+            },
+            {
+              "code": "5013",
+              "street": "Hutt Road",
+              "street_en": "Hutt Road",
+              "pattern": "n{1,150} Hutt Road"
+            },
+            {
+              "code": "5014",
+              "street": "Naenae Road",
+              "street_en": "Naenae Road",
+              "pattern": "n{1,180} Naenae Road"
+            },
+            {
+              "code": "5018",
+              "street": "Wainuiomata Road",
+              "street_en": "Wainuiomata Road",
+              "pattern": "n{1,200} Wainuiomata Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Canterbury",
+      "name_en": "Canterbury",
+      "region_tags": ["South Island"],
+      "cities": [
+        {
+          "name": "Christchurch",
+          "name_en": "Christchurch",
+          "lat": -43.5321,
+          "lon": 172.6362,
+          "postcodes": [
+            {
+              "code": "8011",
+              "street": "Colombo Street",
+              "street_en": "Colombo Street",
+              "pattern": "n{1,300} Colombo Street"
+            },
+            {
+              "code": "8013",
+              "street": "Manchester Street",
+              "street_en": "Manchester Street",
+              "pattern": "n{1,250} Manchester Street"
+            },
+            {
+              "code": "8014",
+              "street": "Riccarton Road",
+              "street_en": "Riccarton Road",
+              "pattern": "n{1,280} Riccarton Road"
+            },
+            {
+              "code": "8022",
+              "street": "Papanui Road",
+              "street_en": "Papanui Road",
+              "pattern": "n{1,250} Papanui Road"
+            },
+            {
+              "code": "8023",
+              "street": "Blenheim Road",
+              "street_en": "Blenheim Road",
+              "pattern": "n{1,200} Blenheim Road"
+            },
+            {
+              "code": "8024",
+              "street": "Fendalton Road",
+              "street_en": "Fendalton Road",
+              "pattern": "n{1,180} Fendalton Road"
+            },
+            {
+              "code": "8025",
+              "street": "Memorial Avenue",
+              "street_en": "Memorial Avenue",
+              "pattern": "n{1,150} Memorial Avenue"
+            },
+            {
+              "code": "8041",
+              "street": "Fitzgerald Avenue",
+              "street_en": "Fitzgerald Avenue",
+              "pattern": "n{1,220} Fitzgerald Avenue"
+            },
+            {
+              "code": "8042",
+              "street": "Ferry Road",
+              "street_en": "Ferry Road",
+              "pattern": "n{1,200} Ferry Road"
+            },
+            {
+              "code": "8052",
+              "street": "Lincoln Road",
+              "street_en": "Lincoln Road",
+              "pattern": "n{1,250} Lincoln Road"
+            },
+            {
+              "code": "8061",
+              "street": "Brougham Street",
+              "street_en": "Brougham Street",
+              "pattern": "n{1,200} Brougham Street"
+            },
+            {
+              "code": "8083",
+              "street": "Main North Road",
+              "street_en": "Main North Road",
+              "pattern": "n{1,300} Main North Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Waikato",
+      "name_en": "Waikato",
+      "region_tags": ["North Island", "Upper North Island"],
+      "cities": [
+        {
+          "name": "Hamilton",
+          "name_en": "Hamilton",
+          "lat": -37.7870,
+          "lon": 175.2793,
+          "postcodes": [
+            {
+              "code": "3200",
+              "street": "Victoria Street",
+              "street_en": "Victoria Street",
+              "pattern": "n{1,300} Victoria Street"
+            },
+            {
+              "code": "3204",
+              "street": "Grey Street",
+              "street_en": "Grey Street",
+              "pattern": "n{1,200} Grey Street"
+            },
+            {
+              "code": "3206",
+              "street": "Tristram Street",
+              "street_en": "Tristram Street",
+              "pattern": "n{1,180} Tristram Street"
+            },
+            {
+              "code": "3210",
+              "street": "Te Rapa Road",
+              "street_en": "Te Rapa Road",
+              "pattern": "n{1,250} Te Rapa Road"
+            },
+            {
+              "code": "3214",
+              "street": "Peachgrove Road",
+              "street_en": "Peachgrove Road",
+              "pattern": "n{1,200} Peachgrove Road"
+            },
+            {
+              "code": "3216",
+              "street": "Heaphy Terrace",
+              "street_en": "Heaphy Terrace",
+              "pattern": "n{1,150} Heaphy Terrace"
+            },
+            {
+              "code": "3218",
+              "street": "Cobham Drive",
+              "street_en": "Cobham Drive",
+              "pattern": "n{1,200} Cobham Drive"
+            },
+            {
+              "code": "3240",
+              "street": "Avalon Drive",
+              "street_en": "Avalon Drive",
+              "pattern": "n{1,180} Avalon Drive"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Bay of Plenty",
+      "name_en": "Bay of Plenty",
+      "region_tags": ["North Island"],
+      "cities": [
+        {
+          "name": "Tauranga",
+          "name_en": "Tauranga",
+          "lat": -37.6878,
+          "lon": 176.1651,
+          "postcodes": [
+            {
+              "code": "3110",
+              "street": "Cameron Road",
+              "street_en": "Cameron Road",
+              "pattern": "n{1,300} Cameron Road"
+            },
+            {
+              "code": "3112",
+              "street": "Devonport Road",
+              "street_en": "Devonport Road",
+              "pattern": "n{1,200} Devonport Road"
+            },
+            {
+              "code": "3116",
+              "street": "Fraser Street",
+              "street_en": "Fraser Street",
+              "pattern": "n{1,180} Fraser Street"
+            },
+            {
+              "code": "3118",
+              "street": "Fifteenth Avenue",
+              "street_en": "Fifteenth Avenue",
+              "pattern": "n{1,150} Fifteenth Avenue"
+            }
+          ]
+        },
+        {
+          "name": "Rotorua",
+          "name_en": "Rotorua",
+          "lat": -38.1368,
+          "lon": 176.2497,
+          "postcodes": [
+            {
+              "code": "3010",
+              "street": "Fenton Street",
+              "street_en": "Fenton Street",
+              "pattern": "n{1,250} Fenton Street"
+            },
+            {
+              "code": "3015",
+              "street": "Tutanekai Street",
+              "street_en": "Tutanekai Street",
+              "pattern": "n{1,200} Tutanekai Street"
+            },
+            {
+              "code": "3040",
+              "street": "Te Ngae Road",
+              "street_en": "Te Ngae Road",
+              "pattern": "n{1,180} Te Ngae Road"
+            },
+            {
+              "code": "3046",
+              "street": "Lake Road",
+              "street_en": "Lake Road",
+              "pattern": "n{1,200} Lake Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Otago",
+      "name_en": "Otago",
+      "region_tags": ["South Island"],
+      "cities": [
+        {
+          "name": "Dunedin",
+          "name_en": "Dunedin",
+          "lat": -45.8788,
+          "lon": 170.5028,
+          "postcodes": [
+            {
+              "code": "9010",
+              "street": "George Street",
+              "street_en": "George Street",
+              "pattern": "n{1,300} George Street"
+            },
+            {
+              "code": "9011",
+              "street": "Princes Street",
+              "street_en": "Princes Street",
+              "pattern": "n{1,250} Princes Street"
+            },
+            {
+              "code": "9012",
+              "street": "Stuart Street",
+              "street_en": "Stuart Street",
+              "pattern": "n{1,200} Stuart Street"
+            },
+            {
+              "code": "9013",
+              "street": "Cumberland Street",
+              "street_en": "Cumberland Street",
+              "pattern": "n{1,220} Cumberland Street"
+            },
+            {
+              "code": "9016",
+              "street": "South Road",
+              "street_en": "South Road",
+              "pattern": "n{1,180} South Road"
+            },
+            {
+              "code": "9018",
+              "street": "Andersons Bay Road",
+              "street_en": "Andersons Bay Road",
+              "pattern": "n{1,220} Andersons Bay Road"
+            },
+            {
+              "code": "9022",
+              "street": "North Road",
+              "street_en": "North Road",
+              "pattern": "n{1,200} North Road"
+            }
+          ]
+        },
+        {
+          "name": "Queenstown",
+          "name_en": "Queenstown",
+          "lat": -45.0312,
+          "lon": 168.6626,
+          "postcodes": [
+            {
+              "code": "9300",
+              "street": "Shotover Street",
+              "street_en": "Shotover Street",
+              "pattern": "n{1,150} Shotover Street"
+            },
+            {
+              "code": "9304",
+              "street": "Stanley Street",
+              "street_en": "Stanley Street",
+              "pattern": "n{1,120} Stanley Street"
+            },
+            {
+              "code": "9348",
+              "street": "Frankton Road",
+              "street_en": "Frankton Road",
+              "pattern": "n{1,180} Frankton Road"
+            },
+            {
+              "code": "9350",
+              "street": "Gorge Road",
+              "street_en": "Gorge Road",
+              "pattern": "n{1,150} Gorge Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Manawatū-Whanganui",
+      "name_en": "Manawatū-Whanganui",
+      "region_tags": ["North Island", "Lower North Island"],
+      "cities": [
+        {
+          "name": "Palmerston North",
+          "name_en": "Palmerston North",
+          "lat": -40.3523,
+          "lon": 175.6082,
+          "postcodes": [
+            {
+              "code": "4410",
+              "street": "Broadway Avenue",
+              "street_en": "Broadway Avenue",
+              "pattern": "n{1,250} Broadway Avenue"
+            },
+            {
+              "code": "4412",
+              "street": "Rangitikei Street",
+              "street_en": "Rangitikei Street",
+              "pattern": "n{1,200} Rangitikei Street"
+            },
+            {
+              "code": "4414",
+              "street": "Fitzherbert Avenue",
+              "street_en": "Fitzherbert Avenue",
+              "pattern": "n{1,280} Fitzherbert Avenue"
+            },
+            {
+              "code": "4440",
+              "street": "Pioneer Highway",
+              "street_en": "Pioneer Highway",
+              "pattern": "n{1,180} Pioneer Highway"
+            },
+            {
+              "code": "4442",
+              "street": "Featherston Street",
+              "street_en": "Featherston Street",
+              "pattern": "n{1,200} Featherston Street"
+            },
+            {
+              "code": "4470",
+              "street": "College Street",
+              "street_en": "College Street",
+              "pattern": "n{1,180} College Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Hawke's Bay",
+      "name_en": "Hawke's Bay",
+      "region_tags": ["North Island"],
+      "cities": [
+        {
+          "name": "Napier",
+          "name_en": "Napier",
+          "lat": -39.4928,
+          "lon": 176.9120,
+          "postcodes": [
+            {
+              "code": "4110",
+              "street": "Emerson Street",
+              "street_en": "Emerson Street",
+              "pattern": "n{1,200} Emerson Street"
+            },
+            {
+              "code": "4112",
+              "street": "Marine Parade",
+              "street_en": "Marine Parade",
+              "pattern": "n{1,250} Marine Parade"
+            },
+            {
+              "code": "4120",
+              "street": "Kennedy Road",
+              "street_en": "Kennedy Road",
+              "pattern": "n{1,180} Kennedy Road"
+            }
+          ]
+        },
+        {
+          "name": "Hastings",
+          "name_en": "Hastings",
+          "lat": -39.6381,
+          "lon": 176.8492,
+          "postcodes": [
+            {
+              "code": "4122",
+              "street": "Heretaunga Street",
+              "street_en": "Heretaunga Street",
+              "pattern": "n{1,250} Heretaunga Street"
+            },
+            {
+              "code": "4130",
+              "street": "Railway Road",
+              "street_en": "Railway Road",
+              "pattern": "n{1,200} Railway Road"
+            },
+            {
+              "code": "4156",
+              "street": "Karamu Road",
+              "street_en": "Karamu Road",
+              "pattern": "n{1,220} Karamu Road"
+            },
+            {
+              "code": "4158",
+              "street": "Omahu Road",
+              "street_en": "Omahu Road",
+              "pattern": "n{1,200} Omahu Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Northland",
+      "name_en": "Northland",
+      "region_tags": ["North Island", "Upper North Island"],
+      "cities": [
+        {
+          "name": "Whangārei",
+          "name_en": "Whangārei",
+          "lat": -35.7251,
+          "lon": 174.3236,
+          "postcodes": [
+            {
+              "code": "0110",
+              "street": "Bank Street",
+              "street_en": "Bank Street",
+              "pattern": "n{1,200} Bank Street"
+            },
+            {
+              "code": "0112",
+              "street": "Cameron Street",
+              "street_en": "Cameron Street",
+              "pattern": "n{1,180} Cameron Street"
+            },
+            {
+              "code": "0118",
+              "street": "Kamo Road",
+              "street_en": "Kamo Road",
+              "pattern": "n{1,250} Kamo Road"
+            },
+            {
+              "code": "0148",
+              "street": "Riverside Drive",
+              "street_en": "Riverside Drive",
+              "pattern": "n{1,150} Riverside Drive"
+            },
+            {
+              "code": "0120",
+              "street": "Dent Street",
+              "street_en": "Dent Street",
+              "pattern": "n{1,180} Dent Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Taranaki",
+      "name_en": "Taranaki",
+      "region_tags": ["North Island"],
+      "cities": [
+        {
+          "name": "New Plymouth",
+          "name_en": "New Plymouth",
+          "lat": -39.0556,
+          "lon": 174.0752,
+          "postcodes": [
+            {
+              "code": "4310",
+              "street": "Devon Street",
+              "street_en": "Devon Street",
+              "pattern": "n{1,250} Devon Street"
+            },
+            {
+              "code": "4312",
+              "street": "Courtenay Street",
+              "street_en": "Courtenay Street",
+              "pattern": "n{1,200} Courtenay Street"
+            },
+            {
+              "code": "4314",
+              "street": "Lemon Street",
+              "street_en": "Lemon Street",
+              "pattern": "n{1,150} Lemon Street"
+            },
+            {
+              "code": "4340",
+              "street": "Coronation Avenue",
+              "street_en": "Coronation Avenue",
+              "pattern": "n{1,180} Coronation Avenue"
+            },
+            {
+              "code": "4342",
+              "street": "Vivian Street",
+              "street_en": "Vivian Street",
+              "pattern": "n{1,150} Vivian Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Southland",
+      "name_en": "Southland",
+      "region_tags": ["South Island"],
+      "cities": [
+        {
+          "name": "Invercargill",
+          "name_en": "Invercargill",
+          "lat": -46.4132,
+          "lon": 168.3538,
+          "postcodes": [
+            {
+              "code": "9810",
+              "street": "Dee Street",
+              "street_en": "Dee Street",
+              "pattern": "n{1,250} Dee Street"
+            },
+            {
+              "code": "9812",
+              "street": "Tay Street",
+              "street_en": "Tay Street",
+              "pattern": "n{1,200} Tay Street"
+            },
+            {
+              "code": "9814",
+              "street": "Esk Street",
+              "street_en": "Esk Street",
+              "pattern": "n{1,180} Esk Street"
+            },
+            {
+              "code": "9840",
+              "street": "North Road",
+              "street_en": "North Road",
+              "pattern": "n{1,220} North Road"
+            },
+            {
+              "code": "9844",
+              "street": "Tweed Street",
+              "street_en": "Tweed Street",
+              "pattern": "n{1,180} Tweed Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Nelson",
+      "name_en": "Nelson",
+      "region_tags": ["South Island"],
+      "cities": [
+        {
+          "name": "Nelson",
+          "name_en": "Nelson",
+          "lat": -41.2706,
+          "lon": 173.2840,
+          "postcodes": [
+            {
+              "code": "7010",
+              "street": "Trafalgar Street",
+              "street_en": "Trafalgar Street",
+              "pattern": "n{1,250} Trafalgar Street"
+            },
+            {
+              "code": "7011",
+              "street": "Hardy Street",
+              "street_en": "Hardy Street",
+              "pattern": "n{1,200} Hardy Street"
+            },
+            {
+              "code": "7020",
+              "street": "Waimea Road",
+              "street_en": "Waimea Road",
+              "pattern": "n{1,180} Waimea Road"
+            },
+            {
+              "code": "7022",
+              "street": "Collingwood Street",
+              "street_en": "Collingwood Street",
+              "pattern": "n{1,200} Collingwood Street"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Marlborough",
+      "name_en": "Marlborough",
+      "region_tags": ["South Island"],
+      "cities": [
+        {
+          "name": "Blenheim",
+          "name_en": "Blenheim",
+          "lat": -41.5138,
+          "lon": 173.9611,
+          "postcodes": [
+            {
+              "code": "7201",
+              "street": "Market Street",
+              "street_en": "Market Street",
+              "pattern": "n{1,200} Market Street"
+            },
+            {
+              "code": "7210",
+              "street": "Main Street",
+              "street_en": "Main Street",
+              "pattern": "n{1,250} Main Street"
+            },
+            {
+              "code": "7220",
+              "street": "Scott Street",
+              "street_en": "Scott Street",
+              "pattern": "n{1,180} Scott Street"
+            },
+            {
+              "code": "7240",
+              "street": "Maxwell Road",
+              "street_en": "Maxwell Road",
+              "pattern": "n{1,200} Maxwell Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Gisborne",
+      "name_en": "Gisborne",
+      "region_tags": ["North Island"],
+      "cities": [
+        {
+          "name": "Gisborne",
+          "name_en": "Gisborne",
+          "lat": -38.6623,
+          "lon": 178.0176,
+          "postcodes": [
+            {
+              "code": "4010",
+              "street": "Gladstone Road",
+              "street_en": "Gladstone Road",
+              "pattern": "n{1,250} Gladstone Road"
+            },
+            {
+              "code": "4020",
+              "street": "Grey Street",
+              "street_en": "Grey Street",
+              "pattern": "n{1,200} Grey Street"
+            },
+            {
+              "code": "4032",
+              "street": "Ormond Road",
+              "street_en": "Ormond Road",
+              "pattern": "n{1,180} Ormond Road"
+            },
+            {
+              "code": "4040",
+              "street": "Childers Road",
+              "street_en": "Childers Road",
+              "pattern": "n{1,200} Childers Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tasman",
+      "name_en": "Tasman",
+      "region_tags": ["South Island"],
+      "cities": [
+        {
+          "name": "Richmond",
+          "name_en": "Richmond",
+          "lat": -41.3400,
+          "lon": 173.1820,
+          "postcodes": [
+            {
+              "code": "7020",
+              "street": "Queen Street",
+              "street_en": "Queen Street",
+              "pattern": "n{1,200} Queen Street"
+            },
+            {
+              "code": "7050",
+              "street": "Gladstone Road",
+              "street_en": "Gladstone Road",
+              "pattern": "n{1,180} Gladstone Road"
+            },
+            {
+              "code": "7081",
+              "street": "Main Road",
+              "street_en": "Main Road",
+              "pattern": "n{1,220} Main Road"
+            },
+            {
+              "code": "7095",
+              "street": "Salisbury Road",
+              "street_en": "Salisbury Road",
+              "pattern": "n{1,180} Salisbury Road"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "West Coast",
+      "name_en": "West Coast",
+      "region_tags": ["South Island"],
+      "cities": [
+        {
+          "name": "Greymouth",
+          "name_en": "Greymouth",
+          "lat": -42.4504,
+          "lon": 171.2108,
+          "postcodes": [
+            {
+              "code": "7805",
+              "street": "Mackay Street",
+              "street_en": "Mackay Street",
+              "pattern": "n{1,200} Mackay Street"
+            },
+            {
+              "code": "7810",
+              "street": "Tainui Street",
+              "street_en": "Tainui Street",
+              "pattern": "n{1,180} Tainui Street"
+            },
+            {
+              "code": "7830",
+              "street": "High Street",
+              "street_en": "High Street",
+              "pattern": "n{1,150} High Street"
+            },
+            {
+              "code": "7840",
+              "street": "Shakespeare Street",
+              "street_en": "Shakespeare Street",
+              "pattern": "n{1,180} Shakespeare Street"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
