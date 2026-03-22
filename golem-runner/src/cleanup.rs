@@ -25,8 +25,10 @@ pub struct CleanupResult {
 /// Performs the following steps in order:
 /// 1. Reset device orientation to portrait
 /// 2. Reset dark mode to disabled
-/// 3. Stop any running screen recordings
-/// 4. Shut down the device (unless `options.keep_devices` is set)
+/// 3. Clear mocked location (reset to 0,0)
+/// 4. Remove port forwards (Android only)
+/// 5. Stop any running screen recordings
+/// 6. Shut down the device (unless `options.keep_devices` is set)
 ///
 /// Every step is best-effort: failures are collected into `CleanupResult::warnings`
 /// and never propagated as errors.
@@ -47,12 +49,35 @@ pub async fn auto_cleanup(
         warnings.push(format!("Failed to reset dark mode: {e}"));
     }
 
-    // 3. Stop recording if running (ignore the result path or error)
+    // 3. Clear mocked location (reset to 0,0)
+    if let Err(e) = driver.set_location(0.0, 0.0).await {
+        warnings.push(format!("Failed to reset location: {e}"));
+    }
+
+    // 4. Remove port forwards (Android only)
+    if device.platform == golem_devices::Platform::Android {
+        match tokio::process::Command::new("adb")
+            .args(["-s", &device.udid, "forward", "--remove-all"])
+            .output()
+            .await
+        {
+            Ok(output) if !output.status.success() => {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                warnings.push(format!("Failed to remove port forwards: {stderr}"));
+            }
+            Err(e) => {
+                warnings.push(format!("Failed to remove port forwards: {e}"));
+            }
+            Ok(_) => {}
+        }
+    }
+
+    // 5. Stop recording if running (ignore the result path or error)
     if let Err(e) = driver.stop_recording().await {
         warnings.push(format!("Failed to stop recording: {e}"));
     }
 
-    // 4. Shutdown device (unless keep_devices is set)
+    // 6. Shutdown device (unless keep_devices is set)
     if !options.keep_devices {
         if let Err(e) = golem_devices::lifecycle::shutdown_device(device).await {
             warnings.push(format!("Failed to shutdown device: {e}"));
@@ -77,6 +102,7 @@ mod tests {
         fail_orientation: bool,
         fail_dark_mode: bool,
         fail_stop_recording: bool,
+        fail_set_location: bool,
     }
 
     impl FailableMockDriver {
@@ -86,6 +112,7 @@ mod tests {
                 fail_orientation: false,
                 fail_dark_mode: false,
                 fail_stop_recording: false,
+                fail_set_location: false,
             }
         }
 
@@ -191,7 +218,11 @@ mod tests {
             Ok(())
         }
 
-        async fn set_location(&self, _lat: f64, _lon: f64) -> anyhow::Result<()> {
+        async fn set_location(&self, lat: f64, lon: f64) -> anyhow::Result<()> {
+            self.record(&format!("set_location:{lat},{lon}"));
+            if self.fail_set_location {
+                anyhow::bail!("set location failed");
+            }
             Ok(())
         }
 
@@ -431,5 +462,111 @@ mod tests {
     fn default_cleanup_options_has_keep_devices_false() {
         let options = CleanupOptions::default();
         assert!(!options.keep_devices);
+    }
+
+    fn android_test_device() -> DeviceInfo {
+        DeviceInfo {
+            name: "Pixel 8".into(),
+            udid: "emulator-5554".into(),
+            platform: Platform::Android,
+            device_type: DeviceType::Phone,
+            os_major: 14,
+            os_version: "14.0".into(),
+            state: DeviceState::Booted,
+            physical: false,
+            playstore: false,
+            screen_width: None,
+            screen_height: None,
+            screen_scale: None,
+            last_booted: None,
+            runtime_id: None,
+            device_type_id: None,
+        }
+    }
+
+    // 9. auto_cleanup resets mocked location
+    #[tokio::test]
+    async fn auto_cleanup_resets_location() {
+        let driver = FailableMockDriver::new();
+        let device = test_device();
+        let options = CleanupOptions {
+            keep_devices: true,
+        };
+
+        let result = auto_cleanup(&driver, &device, &options).await;
+
+        let calls = driver.get_calls();
+        assert!(
+            calls.contains(&"set_location:0,0".to_string()),
+            "SHALL reset location to 0,0, got: {calls:?}"
+        );
+        assert!(result.warnings.is_empty());
+    }
+
+    // 10. auto_cleanup location reset failure collected as warning
+    #[tokio::test]
+    async fn auto_cleanup_location_reset_failure_is_warning() {
+        let driver = FailableMockDriver {
+            fail_set_location: true,
+            ..FailableMockDriver::new()
+        };
+        let device = test_device();
+        let options = CleanupOptions {
+            keep_devices: true,
+        };
+
+        let result = auto_cleanup(&driver, &device, &options).await;
+
+        assert!(
+            result.warnings.iter().any(|w| w.contains("location")),
+            "SHALL collect location reset failure as warning, got: {:?}",
+            result.warnings
+        );
+    }
+
+    // 11. auto_cleanup attempts port forward removal for Android devices
+    #[tokio::test]
+    async fn auto_cleanup_attempts_port_forward_removal_for_android() {
+        let driver = FailableMockDriver::new();
+        let device = android_test_device();
+        let options = CleanupOptions {
+            keep_devices: true,
+        };
+
+        let result = auto_cleanup(&driver, &device, &options).await;
+
+        // Port forward removal will fail in test env (no adb), but should
+        // be attempted and failure collected as a warning.
+        let has_port_forward_warning = result
+            .warnings
+            .iter()
+            .any(|w| w.contains("port forward"));
+        assert!(
+            has_port_forward_warning,
+            "SHALL attempt port forward removal for Android and collect failure as warning, got: {:?}",
+            result.warnings
+        );
+    }
+
+    // 12. auto_cleanup skips port forward removal for iOS devices
+    #[tokio::test]
+    async fn auto_cleanup_skips_port_forward_removal_for_ios() {
+        let driver = FailableMockDriver::new();
+        let device = test_device(); // iOS device
+        let options = CleanupOptions {
+            keep_devices: true,
+        };
+
+        let result = auto_cleanup(&driver, &device, &options).await;
+
+        let has_port_forward_warning = result
+            .warnings
+            .iter()
+            .any(|w| w.contains("port forward"));
+        assert!(
+            !has_port_forward_warning,
+            "SHALL NOT attempt port forward removal for iOS, got: {:?}",
+            result.warnings
+        );
     }
 }
