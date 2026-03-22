@@ -1,0 +1,754 @@
+{
+  "country": {
+    "name": "भारत",
+    "name_en": "India",
+    "iso_code": "IN",
+    "phone_prefix": "+91",
+    "phone_formats": ["+91-####-######", "+91-#####-#####"],
+    "postcode_format": "######",
+    "name_order": "given_first"
+  },
+  "states": [
+    {
+      "name": "Maharashtra",
+      "name_en": "Maharashtra",
+      "region_tags": ["West India"],
+      "cities": [
+        {
+          "name": "Mumbai",
+          "name_en": "Mumbai",
+          "lat": 19.0760,
+          "lon": 72.8777,
+          "postcodes": [
+            { "code": "400001", "street": "Marine Drive", "street_en": "Marine Drive", "pattern": "n{1,200} Marine Drive" },
+            { "code": "400002", "street": "Kalbadevi Road", "street_en": "Kalbadevi Road", "pattern": "n{1,150} Kalbadevi Road" },
+            { "code": "400003", "street": "Byculla Road", "street_en": "Byculla Road", "pattern": "n{1,120} Byculla Road" },
+            { "code": "400004", "street": "Girgaon Road", "street_en": "Girgaon Road", "pattern": "n{1,100} Girgaon Road" },
+            { "code": "400005", "street": "Colaba Causeway", "street_en": "Colaba Causeway", "pattern": "n{1,180} Colaba Causeway" },
+            { "code": "400007", "street": "Grant Road", "street_en": "Grant Road", "pattern": "n{1,160} Grant Road" },
+            { "code": "400008", "street": "Pedder Road", "street_en": "Pedder Road", "pattern": "n{1,130} Pedder Road" },
+            { "code": "400011", "street": "Matunga Road", "street_en": "Matunga Road", "pattern": "n{1,100} Matunga Road" },
+            { "code": "400014", "street": "Dadar Road", "street_en": "Dadar Road", "pattern": "n{1,140} Dadar Road" },
+            { "code": "400016", "street": "Prabhadevi Road", "street_en": "Prabhadevi Road", "pattern": "n{1,110} Prabhadevi Road" },
+            { "code": "400020", "street": "Linking Road", "street_en": "Linking Road", "pattern": "n{1,200} Linking Road" },
+            { "code": "400028", "street": "Hill Road", "street_en": "Hill Road", "pattern": "n{1,175} Hill Road" },
+            { "code": "400050", "street": "S.V. Road", "street_en": "S.V. Road", "pattern": "n{1,250} S.V. Road" },
+            { "code": "400053", "street": "Turner Road", "street_en": "Turner Road", "pattern": "n{1,120} Turner Road" },
+            { "code": "400054", "street": "Juhu Tara Road", "street_en": "Juhu Tara Road", "pattern": "n{1,90} Juhu Tara Road" },
+            { "code": "400058", "street": "Andheri Link Road", "street_en": "Andheri Link Road", "pattern": "n{1,200} Andheri Link Road" },
+            { "code": "400059", "street": "Lokhandwala Complex Road", "street_en": "Lokhandwala Complex Road", "pattern": "n{1,80} Lokhandwala Complex Road" },
+            { "code": "400069", "street": "Goregaon Link Road", "street_en": "Goregaon Link Road", "pattern": "n{1,150} Goregaon Link Road" },
+            { "code": "400076", "street": "Powai Road", "street_en": "Powai Road", "pattern": "n{1,100} Powai Road" },
+            { "code": "400080", "street": "Airoli Road", "street_en": "Airoli Road", "pattern": "n{1,130} Airoli Road" },
+            { "code": "400093", "street": "LBS Marg", "street_en": "LBS Marg", "pattern": "n{1,300} LBS Marg" },
+            { "code": "400104", "street": "Malad Link Road", "street_en": "Malad Link Road", "pattern": "n{1,160} Malad Link Road" }
+          ]
+        },
+        {
+          "name": "Pune",
+          "name_en": "Pune",
+          "lat": 18.5204,
+          "lon": 73.8567,
+          "postcodes": [
+            { "code": "411001", "street": "MG Road", "street_en": "MG Road", "pattern": "n{1,200} MG Road" },
+            { "code": "411002", "street": "Laxmi Road", "street_en": "Laxmi Road", "pattern": "n{1,180} Laxmi Road" },
+            { "code": "411004", "street": "Tilak Road", "street_en": "Tilak Road", "pattern": "n{1,150} Tilak Road" },
+            { "code": "411005", "street": "Fergusson College Road", "street_en": "Fergusson College Road", "pattern": "n{1,120} Fergusson College Road" },
+            { "code": "411006", "street": "Karve Road", "street_en": "Karve Road", "pattern": "n{1,200} Karve Road" },
+            { "code": "411030", "street": "Sinhagad Road", "street_en": "Sinhagad Road", "pattern": "n{1,250} Sinhagad Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tamil Nadu",
+      "name_en": "Tamil Nadu",
+      "region_tags": ["South India"],
+      "cities": [
+        {
+          "name": "Chennai",
+          "name_en": "Chennai",
+          "lat": 13.0827,
+          "lon": 80.2707,
+          "postcodes": [
+            { "code": "600001", "street": "Anna Salai", "street_en": "Anna Salai", "pattern": "n{1,300} Anna Salai" },
+            { "code": "600002", "street": "Poonamallee High Road", "street_en": "Poonamallee High Road", "pattern": "n{1,250} Poonamallee High Road" },
+            { "code": "600003", "street": "Mint Street", "street_en": "Mint Street", "pattern": "n{1,180} Mint Street" },
+            { "code": "600006", "street": "Cathedral Road", "street_en": "Cathedral Road", "pattern": "n{1,120} Cathedral Road" },
+            { "code": "600008", "street": "TTK Road", "street_en": "TTK Road", "pattern": "n{1,150} TTK Road" },
+            { "code": "600010", "street": "Nungambakkam High Road", "street_en": "Nungambakkam High Road", "pattern": "n{1,200} Nungambakkam High Road" },
+            { "code": "600017", "street": "Adyar Bridge Road", "street_en": "Adyar Bridge Road", "pattern": "n{1,100} Adyar Bridge Road" },
+            { "code": "600018", "street": "Sardar Patel Road", "street_en": "Sardar Patel Road", "pattern": "n{1,180} Sardar Patel Road" },
+            { "code": "600020", "street": "Dr Radhakrishnan Salai", "street_en": "Dr Radhakrishnan Salai", "pattern": "n{1,160} Dr Radhakrishnan Salai" },
+            { "code": "600028", "street": "Velachery Main Road", "street_en": "Velachery Main Road", "pattern": "n{1,200} Velachery Main Road" }
+          ]
+        },
+        {
+          "name": "Coimbatore",
+          "name_en": "Coimbatore",
+          "lat": 11.0168,
+          "lon": 76.9558,
+          "postcodes": [
+            { "code": "641001", "street": "Avinashi Road", "street_en": "Avinashi Road", "pattern": "n{1,250} Avinashi Road" },
+            { "code": "641002", "street": "Sathyamangalam Road", "street_en": "Sathyamangalam Road", "pattern": "n{1,150} Sathyamangalam Road" },
+            { "code": "641011", "street": "Mettupalayam Road", "street_en": "Mettupalayam Road", "pattern": "n{1,180} Mettupalayam Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Karnataka",
+      "name_en": "Karnataka",
+      "region_tags": ["South India"],
+      "cities": [
+        {
+          "name": "Bengaluru",
+          "name_en": "Bengaluru",
+          "lat": 12.9716,
+          "lon": 77.5946,
+          "postcodes": [
+            { "code": "560001", "street": "MG Road", "street_en": "MG Road", "pattern": "n{1,200} MG Road" },
+            { "code": "560002", "street": "Commercial Street", "street_en": "Commercial Street", "pattern": "n{1,180} Commercial Street" },
+            { "code": "560003", "street": "Residency Road", "street_en": "Residency Road", "pattern": "n{1,150} Residency Road" },
+            { "code": "560004", "street": "Brigade Road", "street_en": "Brigade Road", "pattern": "n{1,120} Brigade Road" },
+            { "code": "560008", "street": "Lavelle Road", "street_en": "Lavelle Road", "pattern": "n{1,80} Lavelle Road" },
+            { "code": "560010", "street": "Vittal Mallya Road", "street_en": "Vittal Mallya Road", "pattern": "n{1,100} Vittal Mallya Road" },
+            { "code": "560011", "street": "Cunningham Road", "street_en": "Cunningham Road", "pattern": "n{1,120} Cunningham Road" },
+            { "code": "560025", "street": "Jayanagar Main Road", "street_en": "Jayanagar Main Road", "pattern": "n{1,200} Jayanagar Main Road" },
+            { "code": "560034", "street": "Koramangala Main Road", "street_en": "Koramangala Main Road", "pattern": "n{1,180} Koramangala Main Road" },
+            { "code": "560038", "street": "Indiranagar Main Road", "street_en": "Indiranagar Main Road", "pattern": "n{1,200} Indiranagar Main Road" },
+            { "code": "560066", "street": "Whitefield Main Road", "street_en": "Whitefield Main Road", "pattern": "n{1,250} Whitefield Main Road" },
+            { "code": "560100", "street": "Electronic City Road", "street_en": "Electronic City Road", "pattern": "n{1,200} Electronic City Road" }
+          ]
+        },
+        {
+          "name": "Mysuru",
+          "name_en": "Mysuru",
+          "lat": 12.2958,
+          "lon": 76.6394,
+          "postcodes": [
+            { "code": "570001", "street": "Sayyaji Rao Road", "street_en": "Sayyaji Rao Road", "pattern": "n{1,150} Sayyaji Rao Road" },
+            { "code": "570004", "street": "Devaraja Urs Road", "street_en": "Devaraja Urs Road", "pattern": "n{1,120} Devaraja Urs Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Delhi NCT",
+      "name_en": "Delhi NCT",
+      "region_tags": ["North India"],
+      "cities": [
+        {
+          "name": "New Delhi",
+          "name_en": "New Delhi",
+          "lat": 28.6139,
+          "lon": 77.2090,
+          "postcodes": [
+            { "code": "110001", "street": "Connaught Place", "street_en": "Connaught Place", "pattern": "n{1,200} Connaught Place" },
+            { "code": "110002", "street": "Rajpath", "street_en": "Rajpath", "pattern": "n{1,100} Rajpath" },
+            { "code": "110003", "street": "Janpath", "street_en": "Janpath", "pattern": "n{1,150} Janpath" },
+            { "code": "110005", "street": "Karol Bagh Main Road", "street_en": "Karol Bagh Main Road", "pattern": "n{1,180} Karol Bagh Main Road" },
+            { "code": "110006", "street": "Chandni Chowk", "street_en": "Chandni Chowk", "pattern": "n{1,250} Chandni Chowk" },
+            { "code": "110011", "street": "Parliament Street", "street_en": "Parliament Street", "pattern": "n{1,80} Parliament Street" },
+            { "code": "110016", "street": "Hauz Khas Road", "street_en": "Hauz Khas Road", "pattern": "n{1,120} Hauz Khas Road" },
+            { "code": "110017", "street": "Lodhi Road", "street_en": "Lodhi Road", "pattern": "n{1,100} Lodhi Road" },
+            { "code": "110019", "street": "Nehru Place Road", "street_en": "Nehru Place Road", "pattern": "n{1,150} Nehru Place Road" },
+            { "code": "110020", "street": "Okhla Road", "street_en": "Okhla Road", "pattern": "n{1,200} Okhla Road" },
+            { "code": "110025", "street": "Laxmi Nagar Main Road", "street_en": "Laxmi Nagar Main Road", "pattern": "n{1,180} Laxmi Nagar Main Road" },
+            { "code": "110030", "street": "Mehrauli Road", "street_en": "Mehrauli Road", "pattern": "n{1,160} Mehrauli Road" },
+            { "code": "110044", "street": "Rohini Main Road", "street_en": "Rohini Main Road", "pattern": "n{1,200} Rohini Main Road" },
+            { "code": "110048", "street": "Greater Kailash Road", "street_en": "Greater Kailash Road", "pattern": "n{1,100} Greater Kailash Road" },
+            { "code": "110051", "street": "Shahdara Main Road", "street_en": "Shahdara Main Road", "pattern": "n{1,180} Shahdara Main Road" },
+            { "code": "110060", "street": "Dwarka Main Road", "street_en": "Dwarka Main Road", "pattern": "n{1,200} Dwarka Main Road" },
+            { "code": "110085", "street": "Pitampura Main Road", "street_en": "Pitampura Main Road", "pattern": "n{1,150} Pitampura Main Road" },
+            { "code": "110092", "street": "Dilshad Garden Road", "street_en": "Dilshad Garden Road", "pattern": "n{1,130} Dilshad Garden Road" },
+            { "code": "110096", "street": "Narela Main Road", "street_en": "Narela Main Road", "pattern": "n{1,100} Narela Main Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Uttar Pradesh",
+      "name_en": "Uttar Pradesh",
+      "region_tags": ["North India"],
+      "cities": [
+        {
+          "name": "Lucknow",
+          "name_en": "Lucknow",
+          "lat": 26.8467,
+          "lon": 80.9462,
+          "postcodes": [
+            { "code": "226001", "street": "Hazratganj Road", "street_en": "Hazratganj Road", "pattern": "n{1,200} Hazratganj Road" },
+            { "code": "226003", "street": "Aminabad Road", "street_en": "Aminabad Road", "pattern": "n{1,180} Aminabad Road" },
+            { "code": "226018", "street": "Gomti Nagar Road", "street_en": "Gomti Nagar Road", "pattern": "n{1,150} Gomti Nagar Road" }
+          ]
+        },
+        {
+          "name": "Agra",
+          "name_en": "Agra",
+          "lat": 27.1767,
+          "lon": 78.0081,
+          "postcodes": [
+            { "code": "282001", "street": "MG Road", "street_en": "MG Road", "pattern": "n{1,200} MG Road" },
+            { "code": "282002", "street": "Fatehabad Road", "street_en": "Fatehabad Road", "pattern": "n{1,150} Fatehabad Road" }
+          ]
+        },
+        {
+          "name": "Varanasi",
+          "name_en": "Varanasi",
+          "lat": 25.3176,
+          "lon": 83.0068,
+          "postcodes": [
+            { "code": "221001", "street": "Dashashwamedh Road", "street_en": "Dashashwamedh Road", "pattern": "n{1,150} Dashashwamedh Road" },
+            { "code": "221002", "street": "Godowlia Road", "street_en": "Godowlia Road", "pattern": "n{1,120} Godowlia Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "West Bengal",
+      "name_en": "West Bengal",
+      "region_tags": ["East India"],
+      "cities": [
+        {
+          "name": "Kolkata",
+          "name_en": "Kolkata",
+          "lat": 22.5726,
+          "lon": 88.3639,
+          "postcodes": [
+            { "code": "700001", "street": "Park Street", "street_en": "Park Street", "pattern": "n{1,200} Park Street" },
+            { "code": "700007", "street": "Chowringhee Road", "street_en": "Chowringhee Road", "pattern": "n{1,180} Chowringhee Road" },
+            { "code": "700013", "street": "Rashbehari Avenue", "street_en": "Rashbehari Avenue", "pattern": "n{1,200} Rashbehari Avenue" },
+            { "code": "700016", "street": "Gariahat Road", "street_en": "Gariahat Road", "pattern": "n{1,150} Gariahat Road" },
+            { "code": "700019", "street": "Ballygunge Circular Road", "street_en": "Ballygunge Circular Road", "pattern": "n{1,120} Ballygunge Circular Road" },
+            { "code": "700020", "street": "AJC Bose Road", "street_en": "AJC Bose Road", "pattern": "n{1,180} AJC Bose Road" },
+            { "code": "700029", "street": "Elgin Road", "street_en": "Elgin Road", "pattern": "n{1,100} Elgin Road" },
+            { "code": "700064", "street": "Salt Lake Main Road", "street_en": "Salt Lake Main Road", "pattern": "n{1,200} Salt Lake Main Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Telangana",
+      "name_en": "Telangana",
+      "region_tags": ["South India"],
+      "cities": [
+        {
+          "name": "Hyderabad",
+          "name_en": "Hyderabad",
+          "lat": 17.3850,
+          "lon": 78.4867,
+          "postcodes": [
+            { "code": "500001", "street": "Abids Road", "street_en": "Abids Road", "pattern": "n{1,200} Abids Road" },
+            { "code": "500003", "street": "Koti Road", "street_en": "Koti Road", "pattern": "n{1,150} Koti Road" },
+            { "code": "500004", "street": "Sultan Bazaar Road", "street_en": "Sultan Bazaar Road", "pattern": "n{1,180} Sultan Bazaar Road" },
+            { "code": "500008", "street": "Banjara Hills Road", "street_en": "Banjara Hills Road", "pattern": "n{1,120} Banjara Hills Road" },
+            { "code": "500016", "street": "Ameerpet Road", "street_en": "Ameerpet Road", "pattern": "n{1,200} Ameerpet Road" },
+            { "code": "500034", "street": "Jubilee Hills Road", "street_en": "Jubilee Hills Road", "pattern": "n{1,100} Jubilee Hills Road" },
+            { "code": "500072", "street": "HITEC City Road", "street_en": "HITEC City Road", "pattern": "n{1,200} HITEC City Road" },
+            { "code": "500081", "street": "Gachibowli Road", "street_en": "Gachibowli Road", "pattern": "n{1,180} Gachibowli Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Gujarat",
+      "name_en": "Gujarat",
+      "region_tags": ["West India"],
+      "cities": [
+        {
+          "name": "Ahmedabad",
+          "name_en": "Ahmedabad",
+          "lat": 23.0225,
+          "lon": 72.5714,
+          "postcodes": [
+            { "code": "380001", "street": "Relief Road", "street_en": "Relief Road", "pattern": "n{1,200} Relief Road" },
+            { "code": "380004", "street": "Ashram Road", "street_en": "Ashram Road", "pattern": "n{1,250} Ashram Road" },
+            { "code": "380006", "street": "CG Road", "street_en": "CG Road", "pattern": "n{1,180} CG Road" },
+            { "code": "380009", "street": "SG Highway", "street_en": "SG Highway", "pattern": "n{1,300} SG Highway" }
+          ]
+        },
+        {
+          "name": "Surat",
+          "name_en": "Surat",
+          "lat": 21.1702,
+          "lon": 72.8311,
+          "postcodes": [
+            { "code": "395001", "street": "Ring Road", "street_en": "Ring Road", "pattern": "n{1,200} Ring Road" },
+            { "code": "395003", "street": "Athwa Lines Road", "street_en": "Athwa Lines Road", "pattern": "n{1,150} Athwa Lines Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Rajasthan",
+      "name_en": "Rajasthan",
+      "region_tags": ["North India"],
+      "cities": [
+        {
+          "name": "Jaipur",
+          "name_en": "Jaipur",
+          "lat": 26.9124,
+          "lon": 75.7873,
+          "postcodes": [
+            { "code": "302001", "street": "MI Road", "street_en": "MI Road", "pattern": "n{1,200} MI Road" },
+            { "code": "302004", "street": "Tonk Road", "street_en": "Tonk Road", "pattern": "n{1,250} Tonk Road" },
+            { "code": "302015", "street": "Malviya Nagar Road", "street_en": "Malviya Nagar Road", "pattern": "n{1,180} Malviya Nagar Road" },
+            { "code": "302018", "street": "Vaishali Nagar Road", "street_en": "Vaishali Nagar Road", "pattern": "n{1,150} Vaishali Nagar Road" }
+          ]
+        },
+        {
+          "name": "Jodhpur",
+          "name_en": "Jodhpur",
+          "lat": 26.2389,
+          "lon": 73.0243,
+          "postcodes": [
+            { "code": "342001", "street": "Station Road", "street_en": "Station Road", "pattern": "n{1,200} Station Road" },
+            { "code": "342003", "street": "Nai Sarak", "street_en": "Nai Sarak", "pattern": "n{1,150} Nai Sarak" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kerala",
+      "name_en": "Kerala",
+      "region_tags": ["South India"],
+      "cities": [
+        {
+          "name": "Thiruvananthapuram",
+          "name_en": "Thiruvananthapuram",
+          "lat": 8.5241,
+          "lon": 76.9366,
+          "postcodes": [
+            { "code": "695001", "street": "MG Road", "street_en": "MG Road", "pattern": "n{1,200} MG Road" },
+            { "code": "695003", "street": "Statue Road", "street_en": "Statue Road", "pattern": "n{1,120} Statue Road" },
+            { "code": "695014", "street": "Technopark Road", "street_en": "Technopark Road", "pattern": "n{1,100} Technopark Road" }
+          ]
+        },
+        {
+          "name": "Kochi",
+          "name_en": "Kochi",
+          "lat": 9.9312,
+          "lon": 76.2673,
+          "postcodes": [
+            { "code": "682001", "street": "Broadway Road", "street_en": "Broadway Road", "pattern": "n{1,200} Broadway Road" },
+            { "code": "682011", "street": "MG Road", "street_en": "MG Road", "pattern": "n{1,180} MG Road" },
+            { "code": "682024", "street": "Marine Drive", "street_en": "Marine Drive", "pattern": "n{1,150} Marine Drive" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Madhya Pradesh",
+      "name_en": "Madhya Pradesh",
+      "region_tags": ["Central India"],
+      "cities": [
+        {
+          "name": "Bhopal",
+          "name_en": "Bhopal",
+          "lat": 23.2599,
+          "lon": 77.4126,
+          "postcodes": [
+            { "code": "462001", "street": "Hamidia Road", "street_en": "Hamidia Road", "pattern": "n{1,200} Hamidia Road" },
+            { "code": "462003", "street": "New Market Road", "street_en": "New Market Road", "pattern": "n{1,150} New Market Road" }
+          ]
+        },
+        {
+          "name": "Indore",
+          "name_en": "Indore",
+          "lat": 22.7196,
+          "lon": 75.8577,
+          "postcodes": [
+            { "code": "452001", "street": "MG Road", "street_en": "MG Road", "pattern": "n{1,200} MG Road" },
+            { "code": "452003", "street": "Sapna Sangeeta Road", "street_en": "Sapna Sangeeta Road", "pattern": "n{1,150} Sapna Sangeeta Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Punjab",
+      "name_en": "Punjab",
+      "region_tags": ["North India"],
+      "cities": [
+        {
+          "name": "Amritsar",
+          "name_en": "Amritsar",
+          "lat": 31.6340,
+          "lon": 74.8723,
+          "postcodes": [
+            { "code": "143001", "street": "Hall Bazaar Road", "street_en": "Hall Bazaar Road", "pattern": "n{1,200} Hall Bazaar Road" },
+            { "code": "143002", "street": "Lawrence Road", "street_en": "Lawrence Road", "pattern": "n{1,180} Lawrence Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Haryana",
+      "name_en": "Haryana",
+      "region_tags": ["North India"],
+      "cities": [
+        {
+          "name": "Gurugram",
+          "name_en": "Gurugram",
+          "lat": 28.4595,
+          "lon": 77.0266,
+          "postcodes": [
+            { "code": "122001", "street": "MG Road", "street_en": "MG Road", "pattern": "n{1,200} MG Road" },
+            { "code": "122002", "street": "Sohna Road", "street_en": "Sohna Road", "pattern": "n{1,250} Sohna Road" },
+            { "code": "122009", "street": "Golf Course Road", "street_en": "Golf Course Road", "pattern": "n{1,180} Golf Course Road" },
+            { "code": "122018", "street": "Cyber City Road", "street_en": "Cyber City Road", "pattern": "n{1,100} Cyber City Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Bihar",
+      "name_en": "Bihar",
+      "region_tags": ["East India"],
+      "cities": [
+        {
+          "name": "Patna",
+          "name_en": "Patna",
+          "lat": 25.6093,
+          "lon": 85.1376,
+          "postcodes": [
+            { "code": "800001", "street": "Frazer Road", "street_en": "Frazer Road", "pattern": "n{1,200} Frazer Road" },
+            { "code": "800004", "street": "Bailey Road", "street_en": "Bailey Road", "pattern": "n{1,250} Bailey Road" },
+            { "code": "800014", "street": "Boring Road", "street_en": "Boring Road", "pattern": "n{1,180} Boring Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Odisha",
+      "name_en": "Odisha",
+      "region_tags": ["East India"],
+      "cities": [
+        {
+          "name": "Bhubaneswar",
+          "name_en": "Bhubaneswar",
+          "lat": 20.2961,
+          "lon": 85.8245,
+          "postcodes": [
+            { "code": "751001", "street": "Janpath Road", "street_en": "Janpath Road", "pattern": "n{1,200} Janpath Road" },
+            { "code": "751009", "street": "Sachivalaya Marg", "street_en": "Sachivalaya Marg", "pattern": "n{1,150} Sachivalaya Marg" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Assam",
+      "name_en": "Assam",
+      "region_tags": ["Northeast India"],
+      "cities": [
+        {
+          "name": "Guwahati",
+          "name_en": "Guwahati",
+          "lat": 26.1445,
+          "lon": 91.7362,
+          "postcodes": [
+            { "code": "781001", "street": "GS Road", "street_en": "GS Road", "pattern": "n{1,200} GS Road" },
+            { "code": "781003", "street": "RG Baruah Road", "street_en": "RG Baruah Road", "pattern": "n{1,150} RG Baruah Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Jharkhand",
+      "name_en": "Jharkhand",
+      "region_tags": ["East India"],
+      "cities": [
+        {
+          "name": "Ranchi",
+          "name_en": "Ranchi",
+          "lat": 23.3441,
+          "lon": 85.3096,
+          "postcodes": [
+            { "code": "834001", "street": "Main Road", "street_en": "Main Road", "pattern": "n{1,200} Main Road" },
+            { "code": "834002", "street": "Circular Road", "street_en": "Circular Road", "pattern": "n{1,150} Circular Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Chhattisgarh",
+      "name_en": "Chhattisgarh",
+      "region_tags": ["Central India"],
+      "cities": [
+        {
+          "name": "Raipur",
+          "name_en": "Raipur",
+          "lat": 21.2514,
+          "lon": 81.6296,
+          "postcodes": [
+            { "code": "492001", "street": "MG Road", "street_en": "MG Road", "pattern": "n{1,200} MG Road" },
+            { "code": "492007", "street": "VIP Road", "street_en": "VIP Road", "pattern": "n{1,150} VIP Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Uttarakhand",
+      "name_en": "Uttarakhand",
+      "region_tags": ["North India"],
+      "cities": [
+        {
+          "name": "Dehradun",
+          "name_en": "Dehradun",
+          "lat": 30.3165,
+          "lon": 78.0322,
+          "postcodes": [
+            { "code": "248001", "street": "Rajpur Road", "street_en": "Rajpur Road", "pattern": "n{1,200} Rajpur Road" },
+            { "code": "248003", "street": "Chakrata Road", "street_en": "Chakrata Road", "pattern": "n{1,150} Chakrata Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Himachal Pradesh",
+      "name_en": "Himachal Pradesh",
+      "region_tags": ["North India"],
+      "cities": [
+        {
+          "name": "Shimla",
+          "name_en": "Shimla",
+          "lat": 31.1048,
+          "lon": 77.1734,
+          "postcodes": [
+            { "code": "171001", "street": "Mall Road", "street_en": "Mall Road", "pattern": "n{1,150} Mall Road" },
+            { "code": "171002", "street": "Cart Road", "street_en": "Cart Road", "pattern": "n{1,120} Cart Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Goa",
+      "name_en": "Goa",
+      "region_tags": ["West India"],
+      "cities": [
+        {
+          "name": "Panaji",
+          "name_en": "Panaji",
+          "lat": 15.4909,
+          "lon": 73.8278,
+          "postcodes": [
+            { "code": "403001", "street": "18th June Road", "street_en": "18th June Road", "pattern": "n{1,120} 18th June Road" },
+            { "code": "403002", "street": "MG Road", "street_en": "MG Road", "pattern": "n{1,100} MG Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Jammu & Kashmir",
+      "name_en": "Jammu & Kashmir",
+      "region_tags": ["North India"],
+      "cities": [
+        {
+          "name": "Srinagar",
+          "name_en": "Srinagar",
+          "lat": 34.0837,
+          "lon": 74.7973,
+          "postcodes": [
+            { "code": "190001", "street": "Residency Road", "street_en": "Residency Road", "pattern": "n{1,200} Residency Road" },
+            { "code": "190006", "street": "Boulevard Road", "street_en": "Boulevard Road", "pattern": "n{1,150} Boulevard Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Andhra Pradesh",
+      "name_en": "Andhra Pradesh",
+      "region_tags": ["South India"],
+      "cities": [
+        {
+          "name": "Visakhapatnam",
+          "name_en": "Visakhapatnam",
+          "lat": 17.6868,
+          "lon": 83.2185,
+          "postcodes": [
+            { "code": "530001", "street": "Waltair Main Road", "street_en": "Waltair Main Road", "pattern": "n{1,200} Waltair Main Road" },
+            { "code": "530002", "street": "Daba Gardens Road", "street_en": "Daba Gardens Road", "pattern": "n{1,150} Daba Gardens Road" },
+            { "code": "530003", "street": "Beach Road", "street_en": "Beach Road", "pattern": "n{1,180} Beach Road" }
+          ]
+        },
+        {
+          "name": "Vijayawada",
+          "name_en": "Vijayawada",
+          "lat": 16.5062,
+          "lon": 80.6480,
+          "postcodes": [
+            { "code": "520001", "street": "MG Road", "street_en": "MG Road", "pattern": "n{1,200} MG Road" },
+            { "code": "520002", "street": "Bandar Road", "street_en": "Bandar Road", "pattern": "n{1,180} Bandar Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sikkim",
+      "name_en": "Sikkim",
+      "region_tags": ["Northeast India"],
+      "cities": [
+        {
+          "name": "Gangtok",
+          "name_en": "Gangtok",
+          "lat": 27.3389,
+          "lon": 88.6065,
+          "postcodes": [
+            { "code": "737101", "street": "MG Marg", "street_en": "MG Marg", "pattern": "n{1,100} MG Marg" },
+            { "code": "737102", "street": "National Highway 10", "street_en": "National Highway 10", "pattern": "n{1,80} National Highway 10" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Meghalaya",
+      "name_en": "Meghalaya",
+      "region_tags": ["Northeast India"],
+      "cities": [
+        {
+          "name": "Shillong",
+          "name_en": "Shillong",
+          "lat": 25.5788,
+          "lon": 91.8933,
+          "postcodes": [
+            { "code": "793001", "street": "Police Bazaar Road", "street_en": "Police Bazaar Road", "pattern": "n{1,150} Police Bazaar Road" },
+            { "code": "793003", "street": "GS Road", "street_en": "GS Road", "pattern": "n{1,120} GS Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tripura",
+      "name_en": "Tripura",
+      "region_tags": ["Northeast India"],
+      "cities": [
+        {
+          "name": "Agartala",
+          "name_en": "Agartala",
+          "lat": 23.8315,
+          "lon": 91.2868,
+          "postcodes": [
+            { "code": "799001", "street": "Central Road", "street_en": "Central Road", "pattern": "n{1,150} Central Road" },
+            { "code": "799004", "street": "MG Road", "street_en": "MG Road", "pattern": "n{1,120} MG Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Manipur",
+      "name_en": "Manipur",
+      "region_tags": ["Northeast India"],
+      "cities": [
+        {
+          "name": "Imphal",
+          "name_en": "Imphal",
+          "lat": 24.8170,
+          "lon": 93.9368,
+          "postcodes": [
+            { "code": "795001", "street": "Thangal Bazaar Road", "street_en": "Thangal Bazaar Road", "pattern": "n{1,150} Thangal Bazaar Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Nagaland",
+      "name_en": "Nagaland",
+      "region_tags": ["Northeast India"],
+      "cities": [
+        {
+          "name": "Kohima",
+          "name_en": "Kohima",
+          "lat": 25.6751,
+          "lon": 94.1086,
+          "postcodes": [
+            { "code": "797001", "street": "Main Town Road", "street_en": "Main Town Road", "pattern": "n{1,120} Main Town Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Mizoram",
+      "name_en": "Mizoram",
+      "region_tags": ["Northeast India"],
+      "cities": [
+        {
+          "name": "Aizawl",
+          "name_en": "Aizawl",
+          "lat": 23.7271,
+          "lon": 92.7176,
+          "postcodes": [
+            { "code": "796001", "street": "Zarkawt Road", "street_en": "Zarkawt Road", "pattern": "n{1,100} Zarkawt Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Arunachal Pradesh",
+      "name_en": "Arunachal Pradesh",
+      "region_tags": ["Northeast India"],
+      "cities": [
+        {
+          "name": "Itanagar",
+          "name_en": "Itanagar",
+          "lat": 27.0844,
+          "lon": 93.6053,
+          "postcodes": [
+            { "code": "791111", "street": "NH 415", "street_en": "NH 415", "pattern": "n{1,80} NH 415" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Chandigarh",
+      "name_en": "Chandigarh",
+      "region_tags": ["North India"],
+      "cities": [
+        {
+          "name": "Chandigarh",
+          "name_en": "Chandigarh",
+          "lat": 30.7333,
+          "lon": 76.7794,
+          "postcodes": [
+            { "code": "160001", "street": "Sector 17 Road", "street_en": "Sector 17 Road", "pattern": "n{1,50} Sector 17 Road" },
+            { "code": "160009", "street": "Sector 9 Road", "street_en": "Sector 9 Road", "pattern": "n{1,50} Sector 9 Road" },
+            { "code": "160017", "street": "Sector 22 Road", "street_en": "Sector 22 Road", "pattern": "n{1,50} Sector 22 Road" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Puducherry",
+      "name_en": "Puducherry",
+      "region_tags": ["South India"],
+      "cities": [
+        {
+          "name": "Puducherry",
+          "name_en": "Puducherry",
+          "lat": 11.9416,
+          "lon": 79.8083,
+          "postcodes": [
+            { "code": "605001", "street": "MG Road", "street_en": "MG Road", "pattern": "n{1,150} MG Road" },
+            { "code": "605002", "street": "Mission Street", "street_en": "Mission Street", "pattern": "n{1,120} Mission Street" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Andaman & Nicobar Islands",
+      "name_en": "Andaman & Nicobar Islands",
+      "region_tags": ["South India"],
+      "cities": [
+        {
+          "name": "Port Blair",
+          "name_en": "Port Blair",
+          "lat": 11.6234,
+          "lon": 92.7265,
+          "postcodes": [
+            { "code": "744101", "street": "Aberdeen Bazaar Road", "street_en": "Aberdeen Bazaar Road", "pattern": "n{1,100} Aberdeen Bazaar Road" },
+            { "code": "744102", "street": "MG Road", "street_en": "MG Road", "pattern": "n{1,80} MG Road" }
+          ]
+        }
+      ]
+    }
+  ]
+}
