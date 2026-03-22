@@ -1,0 +1,402 @@
+{
+  "country": {
+    "name": "Nederland",
+    "name_en": "Netherlands",
+    "iso_code": "NL",
+    "phone_prefix": "+31",
+    "phone_formats": ["+31-6-########", "+31-##-#######"],
+    "postcode_format": "#### AA",
+    "name_order": "given_first"
+  },
+  "states": [
+    {
+      "name": "Noord-Holland",
+      "name_en": "North Holland",
+      "region_tags": ["Randstad", "Western Netherlands"],
+      "cities": [
+        {
+          "name": "Amsterdam",
+          "name_en": "Amsterdam",
+          "lat": 52.3676,
+          "lon": 4.9041,
+          "postcodes": [
+            { "code": "1011 AB", "street": "Damrak", "street_en": "Damrak", "pattern": "Damrak n{1,100}" },
+            { "code": "1012 CD", "street": "Kalverstraat", "street_en": "Kalverstraat", "pattern": "Kalverstraat n{1,231}" },
+            { "code": "1013 EF", "street": "Haarlemmerstraat", "street_en": "Haarlemmerstraat", "pattern": "Haarlemmerstraat n{1,150}" },
+            { "code": "1015 GH", "street": "Keizersgracht", "street_en": "Keizersgracht", "pattern": "Keizersgracht n{1,826}" },
+            { "code": "1016 JK", "street": "Herengracht", "street_en": "Herengracht", "pattern": "Herengracht n{1,620}" },
+            { "code": "1017 LM", "street": "Prinsengracht", "street_en": "Prinsengracht", "pattern": "Prinsengracht n{1,1000}" },
+            { "code": "1018 NP", "street": "Leidsestraat", "street_en": "Leidsestraat", "pattern": "Leidsestraat n{1,120}" },
+            { "code": "1019 QR", "street": "Czaar Peterstraat", "street_en": "Czar Peterstraat", "pattern": "Czaar Peterstraat n{1,160}" },
+            { "code": "1051 ST", "street": "Bos en Lommerweg", "street_en": "Bos en Lommerweg", "pattern": "Bos en Lommerweg n{1,350}" },
+            { "code": "1052 UV", "street": "Jan Evertsenstraat", "street_en": "Jan Evertsenstraat", "pattern": "Jan Evertsenstraat n{1,200}" },
+            { "code": "1053 WX", "street": "Overtoom", "street_en": "Overtoom", "pattern": "Overtoom n{1,560}" },
+            { "code": "1071 AB", "street": "Van Baerlestraat", "street_en": "Van Baerlestraat", "pattern": "Van Baerlestraat n{1,100}" },
+            { "code": "1073 CD", "street": "Ferdinand Bolstraat", "street_en": "Ferdinand Bolstraat", "pattern": "Ferdinand Bolstraat n{1,180}" },
+            { "code": "1091 EF", "street": "Middenweg", "street_en": "Middenweg", "pattern": "Middenweg n{1,200}" },
+            { "code": "1097 GH", "street": "Wibautstraat", "street_en": "Wibautstraat", "pattern": "Wibautstraat n{1,250}" },
+            { "code": "1109 JK", "street": "Karspeldreef", "street_en": "Karspeldreef", "pattern": "Karspeldreef n{1,100}" }
+          ]
+        },
+        {
+          "name": "Haarlem",
+          "name_en": "Haarlem",
+          "lat": 52.3874,
+          "lon": 4.6462,
+          "postcodes": [
+            { "code": "2011 AB", "street": "Grote Houtstraat", "street_en": "Grote Houtstraat", "pattern": "Grote Houtstraat n{1,180}" },
+            { "code": "2012 CD", "street": "Kruisstraat", "street_en": "Kruisstraat", "pattern": "Kruisstraat n{1,80}" },
+            { "code": "2013 EF", "street": "Schagchelstraat", "street_en": "Schagchelstraat", "pattern": "Schagchelstraat n{1,50}" },
+            { "code": "2014 GH", "street": "Wagenweg", "street_en": "Wagenweg", "pattern": "Wagenweg n{1,240}" }
+          ]
+        },
+        {
+          "name": "Alkmaar",
+          "name_en": "Alkmaar",
+          "lat": 52.6324,
+          "lon": 4.7534,
+          "postcodes": [
+            { "code": "1811 AB", "street": "Langestraat", "street_en": "Langestraat", "pattern": "Langestraat n{1,120}" },
+            { "code": "1812 CD", "street": "Kanaalkade", "street_en": "Kanaalkade", "pattern": "Kanaalkade n{1,60}" },
+            { "code": "1813 EF", "street": "Kennemerstraatweg", "street_en": "Kennemerstraatweg", "pattern": "Kennemerstraatweg n{1,200}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Zuid-Holland",
+      "name_en": "South Holland",
+      "region_tags": ["Randstad", "Western Netherlands"],
+      "cities": [
+        {
+          "name": "Rotterdam",
+          "name_en": "Rotterdam",
+          "lat": 51.9225,
+          "lon": 4.4792,
+          "postcodes": [
+            { "code": "3011 AB", "street": "Coolsingel", "street_en": "Coolsingel", "pattern": "Coolsingel n{1,250}" },
+            { "code": "3012 CD", "street": "Lijnbaan", "street_en": "Lijnbaan", "pattern": "Lijnbaan n{1,100}" },
+            { "code": "3013 EF", "street": "Witte de Withstraat", "street_en": "Witte de Withstraat", "pattern": "Witte de Withstraat n{1,110}" },
+            { "code": "3014 GH", "street": "Meent", "street_en": "Meent", "pattern": "Meent n{1,150}" },
+            { "code": "3015 JK", "street": "Schiedamsevest", "street_en": "Schiedamsevest", "pattern": "Schiedamsevest n{1,200}" },
+            { "code": "3016 LM", "street": "Mathenesserlaan", "street_en": "Mathenesserlaan", "pattern": "Mathenesserlaan n{1,400}" },
+            { "code": "3021 NP", "street": "Nieuwe Binnenweg", "street_en": "Nieuwe Binnenweg", "pattern": "Nieuwe Binnenweg n{1,350}" },
+            { "code": "3032 QR", "street": "Bergweg", "street_en": "Bergweg", "pattern": "Bergweg n{1,300}" },
+            { "code": "3051 ST", "street": "Pleinweg", "street_en": "Pleinweg", "pattern": "Pleinweg n{1,200}" },
+            { "code": "3071 UV", "street": "Groene Hilledijk", "street_en": "Groene Hilledijk", "pattern": "Groene Hilledijk n{1,400}" },
+            { "code": "3081 WX", "street": "Groeninx van Zoelenlaan", "street_en": "Groeninx van Zoelenlaan", "pattern": "Groeninx van Zoelenlaan n{1,100}" },
+            { "code": "3089 AB", "street": "Strevelsweg", "street_en": "Strevelsweg", "pattern": "Strevelsweg n{1,200}" }
+          ]
+        },
+        {
+          "name": "Den Haag",
+          "name_en": "The Hague",
+          "lat": 52.0705,
+          "lon": 4.3007,
+          "postcodes": [
+            { "code": "2511 AB", "street": "Lange Voorhout", "street_en": "Lange Voorhout", "pattern": "Lange Voorhout n{1,100}" },
+            { "code": "2512 CD", "street": "Plein", "street_en": "Plein", "pattern": "Plein n{1,30}" },
+            { "code": "2513 EF", "street": "Noordeinde", "street_en": "Noordeinde", "pattern": "Noordeinde n{1,200}" },
+            { "code": "2514 GH", "street": "Lange Poten", "street_en": "Lange Poten", "pattern": "Lange Poten n{1,80}" },
+            { "code": "2515 JK", "street": "Prinsegracht", "street_en": "Prinsegracht", "pattern": "Prinsegracht n{1,200}" },
+            { "code": "2516 LM", "street": "Javastraat", "street_en": "Javastraat", "pattern": "Javastraat n{1,120}" },
+            { "code": "2531 NP", "street": "Loosduinsekade", "street_en": "Loosduinsekade", "pattern": "Loosduinsekade n{1,150}" },
+            { "code": "2541 QR", "street": "Laan van Meerdervoort", "street_en": "Laan van Meerdervoort", "pattern": "Laan van Meerdervoort n{1,1500}" },
+            { "code": "2561 ST", "street": "Fahrenheitstraat", "street_en": "Fahrenheitstraat", "pattern": "Fahrenheitstraat n{1,600}" },
+            { "code": "2585 UV", "street": "Frederik Hendriklaan", "street_en": "Frederik Hendriklaan", "pattern": "Frederik Hendriklaan n{1,200}" },
+            { "code": "2597 WX", "street": "Scheveningseweg", "street_en": "Scheveningseweg", "pattern": "Scheveningseweg n{1,250}" }
+          ]
+        },
+        {
+          "name": "Leiden",
+          "name_en": "Leiden",
+          "lat": 52.1601,
+          "lon": 4.4970,
+          "postcodes": [
+            { "code": "2311 AB", "street": "Breestraat", "street_en": "Breestraat", "pattern": "Breestraat n{1,175}" },
+            { "code": "2312 CD", "street": "Haarlemmerstraat", "street_en": "Haarlemmerstraat", "pattern": "Haarlemmerstraat n{1,250}" },
+            { "code": "2313 EF", "street": "Rapenburg", "street_en": "Rapenburg", "pattern": "Rapenburg n{1,130}" }
+          ]
+        },
+        {
+          "name": "Delft",
+          "name_en": "Delft",
+          "lat": 52.0116,
+          "lon": 4.3571,
+          "postcodes": [
+            { "code": "2611 AB", "street": "Markt", "street_en": "Market Square", "pattern": "Markt n{1,90}" },
+            { "code": "2612 CD", "street": "Oude Delft", "street_en": "Oude Delft", "pattern": "Oude Delft n{1,250}" },
+            { "code": "2613 EF", "street": "Nieuwe Langendijk", "street_en": "Nieuwe Langendijk", "pattern": "Nieuwe Langendijk n{1,80}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Utrecht",
+      "name_en": "Utrecht",
+      "region_tags": ["Randstad", "Central Netherlands"],
+      "cities": [
+        {
+          "name": "Utrecht",
+          "name_en": "Utrecht",
+          "lat": 52.0907,
+          "lon": 5.1214,
+          "postcodes": [
+            { "code": "3511 AB", "street": "Oudegracht", "street_en": "Oudegracht", "pattern": "Oudegracht n{1,380}" },
+            { "code": "3512 CD", "street": "Vredenburg", "street_en": "Vredenburg", "pattern": "Vredenburg n{1,80}" },
+            { "code": "3513 EF", "street": "Wittevrouwenstraat", "street_en": "Wittevrouwenstraat", "pattern": "Wittevrouwenstraat n{1,60}" },
+            { "code": "3514 GH", "street": "Biltstraat", "street_en": "Biltstraat", "pattern": "Biltstraat n{1,200}" },
+            { "code": "3521 JK", "street": "Croeselaan", "street_en": "Croeselaan", "pattern": "Croeselaan n{1,100}" },
+            { "code": "3531 LM", "street": "Amsterdamsestraatweg", "street_en": "Amsterdamsestraatweg", "pattern": "Amsterdamsestraatweg n{1,900}" },
+            { "code": "3541 NP", "street": "Vondellaan", "street_en": "Vondellaan", "pattern": "Vondellaan n{1,80}" },
+            { "code": "3551 QR", "street": "Vleutenseweg", "street_en": "Vleutenseweg", "pattern": "Vleutenseweg n{1,600}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Noord-Brabant",
+      "name_en": "North Brabant",
+      "region_tags": ["Southern Netherlands"],
+      "cities": [
+        {
+          "name": "Eindhoven",
+          "name_en": "Eindhoven",
+          "lat": 51.4416,
+          "lon": 5.4697,
+          "postcodes": [
+            { "code": "5611 AB", "street": "Stratumseind", "street_en": "Stratumseind", "pattern": "Stratumseind n{1,80}" },
+            { "code": "5612 CD", "street": "Vestdijk", "street_en": "Vestdijk", "pattern": "Vestdijk n{1,200}" },
+            { "code": "5613 EF", "street": "Kruisstraat", "street_en": "Kruisstraat", "pattern": "Kruisstraat n{1,75}" },
+            { "code": "5614 GH", "street": "Tongelresestraat", "street_en": "Tongelresestraat", "pattern": "Tongelresestraat n{1,400}" }
+          ]
+        },
+        {
+          "name": "Tilburg",
+          "name_en": "Tilburg",
+          "lat": 51.5555,
+          "lon": 5.0913,
+          "postcodes": [
+            { "code": "5011 AB", "street": "Heuvelstraat", "street_en": "Heuvelstraat", "pattern": "Heuvelstraat n{1,100}" },
+            { "code": "5012 CD", "street": "Spoorlaan", "street_en": "Spoorlaan", "pattern": "Spoorlaan n{1,450}" },
+            { "code": "5013 EF", "street": "Bredaseweg", "street_en": "Bredaseweg", "pattern": "Bredaseweg n{1,500}" }
+          ]
+        },
+        {
+          "name": "'s-Hertogenbosch",
+          "name_en": "Den Bosch",
+          "lat": 51.6978,
+          "lon": 5.3037,
+          "postcodes": [
+            { "code": "5211 AB", "street": "Markt", "street_en": "Market Square", "pattern": "Markt n{1,50}" },
+            { "code": "5212 CD", "street": "Hinthamerstraat", "street_en": "Hinthamerstraat", "pattern": "Hinthamerstraat n{1,200}" },
+            { "code": "5213 EF", "street": "Vughterstraat", "street_en": "Vughterstraat", "pattern": "Vughterstraat n{1,260}" }
+          ]
+        },
+        {
+          "name": "Breda",
+          "name_en": "Breda",
+          "lat": 51.5719,
+          "lon": 4.7683,
+          "postcodes": [
+            { "code": "4811 AB", "street": "Ginnekenstraat", "street_en": "Ginnekenstraat", "pattern": "Ginnekenstraat n{1,80}" },
+            { "code": "4812 CD", "street": "Haagweg", "street_en": "Haagweg", "pattern": "Haagweg n{1,300}" },
+            { "code": "4813 EF", "street": "Nieuwe Ginnekenstraat", "street_en": "Nieuwe Ginnekenstraat", "pattern": "Nieuwe Ginnekenstraat n{1,120}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Gelderland",
+      "name_en": "Gelderland",
+      "region_tags": ["Eastern Netherlands"],
+      "cities": [
+        {
+          "name": "Nijmegen",
+          "name_en": "Nijmegen",
+          "lat": 51.8126,
+          "lon": 5.8372,
+          "postcodes": [
+            { "code": "6511 AB", "street": "Burchtstraat", "street_en": "Burchtstraat", "pattern": "Burchtstraat n{1,80}" },
+            { "code": "6512 CD", "street": "Graafseweg", "street_en": "Graafseweg", "pattern": "Graafseweg n{1,200}" },
+            { "code": "6521 EF", "street": "St. Annastraat", "street_en": "St. Annastraat", "pattern": "St. Annastraat n{1,400}" }
+          ]
+        },
+        {
+          "name": "Arnhem",
+          "name_en": "Arnhem",
+          "lat": 51.9851,
+          "lon": 5.8987,
+          "postcodes": [
+            { "code": "6811 AB", "street": "Ketelstraat", "street_en": "Ketelstraat", "pattern": "Ketelstraat n{1,50}" },
+            { "code": "6812 CD", "street": "Jansstraat", "street_en": "Jansstraat", "pattern": "Jansstraat n{1,100}" },
+            { "code": "6821 EF", "street": "Apeldoornseweg", "street_en": "Apeldoornseweg", "pattern": "Apeldoornseweg n{1,250}" }
+          ]
+        },
+        {
+          "name": "Apeldoorn",
+          "name_en": "Apeldoorn",
+          "lat": 52.2112,
+          "lon": 5.9699,
+          "postcodes": [
+            { "code": "7311 AB", "street": "Hoofdstraat", "street_en": "Hoofdstraat", "pattern": "Hoofdstraat n{1,200}" },
+            { "code": "7312 CD", "street": "Deventerstraat", "street_en": "Deventerstraat", "pattern": "Deventerstraat n{1,250}" },
+            { "code": "7313 EF", "street": "Laan van de Mensenrechten", "street_en": "Laan van de Mensenrechten", "pattern": "Laan van de Mensenrechten n{1,500}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Overijssel",
+      "name_en": "Overijssel",
+      "region_tags": ["Eastern Netherlands"],
+      "cities": [
+        {
+          "name": "Enschede",
+          "name_en": "Enschede",
+          "lat": 52.2215,
+          "lon": 6.8937,
+          "postcodes": [
+            { "code": "7511 AB", "street": "Kalanderstraat", "street_en": "Kalanderstraat", "pattern": "Kalanderstraat n{1,50}" },
+            { "code": "7512 CD", "street": "Hengelosestraat", "street_en": "Hengelosestraat", "pattern": "Hengelosestraat n{1,600}" },
+            { "code": "7513 EF", "street": "Oldenzaalsestraat", "street_en": "Oldenzaalsestraat", "pattern": "Oldenzaalsestraat n{1,400}" }
+          ]
+        },
+        {
+          "name": "Zwolle",
+          "name_en": "Zwolle",
+          "lat": 52.5168,
+          "lon": 6.0830,
+          "postcodes": [
+            { "code": "8011 AB", "street": "Diezerstraat", "street_en": "Diezerstraat", "pattern": "Diezerstraat n{1,50}" },
+            { "code": "8012 CD", "street": "Luttekestraat", "street_en": "Luttekestraat", "pattern": "Luttekestraat n{1,40}" },
+            { "code": "8021 EF", "street": "Stadshagen", "street_en": "Stadshagen", "pattern": "Stadshagen n{1,100}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Limburg",
+      "name_en": "Limburg",
+      "region_tags": ["Southern Netherlands"],
+      "cities": [
+        {
+          "name": "Maastricht",
+          "name_en": "Maastricht",
+          "lat": 50.8514,
+          "lon": 5.6910,
+          "postcodes": [
+            { "code": "6211 AB", "street": "Vrijthof", "street_en": "Vrijthof", "pattern": "Vrijthof n{1,50}" },
+            { "code": "6212 CD", "street": "Stationsstraat", "street_en": "Stationsstraat", "pattern": "Stationsstraat n{1,60}" },
+            { "code": "6213 EF", "street": "Tongersestraat", "street_en": "Tongersestraat", "pattern": "Tongersestraat n{1,100}" },
+            { "code": "6214 GH", "street": "Franquinetstraat", "street_en": "Franquinetstraat", "pattern": "Franquinetstraat n{1,80}" },
+            { "code": "6221 JK", "street": "Wycker Brugstraat", "street_en": "Wycker Brugstraat", "pattern": "Wycker Brugstraat n{1,60}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Frysl\u00e2n",
+      "name_en": "Friesland",
+      "region_tags": ["Northern Netherlands"],
+      "cities": [
+        {
+          "name": "Leeuwarden",
+          "name_en": "Leeuwarden",
+          "lat": 53.2012,
+          "lon": 5.7999,
+          "postcodes": [
+            { "code": "8911 AB", "street": "Nieuwestad", "street_en": "Nieuwestad", "pattern": "Nieuwestad n{1,150}" },
+            { "code": "8912 CD", "street": "Voorstreek", "street_en": "Voorstreek", "pattern": "Voorstreek n{1,80}" },
+            { "code": "8913 EF", "street": "Willemskade", "street_en": "Willemskade", "pattern": "Willemskade n{1,50}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Groningen",
+      "name_en": "Groningen",
+      "region_tags": ["Northern Netherlands"],
+      "cities": [
+        {
+          "name": "Groningen",
+          "name_en": "Groningen",
+          "lat": 53.2194,
+          "lon": 6.5665,
+          "postcodes": [
+            { "code": "9711 AB", "street": "Grote Markt", "street_en": "Grote Markt", "pattern": "Grote Markt n{1,50}" },
+            { "code": "9712 CD", "street": "Herestraat", "street_en": "Herestraat", "pattern": "Herestraat n{1,120}" },
+            { "code": "9713 EF", "street": "Oosterstraat", "street_en": "Oosterstraat", "pattern": "Oosterstraat n{1,80}" },
+            { "code": "9714 GH", "street": "Vismarkt", "street_en": "Vismarkt", "pattern": "Vismarkt n{1,60}" },
+            { "code": "9715 JK", "street": "Zernike", "street_en": "Zernike", "pattern": "Zernike n{1,30}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Drenthe",
+      "name_en": "Drenthe",
+      "region_tags": ["Northern Netherlands"],
+      "cities": [
+        {
+          "name": "Assen",
+          "name_en": "Assen",
+          "lat": 52.9925,
+          "lon": 6.5625,
+          "postcodes": [
+            { "code": "9401 AB", "street": "Marktstraat", "street_en": "Marktstraat", "pattern": "Marktstraat n{1,40}" },
+            { "code": "9402 CD", "street": "Rolderstraat", "street_en": "Rolderstraat", "pattern": "Rolderstraat n{1,80}" },
+            { "code": "9403 EF", "street": "Stationsstraat", "street_en": "Stationsstraat", "pattern": "Stationsstraat n{1,60}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Flevoland",
+      "name_en": "Flevoland",
+      "region_tags": ["Central Netherlands"],
+      "cities": [
+        {
+          "name": "Almere",
+          "name_en": "Almere",
+          "lat": 52.3508,
+          "lon": 5.2647,
+          "postcodes": [
+            { "code": "1311 AB", "street": "Stationsstraat", "street_en": "Stationsstraat", "pattern": "Stationsstraat n{1,80}" },
+            { "code": "1312 CD", "street": "Randstad", "street_en": "Randstad", "pattern": "Randstad n{1,60}" },
+            { "code": "1313 EF", "street": "Markerkant", "street_en": "Markerkant", "pattern": "Markerkant n{1,100}" }
+          ]
+        },
+        {
+          "name": "Lelystad",
+          "name_en": "Lelystad",
+          "lat": 52.5185,
+          "lon": 5.4714,
+          "postcodes": [
+            { "code": "8211 AB", "street": "Stadhuisplein", "street_en": "Stadhuisplein", "pattern": "Stadhuisplein n{1,30}" },
+            { "code": "8212 CD", "street": "Agoraweg", "street_en": "Agoraweg", "pattern": "Agoraweg n{1,20}" },
+            { "code": "8221 EF", "street": "Kempenaar", "street_en": "Kempenaar", "pattern": "Kempenaar n{1,80}" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Zeeland",
+      "name_en": "Zeeland",
+      "region_tags": ["Southwestern Netherlands"],
+      "cities": [
+        {
+          "name": "Middelburg",
+          "name_en": "Middelburg",
+          "lat": 51.4988,
+          "lon": 3.6109,
+          "postcodes": [
+            { "code": "4331 AB", "street": "Lange Delft", "street_en": "Lange Delft", "pattern": "Lange Delft n{1,60}" },
+            { "code": "4332 CD", "street": "Markt", "street_en": "Market Square", "pattern": "Markt n{1,80}" },
+            { "code": "4333 EF", "street": "Segeersstraat", "street_en": "Segeersstraat", "pattern": "Segeersstraat n{1,50}" }
+          ]
+        }
+      ]
+    }
+  ]
+}
