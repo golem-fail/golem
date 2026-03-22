@@ -1,0 +1,726 @@
+{
+  "country": {
+    "name": "الإمارات العربية المتحدة",
+    "name_en": "United Arab Emirates",
+    "iso_code": "AE",
+    "phone_prefix": "+971",
+    "phone_formats": ["+971-5#-###-####", "+971-#-###-####"],
+    "postcode_format": "#####",
+    "name_order": "given_first"
+  },
+  "states": [
+    {
+      "name": "أبوظبي",
+      "name_en": "Abu Dhabi",
+      "region_tags": ["Capital", "Western UAE"],
+      "cities": [
+        {
+          "name": "أبوظبي",
+          "name_en": "Abu Dhabi",
+          "lat": 24.4539,
+          "lon": 54.3773,
+          "postcodes": [
+            {
+              "code": "10001",
+              "street": "شارع الكورنيش",
+              "street_en": "Corniche Road",
+              "pattern": "n{1,200} شارع الكورنيش"
+            },
+            {
+              "code": "10002",
+              "street": "شارع الشيخ زايد الأول",
+              "street_en": "Sheikh Zayed the First Street",
+              "pattern": "n{1,150} شارع الشيخ زايد الأول"
+            },
+            {
+              "code": "10003",
+              "street": "شارع حمدان",
+              "street_en": "Hamdan Street",
+              "pattern": "n{1,180} شارع حمدان"
+            },
+            {
+              "code": "10004",
+              "street": "شارع المرور",
+              "street_en": "Al Muroor Road",
+              "pattern": "n{1,160} شارع المرور"
+            },
+            {
+              "code": "10005",
+              "street": "شارع الكرامة",
+              "street_en": "Al Karamah Street",
+              "pattern": "n{1,140} شارع الكرامة"
+            },
+            {
+              "code": "10006",
+              "street": "شارع الفلاح",
+              "street_en": "Al Falah Street",
+              "pattern": "n{1,120} شارع الفلاح"
+            },
+            {
+              "code": "10007",
+              "street": "شارع السلام",
+              "street_en": "Al Salam Street",
+              "pattern": "n{1,175} شارع السلام"
+            },
+            {
+              "code": "10008",
+              "street": "شارع إلكترا",
+              "street_en": "Electra Street",
+              "pattern": "n{1,130} شارع إلكترا"
+            },
+            {
+              "code": "10009",
+              "street": "شارع الدفاع",
+              "street_en": "Al Difaa Street",
+              "pattern": "n{1,110} شارع الدفاع"
+            },
+            {
+              "code": "10010",
+              "street": "شارع النجدة",
+              "street_en": "Al Najda Street",
+              "pattern": "n{1,145} شارع النجدة"
+            },
+            {
+              "code": "10011",
+              "street": "شارع الاستقلال",
+              "street_en": "Al Istiqlal Street",
+              "pattern": "n{1,100} شارع الاستقلال"
+            },
+            {
+              "code": "10012",
+              "street": "شارع المطار القديم",
+              "street_en": "Old Airport Road",
+              "pattern": "n{1,190} شارع المطار القديم"
+            },
+            {
+              "code": "10013",
+              "street": "شارع خليفة",
+              "street_en": "Khalifa Street",
+              "pattern": "n{1,155} شارع خليفة"
+            },
+            {
+              "code": "10014",
+              "street": "شارع الشيخ راشد بن سعيد",
+              "street_en": "Sheikh Rashid Bin Saeed Street",
+              "pattern": "n{1,170} شارع الشيخ راشد بن سعيد"
+            },
+            {
+              "code": "10015",
+              "street": "شارع السعادة",
+              "street_en": "Al Saadah Street",
+              "pattern": "n{1,90} شارع السعادة"
+            },
+            {
+              "code": "10016",
+              "street": "شارع المنهل",
+              "street_en": "Al Manhal Street",
+              "pattern": "n{1,85} شارع المنهل"
+            }
+          ]
+        },
+        {
+          "name": "العين",
+          "name_en": "Al Ain",
+          "lat": 24.1917,
+          "lon": 55.7606,
+          "postcodes": [
+            {
+              "code": "15201",
+              "street": "شارع خليفة بن زايد",
+              "street_en": "Khalifa Bin Zayed Street",
+              "pattern": "n{1,140} شارع خليفة بن زايد"
+            },
+            {
+              "code": "15202",
+              "street": "شارع الهيلي",
+              "street_en": "Al Hili Street",
+              "pattern": "n{1,100} شارع الهيلي"
+            },
+            {
+              "code": "15203",
+              "street": "شارع زايد بن سلطان",
+              "street_en": "Zayed Bin Sultan Street",
+              "pattern": "n{1,130} شارع زايد بن سلطان"
+            },
+            {
+              "code": "15204",
+              "street": "شارع الجيمي",
+              "street_en": "Al Jimi Street",
+              "pattern": "n{1,95} شارع الجيمي"
+            },
+            {
+              "code": "15205",
+              "street": "شارع التوحيد",
+              "street_en": "Al Towayya Street",
+              "pattern": "n{1,85} شارع التوحيد"
+            },
+            {
+              "code": "15206",
+              "street": "شارع المعترض",
+              "street_en": "Al Mutarad Street",
+              "pattern": "n{1,75} شارع المعترض"
+            },
+            {
+              "code": "15207",
+              "street": "شارع عود التوبة",
+              "street_en": "Oud Al Toba Street",
+              "pattern": "n{1,70} شارع عود التوبة"
+            },
+            {
+              "code": "15208",
+              "street": "شارع المقام",
+              "street_en": "Al Maqam Street",
+              "pattern": "n{1,65} شارع المقام"
+            },
+            {
+              "code": "15209",
+              "street": "شارع الصاروج",
+              "street_en": "Al Sarooj Street",
+              "pattern": "n{1,80} شارع الصاروج"
+            },
+            {
+              "code": "15210",
+              "street": "شارع المسعودي",
+              "street_en": "Al Masaudi Street",
+              "pattern": "n{1,60} شارع المسعودي"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "دبي",
+      "name_en": "Dubai",
+      "region_tags": ["Eastern UAE", "Commercial Hub"],
+      "cities": [
+        {
+          "name": "دبي",
+          "name_en": "Dubai",
+          "lat": 25.2048,
+          "lon": 55.2708,
+          "postcodes": [
+            {
+              "code": "00000",
+              "street": "شارع الشيخ زايد",
+              "street_en": "Sheikh Zayed Road",
+              "pattern": "n{1,300} شارع الشيخ زايد"
+            },
+            {
+              "code": "00001",
+              "street": "شارع الخيل",
+              "street_en": "Al Khail Road",
+              "pattern": "n{1,250} شارع الخيل"
+            },
+            {
+              "code": "00002",
+              "street": "شارع جميرا",
+              "street_en": "Jumeirah Road",
+              "pattern": "n{1,200} شارع جميرا"
+            },
+            {
+              "code": "11111",
+              "street": "شارع بني ياس",
+              "street_en": "Baniyas Road",
+              "pattern": "n{1,180} شارع بني ياس"
+            },
+            {
+              "code": "11112",
+              "street": "شارع الرقة",
+              "street_en": "Al Rigga Road",
+              "pattern": "n{1,150} شارع الرقة"
+            },
+            {
+              "code": "11113",
+              "street": "شارع المكتوم",
+              "street_en": "Al Maktoum Road",
+              "pattern": "n{1,160} شارع المكتوم"
+            },
+            {
+              "code": "11114",
+              "street": "شارع الميناء",
+              "street_en": "Al Mina Road",
+              "pattern": "n{1,130} شارع الميناء"
+            },
+            {
+              "code": "22222",
+              "street": "شارع الوصل",
+              "street_en": "Al Wasl Road",
+              "pattern": "n{1,220} شارع الوصل"
+            },
+            {
+              "code": "22223",
+              "street": "شارع الحديقة",
+              "street_en": "Al Hadeeqa Road",
+              "pattern": "n{1,100} شارع الحديقة"
+            },
+            {
+              "code": "22224",
+              "street": "شارع الثنية",
+              "street_en": "Al Thanya Road",
+              "pattern": "n{1,90} شارع الثنية"
+            },
+            {
+              "code": "33311",
+              "street": "شارع المنارة",
+              "street_en": "Al Manara Road",
+              "pattern": "n{1,110} شارع المنارة"
+            },
+            {
+              "code": "33312",
+              "street": "شارع السفوح",
+              "street_en": "Al Sufouh Road",
+              "pattern": "n{1,140} شارع السفوح"
+            },
+            {
+              "code": "33313",
+              "street": "شارع المرقبات",
+              "street_en": "Al Muragabat Road",
+              "pattern": "n{1,120} شارع المرقبات"
+            },
+            {
+              "code": "39999",
+              "street": "شارع الديرة",
+              "street_en": "Deira Street",
+              "pattern": "n{1,175} شارع الديرة"
+            },
+            {
+              "code": "41000",
+              "street": "شارع هور العنز",
+              "street_en": "Hor Al Anz Street",
+              "pattern": "n{1,95} شارع هور العنز"
+            },
+            {
+              "code": "41001",
+              "street": "شارع أبو بكر الصديق",
+              "street_en": "Abu Baker Al Siddique Road",
+              "pattern": "n{1,160} شارع أبو بكر الصديق"
+            },
+            {
+              "code": "42000",
+              "street": "شارع القصيص",
+              "street_en": "Al Qusais Road",
+              "pattern": "n{1,100} شارع القصيص"
+            },
+            {
+              "code": "42001",
+              "street": "شارع المحيصنة",
+              "street_en": "Al Muhaisnah Road",
+              "pattern": "n{1,80} شارع المحيصنة"
+            },
+            {
+              "code": "50000",
+              "street": "شارع مارينا دبي",
+              "street_en": "Dubai Marina Walk",
+              "pattern": "n{1,200} شارع مارينا دبي"
+            },
+            {
+              "code": "50001",
+              "street": "شارع الخليج التجاري",
+              "street_en": "Business Bay Boulevard",
+              "pattern": "n{1,150} شارع الخليج التجاري"
+            },
+            {
+              "code": "50002",
+              "street": "شارع محمد بن راشد",
+              "street_en": "Mohammed Bin Rashid Boulevard",
+              "pattern": "n{1,180} شارع محمد بن راشد"
+            },
+            {
+              "code": "50003",
+              "street": "شارع البرشاء",
+              "street_en": "Al Barsha Street",
+              "pattern": "n{1,110} شارع البرشاء"
+            },
+            {
+              "code": "50004",
+              "street": "شارع جبل علي",
+              "street_en": "Jebel Ali Street",
+              "pattern": "n{1,140} شارع جبل علي"
+            },
+            {
+              "code": "50005",
+              "street": "شارع ند الحمر",
+              "street_en": "Nad Al Hamar Road",
+              "pattern": "n{1,90} شارع ند الحمر"
+            },
+            {
+              "code": "50006",
+              "street": "شارع ميدان",
+              "street_en": "Meydan Road",
+              "pattern": "n{1,100} شارع ميدان"
+            },
+            {
+              "code": "50007",
+              "street": "شارع السركال",
+              "street_en": "Al Serkal Avenue",
+              "pattern": "n{1,75} شارع السركال"
+            },
+            {
+              "code": "50008",
+              "street": "شارع ورسان",
+              "street_en": "Warsan Road",
+              "pattern": "n{1,85} شارع ورسان"
+            },
+            {
+              "code": "50009",
+              "street": "شارع الخوانيج",
+              "street_en": "Al Khawaneej Street",
+              "pattern": "n{1,95} شارع الخوانيج"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "الشارقة",
+      "name_en": "Sharjah",
+      "region_tags": ["Eastern UAE"],
+      "cities": [
+        {
+          "name": "الشارقة",
+          "name_en": "Sharjah",
+          "lat": 25.3463,
+          "lon": 55.4209,
+          "postcodes": [
+            {
+              "code": "60001",
+              "street": "شارع الوحدة",
+              "street_en": "Al Wahda Street",
+              "pattern": "n{1,180} شارع الوحدة"
+            },
+            {
+              "code": "60002",
+              "street": "شارع الاتحاد",
+              "street_en": "Al Ittihad Road",
+              "pattern": "n{1,200} شارع الاتحاد"
+            },
+            {
+              "code": "60003",
+              "street": "شارع الملك فيصل",
+              "street_en": "King Faisal Road",
+              "pattern": "n{1,160} شارع الملك فيصل"
+            },
+            {
+              "code": "60004",
+              "street": "شارع الكورنيش",
+              "street_en": "Corniche Street",
+              "pattern": "n{1,140} شارع الكورنيش"
+            },
+            {
+              "code": "60005",
+              "street": "شارع العروبة",
+              "street_en": "Al Arouba Street",
+              "pattern": "n{1,130} شارع العروبة"
+            },
+            {
+              "code": "60006",
+              "street": "شارع الخان",
+              "street_en": "Al Khan Street",
+              "pattern": "n{1,100} شارع الخان"
+            },
+            {
+              "code": "60007",
+              "street": "شارع القاسمية",
+              "street_en": "Al Qasimia Street",
+              "pattern": "n{1,120} شارع القاسمية"
+            },
+            {
+              "code": "60008",
+              "street": "شارع المجاز",
+              "street_en": "Al Majaz Street",
+              "pattern": "n{1,95} شارع المجاز"
+            },
+            {
+              "code": "60009",
+              "street": "شارع النهدة",
+              "street_en": "Al Nahda Street",
+              "pattern": "n{1,150} شارع النهدة"
+            },
+            {
+              "code": "60010",
+              "street": "شارع التعاون",
+              "street_en": "Al Taawun Street",
+              "pattern": "n{1,85} شارع التعاون"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "عجمان",
+      "name_en": "Ajman",
+      "region_tags": ["Eastern UAE"],
+      "cities": [
+        {
+          "name": "عجمان",
+          "name_en": "Ajman",
+          "lat": 25.4052,
+          "lon": 55.5136,
+          "postcodes": [
+            {
+              "code": "20001",
+              "street": "شارع الشيخ خليفة بن زايد",
+              "street_en": "Sheikh Khalifa Bin Zayed Street",
+              "pattern": "n{1,140} شارع الشيخ خليفة بن زايد"
+            },
+            {
+              "code": "20002",
+              "street": "شارع الاتحاد",
+              "street_en": "Al Ittihad Street",
+              "pattern": "n{1,130} شارع الاتحاد"
+            },
+            {
+              "code": "20003",
+              "street": "شارع الكورنيش",
+              "street_en": "Corniche Road",
+              "pattern": "n{1,100} شارع الكورنيش"
+            },
+            {
+              "code": "20004",
+              "street": "شارع الشيخ عمار بن حميد",
+              "street_en": "Sheikh Ammar Bin Humaid Street",
+              "pattern": "n{1,110} شارع الشيخ عمار بن حميد"
+            },
+            {
+              "code": "20005",
+              "street": "شارع الحميدية",
+              "street_en": "Al Humaidiya Street",
+              "pattern": "n{1,90} شارع الحميدية"
+            },
+            {
+              "code": "20006",
+              "street": "شارع المنامة",
+              "street_en": "Al Manama Street",
+              "pattern": "n{1,80} شارع المنامة"
+            },
+            {
+              "code": "20007",
+              "street": "شارع الرميلة",
+              "street_en": "Al Rumaila Street",
+              "pattern": "n{1,75} شارع الرميلة"
+            },
+            {
+              "code": "20008",
+              "street": "شارع النعيمية",
+              "street_en": "Al Nuaimia Street",
+              "pattern": "n{1,95} شارع النعيمية"
+            },
+            {
+              "code": "20009",
+              "street": "شارع الراشدية",
+              "street_en": "Al Rashidiya Street",
+              "pattern": "n{1,85} شارع الراشدية"
+            },
+            {
+              "code": "20010",
+              "street": "شارع المويهات",
+              "street_en": "Al Mowaihat Street",
+              "pattern": "n{1,70} شارع المويهات"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "أم القيوين",
+      "name_en": "Umm Al Quwain",
+      "region_tags": ["Eastern UAE"],
+      "cities": [
+        {
+          "name": "أم القيوين",
+          "name_en": "Umm Al Quwain",
+          "lat": 25.5647,
+          "lon": 55.5554,
+          "postcodes": [
+            {
+              "code": "30001",
+              "street": "شارع الملك فيصل",
+              "street_en": "King Faisal Road",
+              "pattern": "n{1,100} شارع الملك فيصل"
+            },
+            {
+              "code": "30002",
+              "street": "شارع الاتحاد",
+              "street_en": "Al Ittihad Road",
+              "pattern": "n{1,90} شارع الاتحاد"
+            },
+            {
+              "code": "30003",
+              "street": "شارع الشيخ أحمد بن راشد المعلا",
+              "street_en": "Sheikh Ahmed Bin Rashid Al Mualla Street",
+              "pattern": "n{1,80} شارع الشيخ أحمد بن راشد المعلا"
+            },
+            {
+              "code": "30004",
+              "street": "شارع الكورنيش",
+              "street_en": "Corniche Road",
+              "pattern": "n{1,75} شارع الكورنيش"
+            },
+            {
+              "code": "30005",
+              "street": "شارع السلامة",
+              "street_en": "Al Salama Street",
+              "pattern": "n{1,60} شارع السلامة"
+            },
+            {
+              "code": "30006",
+              "street": "شارع الرأس",
+              "street_en": "Al Raas Street",
+              "pattern": "n{1,55} شارع الرأس"
+            },
+            {
+              "code": "30007",
+              "street": "شارع اللؤلؤة",
+              "street_en": "Al Lulu Street",
+              "pattern": "n{1,50} شارع اللؤلؤة"
+            },
+            {
+              "code": "30008",
+              "street": "شارع الرميلة",
+              "street_en": "Al Ramlah Street",
+              "pattern": "n{1,65} شارع الرميلة"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "رأس الخيمة",
+      "name_en": "Ras Al Khaimah",
+      "region_tags": ["Northern UAE"],
+      "cities": [
+        {
+          "name": "رأس الخيمة",
+          "name_en": "Ras Al Khaimah",
+          "lat": 25.7895,
+          "lon": 55.9432,
+          "postcodes": [
+            {
+              "code": "70001",
+              "street": "شارع الشيخ محمد بن سالم",
+              "street_en": "Sheikh Mohammed Bin Salem Road",
+              "pattern": "n{1,130} شارع الشيخ محمد بن سالم"
+            },
+            {
+              "code": "70002",
+              "street": "شارع الإمارات",
+              "street_en": "Emirates Road",
+              "pattern": "n{1,160} شارع الإمارات"
+            },
+            {
+              "code": "70003",
+              "street": "شارع الكورنيش",
+              "street_en": "Corniche Road",
+              "pattern": "n{1,100} شارع الكورنيش"
+            },
+            {
+              "code": "70004",
+              "street": "شارع القواسم",
+              "street_en": "Al Qawasim Road",
+              "pattern": "n{1,90} شارع القواسم"
+            },
+            {
+              "code": "70005",
+              "street": "شارع المنتصر",
+              "street_en": "Al Muntasir Road",
+              "pattern": "n{1,110} شارع المنتصر"
+            },
+            {
+              "code": "70006",
+              "street": "شارع النخيل",
+              "street_en": "Al Nakheel Street",
+              "pattern": "n{1,85} شارع النخيل"
+            },
+            {
+              "code": "70007",
+              "street": "شارع الحصن",
+              "street_en": "Al Hisn Street",
+              "pattern": "n{1,70} شارع الحصن"
+            },
+            {
+              "code": "70008",
+              "street": "شارع الجزيرة الحمراء",
+              "street_en": "Al Jazeera Al Hamra Street",
+              "pattern": "n{1,75} شارع الجزيرة الحمراء"
+            },
+            {
+              "code": "70009",
+              "street": "شارع الظيت",
+              "street_en": "Al Dhait Street",
+              "pattern": "n{1,95} شارع الظيت"
+            },
+            {
+              "code": "70010",
+              "street": "شارع الخران",
+              "street_en": "Al Kharan Street",
+              "pattern": "n{1,60} شارع الخران"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "الفجيرة",
+      "name_en": "Fujairah",
+      "region_tags": ["Eastern UAE"],
+      "cities": [
+        {
+          "name": "الفجيرة",
+          "name_en": "Fujairah",
+          "lat": 25.1288,
+          "lon": 56.3265,
+          "postcodes": [
+            {
+              "code": "80001",
+              "street": "شارع الشيخ زايد بن سلطان",
+              "street_en": "Sheikh Zayed Bin Sultan Street",
+              "pattern": "n{1,120} شارع الشيخ زايد بن سلطان"
+            },
+            {
+              "code": "80002",
+              "street": "شارع الحصن",
+              "street_en": "Al Hisn Road",
+              "pattern": "n{1,90} شارع الحصن"
+            },
+            {
+              "code": "80003",
+              "street": "شارع حمد بن عبدالله",
+              "street_en": "Hamad Bin Abdullah Street",
+              "pattern": "n{1,100} شارع حمد بن عبدالله"
+            },
+            {
+              "code": "80004",
+              "street": "شارع الكورنيش",
+              "street_en": "Corniche Road",
+              "pattern": "n{1,85} شارع الكورنيش"
+            },
+            {
+              "code": "80005",
+              "street": "شارع المضيبي",
+              "street_en": "Al Madhbi Street",
+              "pattern": "n{1,70} شارع المضيبي"
+            },
+            {
+              "code": "80006",
+              "street": "شارع الفصيل",
+              "street_en": "Al Faseel Street",
+              "pattern": "n{1,75} شارع الفصيل"
+            },
+            {
+              "code": "80007",
+              "street": "شارع مربح",
+              "street_en": "Mirbah Street",
+              "pattern": "n{1,65} شارع مربح"
+            },
+            {
+              "code": "80008",
+              "street": "شارع دبا",
+              "street_en": "Dibba Road",
+              "pattern": "n{1,80} شارع دبا"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
