@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use rand::Rng;
 use serde::Deserialize;
 
+use crate::geo_loader::{geo_database, GeoData};
 use crate::{GeneratorDef, VarValue};
 
 // ---------------------------------------------------------------------------
@@ -12,8 +13,6 @@ use crate::{GeneratorDef, VarValue};
 // ---------------------------------------------------------------------------
 
 static NAMES_JSON: &str = include_str!("../../data/names.json");
-static GEO_JP_JSON: &str = include_str!("../../data/geo/jp.json");
-static GEO_GB_JSON: &str = include_str!("../../data/geo/gb.json");
 
 // ---------------------------------------------------------------------------
 // Data models for deserialisation
@@ -32,57 +31,6 @@ struct NameEntry {
     name_en: String,
 }
 
-#[derive(Deserialize)]
-struct GeoData {
-    country: GeoCountry,
-    states: Vec<GeoState>,
-}
-
-#[derive(Deserialize)]
-struct GeoCountry {
-    name_en: String,
-    iso_code: String,
-    #[allow(dead_code)]
-    phone_prefix: String,
-    phone_formats: Vec<String>,
-    #[allow(dead_code)]
-    postcode_format: String,
-    #[allow(dead_code)]
-    name_order: String,
-}
-
-#[derive(Deserialize)]
-struct GeoState {
-    #[allow(dead_code)]
-    name: String,
-    name_en: String,
-    #[allow(dead_code)]
-    region_tags: Vec<String>,
-    cities: Vec<GeoCity>,
-}
-
-#[derive(Deserialize)]
-struct GeoCity {
-    #[allow(dead_code)]
-    name: String,
-    name_en: String,
-    #[allow(dead_code)]
-    lat: f64,
-    #[allow(dead_code)]
-    lon: f64,
-    postcodes: Vec<GeoPostcode>,
-}
-
-#[derive(Deserialize)]
-struct GeoPostcode {
-    code: String,
-    #[allow(dead_code)]
-    street: String,
-    street_en: String,
-    pattern: Option<String>,
-    fixed: Option<Vec<String>>,
-}
-
 // ---------------------------------------------------------------------------
 // Lazy-parsed singletons
 // ---------------------------------------------------------------------------
@@ -92,62 +40,6 @@ fn names_data() -> &'static NamesData {
     INSTANCE.get_or_init(|| {
         serde_json::from_str(NAMES_JSON).expect("data/names.json should be valid JSON")
     })
-}
-
-fn geo_jp() -> &'static GeoData {
-    static INSTANCE: OnceLock<GeoData> = OnceLock::new();
-    INSTANCE.get_or_init(|| {
-        serde_json::from_str(GEO_JP_JSON).expect("data/geo/jp.json should be valid JSON")
-    })
-}
-
-fn geo_gb() -> &'static GeoData {
-    static INSTANCE: OnceLock<GeoData> = OnceLock::new();
-    INSTANCE.get_or_init(|| {
-        serde_json::from_str(GEO_GB_JSON).expect("data/geo/gb.json should be valid JSON")
-    })
-}
-
-// ---------------------------------------------------------------------------
-// Culture-specific name index ranges (based on data/names.json ordering)
-// ---------------------------------------------------------------------------
-
-/// Index ranges into the name arrays for each supported culture.
-struct CultureRange {
-    first_start: usize,
-    first_end: usize, // exclusive
-    last_start: usize,
-    last_end: usize, // exclusive
-}
-
-fn culture_range(country: &str) -> Option<CultureRange> {
-    match country {
-        "JP" => Some(CultureRange {
-            first_start: 0,
-            first_end: 18,
-            last_start: 0,
-            last_end: 18,
-        }),
-        "CN" => Some(CultureRange {
-            first_start: 18,
-            first_end: 36,
-            last_start: 18,
-            last_end: 36,
-        }),
-        "KR" => Some(CultureRange {
-            first_start: 36,
-            first_end: 53,
-            last_start: 36,
-            last_end: 54,
-        }),
-        "GB" => Some(CultureRange {
-            first_start: 260,
-            first_end: 276,
-            last_start: 247,
-            last_end: 263,
-        }),
-        _ => None,
-    }
 }
 
 /// Countries that use family-name-first ordering.
@@ -179,30 +71,11 @@ fn generate_person(params: &HashMap<String, String>, rng: &mut impl Rng) -> Resu
     let data = names_data();
     let country = params.get("country").map(|s| s.as_str());
 
-    // Pick first and last names, optionally filtered to a culture range.
-    let (first, last) = match country.and_then(culture_range) {
-        Some(range) => {
-            let fi = rng.gen_range(range.first_start..range.first_end);
-            let li = rng.gen_range(range.last_start..range.last_end);
-            let first = data
-                .first_names
-                .get(fi)
-                .context("first name index out of range")?;
-            let last = data
-                .last_names
-                .get(li)
-                .context("last name index out of range")?;
-            (first.name_en.clone(), last.name_en.clone())
-        }
-        None => {
-            let fi = rng.gen_range(0..data.first_names.len());
-            let li = rng.gen_range(0..data.last_names.len());
-            (
-                data.first_names[fi].name_en.clone(),
-                data.last_names[li].name_en.clone(),
-            )
-        }
-    };
+    // Pick first and last names from the global pool.
+    let fi = rng.gen_range(0..data.first_names.len());
+    let li = rng.gen_range(0..data.last_names.len());
+    let first = data.first_names[fi].name_en.clone();
+    let last = data.last_names[li].name_en.clone();
 
     // Format full name depending on culture.
     let full_name = if country.is_some_and(is_family_first) {
@@ -234,11 +107,7 @@ fn generate_person(params: &HashMap<String, String>, rng: &mut impl Rng) -> Resu
 
 /// Generate a phone number. Uses geo data phone_formats when available.
 fn generate_phone(country: Option<&str>, rng: &mut impl Rng) -> String {
-    let geo = match country {
-        Some("JP") => Some(geo_jp()),
-        Some("GB") => Some(geo_gb()),
-        _ => None,
-    };
+    let geo = country.and_then(|c| geo_database().get(c));
 
     match geo {
         Some(g) if !g.country.phone_formats.is_empty() => {
@@ -276,11 +145,7 @@ fn expand_phone_format(fmt: &str, rng: &mut impl Rng) -> String {
 fn generate_address(params: &HashMap<String, String>, rng: &mut impl Rng) -> Result<VarValue> {
     let country = params.get("country").map(|s| s.as_str());
 
-    let geo = match country {
-        Some("JP") => Some(geo_jp()),
-        Some("GB") => Some(geo_gb()),
-        _ => None,
-    };
+    let geo = country.and_then(|c| geo_database().get(c));
 
     match geo {
         Some(g) => generate_address_from_geo(g, rng),
@@ -830,14 +695,16 @@ mod tests {
         }
     }
 
-    // 14. Person with country=JP picks from Japanese name pool
+    // 14. Person with country=JP picks from the global name pool
     #[test]
-    fn person_jp_uses_japanese_names() {
-        let jp_first: Vec<&str> = names_data().first_names[0..18]
+    fn person_jp_picks_from_global_pool() {
+        let all_first: Vec<&str> = names_data()
+            .first_names
             .iter()
             .map(|n| n.name_en.as_str())
             .collect();
-        let jp_last: Vec<&str> = names_data().last_names[0..18]
+        let all_last: Vec<&str> = names_data()
+            .last_names
             .iter()
             .map(|n| n.name_en.as_str())
             .collect();
@@ -850,12 +717,12 @@ mod tests {
             let last = field(&result, "last");
 
             assert!(
-                jp_first.contains(&first.as_str()),
-                "seed={seed}: first name '{first}' should be Japanese"
+                all_first.contains(&first.as_str()),
+                "seed={seed}: first name '{first}' SHALL be in global pool"
             );
             assert!(
-                jp_last.contains(&last.as_str()),
-                "seed={seed}: last name '{last}' should be Japanese"
+                all_last.contains(&last.as_str()),
+                "seed={seed}: last name '{last}' SHALL be in global pool"
             );
         }
     }
@@ -930,6 +797,63 @@ mod tests {
             name,
             format!("{last} {first}"),
             "CN name should be in family_first order"
+        );
+    }
+
+    // 20. Address with country=KR returns Korean data (Issue 9)
+    #[test]
+    fn address_kr_returns_korean_data() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("address", &[("country", "KR")]);
+        let result = generate_structured(&d, &mut rng).expect("SHALL generate KR address");
+        let country_code = field(&result, "country_code");
+        assert_eq!(
+            country_code, "KR",
+            "SHALL return country_code KR for address(country=KR)"
+        );
+    }
+
+    // 21. Address with country=FR returns French data (Issue 9)
+    #[test]
+    fn address_fr_returns_french_data() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("address", &[("country", "FR")]);
+        let result = generate_structured(&d, &mut rng).expect("SHALL generate FR address");
+        let country_code = field(&result, "country_code");
+        assert_eq!(
+            country_code, "FR",
+            "SHALL return country_code FR for address(country=FR)"
+        );
+    }
+
+    // 22. Person with country=KR phone starts with +82 (Issue 9)
+    #[test]
+    fn person_kr_phone_has_correct_prefix() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("person", &[("country", "KR")]);
+        let result = generate_structured(&d, &mut rng).expect("SHALL generate KR person");
+        let phone = field(&result, "phone");
+        assert!(
+            phone.starts_with("+82"),
+            "SHALL start KR phone with +82, got: {phone}"
+        );
+    }
+
+    // 23. first_name pool diversity: >20 unique names from 100 draws (Issue 13)
+    #[test]
+    fn person_name_pool_diversity() {
+        let mut unique_first: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for seed in 0u64..100 {
+            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            let result =
+                generate_structured(&def("person"), &mut rng).expect("SHALL generate person");
+            unique_first.insert(field(&result, "first"));
+        }
+        assert!(
+            unique_first.len() > 20,
+            "SHALL draw from pool >20 unique first names in 100 draws, got {}",
+            unique_first.len()
         );
     }
 }

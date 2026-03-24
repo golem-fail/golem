@@ -2298,24 +2298,476 @@ mod tests {
         );
     }
 
-    // ── bash without command param returns error ──────────────────────
+    // ── bash without run param returns error ──────────────────────────
 
     #[tokio::test]
-    async fn bash_without_command_returns_error() {
+    async fn bash_without_run_param_returns_error() {
         let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
         let ctx = test_ctx(Path::new("."));
 
         let step = make_step("bash");
-        // No command param
+        // No run param
 
         let result = execute_action(&step, &driver, &mut vars, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
             err_msg.contains("run"),
-            "error should mention 'run' param, got: {err_msg}"
+            "error SHALL mention 'run' param, got: {err_msg}"
+        );
+    }
+
+    // ── scroll action dispatches to scroll_to_element ─────────────────
+
+    #[tokio::test]
+    async fn scroll_action_dispatches_with_direction() {
+        // Hierarchy that already contains the target, so scroll returns immediately.
+        let root = root_with_button("Target");
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("scroll");
+        step.text = Some("Target".to_string());
+        step.params.insert(
+            "direction".to_string(),
+            toml::Value::String("up".to_string()),
+        );
+
+        execute_action(&step, &driver, &mut vars, &ctx)
+            .await
+            .expect("scroll SHALL succeed when element is already visible");
+
+        // Element found immediately -- no swipe calls expected
+        let calls = driver.get_calls();
+        let swipe_calls: Vec<_> = calls.iter().filter(|c| c.0 == "swipe").collect();
+        assert!(
+            swipe_calls.is_empty(),
+            "no swipes SHALL occur when element is found immediately"
+        );
+    }
+
+    #[tokio::test]
+    async fn scroll_action_uses_default_direction_down() {
+        let root = root_with_button("Target");
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("scroll");
+        step.text = Some("Target".to_string());
+        // No direction param -- should default to "down"
+
+        execute_action(&step, &driver, &mut vars, &ctx)
+            .await
+            .expect("scroll SHALL succeed with default direction");
+    }
+
+    #[tokio::test]
+    async fn scroll_action_uses_custom_max_scrolls() {
+        // Empty hierarchy -- element never found
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("scroll");
+        step.text = Some("Missing".to_string());
+        step.params.insert(
+            "max_scrolls".to_string(),
+            toml::Value::Integer(2),
+        );
+
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
+        assert!(result.is_err(), "scroll SHALL fail when element not found");
+    }
+
+    // ── assert_alert tests ────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn assert_alert_succeeds_when_alert_present() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+
+        // Set up an alert element
+        let alert = make_element_with_text("Alert", "Delete this item?", Bounds::new(50.0, 200.0, 275.0, 150.0));
+        driver.set_alert(Some(alert));
+
+        let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
+
+        let step = make_step("assert_alert");
+
+        execute_action(&step, &driver, &mut vars, &ctx)
+            .await
+            .expect("assert_alert SHALL succeed when any alert is displayed");
+    }
+
+    #[tokio::test]
+    async fn assert_alert_with_matching_text_pattern() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+
+        let alert = make_element_with_text("Alert", "Delete this item?", Bounds::new(50.0, 200.0, 275.0, 150.0));
+        driver.set_alert(Some(alert));
+
+        let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("assert_alert");
+        step.text = Some("Delete*".to_string());
+
+        execute_action(&step, &driver, &mut vars, &ctx)
+            .await
+            .expect("assert_alert SHALL succeed when alert text matches glob pattern");
+    }
+
+    #[tokio::test]
+    async fn assert_alert_fails_with_mismatched_text_pattern() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+
+        let alert = make_element_with_text("Alert", "Delete this item?", Bounds::new(50.0, 200.0, 275.0, 150.0));
+        driver.set_alert(Some(alert));
+
+        let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("assert_alert");
+        step.text = Some("Save*".to_string());
+
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
+        assert!(result.is_err(), "assert_alert SHALL fail when text does not match");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("does not match"),
+            "error SHALL mention pattern mismatch, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn assert_alert_fails_when_no_alert_displayed() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        // No alert set -- default is None
+        let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
+
+        let step = make_step("assert_alert");
+
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
+        assert!(result.is_err(), "assert_alert SHALL fail when no alert is displayed");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("no alert"),
+            "error SHALL mention no alert, got: {err_msg}"
+        );
+    }
+
+    // ── dismiss_alert tests ───────────────────────────────────────────
+
+    #[tokio::test]
+    async fn dismiss_alert_calls_driver_dismiss_alert() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
+
+        let step = make_step("dismiss_alert");
+
+        execute_action(&step, &driver, &mut vars, &ctx)
+            .await
+            .expect("dismiss_alert SHALL succeed");
+
+        let calls = driver.get_calls();
+        let dismiss_calls: Vec<_> = calls.iter().filter(|c| c.0 == "dismiss_alert").collect();
+        assert_eq!(dismiss_calls.len(), 1, "driver.dismiss_alert SHALL be called once");
+        assert!(
+            dismiss_calls[0].1.is_empty(),
+            "no button text SHALL be passed when none specified"
+        );
+    }
+
+    #[tokio::test]
+    async fn dismiss_alert_with_button_text_from_text_field() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("dismiss_alert");
+        step.text = Some("OK".to_string());
+
+        execute_action(&step, &driver, &mut vars, &ctx)
+            .await
+            .expect("dismiss_alert with button text SHALL succeed");
+
+        let calls = driver.get_calls();
+        let dismiss_calls: Vec<_> = calls.iter().filter(|c| c.0 == "dismiss_alert").collect();
+        assert_eq!(dismiss_calls.len(), 1);
+        assert_eq!(dismiss_calls[0].1, vec!["OK"]);
+    }
+
+    #[tokio::test]
+    async fn dismiss_alert_with_button_from_params() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("dismiss_alert");
+        step.params.insert(
+            "button".to_string(),
+            toml::Value::String("Cancel".to_string()),
+        );
+
+        execute_action(&step, &driver, &mut vars, &ctx)
+            .await
+            .expect("dismiss_alert with button param SHALL succeed");
+
+        let calls = driver.get_calls();
+        let dismiss_calls: Vec<_> = calls.iter().filter(|c| c.0 == "dismiss_alert").collect();
+        assert_eq!(dismiss_calls.len(), 1);
+        assert_eq!(dismiss_calls[0].1, vec!["Cancel"]);
+    }
+
+    // ── run action path validation tests ──────────────────────────────
+
+    #[tokio::test]
+    async fn run_action_rejects_path_traversal() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("run");
+        step.params.insert(
+            "script".to_string(),
+            toml::Value::String("../etc/passwd".to_string()),
+        );
+
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
+        assert!(result.is_err(), "run SHALL reject path traversal");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("path traversal"),
+            "error SHALL mention path traversal, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn run_action_rejects_nonexistent_script() {
+        let tmp = tempfile::tempdir().expect("temp dir");
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+        let ctx = test_ctx(tmp.path());
+
+        let mut step = make_step("run");
+        step.params.insert(
+            "script".to_string(),
+            toml::Value::String("nonexistent.sh".to_string()),
+        );
+
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
+        assert!(result.is_err(), "run SHALL fail when script does not exist");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("not found"),
+            "error SHALL mention script not found, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn run_action_without_script_param_returns_error() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
+
+        let step = make_step("run");
+        // No script param
+
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
+        assert!(result.is_err(), "run SHALL require 'script' param");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("script"),
+            "error SHALL mention 'script' param, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn run_action_resolves_leading_slash_to_project_root() {
+        let tmp = tempfile::tempdir().expect("temp dir");
+        let script_path = tmp.path().join("scripts").join("tool.sh");
+        std::fs::create_dir_all(script_path.parent().expect("has parent")).expect("create dir");
+        std::fs::write(&script_path, "#!/bin/sh\necho rooted\n").expect("write script");
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))
+                .expect("set permissions");
+        }
+
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+        let ctx = test_ctx(tmp.path());
+
+        let mut step = make_step("run");
+        step.params.insert(
+            "script".to_string(),
+            toml::Value::String("/scripts/tool.sh".to_string()),
+        );
+        step.save_to = Some("out".to_string());
+
+        execute_action(&step, &driver, &mut vars, &ctx)
+            .await
+            .expect("run SHALL resolve leading / to project_root");
+
+        let saved = vars.get("out").expect("out variable should exist");
+        let obj = saved.as_object().expect("result SHALL be an object");
+        assert_eq!(
+            obj.get("stdout"),
+            Some(&VarValue::string("rooted")),
+            "stdout SHALL contain the script output"
+        );
+    }
+
+    // ── await_email requires inbox param ──────────────────────────────
+
+    #[tokio::test]
+    async fn await_email_requires_inbox_param() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
+
+        let step = make_step("await_email");
+        // No inbox param
+
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
+        assert!(result.is_err(), "await_email SHALL require 'inbox' param");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("inbox"),
+            "error SHALL mention 'inbox' param, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn await_email_fails_when_inbox_not_in_vars() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("await_email");
+        step.params.insert(
+            "inbox".to_string(),
+            toml::Value::String("test_inbox".to_string()),
+        );
+
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
+        assert!(result.is_err(), "await_email SHALL fail when inbox not in vars");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("not found"),
+            "error SHALL mention inbox not found, got: {err_msg}"
+        );
+    }
+
+    // ── load_fixture requires params ──────────────────────────────────
+
+    #[tokio::test]
+    async fn load_fixture_requires_fixture_param() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
+
+        let step = make_step("load_fixture");
+        // No fixture param
+
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
+        assert!(result.is_err(), "load_fixture SHALL require 'fixture' param");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("fixture"),
+            "error SHALL mention 'fixture' param, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn load_fixture_requires_as_param() {
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("load_fixture");
+        step.params.insert(
+            "fixture".to_string(),
+            toml::Value::String("some_fixture".to_string()),
+        );
+        // No 'as' param
+
+        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
+        assert!(result.is_err(), "load_fixture SHALL require 'as' param");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("as"),
+            "error SHALL mention 'as' param, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn load_fixture_loads_vars_into_store() {
+        let tmp = tempfile::tempdir().expect("temp dir");
+        let fixtures_dir = tmp.path().join("__fixtures__");
+        std::fs::create_dir_all(&fixtures_dir).expect("create fixtures dir");
+        std::fs::write(
+            fixtures_dir.join("user.toml"),
+            "[vars]\nemail = \"test@example.com\"\nname = \"Test User\"\n",
+        )
+        .expect("write fixture");
+
+        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+        let ctx = test_ctx(tmp.path());
+
+        let mut step = make_step("load_fixture");
+        step.params.insert(
+            "fixture".to_string(),
+            toml::Value::String("user".to_string()),
+        );
+        step.params.insert(
+            "as".to_string(),
+            toml::Value::String("account".to_string()),
+        );
+
+        execute_action(&step, &driver, &mut vars, &ctx)
+            .await
+            .expect("load_fixture SHALL succeed");
+
+        let account = vars
+            .resolve("account")
+            .expect("account SHALL exist in store");
+        let obj = account.as_object().expect("account SHALL be an object");
+        assert_eq!(
+            obj.get("email"),
+            Some(&VarValue::string("test@example.com")),
+            "email SHALL be loaded from fixture"
+        );
+        assert_eq!(
+            obj.get("name"),
+            Some(&VarValue::string("Test User")),
+            "name SHALL be loaded from fixture"
         );
     }
 }

@@ -48,28 +48,44 @@ fn generate_email(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue, Va
     Ok(VarValue::String(email))
 }
 
-const FIRST_NAMES: &[&str] = &[
-    "Alice", "Bob", "Carol", "David", "Emma", "Frank", "Grace", "Henry", "Iris", "Jack", "Karen",
-    "Leo", "Mia", "Noah", "Olivia", "Paul", "Quinn", "Rachel", "Sam", "Tara", "Uma", "Victor",
-    "Wendy", "Xavier", "Yara", "Zach",
-];
+// ---------------------------------------------------------------------------
+// Name pool — loaded from data/names.json
+// ---------------------------------------------------------------------------
 
-/// Pick a random first name from a hardcoded list.
-fn generate_first_name(rng: &mut impl Rng) -> Result<VarValue, VarError> {
-    let idx = rng.gen_range(0..FIRST_NAMES.len());
-    Ok(VarValue::String(FIRST_NAMES[idx].to_string()))
+static NAMES_JSON: &str = include_str!("../../data/names.json");
+
+#[derive(serde::Deserialize)]
+struct NamesData {
+    first_names: Vec<NameEntry>,
+    last_names: Vec<NameEntry>,
 }
 
-const LAST_NAMES: &[&str] = &[
-    "Adams", "Baker", "Clark", "Davis", "Evans", "Fisher", "Garcia", "Harris", "Irwin", "Jones",
-    "Kim", "Lee", "Moore", "Nelson", "Owens", "Patel", "Quinn", "Reyes", "Smith", "Taylor",
-    "Upton", "Vega", "Wang", "Young", "Zhang",
-];
+#[derive(serde::Deserialize)]
+struct NameEntry {
+    #[allow(dead_code)]
+    name: String,
+    name_en: String,
+}
 
-/// Pick a random last name from a hardcoded list.
+fn names_data() -> &'static NamesData {
+    static INSTANCE: std::sync::OnceLock<NamesData> = std::sync::OnceLock::new();
+    INSTANCE.get_or_init(|| {
+        serde_json::from_str(NAMES_JSON).expect("data/names.json should be valid JSON")
+    })
+}
+
+/// Pick a random first name from the global names pool.
+fn generate_first_name(rng: &mut impl Rng) -> Result<VarValue, VarError> {
+    let data = names_data();
+    let idx = rng.gen_range(0..data.first_names.len());
+    Ok(VarValue::String(data.first_names[idx].name_en.clone()))
+}
+
+/// Pick a random last name from the global names pool.
 fn generate_last_name(rng: &mut impl Rng) -> Result<VarValue, VarError> {
-    let idx = rng.gen_range(0..LAST_NAMES.len());
-    Ok(VarValue::String(LAST_NAMES[idx].to_string()))
+    let data = names_data();
+    let idx = rng.gen_range(0..data.last_names.len());
+    Ok(VarValue::String(data.last_names[idx].name_en.clone()))
 }
 
 /// Generate a random password.
@@ -378,6 +394,40 @@ mod tests {
         assert_ne!(
             email1, email2,
             "successive calls should produce different values"
+        );
+    }
+
+    // 16. first_name pool diversity: >50 unique names from 200 draws (Issue 13)
+    #[test]
+    fn first_name_pool_diversity() {
+        let mut unique: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for seed in 0u64..200 {
+            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            let result = generate_simple(&def("first_name"), &mut rng).expect("SHALL generate");
+            let name = result.as_str().expect("SHALL be string").to_string();
+            unique.insert(name);
+        }
+        assert!(
+            unique.len() > 50,
+            "SHALL draw from pool >50 unique first names in 200 draws, got {}",
+            unique.len()
+        );
+    }
+
+    // 17. last_name pool diversity: >50 unique names from 200 draws (Issue 13)
+    #[test]
+    fn last_name_pool_diversity() {
+        let mut unique: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for seed in 0u64..200 {
+            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            let result = generate_simple(&def("last_name"), &mut rng).expect("SHALL generate");
+            let name = result.as_str().expect("SHALL be string").to_string();
+            unique.insert(name);
+        }
+        assert!(
+            unique.len() > 50,
+            "SHALL draw from pool >50 unique last names in 200 draws, got {}",
+            unique.len()
         );
     }
 }
