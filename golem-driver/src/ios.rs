@@ -1,127 +1,20 @@
+use crate::common::{
+    build_alert_body, build_backspace_body, build_long_press_body, build_swipe_body,
+    build_tap_body, build_type_body, find_alert, parse_hierarchy, CompanionClient, SwipeRequest,
+};
 use crate::{Direction, PlatformDriver, ScreenshotResult};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use golem_element::Element;
-use serde::Serialize;
-#[cfg(test)]
-use serde::Deserialize;
 
 /// iOS driver that communicates with an XCUITest companion server via HTTP.
 ///
 /// The companion server runs inside the iOS simulator and exposes
 /// endpoints for UI automation (tap, type, swipe, screenshot, etc.).
 pub struct IosDriver {
-    base_url: String,
-    client: reqwest::Client,
+    client: CompanionClient,
     device_id: String,
     bundle_id: String,
-}
-
-// ---------------------------------------------------------------------------
-// Request / response DTOs for companion server communication
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Serialize)]
-struct TapRequest {
-    x: f64,
-    y: f64,
-}
-
-#[derive(Debug, Serialize)]
-struct TypeRequest<'a> {
-    text: &'a str,
-}
-
-#[derive(Debug, Serialize)]
-struct BackspaceRequest {
-    count: u32,
-}
-
-#[derive(Debug, Serialize)]
-struct LongPressRequest {
-    x: f64,
-    y: f64,
-    duration_ms: u64,
-}
-
-#[derive(Debug, Serialize)]
-struct SwipeRequest {
-    from_x: f64,
-    from_y: f64,
-    to_x: f64,
-    to_y: f64,
-    duration_ms: u64,
-}
-
-#[derive(Debug, Serialize)]
-struct AlertRequest<'a> {
-    action: &'a str,
-}
-
-#[cfg(test)]
-#[derive(Debug, Deserialize)]
-struct AlertResponse {
-    alert: Option<Element>,
-}
-
-// ---------------------------------------------------------------------------
-// Parsing helpers (testable without HTTP)
-// ---------------------------------------------------------------------------
-
-/// Parse a hierarchy JSON response body into an `Element` tree.
-fn parse_hierarchy(json: &str) -> Result<Element> {
-    serde_json::from_str::<Element>(json).context("failed to parse hierarchy JSON")
-}
-
-/// Build the JSON body for a tap request.
-fn build_tap_body(x: f64, y: f64) -> Result<String> {
-    serde_json::to_string(&TapRequest { x, y }).context("failed to serialize tap request")
-}
-
-/// Build the JSON body for a type-text request.
-fn build_type_body(text: &str) -> Result<String> {
-    serde_json::to_string(&TypeRequest { text }).context("failed to serialize type request")
-}
-
-/// Build the JSON body for a backspace request.
-fn build_backspace_body(count: u32) -> Result<String> {
-    serde_json::to_string(&BackspaceRequest { count })
-        .context("failed to serialize backspace request")
-}
-
-/// Build the JSON body for a long-press request.
-fn build_long_press_body(x: f64, y: f64, duration_ms: u64) -> Result<String> {
-    serde_json::to_string(&LongPressRequest {
-        x,
-        y,
-        duration_ms,
-    })
-    .context("failed to serialize long press request")
-}
-
-/// Build the JSON body for a swipe request.
-fn build_swipe_body(from_x: f64, from_y: f64, to_x: f64, to_y: f64, duration_ms: u64) -> Result<String> {
-    serde_json::to_string(&SwipeRequest {
-        from_x,
-        from_y,
-        to_x,
-        to_y,
-        duration_ms,
-    })
-    .context("failed to serialize swipe request")
-}
-
-/// Build the JSON body for an alert action request.
-fn build_alert_body(action: &str) -> Result<String> {
-    serde_json::to_string(&AlertRequest { action }).context("failed to serialize alert request")
-}
-
-/// Parse an alert response body.
-#[cfg(test)]
-fn parse_alert_response(json: &str) -> Result<Option<Element>> {
-    let resp: AlertResponse =
-        serde_json::from_str(json).context("failed to parse alert response")?;
-    Ok(resp.alert)
 }
 
 /// Convert a `Direction` to swipe coordinate deltas.
@@ -170,8 +63,7 @@ impl IosDriver {
     /// Create a new iOS driver targeting the companion server at the given port.
     pub fn new(device_id: String, bundle_id: String, port: u16) -> Self {
         Self {
-            base_url: format!("http://localhost:{port}"),
-            client: reqwest::Client::new(),
+            client: CompanionClient::new(port),
             device_id,
             bundle_id,
         }
@@ -179,7 +71,7 @@ impl IosDriver {
 
     /// Return the base URL for the companion server.
     pub fn base_url(&self) -> &str {
-        &self.base_url
+        &self.client.base_url
     }
 
     /// Return the device ID.
@@ -190,80 +82,6 @@ impl IosDriver {
     /// Return the bundle ID.
     pub fn bundle_id(&self) -> &str {
         &self.bundle_id
-    }
-
-    // -----------------------------------------------------------------------
-    // Internal helpers
-    // -----------------------------------------------------------------------
-
-    async fn post_json(&self, path: &str, body: &str) -> Result<String> {
-        let url = format!("{}{}", self.base_url, path);
-        let resp = self
-            .client
-            .post(&url)
-            .header("Content-Type", "application/json")
-            .body(body.to_string())
-            .send()
-            .await
-            .with_context(|| format!("POST {url} failed"))?;
-
-        let status = resp.status();
-        let text = resp
-            .text()
-            .await
-            .with_context(|| format!("reading response body from POST {url}"))?;
-
-        if !status.is_success() {
-            anyhow::bail!("POST {url} returned {status}: {text}");
-        }
-
-        Ok(text)
-    }
-
-    async fn get_text(&self, path: &str) -> Result<String> {
-        let url = format!("{}{}", self.base_url, path);
-        let resp = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .with_context(|| format!("GET {url} failed"))?;
-
-        let status = resp.status();
-        let text = resp
-            .text()
-            .await
-            .with_context(|| format!("reading response body from GET {url}"))?;
-
-        if !status.is_success() {
-            anyhow::bail!("GET {url} returned {status}: {text}");
-        }
-
-        Ok(text)
-    }
-
-    async fn get_bytes(&self, path: &str) -> Result<Vec<u8>> {
-        let url = format!("{}{}", self.base_url, path);
-        let resp = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .with_context(|| format!("GET {url} failed"))?;
-
-        let status = resp.status();
-        if !status.is_success() {
-            let text = resp
-                .text()
-                .await
-                .unwrap_or_else(|_| "<unreadable>".to_string());
-            anyhow::bail!("GET {url} returned {status}: {text}");
-        }
-
-        resp.bytes()
-            .await
-            .map(|b| b.to_vec())
-            .with_context(|| format!("reading bytes from GET {url}"))
     }
 
     /// Run an `xcrun simctl` subcommand.
@@ -287,49 +105,49 @@ impl IosDriver {
 #[async_trait]
 impl PlatformDriver for IosDriver {
     async fn get_hierarchy(&self) -> Result<Element> {
-        let text = self.get_text("/hierarchy").await?;
+        let text = self.client.get_text("/hierarchy").await?;
         parse_hierarchy(&text)
     }
 
     async fn tap(&self, x: f64, y: f64) -> Result<()> {
         let body = build_tap_body(x, y)?;
-        self.post_json("/tap", &body).await?;
+        self.client.post_json("/tap", &body).await?;
         Ok(())
     }
 
     async fn long_press(&self, x: f64, y: f64, duration_ms: u64) -> Result<()> {
         let body = build_long_press_body(x, y, duration_ms)?;
-        self.post_json("/longpress", &body).await?;
+        self.client.post_json("/longpress", &body).await?;
         Ok(())
     }
 
     async fn type_text(&self, text: &str) -> Result<()> {
         let body = build_type_body(text)?;
-        self.post_json("/type", &body).await?;
+        self.client.post_json("/type", &body).await?;
         Ok(())
     }
 
     async fn backspace(&self, count: u32) -> Result<()> {
         let body = build_backspace_body(count)?;
-        self.post_json("/backspace", &body).await?;
+        self.client.post_json("/backspace", &body).await?;
         Ok(())
     }
 
     async fn swipe(&self, direction: Direction) -> Result<()> {
         let req = direction_to_swipe_coords(direction);
         let body = serde_json::to_string(&req).context("failed to serialize swipe request")?;
-        self.post_json("/swipe", &body).await?;
+        self.client.post_json("/swipe", &body).await?;
         Ok(())
     }
 
     async fn swipe_coords(&self, from_x: f64, from_y: f64, to_x: f64, to_y: f64) -> Result<()> {
         let body = build_swipe_body(from_x, from_y, to_x, to_y, 300)?;
-        self.post_json("/swipe", &body).await?;
+        self.client.post_json("/swipe", &body).await?;
         Ok(())
     }
 
     async fn screenshot(&self) -> Result<ScreenshotResult> {
-        let data = self.get_bytes("/screenshot").await?;
+        let data = self.client.get_bytes("/screenshot").await?;
         Ok(ScreenshotResult {
             path: String::new(),
             data,
@@ -337,7 +155,7 @@ impl PlatformDriver for IosDriver {
     }
 
     async fn hide_keyboard(&self) -> Result<()> {
-        self.post_json("/hide-keyboard", "{}").await?;
+        self.client.post_json("/hide-keyboard", "{}").await?;
         Ok(())
     }
 
@@ -474,20 +292,8 @@ impl PlatformDriver for IosDriver {
     }
 
     async fn get_alert(&self) -> Result<Option<Element>> {
-        let text = self.get_text("/hierarchy").await?;
+        let text = self.client.get_text("/hierarchy").await?;
         let root = parse_hierarchy(&text)?;
-        // Walk the tree looking for an alert-type element
-        fn find_alert(el: &Element) -> Option<Element> {
-            if el.element_type == "Alert" {
-                return Some(el.clone());
-            }
-            for child in &el.children {
-                if let Some(alert) = find_alert(child) {
-                    return Some(alert);
-                }
-            }
-            None
-        }
         Ok(find_alert(&root))
     }
 
@@ -497,7 +303,7 @@ impl PlatformDriver for IosDriver {
             _ => "dismiss",
         };
         let body = build_alert_body(action)?;
-        self.post_json("/alert", &body).await?;
+        self.client.post_json("/alert", &body).await?;
         Ok(())
     }
 }
@@ -509,6 +315,7 @@ impl PlatformDriver for IosDriver {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::parse_alert_response;
     use golem_element::Bounds;
 
     // -----------------------------------------------------------------------
