@@ -15,7 +15,7 @@ use crate::{VarError, VarValue};
 // Country resolution
 // ---------------------------------------------------------------------------
 
-/// Resolve an optional country param to a `&GeoData`, or `None` for default/US.
+/// Resolve an optional country param to a `&GeoData`, or `None` if unset/unknown.
 fn resolve_geo(params: &HashMap<String, String>) -> Option<&'static GeoData> {
     let code = params.get("country")?;
     geo_database().get(code)
@@ -28,7 +28,7 @@ fn resolve_geo(params: &HashMap<String, String>) -> Option<&'static GeoData> {
 /// Generate a phone number string.
 ///
 /// Params:
-/// - `country`: "JP" | "GB" (default US)
+/// - `country`: "JP" | "GB" etc. (default: random from geo database)
 /// - `format`: custom format where `#` is replaced by a random digit
 pub fn generate_phone(
     params: &HashMap<String, String>,
@@ -40,22 +40,14 @@ pub fn generate_phone(
     }
 
     let geo = resolve_geo(params);
-    let phone = match geo {
-        Some(g) if !g.country.phone_formats.is_empty() => {
-            let idx = rng.gen_range(0..g.country.phone_formats.len());
-            let fmt = &g.country.phone_formats[idx];
-            expand_format(fmt, rng)
-        }
-        _ => {
-            // Default US-style phone.
-            let area: u32 = rng.gen_range(200..999);
-            let exchange: u32 = rng.gen_range(200..999);
-            let subscriber: u32 = rng.gen_range(1000..9999);
-            format!("+1-{area}-{exchange}-{subscriber}")
-        }
+    let geo = match geo {
+        Some(g) if !g.country.phone_formats.is_empty() => g,
+        _ => geo_database().random(rng),
     };
 
-    Ok(VarValue::String(phone))
+    let idx = rng.gen_range(0..geo.country.phone_formats.len());
+    let fmt = &geo.country.phone_formats[idx];
+    Ok(VarValue::String(expand_format(fmt, rng)))
 }
 
 // ---------------------------------------------------------------------------
@@ -65,7 +57,7 @@ pub fn generate_phone(
 /// Generate a city name.
 ///
 /// Params:
-/// - `country`: "JP" | "GB" (default picks from any loaded geo data)
+/// - `country`: "JP" | "GB" etc. (default: picks from any loaded geo data)
 /// - `region`: narrows city pool to states whose `region_tags` contain this value
 pub fn generate_city(
     params: &HashMap<String, String>,
@@ -130,7 +122,7 @@ fn collect_city_names(geo: Option<&GeoData>, region: Option<&str>) -> Vec<String
 /// Generate a postcode string.
 ///
 /// Params:
-/// - `country`: "JP" | "GB" (default picks from any loaded geo data)
+/// - `country`: "JP" | "GB" etc. (default: picks from any loaded geo data)
 pub fn generate_postcode(
     params: &HashMap<String, String>,
     rng: &mut impl Rng,
@@ -186,39 +178,20 @@ fn collect_postcodes(geo: Option<&GeoData>) -> Vec<String> {
 /// Generate a street address string.
 ///
 /// Params:
-/// - `country`: "JP" | "GB" (default US-style)
+/// - `country`: "JP" | "GB" etc. (default: random from geo database)
 pub fn generate_street(
     params: &HashMap<String, String>,
     rng: &mut impl Rng,
 ) -> Result<VarValue, VarError> {
     let geo = resolve_geo(params);
+    let geo = match geo {
+        Some(g) => g,
+        None => geo_database().random(rng),
+    };
 
-    match geo {
-        Some(g) => {
-            // Pick a random postcode entry from the geo data and expand its pattern.
-            let entry = pick_random_postcode_entry(g, rng)?;
-            let street = expand_street_from_entry(entry, rng);
-            Ok(VarValue::String(street))
-        }
-        None => {
-            // Default US-style street.
-            let streets = &[
-                "Main Street",
-                "Oak Avenue",
-                "Elm Drive",
-                "Maple Lane",
-                "Cedar Boulevard",
-                "Pine Road",
-                "Birch Way",
-                "Walnut Court",
-                "Willow Place",
-                "Spruce Terrace",
-            ];
-            let num: u32 = rng.gen_range(1..9999);
-            let name = streets[rng.gen_range(0..streets.len())];
-            Ok(VarValue::String(format!("{num} {name}")))
-        }
-    }
+    let entry = pick_random_postcode_entry(geo, rng)?;
+    let street = expand_street_from_entry(entry, rng);
+    Ok(VarValue::String(street))
 }
 
 /// Pick a random postcode entry from a `GeoData`.
@@ -355,22 +328,20 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // 1. Phone default (US format)
+    // 1. Phone default picks a random geo country
     // -----------------------------------------------------------------------
     #[test]
-    fn phone_default_is_us_format() {
+    fn phone_default_uses_random_geo_data() {
         let mut rng = seeded_rng();
         let result = generate_phone(&empty_params(), &mut rng).expect("should generate");
         let phone = result.as_str().expect("should be string");
         assert!(
-            phone.starts_with("+1-"),
-            "default phone should start with +1-, got: {phone}"
+            phone.starts_with('+'),
+            "default phone SHALL start with '+', got: {phone}"
         );
-        // US format: +1-XXX-XXX-XXXX  (total separators = 3 dashes)
-        assert_eq!(
-            phone.matches('-').count(),
-            3,
-            "US phone should have 3 dashes, got: {phone}"
+        assert!(
+            phone.len() > 5,
+            "default phone SHALL be a plausible length, got: {phone}"
         );
     }
 
@@ -640,22 +611,22 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // 13. Unknown country falls back gracefully
+    // 13. Unknown country falls back to random geo data
     // -----------------------------------------------------------------------
     #[test]
     fn unknown_country_falls_back() {
         let mut rng = seeded_rng();
         let p = params(&[("country", "XX")]);
 
-        // Phone falls back to US style.
+        // Phone falls back to a random geo country.
         let phone = generate_phone(&p, &mut rng).expect("should generate");
         let phone_str = phone.as_str().expect("should be string");
         assert!(
-            phone_str.starts_with("+1-"),
-            "unknown country phone should fall back to US, got: {phone_str}"
+            phone_str.starts_with('+'),
+            "unknown country phone SHALL fall back to geo data, got: {phone_str}"
         );
 
-        // City falls back to all loaded data (JP + GB).
+        // City falls back to all loaded data.
         let mut rng = seeded_rng();
         let city = generate_city(&p, &mut rng).expect("should generate");
         let city_str = city.as_str().expect("should be string");
@@ -667,7 +638,7 @@ mod tests {
         let pc_str = pc.as_str().expect("should be string");
         assert!(!pc_str.is_empty(), "fallback postcode should not be empty");
 
-        // Street falls back to US-style.
+        // Street falls back to a random geo country.
         let mut rng = seeded_rng();
         let st = generate_street(&p, &mut rng).expect("should generate");
         let st_str = st.as_str().expect("should be string");

@@ -93,23 +93,19 @@ pub(crate) fn generate_person(
 }
 
 /// Generate a phone number. Uses geo data phone_formats when available.
+/// When no country is specified (or the country has no formats), a random
+/// country from the geo database is chosen.
 pub(crate) fn generate_phone(country: Option<&str>, rng: &mut impl Rng) -> String {
     let geo = country.and_then(|c| geo_database().get(c));
 
-    match geo {
-        Some(g) if !g.country.phone_formats.is_empty() => {
-            let fmt_idx = rng.gen_range(0..g.country.phone_formats.len());
-            let fmt = &g.country.phone_formats[fmt_idx];
-            expand_phone_format(fmt, rng)
-        }
-        _ => {
-            // Default US-style phone
-            let area: u32 = rng.gen_range(200..999);
-            let exchange: u32 = rng.gen_range(200..999);
-            let subscriber: u32 = rng.gen_range(1000..9999);
-            format!("+1-{area}-{exchange}-{subscriber}")
-        }
-    }
+    let geo = match geo {
+        Some(g) if !g.country.phone_formats.is_empty() => g,
+        _ => geo_database().random(rng),
+    };
+
+    let fmt_idx = rng.gen_range(0..geo.country.phone_formats.len());
+    let fmt = &geo.country.phone_formats[fmt_idx];
+    expand_phone_format(fmt, rng)
 }
 
 /// Replace '#' characters in a phone format with random digits.
@@ -276,15 +272,19 @@ mod tests {
         );
     }
 
-    // 16. Default person phone is US-style
+    // 16. Default person phone uses a random geo country (not hardcoded US)
     #[test]
-    fn person_default_phone_us_style() {
+    fn person_default_phone_uses_geo_data() {
         let mut rng = seeded_rng();
         let result = generate_structured(&def("person"), &mut rng).expect("should generate");
         let phone = field(&result, "phone");
         assert!(
-            phone.starts_with("+1-"),
-            "Default phone should start with +1-, got: {phone}"
+            phone.starts_with('+'),
+            "Default phone SHALL start with '+', got: {phone}"
+        );
+        assert!(
+            phone.len() > 5,
+            "Default phone SHALL be a plausible length, got: {phone}"
         );
     }
 

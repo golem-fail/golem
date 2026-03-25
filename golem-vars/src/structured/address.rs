@@ -102,63 +102,10 @@ pub(crate) fn expand_street_pattern(
     format!("{num} {street_en}")
 }
 
+/// Generate an address by picking a random country from the geo database.
 pub(crate) fn generate_default_address(rng: &mut impl Rng) -> Result<VarValue> {
-    const STREETS: &[&str] = &[
-        "Main Street",
-        "Oak Avenue",
-        "Elm Drive",
-        "Maple Lane",
-        "Cedar Boulevard",
-        "Pine Road",
-        "Birch Way",
-        "Walnut Court",
-        "Willow Place",
-        "Spruce Terrace",
-    ];
-    const CITIES: &[&str] = &[
-        "Springfield",
-        "Riverside",
-        "Fairview",
-        "Madison",
-        "Georgetown",
-        "Clinton",
-        "Salem",
-        "Franklin",
-        "Arlington",
-        "Chester",
-    ];
-    const STATES: &[&str] = &[
-        "California",
-        "Texas",
-        "New York",
-        "Florida",
-        "Illinois",
-        "Pennsylvania",
-        "Ohio",
-        "Georgia",
-        "Michigan",
-        "Virginia",
-    ];
-
-    let street_num: u32 = rng.gen_range(1..9999);
-    let street_name = STREETS[rng.gen_range(0..STREETS.len())];
-    let city = CITIES[rng.gen_range(0..CITIES.len())];
-    let state = STATES[rng.gen_range(0..STATES.len())];
-    let zip: u32 = rng.gen_range(10000..99999);
-
-    let map: Vec<(&str, VarValue)> = vec![
-        (
-            "street",
-            VarValue::string(format!("{street_num} {street_name}")),
-        ),
-        ("city", VarValue::string(city)),
-        ("state", VarValue::string(state)),
-        ("postcode", VarValue::string(format!("{zip}"))),
-        ("country", VarValue::string("United States")),
-        ("country_code", VarValue::string("US")),
-    ];
-
-    Ok(VarValue::object(map))
+    let geo = geo_database().random(rng);
+    generate_address_from_geo(geo, rng)
 }
 
 // ===========================================================================
@@ -288,15 +235,17 @@ mod tests {
         assert_eq!(addr1, addr2, "same seed should produce same address");
     }
 
-    // 18. Default address returns US data
+    // 18. Default address picks a random geo country (not hardcoded US)
     #[test]
-    fn default_address_returns_us() {
+    fn default_address_uses_random_geo_country() {
         let mut rng = seeded_rng();
         let result = generate_structured(&def("address"), &mut rng).expect("should generate");
-        let country = field(&result, "country");
         let country_code = field(&result, "country_code");
-        assert_eq!(country, "United States");
-        assert_eq!(country_code, "US");
+        let loaded_codes = crate::geo_loader::geo_database().countries();
+        assert!(
+            loaded_codes.contains(&country_code.as_str()),
+            "Default address country_code SHALL be from geo database, got: {country_code}"
+        );
     }
 
     // 20. Address with country=KR returns Korean data (Issue 9)
