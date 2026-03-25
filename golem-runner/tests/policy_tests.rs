@@ -82,8 +82,8 @@ fn hierarchy_with_texts(texts: &[&str]) -> Element {
 }
 
 fn assert_success(result: &FlowResult) {
-    assert!(result.success, "flow should succeed");
-    assert!(result.failed_step.is_none(), "no step should have failed");
+    assert!(result.success, "flow SHALL succeed");
+    assert!(result.failed_step.is_none(), "no step SHALL have failed");
     assert!(
         result.failed_block.is_none(),
         "no block should have failed"
@@ -120,8 +120,8 @@ steps = [
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
-    assert!(!result.success, "flow should fail with on_fail=error");
-    assert_eq!(result.failed_step, Some(1), "second step should be the failure");
+    assert!(!result.success, "flow SHALL fail with on_fail=error");
+    assert_eq!(result.failed_step, Some(1), "second step SHALL be the failure");
     assert_eq!(
         result.failed_block,
         Some("failing_block".to_string()),
@@ -164,7 +164,7 @@ steps = [
         .expect("execute_flow should not error");
 
     assert_success(&result);
-    assert_eq!(result.warnings.len(), 1, "should collect one warning");
+    assert_eq!(result.warnings.len(), 1, "SHALL collect one warning");
     assert!(
         !result.warnings[0].is_empty(),
         "warning message should contain error details"
@@ -211,7 +211,7 @@ steps = [
 
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
-    assert_eq!(screenshot_count, 2, "both screenshots should execute around ignored step");
+    assert_eq!(screenshot_count, 2, "both screenshots SHALL execute around ignored step");
 }
 
 // ---------------------------------------------------------------------------
@@ -241,8 +241,8 @@ steps = [
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
-    assert!(!result.success, "flow should fail on the error step");
-    assert_eq!(result.failed_step, Some(2), "third step (error) should fail");
+    assert!(!result.success, "flow SHALL fail on the error step");
+    assert_eq!(result.failed_step, Some(2), "third step (error) SHALL fail");
     // The warning from the first step should still be collected
     assert_eq!(
         result.warnings.len(),
@@ -361,7 +361,7 @@ steps = [
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
-    assert!(!result.success, "should fail after retries exhausted");
+    assert!(!result.success, "SHALL fail after retries exhausted");
     assert_eq!(result.failed_step, Some(0));
 
     let calls = driver.get_calls();
@@ -466,13 +466,13 @@ fn build_screenshot_path_generates_correct_filename() {
 fn capture_config_defaults_correct() {
     let config = CaptureConfig::default();
 
-    assert!(config.screenshot_on_failure, "screenshot_on_failure should default to true");
+    assert!(config.screenshot_on_failure, "screenshot_on_failure SHALL default to true");
     assert_eq!(
         config.screenshot_dir,
         PathBuf::from(".golem/screenshots"),
         "default screenshot dir"
     );
-    assert!(!config.record, "record should default to false");
+    assert!(!config.record, "record SHALL default to false");
     assert_eq!(
         config.recording_dir,
         PathBuf::from(".golem/recordings"),
@@ -789,7 +789,7 @@ steps = [
 
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
-    assert_eq!(screenshot_count, 1, "screenshot should still run after ignored retry failure");
+    assert_eq!(screenshot_count, 1, "screenshot SHALL still run after ignored retry failure");
 }
 
 // ---------------------------------------------------------------------------
@@ -825,7 +825,7 @@ steps = [
 
     let calls = driver.get_calls();
     let tap_count = calls.iter().filter(|c| c.0 == "tap").count();
-    assert_eq!(tap_count, 1, "successful step should not retry");
+    assert_eq!(tap_count, 1, "successful step SHALL NOT retry");
 }
 
 // ---------------------------------------------------------------------------
@@ -848,7 +848,7 @@ async fn capture_failure_screenshot_writes_to_disk() {
         .await
         .expect("capture should succeed");
 
-    assert!(path.exists(), "screenshot file should exist on disk");
+    assert!(path.exists(), "screenshot file SHALL exist on disk");
 
     let filename = path
         .file_name()
@@ -862,7 +862,7 @@ async fn capture_failure_screenshot_writes_to_disk() {
 
     // Verify PNG magic bytes were written
     let data = std::fs::read(&path).expect("should read file");
-    assert_eq!(&data[..4], &[0x89, 0x50, 0x4E, 0x47], "should contain PNG magic bytes");
+    assert_eq!(&data[..4], &[0x89, 0x50, 0x4E, 0x47], "SHALL contain PNG magic bytes");
 }
 
 // ---------------------------------------------------------------------------
@@ -881,7 +881,7 @@ async fn capture_failure_screenshot_disabled_returns_error() {
     let result =
         capture_failure_screenshot(&driver, &config, "flow", "block", 0, "error").await;
 
-    assert!(result.is_err(), "should error when screenshot disabled");
+    assert!(result.is_err(), "SHALL error when screenshot disabled");
     let err_msg = result.expect_err("should be error").to_string();
     assert!(
         err_msg.contains("disabled"),

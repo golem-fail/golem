@@ -217,10 +217,10 @@ mod tests {
     fn step_success_shows_check_and_timing() {
         let step = success_step("tap", "Sign Up", 45);
         let out = format_step(&step);
-        assert!(out.contains(SYM_SUCCESS), "should contain ✓");
-        assert!(out.contains("[45ms]"), "should contain timing");
-        assert!(out.contains("tap"), "should contain action");
-        assert!(out.contains("\"Sign Up\""), "should contain target");
+        assert!(out.contains(SYM_SUCCESS), "SHALL contain ✓");
+        assert!(out.contains("[45ms]"), "SHALL contain timing");
+        assert!(out.contains("tap"), "SHALL contain action");
+        assert!(out.contains("\"Sign Up\""), "SHALL contain target");
     }
 
     // 2. format_step failed shows ✗ with error message ---------------
@@ -229,9 +229,9 @@ mod tests {
     fn step_failed_shows_cross_and_message() {
         let step = failed_step("assert_visible", "Welcome", 10012, "timed out");
         let out = format_step(&step);
-        assert!(out.contains(SYM_FAILED), "should contain ✗");
-        assert!(out.contains("[10.0s]"), "should format as seconds");
-        assert!(out.contains("(timed out)"), "should contain error message");
+        assert!(out.contains(SYM_FAILED), "SHALL contain ✗");
+        assert!(out.contains("[10.0s]"), "SHALL format as seconds");
+        assert!(out.contains("(timed out)"), "SHALL contain error message");
     }
 
     // 3. format_step warning shows ⚠ with message --------------------
@@ -240,8 +240,8 @@ mod tests {
     fn step_warning_shows_symbol_and_message() {
         let step = warning_step("assert_visible", "Promo", 15, "warning: element not found");
         let out = format_step(&step);
-        assert!(out.contains(SYM_WARNING), "should contain ⚠");
-        assert!(out.contains("[15ms]"), "should contain timing");
+        assert!(out.contains(SYM_WARNING), "SHALL contain ⚠");
+        assert!(out.contains("[15ms]"), "SHALL contain timing");
         assert!(
             out.contains("(warning: element not found)"),
             "should contain warning"
@@ -271,8 +271,8 @@ mod tests {
         let lines: Vec<&str> = out.lines().collect();
 
         // Header line
-        assert!(lines[0].contains("login_flow"), "first line should name the flow");
-        assert!(lines[0].contains(SYM_FLOW), "first line should have ▶");
+        assert!(lines[0].contains("login_flow"), "first line SHALL name the flow");
+        assert!(lines[0].contains(SYM_FLOW), "first line SHALL have ▶");
 
         // Steps appear in order: launch before tap before type
         let launch_pos = out.find("launch").expect("should contain launch");
@@ -303,8 +303,8 @@ mod tests {
         };
 
         let out = format_flow(&report);
-        assert!(out.contains("FAILED"), "should say FAILED");
-        assert!(out.contains("Seed: 847291036"), "should show seed");
+        assert!(out.contains("FAILED"), "SHALL say FAILED");
+        assert!(out.contains("Seed: 847291036"), "SHALL show seed");
         assert!(
             out.contains("Screenshot: .golem/screenshots/login_flow_main_step5_error.png"),
             "should show screenshot path"
@@ -335,9 +335,9 @@ mod tests {
 
         let out = format_flow(&report);
         // Should include counts
-        assert!(out.contains("4 passed"), "should count 4 passed");
-        assert!(out.contains("1 warning"), "should count 1 warning");
-        assert!(out.contains("1 failed"), "should count 1 failed");
+        assert!(out.contains("4 passed"), "SHALL count 4 passed");
+        assert!(out.contains("1 warning"), "SHALL count 1 warning");
+        assert!(out.contains("1 failed"), "SHALL count 1 failed");
     }
 
     // 7. format_suite shows aggregate counts --------------------------
@@ -401,7 +401,7 @@ mod tests {
         };
 
         let out = format_suite(&suite);
-        assert!(out.contains("[45.3s]"), "should show total duration");
+        assert!(out.contains("[45.3s]"), "SHALL show total duration");
     }
 
     // 9. format_step skipped shows appropriate indicator ---------------
@@ -410,8 +410,8 @@ mod tests {
     fn step_skipped_shows_indicator() {
         let step = skipped_step("tap", "Cancel");
         let out = format_step(&step);
-        assert!(out.contains(SYM_SKIPPED), "should contain − symbol");
-        assert!(out.contains("(skipped)"), "should say skipped");
+        assert!(out.contains(SYM_SKIPPED), "SHALL contain − symbol");
+        assert!(out.contains("(skipped)"), "SHALL say skipped");
         assert!(out.contains("[0ms]"), "skipped steps show 0ms");
     }
 
@@ -431,10 +431,10 @@ mod tests {
         };
 
         let out = format_flow(&report);
-        assert!(out.contains("empty_flow"), "should contain flow name");
-        assert!(out.contains(SYM_FLOW), "should have flow symbol");
-        assert!(out.contains("PASSED"), "should say PASSED");
-        assert!(out.contains("[0ms]"), "should show 0ms duration");
+        assert!(out.contains("empty_flow"), "SHALL contain flow name");
+        assert!(out.contains(SYM_FLOW), "SHALL have flow symbol");
+        assert!(out.contains("PASSED"), "SHALL say PASSED");
+        assert!(out.contains("[0ms]"), "SHALL show 0ms duration");
         // No seed or screenshot lines
         assert!(!out.contains("Seed:"), "no seed line");
         assert!(!out.contains("Screenshot:"), "no screenshot line");

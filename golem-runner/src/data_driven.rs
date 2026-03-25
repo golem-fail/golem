@@ -179,7 +179,7 @@ mod tests {
 
         let runs = expand_data_rows(&data);
         for (i, run) in runs.iter().enumerate() {
-            assert_eq!(run.index, i, "run at position {i} should have index {i}");
+            assert_eq!(run.index, i, "run at position {i} SHALL have index {i}");
         }
     }
 

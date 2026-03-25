@@ -210,8 +210,8 @@ mod tests {
     #[test]
     fn geo_database_countries_contains_jp_and_gb() {
         let codes = geo_database().countries();
-        assert!(codes.contains(&"JP"), "countries should include JP");
-        assert!(codes.contains(&"GB"), "countries should include GB");
+        assert!(codes.contains(&"JP"), "countries SHALL include JP");
+        assert!(codes.contains(&"GB"), "countries SHALL include GB");
     }
 
     // 6. JP has non-empty states
@@ -280,8 +280,8 @@ mod tests {
     #[test]
     fn geo_database_case_insensitive_lookup() {
         let db = geo_database();
-        assert!(db.get("jp").is_some(), "lowercase 'jp' should resolve");
-        assert!(db.get("Gb").is_some(), "mixed-case 'Gb' should resolve");
+        assert!(db.get("jp").is_some(), "lowercase 'jp' SHALL resolve");
+        assert!(db.get("Gb").is_some(), "mixed-case 'Gb' SHALL resolve");
     }
 
     // 12. JP has cities with postcodes

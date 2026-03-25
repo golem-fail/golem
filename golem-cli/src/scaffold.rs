@@ -116,7 +116,7 @@ mod tests {
         init_project(tmp.path()).expect("init");
 
         let config_path = tmp.path().join("golem.toml");
-        assert!(config_path.exists(), "golem.toml should exist");
+        assert!(config_path.exists(), "golem.toml SHALL exist");
 
         let content = fs::read_to_string(&config_path).expect("read golem.toml");
         assert!(content.contains("[options]"));
@@ -154,7 +154,7 @@ mod tests {
         init_project(tmp.path()).expect("init");
 
         let content = fs::read_to_string(&config_path).expect("read golem.toml");
-        assert_eq!(content, custom_content, "golem.toml should not be overwritten");
+        assert_eq!(content, custom_content, "golem.toml SHALL NOT be overwritten");
     }
 
     // ---------------------------------------------------------------
@@ -187,7 +187,7 @@ mod tests {
         let tmp = TempDir::new().expect("tempdir");
         let path = create_flow("login", tmp.path()).expect("create");
 
-        assert!(path.exists(), "flow file should exist");
+        assert!(path.exists(), "flow file SHALL exist");
         assert!(
             path.file_name()
                 .and_then(|n| n.to_str())
@@ -243,7 +243,7 @@ mod tests {
         create_flow("duplicate", tmp.path()).expect("first create");
         let result = create_flow("duplicate", tmp.path());
 
-        assert!(result.is_err(), "should error on duplicate");
+        assert!(result.is_err(), "SHALL error on duplicate");
         let err_msg = format!("{}", result.expect_err("expected error"));
         assert!(
             err_msg.contains("already exists"),
@@ -290,10 +290,10 @@ mod tests {
         let path = create_flow("full_check", tmp.path()).expect("create");
 
         let content = fs::read_to_string(&path).expect("read flow file");
-        assert!(content.contains("[flow]"), "should contain [flow] section");
-        assert!(content.contains("[[flow.apps]]"), "should contain [[flow.apps]]");
-        assert!(content.contains("[[block]]"), "should contain [[block]]");
-        assert!(content.contains("action = \"launch\""), "should contain launch action");
+        assert!(content.contains("[flow]"), "SHALL contain [flow] section");
+        assert!(content.contains("[[flow.apps]]"), "SHALL contain [[flow.apps]]");
+        assert!(content.contains("[[block]]"), "SHALL contain [[block]]");
+        assert!(content.contains("action = \"launch\""), "SHALL contain launch action");
     }
 
     // ---------------------------------------------------------------

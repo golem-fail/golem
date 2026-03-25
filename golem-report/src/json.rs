@@ -246,7 +246,7 @@ mod tests {
         let report = sample_flow();
         let json_str = format_flow_json(&report).expect("serialization should succeed");
         let parsed: Value = serde_json::from_str(&json_str).expect("should be valid JSON");
-        assert!(parsed.is_object(), "top-level value should be an object");
+        assert!(parsed.is_object(), "top-level value SHALL be an object");
     }
 
     // 2. JSON contains all flow fields --------------------------------
@@ -404,14 +404,14 @@ mod tests {
         let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
 
         // Optional fields should not appear at all
-        assert!(v.get("seed").is_none(), "seed should be absent");
-        assert!(v.get("screenshot").is_none(), "screenshot should be absent");
-        assert!(v.get("device").is_none(), "device should be absent");
+        assert!(v.get("seed").is_none(), "seed SHALL be absent");
+        assert!(v.get("screenshot").is_none(), "screenshot SHALL be absent");
+        assert!(v.get("device").is_none(), "device SHALL be absent");
 
         // Step-level optional fields
         let step = &v["steps"][0];
-        assert!(step.get("error").is_none(), "error should be absent");
-        assert!(step.get("warning").is_none(), "warning should be absent");
+        assert!(step.get("error").is_none(), "error SHALL be absent");
+        assert!(step.get("warning").is_none(), "warning SHALL be absent");
     }
 
     // 11. Skipped step has correct outcome ----------------------------

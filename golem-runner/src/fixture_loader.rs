@@ -127,13 +127,13 @@ mod tests {
             .get("email")
             .and_then(|v| v.as_str())
             .expect("email should be a string");
-        assert!(email.contains('@'), "email should contain @, got: {email}");
+        assert!(email.contains('@'), "email SHALL contain @, got: {email}");
 
         let first = obj
             .get("first")
             .and_then(|v| v.as_str())
             .expect("first should be a string");
-        assert!(!first.is_empty(), "first name should not be empty");
+        assert!(!first.is_empty(), "first name SHALL NOT be empty");
     }
 
     // ---------------------------------------------------------------
@@ -184,7 +184,7 @@ mod tests {
 
         let result =
             load_fixture_into_store("nonexistent", "user", dir, dir, &mut store, &mut rng);
-        assert!(result.is_err(), "should error when fixture not found");
+        assert!(result.is_err(), "SHALL error when fixture not found");
         let err_msg = format!("{}", result.expect_err("should be an error"));
         assert!(
             err_msg.contains("not found"),
@@ -283,7 +283,7 @@ mod tests {
 
         let data = store.resolve("data").expect("data should exist");
         let obj = data.as_object().expect("data should be an object");
-        assert!(obj.is_empty(), "empty fixture should produce empty object");
+        assert!(obj.is_empty(), "empty fixture SHALL produce empty object");
     }
 
     // ---------------------------------------------------------------
@@ -300,6 +300,6 @@ mod tests {
 
         let result =
             load_fixture_into_store("broken", "data", dir, dir, &mut store, &mut rng);
-        assert!(result.is_err(), "should error on invalid TOML");
+        assert!(result.is_err(), "SHALL error on invalid TOML");
     }
 }

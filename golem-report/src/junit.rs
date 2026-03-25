@@ -258,8 +258,8 @@ mod tests {
             xml.starts_with("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"),
             "should start with XML declaration"
         );
-        assert!(xml.contains("<testsuites"), "should contain <testsuites>");
-        assert!(xml.contains("</testsuites>"), "should contain closing </testsuites>");
+        assert!(xml.contains("<testsuites"), "SHALL contain <testsuites>");
+        assert!(xml.contains("</testsuites>"), "SHALL contain closing </testsuites>");
     }
 
     // 2. Flow maps to testsuite with correct attributes ---------------
@@ -268,7 +268,7 @@ mod tests {
     fn flow_maps_to_testsuite_element() {
         let flow = sample_flow();
         let xml = format_flow_junit(&flow);
-        assert!(xml.contains("<testsuite"), "should contain <testsuite>");
+        assert!(xml.contains("<testsuite"), "SHALL contain <testsuite>");
         assert!(
             xml.contains("name=\"login_flow\""),
             "should have name attribute"

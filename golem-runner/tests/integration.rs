@@ -89,8 +89,8 @@ fn empty_hierarchy() -> Element {
 
 /// Assert that a FlowResult indicates success with no warnings.
 fn assert_success(result: &FlowResult) {
-    assert!(result.success, "flow should succeed");
-    assert!(result.failed_step.is_none(), "no step should have failed");
+    assert!(result.success, "flow SHALL succeed");
+    assert!(result.failed_step.is_none(), "no step SHALL have failed");
     assert!(
         result.failed_block.is_none(),
         "no block should have failed"
@@ -142,7 +142,7 @@ steps = [
     // Verify all 3 blocks executed (each has one screenshot step)
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
-    assert_eq!(screenshot_count, 3, "all 3 blocks should have executed");
+    assert_eq!(screenshot_count, 3, "all 3 blocks SHALL have executed");
 }
 
 // ---------------------------------------------------------------------------
@@ -292,7 +292,7 @@ steps = [
     // Verify tap was called
     let calls = driver.get_calls();
     let tap_calls: Vec<_> = calls.iter().filter(|c| c.0 == "tap").collect();
-    assert_eq!(tap_calls.len(), 1, "one tap should have been executed");
+    assert_eq!(tap_calls.len(), 1, "one tap SHALL have been executed");
 
     // Verify the variable is in the store
     let btn_val = vars.get("btn_text").expect("btn_text should be in store");
@@ -450,7 +450,7 @@ steps = [
         .await
         .expect("execute_flow should return Ok(FlowResult), not Err");
 
-    assert!(!flow_result.success, "flow should have failed");
+    assert!(!flow_result.success, "flow SHALL have failed");
     assert_eq!(flow_result.failed_step, Some(0));
     assert_eq!(
         flow_result.failed_block,
@@ -502,7 +502,7 @@ steps = [
         .await
         .expect("execute_flow should not error");
 
-    assert!(result.success, "flow should succeed despite warning");
+    assert!(result.success, "flow SHALL succeed despite warning");
     assert_eq!(
         result.warnings.len(),
         1,
@@ -549,7 +549,7 @@ steps = [
         .await
         .expect("execute_flow should not error");
 
-    assert!(result.success, "flow should succeed");
+    assert!(result.success, "flow SHALL succeed");
     assert!(
         result.warnings.is_empty(),
         "ignored steps should not produce warnings"
@@ -646,7 +646,7 @@ steps = [
 
     let calls = driver.get_calls();
     let tap_calls: Vec<_> = calls.iter().filter(|c| c.0 == "tap").collect();
-    assert_eq!(tap_calls.len(), 2, "two taps should have been executed");
+    assert_eq!(tap_calls.len(), 2, "two taps SHALL have been executed");
 }
 
 // ---------------------------------------------------------------------------
@@ -681,7 +681,7 @@ steps = [
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
-    assert!(!result.success, "flow should have failed");
+    assert!(!result.success, "flow SHALL have failed");
     assert_eq!(
         result.failed_block,
         Some("block_b".to_string()),
@@ -726,7 +726,7 @@ steps = [
         .await
         .expect("execute_flow should not error");
 
-    assert!(result.success, "flow should succeed despite warnings");
+    assert!(result.success, "flow SHALL succeed despite warnings");
     assert_eq!(
         result.warnings.len(),
         3,
@@ -877,7 +877,7 @@ async fn test_invalid_toml_fails_to_parse() {
 this is not valid toml {{{
 "#;
     let result = parse_flow(toml);
-    assert!(result.is_err(), "invalid TOML should fail to parse");
+    assert!(result.is_err(), "invalid TOML SHALL fail to parse");
 }
 
 // ---------------------------------------------------------------------------

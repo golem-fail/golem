@@ -256,20 +256,20 @@ mod tests {
         let suite = sample_suite();
 
         let human = render(&suite, &OutputFormat::Human).expect("human render");
-        assert!(!human.is_empty(), "human output should not be empty");
-        assert!(human.contains("login_flow"), "human should contain flow name");
+        assert!(!human.is_empty(), "human output SHALL NOT be empty");
+        assert!(human.contains("login_flow"), "human SHALL contain flow name");
 
         let json = render(&suite, &OutputFormat::Json).expect("json render");
-        assert!(!json.is_empty(), "json output should not be empty");
-        assert!(json.contains("login_flow"), "json should contain flow name");
+        assert!(!json.is_empty(), "json output SHALL NOT be empty");
+        assert!(json.contains("login_flow"), "json SHALL contain flow name");
 
         let junit = render(&suite, &OutputFormat::Junit).expect("junit render");
-        assert!(!junit.is_empty(), "junit output should not be empty");
-        assert!(junit.contains("login_flow"), "junit should contain flow name");
+        assert!(!junit.is_empty(), "junit output SHALL NOT be empty");
+        assert!(junit.contains("login_flow"), "junit SHALL contain flow name");
 
         let toon = render(&suite, &OutputFormat::Toon).expect("toon render");
-        assert!(!toon.is_empty(), "toon output should not be empty");
-        assert!(toon.contains("login_flow"), "toon should contain flow name");
+        assert!(!toon.is_empty(), "toon output SHALL NOT be empty");
+        assert!(toon.contains("login_flow"), "toon SHALL contain flow name");
     }
 
     // 7. write_outputs creates files on disk (temp dir) ---------------
@@ -313,10 +313,10 @@ mod tests {
 
         let (written, _) = write_outputs(&suite, &targets).expect("should write");
         assert_eq!(written.len(), 1);
-        assert!(nested_path.exists(), "file should exist at nested path");
+        assert!(nested_path.exists(), "file SHALL exist at nested path");
 
         let content = fs::read_to_string(&nested_path).expect("should read file");
-        assert!(content.contains("<?xml"), "should be valid XML");
+        assert!(content.contains("<?xml"), "SHALL be valid XML");
     }
 
     // 9. default_outputs returns human to stdout ----------------------
@@ -356,12 +356,12 @@ mod tests {
         let (written, stdout) = write_outputs(&suite, &targets).expect("should write");
 
         // Two files written
-        assert_eq!(written.len(), 2, "should write two files");
+        assert_eq!(written.len(), 2, "SHALL write two files");
         assert!(written.iter().any(|p| p.contains("report.json")));
         assert!(written.iter().any(|p| p.contains("results.xml")));
 
         // One stdout target
-        assert_eq!(stdout.len(), 1, "should have one stdout output");
+        assert_eq!(stdout.len(), 1, "SHALL have one stdout output");
         assert!(
             stdout[0].contains("login_flow"),
             "stdout should contain human output"
@@ -406,7 +406,7 @@ mod tests {
         ];
 
         let (written, stdout) = write_outputs(&suite, &targets).expect("should write");
-        assert!(written.is_empty(), "no files should be written");
-        assert_eq!(stdout.len(), 2, "should have two stdout outputs");
+        assert!(written.is_empty(), "no files SHALL be written");
+        assert_eq!(stdout.len(), 2, "SHALL have two stdout outputs");
     }
 }

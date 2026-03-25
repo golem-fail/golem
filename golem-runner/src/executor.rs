@@ -519,7 +519,7 @@ mod tests {
         assert!(result.success);
         let calls = driver.get_calls();
         let screenshot_calls: Vec<_> = calls.iter().filter(|c| c.0 == "screenshot").collect();
-        assert_eq!(screenshot_calls.len(), 2, "both blocks should execute");
+        assert_eq!(screenshot_calls.len(), 2, "both blocks SHALL execute");
     }
 
     // ---------------------------------------------------------------
@@ -582,7 +582,7 @@ mod tests {
         // check + dashboard = 2 screenshots; "login" should be skipped
         let calls = driver.get_calls();
         let screenshot_calls: Vec<_> = calls.iter().filter(|c| c.0 == "screenshot").collect();
-        assert_eq!(screenshot_calls.len(), 2, "login block should be skipped");
+        assert_eq!(screenshot_calls.len(), 2, "login block SHALL be skipped");
     }
 
     // ---------------------------------------------------------------
@@ -706,8 +706,8 @@ mod tests {
             .await
             .expect("execute_flow should not error");
 
-        assert!(result.success, "flow should succeed despite warning");
-        assert_eq!(result.warnings.len(), 1, "should have collected one warning");
+        assert!(result.success, "flow SHALL succeed despite warning");
+        assert_eq!(result.warnings.len(), 1, "SHALL have collected one warning");
         assert!(
             !result.warnings[0].is_empty(),
             "warning message should not be empty"
@@ -731,7 +731,7 @@ mod tests {
             .await
             .expect("execute_flow should not error");
 
-        assert!(result.success, "flow should succeed");
+        assert!(result.success, "flow SHALL succeed");
         assert!(
             result.warnings.is_empty(),
             "ignored steps should not produce warnings"
@@ -919,7 +919,7 @@ mod tests {
         let calls = driver.get_calls();
         let screenshot_calls: Vec<_> = calls.iter().filter(|c| c.0 == "screenshot").collect();
         // start + end = 2 (skipped is bypassed), then end falls through past index 2
-        assert_eq!(screenshot_calls.len(), 2, "default branch should jump to end");
+        assert_eq!(screenshot_calls.len(), 2, "default branch SHALL jump to end");
     }
 
     // ---------------------------------------------------------------

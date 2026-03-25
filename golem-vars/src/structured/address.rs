@@ -293,7 +293,7 @@ mod tests {
 
         let addr1 = generate_structured(&def("address"), &mut rng1).expect("should generate");
         let addr2 = generate_structured(&def("address"), &mut rng2).expect("should generate");
-        assert_eq!(addr1, addr2, "same seed should produce same address");
+        assert_eq!(addr1, addr2, "same seed SHALL produce same address");
     }
 
     // 18. Default address picks a random geo country (not hardcoded US)

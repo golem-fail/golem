@@ -357,7 +357,7 @@ mod tests {
         })
         .await;
 
-        assert!(result.is_err(), "default on_fail should propagate as Err");
+        assert!(result.is_err(), "default on_fail SHALL propagate as Err");
     }
 
     // -----------------------------------------------------------------

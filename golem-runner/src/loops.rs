@@ -73,7 +73,7 @@ mod tests {
         let val = tracker
             .enter_block("block_a")
             .expect("should not exceed max iterations");
-        assert_eq!(val, 0, "first entry should return _loop = 0");
+        assert_eq!(val, 0, "first entry SHALL return _loop = 0");
     }
 
     // ---------------------------------------------------------------
@@ -88,7 +88,7 @@ mod tests {
         let val = tracker
             .enter_block("block_a")
             .expect("second entry should succeed");
-        assert_eq!(val, 1, "second entry should return _loop = 1");
+        assert_eq!(val, 1, "second entry SHALL return _loop = 1");
     }
 
     // ---------------------------------------------------------------
@@ -126,13 +126,13 @@ mod tests {
         let val_b = tracker
             .enter_block("block_b")
             .expect("should not exceed max iterations");
-        assert_eq!(val_b, 0, "block_b should start at 0 independently");
+        assert_eq!(val_b, 0, "block_b SHALL start at 0 independently");
 
         // block_a should continue from 3
         let val_a = tracker
             .enter_block("block_a")
             .expect("should not exceed max iterations");
-        assert_eq!(val_a, 3, "block_a should continue its own counter at 3");
+        assert_eq!(val_a, 3, "block_a SHALL continue its own counter at 3");
     }
 
     // ---------------------------------------------------------------
@@ -147,7 +147,7 @@ mod tests {
         tracker.enter_block("a").expect("entry 3 should succeed");
 
         let result = tracker.enter_block("a");
-        assert!(result.is_err(), "fourth entry should exceed max_iterations=3");
+        assert!(result.is_err(), "fourth entry SHALL exceed max_iterations=3");
 
         let err_msg = result.expect_err("should be error").to_string();
         assert!(
@@ -250,7 +250,7 @@ mod tests {
         let val = tracker
             .enter_block("block_a")
             .expect("should not exceed max iterations");
-        assert_eq!(val, 0, "after reset, first entry should return _loop = 0");
+        assert_eq!(val, 0, "after reset, first entry SHALL return _loop = 0");
     }
 
     // ---------------------------------------------------------------

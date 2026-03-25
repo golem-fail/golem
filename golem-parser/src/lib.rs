@@ -617,7 +617,7 @@ name = "orphan"
 action = "tap"
 "#;
         let result = parse_flow(toml_str);
-        assert!(result.is_err(), "missing [flow] should produce an error");
+        assert!(result.is_err(), "missing [flow] SHALL produce an error");
     }
 
     // ---------------------------------------------------------------
@@ -633,7 +633,7 @@ name = "bad app"
 name = "no_bundle"
 "#;
         let result = parse_flow(toml_str);
-        assert!(result.is_err(), "missing bundle should produce an error");
+        assert!(result.is_err(), "missing bundle SHALL produce an error");
     }
 
     // ---------------------------------------------------------------

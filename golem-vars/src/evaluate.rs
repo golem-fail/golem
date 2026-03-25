@@ -164,7 +164,7 @@ mod tests {
 
         let email_val = result.get("email").expect("should have email");
         let email_str = email_val.as_str().expect("should be string");
-        assert!(email_str.contains('@'), "should be an email, got: {email_str}");
+        assert!(email_str.contains('@'), "SHALL be an email, got: {email_str}");
     }
 
     // 3. Cross-reference: generator param references prior variable
@@ -246,11 +246,11 @@ mod tests {
         // city2 should be a non-empty string
         let city2 = result.get("city2").expect("should have city2");
         let city_str = city2.as_str().expect("should be string");
-        assert!(!city_str.is_empty(), "city2 should not be empty");
+        assert!(!city_str.is_empty(), "city2 SHALL NOT be empty");
 
         // person should be an object with JP name ordering
         let person = result.get("person").expect("should have person");
-        assert!(person.as_object().is_some(), "person should be an object");
+        assert!(person.as_object().is_some(), "person SHALL be an object");
     }
 
     // 6. Error when referencing undefined variable
@@ -316,10 +316,10 @@ mod tests {
 
         // Generator vars
         let email = result.get("user_email").expect("should have email");
-        assert!(email.as_str().is_some(), "email should be a string");
+        assert!(email.as_str().is_some(), "email SHALL be a string");
 
         let addr = result.get("addr").expect("should have addr");
-        assert!(addr.as_object().is_some(), "addr should be an object");
+        assert!(addr.as_object().is_some(), "addr SHALL be an object");
         assert_eq!(field(addr, "country_code"), "GB");
     }
 
@@ -338,7 +338,7 @@ mod tests {
         let result1 = evaluate_generators(&vars, &mut rng1).expect("should succeed");
         let result2 = evaluate_generators(&vars, &mut rng2).expect("should succeed");
 
-        assert_eq!(result1, result2, "same seed should produce same results");
+        assert_eq!(result1, result2, "same seed SHALL produce same results");
     }
 
     // 10. Empty vars list returns empty map
@@ -347,7 +347,7 @@ mod tests {
         let mut rng = seeded_rng();
         let vars: Vec<(String, String)> = vec![];
         let result = evaluate_generators(&vars, &mut rng).expect("should succeed");
-        assert!(result.is_empty(), "empty input should produce empty output");
+        assert!(result.is_empty(), "empty input SHALL produce empty output");
     }
 
     // 11. Unclosed reference returns error

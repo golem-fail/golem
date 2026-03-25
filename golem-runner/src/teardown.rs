@@ -179,7 +179,7 @@ mod tests {
 
         let calls = driver.get_calls();
         let screenshot_calls: Vec<_> = calls.iter().filter(|c| c.0 == "screenshot").collect();
-        assert_eq!(screenshot_calls.len(), 3, "all 3 teardown steps should run");
+        assert_eq!(screenshot_calls.len(), 3, "all 3 teardown steps SHALL run");
     }
 
     // ---------------------------------------------------------------
@@ -232,7 +232,7 @@ mod tests {
 
         let result = execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
 
-        assert_eq!(result.warnings.len(), 1, "should collect one warning");
+        assert_eq!(result.warnings.len(), 1, "SHALL collect one warning");
         assert!(
             !result.warnings[0].is_empty(),
             "warning message should not be empty"
@@ -389,7 +389,7 @@ mod tests {
         );
         assert!(result.errors.is_empty());
         for w in &result.warnings {
-            assert!(!w.is_empty(), "each warning should have a message");
+            assert!(!w.is_empty(), "each warning SHALL have a message");
         }
     }
 
@@ -425,7 +425,7 @@ mod tests {
         );
         assert!(result.warnings.is_empty());
         for e in &result.errors {
-            assert!(!e.is_empty(), "each error should have a message");
+            assert!(!e.is_empty(), "each error SHALL have a message");
         }
     }
 

@@ -347,7 +347,7 @@ mod tests {
                 .await
                 .expect("capture should succeed");
 
-        assert!(path.exists(), "screenshot file should exist on disk");
+        assert!(path.exists(), "screenshot file SHALL exist on disk");
         let data = std::fs::read(&path).expect("should read file");
         // MockPlatformDriver returns PNG magic bytes
         assert_eq!(&data[..4], &[0x89, 0x50, 0x4E, 0x47]);

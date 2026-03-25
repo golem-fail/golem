@@ -309,13 +309,13 @@ fn fixture_with_generators_evaluates_fake_values() {
         .get("email")
         .and_then(|v| v.as_str())
         .expect("email should be a string");
-    assert!(email.contains('@'), "email should contain @, got: {email}");
+    assert!(email.contains('@'), "email SHALL contain @, got: {email}");
 
     let first = obj
         .get("first")
         .and_then(|v| v.as_str())
         .expect("first should be a string");
-    assert!(!first.is_empty(), "first name should not be empty");
+    assert!(!first.is_empty(), "first name SHALL NOT be empty");
 }
 
 // ---------------------------------------------------------------------------

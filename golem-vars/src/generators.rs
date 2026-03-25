@@ -238,7 +238,7 @@ mod tests {
         let result = generate_simple(&def("email"), &mut rng).expect("should generate");
         let email = result.as_str().expect("should be string");
         assert!(email.ends_with("@example.com"), "got: {email}");
-        assert!(email.len() > "@example.com".len(), "should have local part");
+        assert!(email.len() > "@example.com".len(), "SHALL have local part");
     }
 
     // 2. email with prefix/domain
@@ -248,8 +248,8 @@ mod tests {
         let d = def_with_params("email", &[("prefix", "test"), ("domain", "acme.com")]);
         let result = generate_simple(&d, &mut rng).expect("should generate");
         let email = result.as_str().expect("should be string");
-        assert!(email.starts_with("test"), "should start with prefix, got: {email}");
-        assert!(email.ends_with("@acme.com"), "should end with @acme.com, got: {email}");
+        assert!(email.starts_with("test"), "SHALL start with prefix, got: {email}");
+        assert!(email.ends_with("@acme.com"), "SHALL end with @acme.com, got: {email}");
     }
 
     // 3. email with plus addressing
@@ -259,8 +259,8 @@ mod tests {
         let d = def_with_params("email", &[("prefix", "user+tag")]);
         let result = generate_simple(&d, &mut rng).expect("should generate");
         let email = result.as_str().expect("should be string");
-        assert!(email.starts_with("user+tag"), "should start with user+tag, got: {email}");
-        assert!(email.contains('+'), "should contain +, got: {email}");
+        assert!(email.starts_with("user+tag"), "SHALL start with user+tag, got: {email}");
+        assert!(email.contains('+'), "SHALL contain +, got: {email}");
     }
 
     // 4. first_name returns non-empty string
@@ -288,8 +288,8 @@ mod tests {
         let result = generate_simple(&def("password"), &mut rng).expect("should generate");
         let pw = result.as_str().expect("should be string");
         assert!(pw.len() >= 12, "expected >= 12 chars, got {}", pw.len());
-        assert!(pw.chars().any(|c| c.is_ascii_alphabetic()), "should contain letters");
-        assert!(pw.chars().any(|c| c.is_ascii_digit()), "should contain digits");
+        assert!(pw.chars().any(|c| c.is_ascii_alphabetic()), "SHALL contain letters");
+        assert!(pw.chars().any(|c| c.is_ascii_digit()), "SHALL contain digits");
     }
 
     // 7. password custom length
@@ -322,7 +322,7 @@ mod tests {
         let id = result.as_str().expect("should be string");
         // UUID v4 format: 8-4-4-4-12 hex digits
         let parsed = Uuid::parse_str(id);
-        assert!(parsed.is_ok(), "should parse as UUID, got: {id}");
+        assert!(parsed.is_ok(), "SHALL parse as UUID, got: {id}");
         let parsed = parsed.expect("already checked");
         assert_eq!(
             parsed.get_version(),
@@ -349,7 +349,7 @@ mod tests {
         let result = generate_simple(&def("timestamp"), &mut rng).expect("should generate");
         let ts = result.as_str().expect("should be string");
         let parsed = chrono::DateTime::parse_from_rfc3339(ts);
-        assert!(parsed.is_ok(), "should parse as ISO 8601, got: {ts}");
+        assert!(parsed.is_ok(), "SHALL parse as ISO 8601, got: {ts}");
     }
 
     // 12. sentence — non-empty string
@@ -359,7 +359,7 @@ mod tests {
         let result = generate_simple(&def("sentence"), &mut rng).expect("should generate");
         let s = result.as_str().expect("should be string");
         assert!(!s.is_empty());
-        assert!(s.ends_with('.'), "sentence should end with period, got: {s}");
+        assert!(s.ends_with('.'), "sentence SHALL end with period, got: {s}");
     }
 
     // 13. unknown generator — error
@@ -382,7 +382,7 @@ mod tests {
         let mut rng2 = seeded_rng();
         let email1 = generate_simple(&def("email"), &mut rng1).expect("should generate");
         let email2 = generate_simple(&def("email"), &mut rng2).expect("should generate");
-        assert_eq!(email1, email2, "same seed should produce same output");
+        assert_eq!(email1, email2, "same seed SHALL produce same output");
     }
 
     // 15. Two calls advance RNG (different values)

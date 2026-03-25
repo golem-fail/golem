@@ -213,7 +213,7 @@ mod tests {
             first.to_lowercase(),
             last.to_lowercase()
         );
-        assert_eq!(email, expected_email, "email should derive from name");
+        assert_eq!(email, expected_email, "email SHALL derive from name");
     }
 
     // 10. Deterministic seed produces same output (person portion)
@@ -224,7 +224,7 @@ mod tests {
 
         let person1 = generate_structured(&def("person"), &mut rng1).expect("should generate");
         let person2 = generate_structured(&def("person"), &mut rng2).expect("should generate");
-        assert_eq!(person1, person2, "same seed should produce same person");
+        assert_eq!(person1, person2, "same seed SHALL produce same person");
     }
 
     // 14. Person with country=JP picks from the global name pool

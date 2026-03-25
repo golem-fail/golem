@@ -441,6 +441,6 @@ mod tests {
         );
 
         let result = poller.await_email("*verification*", 200, 50).await;
-        assert!(result.is_err(), "should not match any email");
+        assert!(result.is_err(), "SHALL NOT match any email");
     }
 }

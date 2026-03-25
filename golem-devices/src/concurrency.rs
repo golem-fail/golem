@@ -362,7 +362,7 @@ mod tests {
     #[test]
     fn get_available_ram_mb_returns_positive_value() {
         let mb = get_available_ram_mb().expect("should query system RAM");
-        assert!(mb > 0, "available RAM should be positive, got {mb}");
+        assert!(mb > 0, "available RAM SHALL be positive, got {mb}");
     }
 
     // 15. SystemRamProvider implements RamProvider correctly.
@@ -370,7 +370,7 @@ mod tests {
     fn system_ram_provider_returns_positive_value() {
         let provider = SystemRamProvider;
         let mb = provider.available_ram_mb().expect("should query system RAM");
-        assert!(mb > 0, "available RAM should be positive, got {mb}");
+        assert!(mb > 0, "available RAM SHALL be positive, got {mb}");
     }
 
     // 16. ConcurrencyConfig equality.

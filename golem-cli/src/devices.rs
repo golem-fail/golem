@@ -232,7 +232,7 @@ mod tests {
         let android_pos = output
             .find("Android Emulators:")
             .expect("Android header should exist");
-        assert!(ios_pos < android_pos, "iOS section should precede Android section");
+        assert!(ios_pos < android_pos, "iOS section SHALL precede Android section");
 
         // iPhone should appear under iOS, not under Android
         let iphone_pos = output.find("iPhone 15").expect("iPhone should appear");

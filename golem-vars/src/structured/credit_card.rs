@@ -366,7 +366,7 @@ mod tests {
         let result =
             generate_structured(&def("credit_card"), &mut rng).expect("should generate");
         let expiry = field(&result, "expiry");
-        assert_eq!(expiry.len(), 5, "expiry should be 5 chars (MM/YY)");
+        assert_eq!(expiry.len(), 5, "expiry SHALL be 5 chars (MM/YY)");
         assert_eq!(
             expiry.chars().nth(2),
             Some('/'),
@@ -375,7 +375,7 @@ mod tests {
         let month: u32 = expiry[..2]
             .parse()
             .expect("month part should parse as u32");
-        assert!((1..=12).contains(&month), "month should be 1-12, got {month}");
+        assert!((1..=12).contains(&month), "month SHALL be 1-12, got {month}");
     }
 
     // 24. No-provider card has empty provider and status fields

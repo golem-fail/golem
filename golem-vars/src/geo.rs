@@ -586,28 +586,28 @@ mod tests {
 
         let phone1 = generate_phone(&p_jp, &mut rng1).expect("should generate");
         let phone2 = generate_phone(&p_jp, &mut rng2).expect("should generate");
-        assert_eq!(phone1, phone2, "same seed should produce same phone");
+        assert_eq!(phone1, phone2, "same seed SHALL produce same phone");
 
         let mut rng1 = seeded_rng();
         let mut rng2 = seeded_rng();
 
         let city1 = generate_city(&p_jp, &mut rng1).expect("should generate");
         let city2 = generate_city(&p_jp, &mut rng2).expect("should generate");
-        assert_eq!(city1, city2, "same seed should produce same city");
+        assert_eq!(city1, city2, "same seed SHALL produce same city");
 
         let mut rng1 = seeded_rng();
         let mut rng2 = seeded_rng();
 
         let pc1 = generate_postcode(&p_jp, &mut rng1).expect("should generate");
         let pc2 = generate_postcode(&p_jp, &mut rng2).expect("should generate");
-        assert_eq!(pc1, pc2, "same seed should produce same postcode");
+        assert_eq!(pc1, pc2, "same seed SHALL produce same postcode");
 
         let mut rng1 = seeded_rng();
         let mut rng2 = seeded_rng();
 
         let st1 = generate_street(&p_jp, &mut rng1).expect("should generate");
         let st2 = generate_street(&p_jp, &mut rng2).expect("should generate");
-        assert_eq!(st1, st2, "same seed should produce same street");
+        assert_eq!(st1, st2, "same seed SHALL produce same street");
     }
 
     // -----------------------------------------------------------------------
@@ -630,19 +630,19 @@ mod tests {
         let mut rng = seeded_rng();
         let city = generate_city(&p, &mut rng).expect("should generate");
         let city_str = city.as_str().expect("should be string");
-        assert!(!city_str.is_empty(), "fallback city should not be empty");
+        assert!(!city_str.is_empty(), "fallback city SHALL NOT be empty");
 
         // Postcode falls back to all loaded data.
         let mut rng = seeded_rng();
         let pc = generate_postcode(&p, &mut rng).expect("should generate");
         let pc_str = pc.as_str().expect("should be string");
-        assert!(!pc_str.is_empty(), "fallback postcode should not be empty");
+        assert!(!pc_str.is_empty(), "fallback postcode SHALL NOT be empty");
 
         // Street falls back to a random geo country.
         let mut rng = seeded_rng();
         let st = generate_street(&p, &mut rng).expect("should generate");
         let st_str = st.as_str().expect("should be string");
-        assert!(!st_str.is_empty(), "fallback street should not be empty");
+        assert!(!st_str.is_empty(), "fallback street SHALL NOT be empty");
     }
 
     // -----------------------------------------------------------------------
@@ -653,7 +653,7 @@ mod tests {
         let mut rng = seeded_rng();
         let p = params(&[("country", "JP"), ("region", "Narnia")]);
         let result = generate_city(&p, &mut rng);
-        assert!(result.is_err(), "should error for nonexistent region");
+        assert!(result.is_err(), "SHALL error for nonexistent region");
     }
 
     // -----------------------------------------------------------------------

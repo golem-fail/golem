@@ -389,7 +389,7 @@ mod tests {
             .into_iter()
             .filter(|(m, _)| m == "swipe")
             .collect();
-        assert!(swipe_calls.is_empty(), "no swipes should occur");
+        assert!(swipe_calls.is_empty(), "no swipes SHALL occur");
     }
 
     // ── 2. Element found after one scroll ───────────────────────────
