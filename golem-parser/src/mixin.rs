@@ -605,11 +605,11 @@ mixin = "inner"
         let steps = vec![load_mixin_step("outer", None)];
         let result = expand_mixins(&steps, flow_dir, project_root);
 
-        assert!(result.is_err());
-        let err_msg = format!("{}", result.expect_err("should be an error"));
+        assert!(result.is_err(), "SHALL reject nested load_mixin in mixin files");
+        let err_msg = format!("{}", result.expect_err("SHALL be an error"));
         assert!(
             err_msg.contains("Nested load_mixin"),
-            "Error should mention nested load_mixin, got: {err_msg}"
+            "SHALL mention nested load_mixin in error, got: {err_msg}"
         );
     }
 

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use rand::Rng;
 
-use crate::geo_loader::{geo_database, GeoData};
+use crate::geo_loader::{geo_database, GeoData, GeoState};
 use crate::VarValue;
 
 // ---------------------------------------------------------------------------
@@ -15,13 +15,65 @@ pub(crate) fn generate_address(
     rng: &mut impl Rng,
 ) -> Result<VarValue> {
     let country = params.get("country").map(|s| s.as_str());
+    let state_filter = params.get("state").map(|s| s.as_str());
+    let region_filter = params.get("region").map(|s| s.as_str());
 
     let geo = country.and_then(|c| geo_database().get(c));
 
     match geo {
-        Some(g) => generate_address_from_geo(g, rng),
+        Some(g) => {
+            if state_filter.is_some() || region_filter.is_some() {
+                generate_address_filtered(g, state_filter, region_filter, rng)
+            } else {
+                generate_address_from_geo(g, rng)
+            }
+        }
         None => generate_default_address(rng),
     }
+}
+
+/// Generate an address filtering states by name and/or region tag.
+fn generate_address_filtered(
+    geo: &GeoData,
+    state_filter: Option<&str>,
+    region_filter: Option<&str>,
+    rng: &mut impl Rng,
+) -> Result<VarValue> {
+    let matching: Vec<&GeoState> = geo
+        .states
+        .iter()
+        .filter(|s| {
+            if let Some(sf) = state_filter {
+                if !s.name_en.eq_ignore_ascii_case(sf) {
+                    return false;
+                }
+            }
+            if let Some(rf) = region_filter {
+                if !s.region_tags.iter().any(|t| t.eq_ignore_ascii_case(rf)) {
+                    return false;
+                }
+            }
+            true
+        })
+        .collect();
+
+    if matching.is_empty() {
+        let filters: Vec<String> = [
+            state_filter.map(|s| format!("state={s}")),
+            region_filter.map(|r| format!("region={r}")),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        anyhow::bail!(
+            "no states match {} for country {}",
+            filters.join(", "),
+            geo.country.iso_code
+        );
+    }
+
+    let state = matching[rng.gen_range(0..matching.len())];
+    generate_address_from_state(geo, state, rng)
 }
 
 pub(crate) fn generate_address_from_geo(
@@ -31,6 +83,15 @@ pub(crate) fn generate_address_from_geo(
     // Pick a random state.
     let state_idx = rng.gen_range(0..geo.states.len());
     let state = &geo.states[state_idx];
+    generate_address_from_state(geo, state, rng)
+}
+
+/// Generate an address from a specific state within a country.
+fn generate_address_from_state(
+    geo: &GeoData,
+    state: &GeoState,
+    rng: &mut impl Rng,
+) -> Result<VarValue> {
 
     // Pick a random city within the state.
     let city_idx = rng.gen_range(0..state.cities.len());
@@ -271,6 +332,59 @@ mod tests {
         assert_eq!(
             country_code, "FR",
             "SHALL return country_code FR for address(country=FR)"
+        );
+    }
+
+    // 22. Address with state=Tokyo constrains to Tokyo
+    #[test]
+    fn address_jp_with_state_tokyo() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("address", &[("country", "JP"), ("state", "Tokyo")]);
+        let result = generate_structured(&d, &mut rng).expect("SHALL generate JP/Tokyo address");
+        let state = field(&result, "state");
+        assert!(
+            state.to_lowercase().contains("tokyo"),
+            "SHALL return Tokyo state, got: {state}"
+        );
+    }
+
+    // 23. Address with region=Kansai constrains to Kansai cities
+    #[test]
+    fn address_jp_with_region_kansai() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("address", &[("country", "JP"), ("region", "Kansai")]);
+        let result = generate_structured(&d, &mut rng).expect("SHALL generate JP/Kansai address");
+        let country_code = field(&result, "country_code");
+        assert_eq!(country_code, "JP", "SHALL be JP address");
+        // The state should be one that has a Kansai region tag.
+        let state = field(&result, "state");
+        assert!(
+            !state.is_empty(),
+            "SHALL have a non-empty state in Kansai region"
+        );
+    }
+
+    // 24. Address with nonexistent state returns error
+    #[test]
+    fn address_jp_nonexistent_state_errors() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("address", &[("country", "JP"), ("state", "Narnia")]);
+        let result = generate_structured(&d, &mut rng);
+        assert!(
+            result.is_err(),
+            "SHALL error for nonexistent state"
+        );
+    }
+
+    // 25. Address with nonexistent region returns error
+    #[test]
+    fn address_jp_nonexistent_region_errors() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("address", &[("country", "JP"), ("region", "Narnia")]);
+        let result = generate_structured(&d, &mut rng);
+        assert!(
+            result.is_err(),
+            "SHALL error for nonexistent region"
         );
     }
 }

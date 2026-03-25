@@ -18,13 +18,33 @@ use serde::Deserialize;
 /// Each entry is a `(filename, json_str)` pair.  To add a new country, append
 /// another tuple here — the ISO code is extracted from the JSON itself.
 static RAW_ENTRIES: &[(&str, &str)] = &[
-    ("jp.json", include_str!("../../data/geo/jp.json")),
-    ("gb.json", include_str!("../../data/geo/gb.json")),
-    ("kr.json", include_str!("../../data/geo/kr.json")),
-    ("fr.json", include_str!("../../data/geo/fr.json")),
-    ("ie.json", include_str!("../../data/geo/ie.json")),
-    ("pl.json", include_str!("../../data/geo/pl.json")),
+    ("ae.json", include_str!("../../data/geo/ae.json")),
+    ("au.json", include_str!("../../data/geo/au.json")),
     ("be.json", include_str!("../../data/geo/be.json")),
+    ("br.json", include_str!("../../data/geo/br.json")),
+    ("ca.json", include_str!("../../data/geo/ca.json")),
+    ("cn.json", include_str!("../../data/geo/cn.json")),
+    ("de.json", include_str!("../../data/geo/de.json")),
+    ("eg.json", include_str!("../../data/geo/eg.json")),
+    ("es.json", include_str!("../../data/geo/es.json")),
+    ("fr.json", include_str!("../../data/geo/fr.json")),
+    ("gb.json", include_str!("../../data/geo/gb.json")),
+    ("ie.json", include_str!("../../data/geo/ie.json")),
+    ("il.json", include_str!("../../data/geo/il.json")),
+    ("in.json", include_str!("../../data/geo/in.json")),
+    ("jp.json", include_str!("../../data/geo/jp.json")),
+    ("kr.json", include_str!("../../data/geo/kr.json")),
+    ("lt.json", include_str!("../../data/geo/lt.json")),
+    ("mx.json", include_str!("../../data/geo/mx.json")),
+    ("nl.json", include_str!("../../data/geo/nl.json")),
+    ("nz.json", include_str!("../../data/geo/nz.json")),
+    ("pl.json", include_str!("../../data/geo/pl.json")),
+    ("ru.json", include_str!("../../data/geo/ru.json")),
+    ("se.json", include_str!("../../data/geo/se.json")),
+    ("sg.json", include_str!("../../data/geo/sg.json")),
+    ("th.json", include_str!("../../data/geo/th.json")),
+    ("us.json", include_str!("../../data/geo/us.json")),
+    ("za.json", include_str!("../../data/geo/za.json")),
 ];
 
 // ---------------------------------------------------------------------------
@@ -278,5 +298,57 @@ mod tests {
             postcode_count > 0,
             "JP should have at least one postcode entry"
         );
+    }
+
+    // 13. All 27 countries SHALL be loaded
+    #[test]
+    fn geo_database_loads_all_27_countries() {
+        let db = geo_database();
+        let count = db.countries().len();
+        assert!(
+            count >= 27,
+            "SHALL load at least 27 countries, got {count}"
+        );
+    }
+
+    // 14. Every expected ISO code SHALL be present
+    #[test]
+    fn geo_database_all_expected_codes_present() {
+        let db = geo_database();
+        let expected = [
+            "AE", "AU", "BE", "BR", "CA", "CN", "DE", "EG", "ES", "FR",
+            "GB", "IE", "IL", "IN", "JP", "KR", "LT", "MX", "NL", "NZ",
+            "PL", "RU", "SE", "SG", "TH", "US", "ZA",
+        ];
+        for code in &expected {
+            assert!(
+                db.get(code).is_some(),
+                "SHALL load country {code}"
+            );
+        }
+    }
+
+    // 15. Every loaded country SHALL have non-empty states
+    #[test]
+    fn geo_database_every_country_has_states() {
+        for geo in geo_database().all() {
+            assert!(
+                !geo.states.is_empty(),
+                "SHALL have states for {}",
+                geo.country.iso_code
+            );
+        }
+    }
+
+    // 16. Every loaded country SHALL have phone formats
+    #[test]
+    fn geo_database_every_country_has_phone_formats() {
+        for geo in geo_database().all() {
+            assert!(
+                !geo.country.phone_formats.is_empty(),
+                "SHALL have phone formats for {}",
+                geo.country.iso_code
+            );
+        }
     }
 }
