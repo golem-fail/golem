@@ -25,3 +25,7 @@ findings/
 
 # Golem working directory
 .golem/
+
+# Test app build artifacts
+node_modules/
+dist/
