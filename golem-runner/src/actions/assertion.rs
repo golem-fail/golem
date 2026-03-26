@@ -60,13 +60,14 @@ pub(crate) async fn handle_assert_text(step: &Step, driver: &dyn PlatformDriver)
 
     // Find element using selectors other than text
     let (elem, _coords) = resolve_element_ignore_text(step, driver).await?;
-    // Use the element's own text, or fall back to concatenated child text
-    // (needed for web-based UIs where container divs hold text in child nodes).
-    let own_text = elem.text.as_deref().unwrap_or("");
-    let actual = if own_text.is_empty() {
-        collect_child_text(&elem)
+    // For web-based UIs, the actual visible text is often in child text nodes
+    // while the element's own text contains the accessibility ID. Prefer child
+    // text when available.
+    let child_text = collect_child_text(&elem);
+    let actual = if child_text.is_empty() {
+        elem.text.as_deref().unwrap_or("").to_string()
     } else {
-        own_text.to_string()
+        child_text
     };
 
     if actual.as_str() == expected {

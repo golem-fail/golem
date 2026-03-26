@@ -71,7 +71,7 @@ pub(crate) fn parse_hierarchy(json: &str) -> Result<Element> {
     // Handle array wrapper: some companions return `[{...}]` instead of `{...}`.
     if let serde_json::Value::Array(ref mut arr) = val {
         for item in arr.iter_mut() {
-            promote_labels_json(item);
+            normalize_json(item);
         }
         if arr.len() == 1 {
             val = arr.remove(0);
@@ -92,64 +92,126 @@ pub(crate) fn parse_hierarchy(json: &str) -> Result<Element> {
             val = wrapped;
         }
     } else {
-        promote_labels_json(&mut val);
+        normalize_json(&mut val);
     }
 
     serde_json::from_value(val).context("failed to deserialize hierarchy into Element")
 }
 
-/// Recursively promote `label` to `text` in a JSON value before deserializing
-/// into `Element`. This handles companion servers that use `label` instead of `text`.
-fn promote_labels_json(val: &mut serde_json::Value) {
+/// Recursively normalize a JSON hierarchy node to match the `Element` schema.
+///
+/// Handles two companion server formats:
+/// - **iOS (mobile-bench):** `label` field instead of `text`/`id`
+/// - **Android:** `class` instead of `element_type`, `contentDescription` instead of `id`,
+///   `bounds` with `left/top/right/bottom` instead of `x/y/width/height`
+fn normalize_json(val: &mut serde_json::Value) {
     if let serde_json::Value::Object(map) = val {
-        let label_str = map
-            .get("label")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        // Promote label → id when id is absent/empty.
-        // On iOS WKWebView, the HTML element's `id` attribute becomes the
-        // accessibility label reported by XCUITest.
-        let id_empty = match map.get("id") {
-            Some(serde_json::Value::String(s)) => s.is_empty(),
-            Some(serde_json::Value::Null) | None => true,
-            _ => false,
-        };
-        if id_empty && !label_str.is_empty() {
-            map.insert("id".to_string(), serde_json::Value::String(label_str.clone()));
-        }
-
-        // Promote label → text only when text is absent/empty AND the element
-        // type is a leaf that carries visible text (StaticText, Button, etc.).
-        // For container elements, the label is typically the accessibility ID,
-        // not the visible content.
-        let text_empty = match map.get("text") {
-            Some(serde_json::Value::String(s)) => s.is_empty(),
-            Some(serde_json::Value::Null) | None => true,
-            _ => false,
-        };
-        if text_empty && !label_str.is_empty() {
-            let etype = map
-                .get("element_type")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let is_leaf = matches!(
-                etype,
-                "StaticText" | "Button" | "TextField" | "SecureTextField"
-                    | "SearchField" | "TextView" | "Switch" | "Link"
-            );
-            if is_leaf {
-                map.insert("text".to_string(), serde_json::Value::String(label_str));
+        // Android: rename `class` → `element_type`
+        if map.contains_key("class") && !map.contains_key("element_type") {
+            if let Some(class) = map.remove("class") {
+                // Simplify Android class names: "android.widget.Button" → "Button"
+                let simplified = class
+                    .as_str()
+                    .and_then(|s| s.rsplit('.').next())
+                    .unwrap_or("")
+                    .to_string();
+                map.insert("element_type".to_string(), serde_json::Value::String(simplified));
             }
         }
+
+        // Android: use `contentDescription` as `id` when present and non-empty.
+        if let Some(cd) = map.get("contentDescription").and_then(|v| v.as_str()) {
+            if !cd.is_empty() {
+                let id_empty = map
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .map_or(true, |s| s.is_empty());
+                if id_empty {
+                    map.insert("id".to_string(), serde_json::Value::String(cd.to_string()));
+                }
+            }
+        }
+
+        // Android WebView: HTML element IDs appear in `text` but not in `id`.
+        // Copy `text` → `id` when `id` is still empty and `text` looks like
+        // an element identifier (contains hyphens, no spaces).
+        let id_empty = map
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map_or(true, |s| s.is_empty());
+        if id_empty {
+            if let Some(text) = map.get("text").and_then(|v| v.as_str()) {
+                if !text.is_empty() && text.contains('-') && !text.contains(' ') {
+                    map.insert("id".to_string(), serde_json::Value::String(text.to_string()));
+                }
+            }
+        }
+
+        // Android: convert bounds from {left,top,right,bottom} → {x,y,width,height}
+        if let Some(serde_json::Value::Object(bounds)) = map.get_mut("bounds") {
+            if bounds.contains_key("left") && !bounds.contains_key("x") {
+                let left = bounds.get("left").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let top = bounds.get("top").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let right = bounds.get("right").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let bottom = bounds.get("bottom").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                bounds.insert("x".to_string(), serde_json::json!(left));
+                bounds.insert("y".to_string(), serde_json::json!(top));
+                bounds.insert("width".to_string(), serde_json::json!(right - left));
+                bounds.insert("height".to_string(), serde_json::json!(bottom - top));
+            }
+        }
+
+        // iOS: promote label → id and label → text (existing logic)
+        promote_labels_json_inner(map);
+
         // Recurse into children
         if let Some(children) = map.get_mut("children") {
             if let serde_json::Value::Array(arr) = children {
                 for child in arr {
-                    promote_labels_json(child);
+                    normalize_json(child);
                 }
             }
+        }
+    }
+}
+
+/// Promote `label` to `id` and `text` for iOS companion servers.
+/// Called on a single node's map — recursion is handled by `normalize_json`.
+fn promote_labels_json_inner(map: &mut serde_json::Map<String, serde_json::Value>) {
+    let label_str = map
+        .get("label")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    // Promote label → id when id is absent/empty.
+    let id_empty = match map.get("id") {
+        Some(serde_json::Value::String(s)) => s.is_empty(),
+        Some(serde_json::Value::Null) | None => true,
+        _ => false,
+    };
+    if id_empty && !label_str.is_empty() {
+        map.insert("id".to_string(), serde_json::Value::String(label_str.clone()));
+    }
+
+    // Promote label → text only for leaf element types.
+    let text_empty = match map.get("text") {
+        Some(serde_json::Value::String(s)) => s.is_empty(),
+        Some(serde_json::Value::Null) | None => true,
+        _ => false,
+    };
+    if text_empty && !label_str.is_empty() {
+        let etype = map
+            .get("element_type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let is_leaf = matches!(
+            etype,
+            "StaticText" | "Button" | "TextField" | "SecureTextField"
+                | "SearchField" | "TextView" | "Switch" | "Link"
+        );
+        if is_leaf {
+            map.insert("text".to_string(), serde_json::Value::String(label_str));
         }
     }
 }

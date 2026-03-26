@@ -196,12 +196,14 @@ impl PlatformDriver for AndroidDriver {
     async fn launch_app(&self, bundle_id: &str) -> Result<()> {
         self.adb(&[
             "shell",
-            "monkey",
-            "-p",
-            bundle_id,
+            "am",
+            "start",
+            "-a",
+            "android.intent.action.MAIN",
             "-c",
             "android.intent.category.LAUNCHER",
-            "1",
+            "-n",
+            &format!("{bundle_id}/.MainActivity"),
         ])
         .await?;
         Ok(())

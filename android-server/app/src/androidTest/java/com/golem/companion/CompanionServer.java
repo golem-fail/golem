@@ -87,6 +87,22 @@ public class CompanionServer {
             body = new String(buf, 0, read);
         }
 
+        // Merge JSON body parameters into query map so handlers work with
+        // both query-parameter and JSON-body request styles.
+        if (!body.isEmpty()) {
+            try {
+                JSONObject jsonBody = new JSONObject(body);
+                for (java.util.Iterator<String> it = jsonBody.keys(); it.hasNext(); ) {
+                    String key = it.next();
+                    if (!query.containsKey(key)) {
+                        query.put(key, jsonBody.optString(key, ""));
+                    }
+                }
+            } catch (Exception ignored) {
+                // Not valid JSON — ignore
+            }
+        }
+
         OutputStream out = client.getOutputStream();
 
         try {

@@ -2,9 +2,11 @@ use std::path::Path;
 use std::time::Instant;
 
 use anyhow::Result;
-use golem_devices::DeviceState;
+use golem_devices::{DeviceInfo, DeviceState, Platform};
+use golem_driver::android::AndroidDriver;
 use golem_driver::ios::IosDriver;
-use golem_parser::{parse_flow, FlowFile};
+use golem_driver::PlatformDriver;
+use golem_parser::{parse_flow, FlowFile, StringOrVec};
 use golem_parser::mixin::expand_mixins;
 use golem_report::{FlowReport, SuiteReport};
 use golem_runner::capture::CaptureConfig;
@@ -91,27 +93,13 @@ impl SuiteRunner {
             }
         };
 
-        // Discover a booted iOS device
-        let device = match golem_devices::ios::discover_ios_devices().await {
-            Ok(devices) => {
-                let booted_count = devices.iter().filter(|d| d.state == DeviceState::Booted).count();
-                eprintln!("  Found {booted_count} booted device(s)");
-                match devices.into_iter().find(|d| d.state == DeviceState::Booted) {
-                    Some(d) => d,
-                    None => {
-                        return FlowReport {
-                            flow_name,
-                            success: false,
-                            step_results: Vec::new(),
-                            warnings: vec!["No booted iOS simulator found".to_string()],
-                            duration_ms: start.elapsed().as_millis() as u64,
-                            seed: self.config.seed,
-                            screenshot_path: None,
-                            device_name: None,
-                        };
-                    }
-                }
-            }
+        // Detect target platform from the flow's device constraints.
+        let platform = detect_platform(&flow);
+        eprintln!("  Platform: {platform}");
+
+        // Discover a device for the target platform.
+        let device = match discover_device(platform).await {
+            Ok(d) => d,
             Err(e) => {
                 eprintln!("  Device discovery failed: {e:#}");
                 return FlowReport {
@@ -137,8 +125,15 @@ impl SuiteRunner {
             .map(|a| a.bundle.clone())
             .unwrap_or_else(|| "com.golem.test".to_string());
 
-        // Create iOS driver
-        let driver = IosDriver::new(device.udid.clone(), bundle_id, 8222);
+        // Create platform-appropriate driver
+        let driver: Box<dyn PlatformDriver> = match platform {
+            Platform::Ios => {
+                Box::new(IosDriver::new(device.udid.clone(), bundle_id, 8222))
+            }
+            Platform::Android => {
+                Box::new(AndroidDriver::new(device.udid.clone(), bundle_id, 8223))
+            }
+        };
 
         // Set up variable store
         let mut vars = VariableStore::new();
@@ -157,7 +152,7 @@ impl SuiteRunner {
 
         // Execute the flow
         eprintln!("  Executing on {} ({})", device_name, device.udid);
-        match execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx).await {
+        match execute_flow(&flow, driver.as_ref(), &mut vars, None, 10_000, &mut ctx).await {
             Ok(result) => {
                 if !result.success {
                     if let Some(ref block) = result.failed_block {
@@ -214,6 +209,80 @@ impl SuiteRunner {
         }
 
         Ok(flow)
+    }
+}
+
+/// Detect the target platform from the flow's device constraints.
+/// Looks at the first app's first device constraint `os` field.
+/// Defaults to iOS if not specified.
+fn detect_platform(flow: &FlowFile) -> Platform {
+    for app in &flow.flow.apps {
+        for constraint in &app.devices {
+            if let Some(ref os) = constraint.os {
+                let os_str = match os {
+                    StringOrVec::Single(s) => s.as_str(),
+                    StringOrVec::Multiple(v) => v.first().map(|s| s.as_str()).unwrap_or(""),
+                };
+                if os_str.starts_with("android") {
+                    return Platform::Android;
+                }
+                if os_str.starts_with("ios") {
+                    return Platform::Ios;
+                }
+            }
+        }
+    }
+    Platform::Ios
+}
+
+/// Discover a suitable device for the given platform.
+async fn discover_device(platform: Platform) -> Result<DeviceInfo> {
+    match platform {
+        Platform::Ios => {
+            let devices = golem_devices::ios::discover_ios_devices().await?;
+            let booted_count = devices.iter().filter(|d| d.state == DeviceState::Booted).count();
+            eprintln!("  Found {booted_count} booted iOS device(s)");
+            devices
+                .into_iter()
+                .find(|d| d.state == DeviceState::Booted)
+                .ok_or_else(|| anyhow::anyhow!("No booted iOS simulator found"))
+        }
+        Platform::Android => {
+            // For Android, check `adb devices` for connected/running devices.
+            let output = tokio::process::Command::new("adb")
+                .args(["devices"])
+                .output()
+                .await?;
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let mut devices = Vec::new();
+            for line in stdout.lines().skip(1) {
+                let parts: Vec<&str> = line.split('\t').collect();
+                if parts.len() >= 2 && parts[1] == "device" {
+                    devices.push(DeviceInfo {
+                        name: parts[0].to_string(),
+                        udid: parts[0].to_string(),
+                        platform: Platform::Android,
+                        device_type: golem_devices::DeviceType::Phone,
+                        os_major: 0,
+                        os_version: String::new(),
+                        state: DeviceState::Booted,
+                        physical: false,
+                        playstore: false,
+                        screen_width: None,
+                        screen_height: None,
+                        screen_scale: None,
+                        last_booted: None,
+                        runtime_id: None,
+                        device_type_id: None,
+                    });
+                }
+            }
+            eprintln!("  Found {} connected Android device(s)", devices.len());
+            devices
+                .into_iter()
+                .next()
+                .ok_or_else(|| anyhow::anyhow!("No connected Android device/emulator found"))
+        }
     }
 }
 
