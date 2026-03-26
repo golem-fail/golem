@@ -16,45 +16,45 @@ steps = [
   { action = "launch", app = "com.golem.test" },
 
   # Verify initial device state
-  { action = "assert_text", id = "orientation-label", text = "Portrait" },
-  { action = "assert_text", id = "theme-label", text = "Light" },
-  { action = "assert_text", id = "location-label", text = "0.0, 0.0" },
+  { action = "assert_text", accessibility_id = "orientation-label", text = "Portrait" },
+  { action = "assert_text", accessibility_id = "theme-label", text = "Light" },
+  { action = "assert_text", accessibility_id = "location-label", text = "0.0, 0.0" },
 
   # Press the home button
   { action = "press", button = "home" },
 
   # Re-launch the app after going to home
   { action = "launch", app = "com.golem.test" },
-  { action = "wait", id = "orientation-label", timeout = 5000 },
+  { action = "wait", accessibility_id = "orientation-label", timeout = 5000 },
 
   # Press the Android back button to navigate back
   { action = "press", button = "back" },
 
   # Re-launch the app after back
   { action = "launch", app = "com.golem.test" },
-  { action = "wait", id = "orientation-label", timeout = 5000 },
+  { action = "wait", accessibility_id = "orientation-label", timeout = 5000 },
 
   # Rotate to landscape
   { action = "rotate", orientation = "landscape" },
-  { action = "assert_text", id = "orientation-label", text = "Landscape" },
+  { action = "assert_text", accessibility_id = "orientation-label", text = "Landscape" },
 
   # Rotate back to portrait
   { action = "rotate", orientation = "portrait" },
-  { action = "assert_text", id = "orientation-label", text = "Portrait" },
+  { action = "assert_text", accessibility_id = "orientation-label", text = "Portrait" },
 
   # Enable dark mode
   { action = "dark_mode", enabled = true },
-  { action = "assert_text", id = "theme-label", text = "Dark" },
+  { action = "assert_text", accessibility_id = "theme-label", text = "Dark" },
 
   # Disable dark mode
   { action = "dark_mode", enabled = false },
-  { action = "assert_text", id = "theme-label", text = "Light" },
+  { action = "assert_text", accessibility_id = "theme-label", text = "Light" },
 
   # Set GPS location to San Francisco
   { action = "set_location", latitude = 37.7749, longitude = -122.4194 },
-  { action = "assert_text", id = "location-label", text = "37.7749, -122.4194" },
+  { action = "assert_text", accessibility_id = "location-label", text = "37.7749, -122.4194" },
 
   # Set GPS location to Tokyo
   { action = "set_location", latitude = 35.6762, longitude = 139.6503 },
-  { action = "assert_text", id = "location-label", text = "35.6762, 139.6503" },
+  { action = "assert_text", accessibility_id = "location-label", text = "35.6762, 139.6503" },
 ]

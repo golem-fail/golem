@@ -60,7 +60,7 @@ async fn resolve_element_ignore_text(
         bail!(
             "No element found matching selector: text={:?}, id={:?}, type={:?}",
             selector.text,
-            selector.id,
+            selector.accessibility_id,
             selector.element_type,
         );
     }

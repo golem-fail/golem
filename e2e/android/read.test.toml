@@ -16,24 +16,24 @@ steps = [
   { action = "launch", app = "com.golem.test" },
 
   # Read the initial counter value and save it to a variable
-  { action = "read", id = "counter-display", save_to = "initial_count" },
+  { action = "read", accessibility_id = "counter-display", save_to = "initial_count" },
 
   # Increment the counter twice
-  { action = "tap", id = "increment-button" },
-  { action = "tap", id = "increment-button" },
+  { action = "tap", accessibility_id = "increment-button" },
+  { action = "tap", accessibility_id = "increment-button" },
 
   # Read the updated counter value
-  { action = "read", id = "counter-display", save_to = "updated_count" },
+  { action = "read", accessibility_id = "counter-display", save_to = "updated_count" },
 
   # Read the orientation label
-  { action = "read", id = "orientation-label", save_to = "device_orientation" },
+  { action = "read", accessibility_id = "orientation-label", save_to = "device_orientation" },
 
   # Read the theme label
-  { action = "read", id = "theme-label", save_to = "current_theme" },
+  { action = "read", accessibility_id = "theme-label", save_to = "current_theme" },
 
   # Read text from a list item
-  { action = "read", id = "list-item-0", save_to = "first_item_text" },
+  { action = "read", accessibility_id = "list-item-0", save_to = "first_item_text" },
 
   # Verify the counter was updated correctly
-  { action = "assert_text", id = "counter-display", text = "2" },
+  { action = "assert_text", accessibility_id = "counter-display", text = "2" },
 ]

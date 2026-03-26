@@ -80,7 +80,7 @@ pub(crate) fn parse_hierarchy(json: &str) -> Result<Element> {
             let wrapped = serde_json::json!({
                 "element_type": "other",
                 "text": null,
-                "id": null,
+                "accessibility_id": null,
                 "placeholder": null,
                 "enabled": true,
                 "checked": false,
@@ -106,6 +106,13 @@ pub(crate) fn parse_hierarchy(json: &str) -> Result<Element> {
 ///   `bounds` with `left/top/right/bottom` instead of `x/y/width/height`
 fn normalize_json(val: &mut serde_json::Value) {
     if let serde_json::Value::Object(map) = val {
+        // Rename raw `id` → `accessibility_id` (GOLEM companion format)
+        if map.contains_key("id") && !map.contains_key("accessibility_id") {
+            if let Some(v) = map.remove("id") {
+                map.insert("accessibility_id".to_string(), v);
+            }
+        }
+
         // Android: rename `class` → `element_type`
         if map.contains_key("class") && !map.contains_key("element_type") {
             if let Some(class) = map.remove("class") {
@@ -123,26 +130,11 @@ fn normalize_json(val: &mut serde_json::Value) {
         if let Some(cd) = map.get("contentDescription").and_then(|v| v.as_str()) {
             if !cd.is_empty() {
                 let id_empty = map
-                    .get("id")
+                    .get("accessibility_id")
                     .and_then(|v| v.as_str())
                     .map_or(true, |s| s.is_empty());
                 if id_empty {
-                    map.insert("id".to_string(), serde_json::Value::String(cd.to_string()));
-                }
-            }
-        }
-
-        // Android WebView: HTML element IDs appear in `text` but not in `id`.
-        // Copy `text` → `id` when `id` is still empty and `text` looks like
-        // an element identifier (contains hyphens, no spaces).
-        let id_empty = map
-            .get("id")
-            .and_then(|v| v.as_str())
-            .map_or(true, |s| s.is_empty());
-        if id_empty {
-            if let Some(text) = map.get("text").and_then(|v| v.as_str()) {
-                if !text.is_empty() && text.contains('-') && !text.contains(' ') {
-                    map.insert("id".to_string(), serde_json::Value::String(text.to_string()));
+                    map.insert("accessibility_id".to_string(), serde_json::Value::String(cd.to_string()));
                 }
             }
         }
@@ -185,34 +177,25 @@ fn promote_labels_json_inner(map: &mut serde_json::Map<String, serde_json::Value
         .to_string();
 
     // Promote label → id when id is absent/empty.
-    let id_empty = match map.get("id") {
+    let id_empty = match map.get("accessibility_id") {
         Some(serde_json::Value::String(s)) => s.is_empty(),
         Some(serde_json::Value::Null) | None => true,
         _ => false,
     };
     if id_empty && !label_str.is_empty() {
-        map.insert("id".to_string(), serde_json::Value::String(label_str.clone()));
+        map.insert("accessibility_id".to_string(), serde_json::Value::String(label_str.clone()));
     }
 
-    // Promote label → text only for leaf element types.
+    // Promote label → text always when text is absent/empty.
+    // Per aria-label spec: "overrides any other native labeling mechanism."
+    // This matches Android behavior where getText() returns aria-label.
     let text_empty = match map.get("text") {
         Some(serde_json::Value::String(s)) => s.is_empty(),
         Some(serde_json::Value::Null) | None => true,
         _ => false,
     };
     if text_empty && !label_str.is_empty() {
-        let etype = map
-            .get("element_type")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let is_leaf = matches!(
-            etype,
-            "StaticText" | "Button" | "TextField" | "SecureTextField"
-                | "SearchField" | "TextView" | "Switch" | "Link"
-        );
-        if is_leaf {
-            map.insert("text".to_string(), serde_json::Value::String(label_str));
-        }
+        map.insert("text".to_string(), serde_json::Value::String(label_str));
     }
 }
 

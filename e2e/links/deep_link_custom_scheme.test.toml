@@ -19,8 +19,8 @@ name = "verify_initial_state"
 steps = [
   # Launch the app and verify deep link display is initially empty
   { action = "launch", app = "com.golem.test" },
-  { action = "wait", id = "deeplink-display", timeout = 10000 },
-  { action = "assert_text", id = "deeplink-display", text = "" },
+  { action = "wait", accessibility_id = "deeplink-display", timeout = 10000 },
+  { action = "assert_text", accessibility_id = "deeplink-display", text = "" },
 ]
 
 [[block]]
@@ -28,8 +28,8 @@ name = "open_simple_deep_link"
 steps = [
   # Open a simple deep link with the golem-test scheme
   { action = "open_link", url = "golem-test://home" },
-  { action = "wait", id = "deeplink-display", timeout = 5000 },
-  { action = "assert_text", id = "deeplink-display", text = "golem-test://home" },
+  { action = "wait", accessibility_id = "deeplink-display", timeout = 5000 },
+  { action = "assert_text", accessibility_id = "deeplink-display", text = "golem-test://home" },
 ]
 
 [[block]]
@@ -37,8 +37,8 @@ name = "open_deep_link_with_query_params"
 steps = [
   # Open a deep link with path and query parameters
   { action = "open_link", url = "golem-test://profile?user=42&tab=settings" },
-  { action = "wait", id = "deeplink-display", timeout = 5000 },
-  { action = "assert_text", id = "deeplink-display", text = "golem-test://profile?user=42&tab=settings" },
+  { action = "wait", accessibility_id = "deeplink-display", timeout = 5000 },
+  { action = "assert_text", accessibility_id = "deeplink-display", text = "golem-test://profile?user=42&tab=settings" },
 ]
 
 [[block]]
@@ -46,6 +46,6 @@ name = "open_deep_link_with_path_segment"
 steps = [
   # Open a deep link to a specific content item with a nested path
   { action = "open_link", url = "golem-test://item/12345" },
-  { action = "wait", id = "deeplink-display", timeout = 5000 },
-  { action = "assert_text", id = "deeplink-display", text = "golem-test://item/12345" },
+  { action = "wait", accessibility_id = "deeplink-display", timeout = 5000 },
+  { action = "assert_text", accessibility_id = "deeplink-display", text = "golem-test://item/12345" },
 ]

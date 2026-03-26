@@ -30,5 +30,5 @@ steps = [
   { action = "swipe", direction = "right" },
 
   # Verify we can still see a known element after swiping
-  { action = "assert_visible", id = "submit-button" },
+  { action = "assert_visible", accessibility_id = "submit-button" },
 ]

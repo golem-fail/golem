@@ -351,13 +351,13 @@ mod tests {
 
         let element = parse_hierarchy(json).expect("should parse");
         assert_eq!(element.element_type, "View");
-        assert_eq!(element.id.as_deref(), Some("root"));
+        assert_eq!(element.accessibility_id.as_deref(), Some("root"));
         assert_eq!(element.children.len(), 1);
 
         let btn = &element.children[0];
         assert_eq!(btn.element_type, "Button");
         assert_eq!(btn.text.as_deref(), Some("Login"));
-        assert_eq!(btn.id.as_deref(), Some("login_btn"));
+        assert_eq!(btn.accessibility_id.as_deref(), Some("login_btn"));
         assert!(btn.clickable);
         assert_eq!(btn.bounds, Bounds::new(100, 400, 190, 44));
     }

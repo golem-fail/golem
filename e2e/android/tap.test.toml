@@ -14,11 +14,11 @@ type = "phone"
 name = "tap_tests"
 steps = [
   { action = "launch", app = "com.golem.test" },
-  { action = "wait", id = "submit-button", timeout = 10000 },
-  { action = "tap", id = "submit-button" },
-  { action = "tap", id = "duplicate-button-1" },
-  { action = "tap", id = "increment-button" },
-  { action = "tap", id = "increment-button" },
-  { action = "tap", id = "decrement-button" },
-  { action = "assert_visible", id = "counter-display" },
+  { action = "wait", text = "Submit", timeout = 10000 },
+  { action = "tap", text = "Submit" },
+  { action = "tap", text = "Action", index = 0 },
+  { action = "tap", text = "Increment" },
+  { action = "tap", text = "Increment" },
+  { action = "tap", text = "Decrement" },
+  { action = "assert_visible", text = "Counter" },
 ]

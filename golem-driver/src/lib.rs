@@ -337,7 +337,7 @@ mod tests {
         Element {
             element_type: element_type.to_string(),
             text: None,
-            id: None,
+            accessibility_id: None,
             placeholder: None,
             enabled: true,
             checked: false,

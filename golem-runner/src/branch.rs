@@ -110,7 +110,7 @@ mod tests {
         Element {
             element_type: element_type.to_string(),
             text: text.map(|s| s.to_string()),
-            id: None,
+            accessibility_id: None,
             placeholder: None,
             enabled: true,
             checked: false,
@@ -125,7 +125,7 @@ mod tests {
         Element {
             element_type: "View".to_string(),
             text: None,
-            id: None,
+            accessibility_id: None,
             placeholder: None,
             enabled: true,
             checked: false,

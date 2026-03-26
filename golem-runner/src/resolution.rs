@@ -12,7 +12,7 @@ use golem_parser::Step;
 pub fn build_selector(step: &Step) -> Selector {
     Selector {
         text: step.text.clone(),
-        id: step.id.clone(),
+        accessibility_id: step.accessibility_id.clone(),
         element_type: step.element_type.clone(),
         index: step.index,
         enabled: step.enabled,
@@ -47,7 +47,7 @@ pub async fn resolve_element(
         bail!(
             "No element found matching selector: text={:?}, id={:?}, type={:?}",
             selector.text,
-            selector.id,
+            selector.accessibility_id,
             selector.element_type,
         );
     }
@@ -69,7 +69,7 @@ mod tests {
         Step {
             action: action.to_string(),
             text: None,
-            id: None,
+            accessibility_id: None,
             element_type: None,
             index: None,
             enabled: None,
@@ -95,7 +95,7 @@ mod tests {
         Element {
             element_type: element_type.to_string(),
             text: None,
-            id: None,
+            accessibility_id: None,
             placeholder: None,
             enabled: true,
             checked: false,
@@ -146,18 +146,18 @@ mod tests {
     async fn resolve_element_finds_by_id() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         let mut btn = make_element("Button", Bounds::new(10, 10, 80, 40));
-        btn.id = Some("btn-login".to_string());
+        btn.accessibility_id = Some("btn-login".to_string());
         btn.text = Some("Login".to_string());
         root.children.push(btn);
 
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
-        step.id = Some("btn-login".to_string());
+        step.accessibility_id = Some("btn-login".to_string());
 
         let (elem, _coords) = resolve_element(&step, &driver)
             .await
             .expect("should find element by id");
-        assert_eq!(elem.id.as_deref(), Some("btn-login"));
+        assert_eq!(elem.accessibility_id.as_deref(), Some("btn-login"));
         assert_eq!(elem.text.as_deref(), Some("Login"));
     }
 
@@ -316,7 +316,7 @@ mod tests {
     fn build_selector_maps_all_fields() {
         let mut step = make_step("tap");
         step.text = Some("Submit".to_string());
-        step.id = Some("btn-1".to_string());
+        step.accessibility_id = Some("btn-1".to_string());
         step.element_type = Some("Button".to_string());
         step.index = Some(2);
         step.enabled = Some(true);
@@ -331,7 +331,7 @@ mod tests {
 
         let sel = build_selector(&step);
         assert_eq!(sel.text.as_deref(), Some("Submit"));
-        assert_eq!(sel.id.as_deref(), Some("btn-1"));
+        assert_eq!(sel.accessibility_id.as_deref(), Some("btn-1"));
         assert_eq!(sel.element_type.as_deref(), Some("Button"));
         assert_eq!(sel.index, Some(2));
         assert_eq!(sel.enabled, Some(true));

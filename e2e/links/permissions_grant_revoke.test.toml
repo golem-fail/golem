@@ -19,13 +19,13 @@ name = "camera_permission_cycle"
 steps = [
   # Launch the app
   { action = "launch", app = "com.golem.test" },
-  { action = "wait", id = "camera-permission-button", timeout = 10000 },
+  { action = "wait", accessibility_id = "camera-permission-button", timeout = 10000 },
 
   # Grant camera permission before tapping the button
   { action = "grant_permission", permission = "camera" },
 
   # Tap the camera permission button; no permission dialog should appear
-  { action = "tap", id = "camera-permission-button" },
+  { action = "tap", accessibility_id = "camera-permission-button" },
 
   # Revoke camera permission
   { action = "revoke_permission", permission = "camera" },
@@ -38,7 +38,7 @@ steps = [
   { action = "grant_permission", permission = "location" },
 
   # Tap the location permission button; no permission dialog should appear
-  { action = "tap", id = "location-permission-button" },
+  { action = "tap", accessibility_id = "location-permission-button" },
 
   # Revoke location permission
   { action = "revoke_permission", permission = "location" },

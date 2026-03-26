@@ -16,21 +16,21 @@ steps = [
   { action = "launch", app = "com.golem.test" },
 
   # Type into the email field
-  { action = "type", id = "email-input", text = "user@example.com" },
-  { action = "assert_text", id = "email-input", text = "user@example.com" },
+  { action = "type", accessibility_id = "email-input", text = "user@example.com" },
+  { action = "assert_text", accessibility_id = "email-input", text = "user@example.com" },
 
   # Type into the password field
-  { action = "type", id = "password-input", text = "s3cret!" },
+  { action = "type", accessibility_id = "password-input", text = "s3cret!" },
 
   # Type into the search field
-  { action = "type", id = "search-input", text = "hello world" },
+  { action = "type", accessibility_id = "search-input", text = "hello world" },
 
   # Backspace to correct a typo in search
-  { action = "backspace", id = "search-input", count = 5 },
-  { action = "type", id = "search-input", text = "earth" },
+  { action = "backspace", accessibility_id = "search-input", count = 5 },
+  { action = "type", accessibility_id = "search-input", text = "earth" },
 
   # Type into the multiline text area
-  { action = "type", id = "multiline-input", text = "Line one\nLine two\nLine three" },
+  { action = "type", accessibility_id = "multiline-input", text = "Line one\nLine two\nLine three" },
 
   # Hide the keyboard after typing
   { action = "hide_keyboard" },

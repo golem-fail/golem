@@ -23,7 +23,7 @@ fn build_fingerprint(element: &Element, buf: &mut String) {
         buf.push_str(text);
     }
     buf.push(':');
-    if let Some(ref id) = element.id {
+    if let Some(ref id) = element.accessibility_id {
         buf.push_str(id);
     }
     buf.push('[');
@@ -91,7 +91,7 @@ pub async fn scroll_to_element(
                     "Element not found: scrolled in both directions and hit boundaries. \
                      Selector: text={:?}, id={:?}, type={:?}",
                     selector.text,
-                    selector.id,
+                    selector.accessibility_id,
                     selector.element_type,
                 );
             }
@@ -108,7 +108,7 @@ pub async fn scroll_to_element(
         "Element not found after {max_scrolls} scroll attempts. \
          Selector: text={:?}, id={:?}, type={:?}",
         selector.text,
-        selector.id,
+        selector.accessibility_id,
         selector.element_type,
     )
 }
@@ -127,7 +127,7 @@ mod tests {
         Element {
             element_type: element_type.to_string(),
             text: None,
-            id: None,
+            accessibility_id: None,
             placeholder: None,
             enabled: true,
             checked: false,

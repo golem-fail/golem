@@ -89,7 +89,7 @@ mod tests {
         Element {
             element_type: "View".to_string(),
             text: None,
-            id: None,
+            accessibility_id: None,
             placeholder: None,
             enabled: true,
             checked: false,
@@ -105,7 +105,7 @@ mod tests {
         Step {
             action: "screenshot".to_string(),
             text: None,
-            id: None,
+            accessibility_id: None,
             element_type: None,
             index: None,
             enabled: None,
@@ -132,7 +132,7 @@ mod tests {
         Step {
             action: "tap".to_string(),
             text: Some("NONEXISTENT_ELEMENT_xyz_12345".to_string()),
-            id: None,
+            accessibility_id: None,
             element_type: None,
             index: None,
             enabled: None,

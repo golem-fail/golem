@@ -16,22 +16,22 @@ steps = [
   { action = "launch", app = "com.golem.test" },
 
   # Tap a text field to bring up the keyboard
-  { action = "tap", id = "email-input" },
+  { action = "tap", accessibility_id = "email-input" },
 
   # Type some text (keyboard should be visible)
-  { action = "type", id = "email-input", text = "test@example.com" },
+  { action = "type", accessibility_id = "email-input", text = "test@example.com" },
 
   # Dismiss the keyboard
   { action = "hide_keyboard" },
 
   # Tap another text field to bring the keyboard back
-  { action = "tap", id = "search-input" },
-  { action = "type", id = "search-input", text = "search query" },
+  { action = "tap", accessibility_id = "search-input" },
+  { action = "type", accessibility_id = "search-input", text = "search query" },
 
   # Dismiss again
   { action = "hide_keyboard" },
 
   # Verify the typed text persisted after keyboard dismissal
-  { action = "assert_text", id = "email-input", text = "test@example.com" },
-  { action = "assert_text", id = "search-input", text = "search query" },
+  { action = "assert_text", accessibility_id = "email-input", text = "test@example.com" },
+  { action = "assert_text", accessibility_id = "search-input", text = "search query" },
 ]

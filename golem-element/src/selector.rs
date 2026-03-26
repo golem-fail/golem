@@ -8,7 +8,7 @@ use crate::{Element, FindResult};
 #[derive(Debug, Clone, Default)]
 pub struct Selector {
     pub text: Option<String>,
-    pub id: Option<String>,
+    pub accessibility_id: Option<String>,
     pub element_type: Option<String>,
     pub index: Option<usize>,
     pub enabled: Option<bool>,
@@ -102,7 +102,7 @@ fn element_exists_in_subtree(subtree_root: &Element, candidate: &Element) -> boo
 fn elements_match(a: &Element, b: &Element) -> bool {
     a.element_type == b.element_type
         && a.text == b.text
-        && a.id == b.id
+        && a.accessibility_id == b.accessibility_id
         && a.bounds == b.bounds
         && a.enabled == b.enabled
         && a.checked == b.checked
@@ -183,10 +183,10 @@ fn matches_selector(element: &Element, selector: &Selector) -> bool {
         }
     }
 
-    if let Some(ref pattern) = selector.id {
-        match &element.id {
-            Some(id) => {
-                if !GlobMatcher::new(pattern).is_match(id) {
+    if let Some(ref pattern) = selector.accessibility_id {
+        match &element.accessibility_id {
+            Some(aid) => {
+                if !GlobMatcher::new(pattern).is_match(aid) {
                     return false;
                 }
             }
@@ -247,7 +247,7 @@ mod tests {
         Element {
             element_type: element_type.to_string(),
             text: None,
-            id: None,
+            accessibility_id: None,
             placeholder: None,
             enabled: true,
             checked: false,
@@ -342,16 +342,16 @@ mod tests {
     fn id_match() {
         let mut root = elem("View");
         let mut btn = elem("Button");
-        btn.id = Some("btn-submit".to_string());
+        btn.accessibility_id = Some("btn-submit".to_string());
         root.children.push(btn);
 
         let s = Selector {
-            id: Some("btn-submit".to_string()),
+            accessibility_id: Some("btn-submit".to_string()),
             ..sel()
         };
         let results = find_elements(&root, &s);
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].element.id.as_deref(), Some("btn-submit"));
+        assert_eq!(results[0].element.accessibility_id.as_deref(), Some("btn-submit"));
     }
 
     // ── 6. ID glob ──────────────────────────────────────────────────
@@ -360,17 +360,17 @@ mod tests {
     fn id_glob() {
         let mut root = elem("View");
         let mut btn1 = elem("Button");
-        btn1.id = Some("btn-submit".to_string());
+        btn1.accessibility_id = Some("btn-submit".to_string());
         let mut btn2 = elem("Button");
-        btn2.id = Some("btn-cancel".to_string());
+        btn2.accessibility_id = Some("btn-cancel".to_string());
         let mut lbl = elem("Label");
-        lbl.id = Some("lbl-title".to_string());
+        lbl.accessibility_id = Some("lbl-title".to_string());
         root.children.push(btn1);
         root.children.push(btn2);
         root.children.push(lbl);
 
         let s = Selector {
-            id: Some("btn-*".to_string()),
+            accessibility_id: Some("btn-*".to_string()),
             ..sel()
         };
         let results = find_elements(&root, &s);

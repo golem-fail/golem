@@ -19,8 +19,8 @@ name = "verify_initial_state"
 steps = [
   # Launch the app and verify notification display is initially empty
   { action = "launch", app = "com.golem.test" },
-  { action = "wait", id = "notification-display", timeout = 10000 },
-  { action = "assert_text", id = "notification-display", text = "" },
+  { action = "wait", accessibility_id = "notification-display", timeout = 10000 },
+  { action = "assert_text", accessibility_id = "notification-display", text = "" },
 ]
 
 [[block]]
@@ -30,8 +30,8 @@ steps = [
   { action = "push_notification", title = "Test Alert", body = "Hello from GOLEM", app = "com.golem.test" },
 
   # Wait for the notification display to update and verify content
-  { action = "wait", id = "notification-display", timeout = 10000 },
-  { action = "assert_text", id = "notification-display", text = "Hello from GOLEM" },
+  { action = "wait", accessibility_id = "notification-display", timeout = 10000 },
+  { action = "assert_text", accessibility_id = "notification-display", text = "Hello from GOLEM" },
 ]
 
 [[block]]
@@ -41,6 +41,6 @@ steps = [
   { action = "push_notification", title = "Second Alert", body = "Updated notification payload", app = "com.golem.test" },
 
   # Verify the notification display updates with the new content
-  { action = "wait", id = "notification-display", timeout = 10000 },
-  { action = "assert_text", id = "notification-display", text = "Updated notification payload" },
+  { action = "wait", accessibility_id = "notification-display", timeout = 10000 },
+  { action = "assert_text", accessibility_id = "notification-display", text = "Updated notification payload" },
 ]

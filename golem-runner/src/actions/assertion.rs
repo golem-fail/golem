@@ -42,7 +42,7 @@ pub(crate) async fn handle_assert_not_visible(step: &Step, driver: &dyn Platform
             "Expected no element matching selector but found {}: text={:?}, id={:?}, type={:?}",
             results.len(),
             selector.text,
-            selector.id,
+            selector.accessibility_id,
             selector.element_type,
         )
     }
@@ -89,7 +89,7 @@ pub(crate) async fn handle_assert_enabled(step: &Step, driver: &dyn PlatformDriv
     } else {
         bail!(
             "assert_enabled failed: element is disabled (id={:?}, text={:?})",
-            elem.id,
+            elem.accessibility_id,
             elem.text,
         )
     }
@@ -103,7 +103,7 @@ pub(crate) async fn handle_assert_checked(step: &Step, driver: &dyn PlatformDriv
     } else {
         bail!(
             "assert_checked failed: element is not checked (id={:?}, text={:?})",
-            elem.id,
+            elem.accessibility_id,
             elem.text,
         )
     }
@@ -220,7 +220,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_text");
-        step.id = Some("total".to_string());
+        step.accessibility_id = Some("total".to_string());
         step.text = Some("$42.00".to_string());
 
         handle_assert_text(&step, &driver)
@@ -242,7 +242,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_text");
-        step.id = Some("total".to_string());
+        step.accessibility_id = Some("total".to_string());
         step.text = Some("$42.00".to_string());
 
         let result = handle_assert_text(&step, &driver).await;
@@ -273,7 +273,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_enabled");
-        step.id = Some("submit-button".to_string());
+        step.accessibility_id = Some("submit-button".to_string());
 
         handle_assert_enabled(&step, &driver)
             .await
@@ -291,7 +291,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_enabled");
-        step.id = Some("submit-button".to_string());
+        step.accessibility_id = Some("submit-button".to_string());
 
         let result = handle_assert_enabled(&step, &driver).await;
         assert!(result.is_err());
@@ -313,7 +313,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_checked");
-        step.id = Some("agree-checkbox".to_string());
+        step.accessibility_id = Some("agree-checkbox".to_string());
 
         handle_assert_checked(&step, &driver)
             .await
@@ -331,7 +331,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_checked");
-        step.id = Some("agree-checkbox".to_string());
+        step.accessibility_id = Some("agree-checkbox".to_string());
 
         let result = handle_assert_checked(&step, &driver).await;
         assert!(result.is_err());

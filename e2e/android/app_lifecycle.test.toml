@@ -17,12 +17,12 @@ steps = [
   { action = "launch", app = "com.golem.test" },
 
   # Verify the app is running by checking for a known element
-  { action = "wait", id = "submit-button", timeout = 10000 },
-  { action = "assert_visible", id = "counter-display" },
+  { action = "wait", accessibility_id = "submit-button", timeout = 10000 },
+  { action = "assert_visible", accessibility_id = "counter-display" },
 
   # Interact to set some state
-  { action = "tap", id = "increment-button" },
-  { action = "assert_text", id = "counter-display", text = "1" },
+  { action = "tap", accessibility_id = "increment-button" },
+  { action = "assert_text", accessibility_id = "counter-display", text = "1" },
 
   # Stop the app
   { action = "stop", app = "com.golem.test" },
@@ -31,6 +31,6 @@ steps = [
   { action = "launch", app = "com.golem.test" },
 
   # Verify the app is running again
-  { action = "wait", id = "submit-button", timeout = 10000 },
-  { action = "assert_visible", id = "counter-display" },
+  { action = "wait", accessibility_id = "submit-button", timeout = 10000 },
+  { action = "assert_visible", accessibility_id = "counter-display" },
 ]

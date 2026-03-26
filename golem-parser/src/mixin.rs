@@ -172,7 +172,7 @@ fn remap_step_vars(step: &Step, vars: &HashMap<String, String>) -> Step {
     Step {
         action: remap_string(&step.action, vars),
         text: step.text.as_ref().map(|s| remap_string(s, vars)),
-        id: step.id.as_ref().map(|s| remap_string(s, vars)),
+        accessibility_id: step.accessibility_id.as_ref().map(|s| remap_string(s, vars)),
         element_type: step.element_type.as_ref().map(|s| remap_string(s, vars)),
         index: step.index,
         enabled: step.enabled,
@@ -267,7 +267,7 @@ mod tests {
         Step {
             action: "load_mixin".to_string(),
             text: None,
-            id: None,
+            accessibility_id: None,
             element_type: None,
             index: None,
             enabled: None,
@@ -294,7 +294,7 @@ mod tests {
         Step {
             action: action.to_string(),
             text: None,
-            id: None,
+            accessibility_id: None,
             element_type: None,
             index: None,
             enabled: None,
@@ -331,7 +331,7 @@ mod tests {
             r#"
 [[step]]
 action = "tap"
-id = "email-input"
+accessibility_id = "email-input"
 
 [[step]]
 action = "type"
@@ -345,7 +345,7 @@ text = "hello"
 
         assert_eq!(expanded.len(), 2);
         assert_eq!(expanded[0].action, "tap");
-        assert_eq!(expanded[0].id.as_deref(), Some("email-input"));
+        assert_eq!(expanded[0].accessibility_id.as_deref(), Some("email-input"));
         assert_eq!(expanded[1].action, "type");
         assert_eq!(expanded[1].text.as_deref(), Some("hello"));
     }
@@ -395,12 +395,12 @@ text = "${email}"
             r#"
 [[step]]
 action = "type"
-id = "${email_field}"
+accessibility_id = "${email_field}"
 text = "${email}"
 
 [[step]]
 action = "type"
-id = "${password_field}"
+accessibility_id = "${password_field}"
 text = "${password}"
 "#,
         );
@@ -416,9 +416,9 @@ text = "${password}"
             expand_mixins(&steps, flow_dir, project_root).expect("expansion should succeed");
 
         assert_eq!(expanded.len(), 2);
-        assert_eq!(expanded[0].id.as_deref(), Some("login-email"));
+        assert_eq!(expanded[0].accessibility_id.as_deref(), Some("login-email"));
         assert_eq!(expanded[0].text.as_deref(), Some("alice@example.com"));
-        assert_eq!(expanded[1].id.as_deref(), Some("login-password"));
+        assert_eq!(expanded[1].accessibility_id.as_deref(), Some("login-password"));
         assert_eq!(expanded[1].text.as_deref(), Some("secret123"));
     }
 
@@ -467,7 +467,7 @@ text = "${greeting} ${name}"
             r#"
 [[step]]
 action = "read"
-id = "price-label"
+accessibility_id = "price-label"
 save_to = "captured_price"
 "#,
         );

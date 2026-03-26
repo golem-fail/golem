@@ -9,7 +9,7 @@ pub fn make_step(action: &str) -> Step {
     Step {
         action: action.to_string(),
         text: None,
-        id: None,
+        accessibility_id: None,
         element_type: None,
         index: None,
         enabled: None,
@@ -35,7 +35,7 @@ pub fn make_element(element_type: &str, bounds: Bounds) -> Element {
     Element {
         element_type: element_type.to_string(),
         text: None,
-        id: None,
+        accessibility_id: None,
         placeholder: None,
         enabled: true,
         checked: false,
@@ -54,7 +54,7 @@ pub fn make_element_with_text(element_type: &str, text: &str, bounds: Bounds) ->
 
 pub fn make_element_with_id(element_type: &str, id: &str, bounds: Bounds) -> Element {
     let mut e = make_element(element_type, bounds);
-    e.id = Some(id.to_string());
+    e.accessibility_id = Some(id.to_string());
     e
 }
 
@@ -65,7 +65,7 @@ pub fn make_element_with_id_and_text(
     bounds: Bounds,
 ) -> Element {
     let mut e = make_element(element_type, bounds);
-    e.id = Some(id.to_string());
+    e.accessibility_id = Some(id.to_string());
     e.text = Some(text.to_string());
     e
 }

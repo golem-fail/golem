@@ -16,11 +16,11 @@ steps = [
   { action = "launch", app = "com.golem.test" },
 
   # Long press on list item with default duration (1000ms)
-  { action = "long_press", id = "list-item-0" },
+  { action = "long_press", accessibility_id = "list-item-0" },
 
   # Long press on submit button with custom duration
-  { action = "long_press", id = "submit-button", duration = 2000 },
+  { action = "long_press", accessibility_id = "submit-button", duration = 2000 },
 
   # Long press on a carousel card
-  { action = "long_press", id = "carousel-item-0", duration = 1500 },
+  { action = "long_press", accessibility_id = "carousel-item-0", duration = 1500 },
 ]

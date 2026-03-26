@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 pub struct Element {
     pub element_type: String,
     pub text: Option<String>,
-    pub id: Option<String>,
+    pub accessibility_id: Option<String>,
     pub placeholder: Option<String>,
     #[serde(default)]
     pub enabled: bool,
@@ -84,7 +84,7 @@ mod tests {
         Element {
             element_type: element_type.to_string(),
             text: None,
-            id: None,
+            accessibility_id: None,
             placeholder: None,
             enabled: true,
             checked: false,
@@ -122,7 +122,7 @@ mod tests {
         let elem = Element {
             element_type: "TextField".to_string(),
             text: Some("hello".to_string()),
-            id: Some("input-1".to_string()),
+            accessibility_id: Some("input-1".to_string()),
             placeholder: Some("Enter name".to_string()),
             enabled: true,
             checked: false,
@@ -137,7 +137,7 @@ mod tests {
 
         assert_eq!(deserialized.element_type, "TextField");
         assert_eq!(deserialized.text.as_deref(), Some("hello"));
-        assert_eq!(deserialized.id.as_deref(), Some("input-1"));
+        assert_eq!(deserialized.accessibility_id.as_deref(), Some("input-1"));
         assert_eq!(deserialized.placeholder.as_deref(), Some("Enter name"));
         assert!(deserialized.enabled);
         assert!(!deserialized.checked);

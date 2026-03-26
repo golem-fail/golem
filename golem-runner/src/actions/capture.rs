@@ -45,7 +45,7 @@ mod tests {
         let mut vars = make_vars();
 
         let mut step = make_step("read");
-        step.id = Some("otp-code".to_string());
+        step.accessibility_id = Some("otp-code".to_string());
         step.save_to = Some("otp".to_string());
 
         handle_read(&step, &driver, &mut vars)
@@ -71,7 +71,7 @@ mod tests {
         let mut vars = make_vars();
 
         let mut step = make_step("read");
-        step.id = Some("info".to_string());
+        step.accessibility_id = Some("info".to_string());
         // No save_to set
 
         handle_read(&step, &driver, &mut vars)

@@ -19,71 +19,71 @@ name = "verify_initial_state"
 steps = [
   # Launch the app
   { action = "launch", app = "com.golem.test" },
-  { action = "wait", id = "counter-display", timeout = 10000 },
+  { action = "wait", accessibility_id = "counter-display", timeout = 10000 },
 
   # Verify the counter starts at zero
-  { action = "assert_text", id = "counter-display", text = "0" },
+  { action = "assert_text", accessibility_id = "counter-display", text = "0" },
 
   # Verify both buttons are visible and enabled
-  { action = "assert_visible", id = "increment-button" },
-  { action = "assert_visible", id = "decrement-button" },
-  { action = "assert_enabled", id = "increment-button" },
-  { action = "assert_enabled", id = "decrement-button" },
+  { action = "assert_visible", accessibility_id = "increment-button" },
+  { action = "assert_visible", accessibility_id = "decrement-button" },
+  { action = "assert_enabled", accessibility_id = "increment-button" },
+  { action = "assert_enabled", accessibility_id = "decrement-button" },
 ]
 
 [[block]]
 name = "increment_counter"
 steps = [
   # Increment the counter five times
-  { action = "tap", id = "increment-button" },
-  { action = "assert_text", id = "counter-display", text = "1" },
-  { action = "tap", id = "increment-button" },
-  { action = "assert_text", id = "counter-display", text = "2" },
-  { action = "tap", id = "increment-button" },
-  { action = "assert_text", id = "counter-display", text = "3" },
-  { action = "tap", id = "increment-button" },
-  { action = "tap", id = "increment-button" },
-  { action = "assert_text", id = "counter-display", text = "5" },
+  { action = "tap", accessibility_id = "increment-button" },
+  { action = "assert_text", accessibility_id = "counter-display", text = "1" },
+  { action = "tap", accessibility_id = "increment-button" },
+  { action = "assert_text", accessibility_id = "counter-display", text = "2" },
+  { action = "tap", accessibility_id = "increment-button" },
+  { action = "assert_text", accessibility_id = "counter-display", text = "3" },
+  { action = "tap", accessibility_id = "increment-button" },
+  { action = "tap", accessibility_id = "increment-button" },
+  { action = "assert_text", accessibility_id = "counter-display", text = "5" },
 
   # Read and save the counter value
-  { action = "read", id = "counter-display", save_to = "count_after_increment" },
+  { action = "read", accessibility_id = "counter-display", save_to = "count_after_increment" },
 ]
 
 [[block]]
 name = "decrement_counter"
 steps = [
   # Decrement the counter three times
-  { action = "tap", id = "decrement-button" },
-  { action = "assert_text", id = "counter-display", text = "4" },
-  { action = "tap", id = "decrement-button" },
-  { action = "assert_text", id = "counter-display", text = "3" },
-  { action = "tap", id = "decrement-button" },
-  { action = "assert_text", id = "counter-display", text = "2" },
+  { action = "tap", accessibility_id = "decrement-button" },
+  { action = "assert_text", accessibility_id = "counter-display", text = "4" },
+  { action = "tap", accessibility_id = "decrement-button" },
+  { action = "assert_text", accessibility_id = "counter-display", text = "3" },
+  { action = "tap", accessibility_id = "decrement-button" },
+  { action = "assert_text", accessibility_id = "counter-display", text = "2" },
 
   # Read and save the counter value after decrement
-  { action = "read", id = "counter-display", save_to = "count_after_decrement" },
+  { action = "read", accessibility_id = "counter-display", save_to = "count_after_decrement" },
 ]
 
 [[block]]
 name = "verify_button_states"
 steps = [
   # Verify buttons remain enabled at count = 2
-  { action = "assert_enabled", id = "increment-button" },
-  { action = "assert_enabled", id = "decrement-button" },
+  { action = "assert_enabled", accessibility_id = "increment-button" },
+  { action = "assert_enabled", accessibility_id = "decrement-button" },
 
   # Decrement to zero
-  { action = "tap", id = "decrement-button" },
-  { action = "tap", id = "decrement-button" },
-  { action = "assert_text", id = "counter-display", text = "0" },
+  { action = "tap", accessibility_id = "decrement-button" },
+  { action = "tap", accessibility_id = "decrement-button" },
+  { action = "assert_text", accessibility_id = "counter-display", text = "0" },
 
   # Verify the counter display shows zero
-  { action = "assert_visible", id = "counter-display" },
-  { action = "assert_text", id = "counter-display", text = "0" },
+  { action = "assert_visible", accessibility_id = "counter-display" },
+  { action = "assert_text", accessibility_id = "counter-display", text = "0" },
 
   # Verify increment button is still enabled at zero
-  { action = "assert_enabled", id = "increment-button" },
+  { action = "assert_enabled", accessibility_id = "increment-button" },
 
   # Increment once more to confirm functionality after reaching zero
-  { action = "tap", id = "increment-button" },
-  { action = "assert_text", id = "counter-display", text = "1" },
+  { action = "tap", accessibility_id = "increment-button" },
+  { action = "assert_text", accessibility_id = "counter-display", text = "1" },
 ]
