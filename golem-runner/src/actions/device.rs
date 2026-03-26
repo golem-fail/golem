@@ -86,7 +86,7 @@ mod tests {
 
     #[tokio::test]
     async fn rotate_landscape_calls_driver_set_orientation() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("rotate");
@@ -109,7 +109,7 @@ mod tests {
 
     #[tokio::test]
     async fn dark_mode_enabled_calls_driver_set_dark_mode_true() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("dark_mode");
@@ -130,7 +130,7 @@ mod tests {
 
     #[tokio::test]
     async fn dark_mode_disabled_calls_driver_set_dark_mode_false() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("dark_mode");
@@ -151,7 +151,7 @@ mod tests {
 
     #[tokio::test]
     async fn set_location_calls_driver_set_location_with_correct_coords() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("set_location");
@@ -174,7 +174,7 @@ mod tests {
 
     #[tokio::test]
     async fn press_home_calls_driver_press_button() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("press");
@@ -197,7 +197,7 @@ mod tests {
 
     #[tokio::test]
     async fn grant_permission_calls_driver_grant_permission() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("grant_permission");
@@ -221,7 +221,7 @@ mod tests {
 
     #[tokio::test]
     async fn revoke_permission_calls_driver_revoke_permission() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("revoke_permission");
@@ -248,7 +248,7 @@ mod tests {
 
     #[tokio::test]
     async fn rotate_without_orientation_returns_error() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let step = make_step("rotate");

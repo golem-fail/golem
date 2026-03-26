@@ -84,7 +84,7 @@ mod tests {
 
     #[tokio::test]
     async fn wait_not_succeeds_immediately_when_element_absent() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("wait_not");

@@ -22,37 +22,37 @@ pub struct IosDriver {
 /// Uses a standard iPhone screen size (390x844) with the center as
 /// the origin point and a 200pt gesture distance.
 fn direction_to_swipe_coords(direction: Direction) -> SwipeRequest {
-    let center_x: f64 = 195.0;
-    let center_y: f64 = 422.0;
-    let distance: f64 = 200.0;
+    let center_x: i32 = 195;
+    let center_y: i32 = 422;
+    let distance: i32 = 200;
     let duration_ms: u64 = 300;
 
     match direction {
         Direction::Up => SwipeRequest {
             from_x: center_x,
-            from_y: center_y + distance / 2.0,
+            from_y: center_y + distance / 2,
             to_x: center_x,
-            to_y: center_y - distance / 2.0,
+            to_y: center_y - distance / 2,
             duration_ms,
         },
         Direction::Down => SwipeRequest {
             from_x: center_x,
-            from_y: center_y - distance / 2.0,
+            from_y: center_y - distance / 2,
             to_x: center_x,
-            to_y: center_y + distance / 2.0,
+            to_y: center_y + distance / 2,
             duration_ms,
         },
         Direction::Left => SwipeRequest {
-            from_x: center_x + distance / 2.0,
+            from_x: center_x + distance / 2,
             from_y: center_y,
-            to_x: center_x - distance / 2.0,
+            to_x: center_x - distance / 2,
             to_y: center_y,
             duration_ms,
         },
         Direction::Right => SwipeRequest {
-            from_x: center_x - distance / 2.0,
+            from_x: center_x - distance / 2,
             from_y: center_y,
-            to_x: center_x + distance / 2.0,
+            to_x: center_x + distance / 2,
             to_y: center_y,
             duration_ms,
         },
@@ -109,13 +109,13 @@ impl PlatformDriver for IosDriver {
         parse_hierarchy(&text)
     }
 
-    async fn tap(&self, x: f64, y: f64) -> Result<()> {
+    async fn tap(&self, x: i32, y: i32) -> Result<()> {
         let body = build_tap_body(x, y)?;
         self.client.post_json("/tap", &body).await?;
         Ok(())
     }
 
-    async fn long_press(&self, x: f64, y: f64, duration_ms: u64) -> Result<()> {
+    async fn long_press(&self, x: i32, y: i32, duration_ms: u64) -> Result<()> {
         let body = build_long_press_body(x, y, duration_ms)?;
         self.client.post_json("/longpress", &body).await?;
         Ok(())
@@ -140,7 +140,7 @@ impl PlatformDriver for IosDriver {
         Ok(())
     }
 
-    async fn swipe_coords(&self, from_x: f64, from_y: f64, to_x: f64, to_y: f64) -> Result<()> {
+    async fn swipe_coords(&self, from_x: i32, from_y: i32, to_x: i32, to_y: i32) -> Result<()> {
         let body = build_swipe_body(from_x, from_y, to_x, to_y, 300)?;
         self.client.post_json("/swipe", &body).await?;
         Ok(())
@@ -359,7 +359,7 @@ mod tests {
         assert_eq!(btn.text.as_deref(), Some("Login"));
         assert_eq!(btn.id.as_deref(), Some("login_btn"));
         assert!(btn.clickable);
-        assert_eq!(btn.bounds, Bounds::new(100.0, 400.0, 190.0, 44.0));
+        assert_eq!(btn.bounds, Bounds::new(100, 400, 190, 44));
     }
 
     // -----------------------------------------------------------------------
@@ -455,10 +455,10 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn tap_request_serialization() {
-        let body = build_tap_body(150.5, 300.0).expect("serialize");
+        let body = build_tap_body(150, 300).expect("serialize");
         let parsed: serde_json::Value = serde_json::from_str(&body).expect("parse");
-        assert_eq!(parsed["x"], 150.5);
-        assert_eq!(parsed["y"], 300.0);
+        assert_eq!(parsed["x"], 150);
+        assert_eq!(parsed["y"], 300);
     }
 
     // -----------------------------------------------------------------------
@@ -486,10 +486,7 @@ mod tests {
         let req = direction_to_swipe_coords(Direction::Up);
         // Swiping up: from_y > to_y (finger moves up)
         assert!(req.from_y > req.to_y, "swiping up means from_y > to_y");
-        assert!(
-            (req.from_x - req.to_x).abs() < f64::EPSILON,
-            "vertical swipe keeps x constant"
-        );
+        assert_eq!(req.from_x, req.to_x, "vertical swipe keeps x constant");
     }
 
     #[test]
@@ -497,10 +494,7 @@ mod tests {
         let req = direction_to_swipe_coords(Direction::Down);
         // Swiping down: from_y < to_y
         assert!(req.from_y < req.to_y, "swiping down means from_y < to_y");
-        assert!(
-            (req.from_x - req.to_x).abs() < f64::EPSILON,
-            "vertical swipe keeps x constant"
-        );
+        assert_eq!(req.from_x, req.to_x, "vertical swipe keeps x constant");
     }
 
     #[test]
@@ -511,10 +505,7 @@ mod tests {
             req.from_x > req.to_x,
             "swiping left means from_x > to_x"
         );
-        assert!(
-            (req.from_y - req.to_y).abs() < f64::EPSILON,
-            "horizontal swipe keeps y constant"
-        );
+        assert_eq!(req.from_y, req.to_y, "horizontal swipe keeps y constant");
     }
 
     #[test]
@@ -525,20 +516,17 @@ mod tests {
             req.from_x < req.to_x,
             "swiping right means from_x < to_x"
         );
-        assert!(
-            (req.from_y - req.to_y).abs() < f64::EPSILON,
-            "horizontal swipe keeps y constant"
-        );
+        assert_eq!(req.from_y, req.to_y, "horizontal swipe keeps y constant");
     }
 
     #[test]
     fn swipe_body_serialization() {
-        let body = build_swipe_body(10.0, 20.0, 30.0, 40.0, 500).expect("serialize");
+        let body = build_swipe_body(10, 20, 30, 40, 500).expect("serialize");
         let parsed: serde_json::Value = serde_json::from_str(&body).expect("parse");
-        assert_eq!(parsed["from_x"], 10.0);
-        assert_eq!(parsed["from_y"], 20.0);
-        assert_eq!(parsed["to_x"], 30.0);
-        assert_eq!(parsed["to_y"], 40.0);
+        assert_eq!(parsed["from_x"], 10);
+        assert_eq!(parsed["from_y"], 20);
+        assert_eq!(parsed["to_x"], 30);
+        assert_eq!(parsed["to_y"], 40);
         assert_eq!(parsed["duration_ms"], 500);
     }
 
@@ -547,10 +535,10 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn long_press_request_serialization() {
-        let body = build_long_press_body(200.0, 400.0, 1500).expect("serialize");
+        let body = build_long_press_body(200, 400, 1500).expect("serialize");
         let parsed: serde_json::Value = serde_json::from_str(&body).expect("parse");
-        assert_eq!(parsed["x"], 200.0);
-        assert_eq!(parsed["y"], 400.0);
+        assert_eq!(parsed["x"], 200);
+        assert_eq!(parsed["y"], 400);
         assert_eq!(parsed["duration_ms"], 1500);
     }
 

@@ -44,7 +44,7 @@ fn empty_hierarchy() -> Element {
         checked: false,
         clickable: true,
         focused: false,
-        bounds: Bounds::new(0.0, 0.0, 375.0, 812.0),
+        bounds: Bounds::new(0, 0, 375, 812),
         children: Vec::new(),
     }
 }
@@ -62,7 +62,7 @@ fn hierarchy_with_texts(texts: &[&str]) -> Element {
             checked: false,
             clickable: true,
             focused: false,
-            bounds: Bounds::new(10.0, (i as f64) * 50.0, 200.0, 40.0),
+            bounds: Bounds::new(10, (i as i32) * 50, 200, 40),
             children: Vec::new(),
         })
         .collect();
@@ -76,7 +76,7 @@ fn hierarchy_with_texts(texts: &[&str]) -> Element {
         checked: false,
         clickable: true,
         focused: false,
-        bounds: Bounds::new(0.0, 0.0, 375.0, 812.0),
+        bounds: Bounds::new(0, 0, 375, 812),
         children,
     }
 }

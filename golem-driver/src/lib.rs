@@ -31,10 +31,10 @@ pub trait PlatformDriver: Send + Sync {
     async fn get_hierarchy(&self) -> anyhow::Result<Element>;
 
     /// Tap at specific screen coordinates
-    async fn tap(&self, x: f64, y: f64) -> anyhow::Result<()>;
+    async fn tap(&self, x: i32, y: i32) -> anyhow::Result<()>;
 
     /// Long press at coordinates for a duration
-    async fn long_press(&self, x: f64, y: f64, duration_ms: u64) -> anyhow::Result<()>;
+    async fn long_press(&self, x: i32, y: i32, duration_ms: u64) -> anyhow::Result<()>;
 
     /// Type text into the currently focused field
     async fn type_text(&self, text: &str) -> anyhow::Result<()>;
@@ -48,10 +48,10 @@ pub trait PlatformDriver: Send + Sync {
     /// Perform a swipe between specific coordinates
     async fn swipe_coords(
         &self,
-        from_x: f64,
-        from_y: f64,
-        to_x: f64,
-        to_y: f64,
+        from_x: i32,
+        from_y: i32,
+        to_x: i32,
+        to_y: i32,
     ) -> anyhow::Result<()>;
 
     /// Take a screenshot
@@ -166,12 +166,12 @@ impl PlatformDriver for MockPlatformDriver {
         Ok(self.hierarchy.lock().expect("lock poisoned").clone())
     }
 
-    async fn tap(&self, x: f64, y: f64) -> anyhow::Result<()> {
+    async fn tap(&self, x: i32, y: i32) -> anyhow::Result<()> {
         self.record_call("tap", vec![x.to_string(), y.to_string()]);
         Ok(())
     }
 
-    async fn long_press(&self, x: f64, y: f64, duration_ms: u64) -> anyhow::Result<()> {
+    async fn long_press(&self, x: i32, y: i32, duration_ms: u64) -> anyhow::Result<()> {
         self.record_call(
             "long_press",
             vec![x.to_string(), y.to_string(), duration_ms.to_string()],
@@ -196,10 +196,10 @@ impl PlatformDriver for MockPlatformDriver {
 
     async fn swipe_coords(
         &self,
-        from_x: f64,
-        from_y: f64,
-        to_x: f64,
-        to_y: f64,
+        from_x: i32,
+        from_y: i32,
+        to_x: i32,
+        to_y: i32,
     ) -> anyhow::Result<()> {
         self.record_call(
             "swipe_coords",
@@ -349,28 +349,28 @@ mod tests {
     }
 
     fn default_hierarchy() -> Element {
-        make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0))
+        make_element("View", Bounds::new(0, 0, 375, 812))
     }
 
     #[tokio::test]
     async fn mock_records_tap_calls_with_coordinates() {
         let driver = MockPlatformDriver::new(default_hierarchy());
 
-        driver.tap(100.0, 200.0).await.expect("tap failed");
-        driver.tap(50.5, 75.5).await.expect("tap failed");
+        driver.tap(100, 200).await.expect("tap failed");
+        driver.tap(50, 75).await.expect("tap failed");
 
         let calls = driver.get_calls();
         assert_eq!(calls.len(), 2);
         assert_eq!(calls[0].0, "tap");
         assert_eq!(calls[0].1, vec!["100", "200"]);
         assert_eq!(calls[1].0, "tap");
-        assert_eq!(calls[1].1, vec!["50.5", "75.5"]);
+        assert_eq!(calls[1].1, vec!["50", "75"]);
     }
 
     #[tokio::test]
     async fn mock_returns_configured_hierarchy() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
-        let button = make_element("Button", Bounds::new(10.0, 10.0, 100.0, 44.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let button = make_element("Button", Bounds::new(10, 10, 100, 44));
         root.children.push(button);
 
         let driver = MockPlatformDriver::new(root);
@@ -381,7 +381,7 @@ mod tests {
         assert_eq!(hierarchy.children[0].element_type, "Button");
 
         // Update hierarchy and verify it changes
-        let new_root = make_element("Screen", Bounds::new(0.0, 0.0, 390.0, 844.0));
+        let new_root = make_element("Screen", Bounds::new(0, 0, 390, 844));
         driver.set_hierarchy(new_root);
 
         let updated = driver.get_hierarchy().await.expect("get_hierarchy failed");
@@ -419,7 +419,7 @@ mod tests {
         assert!(alert.is_none());
 
         // Set an alert
-        let alert_element = make_element("Alert", Bounds::new(50.0, 200.0, 275.0, 150.0));
+        let alert_element = make_element("Alert", Bounds::new(50, 200, 275, 150));
         driver.set_alert(Some(alert_element));
 
         // Alert is now present

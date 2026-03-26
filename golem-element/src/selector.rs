@@ -239,7 +239,7 @@ mod tests {
 
     // ── Test helpers ──────────────────────────────────────────────────
 
-    fn bounds(x: f64, y: f64, w: f64, h: f64) -> Bounds {
+    fn bounds(x: i32, y: i32, w: i32, h: i32) -> Bounds {
         Bounds::new(x, y, w, h)
     }
 
@@ -253,7 +253,7 @@ mod tests {
             checked: false,
             clickable: true,
             focused: false,
-            bounds: bounds(0.0, 0.0, 100.0, 40.0),
+            bounds: bounds(0, 0, 100, 40),
             children: Vec::new(),
         }
     }
@@ -725,7 +725,7 @@ mod tests {
 
     // ── Relational filter helpers ───────────────────────────────────
 
-    fn elem_at(element_type: &str, text: &str, x: f64, y: f64, w: f64, h: f64) -> Element {
+    fn elem_at(element_type: &str, text: &str, x: i32, y: i32, w: i32, h: i32) -> Element {
         let mut e = elem(element_type);
         e.text = Some(text.to_string());
         e.bounds = bounds(x, y, w, h);
@@ -737,13 +737,13 @@ mod tests {
     #[test]
     fn relational_below() {
         let mut root = elem("View");
-        root.bounds = bounds(0.0, 0.0, 400.0, 600.0);
+        root.bounds = bounds(0, 0, 400, 600);
         // Header at top: y=0, height=50 => bottom=50
-        root.children.push(elem_at("Label", "Header", 0.0, 0.0, 400.0, 50.0));
+        root.children.push(elem_at("Label", "Header", 0, 0, 400, 50));
         // Content below header: y=60 > 50
-        root.children.push(elem_at("Button", "Content", 0.0, 60.0, 400.0, 40.0));
+        root.children.push(elem_at("Button", "Content", 0, 60, 400, 40));
         // Sidebar at same level as header: y=10 (not below)
-        root.children.push(elem_at("Label", "Sidebar", 0.0, 10.0, 100.0, 40.0));
+        root.children.push(elem_at("Label", "Sidebar", 0, 10, 100, 40));
 
         let s = Selector {
             below: Some("Header".to_string()),
@@ -759,13 +759,13 @@ mod tests {
     #[test]
     fn relational_above() {
         let mut root = elem("View");
-        root.bounds = bounds(0.0, 0.0, 400.0, 600.0);
+        root.bounds = bounds(0, 0, 400, 600);
         // Title at top: y=0, height=30 => bottom=30
-        root.children.push(elem_at("Label", "Title", 0.0, 0.0, 400.0, 30.0));
+        root.children.push(elem_at("Label", "Title", 0, 0, 400, 30));
         // Footer at bottom: y=500
-        root.children.push(elem_at("Label", "Footer", 0.0, 500.0, 400.0, 50.0));
+        root.children.push(elem_at("Label", "Footer", 0, 500, 400, 50));
         // Body in middle: y=100, height=200 => bottom=300 < 500
-        root.children.push(elem_at("Label", "Body", 0.0, 100.0, 400.0, 200.0));
+        root.children.push(elem_at("Label", "Body", 0, 100, 400, 200));
 
         let s = Selector {
             above: Some("Footer".to_string()),
@@ -784,13 +784,13 @@ mod tests {
     #[test]
     fn relational_right_of() {
         let mut root = elem("View");
-        root.bounds = bounds(0.0, 0.0, 800.0, 100.0);
+        root.bounds = bounds(0, 0, 800, 100);
         // Label on the left: x=0, width=100 => right=100
-        root.children.push(elem_at("Label", "Label", 0.0, 0.0, 100.0, 40.0));
+        root.children.push(elem_at("Label", "Label", 0, 0, 100, 40));
         // Input to the right: x=120 > 100
-        root.children.push(elem_at("TextField", "Input", 120.0, 0.0, 200.0, 40.0));
+        root.children.push(elem_at("TextField", "Input", 120, 0, 200, 40));
         // Another label overlapping: x=50 (not to the right)
-        root.children.push(elem_at("Label", "Other", 50.0, 0.0, 80.0, 40.0));
+        root.children.push(elem_at("Label", "Other", 50, 0, 80, 40));
 
         let s = Selector {
             right_of: Some("Label".to_string()),
@@ -806,13 +806,13 @@ mod tests {
     #[test]
     fn relational_left_of() {
         let mut root = elem("View");
-        root.bounds = bounds(0.0, 0.0, 800.0, 100.0);
+        root.bounds = bounds(0, 0, 800, 100);
         // Icon on the left: x=0, width=30 => right=30
-        root.children.push(elem_at("Image", "Icon", 0.0, 0.0, 30.0, 30.0));
+        root.children.push(elem_at("Image", "Icon", 0, 0, 30, 30));
         // Button on the right: x=200
-        root.children.push(elem_at("Button", "Button", 200.0, 0.0, 100.0, 40.0));
+        root.children.push(elem_at("Button", "Button", 200, 0, 100, 40));
         // Another element overlapping: x=180, width=50 => right=230 (not to the left)
-        root.children.push(elem_at("Label", "Near", 180.0, 0.0, 50.0, 40.0));
+        root.children.push(elem_at("Label", "Near", 180, 0, 50, 40));
 
         let s = Selector {
             left_of: Some("Button".to_string()),
@@ -828,17 +828,17 @@ mod tests {
     #[test]
     fn relational_child_of() {
         let mut root = elem("View");
-        root.bounds = bounds(0.0, 0.0, 400.0, 600.0);
+        root.bounds = bounds(0, 0, 400, 600);
 
         let mut list = elem("View");
         list.text = Some("List".to_string());
-        list.bounds = bounds(0.0, 100.0, 400.0, 300.0);
-        list.children.push(elem_at("Label", "Item 1", 0.0, 100.0, 400.0, 40.0));
-        list.children.push(elem_at("Label", "Item 2", 0.0, 150.0, 400.0, 40.0));
+        list.bounds = bounds(0, 100, 400, 300);
+        list.children.push(elem_at("Label", "Item 1", 0, 100, 400, 40));
+        list.children.push(elem_at("Label", "Item 2", 0, 150, 400, 40));
         root.children.push(list);
 
         // Sibling of list, not a child
-        root.children.push(elem_at("Label", "Item 3", 0.0, 450.0, 400.0, 40.0));
+        root.children.push(elem_at("Label", "Item 3", 0, 450, 400, 40));
 
         let s = Selector {
             element_type: Some("Label".to_string()),
@@ -857,7 +857,7 @@ mod tests {
     #[test]
     fn relational_anchor_not_found() {
         let mut root = elem("View");
-        root.children.push(elem_at("Button", "Submit", 0.0, 100.0, 100.0, 40.0));
+        root.children.push(elem_at("Button", "Submit", 0, 100, 100, 40));
 
         let s = Selector {
             below: Some("Nonexistent".to_string()),
@@ -872,22 +872,22 @@ mod tests {
     #[test]
     fn combined_type_below_enabled() {
         let mut root = elem("View");
-        root.bounds = bounds(0.0, 0.0, 400.0, 600.0);
+        root.bounds = bounds(0, 0, 400, 600);
         // Header at top
-        root.children.push(elem_at("Label", "Header", 0.0, 0.0, 400.0, 50.0));
+        root.children.push(elem_at("Label", "Header", 0, 0, 400, 50));
 
         // Enabled button below header
-        let mut btn1 = elem_at("Button", "Enabled Btn", 0.0, 60.0, 200.0, 40.0);
+        let mut btn1 = elem_at("Button", "Enabled Btn", 0, 60, 200, 40);
         btn1.enabled = true;
         root.children.push(btn1);
 
         // Disabled button below header
-        let mut btn2 = elem_at("Button", "Disabled Btn", 0.0, 110.0, 200.0, 40.0);
+        let mut btn2 = elem_at("Button", "Disabled Btn", 0, 110, 200, 40);
         btn2.enabled = false;
         root.children.push(btn2);
 
         // Enabled label below header (wrong type)
-        root.children.push(elem_at("Label", "Info", 0.0, 160.0, 200.0, 40.0));
+        root.children.push(elem_at("Label", "Info", 0, 160, 200, 40));
 
         let s = Selector {
             element_type: Some("Button".to_string()),
@@ -905,13 +905,13 @@ mod tests {
     #[test]
     fn below_with_multiple_results() {
         let mut root = elem("View");
-        root.bounds = bounds(0.0, 0.0, 400.0, 600.0);
+        root.bounds = bounds(0, 0, 400, 600);
         // Header: bottom = 50
-        root.children.push(elem_at("Label", "Header", 0.0, 0.0, 400.0, 50.0));
+        root.children.push(elem_at("Label", "Header", 0, 0, 400, 50));
         // Three buttons below header
-        root.children.push(elem_at("Button", "Btn A", 0.0, 60.0, 200.0, 40.0));
-        root.children.push(elem_at("Button", "Btn B", 0.0, 110.0, 200.0, 40.0));
-        root.children.push(elem_at("Button", "Btn C", 0.0, 160.0, 200.0, 40.0));
+        root.children.push(elem_at("Button", "Btn A", 0, 60, 200, 40));
+        root.children.push(elem_at("Button", "Btn B", 0, 110, 200, 40));
+        root.children.push(elem_at("Button", "Btn C", 0, 160, 200, 40));
 
         let s = Selector {
             element_type: Some("Button".to_string()),
@@ -927,17 +927,17 @@ mod tests {
     #[test]
     fn child_of_excludes_siblings() {
         let mut root = elem("View");
-        root.bounds = bounds(0.0, 0.0, 400.0, 600.0);
+        root.bounds = bounds(0, 0, 400, 600);
 
         // Container "Panel"
         let mut panel = elem("View");
         panel.text = Some("Panel".to_string());
-        panel.bounds = bounds(0.0, 0.0, 200.0, 300.0);
-        panel.children.push(elem_at("Button", "Inside", 10.0, 10.0, 80.0, 30.0));
+        panel.bounds = bounds(0, 0, 200, 300);
+        panel.children.push(elem_at("Button", "Inside", 10, 10, 80, 30));
         root.children.push(panel);
 
         // Sibling button (not inside Panel)
-        root.children.push(elem_at("Button", "Outside", 210.0, 10.0, 80.0, 30.0));
+        root.children.push(elem_at("Button", "Outside", 210, 10, 80, 30));
 
         let s = Selector {
             element_type: Some("Button".to_string()),
@@ -954,24 +954,24 @@ mod tests {
     #[test]
     fn deep_descendant_found_by_child_of() {
         let mut root = elem("View");
-        root.bounds = bounds(0.0, 0.0, 400.0, 600.0);
+        root.bounds = bounds(0, 0, 400, 600);
 
         // Container "Wrapper" > View > View > deep Button
-        let deep_btn = elem_at("Button", "Deep Button", 10.0, 10.0, 80.0, 30.0);
+        let deep_btn = elem_at("Button", "Deep Button", 10, 10, 80, 30);
         let mut inner2 = elem("View");
-        inner2.bounds = bounds(5.0, 5.0, 190.0, 190.0);
+        inner2.bounds = bounds(5, 5, 190, 190);
         inner2.children.push(deep_btn);
         let mut inner1 = elem("View");
-        inner1.bounds = bounds(0.0, 0.0, 195.0, 195.0);
+        inner1.bounds = bounds(0, 0, 195, 195);
         inner1.children.push(inner2);
         let mut wrapper = elem("View");
         wrapper.text = Some("Wrapper".to_string());
-        wrapper.bounds = bounds(0.0, 0.0, 200.0, 200.0);
+        wrapper.bounds = bounds(0, 0, 200, 200);
         wrapper.children.push(inner1);
         root.children.push(wrapper);
 
         // Sibling button (not inside Wrapper)
-        root.children.push(elem_at("Button", "Shallow Button", 300.0, 10.0, 80.0, 30.0));
+        root.children.push(elem_at("Button", "Shallow Button", 300, 10, 80, 30));
 
         let s = Selector {
             element_type: Some("Button".to_string()),

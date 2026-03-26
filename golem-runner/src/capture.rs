@@ -155,7 +155,7 @@ mod tests {
             checked: false,
             clickable: true,
             focused: false,
-            bounds: Bounds::new(0.0, 0.0, 375.0, 812.0),
+            bounds: Bounds::new(0, 0, 375, 812),
             children: Vec::new(),
         }
     }

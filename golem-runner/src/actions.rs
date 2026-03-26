@@ -49,7 +49,7 @@ use wait::{handle_wait, handle_wait_not};
 async fn resolve_element_ignore_text(
     step: &Step,
     driver: &dyn PlatformDriver,
-) -> Result<(Element, (f64, f64))> {
+) -> Result<(Element, (i32, i32))> {
     let mut selector = build_selector(step);
     selector.text = None;
 
@@ -138,7 +138,7 @@ mod tests {
 
     #[tokio::test]
     async fn unknown_action_returns_error() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
         let ctx = test_ctx(Path::new("."));
@@ -162,7 +162,7 @@ mod tests {
 
     #[tokio::test]
     async fn unknown_action_still_returns_error_after_new_actions() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
         let ctx = test_ctx(Path::new("."));

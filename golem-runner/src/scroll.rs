@@ -145,7 +145,7 @@ mod tests {
     }
 
     fn default_bounds() -> Bounds {
-        Bounds::new(0.0, 0.0, 375.0, 812.0)
+        Bounds::new(0, 0, 375, 812)
     }
 
     fn sel_with_text(text: &str) -> Selector {
@@ -195,12 +195,12 @@ mod tests {
             Ok(hierarchies[clamped].clone())
         }
 
-        async fn tap(&self, x: f64, y: f64) -> anyhow::Result<()> {
+        async fn tap(&self, x: i32, y: i32) -> anyhow::Result<()> {
             self.record_call("tap", vec![x.to_string(), y.to_string()]);
             Ok(())
         }
 
-        async fn long_press(&self, x: f64, y: f64, duration_ms: u64) -> anyhow::Result<()> {
+        async fn long_press(&self, x: i32, y: i32, duration_ms: u64) -> anyhow::Result<()> {
             self.record_call(
                 "long_press",
                 vec![x.to_string(), y.to_string(), duration_ms.to_string()],
@@ -225,10 +225,10 @@ mod tests {
 
         async fn swipe_coords(
             &self,
-            from_x: f64,
-            from_y: f64,
-            to_x: f64,
-            to_y: f64,
+            from_x: i32,
+            from_y: i32,
+            to_x: i32,
+            to_y: i32,
         ) -> anyhow::Result<()> {
             self.record_call(
                 "swipe_coords",
@@ -372,7 +372,7 @@ mod tests {
         root.children.push(make_element_with_text(
             "Button",
             "Target",
-            Bounds::new(10.0, 10.0, 100.0, 44.0),
+            Bounds::new(10, 10, 100, 44),
         ));
 
         let driver = MockPlatformDriver::new(root);
@@ -402,7 +402,7 @@ mod tests {
             root.children.push(make_element_with_text(
                 "Label",
                 "Page 1",
-                Bounds::new(0.0, 0.0, 200.0, 40.0),
+                Bounds::new(0, 0, 200, 40),
             ));
             root
         };
@@ -412,7 +412,7 @@ mod tests {
             root.children.push(make_element_with_text(
                 "Button",
                 "Target",
-                Bounds::new(10.0, 100.0, 100.0, 44.0),
+                Bounds::new(10, 100, 100, 44),
             ));
             root
         };
@@ -447,7 +447,7 @@ mod tests {
                 root.children.push(make_element_with_text(
                     "Label",
                     &format!("Page {i}"),
-                    Bounds::new(0.0, 0.0, 200.0, 40.0),
+                    Bounds::new(0, 0, 200, 40),
                 ));
                 root
             })
@@ -478,7 +478,7 @@ mod tests {
             root.children.push(make_element_with_text(
                 "Label",
                 "Static Page",
-                Bounds::new(0.0, 0.0, 200.0, 40.0),
+                Bounds::new(0, 0, 200, 40),
             ));
             root
         };
@@ -487,7 +487,7 @@ mod tests {
             root.children.push(make_element_with_text(
                 "Label",
                 "Different Page",
-                Bounds::new(0.0, 0.0, 200.0, 40.0),
+                Bounds::new(0, 0, 200, 40),
             ));
             root
         };
@@ -496,7 +496,7 @@ mod tests {
             root.children.push(make_element_with_text(
                 "Label",
                 "Yet Another Page",
-                Bounds::new(0.0, 0.0, 200.0, 40.0),
+                Bounds::new(0, 0, 200, 40),
             ));
             root
         };
@@ -533,7 +533,7 @@ mod tests {
             root.children.push(make_element_with_text(
                 "Label",
                 "Bottom Page",
-                Bounds::new(0.0, 0.0, 200.0, 40.0),
+                Bounds::new(0, 0, 200, 40),
             ));
             root
         };
@@ -542,7 +542,7 @@ mod tests {
             root.children.push(make_element_with_text(
                 "Button",
                 "Target",
-                Bounds::new(10.0, 100.0, 100.0, 44.0),
+                Bounds::new(10, 100, 100, 44),
             ));
             root
         };
@@ -580,7 +580,7 @@ mod tests {
                 root.children.push(make_element_with_text(
                     "Label",
                     &format!("Screen {i}"),
-                    Bounds::new(0.0, 0.0, 200.0, 40.0),
+                    Bounds::new(0, 0, 200, 40),
                 ));
                 root
             })
@@ -621,7 +621,7 @@ mod tests {
             root.children.push(make_element_with_text(
                 "Label",
                 "Page A",
-                Bounds::new(0.0, 0.0, 200.0, 40.0),
+                Bounds::new(0, 0, 200, 40),
             ));
             root
         };
@@ -630,7 +630,7 @@ mod tests {
             root.children.push(make_element_with_text(
                 "Button",
                 "Found",
-                Bounds::new(10.0, 10.0, 100.0, 44.0),
+                Bounds::new(10, 10, 100, 44),
             ));
             root
         };
@@ -660,7 +660,7 @@ mod tests {
             root.children.push(make_element_with_text(
                 "Label",
                 "Page A",
-                Bounds::new(0.0, 0.0, 200.0, 40.0),
+                Bounds::new(0, 0, 200, 40),
             ));
             root
         };
@@ -669,7 +669,7 @@ mod tests {
             root.children.push(make_element_with_text(
                 "Button",
                 "Found",
-                Bounds::new(10.0, 10.0, 100.0, 44.0),
+                Bounds::new(10, 10, 100, 44),
             ));
             root
         };
@@ -699,7 +699,7 @@ mod tests {
             root.children.push(make_element_with_text(
                 "Label",
                 "Page A",
-                Bounds::new(0.0, 0.0, 200.0, 40.0),
+                Bounds::new(0, 0, 200, 40),
             ));
             root
         };
@@ -708,7 +708,7 @@ mod tests {
             root.children.push(make_element_with_text(
                 "Button",
                 "Found",
-                Bounds::new(10.0, 10.0, 100.0, 44.0),
+                Bounds::new(10, 10, 100, 44),
             ));
             root
         };
@@ -738,7 +738,7 @@ mod tests {
             root.children.push(make_element_with_text(
                 "Label",
                 "Page A",
-                Bounds::new(0.0, 0.0, 200.0, 40.0),
+                Bounds::new(0, 0, 200, 40),
             ));
             root
         };
@@ -747,7 +747,7 @@ mod tests {
             root.children.push(make_element_with_text(
                 "Button",
                 "Found",
-                Bounds::new(10.0, 10.0, 100.0, 44.0),
+                Bounds::new(10, 10, 100, 44),
             ));
             root
         };
@@ -781,7 +781,7 @@ mod tests {
                 root.children.push(make_element_with_text(
                     "Label",
                     &format!("Screen {i}"),
-                    Bounds::new(0.0, 0.0, 200.0, 40.0),
+                    Bounds::new(0, 0, 200, 40),
                 ));
                 root
             })
@@ -816,7 +816,7 @@ mod tests {
                 root.children.push(make_element_with_text(
                     "Label",
                     &format!("Page {i}"),
-                    Bounds::new(0.0, 0.0, 200.0, 40.0),
+                    Bounds::new(0, 0, 200, 40),
                 ));
                 root
             })
@@ -827,7 +827,7 @@ mod tests {
         target_root.children.push(make_element_with_text(
             "Button",
             "Target",
-            Bounds::new(10.0, 10.0, 100.0, 44.0),
+            Bounds::new(10, 10, 100, 44),
         ));
         hierarchies.push(target_root);
 
@@ -857,7 +857,7 @@ mod tests {
             root.children.push(make_element_with_text(
                 "Label",
                 "Static Content",
-                Bounds::new(0.0, 0.0, 200.0, 40.0),
+                Bounds::new(0, 0, 200, 40),
             ));
             root
         };
@@ -866,7 +866,7 @@ mod tests {
             root.children.push(make_element_with_text(
                 "Label",
                 "Different Content",
-                Bounds::new(0.0, 0.0, 200.0, 40.0),
+                Bounds::new(0, 0, 200, 40),
             ));
             root
         };

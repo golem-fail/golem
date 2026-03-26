@@ -140,16 +140,16 @@ mod tests {
                 checked: false,
                 clickable: false,
                 focused: false,
-                bounds: Bounds::new(0.0, 0.0, 375.0, 812.0),
+                bounds: Bounds::new(0, 0, 375, 812),
                 children: vec![],
             })
         }
 
-        async fn tap(&self, _x: f64, _y: f64) -> anyhow::Result<()> {
+        async fn tap(&self, _x: i32, _y: i32) -> anyhow::Result<()> {
             Ok(())
         }
 
-        async fn long_press(&self, _x: f64, _y: f64, _duration_ms: u64) -> anyhow::Result<()> {
+        async fn long_press(&self, _x: i32, _y: i32, _duration_ms: u64) -> anyhow::Result<()> {
             Ok(())
         }
 
@@ -167,10 +167,10 @@ mod tests {
 
         async fn swipe_coords(
             &self,
-            _from_x: f64,
-            _from_y: f64,
-            _to_x: f64,
-            _to_y: f64,
+            _from_x: i32,
+            _from_y: i32,
+            _to_x: i32,
+            _to_y: i32,
         ) -> anyhow::Result<()> {
             Ok(())
         }

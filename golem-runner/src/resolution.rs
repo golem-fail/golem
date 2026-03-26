@@ -38,7 +38,7 @@ pub fn build_selector(step: &Step) -> Selector {
 pub async fn resolve_element(
     step: &Step,
     driver: &dyn PlatformDriver,
-) -> Result<(Element, (f64, f64))> {
+) -> Result<(Element, (i32, i32))> {
     let selector = build_selector(step);
     let root = driver.get_hierarchy().await?;
     let results = find_elements(&root, &selector);
@@ -116,16 +116,16 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_element_finds_by_text() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         root.children.push(make_element_with_text(
             "Button",
             "Submit",
-            Bounds::new(100.0, 200.0, 100.0, 44.0),
+            Bounds::new(100, 200, 100, 44),
         ));
         root.children.push(make_element_with_text(
             "Button",
             "Cancel",
-            Bounds::new(100.0, 260.0, 100.0, 44.0),
+            Bounds::new(100, 260, 100, 44),
         ));
 
         let driver = MockPlatformDriver::new(root);
@@ -136,16 +136,16 @@ mod tests {
             .await
             .expect("should find element");
         assert_eq!(elem.text.as_deref(), Some("Submit"));
-        assert!((tap_x - 150.0).abs() < f64::EPSILON);
-        assert!((tap_y - 222.0).abs() < f64::EPSILON);
+        assert_eq!(tap_x, 150);
+        assert_eq!(tap_y, 222);
     }
 
     // ── 2. resolve_element finds element by id ───────────────────────
 
     #[tokio::test]
     async fn resolve_element_finds_by_id() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
-        let mut btn = make_element("Button", Bounds::new(10.0, 10.0, 80.0, 40.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let mut btn = make_element("Button", Bounds::new(10, 10, 80, 40));
         btn.id = Some("btn-login".to_string());
         btn.text = Some("Login".to_string());
         root.children.push(btn);
@@ -165,18 +165,18 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_element_combined_text_and_type() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         // A Label with text "Save"
         root.children.push(make_element_with_text(
             "Label",
             "Save",
-            Bounds::new(10.0, 10.0, 80.0, 30.0),
+            Bounds::new(10, 10, 80, 30),
         ));
         // A Button with text "Save"
         root.children.push(make_element_with_text(
             "Button",
             "Save",
-            Bounds::new(10.0, 50.0, 80.0, 40.0),
+            Bounds::new(10, 50, 80, 40),
         ));
 
         let driver = MockPlatformDriver::new(root);
@@ -195,7 +195,7 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_element_no_match_returns_error() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
         step.text = Some("Nonexistent".to_string());
@@ -213,21 +213,21 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_element_returns_first_match() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         root.children.push(make_element_with_text(
             "Button",
             "OK",
-            Bounds::new(10.0, 10.0, 80.0, 40.0),
+            Bounds::new(10, 10, 80, 40),
         ));
         root.children.push(make_element_with_text(
             "Button",
             "OK",
-            Bounds::new(10.0, 60.0, 80.0, 40.0),
+            Bounds::new(10, 60, 80, 40),
         ));
         root.children.push(make_element_with_text(
             "Button",
             "OK",
-            Bounds::new(10.0, 110.0, 80.0, 40.0),
+            Bounds::new(10, 110, 80, 40),
         ));
 
         let driver = MockPlatformDriver::new(root);
@@ -239,29 +239,29 @@ mod tests {
             .expect("should find first match");
         assert_eq!(elem.text.as_deref(), Some("OK"));
         // First button: center = (10+80/2, 10+40/2) = (50, 30)
-        assert!((tap_x - 50.0).abs() < f64::EPSILON);
-        assert!((tap_y - 30.0).abs() < f64::EPSILON);
+        assert_eq!(tap_x, 50);
+        assert_eq!(tap_y, 30);
     }
 
     // ── 6. resolve_element with index selects correct element ────────
 
     #[tokio::test]
     async fn resolve_element_with_index() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         root.children.push(make_element_with_text(
             "Button",
             "Item A",
-            Bounds::new(0.0, 0.0, 100.0, 40.0),
+            Bounds::new(0, 0, 100, 40),
         ));
         root.children.push(make_element_with_text(
             "Button",
             "Item B",
-            Bounds::new(0.0, 50.0, 100.0, 40.0),
+            Bounds::new(0, 50, 100, 40),
         ));
         root.children.push(make_element_with_text(
             "Button",
             "Item C",
-            Bounds::new(0.0, 100.0, 100.0, 40.0),
+            Bounds::new(0, 100, 100, 40),
         ));
 
         let driver = MockPlatformDriver::new(root);
@@ -279,24 +279,24 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_element_with_below() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 400.0, 600.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 400, 600));
         // Header at top: y=0, height=50 => bottom=50
         root.children.push(make_element_with_text(
             "Label",
             "Header",
-            Bounds::new(0.0, 0.0, 400.0, 50.0),
+            Bounds::new(0, 0, 400, 50),
         ));
         // Button above header area (y=10, not below)
         root.children.push(make_element_with_text(
             "Button",
             "Above",
-            Bounds::new(0.0, 10.0, 100.0, 30.0),
+            Bounds::new(0, 10, 100, 30),
         ));
         // Button below header (y=60 > 50)
         root.children.push(make_element_with_text(
             "Button",
             "Below",
-            Bounds::new(0.0, 60.0, 100.0, 40.0),
+            Bounds::new(0, 60, 100, 40),
         ));
 
         let driver = MockPlatformDriver::new(root);
@@ -349,21 +349,21 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_element_with_glob_pattern() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         root.children.push(make_element_with_text(
             "Label",
             "Item 1",
-            Bounds::new(0.0, 0.0, 100.0, 30.0),
+            Bounds::new(0, 0, 100, 30),
         ));
         root.children.push(make_element_with_text(
             "Label",
             "Item 2",
-            Bounds::new(0.0, 40.0, 100.0, 30.0),
+            Bounds::new(0, 40, 100, 30),
         ));
         root.children.push(make_element_with_text(
             "Label",
             "Other",
-            Bounds::new(0.0, 80.0, 100.0, 30.0),
+            Bounds::new(0, 80, 100, 30),
         ));
 
         let driver = MockPlatformDriver::new(root);
@@ -381,12 +381,12 @@ mod tests {
 
     #[tokio::test]
     async fn resolve_element_with_state_filters() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
 
         let mut enabled_checked = make_element_with_text(
             "Checkbox",
             "Option A",
-            Bounds::new(0.0, 0.0, 100.0, 30.0),
+            Bounds::new(0, 0, 100, 30),
         );
         enabled_checked.enabled = true;
         enabled_checked.checked = true;
@@ -395,7 +395,7 @@ mod tests {
         let mut enabled_unchecked = make_element_with_text(
             "Checkbox",
             "Option B",
-            Bounds::new(0.0, 40.0, 100.0, 30.0),
+            Bounds::new(0, 40, 100, 30),
         );
         enabled_unchecked.enabled = true;
         enabled_unchecked.checked = false;
@@ -404,7 +404,7 @@ mod tests {
         let mut disabled_checked = make_element_with_text(
             "Checkbox",
             "Option C",
-            Bounds::new(0.0, 80.0, 100.0, 30.0),
+            Bounds::new(0, 80, 100, 30),
         );
         disabled_checked.enabled = false;
         disabled_checked.checked = true;

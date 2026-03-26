@@ -77,21 +77,21 @@ pub fn make_vars() -> VariableStore {
 }
 
 pub fn root_with_button(text: &str) -> Element {
-    let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+    let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
     root.children.push(make_element_with_text(
         "Button",
         text,
-        Bounds::new(100.0, 200.0, 100.0, 44.0),
+        Bounds::new(100, 200, 100, 44),
     ));
     root
 }
 
 pub fn root_with_input(id: &str) -> Element {
-    let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+    let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
     root.children.push(make_element_with_id(
         "TextField",
         id,
-        Bounds::new(20.0, 100.0, 300.0, 44.0),
+        Bounds::new(20, 100, 300, 44),
     ));
     root
 }

@@ -157,7 +157,7 @@ mod tests {
 
     #[tokio::test]
     async fn assert_visible_fails_when_element_not_found() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_visible");
@@ -176,7 +176,7 @@ mod tests {
 
     #[tokio::test]
     async fn assert_not_visible_succeeds_when_element_not_found() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_not_visible");
@@ -210,12 +210,12 @@ mod tests {
 
     #[tokio::test]
     async fn assert_text_succeeds_when_text_matches() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         root.children.push(make_element_with_id_and_text(
             "Label",
             "total",
             "$42.00",
-            Bounds::new(50.0, 100.0, 200.0, 30.0),
+            Bounds::new(50, 100, 200, 30),
         ));
         let driver = MockPlatformDriver::new(root);
 
@@ -232,12 +232,12 @@ mod tests {
 
     #[tokio::test]
     async fn assert_text_fails_when_text_does_not_match() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         root.children.push(make_element_with_id_and_text(
             "Label",
             "total",
             "$99.99",
-            Bounds::new(50.0, 100.0, 200.0, 30.0),
+            Bounds::new(50, 100, 200, 30),
         ));
         let driver = MockPlatformDriver::new(root);
 
@@ -266,8 +266,8 @@ mod tests {
 
     #[tokio::test]
     async fn assert_enabled_succeeds_when_element_is_enabled() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
-        let mut btn = make_element_with_id("Button", "submit-button", Bounds::new(50.0, 200.0, 100.0, 44.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let mut btn = make_element_with_id("Button", "submit-button", Bounds::new(50, 200, 100, 44));
         btn.enabled = true;
         root.children.push(btn);
         let driver = MockPlatformDriver::new(root);
@@ -284,8 +284,8 @@ mod tests {
 
     #[tokio::test]
     async fn assert_enabled_fails_when_element_is_disabled() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
-        let mut btn = make_element_with_id("Button", "submit-button", Bounds::new(50.0, 200.0, 100.0, 44.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let mut btn = make_element_with_id("Button", "submit-button", Bounds::new(50, 200, 100, 44));
         btn.enabled = false;
         root.children.push(btn);
         let driver = MockPlatformDriver::new(root);
@@ -306,8 +306,8 @@ mod tests {
 
     #[tokio::test]
     async fn assert_checked_succeeds_when_element_is_checked() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
-        let mut cb = make_element_with_id("Checkbox", "agree-checkbox", Bounds::new(50.0, 300.0, 30.0, 30.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let mut cb = make_element_with_id("Checkbox", "agree-checkbox", Bounds::new(50, 300, 30, 30));
         cb.checked = true;
         root.children.push(cb);
         let driver = MockPlatformDriver::new(root);
@@ -324,8 +324,8 @@ mod tests {
 
     #[tokio::test]
     async fn assert_checked_fails_when_element_is_unchecked() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
-        let mut cb = make_element_with_id("Checkbox", "agree-checkbox", Bounds::new(50.0, 300.0, 30.0, 30.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let mut cb = make_element_with_id("Checkbox", "agree-checkbox", Bounds::new(50, 300, 30, 30));
         cb.checked = false;
         root.children.push(cb);
         let driver = MockPlatformDriver::new(root);
@@ -346,11 +346,11 @@ mod tests {
 
     #[tokio::test]
     async fn assert_alert_succeeds_when_alert_present() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         // Set up an alert element
-        let alert = make_element_with_text("Alert", "Delete this item?", Bounds::new(50.0, 200.0, 275.0, 150.0));
+        let alert = make_element_with_text("Alert", "Delete this item?", Bounds::new(50, 200, 275, 150));
         driver.set_alert(Some(alert));
 
         let step = make_step("assert_alert");
@@ -362,10 +362,10 @@ mod tests {
 
     #[tokio::test]
     async fn assert_alert_with_matching_text_pattern() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
-        let alert = make_element_with_text("Alert", "Delete this item?", Bounds::new(50.0, 200.0, 275.0, 150.0));
+        let alert = make_element_with_text("Alert", "Delete this item?", Bounds::new(50, 200, 275, 150));
         driver.set_alert(Some(alert));
 
         let mut step = make_step("assert_alert");
@@ -378,10 +378,10 @@ mod tests {
 
     #[tokio::test]
     async fn assert_alert_fails_with_mismatched_text_pattern() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
-        let alert = make_element_with_text("Alert", "Delete this item?", Bounds::new(50.0, 200.0, 275.0, 150.0));
+        let alert = make_element_with_text("Alert", "Delete this item?", Bounds::new(50, 200, 275, 150));
         driver.set_alert(Some(alert));
 
         let mut step = make_step("assert_alert");
@@ -398,7 +398,7 @@ mod tests {
 
     #[tokio::test]
     async fn assert_alert_fails_when_no_alert_displayed() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
         // No alert set -- default is None
 

@@ -13,7 +13,7 @@ use super::resolve_element_ignore_text;
 const TAP_COOLDOWN: Duration = Duration::from_millis(300);
 const DOUBLE_TAP_INTERVAL: Duration = Duration::from_millis(40);
 
-async fn tap_at(driver: &dyn PlatformDriver, x: f64, y: f64) -> Result<()> {
+async fn tap_at(driver: &dyn PlatformDriver, x: i32, y: i32) -> Result<()> {
     driver.tap(x, y).await
 }
 
@@ -274,7 +274,7 @@ mod tests {
 
     #[tokio::test]
     async fn swipe_action_with_direction() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("swipe");
@@ -295,7 +295,7 @@ mod tests {
 
     #[tokio::test]
     async fn hide_keyboard_action() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let step = make_step("hide_keyboard");
@@ -356,7 +356,7 @@ mod tests {
 
     #[tokio::test]
     async fn swipe_all_directions() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         for (dir_str, expected) in [
@@ -387,7 +387,7 @@ mod tests {
 
     #[tokio::test]
     async fn swipe_invalid_direction_returns_error() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("swipe");
@@ -409,7 +409,7 @@ mod tests {
 
     #[tokio::test]
     async fn tap_on_nonexistent_element_returns_error() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("tap");
@@ -469,7 +469,7 @@ mod tests {
     #[tokio::test]
     async fn scroll_action_uses_custom_max_scrolls() {
         // Empty hierarchy -- element never found
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("scroll");
@@ -487,16 +487,16 @@ mod tests {
 
     #[tokio::test]
     async fn multiple_actions_in_sequence() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         root.children.push(make_element_with_id(
             "TextField",
             "username",
-            Bounds::new(20.0, 100.0, 300.0, 44.0),
+            Bounds::new(20, 100, 300, 44),
         ));
         root.children.push(make_element_with_text(
             "Button",
             "Login",
-            Bounds::new(100.0, 200.0, 100.0, 44.0),
+            Bounds::new(100, 200, 100, 44),
         ));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();

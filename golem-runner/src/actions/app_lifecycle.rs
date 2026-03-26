@@ -38,7 +38,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_action_calls_driver_launch_app() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("launch");
@@ -58,7 +58,7 @@ mod tests {
 
     #[tokio::test]
     async fn stop_action_calls_driver_stop_app() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("stop");
@@ -78,7 +78,7 @@ mod tests {
 
     #[tokio::test]
     async fn clear_data_action_calls_driver_clear_app_data() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("clear_data");
@@ -98,7 +98,7 @@ mod tests {
 
     #[tokio::test]
     async fn launch_without_app_param_returns_error() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let step = make_step("launch");

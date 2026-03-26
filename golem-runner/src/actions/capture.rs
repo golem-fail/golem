@@ -34,12 +34,12 @@ mod tests {
 
     #[tokio::test]
     async fn read_action_captures_text_into_variable() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         root.children.push(make_element_with_id_and_text(
             "Label",
             "otp-code",
             "123456",
-            Bounds::new(50.0, 300.0, 200.0, 30.0),
+            Bounds::new(50, 300, 200, 30),
         ));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();
@@ -60,12 +60,12 @@ mod tests {
 
     #[tokio::test]
     async fn read_without_save_to_does_not_error() {
-        let mut root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         root.children.push(make_element_with_id_and_text(
             "Label",
             "info",
             "Some text",
-            Bounds::new(10.0, 10.0, 100.0, 30.0),
+            Bounds::new(10, 10, 100, 30),
         ));
         let driver = MockPlatformDriver::new(root);
         let mut vars = make_vars();

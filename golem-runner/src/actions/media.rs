@@ -55,7 +55,7 @@ mod tests {
 
     #[tokio::test]
     async fn screenshot_calls_driver_screenshot() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let step = make_step("screenshot");
@@ -73,7 +73,7 @@ mod tests {
 
     #[tokio::test]
     async fn start_recording_calls_driver_start_recording() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let step = make_step("start_recording");
@@ -93,7 +93,7 @@ mod tests {
 
     #[tokio::test]
     async fn stop_recording_calls_driver_stop_recording() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let step = make_step("stop_recording");
@@ -111,7 +111,7 @@ mod tests {
 
     #[tokio::test]
     async fn add_media_calls_driver_add_media() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("add_media");
@@ -134,7 +134,7 @@ mod tests {
 
     #[tokio::test]
     async fn add_media_without_path_returns_error() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let step = make_step("add_media");

@@ -10,8 +10,8 @@ use serde::Deserialize;
 
 #[derive(Debug, Serialize)]
 pub(crate) struct TapRequest {
-    pub x: f64,
-    pub y: f64,
+    pub x: i32,
+    pub y: i32,
 }
 
 #[derive(Debug, Serialize)]
@@ -26,17 +26,17 @@ pub(crate) struct BackspaceRequest {
 
 #[derive(Debug, Serialize)]
 pub(crate) struct LongPressRequest {
-    pub x: f64,
-    pub y: f64,
+    pub x: i32,
+    pub y: i32,
     pub duration_ms: u64,
 }
 
 #[derive(Debug, Serialize)]
 pub(crate) struct SwipeRequest {
-    pub from_x: f64,
-    pub from_y: f64,
-    pub to_x: f64,
-    pub to_y: f64,
+    pub from_x: i32,
+    pub from_y: i32,
+    pub to_x: i32,
+    pub to_y: i32,
     pub duration_ms: u64,
 }
 
@@ -86,7 +86,7 @@ pub(crate) fn parse_hierarchy(json: &str) -> Result<Element> {
                 "checked": false,
                 "clickable": false,
                 "focused": false,
-                "bounds": { "x": 0.0, "y": 0.0, "width": 0.0, "height": 0.0 },
+                "bounds": { "x": 0, "y": 0, "width": 0, "height": 0 },
                 "children": arr
             });
             val = wrapped;
@@ -150,10 +150,10 @@ fn normalize_json(val: &mut serde_json::Value) {
         // Android: convert bounds from {left,top,right,bottom} → {x,y,width,height}
         if let Some(serde_json::Value::Object(bounds)) = map.get_mut("bounds") {
             if bounds.contains_key("left") && !bounds.contains_key("x") {
-                let left = bounds.get("left").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let top = bounds.get("top").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let right = bounds.get("right").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let bottom = bounds.get("bottom").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let left = bounds.get("left").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                let top = bounds.get("top").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                let right = bounds.get("right").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                let bottom = bounds.get("bottom").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                 bounds.insert("x".to_string(), serde_json::json!(left));
                 bounds.insert("y".to_string(), serde_json::json!(top));
                 bounds.insert("width".to_string(), serde_json::json!(right - left));
@@ -217,7 +217,7 @@ fn promote_labels_json_inner(map: &mut serde_json::Map<String, serde_json::Value
 }
 
 /// Build the JSON body for a tap request.
-pub(crate) fn build_tap_body(x: f64, y: f64) -> Result<String> {
+pub(crate) fn build_tap_body(x: i32, y: i32) -> Result<String> {
     serde_json::to_string(&TapRequest { x, y }).context("failed to serialize tap request")
 }
 
@@ -233,7 +233,7 @@ pub(crate) fn build_backspace_body(count: u32) -> Result<String> {
 }
 
 /// Build the JSON body for a long-press request.
-pub(crate) fn build_long_press_body(x: f64, y: f64, duration_ms: u64) -> Result<String> {
+pub(crate) fn build_long_press_body(x: i32, y: i32, duration_ms: u64) -> Result<String> {
     serde_json::to_string(&LongPressRequest {
         x,
         y,
@@ -244,10 +244,10 @@ pub(crate) fn build_long_press_body(x: f64, y: f64, duration_ms: u64) -> Result<
 
 /// Build the JSON body for a swipe request.
 pub(crate) fn build_swipe_body(
-    from_x: f64,
-    from_y: f64,
-    to_x: f64,
-    to_y: f64,
+    from_x: i32,
+    from_y: i32,
+    to_x: i32,
+    to_y: i32,
     duration_ms: u64,
 ) -> Result<String> {
     serde_json::to_string(&SwipeRequest {

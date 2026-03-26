@@ -385,7 +385,7 @@ mod tests {
 
     #[tokio::test]
     async fn open_link_calls_driver_open_url() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("open_link");
@@ -408,7 +408,7 @@ mod tests {
 
     #[tokio::test]
     async fn push_notification_calls_driver_push_notification() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("push_notification");
@@ -577,7 +577,7 @@ mod tests {
 
     #[tokio::test]
     async fn open_link_without_url_returns_error() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let step = make_step("open_link");
@@ -614,7 +614,7 @@ mod tests {
 
     #[tokio::test]
     async fn dismiss_alert_calls_driver_dismiss_alert() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let step = make_step("dismiss_alert");
@@ -634,7 +634,7 @@ mod tests {
 
     #[tokio::test]
     async fn dismiss_alert_with_button_text_from_text_field() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("dismiss_alert");
@@ -652,7 +652,7 @@ mod tests {
 
     #[tokio::test]
     async fn dismiss_alert_with_button_from_params() {
-        let root = make_element("View", Bounds::new(0.0, 0.0, 375.0, 812.0));
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("dismiss_alert");
