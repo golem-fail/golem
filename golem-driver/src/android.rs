@@ -3,7 +3,7 @@ use crate::common::{
     build_tap_body, build_type_body, find_alert, parse_hierarchy, CompanionClient, SwipeRequest,
 };
 use crate::{Direction, PlatformDriver, ScreenshotResult};
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use golem_element::Element;
 
@@ -353,6 +353,18 @@ impl PlatformDriver for AndroidDriver {
         };
         let body = build_alert_body(action)?;
         self.client.post_json("/alert", &body).await?;
+        Ok(())
+    }
+
+    async fn remove_port_forwards(&self) -> Result<()> {
+        let output = tokio::process::Command::new("adb")
+            .args(["-s", &self.device_serial, "forward", "--remove-all"])
+            .output()
+            .await?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("adb forward --remove-all failed: {stderr}");
+        }
         Ok(())
     }
 }

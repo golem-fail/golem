@@ -306,6 +306,10 @@ impl PlatformDriver for IosDriver {
         self.client.post_json("/alert", &body).await?;
         Ok(())
     }
+
+    async fn remove_port_forwards(&self) -> Result<()> {
+        Ok(()) // Not applicable to iOS
+    }
 }
 
 // ===========================================================================

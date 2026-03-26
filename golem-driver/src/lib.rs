@@ -112,6 +112,9 @@ pub trait PlatformDriver: Send + Sync {
 
     /// Dismiss alert by tapping a button
     async fn dismiss_alert(&self, button: Option<&str>) -> anyhow::Result<()>;
+
+    /// Remove adb port forwards (Android-only; no-op on iOS)
+    async fn remove_port_forwards(&self) -> anyhow::Result<()>;
 }
 
 /// Mock driver for testing — records calls and returns configured responses
@@ -324,6 +327,11 @@ impl PlatformDriver for MockPlatformDriver {
                 .unwrap_or_default(),
         );
         *self.alert.lock().expect("lock poisoned") = None;
+        Ok(())
+    }
+
+    async fn remove_port_forwards(&self) -> anyhow::Result<()> {
+        self.record_call("remove_port_forwards", vec![]);
         Ok(())
     }
 }

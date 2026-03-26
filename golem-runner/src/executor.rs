@@ -165,8 +165,7 @@ pub async fn execute_flow<'a>(
                 Ok(StepOutcome::Success) => {}
                 Ok(StepOutcome::Warning(msg)) => warnings.push(msg),
                 Ok(StepOutcome::Ignored) => {}
-                Err(e) => {
-                    warnings.push(format!("Step {step_idx} failed: {e}"));
+                Err(_e) => {
                     return Ok(FlowResult {
                         success: false,
                         warnings,

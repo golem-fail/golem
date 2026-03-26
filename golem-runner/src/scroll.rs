@@ -362,6 +362,11 @@ mod tests {
             );
             Ok(())
         }
+
+        async fn remove_port_forwards(&self) -> anyhow::Result<()> {
+            self.record_call("remove_port_forwards", vec![]);
+            Ok(())
+        }
     }
 
     // ── 1. Element found in initial hierarchy (no scroll needed) ─────

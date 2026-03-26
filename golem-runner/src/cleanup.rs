@@ -56,19 +56,8 @@ pub async fn auto_cleanup(
 
     // 4. Remove port forwards (Android only)
     if device.platform == golem_devices::Platform::Android {
-        match tokio::process::Command::new("adb")
-            .args(["-s", &device.udid, "forward", "--remove-all"])
-            .output()
-            .await
-        {
-            Ok(output) if !output.status.success() => {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                warnings.push(format!("Failed to remove port forwards: {stderr}"));
-            }
-            Err(e) => {
-                warnings.push(format!("Failed to remove port forwards: {e}"));
-            }
-            Ok(_) => {}
+        if let Err(e) = driver.remove_port_forwards().await {
+            warnings.push(format!("Failed to remove port forwards: {e}"));
         }
     }
 
@@ -103,6 +92,7 @@ mod tests {
         fail_dark_mode: bool,
         fail_stop_recording: bool,
         fail_set_location: bool,
+        fail_remove_port_forwards: bool,
     }
 
     impl FailableMockDriver {
@@ -113,6 +103,7 @@ mod tests {
                 fail_dark_mode: false,
                 fail_stop_recording: false,
                 fail_set_location: false,
+                fail_remove_port_forwards: false,
             }
         }
 
@@ -276,6 +267,14 @@ mod tests {
         }
 
         async fn dismiss_alert(&self, _button: Option<&str>) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn remove_port_forwards(&self) -> anyhow::Result<()> {
+            self.record("remove_port_forwards");
+            if self.fail_remove_port_forwards {
+                anyhow::bail!("remove port forwards failed");
+            }
             Ok(())
         }
     }
@@ -527,7 +526,8 @@ mod tests {
     // 11. auto_cleanup attempts port forward removal for Android devices
     #[tokio::test]
     async fn auto_cleanup_attempts_port_forward_removal_for_android() {
-        let driver = FailableMockDriver::new();
+        let mut driver = FailableMockDriver::new();
+        driver.fail_remove_port_forwards = true;
         let device = android_test_device();
         let options = CleanupOptions {
             keep_devices: true,
