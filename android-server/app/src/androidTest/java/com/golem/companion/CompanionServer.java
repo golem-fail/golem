@@ -17,7 +17,6 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
@@ -58,9 +57,7 @@ public class CompanionServer {
         if (parts.length < 2) return;
 
         String method = parts[0];
-        String fullPath = parts[1];
-        String path = fullPath.split("\\?")[0];
-        Map<String, String> query = parseQuery(fullPath);
+        String path = parts[1].split("\\?")[0];
 
         // Read headers
         Map<String, String> headers = new HashMap<>();
@@ -87,22 +84,6 @@ public class CompanionServer {
             body = new String(buf, 0, read);
         }
 
-        // Merge JSON body parameters into query map so handlers work with
-        // both query-parameter and JSON-body request styles.
-        if (!body.isEmpty()) {
-            try {
-                JSONObject jsonBody = new JSONObject(body);
-                for (java.util.Iterator<String> it = jsonBody.keys(); it.hasNext(); ) {
-                    String key = it.next();
-                    if (!query.containsKey(key)) {
-                        query.put(key, jsonBody.optString(key, ""));
-                    }
-                }
-            } catch (Exception ignored) {
-                // Not valid JSON — ignore
-            }
-        }
-
         OutputStream out = client.getOutputStream();
 
         try {
@@ -114,19 +95,19 @@ public class CompanionServer {
                     handleHierarchy(out);
                     break;
                 case "/tap":
-                    handleTap(out, query);
+                    handleTap(out, body);
                     break;
                 case "/longpress":
-                    handleLongPress(out, query);
+                    handleLongPress(out, body);
                     break;
                 case "/type":
-                    handleType(out, query);
+                    handleType(out, body);
                     break;
                 case "/backspace":
-                    handleBackspace(out);
+                    handleBackspace(out, body);
                     break;
                 case "/swipe":
-                    handleSwipe(out, query);
+                    handleSwipe(out, body);
                     break;
                 case "/screenshot":
                     handleScreenshot(out);
@@ -164,56 +145,48 @@ public class CompanionServer {
         }
     }
 
-    private void handleTap(OutputStream out, Map<String, String> query) throws Exception {
-        String x = query.get("x");
-        String y = query.get("y");
-        if (x == null || y == null) {
-            sendJson(out, 400, new JSONObject().put("error", "x and y required"));
-            return;
-        }
+    private void handleTap(OutputStream out, String body) throws Exception {
+        JSONObject req = new JSONObject(body);
+        int x = req.getInt("x");
+        int y = req.getInt("y");
         executeShell("input tap " + x + " " + y);
         sendJson(out, 200, new JSONObject().put("status", "ok"));
     }
 
-    private void handleLongPress(OutputStream out, Map<String, String> query) throws Exception {
-        String x = query.get("x");
-        String y = query.get("y");
-        if (x == null || y == null) {
-            sendJson(out, 400, new JSONObject().put("error", "x and y required"));
-            return;
-        }
-        String duration = query.containsKey("duration") ? query.get("duration") : "1500";
+    private void handleLongPress(OutputStream out, String body) throws Exception {
+        JSONObject req = new JSONObject(body);
+        int x = req.getInt("x");
+        int y = req.getInt("y");
+        long duration = req.optLong("duration_ms", 1500);
         executeShell("input swipe " + x + " " + y + " " + x + " " + y + " " + duration);
         sendJson(out, 200, new JSONObject().put("status", "ok"));
     }
 
-    private void handleSwipe(OutputStream out, Map<String, String> query) throws Exception {
-        String x1 = query.get("x1");
-        String y1 = query.get("y1");
-        String x2 = query.get("x2");
-        String y2 = query.get("y2");
-        if (x1 == null || y1 == null || x2 == null || y2 == null) {
-            sendJson(out, 400, new JSONObject().put("error", "x1, y1, x2, y2 required"));
-            return;
-        }
-        String duration = query.containsKey("duration") ? query.get("duration") : "300";
-        executeShell("input swipe " + x1 + " " + y1 + " " + x2 + " " + y2 + " " + duration);
+    private void handleSwipe(OutputStream out, String body) throws Exception {
+        JSONObject req = new JSONObject(body);
+        int fromX = req.getInt("from_x");
+        int fromY = req.getInt("from_y");
+        int toX = req.getInt("to_x");
+        int toY = req.getInt("to_y");
+        long duration = req.optLong("duration_ms", 300);
+        executeShell("input swipe " + fromX + " " + fromY + " " + toX + " " + toY + " " + duration);
         sendJson(out, 200, new JSONObject().put("status", "ok"));
     }
 
-    private void handleType(OutputStream out, Map<String, String> query) throws Exception {
-        String text = query.get("text");
-        if (text == null) {
-            sendJson(out, 400, new JSONObject().put("error", "text required"));
-            return;
-        }
+    private void handleType(OutputStream out, String body) throws Exception {
+        JSONObject req = new JSONObject(body);
+        String text = req.getString("text");
         String escaped = escapeForInputText(text);
         executeShell("input text " + escaped);
         sendJson(out, 200, new JSONObject().put("status", "ok"));
     }
 
-    private void handleBackspace(OutputStream out) throws Exception {
-        executeShell("input keyevent DEL");
+    private void handleBackspace(OutputStream out, String body) throws Exception {
+        JSONObject req = body.isEmpty() ? new JSONObject() : new JSONObject(body);
+        int count = req.optInt("count", 1);
+        for (int i = 0; i < count; i++) {
+            executeShell("input keyevent DEL");
+        }
         sendJson(out, 200, new JSONObject().put("status", "ok"));
     }
 
@@ -374,23 +347,6 @@ public class CompanionServer {
             }
         }
         return sb.toString();
-    }
-
-    private Map<String, String> parseQuery(String fullPath) {
-        Map<String, String> query = new HashMap<>();
-        int idx = fullPath.indexOf('?');
-        if (idx < 0) return query;
-        String qs = fullPath.substring(idx + 1);
-        for (String param : qs.split("&")) {
-            String[] kv = param.split("=", 2);
-            if (kv.length == 2) {
-                try {
-                    query.put(URLDecoder.decode(kv[0], "UTF-8"),
-                              URLDecoder.decode(kv[1], "UTF-8"));
-                } catch (Exception ignored) {}
-            }
-        }
-        return query;
     }
 
     private void sendJson(OutputStream out, int status, JSONObject json) throws IOException {

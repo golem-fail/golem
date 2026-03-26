@@ -104,7 +104,7 @@ final class RequestRouter {
               let y = params["y"] as? Double else {
             return .error("Missing x/y coordinates", status: 400)
         }
-        let duration = params["duration"] as? Double ?? 1.0
+        let duration = (params["duration_ms"] as? Double ?? 1000.0) / 1000.0
         let application = app(query: query)
         DispatchQueue.main.sync {
             application.activate()
@@ -144,13 +144,13 @@ final class RequestRouter {
 
     private func handleSwipe(body: Data?, query: [String: String]) -> HTTPResponse {
         guard let params = parseBody(body),
-              let startX = params["start_x"] as? Double,
-              let startY = params["start_y"] as? Double,
-              let endX = params["end_x"] as? Double,
-              let endY = params["end_y"] as? Double else {
-            return .error("Missing start_x/start_y/end_x/end_y coordinates", status: 400)
+              let startX = params["from_x"] as? Double,
+              let startY = params["from_y"] as? Double,
+              let endX = params["to_x"] as? Double,
+              let endY = params["to_y"] as? Double else {
+            return .error("Missing from_x/from_y/to_x/to_y coordinates", status: 400)
         }
-        let duration = params["duration"] as? Double ?? 0.3
+        let duration = (params["duration_ms"] as? Double ?? 300.0) / 1000.0
         let application = app(query: query)
         DispatchQueue.main.sync {
             application.activate()
