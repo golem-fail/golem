@@ -1,16 +1,45 @@
+use std::time::Duration;
+
 use anyhow::{bail, Result};
 use golem_driver::{Direction, PlatformDriver};
 use golem_parser::Step;
+use tokio::time::{sleep, Instant};
 
 use crate::resolution::{build_selector, resolve_element};
 use crate::scroll::{scroll_to_element, DEFAULT_MAX_SCROLLS};
 
 use super::resolve_element_ignore_text;
 
+const TAP_COOLDOWN: Duration = Duration::from_millis(300);
+const DOUBLE_TAP_INTERVAL: Duration = Duration::from_millis(40);
+
+async fn tap_at(driver: &dyn PlatformDriver, x: f64, y: f64) -> Result<()> {
+    driver.tap(x, y).await
+}
+
 /// Find the target element and tap at its center coordinates.
+/// Sleeps 300ms after tapping to prevent accidental double-tap side effects.
 pub(crate) async fn handle_tap(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
     let (_elem, (x, y)) = resolve_element(step, driver).await?;
-    driver.tap(x, y).await
+    tap_at(driver, x, y).await?;
+    sleep(TAP_COOLDOWN).await;
+    Ok(())
+}
+
+/// Find the target element and double-tap at its center coordinates.
+/// Two taps are fired with 40ms between the start of each, followed by a
+/// 300ms cooldown.
+pub(crate) async fn handle_double_tap(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let (_elem, (x, y)) = resolve_element(step, driver).await?;
+    let start = Instant::now();
+    tap_at(driver, x, y).await?;
+    let elapsed = start.elapsed();
+    if elapsed < DOUBLE_TAP_INTERVAL {
+        sleep(DOUBLE_TAP_INTERVAL - elapsed).await;
+    }
+    tap_at(driver, x, y).await?;
+    sleep(TAP_COOLDOWN).await;
+    Ok(())
 }
 
 /// Find the target element (input field), tap it to focus, then type text.
@@ -145,6 +174,28 @@ mod tests {
         assert_eq!(tap_calls.len(), 1);
         // Button bounds: x=100, y=200, w=100, h=44 => center = (150, 222)
         assert_eq!(tap_calls[0].1, vec!["150", "222"]);
+    }
+
+    // ── 2. doubleTap sends two taps at correct coordinates ───────────
+
+    #[tokio::test]
+    async fn double_tap_sends_two_taps_at_correct_coordinates() {
+        let root = root_with_button("Submit");
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("doubleTap");
+        step.text = Some("Submit".to_string());
+
+        handle_double_tap(&step, &driver)
+            .await
+            .expect("doubleTap SHALL succeed");
+
+        let calls = driver.get_calls();
+        let tap_calls: Vec<_> = calls.iter().filter(|c| c.0 == "tap").collect();
+        assert_eq!(tap_calls.len(), 2, "doubleTap SHALL produce exactly two tap calls");
+        // Both taps hit the same center: x=100+100/2=150, y=200+44/2=222
+        assert_eq!(tap_calls[0].1, vec!["150", "222"]);
+        assert_eq!(tap_calls[1].1, vec!["150", "222"]);
     }
 
     // ── 3. type action types text to element ─────────────────────────

@@ -35,8 +35,8 @@ use external::{
     handle_load_fixture, handle_open_link, handle_push_notification, handle_run,
 };
 use interaction::{
-    handle_backspace, handle_hide_keyboard, handle_long_press, handle_scroll, handle_swipe,
-    handle_tap, handle_type,
+    handle_backspace, handle_double_tap, handle_hide_keyboard, handle_long_press, handle_scroll,
+    handle_swipe, handle_tap, handle_type,
 };
 use media::{handle_add_media, handle_screenshot, handle_start_recording, handle_stop_recording};
 use wait::{handle_wait, handle_wait_not};
@@ -79,6 +79,7 @@ pub async fn execute_action(
     let action = step.action.as_str();
     match action {
         "tap" => handle_tap(step, driver).await,
+        "doubleTap" => handle_double_tap(step, driver).await,
         "type" => handle_type(step, driver).await,
         "backspace" => handle_backspace(step, driver).await,
         "long_press" => handle_long_press(step, driver).await,
