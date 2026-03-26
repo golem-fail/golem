@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use golem_driver::PlatformDriver;
 use golem_element::selector::{find_elements, Selector};
-use golem_element::Element;
+use golem_element::{filter_viewport, Element, Viewport};
 use golem_parser::Step;
 
 /// Build a `Selector` from the fields of a parsed `Step`.
@@ -27,15 +27,56 @@ pub fn build_selector(step: &Step) -> Selector {
     }
 }
 
-/// Resolve an element from the device hierarchy using the selectors
-/// specified in a `Step`.
+/// Resolve an element from the **viewport-filtered** hierarchy.
 ///
-/// 1. Builds a `Selector` from the step's fields.
-/// 2. Fetches the current element hierarchy from the driver.
-/// 3. Searches the hierarchy for matching elements.
-/// 4. Returns the first match along with its center (tap) coordinates,
-///    or an error if no elements matched.
+/// Only elements whose bounds intersect the screen viewport are considered.
+/// This matches how a real user interacts — you can only tap what you can see.
+///
+/// If the element is not found in the viewport but exists in the full tree,
+/// the error message includes a hint about its off-screen location.
 pub async fn resolve_element(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+) -> Result<(Element, (i32, i32))> {
+    let selector = build_selector(step);
+    let root = driver.get_hierarchy().await?;
+    let viewport = Viewport::from_root(&root);
+    let visible_root = filter_viewport(&root, &viewport);
+    let results = find_elements(&visible_root, &selector);
+
+    if !results.is_empty() {
+        let first = &results[0];
+        return Ok((first.element.clone(), (first.tap_x, first.tap_y)));
+    }
+
+    // Not found in viewport — check full tree for a better error message.
+    let full_results = find_elements(&root, &selector);
+    if !full_results.is_empty() {
+        let offscreen = &full_results[0].element;
+        let b = &offscreen.bounds;
+        bail!(
+            "Element not in viewport (text={:?}, id={:?}): found off-screen at ({}, {}), viewport {}x{}",
+            selector.text,
+            selector.accessibility_id,
+            b.x,
+            b.y,
+            viewport.width,
+            viewport.height,
+        );
+    }
+
+    bail!(
+        "No element found matching selector: text={:?}, id={:?}, type={:?}",
+        selector.text,
+        selector.accessibility_id,
+        selector.element_type,
+    );
+}
+
+/// Resolve an element from the **full** hierarchy (not viewport-filtered).
+///
+/// Used by actions that need to find off-screen elements, like `scroll`.
+pub async fn resolve_element_full_tree(
     step: &Step,
     driver: &dyn PlatformDriver,
 ) -> Result<(Element, (i32, i32))> {

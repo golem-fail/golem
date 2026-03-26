@@ -60,6 +60,56 @@ pub struct FindResult {
     pub tap_y: i32,
 }
 
+/// Screen viewport dimensions for filtering visible elements.
+#[derive(Debug, Clone, Copy)]
+pub struct Viewport {
+    pub width: i32,
+    pub height: i32,
+}
+
+impl Viewport {
+    pub fn new(width: i32, height: i32) -> Self {
+        Self { width, height }
+    }
+
+    /// Detect viewport from the root element's bounds (assumes root = full screen).
+    pub fn from_root(root: &Element) -> Self {
+        Self {
+            width: root.bounds.width,
+            height: root.bounds.height,
+        }
+    }
+
+    /// Check if an element's bounds intersect this viewport (partially or fully visible).
+    pub fn contains(&self, bounds: &Bounds) -> bool {
+        bounds.x + bounds.width > 0
+            && bounds.x < self.width
+            && bounds.y + bounds.height > 0
+            && bounds.y < self.height
+    }
+}
+
+/// Filter an element tree to only include elements whose bounds
+/// intersect the viewport. Structural parent elements are preserved
+/// if they have any visible descendants.
+pub fn filter_viewport(root: &Element, viewport: &Viewport) -> Element {
+    let mut filtered = root.clone();
+    filtered.children = root
+        .children
+        .iter()
+        .filter_map(|child| {
+            let filtered_child = filter_viewport(child, viewport);
+            // Keep the child if it's in viewport OR has visible descendants
+            if viewport.contains(&child.bounds) || !filtered_child.children.is_empty() {
+                Some(filtered_child)
+            } else {
+                None
+            }
+        })
+        .collect();
+    filtered
+}
+
 impl FindResult {
     pub fn new(element: Element) -> Self {
         let tap_x = element.bounds.center_x();
@@ -171,5 +221,56 @@ mod tests {
         assert_eq!(b.center_y(), 50);
         assert_eq!(b.bottom(), 50);
         assert_eq!(b.right(), 50);
+    }
+
+    // ── Viewport filtering tests ──────────────────────────────────────
+
+    #[test]
+    fn viewport_contains_fully_visible() {
+        let vp = Viewport::new(375, 812);
+        assert!(vp.contains(&Bounds::new(10, 10, 100, 44)));
+    }
+
+    #[test]
+    fn viewport_contains_partially_visible() {
+        let vp = Viewport::new(375, 812);
+        // Element straddles bottom edge
+        assert!(vp.contains(&Bounds::new(10, 790, 100, 44)));
+    }
+
+    #[test]
+    fn viewport_excludes_fully_below() {
+        let vp = Viewport::new(375, 812);
+        assert!(!vp.contains(&Bounds::new(10, 900, 100, 44)));
+    }
+
+    #[test]
+    fn viewport_excludes_fully_above() {
+        let vp = Viewport::new(375, 812);
+        assert!(!vp.contains(&Bounds::new(10, -100, 100, 44)));
+    }
+
+    #[test]
+    fn filter_viewport_keeps_visible_removes_offscreen() {
+        let vp = Viewport::new(375, 812);
+        let mut root = make_element("View", make_bounds(0, 0, 375, 2000));
+        root.children.push(make_element("Button", make_bounds(10, 100, 100, 44))); // visible
+        root.children.push(make_element("Button", make_bounds(10, 900, 100, 44))); // offscreen
+        root.children.push(make_element("Button", make_bounds(10, 400, 100, 44))); // visible
+
+        let filtered = filter_viewport(&root, &vp);
+        assert_eq!(
+            filtered.children.len(),
+            2,
+            "SHALL keep 2 visible, remove 1 offscreen"
+        );
+    }
+
+    #[test]
+    fn filter_viewport_from_root_uses_root_bounds() {
+        let root = make_element("Window", make_bounds(0, 0, 390, 844));
+        let vp = Viewport::from_root(&root);
+        assert_eq!(vp.width, 390);
+        assert_eq!(vp.height, 844);
     }
 }
