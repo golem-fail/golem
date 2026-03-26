@@ -2,11 +2,26 @@ use anyhow::{bail, Result};
 use golem_driver::PlatformDriver;
 use golem_element::glob::glob_match;
 use golem_element::selector::find_elements;
+use golem_element::Element;
 use golem_parser::Step;
 
 use crate::resolution::{build_selector, resolve_element};
 
 use super::resolve_element_ignore_text;
+
+/// Collect text from an element's immediate children (typically StaticText nodes).
+/// Used for web-based UIs where container elements don't carry text directly.
+fn collect_child_text(elem: &Element) -> String {
+    let mut parts = Vec::new();
+    for child in &elem.children {
+        if let Some(text) = child.text.as_deref() {
+            if !text.is_empty() {
+                parts.push(text);
+            }
+        }
+    }
+    parts.join("")
+}
 
 /// Assert that an element matching the step's selectors exists in the hierarchy.
 pub(crate) async fn handle_assert_visible(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
@@ -45,9 +60,16 @@ pub(crate) async fn handle_assert_text(step: &Step, driver: &dyn PlatformDriver)
 
     // Find element using selectors other than text
     let (elem, _coords) = resolve_element_ignore_text(step, driver).await?;
-    let actual = elem.text.as_deref().unwrap_or("");
+    // Use the element's own text, or fall back to concatenated child text
+    // (needed for web-based UIs where container divs hold text in child nodes).
+    let own_text = elem.text.as_deref().unwrap_or("");
+    let actual = if own_text.is_empty() {
+        collect_child_text(&elem)
+    } else {
+        own_text.to_string()
+    };
 
-    if actual == expected {
+    if actual.as_str() == expected {
         Ok(())
     } else {
         bail!(

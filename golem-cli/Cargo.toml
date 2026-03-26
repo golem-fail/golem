@@ -18,6 +18,7 @@ golem-report = { path = "../golem-report" }
 golem-email = { path = "../golem-email" }
 clap = { workspace = true }
 anyhow = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

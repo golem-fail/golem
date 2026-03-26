@@ -2,9 +2,15 @@ use std::path::Path;
 use std::time::Instant;
 
 use anyhow::Result;
+use golem_devices::DeviceState;
+use golem_driver::ios::IosDriver;
 use golem_parser::{parse_flow, FlowFile};
 use golem_parser::mixin::expand_mixins;
 use golem_report::{FlowReport, SuiteReport};
+use golem_runner::capture::CaptureConfig;
+use golem_runner::context::ExecutionContext;
+use golem_runner::executor::execute_flow;
+use golem_vars::VariableStore;
 
 /// Configuration for a suite run.
 #[derive(Default)]
@@ -68,30 +74,126 @@ impl SuiteRunner {
 
         let start = Instant::now();
 
-        match self.parse_and_expand(path) {
-            Ok(_flow) => {
-                // TODO: merge config, connect to device, execute blocks with the runner
-                FlowReport {
+        let flow = match self.parse_and_expand(path) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("  Parse error: {e:#}");
+                return FlowReport {
                     flow_name,
-                    success: true,
+                    success: false,
                     step_results: Vec::new(),
-                    warnings: Vec::new(),
+                    warnings: vec![format!("Parse/mixin error: {e}")],
                     duration_ms: start.elapsed().as_millis() as u64,
                     seed: self.config.seed,
                     screenshot_path: None,
                     device_name: None,
+                };
+            }
+        };
+
+        // Discover a booted iOS device
+        let device = match golem_devices::ios::discover_ios_devices().await {
+            Ok(devices) => {
+                let booted_count = devices.iter().filter(|d| d.state == DeviceState::Booted).count();
+                eprintln!("  Found {booted_count} booted device(s)");
+                match devices.into_iter().find(|d| d.state == DeviceState::Booted) {
+                    Some(d) => d,
+                    None => {
+                        return FlowReport {
+                            flow_name,
+                            success: false,
+                            step_results: Vec::new(),
+                            warnings: vec!["No booted iOS simulator found".to_string()],
+                            duration_ms: start.elapsed().as_millis() as u64,
+                            seed: self.config.seed,
+                            screenshot_path: None,
+                            device_name: None,
+                        };
+                    }
                 }
             }
-            Err(e) => FlowReport {
-                flow_name,
-                success: false,
-                step_results: Vec::new(),
-                warnings: vec![format!("Parse/mixin error: {e}")],
-                duration_ms: start.elapsed().as_millis() as u64,
-                seed: self.config.seed,
-                screenshot_path: None,
-                device_name: None,
-            },
+            Err(e) => {
+                eprintln!("  Device discovery failed: {e:#}");
+                return FlowReport {
+                    flow_name,
+                    success: false,
+                    step_results: Vec::new(),
+                    warnings: vec![format!("Device discovery failed: {e}")],
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    seed: self.config.seed,
+                    screenshot_path: None,
+                    device_name: None,
+                };
+            }
+        };
+
+        let device_name = device.name.clone();
+
+        // Extract bundle ID from the first app in the flow
+        let bundle_id = flow
+            .flow
+            .apps
+            .first()
+            .map(|a| a.bundle.clone())
+            .unwrap_or_else(|| "com.golem.test".to_string());
+
+        // Create iOS driver
+        let driver = IosDriver::new(device.udid.clone(), bundle_id, 8222);
+
+        // Set up variable store
+        let mut vars = VariableStore::new();
+
+        // Build execution context
+        let flow_dir = path.parent().unwrap_or(Path::new("."));
+        let capture_config = CaptureConfig::default();
+        let mut ctx = ExecutionContext {
+            flow_dir,
+            project_root: flow_dir,
+            capture_config: &capture_config,
+            flow_name: &flow_name,
+            block_name: None,
+            step_index: 0,
+        };
+
+        // Execute the flow
+        eprintln!("  Executing on {} ({})", device_name, device.udid);
+        match execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx).await {
+            Ok(result) => {
+                if !result.success {
+                    if let Some(ref block) = result.failed_block {
+                        eprintln!("  Failed in block: {block}");
+                    }
+                    if let Some(step) = result.failed_step {
+                        eprintln!("  Failed at step: {step}");
+                    }
+                }
+                for w in &result.warnings {
+                    eprintln!("  Warning: {w}");
+                }
+                FlowReport {
+                    flow_name,
+                    success: result.success,
+                    step_results: Vec::new(),
+                    warnings: result.warnings,
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    seed: self.config.seed,
+                    screenshot_path: None,
+                    device_name: Some(device_name),
+                }
+            }
+            Err(e) => {
+                eprintln!("  Error: {e:#}");
+                FlowReport {
+                    flow_name,
+                    success: false,
+                    step_results: Vec::new(),
+                    warnings: vec![format!("Execution error: {e}")],
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    seed: self.config.seed,
+                    screenshot_path: None,
+                    device_name: Some(device_name),
+                }
+            }
         }
     }
 

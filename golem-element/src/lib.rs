@@ -9,9 +9,13 @@ pub struct Element {
     pub text: Option<String>,
     pub id: Option<String>,
     pub placeholder: Option<String>,
+    #[serde(default)]
     pub enabled: bool,
+    #[serde(default)]
     pub checked: bool,
+    #[serde(default)]
     pub clickable: bool,
+    #[serde(default)]
     pub focused: bool,
     pub bounds: Bounds,
     #[serde(default)]

@@ -29,3 +29,6 @@ findings/
 # Test app build artifacts
 node_modules/
 dist/
+
+# Tauri generated platform projects (machine-specific)
+**/src-tauri/gen/

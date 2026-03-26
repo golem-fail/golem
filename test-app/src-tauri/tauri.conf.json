@@ -1,12 +1,12 @@
 {
   "productName": "GOLEM Test App",
   "version": "0.1.0",
-  "identifier": "com.golem.testapp",
+  "identifier": "com.golem.test",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run dev"
   },
   "app": {
     "withGlobalTauri": true,
@@ -32,17 +32,5 @@
       "icons/icon.png"
     ]
   },
-  "plugins": {
-    "deep-link": {
-      "mobile": [
-        {
-          "scheme": ["golem-test"],
-          "pathPrefix": ["/"]
-        }
-      ],
-      "desktop": {
-        "schemes": ["golem-test"]
-      }
-    }
-  }
+  "plugins": {}
 }

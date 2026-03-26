@@ -56,8 +56,102 @@ pub(crate) struct AlertResponse {
 // ---------------------------------------------------------------------------
 
 /// Parse a hierarchy JSON response body into an `Element` tree.
+///
+/// The companion server may return either a single root element or an array
+/// of root elements. When an array is returned, wrap them under a synthetic
+/// root element so callers always see a single tree.
+///
+/// After parsing, promotes `label` → `text` for elements where `text` is absent,
+/// to normalise across different companion server implementations.
 pub(crate) fn parse_hierarchy(json: &str) -> Result<Element> {
-    serde_json::from_str::<Element>(json).context("failed to parse hierarchy JSON")
+    // Parse as generic JSON first so we can normalise label → text.
+    let mut val: serde_json::Value =
+        serde_json::from_str(json).context("failed to parse hierarchy JSON")?;
+
+    // Handle array wrapper: some companions return `[{...}]` instead of `{...}`.
+    if let serde_json::Value::Array(ref mut arr) = val {
+        for item in arr.iter_mut() {
+            promote_labels_json(item);
+        }
+        if arr.len() == 1 {
+            val = arr.remove(0);
+        } else {
+            // Multiple roots — wrap in a synthetic container.
+            let wrapped = serde_json::json!({
+                "element_type": "other",
+                "text": null,
+                "id": null,
+                "placeholder": null,
+                "enabled": true,
+                "checked": false,
+                "clickable": false,
+                "focused": false,
+                "bounds": { "x": 0.0, "y": 0.0, "width": 0.0, "height": 0.0 },
+                "children": arr
+            });
+            val = wrapped;
+        }
+    } else {
+        promote_labels_json(&mut val);
+    }
+
+    serde_json::from_value(val).context("failed to deserialize hierarchy into Element")
+}
+
+/// Recursively promote `label` to `text` in a JSON value before deserializing
+/// into `Element`. This handles companion servers that use `label` instead of `text`.
+fn promote_labels_json(val: &mut serde_json::Value) {
+    if let serde_json::Value::Object(map) = val {
+        let label_str = map
+            .get("label")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        // Promote label → id when id is absent/empty.
+        // On iOS WKWebView, the HTML element's `id` attribute becomes the
+        // accessibility label reported by XCUITest.
+        let id_empty = match map.get("id") {
+            Some(serde_json::Value::String(s)) => s.is_empty(),
+            Some(serde_json::Value::Null) | None => true,
+            _ => false,
+        };
+        if id_empty && !label_str.is_empty() {
+            map.insert("id".to_string(), serde_json::Value::String(label_str.clone()));
+        }
+
+        // Promote label → text only when text is absent/empty AND the element
+        // type is a leaf that carries visible text (StaticText, Button, etc.).
+        // For container elements, the label is typically the accessibility ID,
+        // not the visible content.
+        let text_empty = match map.get("text") {
+            Some(serde_json::Value::String(s)) => s.is_empty(),
+            Some(serde_json::Value::Null) | None => true,
+            _ => false,
+        };
+        if text_empty && !label_str.is_empty() {
+            let etype = map
+                .get("element_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let is_leaf = matches!(
+                etype,
+                "StaticText" | "Button" | "TextField" | "SecureTextField"
+                    | "SearchField" | "TextView" | "Switch" | "Link"
+            );
+            if is_leaf {
+                map.insert("text".to_string(), serde_json::Value::String(label_str));
+            }
+        }
+        // Recurse into children
+        if let Some(children) = map.get_mut("children") {
+            if let serde_json::Value::Array(arr) = children {
+                for child in arr {
+                    promote_labels_json(child);
+                }
+            }
+        }
+    }
 }
 
 /// Build the JSON body for a tap request.

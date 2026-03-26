@@ -13,10 +13,10 @@ import DeviceState from "./lib/DeviceState.svelte";
 
 <main>
   <h1>GOLEM Test App</h1>
-  <TextFields />
-  <Buttons />
-  <Toggles />
   <Counter />
+  <Buttons />
+  <TextFields />
+  <Toggles />
   <ScrollList />
   <Carousel />
   <NestedLayout />
