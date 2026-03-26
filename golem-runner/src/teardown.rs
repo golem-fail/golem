@@ -123,6 +123,7 @@ mod tests {
             retry: None,
             retry_delay: None,
             app: None,
+            auto_scroll: None,
             params: HashMap::new(),
         }
     }
@@ -150,6 +151,7 @@ mod tests {
             retry: None,
             retry_delay: None,
             app: None,
+            auto_scroll: None,
             params: HashMap::new(),
         }
     }

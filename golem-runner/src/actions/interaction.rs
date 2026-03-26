@@ -5,7 +5,7 @@ use golem_driver::{Direction, PlatformDriver};
 use golem_parser::Step;
 use tokio::time::{sleep, Instant};
 
-use crate::resolution::{build_selector, resolve_element};
+use crate::resolution::{build_selector, resolve_element, resolve_element_full_tree};
 use crate::scroll::{scroll_to_element, DEFAULT_MAX_SCROLLS};
 
 use super::resolve_element_ignore_text;
@@ -18,9 +18,41 @@ async fn tap_at(driver: &dyn PlatformDriver, x: i32, y: i32) -> Result<()> {
 }
 
 /// Find the target element and tap at its center coordinates.
+///
+/// When `auto_scroll = true`, if the element is not in the viewport but
+/// exists in the full hierarchy, scrolls it into view first. Prefers
+/// in-viewport matches when duplicates exist.
+///
 /// Sleeps 300ms after tapping to prevent accidental double-tap side effects.
 pub(crate) async fn handle_tap(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let (_elem, (x, y)) = resolve_element(step, driver).await?;
+    let result = resolve_element(step, driver).await;
+
+    let (x, y) = match result {
+        Ok((_elem, coords)) => coords,
+        Err(e) if step.auto_scroll.unwrap_or(false) => {
+            // Element not in viewport — try auto-scroll.
+            // Check the full tree to see if the element exists off-screen.
+            let selector = build_selector(step);
+            if resolve_element_full_tree(step, driver).await.is_ok() {
+                // Element exists off-screen — scroll to it.
+                let _found = scroll_to_element(
+                    &selector,
+                    driver,
+                    Direction::Down,
+                    DEFAULT_MAX_SCROLLS,
+                )
+                .await?;
+                // After scrolling, re-resolve in viewport to get correct coordinates.
+                let (_elem, coords) = resolve_element(step, driver).await?;
+                coords
+            } else {
+                // Element doesn't exist at all — propagate original error.
+                return Err(e);
+            }
+        }
+        Err(e) => return Err(e),
+    };
+
     tap_at(driver, x, y).await?;
     sleep(TAP_COOLDOWN).await;
     Ok(())
