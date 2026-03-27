@@ -132,7 +132,7 @@ fn normalize_json(val: &mut serde_json::Value) {
                 let id_empty = map
                     .get("accessibility_id")
                     .and_then(|v| v.as_str())
-                    .map_or(true, |s| s.is_empty());
+                    .is_none_or(|s| s.is_empty());
                 if id_empty {
                     map.insert("accessibility_id".to_string(), serde_json::Value::String(cd.to_string()));
                 }
@@ -157,11 +157,9 @@ fn normalize_json(val: &mut serde_json::Value) {
         promote_labels_json_inner(map);
 
         // Recurse into children
-        if let Some(children) = map.get_mut("children") {
-            if let serde_json::Value::Array(arr) = children {
-                for child in arr {
-                    normalize_json(child);
-                }
+        if let Some(serde_json::Value::Array(arr)) = map.get_mut("children") {
+            for child in arr {
+                normalize_json(child);
             }
         }
     }
