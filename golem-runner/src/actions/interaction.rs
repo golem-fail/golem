@@ -538,20 +538,20 @@ mod tests {
         let mut type_step = make_step("type");
         type_step.accessibility_id = Some("username".to_string());
         type_step.text = Some("admin".to_string());
-        crate::actions::execute_action(&type_step, &driver, &mut vars, &ctx)
+        crate::actions::execute_action(&type_step, &driver, &mut vars, &ctx, &[])
             .await
             .expect("type should succeed");
 
         // Hide keyboard
         let hk_step = make_step("hide_keyboard");
-        crate::actions::execute_action(&hk_step, &driver, &mut vars, &ctx)
+        crate::actions::execute_action(&hk_step, &driver, &mut vars, &ctx, &[])
             .await
             .expect("hide_keyboard should succeed");
 
         // Tap login button
         let mut tap_step = make_step("tap");
         tap_step.text = Some("Login".to_string());
-        crate::actions::execute_action(&tap_step, &driver, &mut vars, &ctx)
+        crate::actions::execute_action(&tap_step, &driver, &mut vars, &ctx, &[])
             .await
             .expect("tap should succeed");
 

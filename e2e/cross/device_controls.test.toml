@@ -24,7 +24,7 @@ steps = [
 
   # Press the home button and re-launch
   { action = "press", button = "home" },
-  { action = "launch", app = "com.golem.test" },
+  { action = "launch", app = "app" },
   { action = "wait", text = "Orientation:", timeout = 5000 },
 ]
 
@@ -34,7 +34,7 @@ name = "android_back_button"
 where = { os = "android" }
 steps = [
   { action = "press", button = "back" },
-  { action = "launch", app = "com.golem.test" },
+  { action = "launch", app = "app" },
   { action = "wait", text = "Orientation:", timeout = 5000 },
 ]
 

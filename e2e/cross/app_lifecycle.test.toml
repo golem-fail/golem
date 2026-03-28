@@ -26,10 +26,10 @@ steps = [
   { action = "assert_text", text = "1", below = "Counter", element_type = "text" },
 
   # Stop the app
-  { action = "stop", app = "com.golem.test" },
+  { action = "stop", app = "app" },
 
   # Re-launch the app (state may be reset)
-  { action = "launch", app = "com.golem.test" },
+  { action = "launch", app = "app" },
 
   # Verify the app is running again
   { action = "wait", text = "Submit", timeout = 30000 },

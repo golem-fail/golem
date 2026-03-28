@@ -38,7 +38,7 @@ steps = [
   { action = "assert_text", text = "3", below = "Counter" },
 
   # Switch to the companion app
-  { action = "launch", app = "com.golem.test-b" },
+  { action = "launch", app = "app-b" },
   { action = "wait", text = "app-b-title", timeout = 10000 },
   { action = "assert_visible", text = "shared-data-display" },
   { action = "assert_visible", text = "refresh-button" },
@@ -48,12 +48,12 @@ steps = [
   { action = "tap", text = "refresh-button" },
 
   # Switch back to the primary app
-  { action = "launch", app = "com.golem.test" },
+  { action = "launch", app = "app" },
   { action = "wait", text = "Counter", timeout = 10000 },
 
   # Verify primary app state is intact
   { action = "assert_text", text = "3", below = "Counter" },
 
   # Stop the companion app
-  { action = "stop", app = "com.golem.test-b" },
+  { action = "stop", app = "app-b" },
 ]

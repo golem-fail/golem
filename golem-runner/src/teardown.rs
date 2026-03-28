@@ -41,7 +41,7 @@ pub async fn execute_teardown(
         for step in &block.steps {
             let effective_step = apply_teardown_defaults(step);
 
-            match execute_step_with_policy(&effective_step, driver, vars, default_timeout_ms, ctx).await
+            match execute_step_with_policy(&effective_step, driver, vars, default_timeout_ms, ctx, &[]).await
             {
                 Ok(StepOutcome::Success) => {}
                 Ok(StepOutcome::Warning(msg)) => result.warnings.push(msg),

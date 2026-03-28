@@ -37,6 +37,7 @@ pub async fn execute_step_with_policy(
     vars: &mut VariableStore,
     default_timeout_ms: u64,
     ctx: &ExecutionContext<'_>,
+    apps: &[golem_parser::AppConfig],
 ) -> Result<StepOutcome> {
     let timeout_ms = step.timeout.unwrap_or(default_timeout_ms);
     let max_retries = step.retry.unwrap_or(0);
@@ -52,7 +53,7 @@ pub async fn execute_step_with_policy(
 
         match tokio::time::timeout(
             Duration::from_millis(timeout_ms),
-            execute_action(step, driver, vars, ctx),
+            execute_action(step, driver, vars, ctx, apps),
         )
         .await
         {

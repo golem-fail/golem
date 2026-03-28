@@ -52,7 +52,7 @@ steps = [
 name = "switch_to_companion_and_verify"
 steps = [
   # Switch to the companion app
-  { action = "launch", app = "com.golem.test-b" },
+  { action = "launch", app = "app-b" },
   { action = "wait", text = "app-b-title", timeout = 10000 },
 
   # Verify companion app elements are visible
@@ -75,7 +75,7 @@ steps = [
 name = "switch_back_and_verify_state_preserved"
 steps = [
   # Switch back to the primary app
-  { action = "launch", app = "com.golem.test" },
+  { action = "launch", app = "app" },
   { action = "wait", text = "Counter", timeout = 10000 },
 
   # Verify primary app state is preserved after app switching
@@ -92,5 +92,5 @@ steps = [
   { action = "assert_text", text = "4", below = "Counter" },
 
   # Stop the companion app
-  { action = "stop", app = "com.golem.test-b" },
+  { action = "stop", app = "app-b" },
 ]

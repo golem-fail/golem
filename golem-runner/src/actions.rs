@@ -14,7 +14,7 @@ use anyhow::{bail, Result};
 use golem_driver::PlatformDriver;
 use golem_element::selector::find_elements;
 use golem_element::Element;
-use golem_parser::Step;
+use golem_parser::{AppConfig, Step};
 use golem_vars::VariableStore;
 
 use crate::context::ExecutionContext;
@@ -75,6 +75,7 @@ pub async fn execute_action(
     driver: &dyn PlatformDriver,
     vars: &mut VariableStore,
     ctx: &ExecutionContext<'_>,
+    apps: &[AppConfig],
 ) -> Result<()> {
     let action = step.action.as_str();
     match action {
@@ -97,9 +98,9 @@ pub async fn execute_action(
         "wait" => handle_wait(step, driver).await,
         "wait_not" => handle_wait_not(step, driver).await,
         "fail" => handle_fail(step),
-        "launch" => handle_launch(step, driver).await,
-        "stop" => handle_stop(step, driver).await,
-        "clear_data" => handle_clear_data(step, driver).await,
+        "launch" => handle_launch(step, driver, apps).await,
+        "stop" => handle_stop(step, driver, apps).await,
+        "clear_data" => handle_clear_data(step, driver, apps).await,
         "rotate" => handle_rotate(step, driver).await,
         "dark_mode" => handle_dark_mode(step, driver).await,
         "set_location" => handle_set_location(step, driver).await,
@@ -145,7 +146,7 @@ mod tests {
 
         let step = make_step("fly_to_moon");
 
-        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx, &[]).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -169,7 +170,7 @@ mod tests {
 
         let step = make_step("teleport");
 
-        let result = execute_action(&step, &driver, &mut vars, &ctx).await;
+        let result = execute_action(&step, &driver, &mut vars, &ctx, &[]).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(

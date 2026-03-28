@@ -204,7 +204,7 @@ pub async fn execute_flow<'a>(
             if start_time.elapsed() > max_runtime {
                 bail!("max_runtime exceeded after {:?}", start_time.elapsed());
             }
-            match execute_step_with_policy(step, driver, vars, default_timeout_ms, ctx).await {
+            match execute_step_with_policy(step, driver, vars, default_timeout_ms, ctx, &flow.flow.apps).await {
                 Ok(StepOutcome::Success) => {}
                 Ok(StepOutcome::Warning(msg)) => warnings.push(msg),
                 Ok(StepOutcome::Ignored) => {}

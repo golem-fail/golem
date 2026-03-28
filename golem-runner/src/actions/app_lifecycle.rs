@@ -1,29 +1,56 @@
 use anyhow::Result;
 use golem_driver::PlatformDriver;
-use golem_parser::Step;
+use golem_parser::{AppConfig, Step};
 
-/// Helper to get the app bundle_id from step.app, falling back to an error.
-fn get_app_bundle(step: &Step) -> Result<&str> {
-    step.app
+/// Resolve the app identifier from a step to a bundle ID.
+///
+/// The step's `app` field can be either:
+/// - A friendly name defined in `[[flow.apps]]` (e.g. `"app"`) — resolved to the bundle ID.
+/// - A bundle ID directly (e.g. `"com.golem.test"`) — used as-is.
+///
+/// If `apps` is empty or the name doesn't match, the value is treated as a bundle ID.
+pub fn resolve_app_bundle<'a>(step: &'a Step, apps: &'a [AppConfig]) -> Result<&'a str> {
+    let app_ref = step
+        .app
         .as_deref()
-        .ok_or_else(|| anyhow::anyhow!("No app specified for {} action", step.action))
+        .ok_or_else(|| anyhow::anyhow!("No app specified for {} action", step.action))?;
+
+    // Try to resolve as a friendly name first.
+    if let Some(config) = apps.iter().find(|a| a.name == app_ref) {
+        return Ok(&config.bundle);
+    }
+
+    // Fall back to treating it as a direct bundle ID.
+    Ok(app_ref)
 }
 
 /// Launch the app with the given bundle_id.
-pub(crate) async fn handle_launch(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let bundle_id = get_app_bundle(step)?;
+pub(crate) async fn handle_launch(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+    apps: &[AppConfig],
+) -> Result<()> {
+    let bundle_id = resolve_app_bundle(step, apps)?;
     driver.launch_app(bundle_id).await
 }
 
 /// Stop/terminate the app.
-pub(crate) async fn handle_stop(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let bundle_id = get_app_bundle(step)?;
+pub(crate) async fn handle_stop(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+    apps: &[AppConfig],
+) -> Result<()> {
+    let bundle_id = resolve_app_bundle(step, apps)?;
     driver.stop_app(bundle_id).await
 }
 
 /// Clear app data/cache.
-pub(crate) async fn handle_clear_data(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let bundle_id = get_app_bundle(step)?;
+pub(crate) async fn handle_clear_data(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+    apps: &[AppConfig],
+) -> Result<()> {
+    let bundle_id = resolve_app_bundle(step, apps)?;
     driver.clear_app_data(bundle_id).await
 }
 
@@ -44,7 +71,7 @@ mod tests {
         let mut step = make_step("launch");
         step.app = Some("com.example.app".to_string());
 
-        handle_launch(&step, &driver)
+        handle_launch(&step, &driver, &[])
             .await
             .expect("launch should succeed");
 
@@ -64,7 +91,7 @@ mod tests {
         let mut step = make_step("stop");
         step.app = Some("com.example.app".to_string());
 
-        handle_stop(&step, &driver)
+        handle_stop(&step, &driver, &[])
             .await
             .expect("stop should succeed");
 
@@ -84,7 +111,7 @@ mod tests {
         let mut step = make_step("clear_data");
         step.app = Some("com.example.app".to_string());
 
-        handle_clear_data(&step, &driver)
+        handle_clear_data(&step, &driver, &[])
             .await
             .expect("clear_data should succeed");
 
@@ -104,7 +131,7 @@ mod tests {
         let step = make_step("launch");
         // No app set
 
-        let result = handle_launch(&step, &driver).await;
+        let result = handle_launch(&step, &driver, &[]).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
