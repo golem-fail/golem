@@ -163,8 +163,8 @@ pub struct FlowOptions {
     pub suite_concurrency: Option<u32>,
     pub keep_devices: Option<bool>,
     /// App lifecycle management before flow execution.
-    /// - `"reset"` — stop + launch (fresh state). Default for top-level flows.
-    /// - `"launch"` — launch if not running. Default for subflows.
+    /// - `"reset"` — stop all apps + launch first app (fresh state). Default.
+    /// - `"launch"` — launch first app if not running; preserves state.
     /// - `"manual"` — do nothing; flow manages its own lifecycle.
     pub app_lifecycle: Option<AppLifecycle>,
 }

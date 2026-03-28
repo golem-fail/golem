@@ -1,6 +1,9 @@
 [flow]
 name = "Increment counter subflow"
 
+[flow.options]
+app_lifecycle = "manual"
+
 [[block]]
 name = "increment"
 steps = [
