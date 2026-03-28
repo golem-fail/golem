@@ -19,23 +19,23 @@ name = "launch_and_wait"
 steps = [
   # Launch the app and wait for initial load
   { action = "launch", app = "com.golem.test" },
-  { action = "wait", accessibility_id = "submit-button", timeout = 10000 },
+  { action = "wait", text = "Submit", timeout = 10000 },
 ]
 
 [[block]]
 name = "rapid_form_fill"
 steps = [
   # Rapidly type into all input fields in quick succession
-  { action = "type", accessibility_id = "email-input", text = "perf@golem.com" },
-  { action = "wait", accessibility_id = "email-input", timeout = 2000 },
-  { action = "assert_text", accessibility_id = "email-input", text = "perf@golem.com" },
+  { action = "type", placeholder = "Enter email", text = "perf@golem.com" },
+  { action = "wait", placeholder = "Enter email", timeout = 2000 },
+  { action = "assert_text", placeholder = "Enter email", text = "perf@golem.com" },
 
-  { action = "type", accessibility_id = "password-input", text = "Str0ngP@ss!" },
-  { action = "wait", accessibility_id = "password-input", timeout = 2000 },
+  { action = "type", placeholder = "Password", text = "Str0ngP@ss!" },
+  { action = "wait", placeholder = "Password", timeout = 2000 },
 
-  { action = "type", accessibility_id = "search-input", text = "rapid test query" },
-  { action = "wait", accessibility_id = "search-input", timeout = 2000 },
-  { action = "assert_text", accessibility_id = "search-input", text = "rapid test query" },
+  { action = "type", placeholder = "Search", text = "rapid test query" },
+  { action = "wait", placeholder = "Search", timeout = 2000 },
+  { action = "assert_text", placeholder = "Search", text = "rapid test query" },
 
   # Hide keyboard between interactions
   { action = "hide_keyboard" },
@@ -45,78 +45,78 @@ steps = [
 name = "rapid_counter_burst"
 steps = [
   # Rapidly tap increment button 5 times without waiting between taps
-  { action = "tap", accessibility_id = "increment-button" },
-  { action = "tap", accessibility_id = "increment-button" },
-  { action = "tap", accessibility_id = "increment-button" },
-  { action = "tap", accessibility_id = "increment-button" },
-  { action = "tap", accessibility_id = "increment-button" },
+  { action = "tap", text = "Increment" },
+  { action = "tap", text = "Increment" },
+  { action = "tap", text = "Increment" },
+  { action = "tap", text = "Increment" },
+  { action = "tap", text = "Increment" },
 
   # Now verify the counter reached the expected value
-  { action = "wait", accessibility_id = "counter-display", timeout = 2000 },
-  { action = "assert_text", accessibility_id = "counter-display", text = "5" },
+  { action = "wait", text = "Counter", timeout = 2000 },
+  { action = "assert_text", text = "5", below = "Counter", element_type = "text" },
 
   # Rapidly decrement 3 times
-  { action = "tap", accessibility_id = "decrement-button" },
-  { action = "tap", accessibility_id = "decrement-button" },
-  { action = "tap", accessibility_id = "decrement-button" },
+  { action = "tap", text = "Decrement" },
+  { action = "tap", text = "Decrement" },
+  { action = "tap", text = "Decrement" },
 
   # Verify counter after burst decrement
-  { action = "wait", accessibility_id = "counter-display", timeout = 2000 },
-  { action = "assert_text", accessibility_id = "counter-display", text = "2" },
+  { action = "wait", text = "Counter", timeout = 2000 },
+  { action = "assert_text", text = "2", below = "Counter", element_type = "text" },
 ]
 
 [[block]]
 name = "rapid_mixed_actions"
 steps = [
   # Mix taps, reads, and asserts in rapid succession
-  { action = "tap", accessibility_id = "increment-button" },
-  { action = "read", accessibility_id = "counter-display", save_to = "mid_count_1" },
-  { action = "assert_visible", accessibility_id = "submit-button" },
-  { action = "tap", accessibility_id = "increment-button" },
-  { action = "read", accessibility_id = "counter-display", save_to = "mid_count_2" },
-  { action = "assert_visible", accessibility_id = "email-input" },
-  { action = "tap", accessibility_id = "increment-button" },
-  { action = "read", accessibility_id = "counter-display", save_to = "mid_count_3" },
-  { action = "assert_visible", accessibility_id = "scroll-list" },
-  { action = "tap", accessibility_id = "increment-button" },
-  { action = "read", accessibility_id = "counter-display", save_to = "mid_count_4" },
-  { action = "assert_visible", accessibility_id = "carousel" },
+  { action = "tap", text = "Increment" },
+  { action = "read", below = "Counter", element_type = "text", save_to = "mid_count_1" },
+  { action = "assert_visible", text = "Submit" },
+  { action = "tap", text = "Increment" },
+  { action = "read", below = "Counter", element_type = "text", save_to = "mid_count_2" },
+  { action = "assert_visible", placeholder = "Enter email" },
+  { action = "tap", text = "Increment" },
+  { action = "read", below = "Counter", element_type = "text", save_to = "mid_count_3" },
+  { action = "assert_visible", text = "scroll-list" },
+  { action = "tap", text = "Increment" },
+  { action = "read", below = "Counter", element_type = "text", save_to = "mid_count_4" },
+  { action = "assert_visible", text = "carousel" },
 ]
 
 [[block]]
 name = "rapid_read_burst"
 steps = [
   # Burst-read many elements in rapid succession
-  { action = "read", accessibility_id = "counter-display", save_to = "r1" },
-  { action = "read", accessibility_id = "email-input", save_to = "r2" },
-  { action = "read", accessibility_id = "search-input", save_to = "r3" },
-  { action = "read", accessibility_id = "list-item-0", save_to = "r4" },
-  { action = "read", accessibility_id = "list-item-1", save_to = "r5" },
-  { action = "read", accessibility_id = "list-item-2", save_to = "r6" },
-  { action = "read", accessibility_id = "carousel-item-0", save_to = "r7" },
-  { action = "read", accessibility_id = "carousel-item-1", save_to = "r8" },
-  { action = "read", accessibility_id = "submit-button", save_to = "r9" },
-  { action = "read", accessibility_id = "increment-button", save_to = "r10" },
+  { action = "read", below = "Counter", element_type = "text", save_to = "r1" },
+  { action = "read", placeholder = "Enter email", save_to = "r2" },
+  { action = "read", placeholder = "Search", save_to = "r3" },
+  { action = "read", text = "Item 0", save_to = "r4" },
+  { action = "read", text = "Item 1", save_to = "r5" },
+  { action = "read", text = "Item 2", save_to = "r6" },
+  { action = "read", text = "carousel-item-0", save_to = "r7" },
+  { action = "read", text = "carousel-item-1", save_to = "r8" },
+  { action = "read", text = "Submit", save_to = "r9" },
+  { action = "read", text = "Increment", save_to = "r10" },
 ]
 
 [[block]]
 name = "rapid_visibility_burst"
 steps = [
   # Burst assert_visible on many elements in rapid succession
-  { action = "assert_visible", accessibility_id = "submit-button" },
-  { action = "assert_visible", accessibility_id = "increment-button" },
-  { action = "assert_visible", accessibility_id = "decrement-button" },
-  { action = "assert_visible", accessibility_id = "counter-display" },
-  { action = "assert_visible", accessibility_id = "email-input" },
-  { action = "assert_visible", accessibility_id = "password-input" },
-  { action = "assert_visible", accessibility_id = "search-input" },
-  { action = "assert_visible", accessibility_id = "scroll-list" },
-  { action = "assert_visible", accessibility_id = "carousel" },
-  { action = "assert_visible", accessibility_id = "list-item-0" },
-  { action = "assert_visible", accessibility_id = "list-item-1" },
-  { action = "assert_visible", accessibility_id = "list-item-2" },
-  { action = "assert_visible", accessibility_id = "carousel-item-0" },
-  { action = "assert_visible", accessibility_id = "carousel-item-1" },
+  { action = "assert_visible", text = "Submit" },
+  { action = "assert_visible", text = "Increment" },
+  { action = "assert_visible", text = "Decrement" },
+  { action = "assert_visible", text = "Counter" },
+  { action = "assert_visible", placeholder = "Enter email" },
+  { action = "assert_visible", placeholder = "Password" },
+  { action = "assert_visible", placeholder = "Search" },
+  { action = "assert_visible", text = "scroll-list" },
+  { action = "assert_visible", text = "carousel" },
+  { action = "assert_visible", text = "list-item-0" },
+  { action = "assert_visible", text = "list-item-1" },
+  { action = "assert_visible", text = "list-item-2" },
+  { action = "assert_visible", text = "carousel-item-0" },
+  { action = "assert_visible", text = "carousel-item-1" },
 
   # Final screenshot to verify app is still in a consistent state
   { action = "screenshot" },

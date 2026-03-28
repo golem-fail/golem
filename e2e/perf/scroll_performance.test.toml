@@ -19,8 +19,8 @@ name = "launch_and_wait"
 steps = [
   # Launch the app and wait for initial load
   { action = "launch", app = "com.golem.test" },
-  { action = "wait", accessibility_id = "scroll-list", timeout = 10000 },
-  { action = "assert_visible", accessibility_id = "list-item-0" },
+  { action = "wait", text = "scroll-list", timeout = 10000 },
+  { action = "assert_visible", text = "list-item-0" },
   { action = "screenshot" },
 ]
 
@@ -33,18 +33,18 @@ steps = [
   { action = "swipe", direction = "down" },
 
   # Verify a mid-range item appears quickly
-  { action = "wait", accessibility_id = "list-item-15", timeout = 2000 },
-  { action = "assert_visible", accessibility_id = "list-item-15" },
-  { action = "assert_text", accessibility_id = "list-item-15", text = "Item 15" },
+  { action = "wait", text = "list-item-15", timeout = 2000 },
+  { action = "assert_visible", text = "list-item-15" },
+  { action = "assert_text", text = "Item 15", child_of = "list-item-15" },
 
   # Continue scrolling
   { action = "swipe", direction = "down" },
   { action = "swipe", direction = "down" },
 
   # Verify another mid-list element with tight timeout
-  { action = "wait", accessibility_id = "list-item-25", timeout = 2000 },
-  { action = "assert_visible", accessibility_id = "list-item-25" },
-  { action = "assert_text", accessibility_id = "list-item-25", text = "Item 25" },
+  { action = "wait", text = "list-item-25", timeout = 2000 },
+  { action = "assert_visible", text = "list-item-25" },
+  { action = "assert_text", text = "Item 25", child_of = "list-item-25" },
 ]
 
 [[block]]
@@ -58,16 +58,16 @@ steps = [
   { action = "swipe", direction = "down" },
 
   # Verify near-bottom items appear within tight timeout
-  { action = "wait", accessibility_id = "list-item-40", timeout = 2000 },
-  { action = "assert_text", accessibility_id = "list-item-40", text = "Item 40" },
+  { action = "wait", text = "list-item-40", timeout = 2000 },
+  { action = "assert_text", text = "Item 40", child_of = "list-item-40" },
 
   { action = "swipe", direction = "down" },
   { action = "swipe", direction = "down" },
 
   # Verify the last item in the list
-  { action = "wait", accessibility_id = "list-item-49", timeout = 2000 },
-  { action = "assert_visible", accessibility_id = "list-item-49" },
-  { action = "assert_text", accessibility_id = "list-item-49", text = "Item 49" },
+  { action = "wait", text = "list-item-49", timeout = 2000 },
+  { action = "assert_visible", text = "list-item-49" },
+  { action = "assert_text", text = "Item 49", child_of = "list-item-49" },
   { action = "screenshot" },
 ]
 
@@ -89,34 +89,34 @@ steps = [
   { action = "swipe", direction = "up" },
 
   # Verify we are back at the top with a tight timeout
-  { action = "wait", accessibility_id = "list-item-0", timeout = 2000 },
-  { action = "assert_visible", accessibility_id = "list-item-0" },
-  { action = "assert_text", accessibility_id = "list-item-0", text = "Item 0" },
+  { action = "wait", text = "list-item-0", timeout = 2000 },
+  { action = "assert_visible", text = "list-item-0" },
+  { action = "assert_text", text = "Item 0", child_of = "list-item-0" },
 ]
 
 [[block]]
 name = "carousel_scroll_forward"
 steps = [
   # Test horizontal carousel scrolling performance
-  { action = "assert_visible", accessibility_id = "carousel" },
-  { action = "assert_visible", accessibility_id = "carousel-item-0" },
+  { action = "assert_visible", text = "carousel" },
+  { action = "assert_visible", text = "carousel-item-0" },
 
   # Swipe left through the entire carousel
   { action = "swipe", direction = "left" },
-  { action = "wait", accessibility_id = "carousel-item-2", timeout = 2000 },
+  { action = "wait", text = "carousel-item-2", timeout = 2000 },
 
   { action = "swipe", direction = "left" },
-  { action = "wait", accessibility_id = "carousel-item-4", timeout = 2000 },
+  { action = "wait", text = "carousel-item-4", timeout = 2000 },
 
   { action = "swipe", direction = "left" },
-  { action = "wait", accessibility_id = "carousel-item-6", timeout = 2000 },
+  { action = "wait", text = "carousel-item-6", timeout = 2000 },
 
   { action = "swipe", direction = "left" },
   { action = "swipe", direction = "left" },
 
   # Verify the last carousel item is reachable
-  { action = "wait", accessibility_id = "carousel-item-9", timeout = 2000 },
-  { action = "assert_visible", accessibility_id = "carousel-item-9" },
+  { action = "wait", text = "carousel-item-9", timeout = 2000 },
+  { action = "assert_visible", text = "carousel-item-9" },
 ]
 
 [[block]]
@@ -134,8 +134,8 @@ steps = [
   { action = "swipe", direction = "right" },
 
   # Verify return to the start of the carousel
-  { action = "wait", accessibility_id = "carousel-item-0", timeout = 2000 },
-  { action = "assert_visible", accessibility_id = "carousel-item-0" },
+  { action = "wait", text = "carousel-item-0", timeout = 2000 },
+  { action = "assert_visible", text = "carousel-item-0" },
 
   # Final screenshot to confirm consistent state
   { action = "screenshot" },
