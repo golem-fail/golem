@@ -1,0 +1,39 @@
+[flow]
+name = "Subflow delegation test"
+tags = ["cross-platform", "subflow"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "setup"
+steps = [
+  { action = "stop", app = "com.golem.test", on_fail = "skip" },
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", text = "Submit", timeout = 30000 },
+  { action = "assert_text", text = "0", below = "Counter", element_type = "text" },
+]
+
+# Delegate counter increment to a subflow and propagate the result back
+[[block]]
+name = "increment_via_subflow"
+run_flow = "subflows/increment_counter.test.toml"
+
+[block.save_to]
+counter_value = "result_after_increment"
+
+[[block]]
+name = "verify"
+steps = [
+  # The subflow should have incremented the counter to 1
+  { action = "assert_text", text = "1", below = "Counter", element_type = "text" },
+]

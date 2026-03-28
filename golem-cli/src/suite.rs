@@ -148,6 +148,7 @@ impl SuiteRunner {
             flow_name: &flow_name,
             block_name: None,
             step_index: 0,
+            device: Some(&device),
         };
 
         // Execute the flow

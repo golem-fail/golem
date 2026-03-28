@@ -42,6 +42,7 @@ pub async fn resolve_element(
     let root = driver.get_hierarchy().await?;
     let viewport = Viewport::from_root(&root);
     let visible_root = filter_viewport(&root, &viewport);
+
     let results = find_elements(&visible_root, &selector);
 
     if !results.is_empty() {
@@ -49,13 +50,24 @@ pub async fn resolve_element(
         return Ok((first.element.clone(), (first.tap_x, first.tap_y)));
     }
 
-    // Not found in viewport — check full tree for a better error message.
+    // Not found in viewport — if auto_scroll is enabled, try scrolling to find it.
+    if step.auto_scroll == Some(true) {
+        let direction = golem_driver::Direction::Down;
+        let max_scrolls = crate::scroll::DEFAULT_MAX_SCROLLS;
+        match crate::scroll::scroll_to_element(&selector, driver, direction, max_scrolls).await {
+            Ok(found) => return Ok((found.element.clone(), (found.tap_x, found.tap_y))),
+            Err(e) => return Err(e),
+        }
+    }
+
+    // Check full tree for a better error message.
     let full_results = find_elements(&root, &selector);
     if !full_results.is_empty() {
         let offscreen = &full_results[0].element;
         let b = &offscreen.bounds;
         bail!(
-            "Element not in viewport (text={:?}, id={:?}): found off-screen at ({}, {}), viewport {}x{}",
+            "Element not in viewport (text={:?}, id={:?}): found off-screen at ({}, {}), viewport {}x{}. \
+             Use auto_scroll = true to scroll to off-screen elements.",
             selector.text,
             selector.accessibility_id,
             b.x,

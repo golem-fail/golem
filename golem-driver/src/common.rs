@@ -77,6 +77,18 @@ pub(crate) fn parse_hierarchy(json: &str) -> Result<Element> {
             val = arr.remove(0);
         } else {
             // Multiple roots — wrap in a synthetic container.
+            // Compute bounding box from children so viewport filtering works.
+            let (mut max_w, mut max_h) = (0i64, 0i64);
+            for item in arr.iter() {
+                if let Some(b) = item.get("bounds") {
+                    let w = b.get("x").and_then(|v| v.as_i64()).unwrap_or(0)
+                        + b.get("width").and_then(|v| v.as_i64()).unwrap_or(0);
+                    let h = b.get("y").and_then(|v| v.as_i64()).unwrap_or(0)
+                        + b.get("height").and_then(|v| v.as_i64()).unwrap_or(0);
+                    max_w = max_w.max(w);
+                    max_h = max_h.max(h);
+                }
+            }
             let wrapped = serde_json::json!({
                 "element_type": "other",
                 "text": null,
@@ -86,7 +98,7 @@ pub(crate) fn parse_hierarchy(json: &str) -> Result<Element> {
                 "checked": false,
                 "clickable": false,
                 "focused": false,
-                "bounds": { "x": 0, "y": 0, "width": 0, "height": 0 },
+                "bounds": { "x": 0, "y": 0, "width": max_w, "height": max_h },
                 "children": arr
             });
             val = wrapped;
@@ -274,6 +286,8 @@ pub(crate) fn find_alert(el: &Element) -> Option<Element> {
 /// Thin HTTP client wrapper used by both `AndroidDriver` and `IosDriver`.
 pub(crate) struct CompanionClient {
     pub base_url: String,
+    /// Default query string appended to every request (e.g. `"?bundle_id=com.golem.test"`).
+    pub default_query: String,
     pub client: reqwest::Client,
 }
 
@@ -281,12 +295,23 @@ impl CompanionClient {
     pub fn new(port: u16) -> Self {
         Self {
             base_url: format!("http://localhost:{port}"),
+            default_query: String::new(),
             client: reqwest::Client::new(),
         }
     }
 
+    /// Build the full URL for a request, appending the default query string.
+    fn url(&self, path: &str) -> String {
+        let sep = if path.contains('?') { "&" } else { "?" };
+        if self.default_query.is_empty() {
+            format!("{}{}", self.base_url, path)
+        } else {
+            format!("{}{}{}{}", self.base_url, path, sep, self.default_query)
+        }
+    }
+
     pub async fn post_json(&self, path: &str, body: &str) -> Result<String> {
-        let url = format!("{}{}", self.base_url, path);
+        let url = self.url(path);
         let resp = self
             .client
             .post(&url)
@@ -310,7 +335,7 @@ impl CompanionClient {
     }
 
     pub async fn get_text(&self, path: &str) -> Result<String> {
-        let url = format!("{}{}", self.base_url, path);
+        let url = self.url(path);
         let resp = self
             .client
             .get(&url)
@@ -332,7 +357,7 @@ impl CompanionClient {
     }
 
     pub async fn get_bytes(&self, path: &str) -> Result<Vec<u8>> {
-        let url = format!("{}{}", self.base_url, path);
+        let url = self.url(path);
         let resp = self
             .client
             .get(&url)

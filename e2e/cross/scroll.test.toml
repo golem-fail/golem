@@ -1,10 +1,14 @@
 [flow]
-name = "Android scroll test"
-tags = ["android", "interaction", "scroll"]
+name = "Scroll test"
+tags = ["cross-platform", "interaction", "scroll"]
 
 [[flow.apps]]
 name = "app"
 bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
 
 [[flow.apps.devices]]
 os = "android:latest"
@@ -16,7 +20,7 @@ steps = [
   { action = "launch", app = "com.golem.test" },
 
   # The first list item should be visible without scrolling
-  { action = "assert_visible", accessibility_id = "list-item-0" },
+  { action = "assert_visible", text = "list-item-0" },
 
   # Scroll down repeatedly to reach items further in the list
   { action = "swipe", direction = "down" },
@@ -26,7 +30,7 @@ steps = [
   { action = "swipe", direction = "down" },
 
   # Wait for a list item near the middle to become visible
-  { action = "wait", accessibility_id = "list-item-25", timeout = 5000 },
+  { action = "wait", text = "list-item-25", timeout = 5000 },
 
   # Continue scrolling to find an item near the end
   { action = "swipe", direction = "down" },
@@ -36,8 +40,8 @@ steps = [
   { action = "swipe", direction = "down" },
 
   # Verify the last list item is reachable
-  { action = "wait", accessibility_id = "list-item-49", timeout = 5000 },
-  { action = "tap", accessibility_id = "list-item-49" },
+  { action = "wait", text = "list-item-49", timeout = 5000 },
+  { action = "tap", text = "list-item-49" },
 
   # Scroll back to the top
   { action = "swipe", direction = "up" },
@@ -52,5 +56,5 @@ steps = [
   { action = "swipe", direction = "up" },
 
   # Verify we are back at the top
-  { action = "wait", accessibility_id = "list-item-0", timeout = 5000 },
+  { action = "wait", text = "list-item-0", timeout = 5000 },
 ]

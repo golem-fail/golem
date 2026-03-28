@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use golem_devices::{DeviceInfo, DeviceType};
+use golem_devices::{DeviceInfo, DeviceType, Platform};
+use golem_parser::DeviceFilter;
 use golem_vars::VarValue;
 
 /// Represents the `_each` context for one iteration of a `for_each` block.
@@ -44,6 +45,20 @@ pub fn build_each_contexts(
         .collect()
 }
 
+/// Parse an `os` value into a platform constraint or an OS-version prefix.
+///
+/// - `"android"` / `"ios"` → `(Some(Platform::*), None)` — matches by platform.
+/// - `"17"`, `"14.0"` etc. → `(None, Some("17"))` — matches by version prefix.
+/// - `None` → `(None, None)` — no constraint.
+fn parse_os_value(os: Option<&str>) -> (Option<Platform>, Option<String>) {
+    match os {
+        Some("android") => (Some(Platform::Android), None),
+        Some("ios") => (Some(Platform::Ios), None),
+        Some(other) => (None, Some(other.to_string())),
+        None => (None, None),
+    }
+}
+
 /// A constraint that filters which devices of an app execute a block.
 ///
 /// Parsed from the `[block.where]` table in a flow file. Only devices matching
@@ -52,6 +67,8 @@ pub fn build_each_contexts(
 pub struct WhereFilter {
     /// If set, only devices of this type run the block.
     pub device_type: Option<DeviceType>,
+    /// If set, only devices on this platform run the block.
+    pub platform: Option<Platform>,
     /// If set, only devices whose `os_version` starts with this string run the block.
     pub os: Option<String>,
     /// If set, only devices with this exact name run the block.
@@ -77,15 +94,38 @@ impl WhereFilter {
             _ => None,
         });
 
-        let os = map.get("os").cloned();
+        let (platform, os) = parse_os_value(map.get("os").map(|s| s.as_str()));
         let name = map.get("name").cloned();
         let physical = map.get("physical").and_then(|v| v.parse::<bool>().ok());
 
         Self {
             device_type,
+            platform,
             os,
             name,
             physical,
+        }
+    }
+
+    /// Build a `WhereFilter` from the parser's [`DeviceFilter`] struct.
+    ///
+    /// Interprets `os = "android"` / `os = "ios"` as a platform constraint;
+    /// other values (e.g. `"17"`) are treated as OS-version prefix matches.
+    pub fn from_device_filter(df: &DeviceFilter) -> Self {
+        let device_type = df.device_type.as_deref().and_then(|t| match t {
+            "phone" => Some(DeviceType::Phone),
+            "tablet" => Some(DeviceType::Tablet),
+            _ => None,
+        });
+
+        let (platform, os) = parse_os_value(df.os.as_deref());
+
+        Self {
+            device_type,
+            platform,
+            os,
+            name: None,
+            physical: df.physical,
         }
     }
 
@@ -95,6 +135,11 @@ impl WhereFilter {
     pub fn matches(&self, device: &DeviceInfo) -> bool {
         if let Some(dt) = self.device_type {
             if device.device_type != dt {
+                return false;
+            }
+        }
+        if let Some(p) = self.platform {
+            if device.platform != p {
                 return false;
             }
         }
@@ -217,6 +262,7 @@ mod tests {
     fn where_filter_matches_device_type_phone() {
         let filter = WhereFilter {
             device_type: Some(DeviceType::Phone),
+            platform: None,
             os: None,
             name: None,
             physical: None,
@@ -237,6 +283,7 @@ mod tests {
     fn where_filter_matches_device_type_tablet() {
         let filter = WhereFilter {
             device_type: Some(DeviceType::Tablet),
+            platform: None,
             os: None,
             name: None,
             physical: None,
@@ -257,6 +304,7 @@ mod tests {
     fn where_filter_no_constraints_matches_all() {
         let filter = WhereFilter {
             device_type: None,
+            platform: None,
             os: None,
             name: None,
             physical: None,
@@ -277,6 +325,7 @@ mod tests {
     fn where_filter_os_constraint_filters_correctly() {
         let filter = WhereFilter {
             device_type: None,
+            platform: None,
             os: Some("17".to_string()),
             name: None,
             physical: None,
@@ -298,6 +347,7 @@ mod tests {
     fn where_filter_name_constraint_filters_correctly() {
         let filter = WhereFilter {
             device_type: None,
+            platform: None,
             os: None,
             name: Some("iPad Pro".to_string()),
             physical: None,
@@ -323,6 +373,7 @@ mod tests {
         let devices = vec![tablet, phone];
         let filter = WhereFilter {
             device_type: Some(DeviceType::Phone),
+            platform: None,
             os: None,
             name: None,
             physical: None,
@@ -344,6 +395,7 @@ mod tests {
         ];
         let filter = WhereFilter {
             device_type: Some(DeviceType::Tablet),
+            platform: None,
             os: None,
             name: None,
             physical: None,
@@ -444,6 +496,7 @@ mod tests {
     fn where_filter_physical_constraint() {
         let filter = WhereFilter {
             device_type: None,
+            platform: None,
             os: None,
             name: None,
             physical: Some(true),
@@ -476,6 +529,7 @@ mod tests {
     fn where_filter_multiple_constraints_and_logic() {
         let filter = WhereFilter {
             device_type: Some(DeviceType::Phone),
+            platform: None,
             os: Some("17".to_string()),
             name: None,
             physical: None,
@@ -524,6 +578,7 @@ mod tests {
         ];
         let filter = WhereFilter {
             device_type: None,
+            platform: None,
             os: None,
             name: None,
             physical: None,
@@ -545,5 +600,112 @@ mod tests {
         let filter = WhereFilter::from_map(&map);
         let device = make_device("iPhone 15", "uid-1");
         assert!(filter.matches(&device));
+    }
+
+    // ---------------------------------------------------------------
+    // 23. Platform constraint matches correct platform
+    // ---------------------------------------------------------------
+    #[test]
+    fn where_filter_platform_matches_correct_platform() {
+        let filter = WhereFilter {
+            device_type: None,
+            platform: Some(Platform::Android),
+            os: None,
+            name: None,
+            physical: None,
+        };
+
+        let mut android = make_device("Pixel 8", "uid-1");
+        android.platform = Platform::Android;
+        android.os_version = "14".to_string();
+        assert!(filter.matches(&android));
+
+        let ios = make_device("iPhone 15", "uid-2");
+        assert!(!filter.matches(&ios));
+    }
+
+    // ---------------------------------------------------------------
+    // 24. from_device_filter parses os = "android" as platform
+    // ---------------------------------------------------------------
+    #[test]
+    fn from_device_filter_parses_android_platform() {
+        let df = DeviceFilter {
+            device_type: None,
+            os: Some("android".to_string()),
+            physical: None,
+        };
+        let filter = WhereFilter::from_device_filter(&df);
+        assert_eq!(filter.platform, Some(Platform::Android));
+        assert!(filter.os.is_none());
+    }
+
+    // ---------------------------------------------------------------
+    // 25. from_device_filter parses os = "ios" as platform
+    // ---------------------------------------------------------------
+    #[test]
+    fn from_device_filter_parses_ios_platform() {
+        let df = DeviceFilter {
+            device_type: None,
+            os: Some("ios".to_string()),
+            physical: None,
+        };
+        let filter = WhereFilter::from_device_filter(&df);
+        assert_eq!(filter.platform, Some(Platform::Ios));
+        assert!(filter.os.is_none());
+    }
+
+    // ---------------------------------------------------------------
+    // 26. from_device_filter keeps version as os prefix
+    // ---------------------------------------------------------------
+    #[test]
+    fn from_device_filter_keeps_version_as_os_prefix() {
+        let df = DeviceFilter {
+            device_type: None,
+            os: Some("17".to_string()),
+            physical: None,
+        };
+        let filter = WhereFilter::from_device_filter(&df);
+        assert!(filter.platform.is_none());
+        assert_eq!(filter.os, Some("17".to_string()));
+    }
+
+    // ---------------------------------------------------------------
+    // 27. from_device_filter parses device_type
+    // ---------------------------------------------------------------
+    #[test]
+    fn from_device_filter_parses_device_type() {
+        let df = DeviceFilter {
+            device_type: Some("tablet".to_string()),
+            os: Some("android".to_string()),
+            physical: Some(true),
+        };
+        let filter = WhereFilter::from_device_filter(&df);
+        assert_eq!(filter.device_type, Some(DeviceType::Tablet));
+        assert_eq!(filter.platform, Some(Platform::Android));
+        assert_eq!(filter.physical, Some(true));
+    }
+
+    // ---------------------------------------------------------------
+    // 28. from_map parses os = "android" as platform
+    // ---------------------------------------------------------------
+    #[test]
+    fn from_map_parses_android_as_platform() {
+        let mut map = HashMap::new();
+        map.insert("os".to_string(), "android".to_string());
+        let filter = WhereFilter::from_map(&map);
+        assert_eq!(filter.platform, Some(Platform::Android));
+        assert!(filter.os.is_none());
+    }
+
+    // ---------------------------------------------------------------
+    // 29. from_map parses os = "ios" as platform
+    // ---------------------------------------------------------------
+    #[test]
+    fn from_map_parses_ios_as_platform() {
+        let mut map = HashMap::new();
+        map.insert("os".to_string(), "ios".to_string());
+        let filter = WhereFilter::from_map(&map);
+        assert_eq!(filter.platform, Some(Platform::Ios));
+        assert!(filter.os.is_none());
     }
 }

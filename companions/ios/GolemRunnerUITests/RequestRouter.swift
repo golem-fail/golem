@@ -70,7 +70,16 @@ final class RequestRouter {
     // MARK: - Route handlers
 
     private func handleHealth() -> HTTPResponse {
-        return .json(["status": "ok"])
+        let device = UIDevice.current
+        return .json([
+            "status": "ok",
+            "platform": "ios",
+            "version": "0.2.0",
+            "device_name": device.name,
+            "device_model": device.model,
+            "os_version": device.systemVersion,
+            "device_id": device.identifierForVendor?.uuidString ?? "unknown",
+        ])
     }
 
     private func handleHierarchy(query: [String: String]) -> HTTPResponse {

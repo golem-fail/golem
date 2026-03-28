@@ -62,8 +62,10 @@ fn direction_to_swipe_coords(direction: Direction) -> SwipeRequest {
 impl IosDriver {
     /// Create a new iOS driver targeting the companion server at the given port.
     pub fn new(device_id: String, bundle_id: String, port: u16) -> Self {
+        let mut client = CompanionClient::new(port);
+        client.default_query = format!("bundle_id={bundle_id}");
         Self {
-            client: CompanionClient::new(port),
+            client,
             device_id,
             bundle_id,
         }

@@ -27,6 +27,7 @@ fn test_ctx() -> ExecutionContext<'static> {
         flow_name: "test",
         block_name: None,
         step_index: 0,
+        device: None,
     }
 }
 
@@ -931,6 +932,7 @@ steps = [
         flow_name: "screenshot on error",
         block_name: None,
         step_index: 0,
+        device: None,
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
@@ -981,6 +983,7 @@ steps = [
         flow_name: "screenshot on warn",
         block_name: None,
         step_index: 0,
+        device: None,
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
@@ -1031,6 +1034,7 @@ steps = [
         flow_name: "no screenshot on ignore",
         block_name: None,
         step_index: 0,
+        device: None,
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
@@ -1081,6 +1085,7 @@ steps = [
         flow_name: "screenshot fail resilient",
         block_name: None,
         step_index: 0,
+        device: None,
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
@@ -1131,6 +1136,7 @@ steps = [
         flow_name: "disk write flow",
         block_name: None,
         step_index: 0,
+        device: None,
     };
 
     let _result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
@@ -1197,6 +1203,7 @@ steps = [
         flow_name: "disabled capture flow",
         block_name: None,
         step_index: 0,
+        device: None,
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)

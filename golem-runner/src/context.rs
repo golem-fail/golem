@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use golem_devices::DeviceInfo;
+
 use crate::capture::CaptureConfig;
 
 /// Flow-level context threaded through the execution pipeline.
@@ -10,6 +12,8 @@ pub struct ExecutionContext<'a> {
     pub flow_name: &'a str,
     pub block_name: Option<&'a str>,
     pub step_index: usize,
+    /// The device running this flow. Used for block-level `where` filtering.
+    pub device: Option<&'a DeviceInfo>,
 }
 
 #[cfg(test)]
@@ -26,5 +30,6 @@ pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
         flow_name: "test",
         block_name: None,
         step_index: 0,
+        device: None,
     }
 }

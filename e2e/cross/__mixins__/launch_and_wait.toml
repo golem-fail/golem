@@ -1,0 +1,8 @@
+[[step]]
+action = "launch"
+app = "${app_bundle}"
+
+[[step]]
+action = "wait"
+text = "${wait_element}"
+timeout = 10000

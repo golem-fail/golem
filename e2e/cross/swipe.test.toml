@@ -1,6 +1,6 @@
 [flow]
-name = "iOS swipe test"
-tags = ["ios", "interaction", "gesture"]
+name = "Swipe test"
+tags = ["cross-platform", "interaction", "gesture"]
 
 [[flow.apps]]
 name = "app"
@@ -8,6 +8,10 @@ bundle = "com.golem.test"
 
 [[flow.apps.devices]]
 os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
 type = "phone"
 
 [[block]]
@@ -30,5 +34,5 @@ steps = [
   { action = "swipe", direction = "right" },
 
   # Verify we can still see a known element after swiping
-  { action = "assert_visible", accessibility_id = "submit-button" },
+  { action = "assert_visible", text = "Submit" },
 ]

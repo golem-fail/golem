@@ -1,0 +1,41 @@
+[flow]
+name = "App lifecycle test"
+tags = ["cross-platform", "lifecycle"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "launch_and_stop"
+steps = [
+  # Fresh app state
+  { action = "stop", app = "com.golem.test", on_fail = "skip" },
+  { action = "launch", app = "com.golem.test" },
+
+  # Verify the app is running by checking for a known element
+  { action = "wait", text = "Submit", timeout = 30000 },
+  { action = "assert_visible", text = "Counter" },
+
+  # Interact to set some state
+  { action = "tap", text = "Increment" },
+  { action = "assert_text", text = "1", below = "Counter", element_type = "text" },
+
+  # Stop the app
+  { action = "stop", app = "com.golem.test" },
+
+  # Re-launch the app (state may be reset)
+  { action = "launch", app = "com.golem.test" },
+
+  # Verify the app is running again
+  { action = "wait", text = "Submit", timeout = 30000 },
+  { action = "assert_visible", text = "Counter" },
+]

@@ -15,68 +15,89 @@ os = "android:latest"
 type = "phone"
 
 [[block]]
+name = "initial_state"
+steps = [
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", text = "Orientation:", timeout = 10000 },
+  { action = "assert_text", text = "Portrait", right_of = "Orientation:" },
+  { action = "assert_text", text = "Light", right_of = "Theme:" },
+  { action = "assert_text", text = "0.0, 0.0", right_of = "Location:" },
+
+  # Press the home button and re-launch
+  { action = "press", button = "home" },
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", text = "Orientation:", timeout = 5000 },
+]
+
+# Android-only: test back button navigation
+[[block]]
+name = "android_back_button"
+where = { os = "android" }
+steps = [
+  { action = "press", button = "back" },
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", text = "Orientation:", timeout = 5000 },
+]
+
+[[block]]
 name = "orientation_controls"
 steps = [
-  # Launch the app
-  { action = "launch", app = "com.golem.test" },
-  { action = "wait", accessibility_id = "orientation-label", timeout = 10000 },
-
   # Verify initial portrait orientation
-  { action = "assert_text", accessibility_id = "orientation-label", text = "Portrait" },
+  { action = "assert_text", text = "Portrait", right_of = "Orientation:" },
 
   # Rotate to landscape and verify
   { action = "rotate", orientation = "landscape" },
-  { action = "assert_text", accessibility_id = "orientation-label", text = "Landscape" },
+  { action = "assert_text", text = "Landscape", right_of = "Orientation:" },
 
   # Verify core elements are still accessible in landscape
-  { action = "assert_visible", accessibility_id = "submit-button" },
-  { action = "assert_visible", accessibility_id = "counter-display" },
+  { action = "assert_visible", text = "Submit" },
+  { action = "assert_visible", text = "Counter" },
 
   # Rotate back to portrait and verify
   { action = "rotate", orientation = "portrait" },
-  { action = "assert_text", accessibility_id = "orientation-label", text = "Portrait" },
+  { action = "assert_text", text = "Portrait", right_of = "Orientation:" },
 ]
 
 [[block]]
 name = "dark_mode_controls"
 steps = [
   # Verify initial light theme
-  { action = "assert_text", accessibility_id = "theme-label", text = "Light" },
+  { action = "assert_text", text = "Light", right_of = "Theme:" },
 
   # Enable dark mode and verify
   { action = "dark_mode", enabled = true },
-  { action = "assert_text", accessibility_id = "theme-label", text = "Dark" },
+  { action = "assert_text", text = "Dark", right_of = "Theme:" },
 
   # Take a screenshot in dark mode
   { action = "screenshot", path = "/tmp/golem-cross-dark-mode.png" },
 
   # Verify elements are still functional in dark mode
-  { action = "tap", accessibility_id = "increment-button" },
-  { action = "assert_text", accessibility_id = "counter-display", text = "1" },
+  { action = "tap", text = "Increment" },
+  { action = "assert_text", text = "1", below = "Counter" },
 
   # Disable dark mode and verify return to light theme
   { action = "dark_mode", enabled = false },
-  { action = "assert_text", accessibility_id = "theme-label", text = "Light" },
+  { action = "assert_text", text = "Light", right_of = "Theme:" },
 ]
 
 [[block]]
 name = "location_controls"
 steps = [
   # Verify initial location
-  { action = "assert_text", accessibility_id = "location-label", text = "0.0, 0.0" },
+  { action = "assert_text", text = "0.0, 0.0", right_of = "Location:" },
 
   # Set GPS location to San Francisco
   { action = "set_location", latitude = 37.7749, longitude = -122.4194 },
-  { action = "assert_text", accessibility_id = "location-label", text = "37.7749, -122.4194" },
+  { action = "assert_text", text = "37.7749, -122.4194", right_of = "Location:" },
 
   # Set GPS location to Tokyo
   { action = "set_location", latitude = 35.6762, longitude = 139.6503 },
-  { action = "assert_text", accessibility_id = "location-label", text = "35.6762, 139.6503" },
+  { action = "assert_text", text = "35.6762, 139.6503", right_of = "Location:" },
 
   # Set GPS location to London
   { action = "set_location", latitude = 51.5074, longitude = -0.1278 },
-  { action = "assert_text", accessibility_id = "location-label", text = "51.5074, -0.1278" },
+  { action = "assert_text", text = "51.5074, -0.1278", right_of = "Location:" },
 
   # Read the final location value
-  { action = "read", accessibility_id = "location-label", save_to = "final_location" },
+  { action = "read", right_of = "Location:", save_to = "final_location" },
 ]

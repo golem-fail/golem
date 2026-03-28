@@ -89,7 +89,14 @@ public class CompanionServer {
         try {
             switch (path) {
                 case "/health":
-                    sendJson(out, 200, new JSONObject().put("status", "ok"));
+                    sendJson(out, 200, new JSONObject()
+                        .put("status", "ok")
+                        .put("platform", "android")
+                        .put("version", "0.2.0")
+                        .put("device_name", android.os.Build.MODEL)
+                        .put("device_model", android.os.Build.DEVICE)
+                        .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
+                        .put("device_id", android.os.Build.SERIAL));
                     break;
                 case "/hierarchy":
                     handleHierarchy(out);

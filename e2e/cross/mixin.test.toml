@@ -1,0 +1,44 @@
+[flow]
+name = "Mixin reuse test"
+tags = ["cross-platform", "mixin"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "launch_via_mixin"
+steps = [
+  # Fresh app state
+  { action = "stop", app = "com.golem.test", on_fail = "skip" },
+
+  # Use a mixin to launch the app and wait for readiness
+  { action = "load_mixin", mixin = "launch_and_wait", vars = { app_bundle = "com.golem.test", wait_element = "Submit" } },
+
+  # Verify the app state after mixin-driven launch
+  { action = "assert_text", text = "0", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "Submit" },
+]
+
+[[block]]
+name = "interact_and_relaunch"
+steps = [
+  # Interact with the app
+  { action = "tap", text = "Increment" },
+  { action = "assert_text", text = "1", below = "Counter", element_type = "text" },
+
+  # Stop and re-launch using the same mixin
+  { action = "stop", app = "com.golem.test" },
+  { action = "load_mixin", mixin = "launch_and_wait", vars = { app_bundle = "com.golem.test", wait_element = "Submit" } },
+
+  # Verify the app relaunched
+  { action = "assert_visible", text = "Counter" },
+]

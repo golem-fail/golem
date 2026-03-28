@@ -1,0 +1,40 @@
+[flow]
+name = "Screenshot test"
+tags = ["cross-platform", "capture"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "screenshot_tests"
+steps = [
+  { action = "stop", app = "com.golem.test", on_fail = "skip" },
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", text = "Submit", timeout = 30000 },
+
+  # Take a screenshot of the initial state
+  { action = "screenshot", path = "/tmp/golem-screenshot-initial.png" },
+
+  # Interact with the app to change state
+  { action = "tap", text = "Increment" },
+  { action = "tap", text = "Increment" },
+  { action = "tap", text = "Increment" },
+  { action = "type", placeholder = "Enter email", text = "screenshot@test.com" },
+  { action = "hide_keyboard" },
+
+  # Take a screenshot after changes
+  { action = "screenshot", path = "/tmp/golem-screenshot-after-interaction.png" },
+
+  # Toggle dark mode and capture
+  { action = "tap", text = "dark-mode-toggle", auto_scroll = true },
+  { action = "screenshot", path = "/tmp/golem-screenshot-dark-mode.png" },
+]

@@ -31,6 +31,7 @@ fn test_ctx() -> ExecutionContext<'static> {
         flow_name: "test",
         block_name: None,
         step_index: 0,
+        device: None,
     }
 }
 

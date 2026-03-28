@@ -1,0 +1,59 @@
+[flow]
+name = "Tap test"
+tags = ["cross-platform", "interaction", "smoke"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+# Android needs an extra wait for Submit to appear
+[[block]]
+name = "tap_setup_android"
+where = { os = "android" }
+steps = [
+  { action = "stop", app = "com.golem.test", on_fail = "skip" },
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", text = "Submit", timeout = 30000 },
+]
+
+[[block]]
+name = "tap_setup_ios"
+where = { os = "ios" }
+steps = [
+  { action = "stop", app = "com.golem.test", on_fail = "skip" },
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", text = "Submit", timeout = 30000 },
+]
+
+[[block]]
+name = "tap_interactions"
+steps = [
+  { action = "tap", text = "Submit" },
+  { action = "tap", text = "Action", index = 0 },
+  { action = "tap", text = "Increment" },
+  { action = "tap", text = "Increment" },
+  { action = "tap", text = "Decrement" },
+]
+
+# Verification differs by platform
+[[block]]
+name = "verify_android"
+where = { os = "android" }
+steps = [
+  { action = "assert_visible", text = "Counter" },
+]
+
+[[block]]
+name = "verify_ios"
+where = { os = "ios" }
+steps = [
+  { action = "assert_text", text = "1", below = "Counter", element_type = "text" },
+]

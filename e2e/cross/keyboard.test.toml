@@ -1,0 +1,59 @@
+[flow]
+name = "Keyboard test"
+tags = ["cross-platform", "interaction", "keyboard"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "keyboard_management"
+steps = [
+  { action = "stop", app = "com.golem.test", on_fail = "skip" },
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", text = "Submit", timeout = 30000 },
+
+  # Tap a text field to bring up the keyboard
+  { action = "tap", placeholder = "Enter email" },
+
+  # Type some text (keyboard should be visible)
+  { action = "type", placeholder = "Enter email", text = "test@example.com" },
+
+  # Dismiss the keyboard
+  { action = "hide_keyboard" },
+
+  # Tap another text field to bring the keyboard back
+  { action = "tap", placeholder = "Search" },
+  { action = "type", placeholder = "Search", text = "search query" },
+]
+
+# Dismiss keyboard: Android can use back button, iOS uses hide_keyboard
+[[block]]
+name = "dismiss_keyboard_android"
+where = { os = "android" }
+steps = [
+  { action = "press", button = "back" },
+]
+
+[[block]]
+name = "dismiss_keyboard_ios"
+where = { os = "ios" }
+steps = [
+  { action = "hide_keyboard" },
+]
+
+[[block]]
+name = "verify_text_persisted"
+steps = [
+  # Verify the typed text persisted after keyboard dismissal
+  { action = "assert_text", placeholder = "Enter email", text = "test@example.com" },
+  { action = "assert_text", placeholder = "Search", text = "search query" },
+]

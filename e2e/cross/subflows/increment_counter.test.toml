@@ -1,0 +1,9 @@
+[flow]
+name = "Increment counter subflow"
+
+[[block]]
+name = "increment"
+steps = [
+  { action = "tap", text = "Increment" },
+  { action = "read", below = "Counter", element_type = "text", save_to = "counter_value" },
+]

@@ -31,23 +31,23 @@ name = "set_state_in_primary_app"
 steps = [
   # Launch the primary app
   { action = "launch", app = "com.golem.test" },
-  { action = "wait", accessibility_id = "submit-button", timeout = 10000 },
+  { action = "wait", text = "Submit", timeout = 10000 },
 
   # Set state by incrementing the counter
-  { action = "tap", accessibility_id = "increment-button" },
-  { action = "tap", accessibility_id = "increment-button" },
-  { action = "tap", accessibility_id = "increment-button" },
-  { action = "tap", accessibility_id = "increment-button" },
-  { action = "tap", accessibility_id = "increment-button" },
-  { action = "assert_text", accessibility_id = "counter-display", text = "5" },
+  { action = "tap", text = "Increment" },
+  { action = "tap", text = "Increment" },
+  { action = "tap", text = "Increment" },
+  { action = "tap", text = "Increment" },
+  { action = "tap", text = "Increment" },
+  { action = "assert_text", text = "5", below = "Counter" },
 
   # Type into a form field to set additional state
-  { action = "type", accessibility_id = "email-input", text = "cross-test@golem.com" },
+  { action = "type", placeholder = "Enter email", text = "cross-test@golem.com" },
   { action = "hide_keyboard" },
 
   # Read the counter value into a variable for later verification
-  { action = "read", accessibility_id = "counter-display", save_to = "primary_counter" },
-  { action = "read", accessibility_id = "email-input", save_to = "primary_email" },
+  { action = "read", below = "Counter", element_type = "text", save_to = "primary_counter" },
+  { action = "read", placeholder = "Enter email", save_to = "primary_email" },
 ]
 
 [[block]]
@@ -55,22 +55,22 @@ name = "switch_to_companion_and_verify"
 steps = [
   # Switch to the companion app
   { action = "launch", app = "com.golem.test-b" },
-  { action = "wait", accessibility_id = "app-b-title", timeout = 10000 },
+  { action = "wait", text = "app-b-title", timeout = 10000 },
 
   # Verify companion app elements are visible
-  { action = "assert_visible", accessibility_id = "app-b-title" },
-  { action = "assert_visible", accessibility_id = "shared-data-display" },
-  { action = "assert_visible", accessibility_id = "refresh-button" },
-  { action = "assert_visible", accessibility_id = "status-label" },
+  { action = "assert_visible", text = "app-b-title" },
+  { action = "assert_visible", text = "shared-data-display" },
+  { action = "assert_visible", text = "refresh-button" },
+  { action = "assert_visible", text = "status-label" },
 
   # Verify companion app initial state
-  { action = "assert_text", accessibility_id = "status-label", text = "Ready" },
+  { action = "assert_text", text = "Ready", right_of = "Status:" },
 
   # Interact with the companion app
-  { action = "tap", accessibility_id = "refresh-button" },
+  { action = "tap", text = "refresh-button" },
 
   # Read companion app state
-  { action = "read", accessibility_id = "status-label", save_to = "companion_status" },
+  { action = "read", text = "status-label", save_to = "companion_status" },
 ]
 
 [[block]]
@@ -78,20 +78,20 @@ name = "switch_back_and_verify_state_preserved"
 steps = [
   # Switch back to the primary app
   { action = "launch", app = "com.golem.test" },
-  { action = "wait", accessibility_id = "counter-display", timeout = 10000 },
+  { action = "wait", text = "Counter", timeout = 10000 },
 
   # Verify primary app state is preserved after app switching
-  { action = "assert_text", accessibility_id = "counter-display", text = "5" },
-  { action = "assert_text", accessibility_id = "email-input", text = "cross-test@golem.com" },
+  { action = "assert_text", text = "5", below = "Counter" },
+  { action = "assert_text", placeholder = "Enter email", text = "cross-test@golem.com" },
 
   # Verify UI elements are still enabled and functional
-  { action = "assert_enabled", accessibility_id = "increment-button" },
-  { action = "assert_enabled", accessibility_id = "decrement-button" },
-  { action = "assert_enabled", accessibility_id = "submit-button" },
+  { action = "assert_enabled", text = "Increment" },
+  { action = "assert_enabled", text = "Decrement" },
+  { action = "assert_enabled", text = "Submit" },
 
   # Perform one more interaction to confirm app is responsive
-  { action = "tap", accessibility_id = "decrement-button" },
-  { action = "assert_text", accessibility_id = "counter-display", text = "4" },
+  { action = "tap", text = "Decrement" },
+  { action = "assert_text", text = "4", below = "Counter" },
 
   # Stop the companion app
   { action = "stop", app = "com.golem.test-b" },

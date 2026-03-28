@@ -19,46 +19,46 @@ name = "webview_element_interaction"
 steps = [
   # Launch the app
   { action = "launch", app = "com.golem.test" },
-  { action = "wait", accessibility_id = "submit-button", timeout = 10000 },
+  { action = "wait", text = "Submit", timeout = 10000 },
 
   # Verify core UI elements are visible (proxy for webview context loaded)
-  { action = "assert_visible", accessibility_id = "email-input" },
-  { action = "assert_visible", accessibility_id = "password-input" },
-  { action = "assert_visible", accessibility_id = "search-input" },
-  { action = "assert_visible", accessibility_id = "submit-button" },
-  { action = "assert_visible", accessibility_id = "counter-display" },
+  { action = "assert_visible", placeholder = "Enter email" },
+  { action = "assert_visible", placeholder = "Password" },
+  { action = "assert_visible", placeholder = "Search" },
+  { action = "assert_visible", text = "Submit" },
+  { action = "assert_visible", text = "Counter" },
 
   # Interact with text input elements inside the web view
-  { action = "type", accessibility_id = "email-input", text = "webview@test.com" },
-  { action = "assert_text", accessibility_id = "email-input", text = "webview@test.com" },
+  { action = "type", placeholder = "Enter email", text = "webview@test.com" },
+  { action = "assert_text", placeholder = "Enter email", text = "webview@test.com" },
 
-  { action = "type", accessibility_id = "search-input", text = "webview search query" },
-  { action = "assert_text", accessibility_id = "search-input", text = "webview search query" },
+  { action = "type", placeholder = "Search", text = "webview search query" },
+  { action = "assert_text", placeholder = "Search", text = "webview search query" },
   { action = "hide_keyboard" },
 
   # Interact with buttons inside the web view
-  { action = "tap", accessibility_id = "increment-button" },
-  { action = "tap", accessibility_id = "increment-button" },
-  { action = "assert_text", accessibility_id = "counter-display", text = "2" },
+  { action = "tap", text = "Increment" },
+  { action = "tap", text = "Increment" },
+  { action = "assert_text", text = "2", below = "Counter" },
 
   # Read values from web view elements
-  { action = "read", accessibility_id = "counter-display", save_to = "counter_value" },
-  { action = "read", accessibility_id = "orientation-label", save_to = "orientation" },
-  { action = "read", accessibility_id = "theme-label", save_to = "theme" },
+  { action = "read", below = "Counter", element_type = "text", save_to = "counter_value" },
+  { action = "read", right_of = "Orientation:", save_to = "orientation" },
+  { action = "read", right_of = "Theme:", save_to = "theme" },
 
   # Verify device state labels are rendered in the web view
-  { action = "assert_text", accessibility_id = "orientation-label", text = "Portrait" },
-  { action = "assert_text", accessibility_id = "theme-label", text = "Light" },
+  { action = "assert_text", text = "Portrait", right_of = "Orientation:" },
+  { action = "assert_text", text = "Light", right_of = "Theme:" },
 
   # Scroll within the web view to find list elements
   { action = "swipe", direction = "down" },
   { action = "swipe", direction = "down" },
-  { action = "wait", accessibility_id = "list-item-0", timeout = 5000 },
+  { action = "wait", text = "list-item-0", timeout = 5000 },
 
   # Scroll back up to the top of the web view
   { action = "swipe", direction = "up" },
   { action = "swipe", direction = "up" },
-  { action = "wait", accessibility_id = "submit-button", timeout = 5000 },
+  { action = "wait", text = "Submit", timeout = 5000 },
 
   # Take a screenshot to capture final web view state
   { action = "screenshot", path = "/tmp/golem-cross-webview.png" },

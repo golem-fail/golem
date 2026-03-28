@@ -1,0 +1,61 @@
+[flow]
+name = "Multi-app test"
+tags = ["cross-platform", "multi-app"]
+
+[[flow.apps]]
+name = "app"
+bundle = "com.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[flow.apps]]
+name = "app-b"
+bundle = "com.golem.test-b"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "switch_between_apps"
+steps = [
+  # Launch the primary app
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", text = "Submit", timeout = 10000 },
+
+  # Interact with the primary app
+  { action = "tap", text = "Increment" },
+  { action = "tap", text = "Increment" },
+  { action = "tap", text = "Increment" },
+  { action = "assert_text", text = "3", below = "Counter" },
+
+  # Switch to the companion app
+  { action = "launch", app = "com.golem.test-b" },
+  { action = "wait", text = "app-b-title", timeout = 10000 },
+  { action = "assert_visible", text = "shared-data-display" },
+  { action = "assert_visible", text = "refresh-button" },
+  { action = "assert_text", text = "Ready", right_of = "Status:" },
+
+  # Tap refresh in companion app
+  { action = "tap", text = "refresh-button" },
+
+  # Switch back to the primary app
+  { action = "launch", app = "com.golem.test" },
+  { action = "wait", text = "Counter", timeout = 10000 },
+
+  # Verify primary app state is intact
+  { action = "assert_text", text = "3", below = "Counter" },
+
+  # Stop the companion app
+  { action = "stop", app = "com.golem.test-b" },
+]

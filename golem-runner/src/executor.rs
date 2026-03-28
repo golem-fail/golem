@@ -74,6 +74,17 @@ pub async fn execute_flow<'a>(
 
         let block = &blocks[current_idx];
 
+        // Skip blocks whose `where` filter doesn't match the current device.
+        if let Some(ref device_filter) = block.r#where {
+            if let Some(device) = ctx.device {
+                let filter = crate::for_each::WhereFilter::from_device_filter(device_filter);
+                if !filter.matches(device) {
+                    current_idx += 1;
+                    continue;
+                }
+            }
+        }
+
         // Sub-flow execution: if the block has run_flow, execute the child flow
         // instead of the block's own steps.
         if let Some(ref run_flow_path) = block.run_flow {
@@ -106,6 +117,7 @@ pub async fn execute_flow<'a>(
                 flow_name: &child_flow.flow.name,
                 block_name: None,
                 step_index: 0,
+                device: ctx.device,
             };
 
             let child_result = Box::pin(execute_flow(
@@ -1501,6 +1513,193 @@ action = "screenshot"
             vars.resolve("payment").ok(),
             Some(&VarValue::String("credit_card".to_string())),
             "row variables SHALL be applied to the variable store"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // Where clause: block skipped when device doesn't match
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn where_clause_skips_non_matching_block() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+
+        let mut android_only = make_block(Some("android_only"), vec![make_success_step()]);
+        android_only.r#where = Some(golem_parser::DeviceFilter {
+            device_type: None,
+            os: Some("android".to_string()),
+            physical: None,
+        });
+
+        let flow = make_flow(vec![android_only]);
+        let mut vars = VariableStore::new();
+        let tmp = std::env::temp_dir();
+
+        // Use an iOS device — the android-only block should be skipped.
+        let ios_device = golem_devices::DeviceInfo {
+            name: "iPhone 15".to_string(),
+            udid: "test-udid".to_string(),
+            platform: golem_devices::Platform::Ios,
+            device_type: golem_devices::DeviceType::Phone,
+            os_major: 17,
+            os_version: "17.2".to_string(),
+            state: golem_devices::DeviceState::Booted,
+            physical: false,
+            playstore: false,
+            screen_width: None,
+            screen_height: None,
+            screen_scale: None,
+            last_booted: None,
+            runtime_id: None,
+            device_type_id: None,
+        };
+
+        let capture = crate::capture::CaptureConfig::default();
+        let mut ctx = ExecutionContext {
+            flow_dir: &tmp,
+            project_root: &tmp,
+            capture_config: &capture,
+            flow_name: "test",
+            block_name: None,
+            step_index: 0,
+            device: Some(&ios_device),
+        };
+
+        let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx)
+            .await
+            .unwrap();
+
+        assert!(result.success, "flow SHALL succeed when block is skipped");
+        assert!(
+            driver.get_calls().is_empty(),
+            "no driver calls SHALL be made when the only block is skipped"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // Where clause: block executes when device matches
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn where_clause_executes_matching_block() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+
+        let mut android_only = make_block(Some("android_only"), vec![make_success_step()]);
+        android_only.r#where = Some(golem_parser::DeviceFilter {
+            device_type: None,
+            os: Some("android".to_string()),
+            physical: None,
+        });
+
+        let flow = make_flow(vec![android_only]);
+        let mut vars = VariableStore::new();
+        let tmp = std::env::temp_dir();
+
+        let android_device = golem_devices::DeviceInfo {
+            name: "Pixel 8".to_string(),
+            udid: "emulator-5554".to_string(),
+            platform: golem_devices::Platform::Android,
+            device_type: golem_devices::DeviceType::Phone,
+            os_major: 14,
+            os_version: "14".to_string(),
+            state: golem_devices::DeviceState::Booted,
+            physical: false,
+            playstore: false,
+            screen_width: None,
+            screen_height: None,
+            screen_scale: None,
+            last_booted: None,
+            runtime_id: None,
+            device_type_id: None,
+        };
+
+        let capture = crate::capture::CaptureConfig::default();
+        let mut ctx = ExecutionContext {
+            flow_dir: &tmp,
+            project_root: &tmp,
+            capture_config: &capture,
+            flow_name: "test",
+            block_name: None,
+            step_index: 0,
+            device: Some(&android_device),
+        };
+
+        let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx)
+            .await
+            .unwrap();
+
+        assert!(result.success, "flow SHALL succeed when block matches");
+        assert!(
+            !driver.get_calls().is_empty(),
+            "driver SHALL be called when the block's where matches the device"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // Where clause: mixed blocks — only matching ones execute
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn where_clause_mixed_blocks_only_matching_execute() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+
+        let mut ios_block = make_block(Some("ios_only"), vec![make_success_step()]);
+        ios_block.r#where = Some(golem_parser::DeviceFilter {
+            device_type: None,
+            os: Some("ios".to_string()),
+            physical: None,
+        });
+
+        let mut android_block = make_block(Some("android_only"), vec![make_success_step()]);
+        android_block.r#where = Some(golem_parser::DeviceFilter {
+            device_type: None,
+            os: Some("android".to_string()),
+            physical: None,
+        });
+
+        let shared_block = make_block(Some("shared"), vec![make_success_step()]);
+
+        let flow = make_flow(vec![ios_block, android_block, shared_block]);
+        let mut vars = VariableStore::new();
+        let tmp = std::env::temp_dir();
+
+        let ios_device = golem_devices::DeviceInfo {
+            name: "iPhone 15".to_string(),
+            udid: "test-udid".to_string(),
+            platform: golem_devices::Platform::Ios,
+            device_type: golem_devices::DeviceType::Phone,
+            os_major: 17,
+            os_version: "17.2".to_string(),
+            state: golem_devices::DeviceState::Booted,
+            physical: false,
+            playstore: false,
+            screen_width: None,
+            screen_height: None,
+            screen_scale: None,
+            last_booted: None,
+            runtime_id: None,
+            device_type_id: None,
+        };
+
+        let capture = crate::capture::CaptureConfig::default();
+        let mut ctx = ExecutionContext {
+            flow_dir: &tmp,
+            project_root: &tmp,
+            capture_config: &capture,
+            flow_name: "test",
+            block_name: None,
+            step_index: 0,
+            device: Some(&ios_device),
+        };
+
+        let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx)
+            .await
+            .unwrap();
+
+        assert!(result.success);
+        // iOS block + shared block = 2 screenshot calls; android block skipped
+        let calls = driver.get_calls();
+        assert_eq!(
+            calls.len(),
+            2,
+            "only the ios and shared blocks SHALL execute (got {calls:?})"
         );
     }
 }
