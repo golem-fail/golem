@@ -17,8 +17,6 @@ type = "phone"
 [[block]]
 name = "launch_and_stop"
 steps = [
-  # Fresh app state
-  { action = "stop", app = "com.golem.test", on_fail = "skip" },
   { action = "launch", app = "com.golem.test" },
 
   # Verify the app is running by checking for a known element

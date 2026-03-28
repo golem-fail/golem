@@ -17,9 +17,6 @@ type = "phone"
 [[block]]
 name = "launch_via_mixin"
 steps = [
-  # Fresh app state
-  { action = "stop", app = "com.golem.test", on_fail = "skip" },
-
   # Use a mixin to launch the app and wait for readiness
   { action = "load_mixin", mixin = "launch_and_wait", vars = { app_bundle = "com.golem.test", wait_element = "Submit" } },
 

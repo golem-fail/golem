@@ -19,7 +19,6 @@ type = "phone"
 name = "tap_setup_android"
 where = { os = "android" }
 steps = [
-  { action = "stop", app = "com.golem.test", on_fail = "skip" },
   { action = "launch", app = "com.golem.test" },
   { action = "wait", text = "Submit", timeout = 30000 },
 ]
@@ -28,7 +27,6 @@ steps = [
 name = "tap_setup_ios"
 where = { os = "ios" }
 steps = [
-  { action = "stop", app = "com.golem.test", on_fail = "skip" },
   { action = "launch", app = "com.golem.test" },
   { action = "wait", text = "Submit", timeout = 30000 },
 ]

@@ -17,7 +17,6 @@ type = "phone"
 [[block]]
 name = "keyboard_management"
 steps = [
-  { action = "stop", app = "com.golem.test", on_fail = "skip" },
   { action = "launch", app = "com.golem.test" },
   { action = "wait", text = "Submit", timeout = 30000 },
 

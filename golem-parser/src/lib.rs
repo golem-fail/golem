@@ -162,6 +162,23 @@ pub struct FlowOptions {
     pub max_runtime: Option<String>,
     pub suite_concurrency: Option<u32>,
     pub keep_devices: Option<bool>,
+    /// App lifecycle management before flow execution.
+    /// - `"reset"` — stop + launch (fresh state). Default for top-level flows.
+    /// - `"launch"` — launch if not running. Default for subflows.
+    /// - `"manual"` — do nothing; flow manages its own lifecycle.
+    pub app_lifecycle: Option<AppLifecycle>,
+}
+
+/// Controls how the runner manages the app before executing a flow.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AppLifecycle {
+    /// Stop and relaunch the app for fresh state.
+    Reset,
+    /// Launch the app if not already running; no-op if running.
+    Launch,
+    /// Do nothing — the flow manages its own app lifecycle.
+    Manual,
 }
 
 #[cfg(test)]

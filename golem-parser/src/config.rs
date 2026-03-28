@@ -22,6 +22,7 @@ pub struct ProjectOptions {
     pub max_runtime: Option<String>,
     pub suite_concurrency: Option<u32>,
     pub keep_devices: Option<bool>,
+    pub app_lifecycle: Option<crate::AppLifecycle>,
 }
 
 /// Internal deserialization target for `golem.toml`.
@@ -147,6 +148,7 @@ pub fn merge_config(project: &ProjectConfig, flow: &FlowFile) -> FlowFile {
             .suite_concurrency
             .or(proj_opts.suite_concurrency),
         keep_devices: flow_opts.keep_devices.or(proj_opts.keep_devices),
+        app_lifecycle: flow_opts.app_lifecycle.or(proj_opts.app_lifecycle),
     };
 
     // Only set options if at least one field is Some
