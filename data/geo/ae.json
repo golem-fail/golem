@@ -12,7 +12,7 @@
     {
       "name": "أبوظبي",
       "name_en": "Abu Dhabi",
-      "region_tags": ["Capital", "Western UAE"],
+      "region_tags": [],
       "cities": [
         {
           "name": "أبوظبي",
@@ -191,7 +191,7 @@
     {
       "name": "دبي",
       "name_en": "Dubai",
-      "region_tags": ["Eastern UAE", "Commercial Hub"],
+      "region_tags": [],
       "cities": [
         {
           "name": "دبي",
@@ -374,7 +374,7 @@
     {
       "name": "الشارقة",
       "name_en": "Sharjah",
-      "region_tags": ["Eastern UAE"],
+      "region_tags": ["Northern Emirates"],
       "cities": [
         {
           "name": "الشارقة",
@@ -449,7 +449,7 @@
     {
       "name": "عجمان",
       "name_en": "Ajman",
-      "region_tags": ["Eastern UAE"],
+      "region_tags": ["Northern Emirates"],
       "cities": [
         {
           "name": "عجمان",
@@ -524,7 +524,7 @@
     {
       "name": "أم القيوين",
       "name_en": "Umm Al Quwain",
-      "region_tags": ["Eastern UAE"],
+      "region_tags": ["Northern Emirates"],
       "cities": [
         {
           "name": "أم القيوين",
@@ -587,7 +587,7 @@
     {
       "name": "رأس الخيمة",
       "name_en": "Ras Al Khaimah",
-      "region_tags": ["Northern UAE"],
+      "region_tags": ["Northern Emirates"],
       "cities": [
         {
           "name": "رأس الخيمة",
@@ -662,7 +662,7 @@
     {
       "name": "الفجيرة",
       "name_en": "Fujairah",
-      "region_tags": ["Eastern UAE"],
+      "region_tags": ["Northern Emirates"],
       "cities": [
         {
           "name": "الفجيرة",

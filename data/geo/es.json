@@ -151,7 +151,7 @@
     {
       "name": "Canarias",
       "name_en": "Canary Islands",
-      "region_tags": ["Canary Islands", "Atlantic"],
+      "region_tags": ["Canary Islands"],
       "cities": [
         {
           "name": "Las Palmas de Gran Canaria",
@@ -421,7 +421,7 @@
     {
       "name": "Galicia",
       "name_en": "Galicia",
-      "region_tags": ["Northwestern Spain", "Atlantic"],
+      "region_tags": ["Northwestern Spain"],
       "cities": [
         {
           "name": "Santiago de Compostela",

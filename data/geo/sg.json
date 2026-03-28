@@ -12,7 +12,7 @@
     {
       "name": "Central Singapore",
       "name_en": "Central Singapore",
-      "region_tags": ["Central", "CBD"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Downtown Core",
@@ -241,7 +241,7 @@
     {
       "name": "North East",
       "name_en": "North East",
-      "region_tags": ["North East"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Hougang",
@@ -432,7 +432,7 @@
     {
       "name": "North West",
       "name_en": "North West",
-      "region_tags": ["North West"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Woodlands",
@@ -611,7 +611,7 @@
     {
       "name": "South East",
       "name_en": "South East",
-      "region_tags": ["South East"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Bedok",
@@ -802,7 +802,7 @@
     {
       "name": "South West",
       "name_en": "South West",
-      "region_tags": ["South West"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Jurong East",

@@ -143,7 +143,7 @@
     {
       "name": "British Columbia",
       "name_en": "British Columbia",
-      "region_tags": ["Western Canada", "Pacific"],
+      "region_tags": ["Western Canada"],
       "cities": [
         {
           "name": "Vancouver",
@@ -404,7 +404,7 @@
     {
       "name": "Nunavut",
       "name_en": "Nunavut",
-      "region_tags": ["Northern Canada", "Arctic"],
+      "region_tags": ["Northern Canada"],
       "cities": [
         {
           "name": "Iqaluit",

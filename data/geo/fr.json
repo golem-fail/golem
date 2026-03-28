@@ -1053,7 +1053,7 @@
     {
       "name": "Centre-Val de Loire",
       "name_en": "Centre-Val de Loire",
-      "region_tags": ["Centre-Val de Loire", "Centre"],
+      "region_tags": ["Centre-Val de Loire"],
       "cities": [
         {
           "name": "Tours",

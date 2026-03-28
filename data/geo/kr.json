@@ -12,7 +12,7 @@
     {
       "name": "서울특별시",
       "name_en": "Seoul",
-      "region_tags": ["Special City", "Capital Area", "Seoul"],
+      "region_tags": ["Seoul"],
       "cities": [
         {
           "name": "서울",
@@ -117,7 +117,7 @@
     {
       "name": "부산광역시",
       "name_en": "Busan",
-      "region_tags": ["Metropolitan City", "Yeongnam", "Southeast"],
+      "region_tags": ["Yeongnam"],
       "cities": [
         {
           "name": "부산",
@@ -192,7 +192,7 @@
     {
       "name": "인천광역시",
       "name_en": "Incheon",
-      "region_tags": ["Metropolitan City", "Capital Area", "Incheon"],
+      "region_tags": ["Incheon"],
       "cities": [
         {
           "name": "인천",
@@ -267,7 +267,7 @@
     {
       "name": "대구광역시",
       "name_en": "Daegu",
-      "region_tags": ["Metropolitan City", "Yeongnam", "Southeast"],
+      "region_tags": ["Yeongnam"],
       "cities": [
         {
           "name": "대구",
@@ -342,7 +342,7 @@
     {
       "name": "대전광역시",
       "name_en": "Daejeon",
-      "region_tags": ["Metropolitan City", "Chungcheong", "Central"],
+      "region_tags": ["Chungcheong"],
       "cities": [
         {
           "name": "대전",
@@ -417,7 +417,7 @@
     {
       "name": "광주광역시",
       "name_en": "Gwangju",
-      "region_tags": ["Metropolitan City", "Honam", "Southwest"],
+      "region_tags": ["Honam"],
       "cities": [
         {
           "name": "광주",
@@ -492,7 +492,7 @@
     {
       "name": "울산광역시",
       "name_en": "Ulsan",
-      "region_tags": ["Metropolitan City", "Yeongnam", "Southeast"],
+      "region_tags": ["Yeongnam"],
       "cities": [
         {
           "name": "울산",
@@ -567,7 +567,7 @@
     {
       "name": "세종특별자치시",
       "name_en": "Sejong",
-      "region_tags": ["Special Autonomous City", "Chungcheong", "Central"],
+      "region_tags": ["Chungcheong"],
       "cities": [
         {
           "name": "세종",
@@ -612,7 +612,7 @@
     {
       "name": "경기도",
       "name_en": "Gyeonggi-do",
-      "region_tags": ["Province", "Capital Area", "Gyeonggi"],
+      "region_tags": ["Gyeonggi"],
       "cities": [
         {
           "name": "수원시",
@@ -771,7 +771,7 @@
     {
       "name": "강원특별자치도",
       "name_en": "Gangwon-do",
-      "region_tags": ["Special Autonomous Province", "Gangwon", "Northeast"],
+      "region_tags": ["Gangwon"],
       "cities": [
         {
           "name": "춘천시",
@@ -854,7 +854,7 @@
     {
       "name": "충청남도",
       "name_en": "Chungcheongnam-do",
-      "region_tags": ["Province", "Chungcheong", "Central West"],
+      "region_tags": ["Chungcheong"],
       "cities": [
         {
           "name": "천안시",
@@ -925,7 +925,7 @@
     {
       "name": "충청북도",
       "name_en": "Chungcheongbuk-do",
-      "region_tags": ["Province", "Chungcheong", "Central"],
+      "region_tags": ["Chungcheong"],
       "cities": [
         {
           "name": "청주시",
@@ -970,7 +970,7 @@
     {
       "name": "경상북도",
       "name_en": "Gyeongsangbuk-do",
-      "region_tags": ["Province", "Yeongnam", "Southeast"],
+      "region_tags": ["Yeongnam"],
       "cities": [
         {
           "name": "포항시",
@@ -1029,7 +1029,7 @@
     {
       "name": "경상남도",
       "name_en": "Gyeongsangnam-do",
-      "region_tags": ["Province", "Yeongnam", "Southeast"],
+      "region_tags": ["Yeongnam"],
       "cities": [
         {
           "name": "창원시",
@@ -1094,7 +1094,7 @@
     {
       "name": "전라남도",
       "name_en": "Jeollanam-do",
-      "region_tags": ["Province", "Honam", "Southwest"],
+      "region_tags": ["Honam"],
       "cities": [
         {
           "name": "여수시",
@@ -1153,7 +1153,7 @@
     {
       "name": "전북특별자치도",
       "name_en": "Jeollabuk-do",
-      "region_tags": ["Special Autonomous Province", "Honam", "Southwest"],
+      "region_tags": ["Honam"],
       "cities": [
         {
           "name": "전주시",
@@ -1198,7 +1198,7 @@
     {
       "name": "제주특별자치도",
       "name_en": "Jeju-do",
-      "region_tags": ["Special Autonomous Province", "Jeju", "Island"],
+      "region_tags": ["Jeju"],
       "cities": [
         {
           "name": "제주시",

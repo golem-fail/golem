@@ -12,7 +12,7 @@
     {
       "name": "Connecticut",
       "name_en": "Connecticut",
-      "region_tags": ["Northeast", "New England"],
+      "region_tags": ["New England"],
       "cities": [
         {
           "name": "Hartford",
@@ -39,7 +39,7 @@
     {
       "name": "Maine",
       "name_en": "Maine",
-      "region_tags": ["Northeast", "New England"],
+      "region_tags": ["New England"],
       "cities": [
         {
           "name": "Portland",
@@ -56,7 +56,7 @@
     {
       "name": "Massachusetts",
       "name_en": "Massachusetts",
-      "region_tags": ["Northeast", "New England"],
+      "region_tags": ["New England"],
       "cities": [
         {
           "name": "Boston",
@@ -84,7 +84,7 @@
     {
       "name": "New Hampshire",
       "name_en": "New Hampshire",
-      "region_tags": ["Northeast", "New England"],
+      "region_tags": ["New England"],
       "cities": [
         {
           "name": "Manchester",
@@ -101,7 +101,7 @@
     {
       "name": "New Jersey",
       "name_en": "New Jersey",
-      "region_tags": ["Northeast", "Mid-Atlantic"],
+      "region_tags": ["Mid-Atlantic"],
       "cities": [
         {
           "name": "Newark",
@@ -127,7 +127,7 @@
     {
       "name": "New York",
       "name_en": "New York",
-      "region_tags": ["Northeast", "Mid-Atlantic"],
+      "region_tags": ["Mid-Atlantic"],
       "cities": [
         {
           "name": "New York City",
@@ -162,7 +162,7 @@
     {
       "name": "Pennsylvania",
       "name_en": "Pennsylvania",
-      "region_tags": ["Northeast", "Mid-Atlantic"],
+      "region_tags": ["Mid-Atlantic"],
       "cities": [
         {
           "name": "Philadelphia",
@@ -191,7 +191,7 @@
     {
       "name": "Rhode Island",
       "name_en": "Rhode Island",
-      "region_tags": ["Northeast", "New England"],
+      "region_tags": ["New England"],
       "cities": [
         {
           "name": "Providence",
@@ -208,7 +208,7 @@
     {
       "name": "Vermont",
       "name_en": "Vermont",
-      "region_tags": ["Northeast", "New England"],
+      "region_tags": ["New England"],
       "cities": [
         {
           "name": "Burlington",
@@ -225,7 +225,7 @@
     {
       "name": "Alabama",
       "name_en": "Alabama",
-      "region_tags": ["Southeast", "Deep South"],
+      "region_tags": ["Deep South"],
       "cities": [
         {
           "name": "Birmingham",
@@ -242,7 +242,7 @@
     {
       "name": "Arkansas",
       "name_en": "Arkansas",
-      "region_tags": ["Southeast", "South Central"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Little Rock",
@@ -259,7 +259,7 @@
     {
       "name": "Delaware",
       "name_en": "Delaware",
-      "region_tags": ["Southeast", "Mid-Atlantic"],
+      "region_tags": ["Mid-Atlantic"],
       "cities": [
         {
           "name": "Wilmington",
@@ -276,7 +276,7 @@
     {
       "name": "Florida",
       "name_en": "Florida",
-      "region_tags": ["Southeast", "Sun Belt"],
+      "region_tags": ["Sun Belt"],
       "cities": [
         {
           "name": "Miami",
@@ -314,7 +314,7 @@
     {
       "name": "Georgia",
       "name_en": "Georgia",
-      "region_tags": ["Southeast", "Deep South"],
+      "region_tags": ["Deep South"],
       "cities": [
         {
           "name": "Atlanta",
@@ -331,7 +331,7 @@
     {
       "name": "Kentucky",
       "name_en": "Kentucky",
-      "region_tags": ["Southeast", "Upper South"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Louisville",
@@ -348,7 +348,7 @@
     {
       "name": "Louisiana",
       "name_en": "Louisiana",
-      "region_tags": ["Southeast", "Gulf Coast"],
+      "region_tags": ["Gulf Coast"],
       "cities": [
         {
           "name": "New Orleans",
@@ -366,7 +366,7 @@
     {
       "name": "Maryland",
       "name_en": "Maryland",
-      "region_tags": ["Southeast", "Mid-Atlantic"],
+      "region_tags": ["Mid-Atlantic"],
       "cities": [
         {
           "name": "Baltimore",
@@ -383,7 +383,7 @@
     {
       "name": "Mississippi",
       "name_en": "Mississippi",
-      "region_tags": ["Southeast", "Deep South"],
+      "region_tags": ["Deep South"],
       "cities": [
         {
           "name": "Jackson",
@@ -400,7 +400,7 @@
     {
       "name": "North Carolina",
       "name_en": "North Carolina",
-      "region_tags": ["Southeast", "South Atlantic"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Charlotte",
@@ -426,7 +426,7 @@
     {
       "name": "South Carolina",
       "name_en": "South Carolina",
-      "region_tags": ["Southeast", "South Atlantic"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Charleston",
@@ -443,7 +443,7 @@
     {
       "name": "Tennessee",
       "name_en": "Tennessee",
-      "region_tags": ["Southeast", "Upper South"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Nashville",
@@ -469,7 +469,7 @@
     {
       "name": "Virginia",
       "name_en": "Virginia",
-      "region_tags": ["Southeast", "South Atlantic"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Richmond",
@@ -495,7 +495,7 @@
     {
       "name": "West Virginia",
       "name_en": "West Virginia",
-      "region_tags": ["Southeast", "Appalachia"],
+      "region_tags": ["Appalachia"],
       "cities": [
         {
           "name": "Charleston",
@@ -512,7 +512,7 @@
     {
       "name": "Illinois",
       "name_en": "Illinois",
-      "region_tags": ["Midwest", "Great Lakes"],
+      "region_tags": ["Great Lakes"],
       "cities": [
         {
           "name": "Chicago",
@@ -535,7 +535,7 @@
     {
       "name": "Indiana",
       "name_en": "Indiana",
-      "region_tags": ["Midwest", "Great Lakes"],
+      "region_tags": ["Great Lakes"],
       "cities": [
         {
           "name": "Indianapolis",
@@ -552,7 +552,7 @@
     {
       "name": "Iowa",
       "name_en": "Iowa",
-      "region_tags": ["Midwest", "Great Plains"],
+      "region_tags": ["Great Plains"],
       "cities": [
         {
           "name": "Des Moines",
@@ -569,7 +569,7 @@
     {
       "name": "Kansas",
       "name_en": "Kansas",
-      "region_tags": ["Midwest", "Great Plains"],
+      "region_tags": ["Great Plains"],
       "cities": [
         {
           "name": "Wichita",
@@ -586,7 +586,7 @@
     {
       "name": "Michigan",
       "name_en": "Michigan",
-      "region_tags": ["Midwest", "Great Lakes"],
+      "region_tags": ["Great Lakes"],
       "cities": [
         {
           "name": "Detroit",
@@ -604,7 +604,7 @@
     {
       "name": "Minnesota",
       "name_en": "Minnesota",
-      "region_tags": ["Midwest", "Upper Midwest"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Minneapolis",
@@ -630,7 +630,7 @@
     {
       "name": "Missouri",
       "name_en": "Missouri",
-      "region_tags": ["Midwest", "Great Plains"],
+      "region_tags": ["Great Plains"],
       "cities": [
         {
           "name": "Kansas City",
@@ -657,7 +657,7 @@
     {
       "name": "Nebraska",
       "name_en": "Nebraska",
-      "region_tags": ["Midwest", "Great Plains"],
+      "region_tags": ["Great Plains"],
       "cities": [
         {
           "name": "Omaha",
@@ -674,7 +674,7 @@
     {
       "name": "North Dakota",
       "name_en": "North Dakota",
-      "region_tags": ["Midwest", "Great Plains"],
+      "region_tags": ["Great Plains"],
       "cities": [
         {
           "name": "Fargo",
@@ -691,7 +691,7 @@
     {
       "name": "Ohio",
       "name_en": "Ohio",
-      "region_tags": ["Midwest", "Great Lakes"],
+      "region_tags": ["Great Lakes"],
       "cities": [
         {
           "name": "Columbus",
@@ -727,7 +727,7 @@
     {
       "name": "South Dakota",
       "name_en": "South Dakota",
-      "region_tags": ["Midwest", "Great Plains"],
+      "region_tags": ["Great Plains"],
       "cities": [
         {
           "name": "Sioux Falls",
@@ -744,7 +744,7 @@
     {
       "name": "Wisconsin",
       "name_en": "Wisconsin",
-      "region_tags": ["Midwest", "Great Lakes"],
+      "region_tags": ["Great Lakes"],
       "cities": [
         {
           "name": "Milwaukee",
@@ -770,7 +770,7 @@
     {
       "name": "Arizona",
       "name_en": "Arizona",
-      "region_tags": ["Southwest", "Sun Belt"],
+      "region_tags": ["Sun Belt"],
       "cities": [
         {
           "name": "Phoenix",
@@ -798,7 +798,7 @@
     {
       "name": "New Mexico",
       "name_en": "New Mexico",
-      "region_tags": ["Southwest", "Mountain West"],
+      "region_tags": ["Mountain West"],
       "cities": [
         {
           "name": "Albuquerque",
@@ -824,7 +824,7 @@
     {
       "name": "Oklahoma",
       "name_en": "Oklahoma",
-      "region_tags": ["Southwest", "South Central"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Oklahoma City",
@@ -850,7 +850,7 @@
     {
       "name": "Texas",
       "name_en": "Texas",
-      "region_tags": ["Southwest", "Sun Belt"],
+      "region_tags": ["Sun Belt"],
       "cities": [
         {
           "name": "Houston",
@@ -902,7 +902,7 @@
     {
       "name": "Alaska",
       "name_en": "Alaska",
-      "region_tags": ["West", "Pacific"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Anchorage",
@@ -919,7 +919,7 @@
     {
       "name": "California",
       "name_en": "California",
-      "region_tags": ["West", "Pacific"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Los Angeles",
@@ -979,7 +979,7 @@
     {
       "name": "Colorado",
       "name_en": "Colorado",
-      "region_tags": ["West", "Mountain West"],
+      "region_tags": ["Mountain West"],
       "cities": [
         {
           "name": "Denver",
@@ -997,7 +997,7 @@
     {
       "name": "Hawaii",
       "name_en": "Hawaii",
-      "region_tags": ["West", "Pacific"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Honolulu",
@@ -1015,7 +1015,7 @@
     {
       "name": "Idaho",
       "name_en": "Idaho",
-      "region_tags": ["West", "Mountain West"],
+      "region_tags": ["Mountain West"],
       "cities": [
         {
           "name": "Boise",
@@ -1032,7 +1032,7 @@
     {
       "name": "Montana",
       "name_en": "Montana",
-      "region_tags": ["West", "Mountain West"],
+      "region_tags": ["Mountain West"],
       "cities": [
         {
           "name": "Billings",
@@ -1049,7 +1049,7 @@
     {
       "name": "Nevada",
       "name_en": "Nevada",
-      "region_tags": ["West", "Mountain West"],
+      "region_tags": ["Mountain West"],
       "cities": [
         {
           "name": "Las Vegas",
@@ -1076,7 +1076,7 @@
     {
       "name": "Oregon",
       "name_en": "Oregon",
-      "region_tags": ["West", "Pacific Northwest"],
+      "region_tags": ["Pacific Northwest"],
       "cities": [
         {
           "name": "Portland",
@@ -1094,7 +1094,7 @@
     {
       "name": "Utah",
       "name_en": "Utah",
-      "region_tags": ["West", "Mountain West"],
+      "region_tags": ["Mountain West"],
       "cities": [
         {
           "name": "Salt Lake City",
@@ -1112,7 +1112,7 @@
     {
       "name": "Washington",
       "name_en": "Washington",
-      "region_tags": ["West", "Pacific Northwest"],
+      "region_tags": ["Pacific Northwest"],
       "cities": [
         {
           "name": "Seattle",
@@ -1139,7 +1139,7 @@
     {
       "name": "Wyoming",
       "name_en": "Wyoming",
-      "region_tags": ["West", "Mountain West"],
+      "region_tags": ["Mountain West"],
       "cities": [
         {
           "name": "Cheyenne",
@@ -1156,7 +1156,7 @@
     {
       "name": "District of Columbia",
       "name_en": "District of Columbia",
-      "region_tags": ["East Coast", "Mid-Atlantic"],
+      "region_tags": ["Mid-Atlantic"],
       "cities": [
         {
           "name": "Washington",

@@ -12,7 +12,7 @@
     {
       "name": "Greater London",
       "name_en": "Greater London",
-      "region_tags": ["South East", "England", "Greater London"],
+      "region_tags": ["England", "Greater London"],
       "cities": [
         {
           "name": "London",
@@ -75,7 +75,7 @@
     {
       "name": "Greater Manchester",
       "name_en": "Greater Manchester",
-      "region_tags": ["North West", "England"],
+      "region_tags": ["England"],
       "cities": [
         {
           "name": "Manchester",
@@ -390,7 +390,7 @@
     {
       "name": "Merseyside",
       "name_en": "Merseyside",
-      "region_tags": ["North West", "England"],
+      "region_tags": ["England"],
       "cities": [
         {
           "name": "Liverpool",
@@ -435,7 +435,7 @@
     {
       "name": "City of Bristol",
       "name_en": "City of Bristol",
-      "region_tags": ["South West", "England"],
+      "region_tags": ["England"],
       "cities": [
         {
           "name": "Bristol",
@@ -519,7 +519,7 @@
     {
       "name": "Tyne and Wear",
       "name_en": "Tyne and Wear",
-      "region_tags": ["North East", "England"],
+      "region_tags": ["England"],
       "cities": [
         {
           "name": "Newcastle upon Tyne",
@@ -642,7 +642,7 @@
     {
       "name": "Hampshire",
       "name_en": "Hampshire",
-      "region_tags": ["South East", "England"],
+      "region_tags": ["England"],
       "cities": [
         {
           "name": "Southampton",
@@ -681,7 +681,7 @@
     {
       "name": "Oxfordshire",
       "name_en": "Oxfordshire",
-      "region_tags": ["South East", "England"],
+      "region_tags": ["England"],
       "cities": [
         {
           "name": "Oxford",
@@ -771,7 +771,7 @@
     {
       "name": "East Sussex",
       "name_en": "East Sussex",
-      "region_tags": ["South East", "England"],
+      "region_tags": ["England"],
       "cities": [
         {
           "name": "Brighton",
@@ -1005,7 +1005,7 @@
     {
       "name": "Bath and North East Somerset",
       "name_en": "Bath and North East Somerset",
-      "region_tags": ["South West", "England"],
+      "region_tags": ["England"],
       "cities": [
         {
           "name": "Bath",
@@ -1077,7 +1077,7 @@
     {
       "name": "Devon",
       "name_en": "Devon",
-      "region_tags": ["South West", "England"],
+      "region_tags": ["England"],
       "cities": [
         {
           "name": "Exeter",

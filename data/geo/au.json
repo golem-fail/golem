@@ -193,7 +193,7 @@
     {
       "name": "Victoria",
       "name_en": "Victoria",
-      "region_tags": ["Eastern Australia", "Southeast"],
+      "region_tags": ["Eastern Australia"],
       "cities": [
         {
           "name": "Melbourne",
@@ -306,7 +306,7 @@
     {
       "name": "Queensland",
       "name_en": "Queensland",
-      "region_tags": ["Eastern Australia", "Tropical"],
+      "region_tags": ["Eastern Australia"],
       "cities": [
         {
           "name": "Brisbane",

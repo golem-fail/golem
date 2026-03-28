@@ -12,7 +12,7 @@
     {
       "name": "Gauteng",
       "name_en": "Gauteng",
-      "region_tags": ["Highveld", "Central"],
+      "region_tags": ["Highveld"],
       "cities": [
         {
           "name": "Johannesburg",
@@ -305,7 +305,7 @@
     {
       "name": "Western Cape",
       "name_en": "Western Cape",
-      "region_tags": ["Western Cape", "Coastal"],
+      "region_tags": ["Western Cape"],
       "cities": [
         {
           "name": "Cape Town",
@@ -456,7 +456,7 @@
     {
       "name": "KwaZulu-Natal",
       "name_en": "KwaZulu-Natal",
-      "region_tags": ["East Coast", "Coastal"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Durban",
@@ -593,7 +593,7 @@
     {
       "name": "Eastern Cape",
       "name_en": "Eastern Cape",
-      "region_tags": ["East Coast", "Coastal"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Gqeberha",
@@ -676,7 +676,7 @@
     {
       "name": "Free State",
       "name_en": "Free State",
-      "region_tags": ["Central", "Highveld"],
+      "region_tags": ["Highveld"],
       "cities": [
         {
           "name": "Bloemfontein",
@@ -733,7 +733,7 @@
     {
       "name": "Mpumalanga",
       "name_en": "Mpumalanga",
-      "region_tags": ["Eastern", "Lowveld"],
+      "region_tags": ["Lowveld"],
       "cities": [
         {
           "name": "Mbombela",
@@ -792,7 +792,7 @@
     {
       "name": "Limpopo",
       "name_en": "Limpopo",
-      "region_tags": ["Northern"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Polokwane",
@@ -837,7 +837,7 @@
     {
       "name": "North West",
       "name_en": "North West",
-      "region_tags": ["Central", "Western"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Rustenburg",
@@ -896,7 +896,7 @@
     {
       "name": "Northern Cape",
       "name_en": "Northern Cape",
-      "region_tags": ["Western", "Karoo"],
+      "region_tags": ["Karoo"],
       "cities": [
         {
           "name": "Kimberley",
