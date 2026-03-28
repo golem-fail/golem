@@ -26,6 +26,8 @@ pub struct SuiteConfig {
     /// Fixed random seed to use for all flows. When `None`, each flow
     /// gets an independent random seed.
     pub seed: Option<u64>,
+    /// Force a specific platform, overriding flow device constraints.
+    pub platform: Option<Platform>,
 }
 
 /// Orchestrates the execution of a suite of test flows.
@@ -93,8 +95,8 @@ impl SuiteRunner {
             }
         };
 
-        // Detect target platform from the flow's device constraints.
-        let platform = detect_platform(&flow);
+        // Detect target platform from CLI override or flow's device constraints.
+        let platform = self.config.platform.unwrap_or_else(|| detect_platform(&flow));
         eprintln!("  Platform: {platform}");
 
         // Discover a device for the target platform.

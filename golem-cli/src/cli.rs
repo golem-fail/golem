@@ -64,6 +64,10 @@ pub struct RunArgs {
     /// Max parallel devices
     #[arg(long)]
     pub max_concurrency: Option<usize>,
+
+    /// Force target platform (ios or android). Overrides flow device constraints.
+    #[arg(long)]
+    pub platform: Option<String>,
 }
 
 #[derive(clap::Args, Debug)]

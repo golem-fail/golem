@@ -47,11 +47,21 @@ async fn main() -> anyhow::Result<()> {
             }
 
             // Build suite config
+            let platform_override = args.platform.as_deref().map(|p| match p {
+                "android" => golem_devices::Platform::Android,
+                "ios" => golem_devices::Platform::Ios,
+                other => {
+                    eprintln!("Unknown platform: {other}. Use 'ios' or 'android'.");
+                    std::process::exit(1);
+                }
+            });
+
             let config = SuiteConfig {
                 no_clean: args.no_clean,
                 no_teardown: args.no_teardown,
                 keep_devices: args.keep_devices,
                 seed: args.seed,
+                platform: platform_override,
             };
 
             // Run suite
