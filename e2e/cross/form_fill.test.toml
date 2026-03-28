@@ -17,8 +17,6 @@ type = "phone"
 [[block]]
 name = "fill_form_fields"
 steps = [
-  # Launch the app
-  { action = "launch", app = "com.golem.test" },
   { action = "wait", placeholder = "Enter email", timeout = 10000 },
 
   # Type into the email field and verify

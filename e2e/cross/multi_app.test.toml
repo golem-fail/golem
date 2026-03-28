@@ -29,8 +29,6 @@ type = "phone"
 [[block]]
 name = "switch_between_apps"
 steps = [
-  # Launch the primary app
-  { action = "launch", app = "com.golem.test" },
   { action = "wait", text = "Submit", timeout = 10000 },
 
   # Interact with the primary app

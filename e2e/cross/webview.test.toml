@@ -17,8 +17,6 @@ type = "phone"
 [[block]]
 name = "webview_element_interaction"
 steps = [
-  # Launch the app
-  { action = "launch", app = "com.golem.test" },
   { action = "wait", text = "Submit", timeout = 10000 },
 
   # Verify core UI elements are visible (proxy for webview context loaded)

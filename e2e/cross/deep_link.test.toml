@@ -17,8 +17,6 @@ type = "phone"
 [[block]]
 name = "deep_link_tests"
 steps = [
-  { action = "launch", app = "com.golem.test" },
-
   # Verify the deep link label is visible before navigating
   { action = "assert_visible", text = "Deep Link:" },
 

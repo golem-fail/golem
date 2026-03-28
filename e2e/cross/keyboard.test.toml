@@ -17,7 +17,6 @@ type = "phone"
 [[block]]
 name = "keyboard_management"
 steps = [
-  { action = "launch", app = "com.golem.test" },
   { action = "wait", text = "Submit", timeout = 30000 },
 
   # Tap a text field to bring up the keyboard

@@ -17,7 +17,6 @@ type = "phone"
 [[block]]
 name = "screenshot_tests"
 steps = [
-  { action = "launch", app = "com.golem.test" },
   { action = "wait", text = "Submit", timeout = 30000 },
 
   # Take a screenshot of the initial state

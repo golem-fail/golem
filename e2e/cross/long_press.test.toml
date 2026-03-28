@@ -17,8 +17,6 @@ type = "phone"
 [[block]]
 name = "long_press_tests"
 steps = [
-  { action = "launch", app = "com.golem.test" },
-
   # Long press on list item with default duration (1000ms)
   { action = "long_press", text = "list-item-0" },
 

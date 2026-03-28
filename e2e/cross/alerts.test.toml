@@ -17,7 +17,6 @@ type = "phone"
 [[block]]
 name = "alert_tests"
 steps = [
-  { action = "launch", app = "com.golem.test" },
   { action = "wait", text = "Submit", timeout = 30000 },
 
   # Trigger a simple alert (button is off-screen, use auto_scroll)

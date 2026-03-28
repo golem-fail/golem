@@ -17,8 +17,6 @@ type = "phone"
 [[block]]
 name = "type_into_fields"
 steps = [
-  { action = "launch", app = "com.golem.test" },
-
   # Type into the email field
   { action = "type", placeholder = "Enter email", text = "user@example.com" },
   { action = "assert_text", placeholder = "Enter email", text = "user@example.com" },

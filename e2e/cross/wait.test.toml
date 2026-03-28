@@ -17,8 +17,6 @@ type = "phone"
 [[block]]
 name = "wait_for_elements"
 steps = [
-  { action = "launch", app = "com.golem.test" },
-
   # Wait for the main UI to be ready
   { action = "wait", text = "Submit", timeout = 10000 },
   { action = "wait", text = "Counter", timeout = 5000 },

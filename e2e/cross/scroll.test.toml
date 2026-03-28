@@ -17,8 +17,6 @@ type = "phone"
 [[block]]
 name = "scroll_to_find_element"
 steps = [
-  { action = "launch", app = "com.golem.test" },
-
   # The first list item should be visible without scrolling
   { action = "assert_visible", text = "list-item-0" },
 

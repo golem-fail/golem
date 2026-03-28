@@ -17,8 +17,6 @@ type = "phone"
 [[block]]
 name = "swipe_all_directions"
 steps = [
-  { action = "launch", app = "com.golem.test" },
-
   # Swipe down to scroll the page
   { action = "swipe", direction = "down" },
   { action = "swipe", direction = "down" },

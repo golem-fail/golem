@@ -17,8 +17,6 @@ type = "phone"
 [[block]]
 name = "verify_initial_state"
 steps = [
-  # Launch the app
-  { action = "launch", app = "com.golem.test" },
   { action = "wait", text = "Counter", timeout = 10000 },
 
   # Verify the counter starts at zero

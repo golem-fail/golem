@@ -17,8 +17,6 @@ type = "phone"
 [[block]]
 name = "read_and_save"
 steps = [
-  { action = "launch", app = "com.golem.test" },
-
   # Read the initial counter value and save it to a variable
   { action = "read", below = "Counter", element_type = "text", save_to = "initial_count" },
 

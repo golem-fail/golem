@@ -17,7 +17,6 @@ type = "phone"
 [[block]]
 name = "initial_state"
 steps = [
-  { action = "launch", app = "com.golem.test" },
   { action = "wait", text = "Orientation:", timeout = 10000 },
   { action = "assert_text", text = "Portrait", right_of = "Orientation:" },
   { action = "assert_text", text = "Light", right_of = "Theme:" },

@@ -17,8 +17,6 @@ type = "phone"
 [[block]]
 name = "vertical_list_scroll"
 steps = [
-  # Launch the app
-  { action = "launch", app = "com.golem.test" },
   { action = "wait", text = "Submit", timeout = 10000 },
 
   # Verify initial state - first list items should be visible
