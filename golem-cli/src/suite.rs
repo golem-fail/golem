@@ -155,7 +155,7 @@ impl SuiteRunner {
 
         // Execute the flow
         eprintln!("  Executing on {} ({})", device_name, device.udid);
-        match execute_flow(&flow, driver.as_ref(), &mut vars, None, 10_000, &mut ctx, false).await {
+        match execute_flow(&flow, driver.as_ref(), &mut vars, None, 10_000, &mut ctx).await {
             Ok(result) => {
                 if !result.success {
                     if let Some(ref block) = result.failed_block {

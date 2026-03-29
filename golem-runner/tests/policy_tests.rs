@@ -117,7 +117,7 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
@@ -160,7 +160,7 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -200,7 +200,7 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -238,7 +238,7 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
@@ -278,7 +278,7 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
@@ -320,7 +320,7 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -358,7 +358,7 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
@@ -391,7 +391,7 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -433,7 +433,7 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -567,7 +567,7 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -617,7 +617,7 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
@@ -673,7 +673,7 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -738,7 +738,7 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -778,7 +778,7 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -814,7 +814,7 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -935,7 +935,7 @@ steps = [
         device: None,
     };
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
@@ -986,7 +986,7 @@ steps = [
         device: None,
     };
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -1037,7 +1037,7 @@ steps = [
         device: None,
     };
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -1088,7 +1088,7 @@ steps = [
         device: None,
     };
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
@@ -1139,7 +1139,7 @@ steps = [
         device: None,
     };
 
-    let _result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let _result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
@@ -1206,7 +1206,7 @@ steps = [
         device: None,
     };
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 

@@ -134,7 +134,7 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -179,7 +179,7 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -231,7 +231,7 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -284,7 +284,7 @@ steps = [
     }
     vars.push_scope(flow_scope);
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -343,7 +343,7 @@ steps = [
     }
     vars.push_scope(flow_scope);
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -393,7 +393,7 @@ steps = [
     let mut ctx = test_ctx();
 
     // Execute the main flow
-    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -447,7 +447,7 @@ steps = [
     let mut ctx = test_ctx();
 
     // Main flow fails (element not found)
-    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult), not Err");
 
@@ -499,7 +499,7 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -546,7 +546,7 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -602,7 +602,7 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -639,7 +639,7 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -678,7 +678,7 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
@@ -723,7 +723,7 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -780,7 +780,7 @@ steps = [
     scope.set("env", VarValue::string("staging"));
     vars.push_scope(scope);
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -813,7 +813,7 @@ name = "empty flow"
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -848,7 +848,7 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
     assert_success(&flow_result);
@@ -915,7 +915,7 @@ steps = [
     let mut ctx = test_ctx();
 
     let start = flow.flow.start.as_deref();
-    let result = execute_flow(&flow, &driver, &mut vars, start, DEFAULT_TIMEOUT, &mut ctx, false)
+    let result = execute_flow(&flow, &driver, &mut vars, start, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
 
@@ -978,7 +978,7 @@ steps = [
     vars.push_scope(flow_scope);
 
     // Execute flow
-    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, false)
+    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
         .await
         .expect("execute_flow should not error");
     assert_success(&flow_result);
