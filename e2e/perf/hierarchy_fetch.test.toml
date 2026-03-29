@@ -30,12 +30,12 @@ steps = [
   # Each read exercises a full hierarchy fetch + element find + text extraction
   { action = "read", below = "Counter", element_type = "text", save_to = "counter_val" },
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "read", placeholder = "Enter email", save_to = "email_val" },
-  { action = "wait", placeholder = "Enter email", timeout = 2000 },
-  { action = "read", placeholder = "Password", save_to = "password_val" },
-  { action = "wait", placeholder = "Password", timeout = 2000 },
-  { action = "read", placeholder = "Search", save_to = "search_val" },
-  { action = "wait", placeholder = "Search", timeout = 2000 },
+  { action = "read", text = "Enter email", save_to = "email_val" },
+  { action = "wait", text = "Enter email", timeout = 2000 },
+  { action = "read", text = "Password", save_to = "password_val" },
+  { action = "wait", text = "Password", timeout = 2000 },
+  { action = "read", text = "Search", save_to = "search_val" },
+  { action = "wait", text = "Search", timeout = 2000 },
 ]
 
 [[block]]

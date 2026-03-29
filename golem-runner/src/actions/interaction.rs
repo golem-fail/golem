@@ -8,7 +8,6 @@ use tokio::time::{sleep, Instant};
 use crate::resolution::{build_selector, resolve_element, resolve_element_full_tree};
 use crate::scroll::{scroll_to_element, DEFAULT_MAX_SCROLLS};
 
-use super::resolve_element_ignore_text;
 
 const TAP_COOLDOWN: Duration = Duration::from_millis(300);
 const DOUBLE_TAP_INTERVAL: Duration = Duration::from_millis(40);
@@ -76,17 +75,19 @@ pub(crate) async fn handle_double_tap(step: &Step, driver: &dyn PlatformDriver) 
 
 /// Find the target element (input field), tap it to focus, then type text.
 ///
-/// The step's `text` field is the string to type, not an element selector,
-/// so we resolve the element using other selectors (id, type, etc.).
+/// The `input` field holds the string to type. The `text` field (and other
+/// selectors) identify which element to type into.
 pub(crate) async fn handle_type(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let (_elem, (x, y)) = resolve_element_ignore_text(step, driver).await?;
+    let (_elem, (x, y)) = resolve_element(step, driver).await?;
     driver.tap(x, y).await?;
 
-    let text = step
-        .text
+    // Use `input` field for the value to type; fall back to `text` for backward compat.
+    let value = step
+        .input
         .as_deref()
+        .or(step.text.as_deref())
         .unwrap_or("");
-    driver.type_text(text).await
+    driver.type_text(value).await
 }
 
 /// Find the target element, tap it to focus, then send backspace key presses.
@@ -239,7 +240,7 @@ mod tests {
 
         let mut step = make_step("type");
         step.accessibility_id = Some("email".to_string());
-        step.text = Some("user@example.com".to_string());
+        step.input = Some("user@example.com".to_string());
 
         handle_type(&step, &driver)
             .await
@@ -537,7 +538,7 @@ mod tests {
         // Type into username field
         let mut type_step = make_step("type");
         type_step.accessibility_id = Some("username".to_string());
-        type_step.text = Some("admin".to_string());
+        type_step.input = Some("admin".to_string());
         crate::actions::execute_action(&type_step, &driver, &mut vars, &ctx, &[])
             .await
             .expect("type should succeed");

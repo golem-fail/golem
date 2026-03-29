@@ -135,6 +135,9 @@ pub struct Step {
     pub right_of: Option<String>,
     pub left_of: Option<String>,
     pub child_of: Option<String>,
+    /// Value to type into an input field. Used by the `type` action.
+    /// Separates the typed value from `text` which is always a selector.
+    pub input: Option<String>,
     pub on_fail: Option<String>,
     pub save_to: Option<String>,
     pub timeout: Option<u64>,

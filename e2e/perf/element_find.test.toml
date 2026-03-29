@@ -40,14 +40,14 @@ steps = [
 name = "find_by_id_inputs"
 steps = [
   # Assert visibility of input fields by ID
-  { action = "assert_visible", placeholder = "Enter email" },
-  { action = "assert_visible", placeholder = "Password" },
-  { action = "assert_visible", placeholder = "Search" },
+  { action = "assert_visible", text = "Enter email" },
+  { action = "assert_visible", text = "Password" },
+  { action = "assert_visible", text = "Search" },
 
   # Tight-timeout waits on input fields
-  { action = "wait", placeholder = "Enter email", timeout = 2000 },
-  { action = "wait", placeholder = "Password", timeout = 2000 },
-  { action = "wait", placeholder = "Search", timeout = 2000 },
+  { action = "wait", text = "Enter email", timeout = 2000 },
+  { action = "wait", text = "Password", timeout = 2000 },
+  { action = "wait", text = "Search", timeout = 2000 },
 ]
 
 [[block]]

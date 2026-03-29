@@ -21,7 +21,7 @@ steps = [
 
   # assert_visible: elements that should be on screen
   { action = "assert_visible", text = "Submit" },
-  { action = "assert_visible", placeholder = "Enter email" },
+  { action = "assert_visible", text = "Enter email" },
   { action = "assert_visible", text = "Counter" },
 
   # assert_not_visible: elements that should not be on screen
@@ -36,7 +36,7 @@ steps = [
   # assert_enabled: verify elements are enabled
   { action = "assert_enabled", text = "Submit" },
   { action = "assert_enabled", text = "Increment" },
-  { action = "assert_enabled", placeholder = "Enter email" },
+  { action = "assert_enabled", text = "Enter email" },
   { action = "assert_enabled", text = "dark-mode-toggle", auto_scroll = true },
 
   # assert_checked: scroll to toggles, toggle checkbox and verify

@@ -20,7 +20,7 @@ steps = [
   # Wait for the main UI to be ready
   { action = "wait", text = "Submit", timeout = 10000 },
   { action = "wait", text = "Counter", timeout = 5000 },
-  { action = "wait", placeholder = "Enter email", timeout = 5000 },
+  { action = "wait", text = "Enter email", timeout = 5000 },
 
   # Wait for a specific text to be visible
   { action = "wait", text = "Item 0", timeout = 5000 },

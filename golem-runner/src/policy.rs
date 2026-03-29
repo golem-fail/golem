@@ -167,6 +167,7 @@ mod tests {
             right_of: None,
             left_of: None,
             child_of: None,
+            input: None,
             on_fail: None,
             save_to: None,
             timeout: None,

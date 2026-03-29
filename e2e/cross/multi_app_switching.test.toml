@@ -40,12 +40,12 @@ steps = [
   { action = "assert_text", text = "5", below = "Counter" },
 
   # Type into a form field to set additional state
-  { action = "type", placeholder = "Enter email", text = "cross-test@golem.com" },
+  { action = "type", input = "Enter email", text = "cross-test@golem.com" },
   { action = "hide_keyboard" },
 
   # Read the counter value into a variable for later verification
   { action = "read", below = "Counter", element_type = "text", save_to = "primary_counter" },
-  { action = "read", placeholder = "Enter email", save_to = "primary_email" },
+  { action = "read", text = "Enter email", save_to = "primary_email" },
 ]
 
 [[block]]
@@ -80,7 +80,7 @@ steps = [
 
   # Verify primary app state is preserved after app switching
   { action = "assert_text", text = "5", below = "Counter" },
-  { action = "assert_text", placeholder = "Enter email", text = "cross-test@golem.com" },
+  { action = "assert_text", text = "cross-test@golem.com" },
 
   # Verify UI elements are still enabled and functional
   { action = "assert_enabled", text = "Increment" },

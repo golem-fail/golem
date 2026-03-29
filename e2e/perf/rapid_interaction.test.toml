@@ -26,16 +26,16 @@ steps = [
 name = "rapid_form_fill"
 steps = [
   # Rapidly type into all input fields in quick succession
-  { action = "type", placeholder = "Enter email", text = "perf@golem.com" },
-  { action = "wait", placeholder = "Enter email", timeout = 2000 },
-  { action = "assert_text", placeholder = "Enter email", text = "perf@golem.com" },
+  { action = "type", input = "Enter email", text = "perf@golem.com" },
+  { action = "wait", text = "Enter email", timeout = 2000 },
+  { action = "assert_text", text = "perf@golem.com" },
 
-  { action = "type", placeholder = "Password", text = "Str0ngP@ss!" },
-  { action = "wait", placeholder = "Password", timeout = 2000 },
+  { action = "type", input = "Password", text = "Str0ngP@ss!" },
+  { action = "wait", text = "Password", timeout = 2000 },
 
-  { action = "type", placeholder = "Search", text = "rapid test query" },
-  { action = "wait", placeholder = "Search", timeout = 2000 },
-  { action = "assert_text", placeholder = "Search", text = "rapid test query" },
+  { action = "type", input = "Search", text = "rapid test query" },
+  { action = "wait", text = "Search", timeout = 2000 },
+  { action = "assert_text", text = "rapid test query" },
 
   # Hide keyboard between interactions
   { action = "hide_keyboard" },
@@ -74,7 +74,7 @@ steps = [
   { action = "assert_visible", text = "Submit" },
   { action = "tap", text = "Increment" },
   { action = "read", below = "Counter", element_type = "text", save_to = "mid_count_2" },
-  { action = "assert_visible", placeholder = "Enter email" },
+  { action = "assert_visible", text = "Enter email" },
   { action = "tap", text = "Increment" },
   { action = "read", below = "Counter", element_type = "text", save_to = "mid_count_3" },
   { action = "assert_visible", text = "scroll-list" },
@@ -88,8 +88,8 @@ name = "rapid_read_burst"
 steps = [
   # Burst-read many elements in rapid succession
   { action = "read", below = "Counter", element_type = "text", save_to = "r1" },
-  { action = "read", placeholder = "Enter email", save_to = "r2" },
-  { action = "read", placeholder = "Search", save_to = "r3" },
+  { action = "read", text = "Enter email", save_to = "r2" },
+  { action = "read", text = "Search", save_to = "r3" },
   { action = "read", text = "Item 0", save_to = "r4" },
   { action = "read", text = "Item 1", save_to = "r5" },
   { action = "read", text = "Item 2", save_to = "r6" },
@@ -107,9 +107,9 @@ steps = [
   { action = "assert_visible", text = "Increment" },
   { action = "assert_visible", text = "Decrement" },
   { action = "assert_visible", text = "Counter" },
-  { action = "assert_visible", placeholder = "Enter email" },
-  { action = "assert_visible", placeholder = "Password" },
-  { action = "assert_visible", placeholder = "Search" },
+  { action = "assert_visible", text = "Enter email" },
+  { action = "assert_visible", text = "Password" },
+  { action = "assert_visible", text = "Search" },
   { action = "assert_visible", text = "scroll-list" },
   { action = "assert_visible", text = "carousel" },
   { action = "assert_visible", text = "list-item-0" },

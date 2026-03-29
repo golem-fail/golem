@@ -20,18 +20,18 @@ steps = [
   { action = "wait", text = "Submit", timeout = 10000 },
 
   # Verify core UI elements are visible (proxy for webview context loaded)
-  { action = "assert_visible", placeholder = "Enter email" },
-  { action = "assert_visible", placeholder = "Password" },
-  { action = "assert_visible", placeholder = "Search" },
+  { action = "assert_visible", text = "Enter email" },
+  { action = "assert_visible", text = "Password" },
+  { action = "assert_visible", text = "Search" },
   { action = "assert_visible", text = "Submit" },
   { action = "assert_visible", text = "Counter" },
 
   # Interact with text input elements inside the web view
-  { action = "type", placeholder = "Enter email", text = "webview@test.com" },
-  { action = "assert_text", placeholder = "Enter email", text = "webview@test.com" },
+  { action = "type", input = "Enter email", text = "webview@test.com" },
+  { action = "assert_text", text = "webview@test.com" },
 
-  { action = "type", placeholder = "Search", text = "webview search query" },
-  { action = "assert_text", placeholder = "Search", text = "webview search query" },
+  { action = "type", input = "Search", text = "webview search query" },
+  { action = "assert_text", text = "webview search query" },
   { action = "hide_keyboard" },
 
   # Interact with buttons inside the web view
