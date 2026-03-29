@@ -135,7 +135,6 @@ pub struct Step {
     pub right_of: Option<String>,
     pub left_of: Option<String>,
     pub child_of: Option<String>,
-    pub placeholder: Option<String>,
     pub on_fail: Option<String>,
     pub save_to: Option<String>,
     pub timeout: Option<u64>,
@@ -482,7 +481,6 @@ index = 2
 enabled = true
 below = "Header"
 child_of = "FormContainer"
-placeholder = "Enter name"
 "#;
         let flow = parse_flow(toml_str).expect("selectors should parse");
         let step = &flow.block[0].steps[0];
@@ -493,7 +491,6 @@ placeholder = "Enter name"
         assert_eq!(step.enabled, Some(true));
         assert_eq!(step.below.as_deref(), Some("Header"));
         assert_eq!(step.child_of.as_deref(), Some("FormContainer"));
-        assert_eq!(step.placeholder.as_deref(), Some("Enter name"));
     }
 
     // ---------------------------------------------------------------

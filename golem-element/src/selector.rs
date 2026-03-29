@@ -14,7 +14,6 @@ pub struct Selector {
     pub enabled: Option<bool>,
     pub checked: Option<bool>,
     pub clickable: Option<bool>,
-    pub placeholder: Option<String>,
     /// Keep only elements whose bounds.y > anchor.bottom()
     pub below: Option<String>,
     /// Keep only elements whose bounds.bottom() < anchor.y
@@ -215,17 +214,6 @@ fn matches_selector(element: &Element, selector: &Selector) -> bool {
     if let Some(expected) = selector.clickable {
         if element.clickable != expected {
             return false;
-        }
-    }
-
-    if let Some(ref pattern) = selector.placeholder {
-        match &element.placeholder {
-            Some(placeholder) => {
-                if !GlobMatcher::new(pattern).is_match(placeholder) {
-                    return false;
-                }
-            }
-            None => return false,
         }
     }
 
@@ -493,29 +481,6 @@ mod tests {
         // root itself is clickable, plus the Button child
         let results = find_elements(&root, &s);
         assert!(results.iter().all(|r| r.element.clickable));
-    }
-
-    // ── 13. Placeholder match ───────────────────────────────────────
-
-    #[test]
-    fn placeholder_match() {
-        let mut root = elem("View");
-        let mut input1 = elem("TextField");
-        input1.placeholder = Some("Enter name".to_string());
-        let mut input2 = elem("TextField");
-        input2.placeholder = Some("Enter email".to_string());
-        let mut input3 = elem("TextField");
-        input3.placeholder = Some("Search".to_string());
-        root.children.push(input1);
-        root.children.push(input2);
-        root.children.push(input3);
-
-        let s = Selector {
-            placeholder: Some("Enter *".to_string()),
-            ..sel()
-        };
-        let results = find_elements(&root, &s);
-        assert_eq!(results.len(), 2);
     }
 
     // ── 14. AND combination text + state ─────────────────────────────

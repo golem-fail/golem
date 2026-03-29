@@ -168,6 +168,22 @@ fn normalize_json(val: &mut serde_json::Value) {
         // iOS: promote label → id and label → text (existing logic)
         promote_labels_json_inner(map);
 
+        // Promote placeholder → text when text is still absent/empty.
+        // A human sees placeholder text as the element's label when no other
+        // text is visible, so it should be targetable via the `text` selector.
+        let text_still_empty = match map.get("text") {
+            Some(serde_json::Value::String(s)) => s.is_empty(),
+            Some(serde_json::Value::Null) | None => true,
+            _ => false,
+        };
+        if text_still_empty {
+            if let Some(ph) = map.get("placeholder").and_then(|v| v.as_str()) {
+                if !ph.is_empty() {
+                    map.insert("text".to_string(), serde_json::Value::String(ph.to_string()));
+                }
+            }
+        }
+
         // Recurse into children
         if let Some(serde_json::Value::Array(arr)) = map.get_mut("children") {
             for child in arr {

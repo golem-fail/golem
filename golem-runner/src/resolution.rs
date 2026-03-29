@@ -18,7 +18,6 @@ pub fn build_selector(step: &Step) -> Selector {
         enabled: step.enabled,
         checked: step.checked,
         clickable: step.clickable,
-        placeholder: step.placeholder.clone(),
         below: step.below.clone(),
         above: step.above.clone(),
         right_of: step.right_of.clone(),
@@ -133,7 +132,6 @@ mod tests {
             right_of: None,
             left_of: None,
             child_of: None,
-            placeholder: None,
             on_fail: None,
             save_to: None,
             timeout: None,
@@ -376,7 +374,6 @@ mod tests {
         step.enabled = Some(true);
         step.checked = Some(false);
         step.clickable = Some(true);
-        step.placeholder = Some("Enter text".to_string());
         step.below = Some("Header".to_string());
         step.above = Some("Footer".to_string());
         step.right_of = Some("Sidebar".to_string());
@@ -391,7 +388,6 @@ mod tests {
         assert_eq!(sel.enabled, Some(true));
         assert_eq!(sel.checked, Some(false));
         assert_eq!(sel.clickable, Some(true));
-        assert_eq!(sel.placeholder.as_deref(), Some("Enter text"));
         assert_eq!(sel.below.as_deref(), Some("Header"));
         assert_eq!(sel.above.as_deref(), Some("Footer"));
         assert_eq!(sel.right_of.as_deref(), Some("Sidebar"));
