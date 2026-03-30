@@ -307,6 +307,16 @@ pub(crate) struct CompanionClient {
     pub client: reqwest::Client,
 }
 
+/// Health information returned by the companion server.
+#[derive(Debug)]
+pub struct CompanionHealth {
+    pub platform: String,
+    pub version: String,
+    pub device_name: String,
+    pub os_version: String,
+    pub device_id: String,
+}
+
 impl CompanionClient {
     pub fn new(port: u16) -> Self {
         Self {
@@ -314,6 +324,36 @@ impl CompanionClient {
             default_query: String::new(),
             client: reqwest::Client::new(),
         }
+    }
+
+    /// Check companion health and return device info.
+    ///
+    /// Returns `Ok(health)` if the companion is running and responsive.
+    /// Returns `Err` if the companion is not reachable or returns unexpected data.
+    pub async fn check_health(&self) -> Result<CompanionHealth> {
+        let url = format!("{}/health", self.base_url);
+        let resp = self
+            .client
+            .get(&url)
+            .timeout(std::time::Duration::from_secs(5))
+            .send()
+            .await
+            .with_context(|| format!(
+                "Companion server not reachable at {}. Is it running?",
+                self.base_url
+            ))?;
+
+        let text = resp.text().await.context("reading health response")?;
+        let json: serde_json::Value =
+            serde_json::from_str(&text).context("parsing health response")?;
+
+        Ok(CompanionHealth {
+            platform: json["platform"].as_str().unwrap_or("unknown").to_string(),
+            version: json["version"].as_str().unwrap_or("unknown").to_string(),
+            device_name: json["device_name"].as_str().unwrap_or("unknown").to_string(),
+            os_version: json["os_version"].as_str().unwrap_or("unknown").to_string(),
+            device_id: json["device_id"].as_str().unwrap_or("unknown").to_string(),
+        })
     }
 
     /// Build the full URL for a request, appending the default query string.

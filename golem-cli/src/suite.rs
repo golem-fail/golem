@@ -127,15 +127,66 @@ impl SuiteRunner {
             .map(|a| a.bundle.clone())
             .unwrap_or_else(|| "com.golem.test".to_string());
 
-        // Create platform-appropriate driver
-        let driver: Box<dyn PlatformDriver> = match platform {
+        // Create platform-appropriate driver and verify companion is running.
+        let companion_port = match platform {
+            Platform::Ios => 8222u16,
+            Platform::Android => 8223u16,
+        };
+        let (driver, health): (Box<dyn PlatformDriver>, _) = match platform {
             Platform::Ios => {
-                Box::new(IosDriver::new(device.udid.clone(), bundle_id, 8222))
+                let d = IosDriver::new(device.udid.clone(), bundle_id, companion_port);
+                let h = d.check_health().await;
+                (Box::new(d), h)
             }
             Platform::Android => {
-                Box::new(AndroidDriver::new(device.udid.clone(), bundle_id, 8223))
+                let d = AndroidDriver::new(device.udid.clone(), bundle_id, companion_port);
+                let h = d.check_health().await;
+                (Box::new(d), h)
             }
         };
+
+        match health {
+            Ok(h) => {
+                let golem_version = env!("CARGO_PKG_VERSION");
+                eprintln!(
+                    "  Companion: {} v{} on {} ({})",
+                    h.platform, h.version, h.device_name, h.os_version
+                );
+                if h.version != golem_version {
+                    eprintln!(
+                        "  Companion version {} does not match golem version {}. Rebuild the companion.",
+                        h.version, golem_version
+                    );
+                    return FlowReport {
+                        flow_name,
+                        success: false,
+                        step_results: Vec::new(),
+                        warnings: vec![format!(
+                            "Companion version mismatch: companion={}, golem={}",
+                            h.version, golem_version
+                        )],
+                        duration_ms: start.elapsed().as_millis() as u64,
+                        seed: self.config.seed,
+                        screenshot_path: None,
+                        device_name: Some(device_name),
+                    };
+                }
+            }
+            Err(e) => {
+                eprintln!("  Companion not reachable on port {companion_port}: {e:#}");
+                eprintln!("  Start the companion server before running tests.");
+                return FlowReport {
+                    flow_name,
+                    success: false,
+                    step_results: Vec::new(),
+                    warnings: vec![format!("Companion not reachable: {e}")],
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    seed: self.config.seed,
+                    screenshot_path: None,
+                    device_name: Some(device_name),
+                };
+            }
+        }
 
         // Set up variable store
         let mut vars = VariableStore::new();

@@ -76,6 +76,11 @@ impl IosDriver {
         &self.client.base_url
     }
 
+    /// Check companion server health and return device info.
+    pub async fn check_health(&self) -> anyhow::Result<crate::common::CompanionHealth> {
+        self.client.check_health().await
+    }
+
     /// Return the device ID.
     pub fn device_id(&self) -> &str {
         &self.device_id

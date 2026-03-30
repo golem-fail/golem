@@ -3,6 +3,8 @@ pub(crate) mod common;
 pub mod commands;
 pub mod ios;
 
+pub use common::CompanionHealth;
+
 use async_trait::async_trait;
 use golem_element::Element;
 use std::sync::Mutex;

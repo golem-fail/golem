@@ -362,8 +362,9 @@ public class CompanionServer {
         return sb.toString();
     }
 
-    private void handleLaunch(OutputStream out, JSONObject body) throws Exception {
-        String packageName = body != null ? body.optString("bundle_id", "") : "";
+    private void handleLaunch(OutputStream out, String body) throws Exception {
+        JSONObject req = new JSONObject(body);
+        String packageName = req.optString("bundle_id", "");
         if (packageName.isEmpty()) {
             sendJson(out, 400, new JSONObject().put("error", "missing bundle_id"));
             return;
@@ -374,8 +375,9 @@ public class CompanionServer {
         sendJson(out, 200, new JSONObject().put("status", "ok"));
     }
 
-    private void handleStop(OutputStream out, JSONObject body) throws Exception {
-        String packageName = body != null ? body.optString("bundle_id", "") : "";
+    private void handleStop(OutputStream out, String body) throws Exception {
+        JSONObject req = new JSONObject(body);
+        String packageName = req.optString("bundle_id", "");
         if (packageName.isEmpty()) {
             sendJson(out, 400, new JSONObject().put("error", "missing bundle_id"));
             return;
