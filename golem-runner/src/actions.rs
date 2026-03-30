@@ -12,19 +12,13 @@ mod test_helpers;
 
 use anyhow::{bail, Result};
 use golem_driver::PlatformDriver;
-use golem_element::selector::find_elements;
-use golem_element::Element;
 use golem_parser::{AppConfig, Step};
 use golem_vars::VariableStore;
 
 use crate::context::ExecutionContext;
-use crate::resolution::build_selector;
 
 use app_lifecycle::{handle_clear_data, handle_launch, handle_stop};
-use assertion::{
-    handle_assert_alert, handle_assert_checked, handle_assert_enabled, handle_assert_not_visible,
-    handle_assert_text, handle_assert_visible,
-};
+use assertion::{handle_assert_alert, handle_assert_not_visible, handle_assert_visible};
 use capture::handle_read;
 use device::{
     handle_dark_mode, handle_grant_permission, handle_press, handle_revoke_permission,
@@ -43,32 +37,6 @@ use wait::{handle_wait, handle_wait_not};
 
 /// Resolve an element using all step selectors except `text`.
 ///
-/// For actions like `type` and `backspace`, the step's `text` field holds the
-/// value to type rather than a selector. This helper builds a selector that
-/// ignores `text`, finds the element, and returns it with tap coordinates.
-async fn resolve_element_ignore_text(
-    step: &Step,
-    driver: &dyn PlatformDriver,
-) -> Result<(Element, (i32, i32))> {
-    let mut selector = build_selector(step);
-    selector.text = None;
-
-    let root = driver.get_hierarchy().await?;
-    let results = find_elements(&root, &selector);
-
-    if results.is_empty() {
-        bail!(
-            "No element found matching selector: text={:?}, id={:?}, type={:?}",
-            selector.text,
-            selector.accessibility_id,
-            selector.element_type,
-        );
-    }
-
-    let first = &results[0];
-    Ok((first.element.clone(), (first.tap_x, first.tap_y)))
-}
-
 /// Dispatch a step to the appropriate action handler.
 pub async fn execute_action(
     step: &Step,
@@ -88,11 +56,9 @@ pub async fn execute_action(
         "scroll" => handle_scroll(step, driver).await,
         "read" => handle_read(step, driver, vars).await,
         "hide_keyboard" => handle_hide_keyboard(driver).await,
-        "assert_visible" => handle_assert_visible(step, driver).await,
+        "assert_visible" | "assert_text" | "assert_enabled" | "assert_checked" =>
+            handle_assert_visible(step, driver).await,
         "assert_not_visible" => handle_assert_not_visible(step, driver).await,
-        "assert_text" => handle_assert_text(step, driver).await,
-        "assert_enabled" => handle_assert_enabled(step, driver).await,
-        "assert_checked" => handle_assert_checked(step, driver).await,
         "assert_alert" => handle_assert_alert(step, driver).await,
         "dismiss_alert" => handle_dismiss_alert(step, driver).await,
         "wait" => handle_wait(step, driver).await,

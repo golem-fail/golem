@@ -18,7 +18,7 @@ type = "phone"
 name = "setup"
 steps = [
   { action = "wait", text = "Submit", timeout = 30000 },
-  { action = "assert_text", text = "0", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "0", below = "Counter", element_type = "text" },
 ]
 
 # Delegate counter increment to a subflow and propagate the result back
@@ -33,5 +33,5 @@ counter_value = "result_after_increment"
 name = "verify"
 steps = [
   # The subflow should have incremented the counter to 1
-  { action = "assert_text", text = "1", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "1", below = "Counter", element_type = "text" },
 ]

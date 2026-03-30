@@ -25,5 +25,5 @@ steps = [
 
   # Wait for the app to launch from cold and display the deep link
   { action = "wait", text = "Deep Link:", timeout = 15000 },
-  { action = "assert_text", text = "golem-test://cold-start-test", right_of = "Deep Link:" },
+  { action = "assert_visible", text = "golem-test://cold-start-test", right_of = "Deep Link:" },
 ]

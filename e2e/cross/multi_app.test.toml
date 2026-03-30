@@ -35,14 +35,14 @@ steps = [
   { action = "tap", text = "Increment" },
   { action = "tap", text = "Increment" },
   { action = "tap", text = "Increment" },
-  { action = "assert_text", text = "3", below = "Counter" },
+  { action = "assert_visible", text = "3", below = "Counter" },
 
   # Switch to the companion app
   { action = "launch", app = "app-b" },
   { action = "wait", text = "app-b-title", timeout = 10000 },
   { action = "assert_visible", text = "shared-data-display" },
   { action = "assert_visible", text = "refresh-button" },
-  { action = "assert_text", text = "Ready", right_of = "Status:" },
+  { action = "assert_visible", text = "Ready", right_of = "Status:" },
 
   # Tap refresh in companion app
   { action = "tap", text = "refresh-button" },
@@ -52,7 +52,7 @@ steps = [
   { action = "wait", text = "Counter", timeout = 10000 },
 
   # Verify primary app state is intact
-  { action = "assert_text", text = "3", below = "Counter" },
+  { action = "assert_visible", text = "3", below = "Counter" },
 
   # Stop the companion app
   { action = "stop", app = "app-b" },

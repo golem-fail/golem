@@ -28,16 +28,16 @@ steps = [
 
   # Interact with text input elements inside the web view
   { action = "type", input = "Enter email", text = "webview@test.com" },
-  { action = "assert_text", text = "webview@test.com" },
+  { action = "assert_visible", text = "webview@test.com" },
 
   { action = "type", input = "Search", text = "webview search query" },
-  { action = "assert_text", text = "webview search query" },
+  { action = "assert_visible", text = "webview search query" },
   { action = "hide_keyboard" },
 
   # Interact with buttons inside the web view
   { action = "tap", text = "Increment" },
   { action = "tap", text = "Increment" },
-  { action = "assert_text", text = "2", below = "Counter" },
+  { action = "assert_visible", text = "2", below = "Counter" },
 
   # Read values from web view elements
   { action = "read", below = "Counter", element_type = "text", save_to = "counter_value" },
@@ -45,8 +45,8 @@ steps = [
   { action = "read", right_of = "Theme:", save_to = "theme" },
 
   # Verify device state labels are rendered in the web view
-  { action = "assert_text", text = "Portrait", right_of = "Orientation:" },
-  { action = "assert_text", text = "Light", right_of = "Theme:" },
+  { action = "assert_visible", text = "Portrait", right_of = "Orientation:" },
+  { action = "assert_visible", text = "Light", right_of = "Theme:" },
 
   # Scroll within the web view to find list elements
   { action = "swipe", direction = "down" },

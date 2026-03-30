@@ -19,7 +19,7 @@ name = "type_into_fields"
 steps = [
   # Type into the email field
   { action = "type", input = "Enter email", text = "user@example.com" },
-  { action = "assert_text", text = "user@example.com" },
+  { action = "assert_visible", text = "user@example.com" },
 
   # Type into the password field
   { action = "type", input = "Password", text = "s3cret!" },

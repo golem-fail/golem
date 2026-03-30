@@ -28,14 +28,14 @@ steps = [
   # Rapidly type into all input fields in quick succession
   { action = "type", input = "Enter email", text = "perf@golem.com" },
   { action = "wait", text = "Enter email", timeout = 2000 },
-  { action = "assert_text", text = "perf@golem.com" },
+  { action = "assert_visible", text = "perf@golem.com" },
 
   { action = "type", input = "Password", text = "Str0ngP@ss!" },
   { action = "wait", text = "Password", timeout = 2000 },
 
   { action = "type", input = "Search", text = "rapid test query" },
   { action = "wait", text = "Search", timeout = 2000 },
-  { action = "assert_text", text = "rapid test query" },
+  { action = "assert_visible", text = "rapid test query" },
 
   # Hide keyboard between interactions
   { action = "hide_keyboard" },
@@ -53,7 +53,7 @@ steps = [
 
   # Now verify the counter reached the expected value
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_text", text = "5", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "5", below = "Counter", element_type = "text" },
 
   # Rapidly decrement 3 times
   { action = "tap", text = "Decrement" },
@@ -62,7 +62,7 @@ steps = [
 
   # Verify counter after burst decrement
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_text", text = "2", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "2", below = "Counter", element_type = "text" },
 ]
 
 [[block]]

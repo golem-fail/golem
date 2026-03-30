@@ -37,7 +37,7 @@ steps = [
   # Open a deep link for app A and verify it is received
   { action = "open_link", url = "golem-test://home" },
   { action = "wait", text = "Deep Link:", timeout = 5000 },
-  { action = "assert_text", text = "golem-test://home", right_of = "Deep Link:" },
+  { action = "assert_visible", text = "golem-test://home", right_of = "Deep Link:" },
 ]
 
 [[block]]
@@ -50,7 +50,7 @@ steps = [
   # Open a deep link for app B and verify it is received
   { action = "open_link", url = "golem-test-b://dashboard" },
   { action = "wait", text = "deeplink-display-b", timeout = 5000 },
-  { action = "assert_text", text = "golem-test-b://dashboard", right_of = "deeplink-display-b" },
+  { action = "assert_visible", text = "golem-test-b://dashboard", right_of = "deeplink-display-b" },
 ]
 
 [[block]]
@@ -61,7 +61,7 @@ steps = [
   { action = "wait", text = "Deep Link:", timeout = 10000 },
 
   # Verify app A's deep link display still shows the previously received link
-  { action = "assert_text", text = "golem-test://home", right_of = "Deep Link:" },
+  { action = "assert_visible", text = "golem-test://home", right_of = "Deep Link:" },
 
   # Stop app B
   { action = "stop", app = "com.golem.test-b" },

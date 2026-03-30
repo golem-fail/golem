@@ -2,26 +2,9 @@ use anyhow::{bail, Result};
 use golem_driver::PlatformDriver;
 use golem_element::glob::glob_match;
 use golem_element::selector::find_elements;
-use golem_element::Element;
 use golem_parser::Step;
 
 use crate::resolution::{build_selector, resolve_element};
-
-use super::resolve_element_ignore_text;
-
-/// Collect text from an element's immediate children (typically StaticText nodes).
-/// Used for web-based UIs where container elements don't carry text directly.
-fn collect_child_text(elem: &Element) -> String {
-    let mut parts = Vec::new();
-    for child in &elem.children {
-        if let Some(text) = child.text.as_deref() {
-            if !text.is_empty() {
-                parts.push(text);
-            }
-        }
-    }
-    parts.join("")
-}
 
 /// Assert that an element matching the step's selectors exists in the hierarchy.
 pub(crate) async fn handle_assert_visible(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
@@ -48,66 +31,6 @@ pub(crate) async fn handle_assert_not_visible(step: &Step, driver: &dyn Platform
     }
 }
 
-/// Assert that an element's text exactly matches the expected value.
-///
-/// The element is located by `id` (or other non-text selectors).
-/// The step's `text` field is used as the expected text to compare against.
-pub(crate) async fn handle_assert_text(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let expected = step
-        .text
-        .as_deref()
-        .unwrap_or("");
-
-    // Find element using selectors other than text
-    let (elem, _coords) = resolve_element_ignore_text(step, driver).await?;
-    // For web-based UIs, the actual visible text is often in child text nodes
-    // while the element's own text contains the accessibility ID. Prefer child
-    // text when available.
-    let child_text = collect_child_text(&elem);
-    let actual = if child_text.is_empty() {
-        elem.text.as_deref().unwrap_or("").to_string()
-    } else {
-        child_text
-    };
-
-    if actual.as_str() == expected {
-        Ok(())
-    } else {
-        bail!(
-            "assert_text failed: expected {:?}, got {:?}",
-            expected,
-            actual,
-        )
-    }
-}
-
-/// Assert that the matched element is enabled.
-pub(crate) async fn handle_assert_enabled(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let (elem, _coords) = resolve_element(step, driver).await?;
-    if elem.enabled {
-        Ok(())
-    } else {
-        bail!(
-            "assert_enabled failed: element is disabled (id={:?}, text={:?})",
-            elem.accessibility_id,
-            elem.text,
-        )
-    }
-}
-
-/// Assert that the matched element is checked.
-pub(crate) async fn handle_assert_checked(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let (elem, _coords) = resolve_element(step, driver).await?;
-    if elem.checked {
-        Ok(())
-    } else {
-        bail!(
-            "assert_checked failed: element is not checked (id={:?}, text={:?})",
-            elem.accessibility_id,
-            elem.text,
-        )
-    }
-}
 
 /// Assert that an alert/dialog is currently displayed.
 ///
@@ -206,140 +129,117 @@ mod tests {
         );
     }
 
-    // ── assert_text succeeds when text matches ──────────────────────
+    // ── assert_visible with text selector matches element text ────────
 
     #[tokio::test]
-    async fn assert_text_succeeds_when_text_matches() {
+    async fn assert_visible_with_text_matches_element() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
-        root.children.push(make_element_with_id_and_text(
+        root.children.push(make_element_with_text(
             "Label",
-            "total",
             "$42.00",
             Bounds::new(50, 100, 200, 30),
         ));
         let driver = MockPlatformDriver::new(root);
 
-        let mut step = make_step("assert_text");
-        step.accessibility_id = Some("total".to_string());
+        let mut step = make_step("assert_visible");
         step.text = Some("$42.00".to_string());
 
-        handle_assert_text(&step, &driver)
+        handle_assert_visible(&step, &driver)
             .await
-            .expect("assert_text should succeed when text matches");
+            .expect("assert_visible SHALL succeed when text matches");
     }
 
-    // ── assert_text fails when text doesn't match ───────────────────
+    // ── assert_visible with text selector fails on mismatch ─────────
 
     #[tokio::test]
-    async fn assert_text_fails_when_text_does_not_match() {
+    async fn assert_visible_with_text_fails_on_mismatch() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
-        root.children.push(make_element_with_id_and_text(
+        root.children.push(make_element_with_text(
             "Label",
-            "total",
             "$99.99",
             Bounds::new(50, 100, 200, 30),
         ));
         let driver = MockPlatformDriver::new(root);
 
-        let mut step = make_step("assert_text");
-        step.accessibility_id = Some("total".to_string());
+        let mut step = make_step("assert_visible");
         step.text = Some("$42.00".to_string());
 
-        let result = handle_assert_text(&step, &driver).await;
-        assert!(result.is_err());
-        let err_msg = format!("{}", result.expect_err("should be error"));
-        assert!(
-            err_msg.contains("assert_text failed"),
-            "error should mention assert_text failed, got: {err_msg}"
-        );
-        assert!(
-            err_msg.contains("$42.00"),
-            "error should mention expected value, got: {err_msg}"
-        );
-        assert!(
-            err_msg.contains("$99.99"),
-            "error should mention actual value, got: {err_msg}"
-        );
+        let result = handle_assert_visible(&step, &driver).await;
+        assert!(result.is_err(), "assert_visible SHALL fail when text does not match");
     }
 
-    // ── assert_enabled succeeds when element is enabled ─────────────
+    // ── assert_visible with enabled selector ─────────────────────────
 
     #[tokio::test]
-    async fn assert_enabled_succeeds_when_element_is_enabled() {
+    async fn assert_visible_with_enabled_succeeds() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let mut btn = make_element_with_id("Button", "submit-button", Bounds::new(50, 200, 100, 44));
+        let mut btn = make_element_with_text("Button", "Submit", Bounds::new(50, 200, 100, 44));
         btn.enabled = true;
         root.children.push(btn);
         let driver = MockPlatformDriver::new(root);
 
-        let mut step = make_step("assert_enabled");
-        step.accessibility_id = Some("submit-button".to_string());
+        let mut step = make_step("assert_visible");
+        step.text = Some("Submit".to_string());
+        step.enabled = Some(true);
 
-        handle_assert_enabled(&step, &driver)
+        handle_assert_visible(&step, &driver)
             .await
-            .expect("assert_enabled should succeed when element is enabled");
+            .expect("assert_visible SHALL succeed when element is enabled");
     }
 
-    // ── assert_enabled fails when element is disabled ───────────────
+    // ── assert_visible with enabled selector fails when disabled ─────
 
     #[tokio::test]
-    async fn assert_enabled_fails_when_element_is_disabled() {
+    async fn assert_visible_with_enabled_fails_when_disabled() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let mut btn = make_element_with_id("Button", "submit-button", Bounds::new(50, 200, 100, 44));
+        let mut btn = make_element_with_text("Button", "Submit", Bounds::new(50, 200, 100, 44));
         btn.enabled = false;
         root.children.push(btn);
         let driver = MockPlatformDriver::new(root);
 
-        let mut step = make_step("assert_enabled");
-        step.accessibility_id = Some("submit-button".to_string());
+        let mut step = make_step("assert_visible");
+        step.text = Some("Submit".to_string());
+        step.enabled = Some(true);
 
-        let result = handle_assert_enabled(&step, &driver).await;
-        assert!(result.is_err());
-        let err_msg = format!("{}", result.expect_err("should be error"));
-        assert!(
-            err_msg.contains("assert_enabled failed"),
-            "error should mention assert_enabled failed, got: {err_msg}"
-        );
+        let result = handle_assert_visible(&step, &driver).await;
+        assert!(result.is_err(), "assert_visible SHALL fail when element is disabled");
     }
 
-    // ── assert_checked succeeds when element is checked ─────────────
+    // ── assert_visible with checked selector ─────────────────────────
 
     #[tokio::test]
-    async fn assert_checked_succeeds_when_element_is_checked() {
+    async fn assert_visible_with_checked_succeeds() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let mut cb = make_element_with_id("Checkbox", "agree-checkbox", Bounds::new(50, 300, 30, 30));
+        let mut cb = make_element_with_text("Checkbox", "Agree", Bounds::new(50, 300, 30, 30));
         cb.checked = true;
         root.children.push(cb);
         let driver = MockPlatformDriver::new(root);
 
-        let mut step = make_step("assert_checked");
-        step.accessibility_id = Some("agree-checkbox".to_string());
+        let mut step = make_step("assert_visible");
+        step.text = Some("Agree".to_string());
+        step.checked = Some(true);
 
-        handle_assert_checked(&step, &driver)
+        handle_assert_visible(&step, &driver)
             .await
-            .expect("assert_checked should succeed when element is checked");
+            .expect("assert_visible SHALL succeed when element is checked");
     }
 
-    // ── assert_checked fails when element is unchecked ──────────────
+    // ── assert_visible with checked selector fails when unchecked ────
 
     #[tokio::test]
-    async fn assert_checked_fails_when_element_is_unchecked() {
+    async fn assert_visible_with_checked_fails_when_unchecked() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let mut cb = make_element_with_id("Checkbox", "agree-checkbox", Bounds::new(50, 300, 30, 30));
+        let mut cb = make_element_with_text("Checkbox", "Agree", Bounds::new(50, 300, 30, 30));
         cb.checked = false;
         root.children.push(cb);
         let driver = MockPlatformDriver::new(root);
 
-        let mut step = make_step("assert_checked");
-        step.accessibility_id = Some("agree-checkbox".to_string());
+        let mut step = make_step("assert_visible");
+        step.text = Some("Agree".to_string());
+        step.checked = Some(true);
 
-        let result = handle_assert_checked(&step, &driver).await;
-        assert!(result.is_err());
-        let err_msg = format!("{}", result.expect_err("should be error"));
-        assert!(
-            err_msg.contains("assert_checked failed"),
-            "error should mention assert_checked failed, got: {err_msg}"
-        );
+        let result = handle_assert_visible(&step, &driver).await;
+        assert!(result.is_err(), "assert_visible SHALL fail when element is unchecked");
     }
 
     // ── assert_alert tests ────────────────────────────────────────────

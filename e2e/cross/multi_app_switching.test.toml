@@ -37,7 +37,7 @@ steps = [
   { action = "tap", text = "Increment" },
   { action = "tap", text = "Increment" },
   { action = "tap", text = "Increment" },
-  { action = "assert_text", text = "5", below = "Counter" },
+  { action = "assert_visible", text = "5", below = "Counter" },
 
   # Type into a form field to set additional state
   { action = "type", input = "Enter email", text = "cross-test@golem.com" },
@@ -62,7 +62,7 @@ steps = [
   { action = "assert_visible", text = "status-label" },
 
   # Verify companion app initial state
-  { action = "assert_text", text = "Ready", right_of = "Status:" },
+  { action = "assert_visible", text = "Ready", right_of = "Status:" },
 
   # Interact with the companion app
   { action = "tap", text = "refresh-button" },
@@ -79,17 +79,17 @@ steps = [
   { action = "wait", text = "Counter", timeout = 10000 },
 
   # Verify primary app state is preserved after app switching
-  { action = "assert_text", text = "5", below = "Counter" },
-  { action = "assert_text", text = "cross-test@golem.com" },
+  { action = "assert_visible", text = "5", below = "Counter" },
+  { action = "assert_visible", text = "cross-test@golem.com" },
 
   # Verify UI elements are still enabled and functional
-  { action = "assert_enabled", text = "Increment" },
-  { action = "assert_enabled", text = "Decrement" },
-  { action = "assert_enabled", text = "Submit" },
+  { action = "assert_visible", text = "Increment", enabled = true },
+  { action = "assert_visible", text = "Decrement", enabled = true },
+  { action = "assert_visible", text = "Submit", enabled = true },
 
   # Perform one more interaction to confirm app is responsive
   { action = "tap", text = "Decrement" },
-  { action = "assert_text", text = "4", below = "Counter" },
+  { action = "assert_visible", text = "4", below = "Counter" },
 
   # Stop the companion app
   { action = "stop", app = "app-b" },

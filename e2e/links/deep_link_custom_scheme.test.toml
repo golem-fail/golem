@@ -29,7 +29,7 @@ steps = [
   # Open a simple deep link with the golem-test scheme
   { action = "open_link", url = "golem-test://home" },
   { action = "wait", text = "Deep Link:", timeout = 5000 },
-  { action = "assert_text", text = "golem-test://home", right_of = "Deep Link:" },
+  { action = "assert_visible", text = "golem-test://home", right_of = "Deep Link:" },
 ]
 
 [[block]]
@@ -38,7 +38,7 @@ steps = [
   # Open a deep link with path and query parameters
   { action = "open_link", url = "golem-test://profile?user=42&tab=settings" },
   { action = "wait", text = "Deep Link:", timeout = 5000 },
-  { action = "assert_text", text = "golem-test://profile?user=42&tab=settings", right_of = "Deep Link:" },
+  { action = "assert_visible", text = "golem-test://profile?user=42&tab=settings", right_of = "Deep Link:" },
 ]
 
 [[block]]
@@ -47,5 +47,5 @@ steps = [
   # Open a deep link to a specific content item with a nested path
   { action = "open_link", url = "golem-test://item/12345" },
   { action = "wait", text = "Deep Link:", timeout = 5000 },
-  { action = "assert_text", text = "golem-test://item/12345", right_of = "Deep Link:" },
+  { action = "assert_visible", text = "golem-test://item/12345", right_of = "Deep Link:" },
 ]

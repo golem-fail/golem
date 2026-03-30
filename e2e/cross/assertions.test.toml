@@ -28,19 +28,19 @@ steps = [
   { action = "assert_not_visible", text = "GOLEM Test B" },
   { action = "assert_not_visible", text = "app-b-title" },
 
-  # assert_text: verify exact text content using relational selectors
-  { action = "assert_text", text = "0", below = "Counter" },
-  { action = "assert_text", text = "Item 0", child_of = "list-item-0" },
-  { action = "assert_text", text = "Item 3", child_of = "list-item-3" },
+  # assert_visible: verify exact text content using relational selectors
+  { action = "assert_visible", text = "0", below = "Counter" },
+  { action = "assert_visible", text = "Item 0", child_of = "list-item-0" },
+  { action = "assert_visible", text = "Item 3", child_of = "list-item-3" },
 
-  # assert_enabled: verify elements are enabled
-  { action = "assert_enabled", text = "Submit" },
-  { action = "assert_enabled", text = "Increment" },
-  { action = "assert_enabled", text = "Enter email" },
-  { action = "assert_enabled", text = "dark-mode-toggle", auto_scroll = true },
+  # assert_visible with enabled: verify elements are enabled
+  { action = "assert_visible", text = "Submit", enabled = true },
+  { action = "assert_visible", text = "Increment", enabled = true },
+  { action = "assert_visible", text = "Enter email", enabled = true },
+  { action = "assert_visible", text = "dark-mode-toggle", enabled = true, auto_scroll = true },
 
-  # assert_checked: scroll to toggles, toggle checkbox and verify
+  # assert_visible with checked: scroll to toggles, toggle checkbox and verify
   { action = "tap", text = "agree-checkbox", auto_scroll = true },
   # WebView checkboxes don't reliably propagate checked state to iOS accessibility
-  { action = "assert_checked", text = "agree-checkbox", on_fail = "warn" },
+  { action = "assert_visible", text = "agree-checkbox", checked = true, on_fail = "warn" },
 ]

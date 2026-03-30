@@ -52,6 +52,6 @@ steps = [
 name = "verify_text_persisted"
 steps = [
   # Verify the typed text persisted after keyboard dismissal
-  { action = "assert_text", text = "test@example.com" },
-  { action = "assert_text", text = "search query" },
+  { action = "assert_visible", text = "test@example.com" },
+  { action = "assert_visible", text = "search query" },
 ]

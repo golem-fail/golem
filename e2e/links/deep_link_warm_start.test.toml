@@ -25,7 +25,7 @@ steps = [
   { action = "tap", text = "Increment" },
   { action = "tap", text = "Increment" },
   { action = "tap", text = "Increment" },
-  { action = "assert_text", text = "3", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "3", below = "Counter", element_type = "text" },
 
   # Verify deep link display is empty before receiving a link
   { action = "assert_visible", text = "Deep Link:" },
@@ -37,16 +37,16 @@ steps = [
   # Open a deep link while the app is already running (warm start)
   { action = "open_link", url = "golem-test://warm-start" },
   { action = "wait", text = "Deep Link:", timeout = 5000 },
-  { action = "assert_text", text = "golem-test://warm-start", right_of = "Deep Link:" },
+  { action = "assert_visible", text = "golem-test://warm-start", right_of = "Deep Link:" },
 ]
 
 [[block]]
 name = "verify_state_preserved"
 steps = [
   # Verify that the counter state set before the deep link is still intact
-  { action = "assert_text", text = "3", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "3", below = "Counter", element_type = "text" },
 
   # Verify the app is still functional after receiving the deep link
   { action = "tap", text = "Increment" },
-  { action = "assert_text", text = "4", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "4", below = "Counter", element_type = "text" },
 ]

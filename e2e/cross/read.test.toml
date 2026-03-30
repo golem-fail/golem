@@ -37,5 +37,5 @@ steps = [
   { action = "read", text = "Item 0", save_to = "first_item_text" },
 
   # Verify the counter was updated correctly
-  { action = "assert_text", text = "2", below = "Counter" },
+  { action = "assert_visible", text = "2", below = "Counter" },
 ]

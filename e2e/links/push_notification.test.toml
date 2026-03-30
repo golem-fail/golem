@@ -31,7 +31,7 @@ steps = [
 
   # Wait for the notification display to update and verify content
   { action = "wait", text = "Notification:", timeout = 10000 },
-  { action = "assert_text", text = "Hello from GOLEM", right_of = "Notification:" },
+  { action = "assert_visible", text = "Hello from GOLEM", right_of = "Notification:" },
 ]
 
 [[block]]
@@ -42,5 +42,5 @@ steps = [
 
   # Verify the notification display updates with the new content
   { action = "wait", text = "Notification:", timeout = 10000 },
-  { action = "assert_text", text = "Updated notification payload", right_of = "Notification:" },
+  { action = "assert_visible", text = "Updated notification payload", right_of = "Notification:" },
 ]

@@ -35,7 +35,7 @@ steps = [
   # Verify a mid-range item appears quickly
   { action = "wait", text = "list-item-15", timeout = 2000 },
   { action = "assert_visible", text = "list-item-15" },
-  { action = "assert_text", text = "Item 15", child_of = "list-item-15" },
+  { action = "assert_visible", text = "Item 15", child_of = "list-item-15" },
 
   # Continue scrolling
   { action = "swipe", direction = "down" },
@@ -44,7 +44,7 @@ steps = [
   # Verify another mid-list element with tight timeout
   { action = "wait", text = "list-item-25", timeout = 2000 },
   { action = "assert_visible", text = "list-item-25" },
-  { action = "assert_text", text = "Item 25", child_of = "list-item-25" },
+  { action = "assert_visible", text = "Item 25", child_of = "list-item-25" },
 ]
 
 [[block]]
@@ -59,7 +59,7 @@ steps = [
 
   # Verify near-bottom items appear within tight timeout
   { action = "wait", text = "list-item-40", timeout = 2000 },
-  { action = "assert_text", text = "Item 40", child_of = "list-item-40" },
+  { action = "assert_visible", text = "Item 40", child_of = "list-item-40" },
 
   { action = "swipe", direction = "down" },
   { action = "swipe", direction = "down" },
@@ -67,7 +67,7 @@ steps = [
   # Verify the last item in the list
   { action = "wait", text = "list-item-49", timeout = 2000 },
   { action = "assert_visible", text = "list-item-49" },
-  { action = "assert_text", text = "Item 49", child_of = "list-item-49" },
+  { action = "assert_visible", text = "Item 49", child_of = "list-item-49" },
   { action = "screenshot" },
 ]
 
@@ -91,7 +91,7 @@ steps = [
   # Verify we are back at the top with a tight timeout
   { action = "wait", text = "list-item-0", timeout = 2000 },
   { action = "assert_visible", text = "list-item-0" },
-  { action = "assert_text", text = "Item 0", child_of = "list-item-0" },
+  { action = "assert_visible", text = "Item 0", child_of = "list-item-0" },
 ]
 
 [[block]]

@@ -23,7 +23,7 @@ steps = [
 
   # Interact to set some state
   { action = "tap", text = "Increment" },
-  { action = "assert_text", text = "1", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "1", below = "Counter", element_type = "text" },
 
   # Stop the app
   { action = "stop", app = "app" },

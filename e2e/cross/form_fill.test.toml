@@ -21,22 +21,22 @@ steps = [
 
   # Type into the email field and verify
   { action = "type", input = "Enter email", text = "testuser@golem.com" },
-  { action = "assert_text", text = "testuser@golem.com" },
+  { action = "assert_visible", text = "testuser@golem.com" },
 
   # Type into the password field
   { action = "type", input = "Password", text = "P@ssw0rd!123" },
 
   # Type into the search field with a deliberate typo
   { action = "type", input = "Search", text = "golem testt" },
-  { action = "assert_text", text = "golem testt" },
+  { action = "assert_visible", text = "golem testt" },
 
   # Use backspace to correct the typo
   { action = "backspace", text = "Search", count = 1 },
-  { action = "assert_text", text = "golem test" },
+  { action = "assert_visible", text = "golem test" },
 
   # Type the correct ending
   { action = "type", input = "Search", text = " query" },
-  { action = "assert_text", text = "golem test query" },
+  { action = "assert_visible", text = "golem test query" },
 
   # Hide the keyboard
   { action = "hide_keyboard" },
@@ -59,7 +59,7 @@ steps = [
   { action = "screenshot", path = "/tmp/golem-cross-form-filled.png" },
 
   # Verify the submit button is enabled
-  { action = "assert_enabled", text = "Submit" },
+  { action = "assert_visible", text = "Submit", enabled = true },
 
   # Submit the form
   { action = "tap", text = "Submit" },

@@ -20,13 +20,13 @@ steps = [
   { action = "wait", text = "Counter", timeout = 10000 },
 
   # Verify the counter starts at zero
-  { action = "assert_text", text = "0", below = "Counter" },
+  { action = "assert_visible", text = "0", below = "Counter" },
 
   # Verify both buttons are visible and enabled
   { action = "assert_visible", text = "Increment" },
   { action = "assert_visible", text = "Decrement" },
-  { action = "assert_enabled", text = "Increment" },
-  { action = "assert_enabled", text = "Decrement" },
+  { action = "assert_visible", text = "Increment", enabled = true },
+  { action = "assert_visible", text = "Decrement", enabled = true },
 ]
 
 [[block]]
@@ -34,14 +34,14 @@ name = "increment_counter"
 steps = [
   # Increment the counter five times
   { action = "tap", text = "Increment" },
-  { action = "assert_text", text = "1", below = "Counter" },
+  { action = "assert_visible", text = "1", below = "Counter" },
   { action = "tap", text = "Increment" },
-  { action = "assert_text", text = "2", below = "Counter" },
+  { action = "assert_visible", text = "2", below = "Counter" },
   { action = "tap", text = "Increment" },
-  { action = "assert_text", text = "3", below = "Counter" },
+  { action = "assert_visible", text = "3", below = "Counter" },
   { action = "tap", text = "Increment" },
   { action = "tap", text = "Increment" },
-  { action = "assert_text", text = "5", below = "Counter" },
+  { action = "assert_visible", text = "5", below = "Counter" },
 
   # Read and save the counter value
   { action = "read", below = "Counter", element_type = "text", save_to = "count_after_increment" },
@@ -52,11 +52,11 @@ name = "decrement_counter"
 steps = [
   # Decrement the counter three times
   { action = "tap", text = "Decrement" },
-  { action = "assert_text", text = "4", below = "Counter" },
+  { action = "assert_visible", text = "4", below = "Counter" },
   { action = "tap", text = "Decrement" },
-  { action = "assert_text", text = "3", below = "Counter" },
+  { action = "assert_visible", text = "3", below = "Counter" },
   { action = "tap", text = "Decrement" },
-  { action = "assert_text", text = "2", below = "Counter" },
+  { action = "assert_visible", text = "2", below = "Counter" },
 
   # Read and save the counter value after decrement
   { action = "read", below = "Counter", element_type = "text", save_to = "count_after_decrement" },
@@ -66,22 +66,22 @@ steps = [
 name = "verify_button_states"
 steps = [
   # Verify buttons remain enabled at count = 2
-  { action = "assert_enabled", text = "Increment" },
-  { action = "assert_enabled", text = "Decrement" },
+  { action = "assert_visible", text = "Increment", enabled = true },
+  { action = "assert_visible", text = "Decrement", enabled = true },
 
   # Decrement to zero
   { action = "tap", text = "Decrement" },
   { action = "tap", text = "Decrement" },
-  { action = "assert_text", text = "0", below = "Counter" },
+  { action = "assert_visible", text = "0", below = "Counter" },
 
   # Verify the counter display shows zero
   { action = "assert_visible", text = "Counter" },
-  { action = "assert_text", text = "0", below = "Counter" },
+  { action = "assert_visible", text = "0", below = "Counter" },
 
   # Verify increment button is still enabled at zero
-  { action = "assert_enabled", text = "Increment" },
+  { action = "assert_visible", text = "Increment", enabled = true },
 
   # Increment once more to confirm functionality after reaching zero
   { action = "tap", text = "Increment" },
-  { action = "assert_text", text = "1", below = "Counter" },
+  { action = "assert_visible", text = "1", below = "Counter" },
 ]
