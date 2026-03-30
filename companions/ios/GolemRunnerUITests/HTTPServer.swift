@@ -68,6 +68,10 @@ final class HTTPServer {
     private var running = false
     private var acceptThread: Thread?
 
+    /// Inactivity timeout — server exits after this duration with no requests.
+    private let inactivityTimeout: TimeInterval = 5 * 60 * 60 // 5 hours
+    private var inactivityTimer: DispatchSourceTimer?
+
     init(port: UInt16, handler: @escaping RequestHandler) {
         self.port = port
         self.handler = handler
@@ -104,6 +108,7 @@ final class HTTPServer {
         }
 
         running = true
+        startInactivityTimer()
 
         let thread = Thread { [weak self] in
             self?.acceptLoop()
@@ -120,6 +125,24 @@ final class HTTPServer {
             close(listenSocket)
             listenSocket = -1
         }
+    }
+
+    // MARK: - Inactivity timer
+
+    private func startInactivityTimer() {
+        let timer = DispatchSource.makeTimerSource(queue: .global())
+        timer.schedule(deadline: .now() + inactivityTimeout)
+        timer.setEventHandler {
+            NSLog("Golem companion: shutting down after %.0f hours of inactivity", self.inactivityTimeout / 3600)
+            exit(0)
+        }
+        timer.resume()
+        inactivityTimer = timer
+    }
+
+    private func resetInactivityTimer() {
+        inactivityTimer?.cancel()
+        startInactivityTimer()
     }
 
     // MARK: - Private
@@ -156,6 +179,7 @@ final class HTTPServer {
             body = readBody(socket: clientSocket, headerData: headerData, contentLength: contentLength)
         }
 
+        resetInactivityTimer()
         let response = handler(method, fullPath, body)
         writeResponse(socket: clientSocket, response: response)
     }

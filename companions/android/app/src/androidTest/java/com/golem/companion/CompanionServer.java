@@ -25,18 +25,23 @@ import java.util.Map;
 public class CompanionServer {
 
     private static final int PORT = 8223;
+    /** Inactivity timeout — server exits after this duration with no requests. */
+    private static final long INACTIVITY_TIMEOUT_MS = 5 * 60 * 60 * 1000L; // 5 hours
     private final UiAutomation uiAutomation;
+    private volatile long lastRequestTime = System.currentTimeMillis();
 
     public CompanionServer(UiAutomation uiAutomation) {
         this.uiAutomation = uiAutomation;
     }
 
     public void start() throws IOException {
+        startInactivityWatchdog();
         ServerSocket serverSocket = new ServerSocket(PORT);
         while (true) {
             Socket client = serverSocket.accept();
             new Thread(() -> {
                 try {
+                    lastRequestTime = System.currentTimeMillis();
                     handleClient(client);
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -45,6 +50,26 @@ public class CompanionServer {
                 }
             }).start();
         }
+    }
+
+    private void startInactivityWatchdog() {
+        Thread watchdog = new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(60_000); // check every minute
+                } catch (InterruptedException e) {
+                    return;
+                }
+                long idle = System.currentTimeMillis() - lastRequestTime;
+                if (idle >= INACTIVITY_TIMEOUT_MS) {
+                    android.util.Log.i("GolemCompanion",
+                        "Shutting down after " + (idle / 3600000) + " hours of inactivity");
+                    System.exit(0);
+                }
+            }
+        });
+        watchdog.setDaemon(true);
+        watchdog.start();
     }
 
     private void handleClient(Socket client) throws Exception {
