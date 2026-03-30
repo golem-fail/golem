@@ -241,6 +241,49 @@ impl SuiteRunner {
     }
 }
 
+/// Return the path to a companion lockfile for the given port.
+fn companion_lockfile(port: u16) -> std::path::PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let dir = std::path::PathBuf::from(home).join(".golem");
+    let _ = std::fs::create_dir_all(&dir);
+    dir.join(format!("companion-{port}.lock"))
+}
+
+/// Check if a process with the given PID is still alive.
+fn is_pid_alive(pid: u32) -> bool {
+    std::process::Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Try to acquire an exclusive lock. Returns true if acquired, false if another
+/// process holds it and is still alive.
+fn try_acquire_lock(port: u16) -> bool {
+    let path = companion_lockfile(port);
+
+    // Check existing lock
+    if let Ok(content) = std::fs::read_to_string(&path) {
+        if let Ok(pid) = content.trim().parse::<u32>() {
+            if is_pid_alive(pid) {
+                return false; // Another process is starting the companion
+            }
+        }
+    }
+
+    // Write our PID
+    let _ = std::fs::write(&path, std::process::id().to_string());
+    true
+}
+
+/// Release the companion lock.
+fn release_lock(port: u16) {
+    let _ = std::fs::remove_file(companion_lockfile(port));
+}
+
 /// Ensure the companion server is running and version-compatible.
 ///
 /// Three-tier startup:
@@ -267,7 +310,9 @@ async fn ensure_companion(
             health.version, golem_version
         );
         // Fall through to tier 3 (rebuild)
-    } else {
+    } else if try_acquire_lock(port) {
+        // We hold the lock — start the companion ourselves.
+
         // Tier 2: try to restart without rebuilding
         eprintln!("  Companion not running. Restarting...");
         let companion_path = find_companion_path(platform)?;
@@ -280,6 +325,7 @@ async fn ensure_companion(
                 let _ = golem_devices::lifecycle::run_command_public(&fwd, "port forward").await;
             }
             if let Ok(health) = client.wait_for_health(std::time::Duration::from_secs(15)).await {
+                release_lock(port);
                 if health.version == golem_version {
                     return Ok(health);
                 }
@@ -289,38 +335,109 @@ async fn ensure_companion(
                 );
             }
         }
-    }
 
-    // Tier 3: full rebuild + install + start
-    eprintln!("  Building companion...");
-    let companion_path = find_companion_path(platform)?;
+        // Tier 3: full rebuild + install + start
+        eprintln!("  Building companion...");
+        let companion_path = find_companion_path(platform)?;
 
-    match platform {
-        Platform::Ios => {
-            golem_devices::lifecycle::build_companion(device, &companion_path).await?;
-            golem_devices::lifecycle::spawn_companion(device, &companion_path).await?;
+        match platform {
+            Platform::Ios => {
+                golem_devices::lifecycle::build_companion(device, &companion_path).await?;
+                golem_devices::lifecycle::spawn_companion(device, &companion_path).await?;
+            }
+            Platform::Android => {
+                let apk_path = find_android_apk()?;
+                golem_devices::lifecycle::install_android_companion(device, &apk_path, port).await?;
+                golem_devices::lifecycle::spawn_companion(device, &companion_path).await?;
+            }
         }
-        Platform::Android => {
-            let apk_path = find_android_apk()?;
-            golem_devices::lifecycle::install_android_companion(device, &apk_path, port).await?;
-            golem_devices::lifecycle::spawn_companion(device, &companion_path).await?;
+
+        let health = client
+            .wait_for_health(std::time::Duration::from_secs(60))
+            .await
+            .context("Companion did not start within 60 seconds")?;
+
+        release_lock(port);
+
+        if health.version != golem_version {
+            anyhow::bail!(
+                "Companion version {} does not match golem version {}",
+                health.version,
+                golem_version
+            );
         }
+
+        return Ok(health);
+    } else {
+        // Another process is starting the companion — wait for it.
+        eprintln!("  Another golem instance is starting the companion. Waiting...");
+        let health = client
+            .wait_for_health(std::time::Duration::from_secs(60))
+            .await
+            .context("Companion did not become available (started by another process)")?;
+
+        if health.version != golem_version {
+            anyhow::bail!(
+                "Companion version {} does not match golem version {}",
+                health.version,
+                golem_version
+            );
+        }
+
+        return Ok(health);
     }
 
-    let health = client
-        .wait_for_health(std::time::Duration::from_secs(60))
-        .await
-        .context("Companion did not start within 60 seconds")?;
+    // Version mismatch from tier 1 falls through here — need tier 3 rebuild.
+    // But we need the lock for rebuilding too.
+    if try_acquire_lock(port) {
+        eprintln!("  Building companion...");
+        let companion_path = find_companion_path(platform)?;
 
-    if health.version != golem_version {
-        anyhow::bail!(
-            "Companion version {} does not match golem version {}",
-            health.version,
-            golem_version
-        );
+        match platform {
+            Platform::Ios => {
+                golem_devices::lifecycle::build_companion(device, &companion_path).await?;
+                golem_devices::lifecycle::spawn_companion(device, &companion_path).await?;
+            }
+            Platform::Android => {
+                let apk_path = find_android_apk()?;
+                golem_devices::lifecycle::install_android_companion(device, &apk_path, port).await?;
+                golem_devices::lifecycle::spawn_companion(device, &companion_path).await?;
+            }
+        }
+
+        let health = client
+            .wait_for_health(std::time::Duration::from_secs(60))
+            .await
+            .context("Companion did not start within 60 seconds")?;
+
+        release_lock(port);
+
+        if health.version != golem_version {
+            anyhow::bail!(
+                "Companion version {} does not match golem version {}",
+                health.version,
+                golem_version
+            );
+        }
+
+        Ok(health)
+    } else {
+        eprintln!("  Another golem instance is rebuilding the companion. Waiting...");
+        let health = client
+            .wait_for_health(std::time::Duration::from_secs(60))
+            .await
+            .context("Companion did not become available (rebuilt by another process)")?;
+
+        if health.version != golem_version {
+            anyhow::bail!(
+                "Companion version {} does not match golem version {}",
+                health.version,
+                golem_version
+            );
+        }
+
+        Ok(health)
     }
-
-    Ok(health)
 }
 
 /// Find the companion project path for the given platform.
