@@ -119,9 +119,25 @@ pub struct BranchCondition {
     pub goto: String,
 }
 
+/// An anchor for relational selectors — either a text pattern or a nested selector group.
+///
+/// Deserializes from either a plain string or an inline table:
+/// ```toml
+/// right_of = "Orientation:"                          # text pattern
+/// right_of = { text = "Orientation:", enabled = true } # nested selector
+/// ```
+#[derive(Deserialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum Anchor {
+    Text(String),
+    Selector(Box<SelectorGroup>),
+}
+
 /// Grouped selector for `on = { ... }` / `to = { ... }` syntax.
 ///
 /// All fields match the flat `on_*` fields on Step but without the prefix.
+/// Relational fields (below, above, right_of, left_of) accept either a
+/// text pattern or a nested selector group.
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct SelectorGroup {
     pub text: Option<String>,
@@ -130,10 +146,10 @@ pub struct SelectorGroup {
     pub enabled: Option<bool>,
     pub checked: Option<bool>,
     pub clickable: Option<bool>,
-    pub below: Option<String>,
-    pub above: Option<String>,
-    pub right_of: Option<String>,
-    pub left_of: Option<String>,
+    pub below: Option<Anchor>,
+    pub above: Option<Anchor>,
+    pub right_of: Option<Anchor>,
+    pub left_of: Option<Anchor>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -528,7 +544,7 @@ steps = [
         let step = &flow.block[0].steps[0];
         let g = step.on.as_ref().expect("on group should be present");
         assert_eq!(g.text.as_deref(), Some("Submit"));
-        assert_eq!(g.below.as_deref(), Some("Counter"));
+        assert!(matches!(&g.below, Some(Anchor::Text(s)) if s == "Counter"));
         assert_eq!(g.enabled, Some(true));
     }
 
@@ -550,6 +566,33 @@ steps = [
         let step = &flow.block[0].steps[0];
         let g = step.on.as_ref().expect("to should populate on field");
         assert_eq!(g.text.as_deref(), Some("Item 49"));
+    }
+
+    // ---------------------------------------------------------------
+    // 8d. Nested anchor selector
+    // ---------------------------------------------------------------
+    #[test]
+    fn step_with_nested_anchor() {
+        let toml_str = r#"
+[flow]
+name = "nested"
+
+[[block]]
+steps = [
+  { action = "tap", on = { text = "Portrait", right_of = { text = "Orientation:", enabled = true } } },
+]
+"#;
+        let flow = parse_flow(toml_str).expect("nested anchor should parse");
+        let step = &flow.block[0].steps[0];
+        let g = step.on.as_ref().expect("on group should be present");
+        assert_eq!(g.text.as_deref(), Some("Portrait"));
+        match &g.right_of {
+            Some(Anchor::Selector(nested)) => {
+                assert_eq!(nested.text.as_deref(), Some("Orientation:"));
+                assert_eq!(nested.enabled, Some(true));
+            }
+            other => panic!("expected nested Anchor::Selector, got {other:?}"),
+        }
     }
 
     // ---------------------------------------------------------------

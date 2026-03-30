@@ -1,6 +1,15 @@
 use crate::glob::GlobMatcher;
 use crate::{Element, FindResult};
 
+/// An anchor for relational selectors — either a simple text pattern or a full selector.
+#[derive(Debug, Clone)]
+pub enum AnchorSelector {
+    /// Match anchor by text pattern (glob).
+    Text(String),
+    /// Match anchor using a full selector.
+    Full(Box<Selector>),
+}
+
 /// Selector criteria for finding elements.
 ///
 /// All non-None fields are combined with AND logic:
@@ -14,13 +23,13 @@ pub struct Selector {
     pub checked: Option<bool>,
     pub clickable: Option<bool>,
     /// Keep only elements whose bounds.y > anchor.bottom()
-    pub below: Option<String>,
+    pub below: Option<AnchorSelector>,
     /// Keep only elements whose bounds.bottom() < anchor.y
-    pub above: Option<String>,
+    pub above: Option<AnchorSelector>,
     /// Keep only elements whose bounds.x > anchor.right()
-    pub right_of: Option<String>,
+    pub right_of: Option<AnchorSelector>,
     /// Keep only elements whose bounds.right() < anchor.x
-    pub left_of: Option<String>,
+    pub left_of: Option<AnchorSelector>,
 }
 
 /// Find all elements matching the selector in the hierarchy tree.
@@ -46,20 +55,31 @@ pub fn find_elements(root: &Element, selector: &Selector) -> Vec<FindResult> {
     }
 }
 
-/// Find the first element in the tree whose text matches the given glob pattern.
-fn find_anchor<'a>(root: &'a Element, pattern: &str) -> Option<&'a Element> {
-    let matcher = GlobMatcher::new(pattern);
-    find_anchor_recursive(root, &matcher)
+/// Find the anchor element for a relational selector.
+///
+/// - `AnchorSelector::Text` — find first element matching the glob pattern.
+/// - `AnchorSelector::Full` — find first element matching the full selector.
+fn resolve_anchor<'a>(root: &'a Element, anchor: &AnchorSelector) -> Option<FindResult> {
+    match anchor {
+        AnchorSelector::Text(pattern) => {
+            let matcher = GlobMatcher::new(pattern);
+            find_by_text_recursive(root, &matcher).map(|el| FindResult::new(el.clone()))
+        }
+        AnchorSelector::Full(selector) => {
+            let results = find_elements(root, selector);
+            results.into_iter().next()
+        }
+    }
 }
 
-fn find_anchor_recursive<'a>(element: &'a Element, matcher: &GlobMatcher) -> Option<&'a Element> {
+fn find_by_text_recursive<'a>(element: &'a Element, matcher: &GlobMatcher) -> Option<&'a Element> {
     if let Some(ref text) = element.text {
         if matcher.is_match(text) {
             return Some(element);
         }
     }
     for child in &element.children {
-        if let Some(found) = find_anchor_recursive(child, matcher) {
+        if let Some(found) = find_by_text_recursive(child, matcher) {
             return Some(found);
         }
     }
@@ -72,36 +92,36 @@ fn apply_relational_filters(
     selector: &Selector,
     mut results: Vec<FindResult>,
 ) -> Vec<FindResult> {
-    if let Some(ref pattern) = selector.below {
-        if let Some(anchor) = find_anchor(root, pattern) {
-            let anchor_bottom = anchor.bounds.bottom();
+    if let Some(ref anchor) = selector.below {
+        if let Some(found) = resolve_anchor(root, anchor) {
+            let anchor_bottom = found.element.bounds.bottom();
             results.retain(|r| r.element.bounds.y > anchor_bottom);
         } else {
             return Vec::new();
         }
     }
 
-    if let Some(ref pattern) = selector.above {
-        if let Some(anchor) = find_anchor(root, pattern) {
-            let anchor_y = anchor.bounds.y;
+    if let Some(ref anchor) = selector.above {
+        if let Some(found) = resolve_anchor(root, anchor) {
+            let anchor_y = found.element.bounds.y;
             results.retain(|r| r.element.bounds.bottom() < anchor_y);
         } else {
             return Vec::new();
         }
     }
 
-    if let Some(ref pattern) = selector.right_of {
-        if let Some(anchor) = find_anchor(root, pattern) {
-            let anchor_right = anchor.bounds.right();
+    if let Some(ref anchor) = selector.right_of {
+        if let Some(found) = resolve_anchor(root, anchor) {
+            let anchor_right = found.element.bounds.right();
             results.retain(|r| r.element.bounds.x > anchor_right);
         } else {
             return Vec::new();
         }
     }
 
-    if let Some(ref pattern) = selector.left_of {
-        if let Some(anchor) = find_anchor(root, pattern) {
-            let anchor_x = anchor.bounds.x;
+    if let Some(ref anchor) = selector.left_of {
+        if let Some(found) = resolve_anchor(root, anchor) {
+            let anchor_x = found.element.bounds.x;
             results.retain(|r| r.element.bounds.right() < anchor_x);
         } else {
             return Vec::new();
@@ -612,7 +632,7 @@ mod tests {
         root.children.push(elem_at("Label", "Sidebar", 0, 10, 100, 40));
 
         let s = Selector {
-            below: Some("Header".to_string()),
+            below: Some(AnchorSelector::Text("Header".to_string())),
             ..sel()
         };
         let results = find_elements(&root, &s);
@@ -634,7 +654,7 @@ mod tests {
         root.children.push(elem_at("Label", "Body", 0, 100, 400, 200));
 
         let s = Selector {
-            above: Some("Footer".to_string()),
+            above: Some(AnchorSelector::Text("Footer".to_string())),
             ..sel()
         };
         let results = find_elements(&root, &s);
@@ -659,7 +679,7 @@ mod tests {
         root.children.push(elem_at("Label", "Other", 50, 0, 80, 40));
 
         let s = Selector {
-            right_of: Some("Label".to_string()),
+            right_of: Some(AnchorSelector::Text("Label".to_string())),
             ..sel()
         };
         let results = find_elements(&root, &s);
@@ -681,7 +701,7 @@ mod tests {
         root.children.push(elem_at("Label", "Near", 180, 0, 50, 40));
 
         let s = Selector {
-            left_of: Some("Button".to_string()),
+            left_of: Some(AnchorSelector::Text("Button".to_string())),
             ..sel()
         };
         let results = find_elements(&root, &s);
@@ -697,7 +717,7 @@ mod tests {
         root.children.push(elem_at("Button", "Submit", 0, 100, 100, 40));
 
         let s = Selector {
-            below: Some("Nonexistent".to_string()),
+            below: Some(AnchorSelector::Text("Nonexistent".to_string())),
             ..sel()
         };
         let results = find_elements(&root, &s);
@@ -728,7 +748,7 @@ mod tests {
 
         let s = Selector {
             text: Some("*Btn".to_string()),
-            below: Some("Header".to_string()),
+            below: Some(AnchorSelector::Text("Header".to_string())),
             enabled: Some(true),
             ..sel()
         };
@@ -752,7 +772,7 @@ mod tests {
 
         let s = Selector {
             text: Some("Btn *".to_string()),
-            below: Some("Header".to_string()),
+            below: Some(AnchorSelector::Text("Header".to_string())),
             ..sel()
         };
         let results = find_elements(&root, &s);

@@ -41,8 +41,8 @@ steps = [
 [[block]]
 name = "orientation_controls"
 steps = [
-  # Verify initial portrait orientation
-  { action = "assert_visible", on_text = "Portrait", on_right_of = "Orientation:" },
+  # Verify initial portrait orientation (using nested anchor syntax)
+  { action = "assert_visible", on = { text = "Portrait", right_of = { text = "Orientation:" } } },
 
   # Rotate to landscape and verify
   { action = "rotate", orientation = "landscape" },

@@ -194,6 +194,14 @@ fn remap_step_vars(step: &Step, vars: &HashMap<String, String>) -> Step {
     }
 }
 
+/// Remap variables in an Anchor.
+fn remap_anchor(a: &crate::Anchor, vars: &HashMap<String, String>) -> crate::Anchor {
+    match a {
+        crate::Anchor::Text(s) => crate::Anchor::Text(remap_string(s, vars)),
+        crate::Anchor::Selector(g) => crate::Anchor::Selector(Box::new(remap_selector_group(g, vars))),
+    }
+}
+
 /// Remap variables in a grouped SelectorGroup.
 fn remap_selector_group(g: &crate::SelectorGroup, vars: &HashMap<String, String>) -> crate::SelectorGroup {
     crate::SelectorGroup {
@@ -203,10 +211,10 @@ fn remap_selector_group(g: &crate::SelectorGroup, vars: &HashMap<String, String>
         enabled: g.enabled,
         checked: g.checked,
         clickable: g.clickable,
-        below: g.below.as_ref().map(|s| remap_string(s, vars)),
-        above: g.above.as_ref().map(|s| remap_string(s, vars)),
-        right_of: g.right_of.as_ref().map(|s| remap_string(s, vars)),
-        left_of: g.left_of.as_ref().map(|s| remap_string(s, vars)),
+        below: g.below.as_ref().map(|a| remap_anchor(a, vars)),
+        above: g.above.as_ref().map(|a| remap_anchor(a, vars)),
+        right_of: g.right_of.as_ref().map(|a| remap_anchor(a, vars)),
+        left_of: g.left_of.as_ref().map(|a| remap_anchor(a, vars)),
     }
 }
 

@@ -1,8 +1,8 @@
 use anyhow::{bail, Result};
 use golem_driver::PlatformDriver;
-use golem_element::selector::{find_elements, Selector};
+use golem_element::selector::{find_elements, AnchorSelector, Selector};
 use golem_element::{filter_viewport, Element, Viewport};
-use golem_parser::Step;
+use golem_parser::{Anchor, Step};
 
 /// Build a `Selector` from the fields of a parsed `Step`.
 ///
@@ -17,6 +17,34 @@ use golem_parser::Step;
 /// - To alias: `to = { text = "Item 49" }`
 ///
 /// Grouped fields take precedence over flat fields.
+/// Convert a parser `Anchor` to a runtime `AnchorSelector`.
+fn convert_anchor(anchor: &Anchor) -> AnchorSelector {
+    match anchor {
+        Anchor::Text(s) => AnchorSelector::Text(s.clone()),
+        Anchor::Selector(group) => AnchorSelector::Full(Box::new(build_selector_from_group(group))),
+    }
+}
+
+/// Build a `Selector` from a `SelectorGroup` (recursive for nested anchors).
+fn build_selector_from_group(g: &golem_parser::SelectorGroup) -> Selector {
+    Selector {
+        text: g.text.clone(),
+        accessibility_id: g.accessibility_id.clone(),
+        index: g.index,
+        enabled: g.enabled,
+        checked: g.checked,
+        clickable: g.clickable,
+        below: g.below.as_ref().map(convert_anchor),
+        above: g.above.as_ref().map(convert_anchor),
+        right_of: g.right_of.as_ref().map(convert_anchor),
+        left_of: g.left_of.as_ref().map(convert_anchor),
+    }
+}
+
+/// Build a `Selector` from the step's selector fields.
+///
+/// Supports flat `on_*`, grouped `on = {}`, `to = {}`, and nested anchors.
+/// Grouped fields take precedence over flat fields.
 pub fn build_selector(step: &Step) -> Selector {
     let g = step.on.as_ref();
     Selector {
@@ -26,10 +54,14 @@ pub fn build_selector(step: &Step) -> Selector {
         enabled: g.and_then(|g| g.enabled).or(step.on_enabled),
         checked: g.and_then(|g| g.checked).or(step.on_checked),
         clickable: g.and_then(|g| g.clickable).or(step.on_clickable),
-        below: g.and_then(|g| g.below.clone()).or(step.on_below.clone()),
-        above: g.and_then(|g| g.above.clone()).or(step.on_above.clone()),
-        right_of: g.and_then(|g| g.right_of.clone()).or(step.on_right_of.clone()),
-        left_of: g.and_then(|g| g.left_of.clone()).or(step.on_left_of.clone()),
+        below: g.and_then(|g| g.below.as_ref().map(convert_anchor))
+            .or(step.on_below.as_ref().map(|s| AnchorSelector::Text(s.clone()))),
+        above: g.and_then(|g| g.above.as_ref().map(convert_anchor))
+            .or(step.on_above.as_ref().map(|s| AnchorSelector::Text(s.clone()))),
+        right_of: g.and_then(|g| g.right_of.as_ref().map(convert_anchor))
+            .or(step.on_right_of.as_ref().map(|s| AnchorSelector::Text(s.clone()))),
+        left_of: g.and_then(|g| g.left_of.as_ref().map(convert_anchor))
+            .or(step.on_left_of.as_ref().map(|s| AnchorSelector::Text(s.clone()))),
     }
 }
 
@@ -392,10 +424,10 @@ mod tests {
         assert_eq!(sel.enabled, Some(true));
         assert_eq!(sel.checked, Some(false));
         assert_eq!(sel.clickable, Some(true));
-        assert_eq!(sel.below.as_deref(), Some("Header"));
-        assert_eq!(sel.above.as_deref(), Some("Footer"));
-        assert_eq!(sel.right_of.as_deref(), Some("Sidebar"));
-        assert_eq!(sel.left_of.as_deref(), Some("Panel"));
+        assert!(matches!(&sel.below, Some(AnchorSelector::Text(s)) if s == "Header"));
+        assert!(matches!(&sel.above, Some(AnchorSelector::Text(s)) if s == "Footer"));
+        assert!(matches!(&sel.right_of, Some(AnchorSelector::Text(s)) if s == "Sidebar"));
+        assert!(matches!(&sel.left_of, Some(AnchorSelector::Text(s)) if s == "Panel"));
     }
 
     // ── 9. resolve_element with glob pattern in text ─────────────────
