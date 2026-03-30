@@ -182,7 +182,7 @@ fn remap_step_vars(step: &Step, vars: &HashMap<String, String>) -> Step {
         on_right_of: step.on_right_of.as_ref().map(|s| remap_string(s, vars)),
         on_left_of: step.on_left_of.as_ref().map(|s| remap_string(s, vars)),
         input: step.input.as_ref().map(|s| remap_string(s, vars)),
-        on_fail: step.on_fail.clone(),
+        if_fail: step.if_fail.clone(),
         save_to: step.save_to.clone(),
         timeout: step.timeout,
         retry: step.retry,
@@ -276,7 +276,7 @@ mod tests {
             on_right_of: None,
             on_left_of: None,
             input: None,
-            on_fail: None,
+            if_fail: None,
             save_to: None,
             timeout: None,
             retry: None,
@@ -302,7 +302,7 @@ mod tests {
             on_right_of: None,
             on_left_of: None,
             input: None,
-            on_fail: None,
+            if_fail: None,
             save_to: None,
             timeout: None,
             retry: None,
@@ -553,7 +553,7 @@ on_text = "Logout"
     }
 
     // ---------------------------------------------------------------
-    // 8. Mixin with on_fail preserved
+    // 8. Mixin with if_fail preserved
     // ---------------------------------------------------------------
     #[test]
     fn mixin_with_on_fail_preserved() {
@@ -568,7 +568,7 @@ on_text = "Logout"
 [[step]]
 action = "tap"
 on_text = "Maybe"
-on_fail = "ignore"
+if_fail = "ignore"
 "#,
         );
 
@@ -577,7 +577,7 @@ on_fail = "ignore"
             expand_mixins(&steps, flow_dir, project_root).expect("expansion should succeed");
 
         assert_eq!(expanded.len(), 1);
-        assert_eq!(expanded[0].on_fail.as_deref(), Some("ignore"));
+        assert_eq!(expanded[0].if_fail.as_deref(), Some("ignore"));
     }
 
     // ---------------------------------------------------------------

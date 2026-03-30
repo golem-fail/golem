@@ -16,21 +16,21 @@ use crate::context::ExecutionContext;
 pub enum StepOutcome {
     /// Step completed successfully (possibly after retries)
     Success,
-    /// on_fail = "warn": step failed but execution continues
+    /// if_fail = "warn": step failed but execution continues
     Warning(String),
-    /// on_fail = "ignore": step failed, silently continue
+    /// if_fail = "ignore": step failed, silently continue
     Ignored,
 }
 
 /// Default retry delay in milliseconds
 const DEFAULT_RETRY_DELAY_MS: u64 = 1_000;
 
-/// Execute a step with on_fail, timeout, and retry policies applied.
+/// Execute a step with if_fail, timeout, and retry policies applied.
 ///
 /// This wraps [`execute_action`] with:
 /// - **timeout**: cancels the step if it exceeds the configured duration
 /// - **retry**: retries the step up to N times on failure
-/// - **on_fail**: controls what happens when all attempts fail
+/// - **if_fail**: controls what happens when all attempts fail
 pub async fn execute_step_with_policy(
     step: &Step,
     driver: &dyn PlatformDriver,
@@ -42,7 +42,7 @@ pub async fn execute_step_with_policy(
     let timeout_ms = step.timeout.unwrap_or(default_timeout_ms);
     let max_retries = step.retry.unwrap_or(0);
     let retry_delay_ms = step.retry_delay.unwrap_or(DEFAULT_RETRY_DELAY_MS);
-    let on_fail = step.on_fail.as_deref().unwrap_or("error");
+    let if_fail = step.if_fail.as_deref().unwrap_or("error");
 
     let mut last_error: Option<anyhow::Error> = None;
 
@@ -70,30 +70,30 @@ pub async fn execute_step_with_policy(
         }
     }
 
-    // All attempts exhausted — capture screenshot before applying on_fail policy.
+    // All attempts exhausted — capture screenshot before applying if_fail policy.
     // Only capture for "error" and "warn" policies, not "ignore".
-    if on_fail != "ignore" {
+    if if_fail != "ignore" {
         let _ = capture_failure_screenshot(
             driver,
             ctx.capture_config,
             ctx.flow_name,
             ctx.block_name.unwrap_or("unnamed"),
             ctx.step_index,
-            on_fail,
+            if_fail,
         )
         .await;
     }
 
     let error =
         last_error.unwrap_or_else(|| anyhow::anyhow!("step failed with no error details"));
-    match on_fail {
+    match if_fail {
         "warn" => Ok(StepOutcome::Warning(error.to_string())),
         "ignore" => Ok(StepOutcome::Ignored),
         _ => Err(error), // "error" (default) — propagate
     }
 }
 
-/// Apply on_fail, timeout, and retry policies around an arbitrary async executor.
+/// Apply if_fail, timeout, and retry policies around an arbitrary async executor.
 ///
 /// This is the testable core: the `executor` closure receives the step and
 /// returns a future that resolves to `Result<()>`.
@@ -110,7 +110,7 @@ where
     let timeout_ms = step.timeout.unwrap_or(default_timeout_ms);
     let max_retries = step.retry.unwrap_or(0);
     let retry_delay_ms = step.retry_delay.unwrap_or(DEFAULT_RETRY_DELAY_MS);
-    let on_fail = step.on_fail.as_deref().unwrap_or("error");
+    let if_fail = step.if_fail.as_deref().unwrap_or("error");
 
     let mut last_error: Option<anyhow::Error> = None;
 
@@ -135,7 +135,7 @@ where
 
     let error =
         last_error.unwrap_or_else(|| anyhow::anyhow!("step failed with no error details"));
-    match on_fail {
+    match if_fail {
         "warn" => Ok(StepOutcome::Warning(error.to_string())),
         "ignore" => Ok(StepOutcome::Ignored),
         _ => Err(error),
@@ -166,7 +166,7 @@ mod tests {
             on_right_of: None,
             on_left_of: None,
             input: None,
-            on_fail: None,
+            if_fail: None,
             save_to: None,
             timeout: None,
             retry: None,
@@ -190,12 +190,12 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // 2. Step fails with on_fail="error" -> returns Err
+    // 2. Step fails with if_fail="error" -> returns Err
     // -----------------------------------------------------------------
     #[tokio::test]
     async fn step_fails_with_on_fail_error_returns_err() {
         let mut step = make_step();
-        step.on_fail = Some("error".to_string());
+        step.if_fail = Some("error".to_string());
 
         let result = apply_policy(&step, DEFAULT_TIMEOUT_MS, |_| async {
             Err(anyhow::anyhow!("element not found"))
@@ -211,12 +211,12 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // 3. Step fails with on_fail="warn" -> StepOutcome::Warning
+    // 3. Step fails with if_fail="warn" -> StepOutcome::Warning
     // -----------------------------------------------------------------
     #[tokio::test]
     async fn step_fails_with_on_fail_warn_returns_warning() {
         let mut step = make_step();
-        step.on_fail = Some("warn".to_string());
+        step.if_fail = Some("warn".to_string());
 
         let result = apply_policy(&step, DEFAULT_TIMEOUT_MS, |_| async {
             Err(anyhow::anyhow!("something went wrong"))
@@ -236,12 +236,12 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // 4. Step fails with on_fail="ignore" -> StepOutcome::Ignored
+    // 4. Step fails with if_fail="ignore" -> StepOutcome::Ignored
     // -----------------------------------------------------------------
     #[tokio::test]
     async fn step_fails_with_on_fail_ignore_returns_ignored() {
         let mut step = make_step();
-        step.on_fail = Some("ignore".to_string());
+        step.if_fail = Some("ignore".to_string());
 
         let result = apply_policy(&step, DEFAULT_TIMEOUT_MS, |_| async {
             Err(anyhow::anyhow!("ignored failure"))
@@ -259,7 +259,7 @@ mod tests {
     async fn step_timeout_triggers_failure() {
         let mut step = make_step();
         step.timeout = Some(50); // 50ms timeout
-        step.on_fail = Some("error".to_string());
+        step.if_fail = Some("error".to_string());
 
         let result = apply_policy(&step, DEFAULT_TIMEOUT_MS, |_| async {
             tokio::time::sleep(Duration::from_millis(200)).await;
@@ -310,14 +310,14 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // 7. Retry: step fails all retries -> on_fail applies
+    // 7. Retry: step fails all retries -> if_fail applies
     // -----------------------------------------------------------------
     #[tokio::test]
     async fn retry_exhausted_applies_on_fail() {
         let mut step = make_step();
         step.retry = Some(2); // 3 total attempts (0, 1, 2)
         step.retry_delay = Some(10);
-        step.on_fail = Some("warn".to_string());
+        step.if_fail = Some("warn".to_string());
 
         let attempt_count = Arc::new(AtomicU32::new(0));
         let count = Arc::clone(&attempt_count);
@@ -346,18 +346,18 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // 8. Default on_fail is "error"
+    // 8. Default if_fail is "error"
     // -----------------------------------------------------------------
     #[tokio::test]
     async fn default_on_fail_is_error() {
-        let step = make_step(); // on_fail is None -> defaults to "error"
+        let step = make_step(); // if_fail is None -> defaults to "error"
 
         let result = apply_policy(&step, DEFAULT_TIMEOUT_MS, |_| async {
             Err(anyhow::anyhow!("default policy"))
         })
         .await;
 
-        assert!(result.is_err(), "default on_fail SHALL propagate as Err");
+        assert!(result.is_err(), "default if_fail SHALL propagate as Err");
     }
 
     // -----------------------------------------------------------------
@@ -391,7 +391,7 @@ mod tests {
         step.timeout = Some(50);
         step.retry = Some(1); // 2 total attempts
         step.retry_delay = Some(10);
-        step.on_fail = Some("warn".to_string());
+        step.if_fail = Some("warn".to_string());
 
         let attempt_count = Arc::new(AtomicU32::new(0));
         let count = Arc::clone(&attempt_count);

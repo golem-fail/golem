@@ -11,7 +11,7 @@ use crate::policy::{execute_step_with_policy, StepOutcome};
 /// teardown step fails, the flow's pass/fail status is unchanged.
 #[derive(Debug)]
 pub struct TeardownResult {
-    /// Warnings from steps with explicit `on_fail = "warn"`.
+    /// Warnings from steps with explicit `if_fail = "warn"`.
     pub warnings: Vec<String>,
     /// Errors collected from steps that failed — recorded but never propagated.
     pub errors: Vec<String>,
@@ -21,7 +21,7 @@ pub struct TeardownResult {
 ///
 /// Key behaviours:
 /// - **Always runs** (caller decides whether to invoke based on `--no-teardown`).
-/// - Steps default to `on_fail = "ignore"` (opposite of regular blocks).
+/// - Steps default to `if_fail = "ignore"` (opposite of regular blocks).
 /// - Failures are collected but **never** change the test result.
 /// - All variables captured during the flow are accessible.
 /// - Multiple teardown blocks execute in document order.
@@ -59,12 +59,12 @@ pub async fn execute_teardown(
 
 /// Clone a step with teardown-specific defaults applied.
 ///
-/// In teardown context, `on_fail` defaults to `"ignore"` rather than `"error"`.
-/// If the step already has an explicit `on_fail`, it is preserved.
+/// In teardown context, `if_fail` defaults to `"ignore"` rather than `"error"`.
+/// If the step already has an explicit `if_fail`, it is preserved.
 fn apply_teardown_defaults(step: &Step) -> Step {
     let mut step = step.clone();
-    if step.on_fail.is_none() {
-        step.on_fail = Some("ignore".to_string());
+    if step.if_fail.is_none() {
+        step.if_fail = Some("ignore".to_string());
     }
     step
 }
@@ -115,7 +115,7 @@ mod tests {
             on_right_of: None,
             on_left_of: None,
             input: None,
-            on_fail: None,
+            if_fail: None,
             save_to: None,
             timeout: None,
             retry: None,
@@ -141,7 +141,7 @@ mod tests {
             on_right_of: None,
             on_left_of: None,
             input: None,
-            on_fail: None,
+            if_fail: None,
             save_to: None,
             timeout: None,
             retry: None,
@@ -181,7 +181,7 @@ mod tests {
     }
 
     // ---------------------------------------------------------------
-    // 2. Teardown continues after step failure (default on_fail="ignore")
+    // 2. Teardown continues after step failure (default if_fail="ignore")
     // ---------------------------------------------------------------
     #[tokio::test]
     async fn teardown_continues_after_step_failure() {
@@ -191,13 +191,13 @@ mod tests {
         // failing step in the middle — should not stop subsequent steps
         let blocks = vec![make_teardown_block(vec![
             make_success_step(),
-            make_failing_step(), // on_fail defaults to "ignore" in teardown
+            make_failing_step(), // if_fail defaults to "ignore" in teardown
             make_success_step(),
         ])];
 
         let result = execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
 
-        // The failing step is silently ignored (default on_fail = "ignore")
+        // The failing step is silently ignored (default if_fail = "ignore")
         assert!(result.warnings.is_empty());
         assert!(result.errors.is_empty());
 
@@ -211,7 +211,7 @@ mod tests {
     }
 
     // ---------------------------------------------------------------
-    // 3. Teardown with explicit on_fail="warn" collects warning
+    // 3. Teardown with explicit if_fail="warn" collects warning
     // ---------------------------------------------------------------
     #[tokio::test]
     async fn teardown_explicit_on_fail_warn_collects_warning() {
@@ -220,7 +220,7 @@ mod tests {
         let ctx = test_ctx(Path::new("."));
 
         let mut warn_step = make_failing_step();
-        warn_step.on_fail = Some("warn".to_string());
+        warn_step.if_fail = Some("warn".to_string());
 
         let blocks = vec![make_teardown_block(vec![
             make_success_step(),
@@ -239,7 +239,7 @@ mod tests {
     }
 
     // ---------------------------------------------------------------
-    // 4. Teardown with explicit on_fail="error" collects error but doesn't propagate
+    // 4. Teardown with explicit if_fail="error" collects error but doesn't propagate
     // ---------------------------------------------------------------
     #[tokio::test]
     async fn teardown_explicit_on_fail_error_collects_error_no_propagation() {
@@ -248,7 +248,7 @@ mod tests {
         let ctx = test_ctx(Path::new("."));
 
         let mut error_step = make_failing_step();
-        error_step.on_fail = Some("error".to_string());
+        error_step.if_fail = Some("error".to_string());
 
         let blocks = vec![make_teardown_block(vec![
             make_success_step(),
@@ -369,9 +369,9 @@ mod tests {
         let ctx = test_ctx(Path::new("."));
 
         let mut warn_step_1 = make_failing_step();
-        warn_step_1.on_fail = Some("warn".to_string());
+        warn_step_1.if_fail = Some("warn".to_string());
         let mut warn_step_2 = make_failing_step();
-        warn_step_2.on_fail = Some("warn".to_string());
+        warn_step_2.if_fail = Some("warn".to_string());
 
         let blocks = vec![
             make_teardown_block(vec![warn_step_1, make_success_step()]),
@@ -401,11 +401,11 @@ mod tests {
         let ctx = test_ctx(Path::new("."));
 
         let mut error_step_1 = make_failing_step();
-        error_step_1.on_fail = Some("error".to_string());
+        error_step_1.if_fail = Some("error".to_string());
         let mut error_step_2 = make_failing_step();
-        error_step_2.on_fail = Some("error".to_string());
+        error_step_2.if_fail = Some("error".to_string());
         let mut error_step_3 = make_failing_step();
-        error_step_3.on_fail = Some("error".to_string());
+        error_step_3.if_fail = Some("error".to_string());
 
         let blocks = vec![make_teardown_block(vec![
             error_step_1,
@@ -438,10 +438,10 @@ mod tests {
 
         // Mix of failure modes — none should cause execute_teardown to panic or return Err
         let mut error_step = make_failing_step();
-        error_step.on_fail = Some("error".to_string());
+        error_step.if_fail = Some("error".to_string());
         let mut warn_step = make_failing_step();
-        warn_step.on_fail = Some("warn".to_string());
-        let ignore_step = make_failing_step(); // on_fail defaults to "ignore" in teardown
+        warn_step.if_fail = Some("warn".to_string());
+        let ignore_step = make_failing_step(); // if_fail defaults to "ignore" in teardown
 
         let blocks = vec![make_teardown_block(vec![
             error_step,
@@ -453,11 +453,11 @@ mod tests {
         // execute_teardown always returns a TeardownResult, never an Err
         let result = execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
 
-        assert_eq!(result.errors.len(), 1, "one error from on_fail=error step");
+        assert_eq!(result.errors.len(), 1, "one error from if_fail=error step");
         assert_eq!(
             result.warnings.len(),
             1,
-            "one warning from on_fail=warn step"
+            "one warning from if_fail=warn step"
         );
 
         // The last success step should have still executed.
@@ -469,7 +469,7 @@ mod tests {
     }
 
     // ---------------------------------------------------------------
-    // 11. Teardown with explicit on_fail="ignore" also works
+    // 11. Teardown with explicit if_fail="ignore" also works
     // ---------------------------------------------------------------
     #[tokio::test]
     async fn teardown_explicit_on_fail_ignore_works() {
@@ -478,7 +478,7 @@ mod tests {
         let ctx = test_ctx(Path::new("."));
 
         let mut ignore_step = make_failing_step();
-        ignore_step.on_fail = Some("ignore".to_string());
+        ignore_step.if_fail = Some("ignore".to_string());
 
         let blocks = vec![make_teardown_block(vec![
             ignore_step,
@@ -501,44 +501,44 @@ mod tests {
     }
 
     // ---------------------------------------------------------------
-    // 12. apply_teardown_defaults sets on_fail to "ignore" when absent
+    // 12. apply_teardown_defaults sets if_fail to "ignore" when absent
     // ---------------------------------------------------------------
     #[test]
     fn apply_teardown_defaults_sets_on_fail_to_ignore() {
         let step = make_success_step();
-        assert!(step.on_fail.is_none(), "precondition: on_fail is None");
+        assert!(step.if_fail.is_none(), "precondition: if_fail is None");
 
         let effective = apply_teardown_defaults(&step);
         assert_eq!(
-            effective.on_fail.as_deref(),
+            effective.if_fail.as_deref(),
             Some("ignore"),
             "should default to ignore in teardown context"
         );
     }
 
     // ---------------------------------------------------------------
-    // 13. apply_teardown_defaults preserves explicit on_fail
+    // 13. apply_teardown_defaults preserves explicit if_fail
     // ---------------------------------------------------------------
     #[test]
     fn apply_teardown_defaults_preserves_explicit_on_fail() {
         let mut step = make_success_step();
-        step.on_fail = Some("warn".to_string());
+        step.if_fail = Some("warn".to_string());
 
         let effective = apply_teardown_defaults(&step);
         assert_eq!(
-            effective.on_fail.as_deref(),
+            effective.if_fail.as_deref(),
             Some("warn"),
-            "explicit on_fail should be preserved"
+            "explicit if_fail should be preserved"
         );
 
         let mut step2 = make_success_step();
-        step2.on_fail = Some("error".to_string());
+        step2.if_fail = Some("error".to_string());
 
         let effective2 = apply_teardown_defaults(&step2);
         assert_eq!(
-            effective2.on_fail.as_deref(),
+            effective2.if_fail.as_deref(),
             Some("error"),
-            "explicit on_fail=error should be preserved"
+            "explicit if_fail=error should be preserved"
         );
     }
 }

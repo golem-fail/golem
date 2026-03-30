@@ -14,7 +14,7 @@ use crate::policy::{execute_step_with_policy, StepOutcome};
 pub struct FlowResult {
     /// Whether the flow completed without step failures.
     pub success: bool,
-    /// Warnings collected from steps with `on_fail = "warn"`.
+    /// Warnings collected from steps with `if_fail = "warn"`.
     pub warnings: Vec<String>,
     /// The index of the step that failed (within its block), if any.
     pub failed_step: Option<usize>,
@@ -434,7 +434,7 @@ mod tests {
             on_right_of: None,
             on_left_of: None,
             input: None,
-            on_fail: None,
+            if_fail: None,
             save_to: None,
             timeout: None,
             retry: None,
@@ -460,7 +460,7 @@ mod tests {
             on_right_of: None,
             on_left_of: None,
             input: None,
-            on_fail: None,
+            if_fail: None,
             save_to: None,
             timeout: None,
             retry: None,
@@ -473,13 +473,13 @@ mod tests {
 
     fn make_warn_step() -> Step {
         let mut step = make_failing_step();
-        step.on_fail = Some("warn".to_string());
+        step.if_fail = Some("warn".to_string());
         step
     }
 
     fn make_ignore_step() -> Step {
         let mut step = make_failing_step();
-        step.on_fail = Some("ignore".to_string());
+        step.if_fail = Some("ignore".to_string());
         step
     }
 
@@ -728,7 +728,7 @@ mod tests {
     }
 
     // ---------------------------------------------------------------
-    // 9. Step with on_fail="warn" collects warning and continues
+    // 9. Step with if_fail="warn" collects warning and continues
     // ---------------------------------------------------------------
     #[tokio::test]
     async fn step_with_on_fail_warn_collects_warning() {
@@ -753,7 +753,7 @@ mod tests {
     }
 
     // ---------------------------------------------------------------
-    // 10. Step with on_fail="ignore" continues silently
+    // 10. Step with if_fail="ignore" continues silently
     // ---------------------------------------------------------------
     #[tokio::test]
     async fn step_with_on_fail_ignore_continues_silently() {

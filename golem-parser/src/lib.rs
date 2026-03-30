@@ -135,7 +135,7 @@ pub struct Step {
     /// Value to type into an input field. Used by the `type` action.
     /// Separates the typed value from `text` which is always a selector.
     pub input: Option<String>,
-    pub on_fail: Option<String>,
+    pub if_fail: Option<String>,
     pub save_to: Option<String>,
     pub timeout: Option<u64>,
     pub retry: Option<u32>,
@@ -502,7 +502,7 @@ name = "behavior"
 
 [[block.steps]]
 action = "tap"
-on_fail = "skip"
+if_fail = "skip"
 save_to = "result_var"
 timeout = 5000
 retry = 3
@@ -510,7 +510,7 @@ retry_delay = 1000
 "#;
         let flow = parse_flow(toml_str).expect("behavior fields should parse");
         let step = &flow.block[0].steps[0];
-        assert_eq!(step.on_fail.as_deref(), Some("skip"));
+        assert_eq!(step.if_fail.as_deref(), Some("skip"));
         assert_eq!(step.save_to.as_deref(), Some("result_var"));
         assert_eq!(step.timeout, Some(5000));
         assert_eq!(step.retry, Some(3));

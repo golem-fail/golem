@@ -1,4 +1,4 @@
-//! Integration tests for step policies (on_fail, retry, timeout) and screenshot
+//! Integration tests for step policies (if_fail, retry, timeout) and screenshot
 //! capture paths.
 //!
 //! These tests exercise the interaction between `golem_runner::policy`,
@@ -92,23 +92,23 @@ fn assert_success(result: &FlowResult) {
 }
 
 // ===========================================================================
-// Policy tests: on_fail behaviour through full flow execution
+// Policy tests: if_fail behaviour through full flow execution
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-// 1. on_fail="error" propagates error and stops flow
+// 1. if_fail="error" propagates error and stops flow
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn on_fail_error_propagates_and_stops_flow() {
     let toml = r#"
 [flow]
-name = "on_fail error test"
+name = "if_fail error test"
 
 [[block]]
 name = "failing_block"
 steps = [
   { action = "screenshot" },
-  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "error" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", if_fail = "error" },
   { action = "screenshot" },
 ]
 "#;
@@ -121,7 +121,7 @@ steps = [
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
-    assert!(!result.success, "flow SHALL fail with on_fail=error");
+    assert!(!result.success, "flow SHALL fail with if_fail=error");
     assert_eq!(result.failed_step, Some(1), "second step SHALL be the failure");
     assert_eq!(
         result.failed_block,
@@ -139,19 +139,19 @@ steps = [
 }
 
 // ---------------------------------------------------------------------------
-// 2. on_fail="warn" collects warning and continues
+// 2. if_fail="warn" collects warning and continues
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn on_fail_warn_collects_warning_and_continues() {
     let toml = r#"
 [flow]
-name = "on_fail warn test"
+name = "if_fail warn test"
 
 [[block]]
 name = "warn_block"
 steps = [
   { action = "screenshot" },
-  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "warn" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", if_fail = "warn" },
   { action = "screenshot" },
 ]
 "#;
@@ -179,19 +179,19 @@ steps = [
 }
 
 // ---------------------------------------------------------------------------
-// 3. on_fail="ignore" silently continues
+// 3. if_fail="ignore" silently continues
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn on_fail_ignore_silently_continues() {
     let toml = r#"
 [flow]
-name = "on_fail ignore test"
+name = "if_fail ignore test"
 
 [[block]]
 name = "ignore_block"
 steps = [
   { action = "screenshot" },
-  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "ignore" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", if_fail = "ignore" },
   { action = "screenshot" },
 ]
 "#;
@@ -227,9 +227,9 @@ name = "warn + error combined"
 [[block]]
 name = "mixed_block"
 steps = [
-  { action = "tap", on_text = "MISSING_1", on_fail = "warn" },
+  { action = "tap", on_text = "MISSING_1", if_fail = "warn" },
   { action = "screenshot" },
-  { action = "tap", on_text = "MISSING_2", on_fail = "error" },
+  { action = "tap", on_text = "MISSING_2", if_fail = "error" },
   { action = "screenshot" },
 ]
 "#;
@@ -258,13 +258,13 @@ steps = [
 }
 
 // ---------------------------------------------------------------------------
-// 5. Default on_fail is "error" (no on_fail field specified)
+// 5. Default if_fail is "error" (no if_fail field specified)
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn default_on_fail_is_error() {
     let toml = r#"
 [flow]
-name = "default on_fail test"
+name = "default if_fail test"
 
 [[block]]
 name = "default_block"
@@ -284,7 +284,7 @@ steps = [
 
     assert!(
         !result.success,
-        "default on_fail should be error, so flow fails"
+        "default if_fail should be error, so flow fails"
     );
     assert_eq!(result.failed_step, Some(0));
 
@@ -311,7 +311,7 @@ name = "retry exhausted test"
 [[block]]
 name = "retry_block"
 steps = [
-  { action = "tap", on_text = "NONEXISTENT_ELEMENT", retry = 2, retry_delay = 10, on_fail = "warn" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", retry = 2, retry_delay = 10, if_fail = "warn" },
   { action = "screenshot" },
 ]
 "#;
@@ -328,7 +328,7 @@ steps = [
     assert_eq!(
         result.warnings.len(),
         1,
-        "after exhausting retries, on_fail=warn should produce a warning"
+        "after exhausting retries, if_fail=warn should produce a warning"
     );
 
     // Count includes: 1 explicit screenshot step + 1 failure capture = 2
@@ -338,7 +338,7 @@ steps = [
 }
 
 // ---------------------------------------------------------------------------
-// 7. Step fails all retries with on_fail="error" -> error propagates
+// 7. Step fails all retries with if_fail="error" -> error propagates
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn retry_exhausted_with_error_propagates() {
@@ -349,7 +349,7 @@ name = "retry error test"
 [[block]]
 name = "retry_error_block"
 steps = [
-  { action = "tap", on_text = "NONEXISTENT_ELEMENT", retry = 1, retry_delay = 10, on_fail = "error" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", retry = 1, retry_delay = 10, if_fail = "error" },
   { action = "screenshot" },
 ]
 "#;
@@ -382,7 +382,7 @@ name = "retry=0 test"
 [[block]]
 name = "no_retry_block"
 steps = [
-  { action = "tap", on_text = "NONEXISTENT_ELEMENT", retry = 0, on_fail = "warn" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", retry = 0, if_fail = "warn" },
   { action = "screenshot" },
 ]
 "#;
@@ -399,7 +399,7 @@ steps = [
     assert_eq!(
         result.warnings.len(),
         1,
-        "single attempt fails, on_fail=warn produces warning"
+        "single attempt fails, if_fail=warn produces warning"
     );
 }
 
@@ -425,7 +425,7 @@ name = "timeout test"
 [[block]]
 name = "timeout_block"
 steps = [
-  { action = "tap", on_text = "NONEXISTENT_ELEMENT", timeout = 50, on_fail = "warn" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", timeout = 50, if_fail = "warn" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -545,7 +545,7 @@ fn screenshot_path_sanitizes_special_characters() {
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-// 14. on_fail="warn" in flow -> warning collected -> can build screenshot
+// 14. if_fail="warn" in flow -> warning collected -> can build screenshot
 //     path for the warning step
 // ---------------------------------------------------------------------------
 #[tokio::test]
@@ -558,7 +558,7 @@ name = "screenshot path flow"
 name = "login_screen"
 steps = [
   { action = "screenshot" },
-  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "warn" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", if_fail = "warn" },
   { action = "screenshot" },
 ]
 "#;
@@ -597,7 +597,7 @@ steps = [
 }
 
 // ---------------------------------------------------------------------------
-// 15. on_fail="error" -> can build screenshot path for the error step
+// 15. if_fail="error" -> can build screenshot path for the error step
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn error_outcome_feeds_screenshot_path_generation() {
@@ -659,13 +659,13 @@ name = "multi warn flow"
 [[block]]
 name = "block_a"
 steps = [
-  { action = "tap", on_text = "MISSING_1", on_fail = "warn" },
+  { action = "tap", on_text = "MISSING_1", if_fail = "warn" },
 ]
 
 [[block]]
 name = "block_b"
 steps = [
-  { action = "tap", on_text = "MISSING_2", on_fail = "warn" },
+  { action = "tap", on_text = "MISSING_2", if_fail = "warn" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -704,7 +704,7 @@ steps = [
 }
 
 // ---------------------------------------------------------------------------
-// 17. on_fail="ignore" in multi-block flow: no warnings, no failures,
+// 17. if_fail="ignore" in multi-block flow: no warnings, no failures,
 //     and ignore steps do not affect subsequent blocks
 // ---------------------------------------------------------------------------
 #[tokio::test]
@@ -716,14 +716,14 @@ name = "ignore multi-block"
 [[block]]
 name = "block_1"
 steps = [
-  { action = "tap", on_text = "MISSING", on_fail = "ignore" },
+  { action = "tap", on_text = "MISSING", if_fail = "ignore" },
   { action = "screenshot" },
 ]
 
 [[block]]
 name = "block_2"
 steps = [
-  { action = "tap", on_text = "Also_Missing", on_fail = "ignore" },
+  { action = "tap", on_text = "Also_Missing", if_fail = "ignore" },
   { action = "screenshot" },
 ]
 
@@ -758,7 +758,7 @@ steps = [
 }
 
 // ---------------------------------------------------------------------------
-// 18. Retry with on_fail="ignore" — retries exhaust, then silently ignored
+// 18. Retry with if_fail="ignore" — retries exhaust, then silently ignored
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn retry_with_on_fail_ignore_silently_continues() {
@@ -769,7 +769,7 @@ name = "retry ignore test"
 [[block]]
 name = "retry_ignore_block"
 steps = [
-  { action = "tap", on_text = "NONEXISTENT", retry = 1, retry_delay = 10, on_fail = "ignore" },
+  { action = "tap", on_text = "NONEXISTENT", retry = 1, retry_delay = 10, if_fail = "ignore" },
   { action = "screenshot" },
 ]
 "#;
@@ -785,7 +785,7 @@ steps = [
     assert_success(&result);
     assert!(
         result.warnings.is_empty(),
-        "on_fail=ignore should not produce warnings even after retries"
+        "if_fail=ignore should not produce warnings even after retries"
     );
 
     let calls = driver.get_calls();
@@ -901,7 +901,7 @@ async fn capture_failure_screenshot_disabled_returns_error() {
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-// 22. on_fail="error" triggers screenshot capture via driver
+// 22. if_fail="error" triggers screenshot capture via driver
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn on_fail_error_triggers_screenshot_capture() {
@@ -912,7 +912,7 @@ name = "screenshot on error"
 [[block]]
 name = "fail_block"
 steps = [
-  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "error" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", if_fail = "error" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -939,7 +939,7 @@ steps = [
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
-    assert!(!result.success, "flow SHALL fail with on_fail=error");
+    assert!(!result.success, "flow SHALL fail with if_fail=error");
 
     // The driver should have been called for a screenshot (in addition to get_hierarchy)
     let calls = driver.get_calls();
@@ -952,7 +952,7 @@ steps = [
 }
 
 // ---------------------------------------------------------------------------
-// 23. on_fail="warn" triggers screenshot capture via driver
+// 23. if_fail="warn" triggers screenshot capture via driver
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn on_fail_warn_triggers_screenshot_capture() {
@@ -963,7 +963,7 @@ name = "screenshot on warn"
 [[block]]
 name = "warn_block"
 steps = [
-  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "warn" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", if_fail = "warn" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -990,7 +990,7 @@ steps = [
         .await
         .expect("execute_flow should not error");
 
-    assert!(result.success, "flow SHALL succeed with on_fail=warn");
+    assert!(result.success, "flow SHALL succeed with if_fail=warn");
     assert_eq!(result.warnings.len(), 1, "SHALL collect one warning");
 
     let calls = driver.get_calls();
@@ -1003,7 +1003,7 @@ steps = [
 }
 
 // ---------------------------------------------------------------------------
-// 24. on_fail="ignore" does NOT trigger screenshot capture
+// 24. if_fail="ignore" does NOT trigger screenshot capture
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn on_fail_ignore_does_not_trigger_screenshot_capture() {
@@ -1014,7 +1014,7 @@ name = "no screenshot on ignore"
 [[block]]
 name = "ignore_block"
 steps = [
-  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "ignore" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", if_fail = "ignore" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -1041,7 +1041,7 @@ steps = [
         .await
         .expect("execute_flow should not error");
 
-    assert!(result.success, "flow SHALL succeed with on_fail=ignore");
+    assert!(result.success, "flow SHALL succeed with if_fail=ignore");
 
     let calls = driver.get_calls();
     let screenshot_calls: Vec<_> = calls.iter().filter(|c| c.0 == "screenshot").collect();
@@ -1064,7 +1064,7 @@ name = "screenshot fail resilient"
 [[block]]
 name = "fail_block"
 steps = [
-  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "error" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", if_fail = "error" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -1116,7 +1116,7 @@ name = "disk write flow"
 [[block]]
 name = "disk_block"
 steps = [
-  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "error" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", if_fail = "error" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -1185,7 +1185,7 @@ name = "disabled capture flow"
 [[block]]
 name = "disabled_block"
 steps = [
-  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "error" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", if_fail = "error" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -1210,7 +1210,7 @@ steps = [
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
-    assert!(!result.success, "flow SHALL fail with on_fail=error");
+    assert!(!result.success, "flow SHALL fail with if_fail=error");
 
     // No screenshot calls should have been made
     let calls = driver.get_calls();

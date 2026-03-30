@@ -31,7 +31,7 @@ steps = [
   { action = "tap", on_text = "OK" },
 
   # wait_not: wait for the alert to disappear after dismissal
-  { action = "wait_not", on_text = "Show Alert", timeout = 5000, on_fail = "skip" },
+  { action = "wait_not", on_text = "Show Alert", timeout = 5000, if_fail = "skip" },
 
   # Wait for the counter to show initial value
   { action = "wait", on_text = "Counter", timeout = 3000 },

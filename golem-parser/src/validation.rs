@@ -120,11 +120,11 @@ pub fn validate_flow(flow: &FlowFile) -> Vec<ValidationError> {
                 });
             }
 
-            // 6. Invalid on_fail
-            if let Some(ref on_fail) = step.on_fail {
-                if !VALID_ON_FAIL.contains(&on_fail.as_str()) {
+            // 6. Invalid if_fail
+            if let Some(ref if_fail) = step.if_fail {
+                if !VALID_ON_FAIL.contains(&if_fail.as_str()) {
                     errors.push(ValidationError {
-                        message: format!("Invalid on_fail value '{on_fail}', expected one of: error, warn, ignore"),
+                        message: format!("Invalid if_fail value '{if_fail}', expected one of: error, warn, ignore"),
                         kind: ValidationErrorKind::InvalidOnFail,
                     });
                 }
@@ -320,18 +320,18 @@ name = "login"
         assert!(errors[0].message.contains("login"));
     }
 
-    // 7. Invalid on_fail "crash"
+    // 7. Invalid if_fail "crash"
     #[test]
     fn invalid_on_fail() {
         let toml_str = r#"
 [flow]
-name = "bad on_fail"
+name = "bad if_fail"
 
 [[block]]
 
 [[block.steps]]
 action = "tap"
-on_fail = "crash"
+if_fail = "crash"
 "#;
         let flow = parse_flow(toml_str).expect("should parse");
         let errors = validate_flow(&flow);
@@ -377,7 +377,7 @@ name = "first"
 
 [[block.steps]]
 action = "explode"
-on_fail = "crash"
+if_fail = "crash"
 
 [[block]]
 name = "first"

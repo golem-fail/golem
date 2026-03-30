@@ -2,7 +2,7 @@
 //!
 //! These tests exercise the full pipeline: parse TOML -> execute flow with mock
 //! driver -> verify results. They cover linear flows, branching, loops, variable
-//! interpolation, fake data generation, teardown, and on_fail policies.
+//! interpolation, fake data generation, teardown, and if_fail policies.
 
 use std::path::Path;
 use std::sync::LazyLock;
@@ -478,7 +478,7 @@ steps = [
 }
 
 // ---------------------------------------------------------------------------
-// 8. Step warning doesn't fail flow: on_fail="warn" step fails, flow continues
+// 8. Step warning doesn't fail flow: if_fail="warn" step fails, flow continues
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_on_fail_warn_continues_flow() {
@@ -490,7 +490,7 @@ name = "warn test"
 name = "block_with_warning"
 steps = [
   { action = "screenshot" },
-  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "warn" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", if_fail = "warn" },
   { action = "screenshot" },
 ]
 "#;
@@ -525,7 +525,7 @@ steps = [
 }
 
 // ---------------------------------------------------------------------------
-// 9. Step ignore continues: on_fail="ignore" step fails, flow continues silently
+// 9. Step ignore continues: if_fail="ignore" step fails, flow continues silently
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn test_on_fail_ignore_continues_silently() {
@@ -537,7 +537,7 @@ name = "ignore test"
 name = "block_with_ignore"
 steps = [
   { action = "screenshot" },
-  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "ignore" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", if_fail = "ignore" },
   { action = "screenshot" },
 ]
 "#;
@@ -707,15 +707,15 @@ name = "multi-warn test"
 [[block]]
 name = "b1"
 steps = [
-  { action = "tap", on_text = "MISSING_1", on_fail = "warn" },
+  { action = "tap", on_text = "MISSING_1", if_fail = "warn" },
   { action = "screenshot" },
-  { action = "tap", on_text = "MISSING_2", on_fail = "warn" },
+  { action = "tap", on_text = "MISSING_2", if_fail = "warn" },
 ]
 
 [[block]]
 name = "b2"
 steps = [
-  { action = "tap", on_text = "MISSING_3", on_fail = "warn" },
+  { action = "tap", on_text = "MISSING_3", if_fail = "warn" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -822,7 +822,7 @@ name = "empty flow"
 }
 
 // ---------------------------------------------------------------------------
-// 16. Parse + execute flow with teardown that has failing steps (on_fail
+// 16. Parse + execute flow with teardown that has failing steps (if_fail
 //     defaults to "ignore" in teardown context)
 // ---------------------------------------------------------------------------
 #[tokio::test]
@@ -856,7 +856,7 @@ steps = [
     let teardown_result =
         execute_teardown(&flow.teardown, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
 
-    // Failing step in teardown defaults to on_fail="ignore" so it's silent
+    // Failing step in teardown defaults to if_fail="ignore" so it's silent
     assert!(teardown_result.warnings.is_empty());
     assert!(teardown_result.errors.is_empty());
 

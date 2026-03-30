@@ -42,5 +42,5 @@ steps = [
   # assert_visible with checked: scroll to toggles, toggle checkbox and verify
   { action = "tap", on_text = "agree-checkbox", auto_scroll = true },
   # WebView checkboxes don't reliably propagate checked state to iOS accessibility
-  { action = "assert_visible", on_text = "agree-checkbox", on_checked = true, on_fail = "warn" },
+  { action = "assert_visible", on_text = "agree-checkbox", on_checked = true, if_fail = "warn" },
 ]

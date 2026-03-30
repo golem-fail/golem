@@ -127,7 +127,7 @@ mod tests {
             on_right_of: None,
             on_left_of: None,
             input: None,
-            on_fail: None,
+            if_fail: None,
             save_to: None,
             timeout: None,
             retry: None,
