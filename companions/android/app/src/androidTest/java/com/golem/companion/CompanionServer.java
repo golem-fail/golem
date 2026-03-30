@@ -129,6 +129,12 @@ public class CompanionServer {
                         handleGetAlert(out);
                     }
                     break;
+                case "/launch":
+                    handleLaunch(out, body);
+                    break;
+                case "/stop":
+                    handleStop(out, body);
+                    break;
                 default:
                     sendJson(out, 404, new JSONObject().put("error", "not found"));
                     break;
@@ -354,6 +360,28 @@ public class CompanionServer {
             }
         }
         return sb.toString();
+    }
+
+    private void handleLaunch(OutputStream out, JSONObject body) throws Exception {
+        String packageName = body != null ? body.optString("bundle_id", "") : "";
+        if (packageName.isEmpty()) {
+            sendJson(out, 400, new JSONObject().put("error", "missing bundle_id"));
+            return;
+        }
+        String cmd = "am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER "
+                + packageName + "/.MainActivity";
+        uiAutomation.executeShellCommand(cmd);
+        sendJson(out, 200, new JSONObject().put("status", "ok"));
+    }
+
+    private void handleStop(OutputStream out, JSONObject body) throws Exception {
+        String packageName = body != null ? body.optString("bundle_id", "") : "";
+        if (packageName.isEmpty()) {
+            sendJson(out, 400, new JSONObject().put("error", "missing bundle_id"));
+            return;
+        }
+        uiAutomation.executeShellCommand("am force-stop " + packageName);
+        sendJson(out, 200, new JSONObject().put("status", "ok"));
     }
 
     private void sendJson(OutputStream out, int status, JSONObject json) throws IOException {

@@ -162,13 +162,14 @@ impl PlatformDriver for IosDriver {
     }
 
     async fn launch_app(&self, bundle_id: &str) -> Result<()> {
-        self.simctl(&["launch", &self.device_id, bundle_id]).await?;
+        let body = serde_json::json!({ "bundle_id": bundle_id }).to_string();
+        self.client.post_json("/launch", &body).await?;
         Ok(())
     }
 
     async fn stop_app(&self, bundle_id: &str) -> Result<()> {
-        self.simctl(&["terminate", &self.device_id, bundle_id])
-            .await?;
+        let body = serde_json::json!({ "bundle_id": bundle_id }).to_string();
+        self.client.post_json("/stop", &body).await?;
         Ok(())
     }
 

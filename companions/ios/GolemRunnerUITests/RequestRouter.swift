@@ -33,6 +33,10 @@ final class RequestRouter {
             return handleGetAlert(query: query)
         case ("POST", "/alert"):
             return handlePostAlert(body: body, query: query)
+        case ("POST", "/launch"):
+            return handleLaunch(body: body, query: query)
+        case ("POST", "/stop"):
+            return handleStop(body: body, query: query)
         default:
             return .error("Not found: \(method) \(route)", status: 404)
         }
@@ -249,5 +253,29 @@ final class RequestRouter {
         } else {
             return .error("Alert not found or button not found", status: 400)
         }
+    }
+
+    private func handleLaunch(body: Data?, query: [String: String]) -> HTTPResponse {
+        guard let params = parseBody(body),
+              let bundleId = params["bundle_id"] as? String, !bundleId.isEmpty else {
+            return .error("Missing bundle_id", status: 400)
+        }
+        let application = XCUIApplication(bundleIdentifier: bundleId)
+        DispatchQueue.main.sync {
+            application.launch()
+        }
+        return .json(["status": "ok"])
+    }
+
+    private func handleStop(body: Data?, query: [String: String]) -> HTTPResponse {
+        guard let params = parseBody(body),
+              let bundleId = params["bundle_id"] as? String, !bundleId.isEmpty else {
+            return .error("Missing bundle_id", status: 400)
+        }
+        let application = XCUIApplication(bundleIdentifier: bundleId)
+        DispatchQueue.main.sync {
+            application.terminate()
+        }
+        return .json(["status": "ok"])
     }
 }
