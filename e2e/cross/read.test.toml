@@ -18,24 +18,24 @@ type = "phone"
 name = "read_and_save"
 steps = [
   # Read the initial counter value and save it to a variable
-  { action = "read", below = "Counter", index = 0, save_to = "initial_count" },
+  { action = "read", on_below = "Counter", on_index = 0, save_to = "initial_count" },
 
   # Increment the counter twice
-  { action = "tap", text = "Increment" },
-  { action = "tap", text = "Increment" },
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Increment" },
 
   # Read the updated counter value
-  { action = "read", below = "Counter", index = 0, save_to = "updated_count" },
+  { action = "read", on_below = "Counter", on_index = 0, save_to = "updated_count" },
 
   # Read the orientation label (off-screen, needs scroll)
-  { action = "read", right_of = "Orientation:", save_to = "device_orientation", auto_scroll = true },
+  { action = "read", on_right_of = "Orientation:", save_to = "device_orientation", auto_scroll = true },
 
   # Read the theme label
-  { action = "read", right_of = "Theme:", save_to = "current_theme", auto_scroll = true },
+  { action = "read", on_right_of = "Theme:", save_to = "current_theme", auto_scroll = true },
 
   # Read text from a list item
-  { action = "read", text = "Item 0", save_to = "first_item_text" },
+  { action = "read", on_text = "Item 0", save_to = "first_item_text" },
 
   # Verify the counter was updated correctly
-  { action = "assert_visible", text = "2", below = "Counter" },
+  { action = "assert_visible", on_text = "2", on_below = "Counter" },
 ]

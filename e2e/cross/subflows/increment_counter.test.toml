@@ -7,6 +7,6 @@ app_lifecycle = "manual"
 [[block]]
 name = "increment"
 steps = [
-  { action = "tap", text = "Increment" },
-  { action = "read", below = "Counter", index = 0, save_to = "counter_value" },
+  { action = "tap", on_text = "Increment" },
+  { action = "read", on_below = "Counter", on_index = 0, save_to = "counter_value" },
 ]

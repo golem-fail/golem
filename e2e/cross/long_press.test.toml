@@ -18,11 +18,11 @@ type = "phone"
 name = "long_press_tests"
 steps = [
   # Long press on list item with default duration (1000ms)
-  { action = "long_press", text = "list-item-0" },
+  { action = "long_press", on_text = "list-item-0" },
 
   # Long press on submit button with custom duration
-  { action = "long_press", text = "Submit", duration = 2000 },
+  { action = "long_press", on_text = "Submit", duration = 2000 },
 
   # Long press on a carousel card
-  { action = "long_press", text = "carousel-item-0", duration = 1500 },
+  { action = "long_press", on_text = "carousel-item-0", duration = 1500 },
 ]

@@ -171,16 +171,16 @@ fn remap_step_vars(step: &Step, vars: &HashMap<String, String>) -> Step {
 
     Step {
         action: remap_string(&step.action, vars),
-        text: step.text.as_ref().map(|s| remap_string(s, vars)),
-        accessibility_id: step.accessibility_id.as_ref().map(|s| remap_string(s, vars)),
-        index: step.index,
-        enabled: step.enabled,
-        checked: step.checked,
-        clickable: step.clickable,
-        below: step.below.as_ref().map(|s| remap_string(s, vars)),
-        above: step.above.as_ref().map(|s| remap_string(s, vars)),
-        right_of: step.right_of.as_ref().map(|s| remap_string(s, vars)),
-        left_of: step.left_of.as_ref().map(|s| remap_string(s, vars)),
+        on_text: step.on_text.as_ref().map(|s| remap_string(s, vars)),
+        on_accessibility_id: step.on_accessibility_id.as_ref().map(|s| remap_string(s, vars)),
+        on_index: step.on_index,
+        on_enabled: step.on_enabled,
+        on_checked: step.on_checked,
+        on_clickable: step.on_clickable,
+        on_below: step.on_below.as_ref().map(|s| remap_string(s, vars)),
+        on_above: step.on_above.as_ref().map(|s| remap_string(s, vars)),
+        on_right_of: step.on_right_of.as_ref().map(|s| remap_string(s, vars)),
+        on_left_of: step.on_left_of.as_ref().map(|s| remap_string(s, vars)),
         input: step.input.as_ref().map(|s| remap_string(s, vars)),
         on_fail: step.on_fail.clone(),
         save_to: step.save_to.clone(),
@@ -265,16 +265,16 @@ mod tests {
         }
         Step {
             action: "load_mixin".to_string(),
-            text: None,
-            accessibility_id: None,
-            index: None,
-            enabled: None,
-            checked: None,
-            clickable: None,
-            below: None,
-            above: None,
-            right_of: None,
-            left_of: None,
+            on_text: None,
+            on_accessibility_id: None,
+            on_index: None,
+            on_enabled: None,
+            on_checked: None,
+            on_clickable: None,
+            on_below: None,
+            on_above: None,
+            on_right_of: None,
+            on_left_of: None,
             input: None,
             on_fail: None,
             save_to: None,
@@ -291,16 +291,16 @@ mod tests {
     fn simple_step(action: &str) -> Step {
         Step {
             action: action.to_string(),
-            text: None,
-            accessibility_id: None,
-            index: None,
-            enabled: None,
-            checked: None,
-            clickable: None,
-            below: None,
-            above: None,
-            right_of: None,
-            left_of: None,
+            on_text: None,
+            on_accessibility_id: None,
+            on_index: None,
+            on_enabled: None,
+            on_checked: None,
+            on_clickable: None,
+            on_below: None,
+            on_above: None,
+            on_right_of: None,
+            on_left_of: None,
             input: None,
             on_fail: None,
             save_to: None,
@@ -328,11 +328,11 @@ mod tests {
             r#"
 [[step]]
 action = "tap"
-accessibility_id = "email-input"
+on_accessibility_id = "email-input"
 
 [[step]]
 action = "type"
-text = "hello"
+on_text = "hello"
 "#,
         );
 
@@ -342,9 +342,9 @@ text = "hello"
 
         assert_eq!(expanded.len(), 2);
         assert_eq!(expanded[0].action, "tap");
-        assert_eq!(expanded[0].accessibility_id.as_deref(), Some("email-input"));
+        assert_eq!(expanded[0].on_accessibility_id.as_deref(), Some("email-input"));
         assert_eq!(expanded[1].action, "type");
-        assert_eq!(expanded[1].text.as_deref(), Some("hello"));
+        assert_eq!(expanded[1].on_text.as_deref(), Some("hello"));
     }
 
     // ---------------------------------------------------------------
@@ -362,7 +362,7 @@ text = "hello"
             r#"
 [[step]]
 action = "type"
-text = "${email}"
+on_text = "${email}"
 "#,
         );
 
@@ -374,7 +374,7 @@ text = "${email}"
             expand_mixins(&steps, flow_dir, project_root).expect("expansion should succeed");
 
         assert_eq!(expanded.len(), 1);
-        assert_eq!(expanded[0].text.as_deref(), Some("${user.email}"));
+        assert_eq!(expanded[0].on_text.as_deref(), Some("${user.email}"));
     }
 
     // ---------------------------------------------------------------
@@ -392,13 +392,13 @@ text = "${email}"
             r#"
 [[step]]
 action = "type"
-accessibility_id = "${email_field}"
-text = "${email}"
+on_accessibility_id = "${email_field}"
+on_text = "${email}"
 
 [[step]]
 action = "type"
-accessibility_id = "${password_field}"
-text = "${password}"
+on_accessibility_id = "${password_field}"
+on_text = "${password}"
 "#,
         );
 
@@ -413,10 +413,10 @@ text = "${password}"
             expand_mixins(&steps, flow_dir, project_root).expect("expansion should succeed");
 
         assert_eq!(expanded.len(), 2);
-        assert_eq!(expanded[0].accessibility_id.as_deref(), Some("login-email"));
-        assert_eq!(expanded[0].text.as_deref(), Some("alice@example.com"));
-        assert_eq!(expanded[1].accessibility_id.as_deref(), Some("login-password"));
-        assert_eq!(expanded[1].text.as_deref(), Some("secret123"));
+        assert_eq!(expanded[0].on_accessibility_id.as_deref(), Some("login-email"));
+        assert_eq!(expanded[0].on_text.as_deref(), Some("alice@example.com"));
+        assert_eq!(expanded[1].on_accessibility_id.as_deref(), Some("login-password"));
+        assert_eq!(expanded[1].on_text.as_deref(), Some("secret123"));
     }
 
     // ---------------------------------------------------------------
@@ -434,7 +434,7 @@ text = "${password}"
             r#"
 [[step]]
 action = "type"
-text = "${greeting} ${name}"
+on_text = "${greeting} ${name}"
 "#,
         );
 
@@ -446,7 +446,7 @@ text = "${greeting} ${name}"
         let expanded =
             expand_mixins(&steps, flow_dir, project_root).expect("expansion should succeed");
 
-        assert_eq!(expanded[0].text.as_deref(), Some("Hello ${name}"));
+        assert_eq!(expanded[0].on_text.as_deref(), Some("Hello ${name}"));
     }
 
     // ---------------------------------------------------------------
@@ -464,7 +464,7 @@ text = "${greeting} ${name}"
             r#"
 [[step]]
 action = "read"
-accessibility_id = "price-label"
+on_accessibility_id = "price-label"
 save_to = "captured_price"
 "#,
         );
@@ -492,7 +492,7 @@ save_to = "captured_price"
             r#"
 [[step]]
 action = "tap"
-text = "Login"
+on_text = "Login"
 "#,
         );
 
@@ -502,7 +502,7 @@ text = "Login"
             r#"
 [[step]]
 action = "tap"
-text = "Logout"
+on_text = "Logout"
 "#,
         );
 
@@ -520,10 +520,10 @@ text = "Logout"
         assert_eq!(expanded.len(), 5);
         assert_eq!(expanded[0].action, "screenshot");
         assert_eq!(expanded[1].action, "tap");
-        assert_eq!(expanded[1].text.as_deref(), Some("Login"));
+        assert_eq!(expanded[1].on_text.as_deref(), Some("Login"));
         assert_eq!(expanded[2].action, "wait");
         assert_eq!(expanded[3].action, "tap");
-        assert_eq!(expanded[3].text.as_deref(), Some("Logout"));
+        assert_eq!(expanded[3].on_text.as_deref(), Some("Logout"));
         assert_eq!(expanded[4].action, "screenshot");
     }
 
@@ -567,7 +567,7 @@ text = "Logout"
             r#"
 [[step]]
 action = "tap"
-text = "Maybe"
+on_text = "Maybe"
 on_fail = "ignore"
 "#,
         );
@@ -688,7 +688,7 @@ action = "tap"
             r#"
 [[step]]
 action = "type"
-text = "${some_var}"
+on_text = "${some_var}"
 "#,
         );
 
@@ -698,7 +698,7 @@ text = "${some_var}"
 
         assert_eq!(expanded.len(), 1);
         assert_eq!(
-            expanded[0].text.as_deref(),
+            expanded[0].on_text.as_deref(),
             Some("${some_var}"),
             "Without vars mapping, variables should pass through unchanged"
         );
@@ -719,15 +719,15 @@ text = "${some_var}"
             r#"
 [[step]]
 action = "type"
-text = "mixin-step-1"
+on_text = "mixin-step-1"
 
 [[step]]
 action = "tap"
-text = "mixin-step-2"
+on_text = "mixin-step-2"
 
 [[step]]
 action = "swipe"
-text = "mixin-step-3"
+on_text = "mixin-step-3"
 "#,
         );
 
@@ -748,8 +748,8 @@ text = "mixin-step-3"
         );
 
         // Verify mixin step content preserved
-        assert_eq!(expanded[1].text.as_deref(), Some("mixin-step-1"));
-        assert_eq!(expanded[2].text.as_deref(), Some("mixin-step-2"));
-        assert_eq!(expanded[3].text.as_deref(), Some("mixin-step-3"));
+        assert_eq!(expanded[1].on_text.as_deref(), Some("mixin-step-1"));
+        assert_eq!(expanded[2].on_text.as_deref(), Some("mixin-step-2"));
+        assert_eq!(expanded[3].on_text.as_deref(), Some("mixin-step-3"));
     }
 }

@@ -108,7 +108,7 @@ name = "on_fail error test"
 name = "failing_block"
 steps = [
   { action = "screenshot" },
-  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "error" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "error" },
   { action = "screenshot" },
 ]
 "#;
@@ -151,7 +151,7 @@ name = "on_fail warn test"
 name = "warn_block"
 steps = [
   { action = "screenshot" },
-  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "warn" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "warn" },
   { action = "screenshot" },
 ]
 "#;
@@ -191,7 +191,7 @@ name = "on_fail ignore test"
 name = "ignore_block"
 steps = [
   { action = "screenshot" },
-  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "ignore" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "ignore" },
   { action = "screenshot" },
 ]
 "#;
@@ -227,9 +227,9 @@ name = "warn + error combined"
 [[block]]
 name = "mixed_block"
 steps = [
-  { action = "tap", text = "MISSING_1", on_fail = "warn" },
+  { action = "tap", on_text = "MISSING_1", on_fail = "warn" },
   { action = "screenshot" },
-  { action = "tap", text = "MISSING_2", on_fail = "error" },
+  { action = "tap", on_text = "MISSING_2", on_fail = "error" },
   { action = "screenshot" },
 ]
 "#;
@@ -269,7 +269,7 @@ name = "default on_fail test"
 [[block]]
 name = "default_block"
 steps = [
-  { action = "tap", text = "NONEXISTENT_ELEMENT" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT" },
   { action = "screenshot" },
 ]
 "#;
@@ -311,7 +311,7 @@ name = "retry exhausted test"
 [[block]]
 name = "retry_block"
 steps = [
-  { action = "tap", text = "NONEXISTENT_ELEMENT", retry = 2, retry_delay = 10, on_fail = "warn" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", retry = 2, retry_delay = 10, on_fail = "warn" },
   { action = "screenshot" },
 ]
 "#;
@@ -349,7 +349,7 @@ name = "retry error test"
 [[block]]
 name = "retry_error_block"
 steps = [
-  { action = "tap", text = "NONEXISTENT_ELEMENT", retry = 1, retry_delay = 10, on_fail = "error" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", retry = 1, retry_delay = 10, on_fail = "error" },
   { action = "screenshot" },
 ]
 "#;
@@ -382,7 +382,7 @@ name = "retry=0 test"
 [[block]]
 name = "no_retry_block"
 steps = [
-  { action = "tap", text = "NONEXISTENT_ELEMENT", retry = 0, on_fail = "warn" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", retry = 0, on_fail = "warn" },
   { action = "screenshot" },
 ]
 "#;
@@ -425,7 +425,7 @@ name = "timeout test"
 [[block]]
 name = "timeout_block"
 steps = [
-  { action = "tap", text = "NONEXISTENT_ELEMENT", timeout = 50, on_fail = "warn" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", timeout = 50, on_fail = "warn" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -558,7 +558,7 @@ name = "screenshot path flow"
 name = "login_screen"
 steps = [
   { action = "screenshot" },
-  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "warn" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "warn" },
   { action = "screenshot" },
 ]
 "#;
@@ -609,7 +609,7 @@ name = "error capture flow"
 name = "auth_block"
 steps = [
   { action = "screenshot" },
-  { action = "tap", text = "NONEXISTENT_ELEMENT" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -659,13 +659,13 @@ name = "multi warn flow"
 [[block]]
 name = "block_a"
 steps = [
-  { action = "tap", text = "MISSING_1", on_fail = "warn" },
+  { action = "tap", on_text = "MISSING_1", on_fail = "warn" },
 ]
 
 [[block]]
 name = "block_b"
 steps = [
-  { action = "tap", text = "MISSING_2", on_fail = "warn" },
+  { action = "tap", on_text = "MISSING_2", on_fail = "warn" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -716,14 +716,14 @@ name = "ignore multi-block"
 [[block]]
 name = "block_1"
 steps = [
-  { action = "tap", text = "MISSING", on_fail = "ignore" },
+  { action = "tap", on_text = "MISSING", on_fail = "ignore" },
   { action = "screenshot" },
 ]
 
 [[block]]
 name = "block_2"
 steps = [
-  { action = "tap", text = "Also_Missing", on_fail = "ignore" },
+  { action = "tap", on_text = "Also_Missing", on_fail = "ignore" },
   { action = "screenshot" },
 ]
 
@@ -769,7 +769,7 @@ name = "retry ignore test"
 [[block]]
 name = "retry_ignore_block"
 steps = [
-  { action = "tap", text = "NONEXISTENT", retry = 1, retry_delay = 10, on_fail = "ignore" },
+  { action = "tap", on_text = "NONEXISTENT", retry = 1, retry_delay = 10, on_fail = "ignore" },
   { action = "screenshot" },
 ]
 "#;
@@ -805,7 +805,7 @@ name = "success with retry"
 [[block]]
 name = "ok_block"
 steps = [
-  { action = "tap", text = "Submit", retry = 2, retry_delay = 10 },
+  { action = "tap", on_text = "Submit", retry = 2, retry_delay = 10 },
   { action = "screenshot" },
 ]
 "#;
@@ -912,7 +912,7 @@ name = "screenshot on error"
 [[block]]
 name = "fail_block"
 steps = [
-  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "error" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "error" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -963,7 +963,7 @@ name = "screenshot on warn"
 [[block]]
 name = "warn_block"
 steps = [
-  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "warn" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "warn" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -1014,7 +1014,7 @@ name = "no screenshot on ignore"
 [[block]]
 name = "ignore_block"
 steps = [
-  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "ignore" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "ignore" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -1064,7 +1064,7 @@ name = "screenshot fail resilient"
 [[block]]
 name = "fail_block"
 steps = [
-  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "error" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "error" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -1116,7 +1116,7 @@ name = "disk write flow"
 [[block]]
 name = "disk_block"
 steps = [
-  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "error" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "error" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -1185,7 +1185,7 @@ name = "disabled capture flow"
 [[block]]
 name = "disabled_block"
 steps = [
-  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "error" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "error" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");

@@ -353,7 +353,7 @@ pub(crate) async fn handle_http(step: &Step, vars: &mut VariableStore, method: &
 /// Immediately fail the flow with a message from the step's `text` field.
 pub(crate) fn handle_fail(step: &Step) -> Result<()> {
     let message = step
-        .text
+        .on_text
         .as_deref()
         .unwrap_or("Flow failed (no message provided)");
     bail!("{}", message)
@@ -365,7 +365,7 @@ pub(crate) fn handle_fail(step: &Step) -> Result<()> {
 /// label to dismiss with. Otherwise the alert is dismissed with the default action.
 pub(crate) async fn handle_dismiss_alert(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
     let button = step
-        .text
+        .on_text
         .as_deref()
         .or_else(|| step.params.get("button").and_then(|v| v.as_str()));
 
@@ -562,7 +562,7 @@ mod tests {
     #[tokio::test]
     async fn fail_action_always_returns_error_with_message() {
         let mut step = make_step("fail");
-        step.text = Some("Should not reach here".to_string());
+        step.on_text = Some("Should not reach here".to_string());
 
         let result = handle_fail(&step);
         assert!(result.is_err());
@@ -638,7 +638,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("dismiss_alert");
-        step.text = Some("OK".to_string());
+        step.on_text = Some("OK".to_string());
 
         handle_dismiss_alert(&step, &driver)
             .await

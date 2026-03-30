@@ -29,30 +29,30 @@ type = "phone"
 [[block]]
 name = "switch_between_apps"
 steps = [
-  { action = "wait", text = "Submit", timeout = 10000 },
+  { action = "wait", on_text = "Submit", timeout = 10000 },
 
   # Interact with the primary app
-  { action = "tap", text = "Increment" },
-  { action = "tap", text = "Increment" },
-  { action = "tap", text = "Increment" },
-  { action = "assert_visible", text = "3", below = "Counter" },
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Increment" },
+  { action = "assert_visible", on_text = "3", on_below = "Counter" },
 
   # Switch to the companion app
   { action = "launch", app = "app-b" },
-  { action = "wait", text = "app-b-title", timeout = 10000 },
-  { action = "assert_visible", text = "shared-data-display" },
-  { action = "assert_visible", text = "refresh-button" },
-  { action = "assert_visible", text = "Ready", right_of = "Status:" },
+  { action = "wait", on_text = "app-b-title", timeout = 10000 },
+  { action = "assert_visible", on_text = "shared-data-display" },
+  { action = "assert_visible", on_text = "refresh-button" },
+  { action = "assert_visible", on_text = "Ready", on_right_of = "Status:" },
 
   # Tap refresh in companion app
-  { action = "tap", text = "refresh-button" },
+  { action = "tap", on_text = "refresh-button" },
 
   # Switch back to the primary app
   { action = "launch", app = "app" },
-  { action = "wait", text = "Counter", timeout = 10000 },
+  { action = "wait", on_text = "Counter", timeout = 10000 },
 
   # Verify primary app state is intact
-  { action = "assert_visible", text = "3", below = "Counter" },
+  { action = "assert_visible", on_text = "3", on_below = "Counter" },
 
   # Stop the companion app
   { action = "stop", app = "app-b" },

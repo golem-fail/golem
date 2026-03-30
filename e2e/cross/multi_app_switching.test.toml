@@ -29,23 +29,23 @@ type = "phone"
 [[block]]
 name = "set_state_in_primary_app"
 steps = [
-  { action = "wait", text = "Submit", timeout = 10000 },
+  { action = "wait", on_text = "Submit", timeout = 10000 },
 
   # Set state by incrementing the counter
-  { action = "tap", text = "Increment" },
-  { action = "tap", text = "Increment" },
-  { action = "tap", text = "Increment" },
-  { action = "tap", text = "Increment" },
-  { action = "tap", text = "Increment" },
-  { action = "assert_visible", text = "5", below = "Counter" },
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Increment" },
+  { action = "assert_visible", on_text = "5", on_below = "Counter" },
 
   # Type into a form field to set additional state
-  { action = "type", input = "Enter email", text = "cross-test@golem.com" },
+  { action = "type", input = "Enter email", on_text = "cross-test@golem.com" },
   { action = "hide_keyboard" },
 
   # Read the counter value into a variable for later verification
-  { action = "read", below = "Counter", index = 0, save_to = "primary_counter" },
-  { action = "read", text = "Enter email", save_to = "primary_email" },
+  { action = "read", on_below = "Counter", on_index = 0, save_to = "primary_counter" },
+  { action = "read", on_text = "Enter email", save_to = "primary_email" },
 ]
 
 [[block]]
@@ -53,22 +53,22 @@ name = "switch_to_companion_and_verify"
 steps = [
   # Switch to the companion app
   { action = "launch", app = "app-b" },
-  { action = "wait", text = "app-b-title", timeout = 10000 },
+  { action = "wait", on_text = "app-b-title", timeout = 10000 },
 
   # Verify companion app elements are visible
-  { action = "assert_visible", text = "app-b-title" },
-  { action = "assert_visible", text = "shared-data-display" },
-  { action = "assert_visible", text = "refresh-button" },
-  { action = "assert_visible", text = "status-label" },
+  { action = "assert_visible", on_text = "app-b-title" },
+  { action = "assert_visible", on_text = "shared-data-display" },
+  { action = "assert_visible", on_text = "refresh-button" },
+  { action = "assert_visible", on_text = "status-label" },
 
   # Verify companion app initial state
-  { action = "assert_visible", text = "Ready", right_of = "Status:" },
+  { action = "assert_visible", on_text = "Ready", on_right_of = "Status:" },
 
   # Interact with the companion app
-  { action = "tap", text = "refresh-button" },
+  { action = "tap", on_text = "refresh-button" },
 
   # Read companion app state
-  { action = "read", text = "status-label", save_to = "companion_status" },
+  { action = "read", on_text = "status-label", save_to = "companion_status" },
 ]
 
 [[block]]
@@ -76,20 +76,20 @@ name = "switch_back_and_verify_state_preserved"
 steps = [
   # Switch back to the primary app
   { action = "launch", app = "app" },
-  { action = "wait", text = "Counter", timeout = 10000 },
+  { action = "wait", on_text = "Counter", timeout = 10000 },
 
   # Verify primary app state is preserved after app switching
-  { action = "assert_visible", text = "5", below = "Counter" },
-  { action = "assert_visible", text = "cross-test@golem.com" },
+  { action = "assert_visible", on_text = "5", on_below = "Counter" },
+  { action = "assert_visible", on_text = "cross-test@golem.com" },
 
   # Verify UI elements are still enabled and functional
-  { action = "assert_visible", text = "Increment", enabled = true },
-  { action = "assert_visible", text = "Decrement", enabled = true },
-  { action = "assert_visible", text = "Submit", enabled = true },
+  { action = "assert_visible", on_text = "Increment", on_enabled = true },
+  { action = "assert_visible", on_text = "Decrement", on_enabled = true },
+  { action = "assert_visible", on_text = "Submit", on_enabled = true },
 
   # Perform one more interaction to confirm app is responsive
-  { action = "tap", text = "Decrement" },
-  { action = "assert_visible", text = "4", below = "Counter" },
+  { action = "tap", on_text = "Decrement" },
+  { action = "assert_visible", on_text = "4", on_below = "Counter" },
 
   # Stop the companion app
   { action = "stop", app = "app-b" },

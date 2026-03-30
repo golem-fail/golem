@@ -17,30 +17,30 @@ type = "phone"
 [[block]]
 name = "alert_tests"
 steps = [
-  { action = "wait", text = "Submit", timeout = 30000 },
+  { action = "wait", on_text = "Submit", timeout = 30000 },
 
   # Trigger a simple alert (button is off-screen, use auto_scroll)
-  { action = "tap", text = "alert-button", auto_scroll = true },
+  { action = "tap", on_text = "alert-button", auto_scroll = true },
 
   # Wait for the alert to appear and dismiss it
-  { action = "wait", text = "OK", timeout = 5000 },
-  { action = "tap", text = "OK" },
+  { action = "wait", on_text = "OK", timeout = 5000 },
+  { action = "tap", on_text = "OK" },
 
   # Trigger a confirmation dialog
-  { action = "tap", text = "confirm-button" },
+  { action = "tap", on_text = "confirm-button" },
 
   # Wait for the confirm dialog and accept it
-  { action = "wait", text = "Confirm", timeout = 5000 },
-  { action = "tap", text = "Confirm" },
+  { action = "wait", on_text = "Confirm", timeout = 5000 },
+  { action = "tap", on_text = "Confirm" },
 
   # Trigger the confirmation dialog again and cancel it
-  { action = "tap", text = "confirm-button" },
-  { action = "wait", text = "Cancel", timeout = 5000 },
-  { action = "tap", text = "Cancel" },
+  { action = "tap", on_text = "confirm-button" },
+  { action = "wait", on_text = "Cancel", timeout = 5000 },
+  { action = "tap", on_text = "Cancel" },
 
   # Trigger an action sheet
-  { action = "tap", text = "action-sheet-button" },
-  { action = "wait", text = "Action Sheet", timeout = 5000 },
+  { action = "tap", on_text = "action-sheet-button" },
+  { action = "wait", on_text = "Action Sheet", timeout = 5000 },
 ]
 
 # Dismiss action sheet: Android uses back button, iOS taps Cancel
@@ -55,5 +55,5 @@ steps = [
 name = "dismiss_action_sheet_ios"
 where = { os = "ios" }
 steps = [
-  { action = "tap", text = "Cancel" },
+  { action = "tap", on_text = "Cancel" },
 ]

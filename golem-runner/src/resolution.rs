@@ -11,16 +11,16 @@ use golem_parser::Step;
 /// step remain `None` on the selector (i.e. not constrained).
 pub fn build_selector(step: &Step) -> Selector {
     Selector {
-        text: step.text.clone(),
-        accessibility_id: step.accessibility_id.clone(),
-        index: step.index,
-        enabled: step.enabled,
-        checked: step.checked,
-        clickable: step.clickable,
-        below: step.below.clone(),
-        above: step.above.clone(),
-        right_of: step.right_of.clone(),
-        left_of: step.left_of.clone(),
+        text: step.on_text.clone(),
+        accessibility_id: step.on_accessibility_id.clone(),
+        index: step.on_index,
+        enabled: step.on_enabled,
+        checked: step.on_checked,
+        clickable: step.on_clickable,
+        below: step.on_below.clone(),
+        above: step.on_above.clone(),
+        right_of: step.on_right_of.clone(),
+        left_of: step.on_left_of.clone(),
     }
 }
 
@@ -116,16 +116,16 @@ mod tests {
     fn make_step(action: &str) -> Step {
         Step {
             action: action.to_string(),
-            text: None,
-            accessibility_id: None,
-            index: None,
-            enabled: None,
-            checked: None,
-            clickable: None,
-            below: None,
-            above: None,
-            right_of: None,
-            left_of: None,
+            on_text: None,
+            on_accessibility_id: None,
+            on_index: None,
+            on_enabled: None,
+            on_checked: None,
+            on_clickable: None,
+            on_below: None,
+            on_above: None,
+            on_right_of: None,
+            on_left_of: None,
             input: None,
             on_fail: None,
             save_to: None,
@@ -177,7 +177,7 @@ mod tests {
 
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
-        step.text = Some("Submit".to_string());
+        step.on_text = Some("Submit".to_string());
 
         let (elem, (tap_x, tap_y)) = resolve_element(&step, &driver)
             .await
@@ -199,7 +199,7 @@ mod tests {
 
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
-        step.accessibility_id = Some("btn-login".to_string());
+        step.on_accessibility_id = Some("btn-login".to_string());
 
         let (elem, _coords) = resolve_element(&step, &driver)
             .await
@@ -230,8 +230,8 @@ mod tests {
 
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
-        step.text = Some("Save".to_string());
-        step.accessibility_id = Some("btn-save".to_string());
+        step.on_text = Some("Save".to_string());
+        step.on_accessibility_id = Some("btn-save".to_string());
 
         let (elem, _coords) = resolve_element(&step, &driver)
             .await
@@ -247,7 +247,7 @@ mod tests {
         let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
-        step.text = Some("Nonexistent".to_string());
+        step.on_text = Some("Nonexistent".to_string());
 
         let result = resolve_element(&step, &driver).await;
         assert!(result.is_err());
@@ -281,7 +281,7 @@ mod tests {
 
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
-        step.text = Some("OK".to_string());
+        step.on_text = Some("OK".to_string());
 
         let (elem, (tap_x, tap_y)) = resolve_element(&step, &driver)
             .await
@@ -315,8 +315,8 @@ mod tests {
 
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
-        step.text = Some("Item *".to_string());
-        step.index = Some(1);
+        step.on_text = Some("Item *".to_string());
+        step.on_index = Some(1);
 
         let (elem, _coords) = resolve_element(&step, &driver)
             .await
@@ -350,8 +350,8 @@ mod tests {
 
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
-        step.text = Some("*".to_string());
-        step.below = Some("Header".to_string());
+        step.on_text = Some("*".to_string());
+        step.on_below = Some("Header".to_string());
 
         let (elem, _coords) = resolve_element(&step, &driver)
             .await
@@ -364,16 +364,16 @@ mod tests {
     #[test]
     fn build_selector_maps_all_fields() {
         let mut step = make_step("tap");
-        step.text = Some("Submit".to_string());
-        step.accessibility_id = Some("btn-1".to_string());
-        step.index = Some(2);
-        step.enabled = Some(true);
-        step.checked = Some(false);
-        step.clickable = Some(true);
-        step.below = Some("Header".to_string());
-        step.above = Some("Footer".to_string());
-        step.right_of = Some("Sidebar".to_string());
-        step.left_of = Some("Panel".to_string());
+        step.on_text = Some("Submit".to_string());
+        step.on_accessibility_id = Some("btn-1".to_string());
+        step.on_index = Some(2);
+        step.on_enabled = Some(true);
+        step.on_checked = Some(false);
+        step.on_clickable = Some(true);
+        step.on_below = Some("Header".to_string());
+        step.on_above = Some("Footer".to_string());
+        step.on_right_of = Some("Sidebar".to_string());
+        step.on_left_of = Some("Panel".to_string());
 
         let sel = build_selector(&step);
         assert_eq!(sel.text.as_deref(), Some("Submit"));
@@ -411,7 +411,7 @@ mod tests {
 
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
-        step.text = Some("Item *".to_string());
+        step.on_text = Some("Item *".to_string());
 
         // Should return the first of the two "Item *" matches
         let (elem, _coords) = resolve_element(&step, &driver)
@@ -459,10 +459,10 @@ mod tests {
 
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
-        step.text = Some("Option *".to_string());
-        step.enabled = Some(true);
-        step.checked = Some(true);
-        step.clickable = Some(true);
+        step.on_text = Some("Option *".to_string());
+        step.on_enabled = Some(true);
+        step.on_checked = Some(true);
+        step.on_clickable = Some(true);
 
         let (elem, _coords) = resolve_element(&step, &driver)
             .await

@@ -19,13 +19,13 @@ name = "grant_permission_and_verify"
 steps = [
   # Launch the app
   { action = "launch", app = "com.golem.test" },
-  { action = "wait", text = "camera-permission-button", timeout = 10000 },
+  { action = "wait", on_text = "camera-permission-button", timeout = 10000 },
 
   # Grant camera permission
   { action = "grant_permission", permission = "camera" },
 
   # Tap the camera button to confirm permission is active (no dialog)
-  { action = "tap", text = "camera-permission-button" },
+  { action = "tap", on_text = "camera-permission-button" },
 ]
 
 [[block]]
@@ -34,10 +34,10 @@ steps = [
   # Stop and relaunch the app
   { action = "stop", app = "com.golem.test" },
   { action = "launch", app = "com.golem.test" },
-  { action = "wait", text = "camera-permission-button", timeout = 15000 },
+  { action = "wait", on_text = "camera-permission-button", timeout = 15000 },
 
   # Tap camera button again; permission should persist across restarts
-  { action = "tap", text = "camera-permission-button" },
+  { action = "tap", on_text = "camera-permission-button" },
 ]
 
 [[block]]
@@ -47,5 +47,5 @@ steps = [
   { action = "revoke_permission", permission = "camera" },
 
   # Verify permission is revoked by confirming the button is still present
-  { action = "assert_visible", text = "camera-permission-button" },
+  { action = "assert_visible", on_text = "camera-permission-button" },
 ]

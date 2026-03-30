@@ -17,26 +17,26 @@ type = "phone"
 [[block]]
 name = "fill_form_fields"
 steps = [
-  { action = "wait", text = "Enter email", timeout = 10000 },
+  { action = "wait", on_text = "Enter email", timeout = 10000 },
 
   # Type into the email field and verify
-  { action = "type", input = "Enter email", text = "testuser@golem.com" },
-  { action = "assert_visible", text = "testuser@golem.com" },
+  { action = "type", input = "Enter email", on_text = "testuser@golem.com" },
+  { action = "assert_visible", on_text = "testuser@golem.com" },
 
   # Type into the password field
-  { action = "type", input = "Password", text = "P@ssw0rd!123" },
+  { action = "type", input = "Password", on_text = "P@ssw0rd!123" },
 
   # Type into the search field with a deliberate typo
-  { action = "type", input = "Search", text = "golem testt" },
-  { action = "assert_visible", text = "golem testt" },
+  { action = "type", input = "Search", on_text = "golem testt" },
+  { action = "assert_visible", on_text = "golem testt" },
 
   # Use backspace to correct the typo
-  { action = "backspace", text = "Search", count = 1 },
-  { action = "assert_visible", text = "golem test" },
+  { action = "backspace", on_text = "Search", count = 1 },
+  { action = "assert_visible", on_text = "golem test" },
 
   # Type the correct ending
-  { action = "type", input = "Search", text = " query" },
-  { action = "assert_visible", text = "golem test query" },
+  { action = "type", input = "Search", on_text = " query" },
+  { action = "assert_visible", on_text = "golem test query" },
 
   # Hide the keyboard
   { action = "hide_keyboard" },
@@ -46,23 +46,23 @@ steps = [
 name = "fill_multiline_and_submit"
 steps = [
   # Type into the multiline text area
-  { action = "type", input = "Multi-line text", text = "First line of input\nSecond line with details\nThird line conclusion" },
+  { action = "type", input = "Multi-line text", on_text = "First line of input\nSecond line with details\nThird line conclusion" },
 
   # Hide the keyboard
   { action = "hide_keyboard" },
 
   # Read back form values to verify
-  { action = "read", text = "Enter email", save_to = "filled_email" },
-  { action = "read", text = "Search", save_to = "filled_search" },
+  { action = "read", on_text = "Enter email", save_to = "filled_email" },
+  { action = "read", on_text = "Search", save_to = "filled_search" },
 
   # Take a screenshot before submitting
   { action = "screenshot", path = "/tmp/golem-cross-form-filled.png" },
 
   # Verify the submit button is enabled
-  { action = "assert_visible", text = "Submit", enabled = true },
+  { action = "assert_visible", on_text = "Submit", on_enabled = true },
 
   # Submit the form
-  { action = "tap", text = "Submit" },
+  { action = "tap", on_text = "Submit" },
 
   # Take a screenshot after submission
   { action = "screenshot", path = "/tmp/golem-cross-form-submitted.png" },

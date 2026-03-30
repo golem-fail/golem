@@ -17,15 +17,15 @@ type = "phone"
 [[block]]
 name = "initial_state"
 steps = [
-  { action = "wait", text = "Orientation:", timeout = 10000 },
-  { action = "assert_visible", text = "Portrait", right_of = "Orientation:" },
-  { action = "assert_visible", text = "Light", right_of = "Theme:" },
-  { action = "assert_visible", text = "0.0, 0.0", right_of = "Location:" },
+  { action = "wait", on_text = "Orientation:", timeout = 10000 },
+  { action = "assert_visible", on_text = "Portrait", on_right_of = "Orientation:" },
+  { action = "assert_visible", on_text = "Light", on_right_of = "Theme:" },
+  { action = "assert_visible", on_text = "0.0, 0.0", on_right_of = "Location:" },
 
   # Press the home button and re-launch
   { action = "press", button = "home" },
   { action = "launch", app = "app" },
-  { action = "wait", text = "Orientation:", timeout = 5000 },
+  { action = "wait", on_text = "Orientation:", timeout = 5000 },
 ]
 
 # Android-only: test back button navigation
@@ -35,68 +35,68 @@ where = { os = "android" }
 steps = [
   { action = "press", button = "back" },
   { action = "launch", app = "app" },
-  { action = "wait", text = "Orientation:", timeout = 5000 },
+  { action = "wait", on_text = "Orientation:", timeout = 5000 },
 ]
 
 [[block]]
 name = "orientation_controls"
 steps = [
   # Verify initial portrait orientation
-  { action = "assert_visible", text = "Portrait", right_of = "Orientation:" },
+  { action = "assert_visible", on_text = "Portrait", on_right_of = "Orientation:" },
 
   # Rotate to landscape and verify
   { action = "rotate", orientation = "landscape" },
-  { action = "assert_visible", text = "Landscape", right_of = "Orientation:" },
+  { action = "assert_visible", on_text = "Landscape", on_right_of = "Orientation:" },
 
   # Verify core elements are still accessible in landscape
-  { action = "assert_visible", text = "Submit" },
-  { action = "assert_visible", text = "Counter" },
+  { action = "assert_visible", on_text = "Submit" },
+  { action = "assert_visible", on_text = "Counter" },
 
   # Rotate back to portrait and verify
   { action = "rotate", orientation = "portrait" },
-  { action = "assert_visible", text = "Portrait", right_of = "Orientation:" },
+  { action = "assert_visible", on_text = "Portrait", on_right_of = "Orientation:" },
 ]
 
 [[block]]
 name = "dark_mode_controls"
 steps = [
   # Verify initial light theme
-  { action = "assert_visible", text = "Light", right_of = "Theme:" },
+  { action = "assert_visible", on_text = "Light", on_right_of = "Theme:" },
 
   # Enable dark mode and verify
   { action = "dark_mode", enabled = true },
-  { action = "assert_visible", text = "Dark", right_of = "Theme:" },
+  { action = "assert_visible", on_text = "Dark", on_right_of = "Theme:" },
 
   # Take a screenshot in dark mode
   { action = "screenshot", path = "/tmp/golem-cross-dark-mode.png" },
 
   # Verify elements are still functional in dark mode
-  { action = "tap", text = "Increment" },
-  { action = "assert_visible", text = "1", below = "Counter" },
+  { action = "tap", on_text = "Increment" },
+  { action = "assert_visible", on_text = "1", on_below = "Counter" },
 
   # Disable dark mode and verify return to light theme
   { action = "dark_mode", enabled = false },
-  { action = "assert_visible", text = "Light", right_of = "Theme:" },
+  { action = "assert_visible", on_text = "Light", on_right_of = "Theme:" },
 ]
 
 [[block]]
 name = "location_controls"
 steps = [
   # Verify initial location
-  { action = "assert_visible", text = "0.0, 0.0", right_of = "Location:" },
+  { action = "assert_visible", on_text = "0.0, 0.0", on_right_of = "Location:" },
 
   # Set GPS location to San Francisco
   { action = "set_location", latitude = 37.7749, longitude = -122.4194 },
-  { action = "assert_visible", text = "37.7749, -122.4194", right_of = "Location:" },
+  { action = "assert_visible", on_text = "37.7749, -122.4194", on_right_of = "Location:" },
 
   # Set GPS location to Tokyo
   { action = "set_location", latitude = 35.6762, longitude = 139.6503 },
-  { action = "assert_visible", text = "35.6762, 139.6503", right_of = "Location:" },
+  { action = "assert_visible", on_text = "35.6762, 139.6503", on_right_of = "Location:" },
 
   # Set GPS location to London
   { action = "set_location", latitude = 51.5074, longitude = -0.1278 },
-  { action = "assert_visible", text = "51.5074, -0.1278", right_of = "Location:" },
+  { action = "assert_visible", on_text = "51.5074, -0.1278", on_right_of = "Location:" },
 
   # Read the final location value
-  { action = "read", right_of = "Location:", save_to = "final_location" },
+  { action = "read", on_right_of = "Location:", save_to = "final_location" },
 ]

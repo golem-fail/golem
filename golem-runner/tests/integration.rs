@@ -269,7 +269,7 @@ btn_text = "Submit"
 [[block]]
 name = "tap_block"
 steps = [
-  { action = "tap", text = "Submit" },
+  { action = "tap", on_text = "Submit" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -433,7 +433,7 @@ name = "teardown after fail"
 [[block]]
 name = "failing"
 steps = [
-  { action = "tap", text = "NONEXISTENT_ELEMENT" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT" },
 ]
 
 [[teardown]]
@@ -490,7 +490,7 @@ name = "warn test"
 name = "block_with_warning"
 steps = [
   { action = "screenshot" },
-  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "warn" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "warn" },
   { action = "screenshot" },
 ]
 "#;
@@ -537,7 +537,7 @@ name = "ignore test"
 name = "block_with_ignore"
 steps = [
   { action = "screenshot" },
-  { action = "tap", text = "NONEXISTENT_ELEMENT", on_fail = "ignore" },
+  { action = "tap", on_text = "NONEXISTENT_ELEMENT", on_fail = "ignore" },
   { action = "screenshot" },
 ]
 "#;
@@ -629,8 +629,8 @@ name = "tap test"
 [[block]]
 name = "tap_block"
 steps = [
-  { action = "tap", text = "Login" },
-  { action = "tap", text = "Submit" },
+  { action = "tap", on_text = "Login" },
+  { action = "tap", on_text = "Submit" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -669,7 +669,7 @@ steps = [
 name = "block_b"
 steps = [
   { action = "screenshot" },
-  { action = "tap", text = "DOES_NOT_EXIST" },
+  { action = "tap", on_text = "DOES_NOT_EXIST" },
   { action = "screenshot" },
 ]
 "#;
@@ -707,15 +707,15 @@ name = "multi-warn test"
 [[block]]
 name = "b1"
 steps = [
-  { action = "tap", text = "MISSING_1", on_fail = "warn" },
+  { action = "tap", on_text = "MISSING_1", on_fail = "warn" },
   { action = "screenshot" },
-  { action = "tap", text = "MISSING_2", on_fail = "warn" },
+  { action = "tap", on_text = "MISSING_2", on_fail = "warn" },
 ]
 
 [[block]]
 name = "b2"
 steps = [
-  { action = "tap", text = "MISSING_3", on_fail = "warn" },
+  { action = "tap", on_text = "MISSING_3", on_fail = "warn" },
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
@@ -839,7 +839,7 @@ steps = [
 
 [[teardown]]
 steps = [
-  { action = "tap", text = "MISSING_CLEANUP_BTN" },
+  { action = "tap", on_text = "MISSING_CLEANUP_BTN" },
   { action = "screenshot" },
 ]
 "#;
@@ -950,7 +950,7 @@ static_text = "Continue"
 [[block]]
 name = "login_screen"
 steps = [
-  { action = "tap", text = "Continue" },
+  { action = "tap", on_text = "Continue" },
   { action = "screenshot" },
 ]
 

@@ -122,16 +122,16 @@ pub struct BranchCondition {
 #[derive(Deserialize, Debug, Clone)]
 pub struct Step {
     pub action: String,
-    pub text: Option<String>,
-    pub accessibility_id: Option<String>,
-    pub index: Option<usize>,
-    pub enabled: Option<bool>,
-    pub checked: Option<bool>,
-    pub clickable: Option<bool>,
-    pub below: Option<String>,
-    pub above: Option<String>,
-    pub right_of: Option<String>,
-    pub left_of: Option<String>,
+    pub on_text: Option<String>,
+    pub on_accessibility_id: Option<String>,
+    pub on_index: Option<usize>,
+    pub on_enabled: Option<bool>,
+    pub on_checked: Option<bool>,
+    pub on_clickable: Option<bool>,
+    pub on_below: Option<String>,
+    pub on_above: Option<String>,
+    pub on_right_of: Option<String>,
+    pub on_left_of: Option<String>,
     /// Value to type into an input field. Used by the `type` action.
     /// Separates the typed value from `text` which is always a selector.
     pub input: Option<String>,
@@ -205,7 +205,7 @@ name = "first"
 
 [[block.steps]]
 action = "tap"
-text = "OK"
+on_text = "OK"
 "#;
         let flow = parse_flow(toml_str).expect("minimal valid flow should parse");
         assert_eq!(flow.flow.name, "minimal test");
@@ -297,7 +297,7 @@ name = "compact"
 
 [[block]]
 name = "b1"
-steps = [{action = "tap", text = "OK"}, {action = "wait"}]
+steps = [{action = "tap", on_text = "OK"}, {action = "wait"}]
 "#;
         let verbose_toml = r#"
 [flow]
@@ -308,7 +308,7 @@ name = "b1"
 
 [[block.steps]]
 action = "tap"
-text = "OK"
+on_text = "OK"
 
 [[block.steps]]
 action = "wait"
@@ -323,7 +323,7 @@ action = "wait"
             .zip(verbose.block[0].steps.iter())
         {
             assert_eq!(c.action, v.action);
-            assert_eq!(c.text, v.text);
+            assert_eq!(c.on_text, v.on_text);
         }
     }
 
@@ -474,19 +474,19 @@ name = "selectors"
 
 [[block.steps]]
 action = "tap"
-text = "Submit"
-accessibility_id = "btn_submit"
-index = 2
-enabled = true
-below = "Header"
+on_text = "Submit"
+on_accessibility_id = "btn_submit"
+on_index = 2
+on_enabled = true
+on_below = "Header"
 "#;
         let flow = parse_flow(toml_str).expect("selectors should parse");
         let step = &flow.block[0].steps[0];
-        assert_eq!(step.text.as_deref(), Some("Submit"));
-        assert_eq!(step.accessibility_id.as_deref(), Some("btn_submit"));
-        assert_eq!(step.index, Some(2));
-        assert_eq!(step.enabled, Some(true));
-        assert_eq!(step.below.as_deref(), Some("Header"));
+        assert_eq!(step.on_text.as_deref(), Some("Submit"));
+        assert_eq!(step.on_accessibility_id.as_deref(), Some("btn_submit"));
+        assert_eq!(step.on_index, Some(2));
+        assert_eq!(step.on_enabled, Some(true));
+        assert_eq!(step.on_below.as_deref(), Some("Header"));
     }
 
     // ---------------------------------------------------------------

@@ -423,16 +423,16 @@ mod tests {
     fn make_success_step() -> Step {
         Step {
             action: "screenshot".to_string(),
-            text: None,
-            accessibility_id: None,
-            index: None,
-            enabled: None,
-            checked: None,
-            clickable: None,
-            below: None,
-            above: None,
-            right_of: None,
-            left_of: None,
+            on_text: None,
+            on_accessibility_id: None,
+            on_index: None,
+            on_enabled: None,
+            on_checked: None,
+            on_clickable: None,
+            on_below: None,
+            on_above: None,
+            on_right_of: None,
+            on_left_of: None,
             input: None,
             on_fail: None,
             save_to: None,
@@ -449,16 +449,16 @@ mod tests {
     fn make_failing_step() -> Step {
         Step {
             action: "tap".to_string(),
-            text: Some("NONEXISTENT_ELEMENT_xyz_12345".to_string()),
-            accessibility_id: None,
-            index: None,
-            enabled: None,
-            checked: None,
-            clickable: None,
-            below: None,
-            above: None,
-            right_of: None,
-            left_of: None,
+            on_text: Some("NONEXISTENT_ELEMENT_xyz_12345".to_string()),
+            on_accessibility_id: None,
+            on_index: None,
+            on_enabled: None,
+            on_checked: None,
+            on_clickable: None,
+            on_below: None,
+            on_above: None,
+            on_right_of: None,
+            on_left_of: None,
             input: None,
             on_fail: None,
             save_to: None,
@@ -1297,7 +1297,7 @@ name = "child_fail"
 
 [[block.steps]]
 action = "tap"
-text = "NONEXISTENT_ELEMENT_xyz_12345"
+on_text = "NONEXISTENT_ELEMENT_xyz_12345"
 "#;
         std::fs::write(tmp_dir.path().join("fail_child.test.toml"), child_toml)
             .expect("SHALL write child flow");

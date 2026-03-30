@@ -19,23 +19,23 @@ name = "launch_and_wait"
 steps = [
   # Launch the app and wait for initial load
   { action = "launch", app = "com.golem.test" },
-  { action = "wait", text = "Submit", timeout = 10000 },
+  { action = "wait", on_text = "Submit", timeout = 10000 },
 ]
 
 [[block]]
 name = "rapid_form_fill"
 steps = [
   # Rapidly type into all input fields in quick succession
-  { action = "type", input = "Enter email", text = "perf@golem.com" },
-  { action = "wait", text = "Enter email", timeout = 2000 },
-  { action = "assert_visible", text = "perf@golem.com" },
+  { action = "type", input = "Enter email", on_text = "perf@golem.com" },
+  { action = "wait", on_text = "Enter email", timeout = 2000 },
+  { action = "assert_visible", on_text = "perf@golem.com" },
 
-  { action = "type", input = "Password", text = "Str0ngP@ss!" },
-  { action = "wait", text = "Password", timeout = 2000 },
+  { action = "type", input = "Password", on_text = "Str0ngP@ss!" },
+  { action = "wait", on_text = "Password", timeout = 2000 },
 
-  { action = "type", input = "Search", text = "rapid test query" },
-  { action = "wait", text = "Search", timeout = 2000 },
-  { action = "assert_visible", text = "rapid test query" },
+  { action = "type", input = "Search", on_text = "rapid test query" },
+  { action = "wait", on_text = "Search", timeout = 2000 },
+  { action = "assert_visible", on_text = "rapid test query" },
 
   # Hide keyboard between interactions
   { action = "hide_keyboard" },
@@ -45,78 +45,78 @@ steps = [
 name = "rapid_counter_burst"
 steps = [
   # Rapidly tap increment button 5 times without waiting between taps
-  { action = "tap", text = "Increment" },
-  { action = "tap", text = "Increment" },
-  { action = "tap", text = "Increment" },
-  { action = "tap", text = "Increment" },
-  { action = "tap", text = "Increment" },
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Increment" },
 
   # Now verify the counter reached the expected value
-  { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "5", below = "Counter" },
+  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "5", on_below = "Counter" },
 
   # Rapidly decrement 3 times
-  { action = "tap", text = "Decrement" },
-  { action = "tap", text = "Decrement" },
-  { action = "tap", text = "Decrement" },
+  { action = "tap", on_text = "Decrement" },
+  { action = "tap", on_text = "Decrement" },
+  { action = "tap", on_text = "Decrement" },
 
   # Verify counter after burst decrement
-  { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "2", below = "Counter" },
+  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "2", on_below = "Counter" },
 ]
 
 [[block]]
 name = "rapid_mixed_actions"
 steps = [
   # Mix taps, reads, and asserts in rapid succession
-  { action = "tap", text = "Increment" },
-  { action = "read", below = "Counter", index = 0, save_to = "mid_count_1" },
-  { action = "assert_visible", text = "Submit" },
-  { action = "tap", text = "Increment" },
-  { action = "read", below = "Counter", index = 0, save_to = "mid_count_2" },
-  { action = "assert_visible", text = "Enter email" },
-  { action = "tap", text = "Increment" },
-  { action = "read", below = "Counter", index = 0, save_to = "mid_count_3" },
-  { action = "assert_visible", text = "scroll-list" },
-  { action = "tap", text = "Increment" },
-  { action = "read", below = "Counter", index = 0, save_to = "mid_count_4" },
-  { action = "assert_visible", text = "carousel" },
+  { action = "tap", on_text = "Increment" },
+  { action = "read", on_below = "Counter", on_index = 0, save_to = "mid_count_1" },
+  { action = "assert_visible", on_text = "Submit" },
+  { action = "tap", on_text = "Increment" },
+  { action = "read", on_below = "Counter", on_index = 0, save_to = "mid_count_2" },
+  { action = "assert_visible", on_text = "Enter email" },
+  { action = "tap", on_text = "Increment" },
+  { action = "read", on_below = "Counter", on_index = 0, save_to = "mid_count_3" },
+  { action = "assert_visible", on_text = "scroll-list" },
+  { action = "tap", on_text = "Increment" },
+  { action = "read", on_below = "Counter", on_index = 0, save_to = "mid_count_4" },
+  { action = "assert_visible", on_text = "carousel" },
 ]
 
 [[block]]
 name = "rapid_read_burst"
 steps = [
   # Burst-read many elements in rapid succession
-  { action = "read", below = "Counter", index = 0, save_to = "r1" },
-  { action = "read", text = "Enter email", save_to = "r2" },
-  { action = "read", text = "Search", save_to = "r3" },
-  { action = "read", text = "Item 0", save_to = "r4" },
-  { action = "read", text = "Item 1", save_to = "r5" },
-  { action = "read", text = "Item 2", save_to = "r6" },
-  { action = "read", text = "carousel-item-0", save_to = "r7" },
-  { action = "read", text = "carousel-item-1", save_to = "r8" },
-  { action = "read", text = "Submit", save_to = "r9" },
-  { action = "read", text = "Increment", save_to = "r10" },
+  { action = "read", on_below = "Counter", on_index = 0, save_to = "r1" },
+  { action = "read", on_text = "Enter email", save_to = "r2" },
+  { action = "read", on_text = "Search", save_to = "r3" },
+  { action = "read", on_text = "Item 0", save_to = "r4" },
+  { action = "read", on_text = "Item 1", save_to = "r5" },
+  { action = "read", on_text = "Item 2", save_to = "r6" },
+  { action = "read", on_text = "carousel-item-0", save_to = "r7" },
+  { action = "read", on_text = "carousel-item-1", save_to = "r8" },
+  { action = "read", on_text = "Submit", save_to = "r9" },
+  { action = "read", on_text = "Increment", save_to = "r10" },
 ]
 
 [[block]]
 name = "rapid_visibility_burst"
 steps = [
   # Burst assert_visible on many elements in rapid succession
-  { action = "assert_visible", text = "Submit" },
-  { action = "assert_visible", text = "Increment" },
-  { action = "assert_visible", text = "Decrement" },
-  { action = "assert_visible", text = "Counter" },
-  { action = "assert_visible", text = "Enter email" },
-  { action = "assert_visible", text = "Password" },
-  { action = "assert_visible", text = "Search" },
-  { action = "assert_visible", text = "scroll-list" },
-  { action = "assert_visible", text = "carousel" },
-  { action = "assert_visible", text = "list-item-0" },
-  { action = "assert_visible", text = "list-item-1" },
-  { action = "assert_visible", text = "list-item-2" },
-  { action = "assert_visible", text = "carousel-item-0" },
-  { action = "assert_visible", text = "carousel-item-1" },
+  { action = "assert_visible", on_text = "Submit" },
+  { action = "assert_visible", on_text = "Increment" },
+  { action = "assert_visible", on_text = "Decrement" },
+  { action = "assert_visible", on_text = "Counter" },
+  { action = "assert_visible", on_text = "Enter email" },
+  { action = "assert_visible", on_text = "Password" },
+  { action = "assert_visible", on_text = "Search" },
+  { action = "assert_visible", on_text = "scroll-list" },
+  { action = "assert_visible", on_text = "carousel" },
+  { action = "assert_visible", on_text = "list-item-0" },
+  { action = "assert_visible", on_text = "list-item-1" },
+  { action = "assert_visible", on_text = "list-item-2" },
+  { action = "assert_visible", on_text = "carousel-item-0" },
+  { action = "assert_visible", on_text = "carousel-item-1" },
 
   # Final screenshot to verify app is still in a consistent state
   { action = "screenshot" },

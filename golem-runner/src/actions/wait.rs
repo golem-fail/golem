@@ -71,7 +71,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("wait");
-        step.text = Some("Welcome".to_string());
+        step.on_text = Some("Welcome".to_string());
         step.timeout = Some(1000);
 
         handle_wait(&step, &driver)
@@ -87,7 +87,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("wait_not");
-        step.text = Some("Loading...".to_string());
+        step.on_text = Some("Loading...".to_string());
         step.timeout = Some(1000);
 
         handle_wait_not(&step, &driver)

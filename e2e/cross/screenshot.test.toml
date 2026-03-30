@@ -17,22 +17,22 @@ type = "phone"
 [[block]]
 name = "screenshot_tests"
 steps = [
-  { action = "wait", text = "Submit", timeout = 30000 },
+  { action = "wait", on_text = "Submit", timeout = 30000 },
 
   # Take a screenshot of the initial state
   { action = "screenshot", path = "/tmp/golem-screenshot-initial.png" },
 
   # Interact with the app to change state
-  { action = "tap", text = "Increment" },
-  { action = "tap", text = "Increment" },
-  { action = "tap", text = "Increment" },
-  { action = "type", input = "Enter email", text = "screenshot@test.com" },
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Increment" },
+  { action = "type", input = "Enter email", on_text = "screenshot@test.com" },
   { action = "hide_keyboard" },
 
   # Take a screenshot after changes
   { action = "screenshot", path = "/tmp/golem-screenshot-after-interaction.png" },
 
   # Toggle dark mode and capture
-  { action = "tap", text = "dark-mode-toggle", auto_scroll = true },
+  { action = "tap", on_text = "dark-mode-toggle", auto_scroll = true },
   { action = "screenshot", path = "/tmp/golem-screenshot-dark-mode.png" },
 ]

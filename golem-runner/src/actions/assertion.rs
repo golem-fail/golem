@@ -39,7 +39,7 @@ pub(crate) async fn handle_assert_alert(step: &Step, driver: &dyn PlatformDriver
     let alert = driver.get_alert().await?;
     let alert_elem = alert.ok_or_else(|| anyhow::anyhow!("assert_alert failed: no alert is displayed"))?;
 
-    if let Some(ref expected_pattern) = step.text {
+    if let Some(ref expected_pattern) = step.on_text {
         let alert_text = alert_elem.text.as_deref().unwrap_or("");
         if !glob_match(expected_pattern, alert_text) {
             bail!(
@@ -68,7 +68,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_visible");
-        step.text = Some("Welcome".to_string());
+        step.on_text = Some("Welcome".to_string());
 
         handle_assert_visible(&step, &driver)
             .await
@@ -83,7 +83,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_visible");
-        step.text = Some("Nonexistent".to_string());
+        step.on_text = Some("Nonexistent".to_string());
 
         let result = handle_assert_visible(&step, &driver).await;
         assert!(result.is_err());
@@ -102,7 +102,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_not_visible");
-        step.text = Some("Error*".to_string());
+        step.on_text = Some("Error*".to_string());
 
         handle_assert_not_visible(&step, &driver)
             .await
@@ -117,7 +117,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_not_visible");
-        step.text = Some("Error*".to_string());
+        step.on_text = Some("Error*".to_string());
 
         let result = handle_assert_not_visible(&step, &driver).await;
         assert!(result.is_err());
@@ -141,7 +141,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_visible");
-        step.text = Some("$42.00".to_string());
+        step.on_text = Some("$42.00".to_string());
 
         handle_assert_visible(&step, &driver)
             .await
@@ -161,7 +161,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_visible");
-        step.text = Some("$42.00".to_string());
+        step.on_text = Some("$42.00".to_string());
 
         let result = handle_assert_visible(&step, &driver).await;
         assert!(result.is_err(), "assert_visible SHALL fail when text does not match");
@@ -178,8 +178,8 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_visible");
-        step.text = Some("Submit".to_string());
-        step.enabled = Some(true);
+        step.on_text = Some("Submit".to_string());
+        step.on_enabled = Some(true);
 
         handle_assert_visible(&step, &driver)
             .await
@@ -197,8 +197,8 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_visible");
-        step.text = Some("Submit".to_string());
-        step.enabled = Some(true);
+        step.on_text = Some("Submit".to_string());
+        step.on_enabled = Some(true);
 
         let result = handle_assert_visible(&step, &driver).await;
         assert!(result.is_err(), "assert_visible SHALL fail when element is disabled");
@@ -215,8 +215,8 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_visible");
-        step.text = Some("Agree".to_string());
-        step.checked = Some(true);
+        step.on_text = Some("Agree".to_string());
+        step.on_checked = Some(true);
 
         handle_assert_visible(&step, &driver)
             .await
@@ -234,8 +234,8 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_visible");
-        step.text = Some("Agree".to_string());
-        step.checked = Some(true);
+        step.on_text = Some("Agree".to_string());
+        step.on_checked = Some(true);
 
         let result = handle_assert_visible(&step, &driver).await;
         assert!(result.is_err(), "assert_visible SHALL fail when element is unchecked");
@@ -268,7 +268,7 @@ mod tests {
         driver.set_alert(Some(alert));
 
         let mut step = make_step("assert_alert");
-        step.text = Some("Delete*".to_string());
+        step.on_text = Some("Delete*".to_string());
 
         handle_assert_alert(&step, &driver)
             .await
@@ -284,7 +284,7 @@ mod tests {
         driver.set_alert(Some(alert));
 
         let mut step = make_step("assert_alert");
-        step.text = Some("Save*".to_string());
+        step.on_text = Some("Save*".to_string());
 
         let result = handle_assert_alert(&step, &driver).await;
         assert!(result.is_err(), "assert_alert SHALL fail when text does not match");

@@ -17,13 +17,13 @@ type = "phone"
 [[block]]
 name = "vertical_list_scroll"
 steps = [
-  { action = "wait", text = "Submit", timeout = 10000 },
+  { action = "wait", on_text = "Submit", timeout = 10000 },
 
   # Verify initial state - first list items should be visible
-  { action = "assert_visible", text = "list-item-0" },
-  { action = "assert_visible", text = "Item 0" },
-  { action = "assert_visible", text = "list-item-3" },
-  { action = "assert_visible", text = "Item 3" },
+  { action = "assert_visible", on_text = "list-item-0" },
+  { action = "assert_visible", on_text = "Item 0" },
+  { action = "assert_visible", on_text = "list-item-3" },
+  { action = "assert_visible", on_text = "Item 3" },
 
   # Scroll down to find elements deeper in the list
   { action = "swipe", direction = "down" },
@@ -33,8 +33,8 @@ steps = [
   { action = "swipe", direction = "down" },
 
   # Wait for a mid-list element to appear
-  { action = "wait", text = "list-item-25", timeout = 5000 },
-  { action = "tap", text = "list-item-25" },
+  { action = "wait", on_text = "list-item-25", timeout = 5000 },
+  { action = "tap", on_text = "list-item-25" },
 
   # Continue scrolling to reach the end of the list
   { action = "swipe", direction = "down" },
@@ -44,9 +44,9 @@ steps = [
   { action = "swipe", direction = "down" },
 
   # Verify the last list item is reachable
-  { action = "wait", text = "list-item-49", timeout = 5000 },
-  { action = "assert_visible", text = "Item 49" },
-  { action = "tap", text = "list-item-49" },
+  { action = "wait", on_text = "list-item-49", timeout = 5000 },
+  { action = "assert_visible", on_text = "Item 49" },
+  { action = "tap", on_text = "list-item-49" },
 
   # Scroll back up to the top
   { action = "swipe", direction = "up" },
@@ -61,17 +61,17 @@ steps = [
   { action = "swipe", direction = "up" },
 
   # Verify return to the top of the list
-  { action = "wait", text = "list-item-0", timeout = 5000 },
-  { action = "assert_visible", text = "list-item-0" },
-  { action = "assert_visible", text = "Item 0" },
+  { action = "wait", on_text = "list-item-0", timeout = 5000 },
+  { action = "assert_visible", on_text = "list-item-0" },
+  { action = "assert_visible", on_text = "Item 0" },
 ]
 
 [[block]]
 name = "horizontal_carousel_swipe"
 steps = [
   # Verify the carousel is visible
-  { action = "assert_visible", text = "carousel" },
-  { action = "assert_visible", text = "carousel-item-0" },
+  { action = "assert_visible", on_text = "carousel" },
+  { action = "assert_visible", on_text = "carousel-item-0" },
 
   # Swipe left to advance through the carousel
   { action = "swipe", direction = "left" },
@@ -81,7 +81,7 @@ steps = [
   { action = "swipe", direction = "left" },
 
   # Wait for a carousel item near the middle
-  { action = "wait", text = "carousel-item-5", timeout = 5000 },
+  { action = "wait", on_text = "carousel-item-5", timeout = 5000 },
 
   # Continue swiping to reach the end of the carousel
   { action = "swipe", direction = "left" },
@@ -90,7 +90,7 @@ steps = [
   { action = "swipe", direction = "left" },
 
   # Verify the last carousel item is reachable
-  { action = "wait", text = "carousel-item-9", timeout = 5000 },
+  { action = "wait", on_text = "carousel-item-9", timeout = 5000 },
 
   # Swipe right to go back through the carousel
   { action = "swipe", direction = "right" },
@@ -104,6 +104,6 @@ steps = [
   { action = "swipe", direction = "right" },
 
   # Verify return to the beginning of the carousel
-  { action = "wait", text = "carousel-item-0", timeout = 5000 },
-  { action = "assert_visible", text = "carousel-item-0" },
+  { action = "wait", on_text = "carousel-item-0", timeout = 5000 },
+  { action = "assert_visible", on_text = "carousel-item-0" },
 ]

@@ -19,24 +19,24 @@ type = "phone"
 name = "tap_setup_android"
 where = { os = "android" }
 steps = [
-  { action = "wait", text = "Submit", timeout = 30000 },
+  { action = "wait", on_text = "Submit", timeout = 30000 },
 ]
 
 [[block]]
 name = "tap_setup_ios"
 where = { os = "ios" }
 steps = [
-  { action = "wait", text = "Submit", timeout = 30000 },
+  { action = "wait", on_text = "Submit", timeout = 30000 },
 ]
 
 [[block]]
 name = "tap_interactions"
 steps = [
-  { action = "tap", text = "Submit" },
-  { action = "tap", text = "Action", index = 0 },
-  { action = "tap", text = "Increment" },
-  { action = "tap", text = "Increment" },
-  { action = "tap", text = "Decrement" },
+  { action = "tap", on_text = "Submit" },
+  { action = "tap", on_text = "Action", on_index = 0 },
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Decrement" },
 ]
 
 # Verification differs by platform
@@ -44,12 +44,12 @@ steps = [
 name = "verify_android"
 where = { os = "android" }
 steps = [
-  { action = "assert_visible", text = "Counter" },
+  { action = "assert_visible", on_text = "Counter" },
 ]
 
 [[block]]
 name = "verify_ios"
 where = { os = "ios" }
 steps = [
-  { action = "assert_visible", text = "1", below = "Counter" },
+  { action = "assert_visible", on_text = "1", on_below = "Counter" },
 ]

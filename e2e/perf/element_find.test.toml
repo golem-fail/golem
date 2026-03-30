@@ -19,95 +19,95 @@ name = "launch_and_wait"
 steps = [
   # Launch the app and wait for initial load
   { action = "launch", app = "com.golem.test" },
-  { action = "wait", text = "Submit", timeout = 10000 },
+  { action = "wait", on_text = "Submit", timeout = 10000 },
 ]
 
 [[block]]
 name = "find_by_id_buttons"
 steps = [
   # Rapidly assert visibility of button elements by ID (fast path)
-  { action = "assert_visible", text = "Submit" },
-  { action = "assert_visible", text = "Increment" },
-  { action = "assert_visible", text = "Decrement" },
+  { action = "assert_visible", on_text = "Submit" },
+  { action = "assert_visible", on_text = "Increment" },
+  { action = "assert_visible", on_text = "Decrement" },
 
   # Tight-timeout waits to enforce speed
-  { action = "wait", text = "Submit", timeout = 2000 },
-  { action = "wait", text = "Increment", timeout = 2000 },
-  { action = "wait", text = "Decrement", timeout = 2000 },
+  { action = "wait", on_text = "Submit", timeout = 2000 },
+  { action = "wait", on_text = "Increment", timeout = 2000 },
+  { action = "wait", on_text = "Decrement", timeout = 2000 },
 ]
 
 [[block]]
 name = "find_by_id_inputs"
 steps = [
   # Assert visibility of input fields by ID
-  { action = "assert_visible", text = "Enter email" },
-  { action = "assert_visible", text = "Password" },
-  { action = "assert_visible", text = "Search" },
+  { action = "assert_visible", on_text = "Enter email" },
+  { action = "assert_visible", on_text = "Password" },
+  { action = "assert_visible", on_text = "Search" },
 
   # Tight-timeout waits on input fields
-  { action = "wait", text = "Enter email", timeout = 2000 },
-  { action = "wait", text = "Password", timeout = 2000 },
-  { action = "wait", text = "Search", timeout = 2000 },
+  { action = "wait", on_text = "Enter email", timeout = 2000 },
+  { action = "wait", on_text = "Password", timeout = 2000 },
+  { action = "wait", on_text = "Search", timeout = 2000 },
 ]
 
 [[block]]
 name = "find_by_id_display_and_containers"
 steps = [
   # Assert visibility of display and container elements
-  { action = "assert_visible", text = "Counter" },
-  { action = "assert_visible", text = "scroll-list" },
-  { action = "assert_visible", text = "carousel" },
+  { action = "assert_visible", on_text = "Counter" },
+  { action = "assert_visible", on_text = "scroll-list" },
+  { action = "assert_visible", on_text = "carousel" },
 
-  { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "wait", text = "scroll-list", timeout = 2000 },
-  { action = "wait", text = "carousel", timeout = 2000 },
+  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "wait", on_text = "scroll-list", timeout = 2000 },
+  { action = "wait", on_text = "carousel", timeout = 2000 },
 ]
 
 [[block]]
 name = "find_list_items_rapid"
 steps = [
   # Rapidly find list items scattered throughout the hierarchy
-  { action = "assert_visible", text = "list-item-0" },
-  { action = "assert_visible", text = "list-item-1" },
-  { action = "assert_visible", text = "list-item-2" },
-  { action = "assert_visible", text = "list-item-3" },
-  { action = "assert_visible", text = "list-item-4" },
+  { action = "assert_visible", on_text = "list-item-0" },
+  { action = "assert_visible", on_text = "list-item-1" },
+  { action = "assert_visible", on_text = "list-item-2" },
+  { action = "assert_visible", on_text = "list-item-3" },
+  { action = "assert_visible", on_text = "list-item-4" },
 
   # Tight-timeout waits on each list item
-  { action = "wait", text = "list-item-0", timeout = 2000 },
-  { action = "wait", text = "list-item-1", timeout = 2000 },
-  { action = "wait", text = "list-item-2", timeout = 2000 },
-  { action = "wait", text = "list-item-3", timeout = 2000 },
-  { action = "wait", text = "list-item-4", timeout = 2000 },
+  { action = "wait", on_text = "list-item-0", timeout = 2000 },
+  { action = "wait", on_text = "list-item-1", timeout = 2000 },
+  { action = "wait", on_text = "list-item-2", timeout = 2000 },
+  { action = "wait", on_text = "list-item-3", timeout = 2000 },
+  { action = "wait", on_text = "list-item-4", timeout = 2000 },
 ]
 
 [[block]]
 name = "find_carousel_items_rapid"
 steps = [
   # Rapidly find carousel items
-  { action = "assert_visible", text = "carousel-item-0" },
-  { action = "assert_visible", text = "carousel-item-1" },
-  { action = "assert_visible", text = "carousel-item-2" },
-  { action = "assert_visible", text = "carousel-item-3" },
-  { action = "assert_visible", text = "carousel-item-4" },
+  { action = "assert_visible", on_text = "carousel-item-0" },
+  { action = "assert_visible", on_text = "carousel-item-1" },
+  { action = "assert_visible", on_text = "carousel-item-2" },
+  { action = "assert_visible", on_text = "carousel-item-3" },
+  { action = "assert_visible", on_text = "carousel-item-4" },
 
-  { action = "wait", text = "carousel-item-0", timeout = 2000 },
-  { action = "wait", text = "carousel-item-1", timeout = 2000 },
-  { action = "wait", text = "carousel-item-2", timeout = 2000 },
-  { action = "wait", text = "carousel-item-3", timeout = 2000 },
-  { action = "wait", text = "carousel-item-4", timeout = 2000 },
+  { action = "wait", on_text = "carousel-item-0", timeout = 2000 },
+  { action = "wait", on_text = "carousel-item-1", timeout = 2000 },
+  { action = "wait", on_text = "carousel-item-2", timeout = 2000 },
+  { action = "wait", on_text = "carousel-item-3", timeout = 2000 },
+  { action = "wait", on_text = "carousel-item-4", timeout = 2000 },
 ]
 
 [[block]]
 name = "find_by_text_content"
 steps = [
   # Assert text on elements — exercises the slower text-matching path
-  { action = "assert_visible", text = "0", below = "Counter" },
-  { action = "assert_visible", text = "Item 0" },
-  { action = "assert_visible", text = "Item 1" },
-  { action = "assert_visible", text = "Item 2" },
-  { action = "assert_visible", text = "Item 3" },
-  { action = "assert_visible", text = "Item 4" },
+  { action = "assert_visible", on_text = "0", on_below = "Counter" },
+  { action = "assert_visible", on_text = "Item 0" },
+  { action = "assert_visible", on_text = "Item 1" },
+  { action = "assert_visible", on_text = "Item 2" },
+  { action = "assert_visible", on_text = "Item 3" },
+  { action = "assert_visible", on_text = "Item 4" },
 
   # Final screenshot
   { action = "screenshot" },

@@ -17,30 +17,30 @@ type = "phone"
 [[block]]
 name = "visibility_assertions"
 steps = [
-  { action = "wait", text = "Submit", timeout = 30000 },
+  { action = "wait", on_text = "Submit", timeout = 30000 },
 
   # assert_visible: elements that should be on screen
-  { action = "assert_visible", text = "Submit" },
-  { action = "assert_visible", text = "email-input" },
-  { action = "assert_visible", text = "Counter" },
+  { action = "assert_visible", on_text = "Submit" },
+  { action = "assert_visible", on_text = "email-input" },
+  { action = "assert_visible", on_text = "Counter" },
 
   # assert_not_visible: elements that should not be on screen
-  { action = "assert_not_visible", text = "GOLEM Test B" },
-  { action = "assert_not_visible", text = "app-b-title" },
+  { action = "assert_not_visible", on_text = "GOLEM Test B" },
+  { action = "assert_not_visible", on_text = "app-b-title" },
 
   # assert_visible: verify exact text content using relational selectors
-  { action = "assert_visible", text = "0", below = "Counter" },
-  { action = "assert_visible", text = "Item 0" },
-  { action = "assert_visible", text = "Item 3" },
+  { action = "assert_visible", on_text = "0", on_below = "Counter" },
+  { action = "assert_visible", on_text = "Item 0" },
+  { action = "assert_visible", on_text = "Item 3" },
 
   # assert_visible with enabled: verify elements are enabled
-  { action = "assert_visible", text = "Submit", enabled = true },
-  { action = "assert_visible", text = "Increment", enabled = true },
-  { action = "assert_visible", text = "email-input", enabled = true },
-  { action = "assert_visible", text = "dark-mode-toggle", enabled = true, auto_scroll = true },
+  { action = "assert_visible", on_text = "Submit", on_enabled = true },
+  { action = "assert_visible", on_text = "Increment", on_enabled = true },
+  { action = "assert_visible", on_text = "email-input", on_enabled = true },
+  { action = "assert_visible", on_text = "dark-mode-toggle", on_enabled = true, auto_scroll = true },
 
   # assert_visible with checked: scroll to toggles, toggle checkbox and verify
-  { action = "tap", text = "agree-checkbox", auto_scroll = true },
+  { action = "tap", on_text = "agree-checkbox", auto_scroll = true },
   # WebView checkboxes don't reliably propagate checked state to iOS accessibility
-  { action = "assert_visible", text = "agree-checkbox", checked = true, on_fail = "warn" },
+  { action = "assert_visible", on_text = "agree-checkbox", on_checked = true, on_fail = "warn" },
 ]

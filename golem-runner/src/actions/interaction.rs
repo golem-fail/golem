@@ -85,7 +85,7 @@ pub(crate) async fn handle_type(step: &Step, driver: &dyn PlatformDriver) -> Res
     let value = step
         .input
         .as_deref()
-        .or(step.text.as_deref())
+        .or(step.on_text.as_deref())
         .unwrap_or("");
     driver.type_text(value).await
 }
@@ -195,7 +195,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("tap");
-        step.text = Some("Submit".to_string());
+        step.on_text = Some("Submit".to_string());
 
         handle_tap(&step, &driver)
             .await
@@ -217,7 +217,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("doubleTap");
-        step.text = Some("Submit".to_string());
+        step.on_text = Some("Submit".to_string());
 
         handle_double_tap(&step, &driver)
             .await
@@ -239,7 +239,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("type");
-        step.accessibility_id = Some("email".to_string());
+        step.on_accessibility_id = Some("email".to_string());
         step.input = Some("user@example.com".to_string());
 
         handle_type(&step, &driver)
@@ -266,7 +266,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("backspace");
-        step.accessibility_id = Some("search".to_string());
+        step.on_accessibility_id = Some("search".to_string());
         step.params
             .insert("count".to_string(), toml::Value::Integer(5));
 
@@ -288,7 +288,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("long_press");
-        step.text = Some("Item to select".to_string());
+        step.on_text = Some("Item to select".to_string());
         step.params
             .insert("duration".to_string(), toml::Value::Integer(2000));
 
@@ -351,7 +351,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("backspace");
-        step.accessibility_id = Some("field".to_string());
+        step.on_accessibility_id = Some("field".to_string());
         // No count param set
 
         handle_backspace(&step, &driver)
@@ -372,7 +372,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("long_press");
-        step.text = Some("Hold me".to_string());
+        step.on_text = Some("Hold me".to_string());
         // No duration param set
 
         handle_long_press(&step, &driver)
@@ -446,7 +446,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("tap");
-        step.text = Some("Does Not Exist".to_string());
+        step.on_text = Some("Does Not Exist".to_string());
 
         let result = handle_tap(&step, &driver).await;
         assert!(result.is_err());
@@ -466,7 +466,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("scroll");
-        step.text = Some("Target".to_string());
+        step.on_text = Some("Target".to_string());
         step.params.insert(
             "direction".to_string(),
             toml::Value::String("up".to_string()),
@@ -491,7 +491,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("scroll");
-        step.text = Some("Target".to_string());
+        step.on_text = Some("Target".to_string());
         // No direction param -- should default to "down"
 
         handle_scroll(&step, &driver)
@@ -506,7 +506,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("scroll");
-        step.text = Some("Missing".to_string());
+        step.on_text = Some("Missing".to_string());
         step.params.insert(
             "max_scrolls".to_string(),
             toml::Value::Integer(2),
@@ -537,7 +537,7 @@ mod tests {
 
         // Type into username field
         let mut type_step = make_step("type");
-        type_step.accessibility_id = Some("username".to_string());
+        type_step.on_accessibility_id = Some("username".to_string());
         type_step.input = Some("admin".to_string());
         crate::actions::execute_action(&type_step, &driver, &mut vars, &ctx, &[])
             .await
@@ -551,7 +551,7 @@ mod tests {
 
         // Tap login button
         let mut tap_step = make_step("tap");
-        tap_step.text = Some("Login".to_string());
+        tap_step.on_text = Some("Login".to_string());
         crate::actions::execute_action(&tap_step, &driver, &mut vars, &ctx, &[])
             .await
             .expect("tap should succeed");

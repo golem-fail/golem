@@ -17,46 +17,46 @@ type = "phone"
 [[block]]
 name = "webview_element_interaction"
 steps = [
-  { action = "wait", text = "Submit", timeout = 10000 },
+  { action = "wait", on_text = "Submit", timeout = 10000 },
 
   # Verify core UI elements are visible (proxy for webview context loaded)
-  { action = "assert_visible", text = "Enter email" },
-  { action = "assert_visible", text = "Password" },
-  { action = "assert_visible", text = "Search" },
-  { action = "assert_visible", text = "Submit" },
-  { action = "assert_visible", text = "Counter" },
+  { action = "assert_visible", on_text = "Enter email" },
+  { action = "assert_visible", on_text = "Password" },
+  { action = "assert_visible", on_text = "Search" },
+  { action = "assert_visible", on_text = "Submit" },
+  { action = "assert_visible", on_text = "Counter" },
 
   # Interact with text input elements inside the web view
-  { action = "type", input = "Enter email", text = "webview@test.com" },
-  { action = "assert_visible", text = "webview@test.com" },
+  { action = "type", input = "Enter email", on_text = "webview@test.com" },
+  { action = "assert_visible", on_text = "webview@test.com" },
 
-  { action = "type", input = "Search", text = "webview search query" },
-  { action = "assert_visible", text = "webview search query" },
+  { action = "type", input = "Search", on_text = "webview search query" },
+  { action = "assert_visible", on_text = "webview search query" },
   { action = "hide_keyboard" },
 
   # Interact with buttons inside the web view
-  { action = "tap", text = "Increment" },
-  { action = "tap", text = "Increment" },
-  { action = "assert_visible", text = "2", below = "Counter" },
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Increment" },
+  { action = "assert_visible", on_text = "2", on_below = "Counter" },
 
   # Read values from web view elements
-  { action = "read", below = "Counter", index = 0, save_to = "counter_value" },
-  { action = "read", right_of = "Orientation:", save_to = "orientation" },
-  { action = "read", right_of = "Theme:", save_to = "theme" },
+  { action = "read", on_below = "Counter", on_index = 0, save_to = "counter_value" },
+  { action = "read", on_right_of = "Orientation:", save_to = "orientation" },
+  { action = "read", on_right_of = "Theme:", save_to = "theme" },
 
   # Verify device state labels are rendered in the web view
-  { action = "assert_visible", text = "Portrait", right_of = "Orientation:" },
-  { action = "assert_visible", text = "Light", right_of = "Theme:" },
+  { action = "assert_visible", on_text = "Portrait", on_right_of = "Orientation:" },
+  { action = "assert_visible", on_text = "Light", on_right_of = "Theme:" },
 
   # Scroll within the web view to find list elements
   { action = "swipe", direction = "down" },
   { action = "swipe", direction = "down" },
-  { action = "wait", text = "list-item-0", timeout = 5000 },
+  { action = "wait", on_text = "list-item-0", timeout = 5000 },
 
   # Scroll back up to the top of the web view
   { action = "swipe", direction = "up" },
   { action = "swipe", direction = "up" },
-  { action = "wait", text = "Submit", timeout = 5000 },
+  { action = "wait", on_text = "Submit", timeout = 5000 },
 
   # Take a screenshot to capture final web view state
   { action = "screenshot", path = "/tmp/golem-cross-webview.png" },
