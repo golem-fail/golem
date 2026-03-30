@@ -300,7 +300,7 @@ pub(crate) fn find_alert(el: &Element) -> Option<Element> {
 // ---------------------------------------------------------------------------
 
 /// Thin HTTP client wrapper used by both `AndroidDriver` and `IosDriver`.
-pub(crate) struct CompanionClient {
+pub struct CompanionClient {
     pub base_url: String,
     /// Default query string appended to every request (e.g. `"?bundle_id=com.golem.test"`).
     pub default_query: String,
@@ -354,6 +354,24 @@ impl CompanionClient {
             os_version: json["os_version"].as_str().unwrap_or("unknown").to_string(),
             device_id: json["device_id"].as_str().unwrap_or("unknown").to_string(),
         })
+    }
+
+    /// Poll `/health` until the companion responds or timeout expires.
+    ///
+    /// Polls every 2 seconds. Returns the health info on success.
+    pub async fn wait_for_health(&self, timeout: std::time::Duration) -> Result<CompanionHealth> {
+        let deadline = tokio::time::Instant::now() + timeout;
+        let poll_interval = std::time::Duration::from_secs(2);
+
+        loop {
+            match self.check_health().await {
+                Ok(health) => return Ok(health),
+                Err(_) if tokio::time::Instant::now() < deadline => {
+                    tokio::time::sleep(poll_interval).await;
+                }
+                Err(e) => return Err(e),
+            }
+        }
     }
 
     /// Build the full URL for a request, appending the default query string.

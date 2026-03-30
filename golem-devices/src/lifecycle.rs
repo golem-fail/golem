@@ -5,7 +5,7 @@
 //! the constructed command via `tokio::process::Command`.
 
 use crate::{DeviceInfo, Platform};
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 
 // ---------------------------------------------------------------------------
 // Command construction
@@ -70,61 +70,77 @@ pub fn install_app_command(device: &DeviceInfo, app_path: &str) -> Vec<String> {
     }
 }
 
-/// Construct the commands to install and launch a test companion/runner.
-///
-/// iOS requires a two-step process: build-for-testing then test-without-building.
-/// Android requires installing the companion APK then starting instrumentation.
-///
-/// Returns a `Vec` of commands (each command is itself a `Vec<String>`).
-pub fn install_companion_commands(
-    device: &DeviceInfo,
-    companion_path: &str,
-    test_runner_class: &str,
-) -> Vec<Vec<String>> {
+/// Construct the command to build the iOS companion for testing.
+pub fn build_companion_command(device: &DeviceInfo, companion_path: &str) -> Vec<String> {
     match device.platform {
         Platform::Ios => vec![
-            vec![
-                "xcodebuild".into(),
-                "build-for-testing".into(),
-                "-project".into(),
-                companion_path.into(),
-                "-scheme".into(),
-                "GolemRunnerUITests".into(),
-                "-destination".into(),
-                format!("id={}", device.udid),
-            ],
-            vec![
-                "xcodebuild".into(),
-                "test-without-building".into(),
-                "-project".into(),
-                companion_path.into(),
-                "-scheme".into(),
-                "GolemRunnerUITests".into(),
-                "-destination".into(),
-                format!("id={}", device.udid),
-            ],
+            "xcodebuild".into(),
+            "build-for-testing".into(),
+            "-project".into(),
+            companion_path.into(),
+            "-scheme".into(),
+            "GolemRunnerUITests".into(),
+            "-destination".into(),
+            format!("id={}", device.udid),
+        ],
+        Platform::Android => vec![],  // Android uses pre-built APK
+    }
+}
+
+/// Construct the command to start the companion server process.
+///
+/// This command blocks forever (the companion stays alive). It must be
+/// spawned as a background process, not awaited.
+pub fn start_companion_command(device: &DeviceInfo, companion_path: &str) -> Vec<String> {
+    match device.platform {
+        Platform::Ios => vec![
+            "xcodebuild".into(),
+            "test-without-building".into(),
+            "-project".into(),
+            companion_path.into(),
+            "-scheme".into(),
+            "GolemRunnerUITests".into(),
+            "-destination".into(),
+            format!("id={}", device.udid),
+            "-parallel-testing-enabled".into(),
+            "NO".into(),
+            "-only-testing:GolemRunnerUITests/GolemRunnerUITests/testCompanionServer".into(),
         ],
         Platform::Android => vec![
-            vec![
-                "adb".into(),
-                "-s".into(),
-                device.udid.clone(),
-                "install".into(),
-                "-r".into(),
-                companion_path.into(),
-            ],
-            vec![
-                "adb".into(),
-                "-s".into(),
-                device.udid.clone(),
-                "shell".into(),
-                "am".into(),
-                "instrument".into(),
-                "-w".into(),
-                test_runner_class.into(),
-            ],
+            "adb".into(),
+            "-s".into(),
+            device.udid.clone(),
+            "shell".into(),
+            "am".into(),
+            "instrument".into(),
+            "-w".into(),
+            "com.golem.companion.test/androidx.test.runner.AndroidJUnitRunner".into(),
         ],
     }
+}
+
+/// Construct the command to install the Android companion APK.
+pub fn install_companion_command(device: &DeviceInfo, apk_path: &str) -> Vec<String> {
+    vec![
+        "adb".into(),
+        "-s".into(),
+        device.udid.clone(),
+        "install".into(),
+        "-r".into(),
+        apk_path.into(),
+    ]
+}
+
+/// Construct the command to set up Android port forwarding.
+pub fn port_forward_command(device: &DeviceInfo, port: u16) -> Vec<String> {
+    vec![
+        "adb".into(),
+        "-s".into(),
+        device.udid.clone(),
+        "forward".into(),
+        format!("tcp:{port}"),
+        format!("tcp:{port}"),
+    ]
 }
 
 /// Construct the commands to clear application data on a device.
@@ -215,6 +231,10 @@ pub fn create_device_command(
 // ---------------------------------------------------------------------------
 
 /// Execute a single command described by `args` and return an error on non-zero exit.
+pub async fn run_command_public(args: &[String], context: &str) -> Result<String> {
+    run_command(args, context).await
+}
+
 async fn run_command(args: &[String], context: &str) -> Result<String> {
     let Some((program, arguments)) = args.split_first() else {
         bail!("{context}: empty command");
@@ -264,14 +284,45 @@ pub async fn install_app(device: &DeviceInfo, app_path: &str) -> Result<()> {
     Ok(())
 }
 
-/// Install and launch a test companion on a device.
-pub async fn install_companion(
+/// Start the companion server process in the background.
+///
+/// The server command blocks forever, so it is spawned as a detached process.
+/// Returns once the process has been spawned (does NOT wait for /health).
+pub async fn spawn_companion(device: &DeviceInfo, companion_path: &str) -> Result<()> {
+    let args = start_companion_command(device, companion_path);
+    let Some((program, arguments)) = args.split_first() else {
+        bail!("empty companion start command");
+    };
+    tokio::process::Command::new(program)
+        .args(arguments)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .with_context(|| format!("failed to spawn companion on {}", device.name))?;
+    Ok(())
+}
+
+/// Build the companion (iOS only — Android uses pre-built APK).
+pub async fn build_companion(device: &DeviceInfo, companion_path: &str) -> Result<()> {
+    let args = build_companion_command(device, companion_path);
+    if args.is_empty() {
+        return Ok(()); // Android: nothing to build
+    }
+    run_command(&args, &format!("build companion for {}", device.name)).await?;
+    Ok(())
+}
+
+/// Install the Android companion APK and set up port forwarding.
+pub async fn install_android_companion(
     device: &DeviceInfo,
-    companion_path: &str,
-    test_runner_class: &str,
+    apk_path: &str,
+    port: u16,
 ) -> Result<()> {
-    let cmds = install_companion_commands(device, companion_path, test_runner_class);
-    run_commands(&cmds, &format!("install companion on {}", device.name)).await
+    let install = install_companion_command(device, apk_path);
+    run_command(&install, "install companion APK").await?;
+    let forward = port_forward_command(device, port);
+    run_command(&forward, "set up port forwarding").await?;
+    Ok(())
 }
 
 /// Clear application data on a device.
@@ -513,18 +564,13 @@ mod tests {
         );
     }
 
-    // 11. iOS install companion
+    // 11. iOS build companion command
     #[test]
-    fn ios_install_companion_commands_are_correct() {
+    fn ios_build_companion_command_is_correct() {
         let d = ios_device();
-        let cmds = install_companion_commands(
-            &d,
-            "/path/to/Companion.xcodeproj",
-            "CompanionUITests",
-        );
-        assert_eq!(cmds.len(), 2);
+        let cmd = build_companion_command(&d, "/path/to/Companion.xcodeproj");
         assert_eq!(
-            cmds[0],
+            cmd,
             vec![
                 "xcodebuild",
                 "build-for-testing",
@@ -536,8 +582,15 @@ mod tests {
                 "id=AAAA-BBBB-CCCC",
             ]
         );
+    }
+
+    // 12. iOS start companion command includes no-clone flags
+    #[test]
+    fn ios_start_companion_command_is_correct() {
+        let d = ios_device();
+        let cmd = start_companion_command(&d, "/path/to/Companion.xcodeproj");
         assert_eq!(
-            cmds[1],
+            cmd,
             vec![
                 "xcodebuild",
                 "test-without-building",
@@ -547,22 +600,40 @@ mod tests {
                 "GolemRunnerUITests",
                 "-destination",
                 "id=AAAA-BBBB-CCCC",
+                "-parallel-testing-enabled",
+                "NO",
+                "-only-testing:GolemRunnerUITests/GolemRunnerUITests/testCompanionServer",
             ]
         );
     }
 
-    // 12. Android install companion
+    // 13. Android start companion command
     #[test]
-    fn android_install_companion_commands_are_correct() {
+    fn android_start_companion_command_is_correct() {
         let d = android_device();
-        let cmds = install_companion_commands(
-            &d,
-            "/path/to/companion.apk",
-            "com.example.test/androidx.test.runner.AndroidJUnitRunner",
-        );
-        assert_eq!(cmds.len(), 2);
+        let cmd = start_companion_command(&d, "/path/to/companion.apk");
         assert_eq!(
-            cmds[0],
+            cmd,
+            vec![
+                "adb",
+                "-s",
+                "emulator-5554",
+                "shell",
+                "am",
+                "instrument",
+                "-w",
+                "com.golem.companion.test/androidx.test.runner.AndroidJUnitRunner",
+            ]
+        );
+    }
+
+    // 14. Android install companion command
+    #[test]
+    fn android_install_companion_command_is_correct() {
+        let d = android_device();
+        let cmd = install_companion_command(&d, "/path/to/companion.apk");
+        assert_eq!(
+            cmd,
             vec![
                 "adb",
                 "-s",
@@ -572,18 +643,16 @@ mod tests {
                 "/path/to/companion.apk",
             ]
         );
+    }
+
+    // 15. Android port forward command
+    #[test]
+    fn android_port_forward_command_is_correct() {
+        let d = android_device();
+        let cmd = port_forward_command(&d, 8223);
         assert_eq!(
-            cmds[1],
-            vec![
-                "adb",
-                "-s",
-                "emulator-5554",
-                "shell",
-                "am",
-                "instrument",
-                "-w",
-                "com.example.test/androidx.test.runner.AndroidJUnitRunner",
-            ]
+            cmd,
+            vec!["adb", "-s", "emulator-5554", "forward", "tcp:8223", "tcp:8223"]
         );
     }
 

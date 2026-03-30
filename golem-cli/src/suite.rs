@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::time::Instant;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use golem_devices::{DeviceInfo, DeviceState, Platform};
 use golem_driver::android::AndroidDriver;
 use golem_driver::ios::IosDriver;
@@ -132,61 +132,36 @@ impl SuiteRunner {
             Platform::Ios => 8222u16,
             Platform::Android => 8223u16,
         };
-        let (driver, health): (Box<dyn PlatformDriver>, _) = match platform {
+        let driver: Box<dyn PlatformDriver> = match platform {
             Platform::Ios => {
-                let d = IosDriver::new(device.udid.clone(), bundle_id, companion_port);
-                let h = d.check_health().await;
-                (Box::new(d), h)
+                Box::new(IosDriver::new(device.udid.clone(), bundle_id, companion_port))
             }
             Platform::Android => {
-                let d = AndroidDriver::new(device.udid.clone(), bundle_id, companion_port);
-                let h = d.check_health().await;
-                (Box::new(d), h)
+                Box::new(AndroidDriver::new(device.udid.clone(), bundle_id, companion_port))
             }
         };
 
-        match health {
-            Ok(h) => {
-                let golem_version = env!("CARGO_PKG_VERSION");
-                eprintln!(
-                    "  Companion: {} v{} on {} ({})",
-                    h.platform, h.version, h.device_name, h.os_version
-                );
-                if h.version != golem_version {
-                    eprintln!(
-                        "  Companion version {} does not match golem version {}. Rebuild the companion.",
-                        h.version, golem_version
-                    );
-                    return FlowReport {
-                        flow_name,
-                        success: false,
-                        step_results: Vec::new(),
-                        warnings: vec![format!(
-                            "Companion version mismatch: companion={}, golem={}",
-                            h.version, golem_version
-                        )],
-                        duration_ms: start.elapsed().as_millis() as u64,
-                        seed: self.config.seed,
-                        screenshot_path: None,
-                        device_name: Some(device_name),
-                    };
-                }
-            }
+        // Three-tier companion startup
+        let health = match ensure_companion(&device, platform, companion_port).await {
+            Ok(h) => h,
             Err(e) => {
-                eprintln!("  Companion not reachable on port {companion_port}: {e:#}");
-                eprintln!("  Start the companion server before running tests.");
+                eprintln!("  Companion startup failed: {e:#}");
                 return FlowReport {
                     flow_name,
                     success: false,
                     step_results: Vec::new(),
-                    warnings: vec![format!("Companion not reachable: {e}")],
+                    warnings: vec![format!("Companion startup failed: {e}")],
                     duration_ms: start.elapsed().as_millis() as u64,
                     seed: self.config.seed,
                     screenshot_path: None,
                     device_name: Some(device_name),
                 };
             }
-        }
+        };
+        eprintln!(
+            "  Companion: {} v{} on {} ({})",
+            health.platform, health.version, health.device_name, health.os_version
+        );
 
         // Set up variable store
         let mut vars = VariableStore::new();
@@ -264,6 +239,127 @@ impl SuiteRunner {
 
         Ok(flow)
     }
+}
+
+/// Ensure the companion server is running and version-compatible.
+///
+/// Three-tier startup:
+/// 1. Health check passes → reuse existing companion
+/// 2. Health check fails → try to restart the server process (no rebuild)
+/// 3. Restart fails → full rebuild + install + start
+async fn ensure_companion(
+    device: &DeviceInfo,
+    platform: Platform,
+    port: u16,
+) -> Result<golem_driver::CompanionHealth> {
+    use golem_driver::common::CompanionClient;
+
+    let client = CompanionClient::new(port);
+    let golem_version = env!("CARGO_PKG_VERSION");
+
+    // Tier 1: check if companion is already running
+    if let Ok(health) = client.check_health().await {
+        if health.version == golem_version {
+            return Ok(health);
+        }
+        eprintln!(
+            "  Companion version {} does not match golem {}. Rebuilding...",
+            health.version, golem_version
+        );
+        // Fall through to tier 3 (rebuild)
+    } else {
+        // Tier 2: try to restart without rebuilding
+        eprintln!("  Companion not running. Restarting...");
+        let companion_path = find_companion_path(platform)?;
+        if let Err(e) = golem_devices::lifecycle::spawn_companion(device, &companion_path).await {
+            eprintln!("  Restart failed: {e:#}");
+        } else {
+            // Android needs port forwarding
+            if platform == Platform::Android {
+                let fwd = golem_devices::lifecycle::port_forward_command(device, port);
+                let _ = golem_devices::lifecycle::run_command_public(&fwd, "port forward").await;
+            }
+            if let Ok(health) = client.wait_for_health(std::time::Duration::from_secs(15)).await {
+                if health.version == golem_version {
+                    return Ok(health);
+                }
+                eprintln!(
+                    "  Restarted companion has wrong version {}. Rebuilding...",
+                    health.version
+                );
+            }
+        }
+    }
+
+    // Tier 3: full rebuild + install + start
+    eprintln!("  Building companion...");
+    let companion_path = find_companion_path(platform)?;
+
+    match platform {
+        Platform::Ios => {
+            golem_devices::lifecycle::build_companion(device, &companion_path).await?;
+            golem_devices::lifecycle::spawn_companion(device, &companion_path).await?;
+        }
+        Platform::Android => {
+            let apk_path = find_android_apk()?;
+            golem_devices::lifecycle::install_android_companion(device, &apk_path, port).await?;
+            golem_devices::lifecycle::spawn_companion(device, &companion_path).await?;
+        }
+    }
+
+    let health = client
+        .wait_for_health(std::time::Duration::from_secs(60))
+        .await
+        .context("Companion did not start within 60 seconds")?;
+
+    if health.version != golem_version {
+        anyhow::bail!(
+            "Companion version {} does not match golem version {}",
+            health.version,
+            golem_version
+        );
+    }
+
+    Ok(health)
+}
+
+/// Find the companion project path for the given platform.
+fn find_companion_path(platform: Platform) -> Result<String> {
+    let relative = match platform {
+        Platform::Ios => "companions/ios/GolemRunner.xcodeproj",
+        Platform::Android => "companions/android",
+    };
+
+    // Check relative to current working directory
+    if std::path::Path::new(relative).exists() {
+        return Ok(relative.to_string());
+    }
+
+    // Check relative to golem binary location
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let path = dir.join(relative);
+            if path.exists() {
+                return Ok(path.to_string_lossy().into_owned());
+            }
+        }
+    }
+
+    anyhow::bail!(
+        "Companion project not found at {}. Run golem from the project root.",
+        relative
+    )
+}
+
+/// Find the pre-built Android companion APK.
+fn find_android_apk() -> Result<String> {
+    let relative = "companions/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk";
+    if std::path::Path::new(relative).exists() {
+        return Ok(relative.to_string());
+    }
+    anyhow::bail!(
+        "Android companion APK not found. Run: cd companions/android && ./gradlew assembleAndroidTest"
+    )
 }
 
 /// Detect the target platform from the flow's device constraints.

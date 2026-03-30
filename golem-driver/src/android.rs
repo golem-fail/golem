@@ -112,6 +112,11 @@ impl AndroidDriver {
         self.client.check_health().await
     }
 
+    /// Wait for companion to become healthy, polling with timeout.
+    pub async fn wait_for_health(&self, timeout: std::time::Duration) -> anyhow::Result<crate::common::CompanionHealth> {
+        self.client.wait_for_health(timeout).await
+    }
+
     /// Return the device serial.
     pub fn device_serial(&self) -> &str {
         &self.device_serial

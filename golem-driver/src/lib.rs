@@ -1,5 +1,5 @@
 pub mod android;
-pub(crate) mod common;
+pub mod common;
 pub mod commands;
 pub mod ios;
 
