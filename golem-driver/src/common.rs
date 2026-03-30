@@ -165,23 +165,64 @@ fn normalize_json(val: &mut serde_json::Value) {
             }
         }
 
-        // iOS: promote label → id and label → text (existing logic)
-        promote_labels_json_inner(map);
+        // Build `text` using priority chain: value → label → placeholder → content.
+        // This reflects what a human actually sees on screen.
+        //
+        // 1. typed value (for inputs) — most visible thing in an input field
+        // 2. aria-label — accessible name for the element
+        // 3. placeholder (inputs) — hint text when field is empty
+        // 4. content (existing text) — inner text of spans, paragraphs, etc.
+        //
+        // The iOS companion sends: text=label, value=snapshot.value, placeholder=placeholderValue
+        // Android sends: text=getText() (which is already the typed value or content)
 
-        // Promote placeholder → text when text is still absent/empty.
-        // A human sees placeholder text as the element's label when no other
-        // text is visible, so it should be targetable via the `text` selector.
-        let text_still_empty = match map.get("text") {
-            Some(serde_json::Value::String(s)) => s.is_empty(),
-            Some(serde_json::Value::Null) | None => true,
-            _ => false,
+        // Promote label → accessibility_id (always, regardless of text chain)
+        promote_label_to_id(map);
+
+        // Now build the text chain
+        let current_text = map
+            .get("text")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let value = map
+            .get("value")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let label = map
+            .get("label")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let placeholder = map
+            .get("placeholder")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        // Check if this is an input-type element where value takes priority
+        let is_input = matches!(
+            map.get("element_type").and_then(|v| v.as_str()),
+            Some("text_field" | "secure_text_field" | "search_field" | "text_view"
+                | "EditText" | "AutoCompleteTextView")
+        );
+
+        // Pick the highest priority non-empty value.
+        // For inputs: value → label → placeholder → content
+        // For others: label → content (value is often metadata like "0" for switches)
+        let resolved_text = if is_input && !value.is_empty() {
+            value
+        } else if !label.is_empty() {
+            label
+        } else if is_input && !placeholder.is_empty() {
+            placeholder
+        } else {
+            current_text
         };
-        if text_still_empty {
-            if let Some(ph) = map.get("placeholder").and_then(|v| v.as_str()) {
-                if !ph.is_empty() {
-                    map.insert("text".to_string(), serde_json::Value::String(ph.to_string()));
-                }
-            }
+
+        if !resolved_text.is_empty() {
+            map.insert("text".to_string(), serde_json::Value::String(resolved_text));
         }
 
         // Recurse into children
@@ -193,35 +234,21 @@ fn normalize_json(val: &mut serde_json::Value) {
     }
 }
 
-/// Promote `label` to `id` and `text` for iOS companion servers.
-/// Called on a single node's map — recursion is handled by `normalize_json`.
-fn promote_labels_json_inner(map: &mut serde_json::Map<String, serde_json::Value>) {
+/// Promote `label` (aria-label) to `accessibility_id` when id is absent/empty.
+fn promote_label_to_id(map: &mut serde_json::Map<String, serde_json::Value>) {
     let label_str = map
         .get("label")
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
 
-    // Promote label → id when id is absent/empty.
     let id_empty = match map.get("accessibility_id") {
         Some(serde_json::Value::String(s)) => s.is_empty(),
         Some(serde_json::Value::Null) | None => true,
         _ => false,
     };
     if id_empty && !label_str.is_empty() {
-        map.insert("accessibility_id".to_string(), serde_json::Value::String(label_str.clone()));
-    }
-
-    // Promote label → text always when text is absent/empty.
-    // Per aria-label spec: "overrides any other native labeling mechanism."
-    // This matches Android behavior where getText() returns aria-label.
-    let text_empty = match map.get("text") {
-        Some(serde_json::Value::String(s)) => s.is_empty(),
-        Some(serde_json::Value::Null) | None => true,
-        _ => false,
-    };
-    if text_empty && !label_str.is_empty() {
-        map.insert("text".to_string(), serde_json::Value::String(label_str));
+        map.insert("accessibility_id".to_string(), serde_json::Value::String(label_str));
     }
 }
 

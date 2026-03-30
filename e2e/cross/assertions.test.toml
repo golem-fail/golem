@@ -21,7 +21,7 @@ steps = [
 
   # assert_visible: elements that should be on screen (using grouped on = {} syntax)
   { action = "assert_visible", on = { text = "Submit" } },
-  { action = "assert_visible", on_text = "email-input" },
+  { action = "assert_visible", on_text = "Enter email" },
   { action = "assert_visible", on_text = "Counter" },
 
   # assert_not_visible: elements that should not be on screen
@@ -36,7 +36,7 @@ steps = [
   # assert_visible with enabled: verify elements are enabled
   { action = "assert_visible", on_text = "Submit", on_enabled = true },
   { action = "assert_visible", on_text = "Increment", on_enabled = true },
-  { action = "assert_visible", on_text = "email-input", on_enabled = true },
+  { action = "assert_visible", on_text = "Enter email", on_enabled = true },
   { action = "assert_visible", on_text = "dark-mode-toggle", on_enabled = true, auto_scroll = true },
 
   # assert_visible with checked: scroll to toggles, toggle checkbox and verify

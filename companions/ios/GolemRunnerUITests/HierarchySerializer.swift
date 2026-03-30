@@ -21,6 +21,7 @@ enum HierarchySerializer {
         var node: [String: Any] = [
             "element_type": elementTypeName(snapshot.elementType),
             "text": snapshot.label,
+            "value": (snapshot.value as? String) ?? "",
             "id": snapshot.identifier,
             "placeholder": snapshot.placeholderValue ?? "",
             "enabled": snapshot.isEnabled,
