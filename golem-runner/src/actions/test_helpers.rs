@@ -18,6 +18,7 @@ pub fn make_step(action: &str) -> Step {
         on_above: None,
         on_right_of: None,
         on_left_of: None,
+            on: None,
         input: None,
         if_fail: None,
         save_to: None,

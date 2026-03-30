@@ -19,8 +19,8 @@ name = "visibility_assertions"
 steps = [
   { action = "wait", on_text = "Submit", timeout = 30000 },
 
-  # assert_visible: elements that should be on screen
-  { action = "assert_visible", on_text = "Submit" },
+  # assert_visible: elements that should be on screen (using grouped on = {} syntax)
+  { action = "assert_visible", on = { text = "Submit" } },
   { action = "assert_visible", on_text = "email-input" },
   { action = "assert_visible", on_text = "Counter" },
 

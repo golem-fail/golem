@@ -9,18 +9,27 @@ use golem_parser::Step;
 /// Maps each optional selector/filter field on the step to the
 /// corresponding field on `Selector`. Fields that are `None` on the
 /// step remain `None` on the selector (i.e. not constrained).
+/// Build a `Selector` from the step's selector fields.
+///
+/// Supports three syntaxes:
+/// - Flat: `on_text = "Submit"`, `on_below = "Counter"`
+/// - Grouped: `on = { text = "Submit", below = "Counter" }`
+/// - To alias: `to = { text = "Item 49" }`
+///
+/// Grouped fields take precedence over flat fields.
 pub fn build_selector(step: &Step) -> Selector {
+    let g = step.on.as_ref();
     Selector {
-        text: step.on_text.clone(),
-        accessibility_id: step.on_accessibility_id.clone(),
-        index: step.on_index,
-        enabled: step.on_enabled,
-        checked: step.on_checked,
-        clickable: step.on_clickable,
-        below: step.on_below.clone(),
-        above: step.on_above.clone(),
-        right_of: step.on_right_of.clone(),
-        left_of: step.on_left_of.clone(),
+        text: g.and_then(|g| g.text.clone()).or(step.on_text.clone()),
+        accessibility_id: g.and_then(|g| g.accessibility_id.clone()).or(step.on_accessibility_id.clone()),
+        index: g.and_then(|g| g.index).or(step.on_index),
+        enabled: g.and_then(|g| g.enabled).or(step.on_enabled),
+        checked: g.and_then(|g| g.checked).or(step.on_checked),
+        clickable: g.and_then(|g| g.clickable).or(step.on_clickable),
+        below: g.and_then(|g| g.below.clone()).or(step.on_below.clone()),
+        above: g.and_then(|g| g.above.clone()).or(step.on_above.clone()),
+        right_of: g.and_then(|g| g.right_of.clone()).or(step.on_right_of.clone()),
+        left_of: g.and_then(|g| g.left_of.clone()).or(step.on_left_of.clone()),
     }
 }
 
@@ -126,6 +135,7 @@ mod tests {
             on_above: None,
             on_right_of: None,
             on_left_of: None,
+            on: None,
             input: None,
             if_fail: None,
             save_to: None,

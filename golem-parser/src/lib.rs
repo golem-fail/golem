@@ -119,9 +119,27 @@ pub struct BranchCondition {
     pub goto: String,
 }
 
+/// Grouped selector for `on = { ... }` / `to = { ... }` syntax.
+///
+/// All fields match the flat `on_*` fields on Step but without the prefix.
+#[derive(Deserialize, Debug, Clone, Default)]
+pub struct SelectorGroup {
+    pub text: Option<String>,
+    pub accessibility_id: Option<String>,
+    pub index: Option<usize>,
+    pub enabled: Option<bool>,
+    pub checked: Option<bool>,
+    pub clickable: Option<bool>,
+    pub below: Option<String>,
+    pub above: Option<String>,
+    pub right_of: Option<String>,
+    pub left_of: Option<String>,
+}
+
 #[derive(Deserialize, Debug, Clone)]
 pub struct Step {
     pub action: String,
+    // Flat selectors (on_* prefix)
     pub on_text: Option<String>,
     pub on_accessibility_id: Option<String>,
     pub on_index: Option<usize>,
@@ -132,6 +150,9 @@ pub struct Step {
     pub on_above: Option<String>,
     pub on_right_of: Option<String>,
     pub on_left_of: Option<String>,
+    // Grouped selector — accepts both `on = {}` and `to = {}` in TOML
+    #[serde(alias = "to")]
+    pub on: Option<SelectorGroup>,
     /// Value to type into an input field. Used by the `type` action.
     /// Separates the typed value from `text` which is always a selector.
     pub input: Option<String>,
@@ -487,6 +508,48 @@ on_below = "Header"
         assert_eq!(step.on_index, Some(2));
         assert_eq!(step.on_enabled, Some(true));
         assert_eq!(step.on_below.as_deref(), Some("Header"));
+    }
+
+    // ---------------------------------------------------------------
+    // 8b. Grouped on = {} selector syntax
+    // ---------------------------------------------------------------
+    #[test]
+    fn step_with_grouped_on_selector() {
+        let toml_str = r#"
+[flow]
+name = "grouped"
+
+[[block]]
+steps = [
+  { action = "tap", on = { text = "Submit", below = "Counter", enabled = true } },
+]
+"#;
+        let flow = parse_flow(toml_str).expect("grouped on syntax should parse");
+        let step = &flow.block[0].steps[0];
+        let g = step.on.as_ref().expect("on group should be present");
+        assert_eq!(g.text.as_deref(), Some("Submit"));
+        assert_eq!(g.below.as_deref(), Some("Counter"));
+        assert_eq!(g.enabled, Some(true));
+    }
+
+    // ---------------------------------------------------------------
+    // 8c. to = {} alias for grouped selector
+    // ---------------------------------------------------------------
+    #[test]
+    fn step_with_to_alias() {
+        let toml_str = r#"
+[flow]
+name = "to alias"
+
+[[block]]
+steps = [
+  { action = "scroll", to = { text = "Item 49" } },
+]
+"#;
+        let flow = parse_flow(toml_str).expect("to alias should parse");
+        let step = &flow.block[0].steps[0];
+        let g = step.on.as_ref().expect("to should populate on field");
+        assert_eq!(g.text.as_deref(), Some("Item 49"));
     }
 
     // ---------------------------------------------------------------

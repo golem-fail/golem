@@ -181,6 +181,7 @@ fn remap_step_vars(step: &Step, vars: &HashMap<String, String>) -> Step {
         on_above: step.on_above.as_ref().map(|s| remap_string(s, vars)),
         on_right_of: step.on_right_of.as_ref().map(|s| remap_string(s, vars)),
         on_left_of: step.on_left_of.as_ref().map(|s| remap_string(s, vars)),
+        on: step.on.as_ref().map(|g| remap_selector_group(g, vars)),
         input: step.input.as_ref().map(|s| remap_string(s, vars)),
         if_fail: step.if_fail.clone(),
         save_to: step.save_to.clone(),
@@ -190,6 +191,22 @@ fn remap_step_vars(step: &Step, vars: &HashMap<String, String>) -> Step {
         app: step.app.as_ref().map(|s| remap_string(s, vars)),
         auto_scroll: step.auto_scroll,
         params: remap_params(&step.params, vars),
+    }
+}
+
+/// Remap variables in a grouped SelectorGroup.
+fn remap_selector_group(g: &crate::SelectorGroup, vars: &HashMap<String, String>) -> crate::SelectorGroup {
+    crate::SelectorGroup {
+        text: g.text.as_ref().map(|s| remap_string(s, vars)),
+        accessibility_id: g.accessibility_id.as_ref().map(|s| remap_string(s, vars)),
+        index: g.index,
+        enabled: g.enabled,
+        checked: g.checked,
+        clickable: g.clickable,
+        below: g.below.as_ref().map(|s| remap_string(s, vars)),
+        above: g.above.as_ref().map(|s| remap_string(s, vars)),
+        right_of: g.right_of.as_ref().map(|s| remap_string(s, vars)),
+        left_of: g.left_of.as_ref().map(|s| remap_string(s, vars)),
     }
 }
 
@@ -275,6 +292,7 @@ mod tests {
             on_above: None,
             on_right_of: None,
             on_left_of: None,
+            on: None,
             input: None,
             if_fail: None,
             save_to: None,
@@ -301,6 +319,7 @@ mod tests {
             on_above: None,
             on_right_of: None,
             on_left_of: None,
+            on: None,
             input: None,
             if_fail: None,
             save_to: None,
