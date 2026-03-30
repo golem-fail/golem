@@ -18,20 +18,20 @@ type = "phone"
 name = "read_and_save"
 steps = [
   # Read the initial counter value and save it to a variable
-  { action = "read", below = "Counter", element_type = "text", save_to = "initial_count" },
+  { action = "read", below = "Counter", index = 0, save_to = "initial_count" },
 
   # Increment the counter twice
   { action = "tap", text = "Increment" },
   { action = "tap", text = "Increment" },
 
   # Read the updated counter value
-  { action = "read", below = "Counter", element_type = "text", save_to = "updated_count" },
+  { action = "read", below = "Counter", index = 0, save_to = "updated_count" },
 
-  # Read the orientation label
-  { action = "read", right_of = "Orientation:", save_to = "device_orientation" },
+  # Read the orientation label (off-screen, needs scroll)
+  { action = "read", right_of = "Orientation:", save_to = "device_orientation", auto_scroll = true },
 
   # Read the theme label
-  { action = "read", right_of = "Theme:", save_to = "current_theme" },
+  { action = "read", right_of = "Theme:", save_to = "current_theme", auto_scroll = true },
 
   # Read text from a list item
   { action = "read", text = "Item 0", save_to = "first_item_text" },

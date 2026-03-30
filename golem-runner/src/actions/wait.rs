@@ -46,10 +46,9 @@ pub(crate) async fn handle_wait_not(step: &Step, driver: &dyn PlatformDriver) ->
 
         if Instant::now() >= deadline {
             bail!(
-                "Timed out waiting for element to disappear: text={:?}, id={:?}, type={:?}",
+                "Timed out waiting for element to disappear: text={:?}, id={:?}",
                 selector.text,
                 selector.accessibility_id,
-                selector.element_type,
             );
         }
 

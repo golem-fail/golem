@@ -10,7 +10,6 @@ pub fn make_step(action: &str) -> Step {
         action: action.to_string(),
         text: None,
         accessibility_id: None,
-        element_type: None,
         index: None,
         enabled: None,
         checked: None,
@@ -19,15 +18,15 @@ pub fn make_step(action: &str) -> Step {
         above: None,
         right_of: None,
         left_of: None,
-        child_of: None,
-            input: None,
+        input: None,
         on_fail: None,
         save_to: None,
         timeout: None,
         retry: None,
         retry_delay: None,
         app: None,
-            auto_scroll: None,        params: HashMap::new(),
+        auto_scroll: None,
+        params: HashMap::new(),
     }
 }
 

@@ -89,10 +89,9 @@ pub async fn scroll_to_element(
                 // Already tried both directions
                 bail!(
                     "Element not found: scrolled in both directions and hit boundaries. \
-                     Selector: text={:?}, id={:?}, type={:?}",
+                     Selector: text={:?}, id={:?}",
                     selector.text,
                     selector.accessibility_id,
-                    selector.element_type,
                 );
             }
             // Reverse direction and continue
@@ -106,10 +105,9 @@ pub async fn scroll_to_element(
     // Step 7: Max scrolls reached
     bail!(
         "Element not found after {max_scrolls} scroll attempts. \
-         Selector: text={:?}, id={:?}, type={:?}",
+         Selector: text={:?}, id={:?}",
         selector.text,
         selector.accessibility_id,
-        selector.element_type,
     )
 }
 

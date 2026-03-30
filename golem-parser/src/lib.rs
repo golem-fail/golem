@@ -124,8 +124,6 @@ pub struct Step {
     pub action: String,
     pub text: Option<String>,
     pub accessibility_id: Option<String>,
-    #[serde(rename = "type")]
-    pub element_type: Option<String>,
     pub index: Option<usize>,
     pub enabled: Option<bool>,
     pub checked: Option<bool>,
@@ -134,7 +132,6 @@ pub struct Step {
     pub above: Option<String>,
     pub right_of: Option<String>,
     pub left_of: Option<String>,
-    pub child_of: Option<String>,
     /// Value to type into an input field. Used by the `type` action.
     /// Separates the typed value from `text` which is always a selector.
     pub input: Option<String>,
@@ -479,21 +476,17 @@ name = "selectors"
 action = "tap"
 text = "Submit"
 accessibility_id = "btn_submit"
-type = "Button"
 index = 2
 enabled = true
 below = "Header"
-child_of = "FormContainer"
 "#;
         let flow = parse_flow(toml_str).expect("selectors should parse");
         let step = &flow.block[0].steps[0];
         assert_eq!(step.text.as_deref(), Some("Submit"));
         assert_eq!(step.accessibility_id.as_deref(), Some("btn_submit"));
-        assert_eq!(step.element_type.as_deref(), Some("Button"));
         assert_eq!(step.index, Some(2));
         assert_eq!(step.enabled, Some(true));
         assert_eq!(step.below.as_deref(), Some("Header"));
-        assert_eq!(step.child_of.as_deref(), Some("FormContainer"));
     }
 
     // ---------------------------------------------------------------

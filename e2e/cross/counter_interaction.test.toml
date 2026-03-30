@@ -44,7 +44,7 @@ steps = [
   { action = "assert_visible", text = "5", below = "Counter" },
 
   # Read and save the counter value
-  { action = "read", below = "Counter", element_type = "text", save_to = "count_after_increment" },
+  { action = "read", below = "Counter", index = 0, save_to = "count_after_increment" },
 ]
 
 [[block]]
@@ -59,7 +59,7 @@ steps = [
   { action = "assert_visible", text = "2", below = "Counter" },
 
   # Read and save the counter value after decrement
-  { action = "read", below = "Counter", element_type = "text", save_to = "count_after_decrement" },
+  { action = "read", below = "Counter", index = 0, save_to = "count_after_decrement" },
 ]
 
 [[block]]

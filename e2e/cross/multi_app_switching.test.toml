@@ -44,7 +44,7 @@ steps = [
   { action = "hide_keyboard" },
 
   # Read the counter value into a variable for later verification
-  { action = "read", below = "Counter", element_type = "text", save_to = "primary_counter" },
+  { action = "read", below = "Counter", index = 0, save_to = "primary_counter" },
   { action = "read", text = "Enter email", save_to = "primary_email" },
 ]
 

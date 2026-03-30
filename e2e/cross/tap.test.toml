@@ -51,5 +51,5 @@ steps = [
 name = "verify_ios"
 where = { os = "ios" }
 steps = [
-  { action = "assert_visible", text = "1", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "1", below = "Counter" },
 ]

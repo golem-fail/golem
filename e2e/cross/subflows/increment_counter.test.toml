@@ -8,5 +8,5 @@ app_lifecycle = "manual"
 name = "increment"
 steps = [
   { action = "tap", text = "Increment" },
-  { action = "read", below = "Counter", element_type = "text", save_to = "counter_value" },
+  { action = "read", below = "Counter", index = 0, save_to = "counter_value" },
 ]

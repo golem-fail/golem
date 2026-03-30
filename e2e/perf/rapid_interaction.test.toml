@@ -53,7 +53,7 @@ steps = [
 
   # Now verify the counter reached the expected value
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "5", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "5", below = "Counter" },
 
   # Rapidly decrement 3 times
   { action = "tap", text = "Decrement" },
@@ -62,7 +62,7 @@ steps = [
 
   # Verify counter after burst decrement
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "2", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "2", below = "Counter" },
 ]
 
 [[block]]
@@ -70,16 +70,16 @@ name = "rapid_mixed_actions"
 steps = [
   # Mix taps, reads, and asserts in rapid succession
   { action = "tap", text = "Increment" },
-  { action = "read", below = "Counter", element_type = "text", save_to = "mid_count_1" },
+  { action = "read", below = "Counter", index = 0, save_to = "mid_count_1" },
   { action = "assert_visible", text = "Submit" },
   { action = "tap", text = "Increment" },
-  { action = "read", below = "Counter", element_type = "text", save_to = "mid_count_2" },
+  { action = "read", below = "Counter", index = 0, save_to = "mid_count_2" },
   { action = "assert_visible", text = "Enter email" },
   { action = "tap", text = "Increment" },
-  { action = "read", below = "Counter", element_type = "text", save_to = "mid_count_3" },
+  { action = "read", below = "Counter", index = 0, save_to = "mid_count_3" },
   { action = "assert_visible", text = "scroll-list" },
   { action = "tap", text = "Increment" },
-  { action = "read", below = "Counter", element_type = "text", save_to = "mid_count_4" },
+  { action = "read", below = "Counter", index = 0, save_to = "mid_count_4" },
   { action = "assert_visible", text = "carousel" },
 ]
 
@@ -87,7 +87,7 @@ steps = [
 name = "rapid_read_burst"
 steps = [
   # Burst-read many elements in rapid succession
-  { action = "read", below = "Counter", element_type = "text", save_to = "r1" },
+  { action = "read", below = "Counter", index = 0, save_to = "r1" },
   { action = "read", text = "Enter email", save_to = "r2" },
   { action = "read", text = "Search", save_to = "r3" },
   { action = "read", text = "Item 0", save_to = "r4" },

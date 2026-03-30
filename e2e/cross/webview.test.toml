@@ -40,7 +40,7 @@ steps = [
   { action = "assert_visible", text = "2", below = "Counter" },
 
   # Read values from web view elements
-  { action = "read", below = "Counter", element_type = "text", save_to = "counter_value" },
+  { action = "read", below = "Counter", index = 0, save_to = "counter_value" },
   { action = "read", right_of = "Orientation:", save_to = "orientation" },
   { action = "read", right_of = "Theme:", save_to = "theme" },
 

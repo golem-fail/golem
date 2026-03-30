@@ -21,7 +21,7 @@ steps = [
   { action = "load_mixin", mixin = "launch_and_wait", vars = { app_bundle = "app", wait_element = "Submit" } },
 
   # Verify the app state after mixin-driven launch
-  { action = "assert_visible", text = "0", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "0", below = "Counter" },
   { action = "assert_visible", text = "Submit" },
 ]
 
@@ -30,7 +30,7 @@ name = "interact_and_relaunch"
 steps = [
   # Interact with the app
   { action = "tap", text = "Increment" },
-  { action = "assert_visible", text = "1", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "1", below = "Counter" },
 
   # Stop and re-launch using the same mixin
   { action = "stop", app = "app" },

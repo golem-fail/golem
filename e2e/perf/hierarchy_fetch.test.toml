@@ -28,7 +28,7 @@ name = "read_top_of_tree"
 steps = [
   # Read elements near the top of the hierarchy
   # Each read exercises a full hierarchy fetch + element find + text extraction
-  { action = "read", below = "Counter", element_type = "text", save_to = "counter_val" },
+  { action = "read", below = "Counter", index = 0, save_to = "counter_val" },
   { action = "wait", text = "Counter", timeout = 2000 },
   { action = "read", text = "Enter email", save_to = "email_val" },
   { action = "wait", text = "Enter email", timeout = 2000 },

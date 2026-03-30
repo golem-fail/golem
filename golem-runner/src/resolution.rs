@@ -13,7 +13,6 @@ pub fn build_selector(step: &Step) -> Selector {
     Selector {
         text: step.text.clone(),
         accessibility_id: step.accessibility_id.clone(),
-        element_type: step.element_type.clone(),
         index: step.index,
         enabled: step.enabled,
         checked: step.checked,
@@ -22,7 +21,6 @@ pub fn build_selector(step: &Step) -> Selector {
         above: step.above.clone(),
         right_of: step.right_of.clone(),
         left_of: step.left_of.clone(),
-        child_of: step.child_of.clone(),
     }
 }
 
@@ -77,10 +75,9 @@ pub async fn resolve_element(
     }
 
     bail!(
-        "No element found matching selector: text={:?}, id={:?}, type={:?}",
+        "No element found matching selector: text={:?}, id={:?}",
         selector.text,
         selector.accessibility_id,
-        selector.element_type,
     );
 }
 
@@ -97,10 +94,9 @@ pub async fn resolve_element_full_tree(
 
     if results.is_empty() {
         bail!(
-            "No element found matching selector: text={:?}, id={:?}, type={:?}",
+            "No element found matching selector: text={:?}, id={:?}",
             selector.text,
             selector.accessibility_id,
-            selector.element_type,
         );
     }
 
@@ -122,7 +118,6 @@ mod tests {
             action: action.to_string(),
             text: None,
             accessibility_id: None,
-            element_type: None,
             index: None,
             enabled: None,
             checked: None,
@@ -131,7 +126,6 @@ mod tests {
             above: None,
             right_of: None,
             left_of: None,
-            child_of: None,
             input: None,
             on_fail: None,
             save_to: None,
@@ -214,10 +208,10 @@ mod tests {
         assert_eq!(elem.text.as_deref(), Some("Login"));
     }
 
-    // ── 3. resolve_element with combined text + element_type ─────────
+    // ── 3. resolve_element with combined text + accessibility_id ─────
 
     #[tokio::test]
-    async fn resolve_element_combined_text_and_type() {
+    async fn resolve_element_combined_text_and_id() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         // A Label with text "Save"
         root.children.push(make_element_with_text(
@@ -225,22 +219,24 @@ mod tests {
             "Save",
             Bounds::new(10, 10, 80, 30),
         ));
-        // A Button with text "Save"
-        root.children.push(make_element_with_text(
+        // A Button with text "Save" and an id
+        let mut btn = make_element_with_text(
             "Button",
             "Save",
             Bounds::new(10, 50, 80, 40),
-        ));
+        );
+        btn.accessibility_id = Some("btn-save".to_string());
+        root.children.push(btn);
 
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
         step.text = Some("Save".to_string());
-        step.element_type = Some("Button".to_string());
+        step.accessibility_id = Some("btn-save".to_string());
 
         let (elem, _coords) = resolve_element(&step, &driver)
             .await
-            .expect("should find button with text Save");
-        assert_eq!(elem.element_type, "Button");
+            .expect("should find button with text Save and id btn-save");
+        assert_eq!(elem.accessibility_id.as_deref(), Some("btn-save"));
         assert_eq!(elem.text.as_deref(), Some("Save"));
     }
 
@@ -319,7 +315,7 @@ mod tests {
 
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
-        step.element_type = Some("Button".to_string());
+        step.text = Some("Item *".to_string());
         step.index = Some(1);
 
         let (elem, _coords) = resolve_element(&step, &driver)
@@ -354,7 +350,7 @@ mod tests {
 
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
-        step.element_type = Some("Button".to_string());
+        step.text = Some("*".to_string());
         step.below = Some("Header".to_string());
 
         let (elem, _coords) = resolve_element(&step, &driver)
@@ -370,7 +366,6 @@ mod tests {
         let mut step = make_step("tap");
         step.text = Some("Submit".to_string());
         step.accessibility_id = Some("btn-1".to_string());
-        step.element_type = Some("Button".to_string());
         step.index = Some(2);
         step.enabled = Some(true);
         step.checked = Some(false);
@@ -379,12 +374,10 @@ mod tests {
         step.above = Some("Footer".to_string());
         step.right_of = Some("Sidebar".to_string());
         step.left_of = Some("Panel".to_string());
-        step.child_of = Some("Container".to_string());
 
         let sel = build_selector(&step);
         assert_eq!(sel.text.as_deref(), Some("Submit"));
         assert_eq!(sel.accessibility_id.as_deref(), Some("btn-1"));
-        assert_eq!(sel.element_type.as_deref(), Some("Button"));
         assert_eq!(sel.index, Some(2));
         assert_eq!(sel.enabled, Some(true));
         assert_eq!(sel.checked, Some(false));
@@ -393,7 +386,6 @@ mod tests {
         assert_eq!(sel.above.as_deref(), Some("Footer"));
         assert_eq!(sel.right_of.as_deref(), Some("Sidebar"));
         assert_eq!(sel.left_of.as_deref(), Some("Panel"));
-        assert_eq!(sel.child_of.as_deref(), Some("Container"));
     }
 
     // ── 9. resolve_element with glob pattern in text ─────────────────
@@ -467,7 +459,7 @@ mod tests {
 
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
-        step.element_type = Some("Checkbox".to_string());
+        step.text = Some("Option *".to_string());
         step.enabled = Some(true);
         step.checked = Some(true);
         step.clickable = Some(true);

@@ -9,7 +9,6 @@ use crate::{Element, FindResult};
 pub struct Selector {
     pub text: Option<String>,
     pub accessibility_id: Option<String>,
-    pub element_type: Option<String>,
     pub index: Option<usize>,
     pub enabled: Option<bool>,
     pub checked: Option<bool>,
@@ -22,8 +21,6 @@ pub struct Selector {
     pub right_of: Option<String>,
     /// Keep only elements whose bounds.right() < anchor.x
     pub left_of: Option<String>,
-    /// Keep only elements that are descendants of an element matching this text
-    pub child_of: Option<String>,
 }
 
 /// Find all elements matching the selector in the hierarchy tree.
@@ -69,47 +66,6 @@ fn find_anchor_recursive<'a>(element: &'a Element, matcher: &GlobMatcher) -> Opt
     None
 }
 
-/// Check whether an element (identified by its bounds) is a descendant of
-/// any element matching the `child_of` pattern in the tree.
-/// We collect all elements under the anchor and check if the candidate is among them.
-fn is_element_descendant_of_anchor(root: &Element, anchor_pattern: &str, candidate: &Element) -> bool {
-    let matcher = GlobMatcher::new(anchor_pattern);
-    // Find the anchor element
-    if let Some(anchor) = find_anchor_recursive(root, &matcher) {
-        // Check if candidate is a descendant of anchor
-        element_exists_in_subtree(anchor, candidate)
-    } else {
-        false
-    }
-}
-
-/// Check if an element with matching bounds/text/type/id exists in the subtree
-/// (excluding the root itself, only checking descendants).
-fn element_exists_in_subtree(subtree_root: &Element, candidate: &Element) -> bool {
-    for child in &subtree_root.children {
-        if elements_match(child, candidate) {
-            return true;
-        }
-        if element_exists_in_subtree(child, candidate) {
-            return true;
-        }
-    }
-    false
-}
-
-/// Check if two elements are the same by comparing all their identifying fields.
-fn elements_match(a: &Element, b: &Element) -> bool {
-    a.element_type == b.element_type
-        && a.text == b.text
-        && a.accessibility_id == b.accessibility_id
-        && a.bounds == b.bounds
-        && a.enabled == b.enabled
-        && a.checked == b.checked
-        && a.clickable == b.clickable
-        && a.focused == b.focused
-        && a.placeholder == b.placeholder
-}
-
 /// Apply all relational filters to the results.
 fn apply_relational_filters(
     root: &Element,
@@ -152,10 +108,6 @@ fn apply_relational_filters(
         }
     }
 
-    if let Some(ref pattern) = selector.child_of {
-        results.retain(|r| is_element_descendant_of_anchor(root, pattern, &r.element));
-    }
-
     results
 }
 
@@ -190,12 +142,6 @@ fn matches_selector(element: &Element, selector: &Selector) -> bool {
                 }
             }
             None => return false,
-        }
-    }
-
-    if let Some(ref expected_type) = selector.element_type {
-        if element.element_type != *expected_type {
-            return false;
         }
     }
 
@@ -365,26 +311,6 @@ mod tests {
         assert_eq!(results.len(), 2);
     }
 
-    // ── 7. Type filter ──────────────────────────────────────────────
-
-    #[test]
-    fn type_filter() {
-        let mut root = elem("View");
-        root.children.push(elem("Button"));
-        root.children.push(elem("Label"));
-        root.children.push(elem("Button"));
-
-        let s = Selector {
-            element_type: Some("Button".to_string()),
-            ..sel()
-        };
-        let results = find_elements(&root, &s);
-        assert_eq!(results.len(), 2);
-        assert!(results
-            .iter()
-            .all(|r| r.element.element_type == "Button"));
-    }
-
     // ── 8. Index selection ──────────────────────────────────────────
 
     #[test]
@@ -395,7 +321,7 @@ mod tests {
         root.children.push(elem_with_text("Button", "C"));
 
         let s = Selector {
-            element_type: Some("Button".to_string()),
+            text: Some("*".to_string()),
             index: Some(1),
             ..sel()
         };
@@ -412,7 +338,6 @@ mod tests {
         root.children.push(elem("Button"));
 
         let s = Selector {
-            element_type: Some("Button".to_string()),
             index: Some(99),
             ..sel()
         };
@@ -434,7 +359,7 @@ mod tests {
 
         let s = Selector {
             enabled: Some(true),
-            element_type: Some("Button".to_string()),
+            text: Some("*".to_string()),
             ..sel()
         };
         let results = find_elements(&root, &s);
@@ -447,15 +372,15 @@ mod tests {
     #[test]
     fn state_filter_checked() {
         let mut root = elem("View");
-        let mut checked = elem("Checkbox");
+        let mut checked = elem_with_text("Checkbox", "Option A");
         checked.checked = true;
-        let unchecked = elem("Checkbox");
+        let unchecked = elem_with_text("Checkbox", "Option B");
         root.children.push(checked);
         root.children.push(unchecked);
 
         let s = Selector {
             checked: Some(false),
-            element_type: Some("Checkbox".to_string()),
+            text: Some("Option *".to_string()),
             ..sel()
         };
         let results = find_elements(&root, &s);
@@ -502,30 +427,6 @@ mod tests {
         };
         let results = find_elements(&root, &s);
         assert_eq!(results.len(), 1);
-        assert!(results[0].element.enabled);
-    }
-
-    // ── 15. AND combination type + enabled ──────────────────────────
-
-    #[test]
-    fn and_combination_type_and_enabled() {
-        let mut root = elem("View");
-        let enabled_btn = elem("Button"); // enabled=true by default
-        let mut disabled_btn = elem("Button");
-        disabled_btn.enabled = false;
-        let label = elem("Label");
-        root.children.push(enabled_btn);
-        root.children.push(disabled_btn);
-        root.children.push(label);
-
-        let s = Selector {
-            element_type: Some("Button".to_string()),
-            enabled: Some(true),
-            ..sel()
-        };
-        let results = find_elements(&root, &s);
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].element.element_type, "Button");
         assert!(results[0].element.enabled);
     }
 
@@ -788,35 +689,6 @@ mod tests {
         assert_eq!(results[0].element.text.as_deref(), Some("Icon"));
     }
 
-    // ── 29. child_of — only children of "List" returned ─────────────
-
-    #[test]
-    fn relational_child_of() {
-        let mut root = elem("View");
-        root.bounds = bounds(0, 0, 400, 600);
-
-        let mut list = elem("View");
-        list.text = Some("List".to_string());
-        list.bounds = bounds(0, 100, 400, 300);
-        list.children.push(elem_at("Label", "Item 1", 0, 100, 400, 40));
-        list.children.push(elem_at("Label", "Item 2", 0, 150, 400, 40));
-        root.children.push(list);
-
-        // Sibling of list, not a child
-        root.children.push(elem_at("Label", "Item 3", 0, 450, 400, 40));
-
-        let s = Selector {
-            element_type: Some("Label".to_string()),
-            child_of: Some("List".to_string()),
-            ..sel()
-        };
-        let results = find_elements(&root, &s);
-        assert_eq!(results.len(), 2);
-        let texts: Vec<_> = results.iter().filter_map(|r| r.element.text.as_deref()).collect();
-        assert!(texts.contains(&"Item 1"));
-        assert!(texts.contains(&"Item 2"));
-    }
-
     // ── 30. Relational anchor not found — empty results ─────────────
 
     #[test]
@@ -855,7 +727,7 @@ mod tests {
         root.children.push(elem_at("Label", "Info", 0, 160, 200, 40));
 
         let s = Selector {
-            element_type: Some("Button".to_string()),
+            text: Some("*Btn".to_string()),
             below: Some("Header".to_string()),
             enabled: Some(true),
             ..sel()
@@ -879,7 +751,7 @@ mod tests {
         root.children.push(elem_at("Button", "Btn C", 0, 160, 200, 40));
 
         let s = Selector {
-            element_type: Some("Button".to_string()),
+            text: Some("Btn *".to_string()),
             below: Some("Header".to_string()),
             ..sel()
         };
@@ -887,64 +759,4 @@ mod tests {
         assert_eq!(results.len(), 3);
     }
 
-    // ── 33. child_of excludes siblings ──────────────────────────────
-
-    #[test]
-    fn child_of_excludes_siblings() {
-        let mut root = elem("View");
-        root.bounds = bounds(0, 0, 400, 600);
-
-        // Container "Panel"
-        let mut panel = elem("View");
-        panel.text = Some("Panel".to_string());
-        panel.bounds = bounds(0, 0, 200, 300);
-        panel.children.push(elem_at("Button", "Inside", 10, 10, 80, 30));
-        root.children.push(panel);
-
-        // Sibling button (not inside Panel)
-        root.children.push(elem_at("Button", "Outside", 210, 10, 80, 30));
-
-        let s = Selector {
-            element_type: Some("Button".to_string()),
-            child_of: Some("Panel".to_string()),
-            ..sel()
-        };
-        let results = find_elements(&root, &s);
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].element.text.as_deref(), Some("Inside"));
-    }
-
-    // ── 34. Deep descendant found by child_of ───────────────────────
-
-    #[test]
-    fn deep_descendant_found_by_child_of() {
-        let mut root = elem("View");
-        root.bounds = bounds(0, 0, 400, 600);
-
-        // Container "Wrapper" > View > View > deep Button
-        let deep_btn = elem_at("Button", "Deep Button", 10, 10, 80, 30);
-        let mut inner2 = elem("View");
-        inner2.bounds = bounds(5, 5, 190, 190);
-        inner2.children.push(deep_btn);
-        let mut inner1 = elem("View");
-        inner1.bounds = bounds(0, 0, 195, 195);
-        inner1.children.push(inner2);
-        let mut wrapper = elem("View");
-        wrapper.text = Some("Wrapper".to_string());
-        wrapper.bounds = bounds(0, 0, 200, 200);
-        wrapper.children.push(inner1);
-        root.children.push(wrapper);
-
-        // Sibling button (not inside Wrapper)
-        root.children.push(elem_at("Button", "Shallow Button", 300, 10, 80, 30));
-
-        let s = Selector {
-            element_type: Some("Button".to_string()),
-            child_of: Some("Wrapper".to_string()),
-            ..sel()
-        };
-        let results = find_elements(&root, &s);
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].element.text.as_deref(), Some("Deep Button"));
-    }
 }

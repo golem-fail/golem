@@ -102,12 +102,12 @@ steps = [
 name = "find_by_text_content"
 steps = [
   # Assert text on elements — exercises the slower text-matching path
-  { action = "assert_visible", text = "0", below = "Counter", element_type = "text" },
-  { action = "assert_visible", text = "Item 0", child_of = "list-item-0" },
-  { action = "assert_visible", text = "Item 1", child_of = "list-item-1" },
-  { action = "assert_visible", text = "Item 2", child_of = "list-item-2" },
-  { action = "assert_visible", text = "Item 3", child_of = "list-item-3" },
-  { action = "assert_visible", text = "Item 4", child_of = "list-item-4" },
+  { action = "assert_visible", text = "0", below = "Counter" },
+  { action = "assert_visible", text = "Item 0" },
+  { action = "assert_visible", text = "Item 1" },
+  { action = "assert_visible", text = "Item 2" },
+  { action = "assert_visible", text = "Item 3" },
+  { action = "assert_visible", text = "Item 4" },
 
   # Final screenshot
   { action = "screenshot" },

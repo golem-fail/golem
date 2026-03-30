@@ -25,7 +25,7 @@ steps = [
   { action = "tap", text = "Increment" },
   { action = "tap", text = "Increment" },
   { action = "tap", text = "Increment" },
-  { action = "assert_visible", text = "3", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "3", below = "Counter" },
 
   # Verify deep link display is empty before receiving a link
   { action = "assert_visible", text = "Deep Link:" },
@@ -44,9 +44,9 @@ steps = [
 name = "verify_state_preserved"
 steps = [
   # Verify that the counter state set before the deep link is still intact
-  { action = "assert_visible", text = "3", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "3", below = "Counter" },
 
   # Verify the app is still functional after receiving the deep link
   { action = "tap", text = "Increment" },
-  { action = "assert_visible", text = "4", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "4", below = "Counter" },
 ]

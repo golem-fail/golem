@@ -22,7 +22,7 @@ steps = [
   { action = "wait", text = "Counter", timeout = 10000 },
 
   # Verify counter starts at zero
-  { action = "assert_visible", text = "0", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "0", below = "Counter" },
   { action = "screenshot" },
 ]
 
@@ -32,27 +32,27 @@ steps = [
   # Tap 1: tap increment, assert counter updated within 2s
   { action = "tap", text = "Increment" },
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "1", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "1", below = "Counter" },
 
   # Tap 2
   { action = "tap", text = "Increment" },
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "2", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "2", below = "Counter" },
 
   # Tap 3
   { action = "tap", text = "Increment" },
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "3", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "3", below = "Counter" },
 
   # Tap 4
   { action = "tap", text = "Increment" },
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "4", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "4", below = "Counter" },
 
   # Tap 5
   { action = "tap", text = "Increment" },
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "5", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "5", below = "Counter" },
 ]
 
 [[block]]
@@ -61,30 +61,30 @@ steps = [
   # Tap 6
   { action = "tap", text = "Increment" },
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "6", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "6", below = "Counter" },
 
   # Tap 7
   { action = "tap", text = "Increment" },
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "7", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "7", below = "Counter" },
 
   # Tap 8
   { action = "tap", text = "Increment" },
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "8", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "8", below = "Counter" },
 
   # Tap 9
   { action = "tap", text = "Increment" },
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "9", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "9", below = "Counter" },
 
   # Tap 10
   { action = "tap", text = "Increment" },
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "10", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "10", below = "Counter" },
 
   # Read the final counter value
-  { action = "read", below = "Counter", element_type = "text", save_to = "final_count" },
+  { action = "read", below = "Counter", index = 0, save_to = "final_count" },
   { action = "screenshot" },
 ]
 
@@ -94,25 +94,25 @@ steps = [
   # Rapidly decrement back down to verify round-trip in the other direction
   { action = "tap", text = "Decrement" },
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "9", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "9", below = "Counter" },
 
   { action = "tap", text = "Decrement" },
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "8", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "8", below = "Counter" },
 
   { action = "tap", text = "Decrement" },
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "7", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "7", below = "Counter" },
 
   { action = "tap", text = "Decrement" },
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "6", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "6", below = "Counter" },
 
   { action = "tap", text = "Decrement" },
   { action = "wait", text = "Counter", timeout = 2000 },
-  { action = "assert_visible", text = "5", below = "Counter", element_type = "text" },
+  { action = "assert_visible", text = "5", below = "Counter" },
 
   # Final read to confirm state
-  { action = "read", below = "Counter", element_type = "text", save_to = "decremented_count" },
+  { action = "read", below = "Counter", index = 0, save_to = "decremented_count" },
   { action = "screenshot" },
 ]

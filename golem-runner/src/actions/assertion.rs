@@ -22,11 +22,10 @@ pub(crate) async fn handle_assert_not_visible(step: &Step, driver: &dyn Platform
         Ok(())
     } else {
         bail!(
-            "Expected no element matching selector but found {}: text={:?}, id={:?}, type={:?}",
+            "Expected no element matching selector but found {}: text={:?}, id={:?}",
             results.len(),
             selector.text,
             selector.accessibility_id,
-            selector.element_type,
         )
     }
 }
