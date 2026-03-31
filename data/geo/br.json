@@ -12,7 +12,7 @@
     {
       "name": "São Paulo",
       "name_en": "Sao Paulo",
-      "region_tags": [],
+      "region_tags": ["Sudeste"],
       "cities": [
         {
           "name": "São Paulo",
@@ -163,7 +163,7 @@
     {
       "name": "Rio de Janeiro",
       "name_en": "Rio de Janeiro",
-      "region_tags": [],
+      "region_tags": ["Sudeste"],
       "cities": [
         {
           "name": "Rio de Janeiro",
@@ -258,7 +258,7 @@
     {
       "name": "Minas Gerais",
       "name_en": "Minas Gerais",
-      "region_tags": [],
+      "region_tags": ["Sudeste"],
       "cities": [
         {
           "name": "Belo Horizonte",
@@ -341,7 +341,7 @@
     {
       "name": "Espírito Santo",
       "name_en": "Espirito Santo",
-      "region_tags": [],
+      "region_tags": ["Sudeste"],
       "cities": [
         {
           "name": "Vitória",
@@ -368,7 +368,7 @@
     {
       "name": "Bahia",
       "name_en": "Bahia",
-      "region_tags": [],
+      "region_tags": ["Nordeste", "Sertão"],
       "cities": [
         {
           "name": "Salvador",
@@ -413,7 +413,7 @@
     {
       "name": "Pernambuco",
       "name_en": "Pernambuco",
-      "region_tags": [],
+      "region_tags": ["Nordeste", "Sertão"],
       "cities": [
         {
           "name": "Recife",
@@ -452,7 +452,7 @@
     {
       "name": "Ceará",
       "name_en": "Ceara",
-      "region_tags": [],
+      "region_tags": ["Nordeste", "Sertão"],
       "cities": [
         {
           "name": "Fortaleza",
@@ -491,7 +491,7 @@
     {
       "name": "Rio Grande do Norte",
       "name_en": "Rio Grande do Norte",
-      "region_tags": [],
+      "region_tags": ["Nordeste", "Sertão"],
       "cities": [
         {
           "name": "Natal",
@@ -524,7 +524,7 @@
     {
       "name": "Paraíba",
       "name_en": "Paraiba",
-      "region_tags": [],
+      "region_tags": ["Nordeste", "Sertão"],
       "cities": [
         {
           "name": "João Pessoa",
@@ -557,7 +557,7 @@
     {
       "name": "Alagoas",
       "name_en": "Alagoas",
-      "region_tags": [],
+      "region_tags": ["Nordeste", "Sertão"],
       "cities": [
         {
           "name": "Maceió",
@@ -584,7 +584,7 @@
     {
       "name": "Sergipe",
       "name_en": "Sergipe",
-      "region_tags": [],
+      "region_tags": ["Nordeste", "Sertão"],
       "cities": [
         {
           "name": "Aracaju",
@@ -611,7 +611,7 @@
     {
       "name": "Piauí",
       "name_en": "Piaui",
-      "region_tags": [],
+      "region_tags": ["Nordeste", "Sertão"],
       "cities": [
         {
           "name": "Teresina",
@@ -638,7 +638,7 @@
     {
       "name": "Maranhão",
       "name_en": "Maranhao",
-      "region_tags": [],
+      "region_tags": ["Nordeste"],
       "cities": [
         {
           "name": "São Luís",
@@ -671,7 +671,7 @@
     {
       "name": "Rio Grande do Sul",
       "name_en": "Rio Grande do Sul",
-      "region_tags": [],
+      "region_tags": ["Sul"],
       "cities": [
         {
           "name": "Porto Alegre",
@@ -730,7 +730,7 @@
     {
       "name": "Paraná",
       "name_en": "Parana",
-      "region_tags": [],
+      "region_tags": ["Sul"],
       "cities": [
         {
           "name": "Curitiba",
@@ -789,7 +789,7 @@
     {
       "name": "Santa Catarina",
       "name_en": "Santa Catarina",
-      "region_tags": [],
+      "region_tags": ["Sul"],
       "cities": [
         {
           "name": "Florianópolis",
@@ -836,7 +836,7 @@
     {
       "name": "Distrito Federal",
       "name_en": "Federal District",
-      "region_tags": [],
+      "region_tags": ["Centro-Oeste"],
       "cities": [
         {
           "name": "Brasília",
@@ -905,7 +905,7 @@
     {
       "name": "Goiás",
       "name_en": "Goias",
-      "region_tags": [],
+      "region_tags": ["Centro-Oeste"],
       "cities": [
         {
           "name": "Goiânia",
@@ -944,7 +944,7 @@
     {
       "name": "Mato Grosso",
       "name_en": "Mato Grosso",
-      "region_tags": [],
+      "region_tags": ["Centro-Oeste", "Pantanal"],
       "cities": [
         {
           "name": "Cuiabá",
@@ -971,7 +971,7 @@
     {
       "name": "Mato Grosso do Sul",
       "name_en": "Mato Grosso do Sul",
-      "region_tags": [],
+      "region_tags": ["Centro-Oeste", "Pantanal"],
       "cities": [
         {
           "name": "Campo Grande",
@@ -998,7 +998,7 @@
     {
       "name": "Pará",
       "name_en": "Para",
-      "region_tags": [],
+      "region_tags": ["Norte", "Amazônia"],
       "cities": [
         {
           "name": "Belém",
@@ -1037,7 +1037,7 @@
     {
       "name": "Amazonas",
       "name_en": "Amazonas",
-      "region_tags": [],
+      "region_tags": ["Norte", "Amazônia"],
       "cities": [
         {
           "name": "Manaus",
@@ -1070,7 +1070,7 @@
     {
       "name": "Tocantins",
       "name_en": "Tocantins",
-      "region_tags": [],
+      "region_tags": ["Norte"],
       "cities": [
         {
           "name": "Palmas",
@@ -1097,7 +1097,7 @@
     {
       "name": "Rondônia",
       "name_en": "Rondonia",
-      "region_tags": [],
+      "region_tags": ["Norte", "Amazônia"],
       "cities": [
         {
           "name": "Porto Velho",
@@ -1124,7 +1124,7 @@
     {
       "name": "Acre",
       "name_en": "Acre",
-      "region_tags": [],
+      "region_tags": ["Norte", "Amazônia"],
       "cities": [
         {
           "name": "Rio Branco",
@@ -1151,7 +1151,7 @@
     {
       "name": "Amapá",
       "name_en": "Amapa",
-      "region_tags": [],
+      "region_tags": ["Norte", "Amazônia"],
       "cities": [
         {
           "name": "Macapá",
@@ -1178,7 +1178,7 @@
     {
       "name": "Roraima",
       "name_en": "Roraima",
-      "region_tags": [],
+      "region_tags": ["Norte", "Amazônia"],
       "cities": [
         {
           "name": "Boa Vista",
