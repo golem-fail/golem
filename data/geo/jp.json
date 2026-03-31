@@ -91,7 +91,7 @@
     {
       "name": "青森県",
       "name_en": "Aomori",
-      "region_tags": ["Tohoku", "Honshu", "North Japan"],
+      "region_tags": ["Tohoku"],
       "cities": [
         {
           "name": "青森市",
@@ -124,7 +124,7 @@
     {
       "name": "岩手県",
       "name_en": "Iwate",
-      "region_tags": ["Tohoku", "Honshu", "North Japan"],
+      "region_tags": ["Tohoku"],
       "cities": [
         {
           "name": "盛岡市",
@@ -157,7 +157,7 @@
     {
       "name": "宮城県",
       "name_en": "Miyagi",
-      "region_tags": ["Tohoku", "Honshu", "North Japan"],
+      "region_tags": ["Tohoku"],
       "cities": [
         {
           "name": "仙台市青葉区",
@@ -204,7 +204,7 @@
     {
       "name": "秋田県",
       "name_en": "Akita",
-      "region_tags": ["Tohoku", "Honshu", "North Japan"],
+      "region_tags": ["Tohoku"],
       "cities": [
         {
           "name": "秋田市",
@@ -231,7 +231,7 @@
     {
       "name": "山形県",
       "name_en": "Yamagata",
-      "region_tags": ["Tohoku", "Honshu", "North Japan"],
+      "region_tags": ["Tohoku"],
       "cities": [
         {
           "name": "山形市",
@@ -258,7 +258,7 @@
     {
       "name": "福島県",
       "name_en": "Fukushima",
-      "region_tags": ["Tohoku", "Honshu", "North Japan"],
+      "region_tags": ["Tohoku"],
       "cities": [
         {
           "name": "福島市",
@@ -299,7 +299,7 @@
     {
       "name": "茨城県",
       "name_en": "Ibaraki",
-      "region_tags": ["Kanto", "Honshu", "East Japan"],
+      "region_tags": ["Kanto"],
       "cities": [
         {
           "name": "水戸市",
@@ -326,7 +326,7 @@
     {
       "name": "栃木県",
       "name_en": "Tochigi",
-      "region_tags": ["Kanto", "Honshu", "East Japan"],
+      "region_tags": ["Kanto"],
       "cities": [
         {
           "name": "宇都宮市",
@@ -353,7 +353,7 @@
     {
       "name": "群馬県",
       "name_en": "Gunma",
-      "region_tags": ["Kanto", "Honshu", "East Japan"],
+      "region_tags": ["Kanto"],
       "cities": [
         {
           "name": "前橋市",
@@ -380,7 +380,7 @@
     {
       "name": "埼玉県",
       "name_en": "Saitama",
-      "region_tags": ["Kanto", "Honshu", "East Japan"],
+      "region_tags": ["Kanto"],
       "cities": [
         {
           "name": "さいたま市大宮区",
@@ -421,7 +421,7 @@
     {
       "name": "千葉県",
       "name_en": "Chiba",
-      "region_tags": ["Kanto", "Honshu", "East Japan"],
+      "region_tags": ["Kanto"],
       "cities": [
         {
           "name": "千葉市中央区",
@@ -462,7 +462,7 @@
     {
       "name": "東京都",
       "name_en": "Tokyo",
-      "region_tags": ["Kanto", "Honshu", "East Japan"],
+      "region_tags": ["Kanto"],
       "cities": [
         {
           "name": "千代田区",
@@ -631,7 +631,7 @@
     {
       "name": "神奈川県",
       "name_en": "Kanagawa",
-      "region_tags": ["Kanto", "Honshu", "East Japan"],
+      "region_tags": ["Kanto"],
       "cities": [
         {
           "name": "横浜市中区",
@@ -692,7 +692,7 @@
     {
       "name": "新潟県",
       "name_en": "Niigata",
-      "region_tags": ["Chubu", "Honshu"],
+      "region_tags": ["Chubu", "Hokuriku"],
       "cities": [
         {
           "name": "新潟市中央区",
@@ -719,7 +719,7 @@
     {
       "name": "富山県",
       "name_en": "Toyama",
-      "region_tags": ["Chubu", "Honshu"],
+      "region_tags": ["Chubu", "Hokuriku"],
       "cities": [
         {
           "name": "富山市",
@@ -746,7 +746,7 @@
     {
       "name": "石川県",
       "name_en": "Ishikawa",
-      "region_tags": ["Chubu", "Honshu"],
+      "region_tags": ["Chubu", "Hokuriku"],
       "cities": [
         {
           "name": "金沢市",
@@ -779,7 +779,7 @@
     {
       "name": "福井県",
       "name_en": "Fukui",
-      "region_tags": ["Chubu", "Honshu"],
+      "region_tags": ["Chubu", "Hokuriku"],
       "cities": [
         {
           "name": "福井市",
@@ -806,7 +806,7 @@
     {
       "name": "山梨県",
       "name_en": "Yamanashi",
-      "region_tags": ["Chubu", "Honshu"],
+      "region_tags": ["Chubu"],
       "cities": [
         {
           "name": "甲府市",
@@ -833,7 +833,7 @@
     {
       "name": "長野県",
       "name_en": "Nagano",
-      "region_tags": ["Chubu", "Honshu"],
+      "region_tags": ["Chubu"],
       "cities": [
         {
           "name": "長野市",
@@ -874,7 +874,7 @@
     {
       "name": "岐阜県",
       "name_en": "Gifu",
-      "region_tags": ["Chubu", "Honshu"],
+      "region_tags": ["Chubu", "Tokai"],
       "cities": [
         {
           "name": "岐阜市",
@@ -901,7 +901,7 @@
     {
       "name": "静岡県",
       "name_en": "Shizuoka",
-      "region_tags": ["Chubu", "Honshu"],
+      "region_tags": ["Chubu", "Tokai"],
       "cities": [
         {
           "name": "静岡市葵区",
@@ -942,7 +942,7 @@
     {
       "name": "愛知県",
       "name_en": "Aichi",
-      "region_tags": ["Chubu", "Honshu"],
+      "region_tags": ["Chubu", "Tokai"],
       "cities": [
         {
           "name": "名古屋市中区",
@@ -1003,7 +1003,7 @@
     {
       "name": "三重県",
       "name_en": "Mie",
-      "region_tags": ["Kansai", "Honshu", "West Japan"],
+      "region_tags": ["Kansai", "Tokai"],
       "cities": [
         {
           "name": "津市",
@@ -1030,7 +1030,7 @@
     {
       "name": "滋賀県",
       "name_en": "Shiga",
-      "region_tags": ["Kansai", "Honshu", "West Japan"],
+      "region_tags": ["Kansai"],
       "cities": [
         {
           "name": "大津市",
@@ -1057,7 +1057,7 @@
     {
       "name": "京都府",
       "name_en": "Kyoto",
-      "region_tags": ["Kansai", "Honshu", "West Japan"],
+      "region_tags": ["Kansai"],
       "cities": [
         {
           "name": "京都市下京区",
@@ -1124,7 +1124,7 @@
     {
       "name": "大阪府",
       "name_en": "Osaka",
-      "region_tags": ["Kansai", "Honshu", "West Japan"],
+      "region_tags": ["Kansai"],
       "cities": [
         {
           "name": "大阪市北区",
@@ -1197,7 +1197,7 @@
     {
       "name": "兵庫県",
       "name_en": "Hyogo",
-      "region_tags": ["Kansai", "Honshu", "West Japan"],
+      "region_tags": ["Kansai"],
       "cities": [
         {
           "name": "神戸市中央区",
@@ -1244,7 +1244,7 @@
     {
       "name": "奈良県",
       "name_en": "Nara",
-      "region_tags": ["Kansai", "Honshu", "West Japan"],
+      "region_tags": ["Kansai"],
       "cities": [
         {
           "name": "奈良市",
@@ -1271,7 +1271,7 @@
     {
       "name": "和歌山県",
       "name_en": "Wakayama",
-      "region_tags": ["Kansai", "Honshu", "West Japan"],
+      "region_tags": ["Kansai"],
       "cities": [
         {
           "name": "和歌山市",
@@ -1298,7 +1298,7 @@
     {
       "name": "鳥取県",
       "name_en": "Tottori",
-      "region_tags": ["Chugoku", "Honshu", "West Japan"],
+      "region_tags": ["Chugoku", "San'in"],
       "cities": [
         {
           "name": "鳥取市",
@@ -1325,7 +1325,7 @@
     {
       "name": "島根県",
       "name_en": "Shimane",
-      "region_tags": ["Chugoku", "Honshu", "West Japan"],
+      "region_tags": ["Chugoku", "San'in"],
       "cities": [
         {
           "name": "松江市",
@@ -1352,7 +1352,7 @@
     {
       "name": "岡山県",
       "name_en": "Okayama",
-      "region_tags": ["Chugoku", "Honshu", "West Japan"],
+      "region_tags": ["Chugoku", "San'yō"],
       "cities": [
         {
           "name": "岡山市北区",
@@ -1385,7 +1385,7 @@
     {
       "name": "広島県",
       "name_en": "Hiroshima",
-      "region_tags": ["Chugoku", "Honshu", "West Japan"],
+      "region_tags": ["Chugoku", "San'yō"],
       "cities": [
         {
           "name": "広島市中区",
@@ -1432,7 +1432,7 @@
     {
       "name": "山口県",
       "name_en": "Yamaguchi",
-      "region_tags": ["Chugoku", "Honshu", "West Japan"],
+      "region_tags": ["Chugoku", "San'yō"],
       "cities": [
         {
           "name": "山口市",
@@ -1826,7 +1826,7 @@
     {
       "name": "沖縄県",
       "name_en": "Okinawa",
-      "region_tags": ["Okinawa", "Ryukyu"],
+      "region_tags": ["Ryukyu"],
       "cities": [
         {
           "name": "那覇市",
