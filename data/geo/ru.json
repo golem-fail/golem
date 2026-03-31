@@ -233,7 +233,7 @@
     {
       "name": "Санкт-Петербург",
       "name_en": "St. Petersburg",
-      "region_tags": [],
+      "region_tags": ["Northwestern Russia"],
       "cities": [
         {
           "name": "Санкт-Петербург",
@@ -308,7 +308,7 @@
     {
       "name": "Ленинградская область",
       "name_en": "Leningrad Oblast",
-      "region_tags": [],
+      "region_tags": ["Northwestern Russia"],
       "cities": [
         {
           "name": "Гатчина",
@@ -860,7 +860,7 @@
     {
       "name": "Ростовская область",
       "name_en": "Rostov Oblast",
-      "region_tags": [],
+      "region_tags": ["Southern Russia", "Don"],
       "cities": [
         {
           "name": "Ростов-на-Дону",
@@ -905,7 +905,7 @@
     {
       "name": "Волгоградская область",
       "name_en": "Volgograd Oblast",
-      "region_tags": [],
+      "region_tags": ["Southern Russia", "Lower Volga"],
       "cities": [
         {
           "name": "Волгоград",
@@ -950,7 +950,7 @@
     {
       "name": "Краснодарский край",
       "name_en": "Krasnodar Krai",
-      "region_tags": [],
+      "region_tags": ["Southern Russia", "Kuban"],
       "cities": [
         {
           "name": "Краснодар",
@@ -1034,7 +1034,7 @@
     {
       "name": "Приморский край",
       "name_en": "Primorsky Krai",
-      "region_tags": [],
+      "region_tags": ["Far Eastern Russia", "Pacific Russia"],
       "cities": [
         {
           "name": "Владивосток",
@@ -1079,7 +1079,7 @@
     {
       "name": "Хабаровский край",
       "name_en": "Khabarovsk Krai",
-      "region_tags": [],
+      "region_tags": ["Far Eastern Russia", "Pacific Russia"],
       "cities": [
         {
           "name": "Хабаровск",
