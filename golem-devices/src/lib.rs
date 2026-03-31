@@ -5,6 +5,7 @@ pub mod concurrency;
 pub mod ios;
 pub mod lifecycle;
 pub mod resolver;
+pub mod resource_manager;
 pub mod version;
 
 use serde::{Deserialize, Serialize};
