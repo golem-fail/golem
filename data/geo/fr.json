@@ -175,7 +175,7 @@
     {
       "name": "Provence-Alpes-Côte d'Azur",
       "name_en": "Provence-Alpes-Cote d'Azur",
-      "region_tags": ["Provence", "PACA"],
+      "region_tags": ["Provence", "PACA", "Midi"],
       "cities": [
         {
           "name": "Marseille",
@@ -433,7 +433,7 @@
     {
       "name": "Occitanie",
       "name_en": "Occitanie",
-      "region_tags": ["Languedoc-Roussillon", "Midi-Pyrénées"],
+      "region_tags": ["Languedoc-Roussillon", "Midi-Pyrénées", "Midi"],
       "cities": [
         {
           "name": "Toulouse",
@@ -1053,7 +1053,7 @@
     {
       "name": "Centre-Val de Loire",
       "name_en": "Centre-Val de Loire",
-      "region_tags": [],
+      "region_tags": ["Loire Valley"],
       "cities": [
         {
           "name": "Tours",
