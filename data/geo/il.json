@@ -12,7 +12,7 @@
     {
       "name": "ירושלים",
       "name_en": "Jerusalem District",
-      "region_tags": ["Central Israel", "Jerusalem"],
+      "region_tags": ["Central Israel"],
       "cities": [
         {
           "name": "ירושלים",

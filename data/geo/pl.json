@@ -12,7 +12,7 @@
     {
       "name": "Mazowieckie",
       "name_en": "Masovian Voivodeship",
-      "region_tags": ["Mazowieckie", "Mazowsze", "Central Poland"],
+      "region_tags": ["Mazowsze", "Central Poland"],
       "cities": [
         {
           "name": "Warszawa",
@@ -119,7 +119,7 @@
     {
       "name": "Małopolskie",
       "name_en": "Lesser Poland Voivodeship",
-      "region_tags": ["Małopolskie", "Małopolska", "Southern Poland"],
+      "region_tags": ["Małopolska", "Southern Poland"],
       "cities": [
         {
           "name": "Kraków",
@@ -194,7 +194,7 @@
     {
       "name": "Wielkopolskie",
       "name_en": "Greater Poland Voivodeship",
-      "region_tags": ["Wielkopolskie", "Wielkopolska", "Western Poland"],
+      "region_tags": ["Wielkopolska", "Western Poland"],
       "cities": [
         {
           "name": "Poznań",
@@ -269,7 +269,7 @@
     {
       "name": "Dolnośląskie",
       "name_en": "Lower Silesian Voivodeship",
-      "region_tags": ["Dolnośląskie", "Dolny Śląsk", "Silesia"],
+      "region_tags": ["Dolny Śląsk", "Silesia"],
       "cities": [
         {
           "name": "Wrocław",
@@ -344,7 +344,7 @@
     {
       "name": "Łódzkie",
       "name_en": "Lodz Voivodeship",
-      "region_tags": ["Łódzkie", "Central Poland"],
+      "region_tags": ["Central Poland"],
       "cities": [
         {
           "name": "Łódź",
@@ -419,7 +419,7 @@
     {
       "name": "Pomorskie",
       "name_en": "Pomeranian Voivodeship",
-      "region_tags": ["Pomorskie", "Pomorze", "Northern Poland"],
+      "region_tags": ["Pomorze", "Northern Poland"],
       "cities": [
         {
           "name": "Gdańsk",
@@ -514,7 +514,7 @@
     {
       "name": "Śląskie",
       "name_en": "Silesian Voivodeship",
-      "region_tags": ["Śląskie", "Górny Śląsk", "Upper Silesia"],
+      "region_tags": ["Górny Śląsk", "Upper Silesia"],
       "cities": [
         {
           "name": "Katowice",
@@ -589,7 +589,7 @@
     {
       "name": "Lubelskie",
       "name_en": "Lublin Voivodeship",
-      "region_tags": ["Lubelskie", "Lubelszczyzna", "Eastern Poland"],
+      "region_tags": ["Lubelszczyzna", "Eastern Poland"],
       "cities": [
         {
           "name": "Lublin",
@@ -664,7 +664,7 @@
     {
       "name": "Podkarpackie",
       "name_en": "Subcarpathian Voivodeship",
-      "region_tags": ["Podkarpackie", "Podkarpacie", "South-Eastern Poland"],
+      "region_tags": ["Podkarpacie", "South-Eastern Poland"],
       "cities": [
         {
           "name": "Rzeszów",
@@ -739,7 +739,7 @@
     {
       "name": "Zachodniopomorskie",
       "name_en": "West Pomeranian Voivodeship",
-      "region_tags": ["Zachodniopomorskie", "Pomorze Zachodnie", "North-Western Poland"],
+      "region_tags": ["Pomorze Zachodnie", "North-Western Poland"],
       "cities": [
         {
           "name": "Szczecin",
@@ -814,7 +814,7 @@
     {
       "name": "Podlaskie",
       "name_en": "Podlaskie Voivodeship",
-      "region_tags": ["Podlaskie", "Podlasie", "North-Eastern Poland"],
+      "region_tags": ["Podlasie", "North-Eastern Poland"],
       "cities": [
         {
           "name": "Białystok",
@@ -877,7 +877,7 @@
     {
       "name": "Warmińsko-Mazurskie",
       "name_en": "Warmian-Masurian Voivodeship",
-      "region_tags": ["Warmińsko-Mazurskie", "Warmia", "Mazury"],
+      "region_tags": ["Warmia", "Mazury"],
       "cities": [
         {
           "name": "Olsztyn",
@@ -922,7 +922,7 @@
     {
       "name": "Kujawsko-Pomorskie",
       "name_en": "Kuyavian-Pomeranian Voivodeship",
-      "region_tags": ["Kujawsko-Pomorskie", "Kujawy", "Pomorze"],
+      "region_tags": ["Kujawy", "Pomorze"],
       "cities": [
         {
           "name": "Bydgoszcz",
@@ -993,7 +993,7 @@
     {
       "name": "Świętokrzyskie",
       "name_en": "Holy Cross Voivodeship",
-      "region_tags": ["Świętokrzyskie", "Central Poland"],
+      "region_tags": ["Central Poland"],
       "cities": [
         {
           "name": "Kielce",
@@ -1038,7 +1038,7 @@
     {
       "name": "Lubuskie",
       "name_en": "Lubusz Voivodeship",
-      "region_tags": ["Lubuskie", "Ziemia Lubuska", "Western Poland"],
+      "region_tags": ["Ziemia Lubuska", "Western Poland"],
       "cities": [
         {
           "name": "Zielona Góra",
@@ -1083,7 +1083,7 @@
     {
       "name": "Opolskie",
       "name_en": "Opole Voivodeship",
-      "region_tags": ["Opolskie", "Śląsk Opolski", "Upper Silesia"],
+      "region_tags": ["Śląsk Opolski", "Upper Silesia"],
       "cities": [
         {
           "name": "Opole",

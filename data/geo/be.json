@@ -12,7 +12,7 @@
     {
       "name": "Bruxelles-Capitale / Brussels Hoofdstedelijk Gewest",
       "name_en": "Brussels-Capital Region",
-      "region_tags": ["Brussels", "Brussels-Capital", "French community", "Dutch community"],
+      "region_tags": ["French community", "Dutch community"],
       "cities": [
         {
           "name": "Bruxelles / Brussel",
@@ -155,7 +155,7 @@
     {
       "name": "Antwerpen",
       "name_en": "Antwerp",
-      "region_tags": ["Flanders", "Antwerp", "Dutch community"],
+      "region_tags": ["Flanders", "Dutch community"],
       "cities": [
         {
           "name": "Antwerpen",
@@ -300,7 +300,7 @@
     {
       "name": "Oost-Vlaanderen",
       "name_en": "East Flanders",
-      "region_tags": ["Flanders", "East Flanders", "Dutch community"],
+      "region_tags": ["Flanders", "Dutch community"],
       "cities": [
         {
           "name": "Gent",
@@ -415,7 +415,7 @@
     {
       "name": "West-Vlaanderen",
       "name_en": "West Flanders",
-      "region_tags": ["Flanders", "West Flanders", "Dutch community"],
+      "region_tags": ["Flanders", "Dutch community"],
       "cities": [
         {
           "name": "Brugge",
@@ -536,7 +536,7 @@
     {
       "name": "Vlaams-Brabant",
       "name_en": "Flemish Brabant",
-      "region_tags": ["Flanders", "Flemish Brabant", "Dutch community"],
+      "region_tags": ["Flanders", "Dutch community"],
       "cities": [
         {
           "name": "Leuven / Louvain",
@@ -631,7 +631,7 @@
     {
       "name": "Limburg",
       "name_en": "Limburg",
-      "region_tags": ["Flanders", "Limburg", "Dutch community"],
+      "region_tags": ["Flanders", "Dutch community"],
       "cities": [
         {
           "name": "Hasselt",
@@ -716,7 +716,7 @@
     {
       "name": "Hainaut / Henegouwen",
       "name_en": "Hainaut",
-      "region_tags": ["Wallonia", "Hainaut", "French community"],
+      "region_tags": ["Wallonia", "French community"],
       "cities": [
         {
           "name": "Mons / Bergen",
@@ -849,7 +849,7 @@
     {
       "name": "Liège / Luik",
       "name_en": "Liège",
-      "region_tags": ["Wallonia", "Liège", "French community", "German community"],
+      "region_tags": ["Wallonia", "French community", "German community"],
       "cities": [
         {
           "name": "Liège / Luik",
@@ -964,7 +964,7 @@
     {
       "name": "Luxembourg / Luxemburg",
       "name_en": "Luxembourg",
-      "region_tags": ["Wallonia", "Luxembourg", "French community"],
+      "region_tags": ["Wallonia", "French community"],
       "cities": [
         {
           "name": "Arlon / Aarlen",
@@ -1031,7 +1031,7 @@
     {
       "name": "Namur / Namen",
       "name_en": "Namur",
-      "region_tags": ["Wallonia", "Namur", "French community"],
+      "region_tags": ["Wallonia", "French community"],
       "cities": [
         {
           "name": "Namur / Namen",
@@ -1126,7 +1126,7 @@
     {
       "name": "Brabant wallon / Waals-Brabant",
       "name_en": "Walloon Brabant",
-      "region_tags": ["Wallonia", "Walloon Brabant", "French community"],
+      "region_tags": ["Wallonia", "French community"],
       "cities": [
         {
           "name": "Wavre / Waver",

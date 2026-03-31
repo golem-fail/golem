@@ -12,7 +12,7 @@
     {
       "name": "Contae Bhaile Átha Cliath",
       "name_en": "County Dublin",
-      "region_tags": ["Leinster", "Dublin"],
+      "region_tags": ["Leinster"],
       "cities": [
         {
           "name": "Baile Átha Cliath",
@@ -163,7 +163,7 @@
     {
       "name": "Contae Chorcaí",
       "name_en": "County Cork",
-      "region_tags": ["Munster", "Cork"],
+      "region_tags": ["Munster"],
       "cities": [
         {
           "name": "Corcaigh",
@@ -270,7 +270,7 @@
     {
       "name": "Contae na Gaillimhe",
       "name_en": "County Galway",
-      "region_tags": ["Connacht", "Galway"],
+      "region_tags": ["Connacht"],
       "cities": [
         {
           "name": "Gaillimh",
@@ -351,7 +351,7 @@
     {
       "name": "Contae Luimnigh",
       "name_en": "County Limerick",
-      "region_tags": ["Munster", "Limerick"],
+      "region_tags": ["Munster"],
       "cities": [
         {
           "name": "Luimneach",
@@ -426,7 +426,7 @@
     {
       "name": "Contae Phort Láirge",
       "name_en": "County Waterford",
-      "region_tags": ["Munster", "Waterford"],
+      "region_tags": ["Munster"],
       "cities": [
         {
           "name": "Port Láirge",
@@ -501,7 +501,7 @@
     {
       "name": "Contae Chill Chainnigh",
       "name_en": "County Kilkenny",
-      "region_tags": ["Leinster", "Kilkenny"],
+      "region_tags": ["Leinster"],
       "cities": [
         {
           "name": "Cill Chainnigh",
@@ -564,7 +564,7 @@
     {
       "name": "Contae Chiarraí",
       "name_en": "County Kerry",
-      "region_tags": ["Munster", "Kerry"],
+      "region_tags": ["Munster"],
       "cities": [
         {
           "name": "Trá Lí",
@@ -653,7 +653,7 @@
     {
       "name": "Contae Dhún na nGall",
       "name_en": "County Donegal",
-      "region_tags": ["Ulster", "Donegal"],
+      "region_tags": ["Ulster"],
       "cities": [
         {
           "name": "Leitir Ceanainn",
@@ -724,7 +724,7 @@
     {
       "name": "Contae Chill Mhantáin",
       "name_en": "County Wicklow",
-      "region_tags": ["Leinster", "Wicklow"],
+      "region_tags": ["Leinster"],
       "cities": [
         {
           "name": "Cill Mhantáin",
@@ -807,7 +807,7 @@
     {
       "name": "Contae Lú",
       "name_en": "County Louth",
-      "region_tags": ["Leinster", "Louth"],
+      "region_tags": ["Leinster"],
       "cities": [
         {
           "name": "Droichead Átha",
@@ -890,7 +890,7 @@
     {
       "name": "Contae Mhaigh Eo",
       "name_en": "County Mayo",
-      "region_tags": ["Connacht", "Mayo"],
+      "region_tags": ["Connacht"],
       "cities": [
         {
           "name": "Caisleán an Bharraigh",
@@ -967,7 +967,7 @@
     {
       "name": "Contae Thiobraid Árann",
       "name_en": "County Tipperary",
-      "region_tags": ["Munster", "Tipperary"],
+      "region_tags": ["Munster"],
       "cities": [
         {
           "name": "Cluain Meala",
@@ -1038,7 +1038,7 @@
     {
       "name": "Contae na Mí",
       "name_en": "County Meath",
-      "region_tags": ["Leinster", "Meath"],
+      "region_tags": ["Leinster"],
       "cities": [
         {
           "name": "An Uaimh",
@@ -1077,7 +1077,7 @@
     {
       "name": "Contae Chill Dara",
       "name_en": "County Kildare",
-      "region_tags": ["Leinster", "Kildare"],
+      "region_tags": ["Leinster"],
       "cities": [
         {
           "name": "Nas na Ríogh",

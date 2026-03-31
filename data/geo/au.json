@@ -459,7 +459,7 @@
     {
       "name": "Western Australia",
       "name_en": "Western Australia",
-      "region_tags": ["Western Australia"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Perth",

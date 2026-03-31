@@ -12,7 +12,7 @@
     {
       "name": "Île-de-France",
       "name_en": "Ile-de-France",
-      "region_tags": ["Île-de-France", "Paris Region"],
+      "region_tags": ["Paris Region"],
       "cities": [
         {
           "name": "Paris",
@@ -175,7 +175,7 @@
     {
       "name": "Provence-Alpes-Côte d'Azur",
       "name_en": "Provence-Alpes-Cote d'Azur",
-      "region_tags": ["Provence-Alpes-Côte d'Azur", "Provence", "PACA"],
+      "region_tags": ["Provence", "PACA"],
       "cities": [
         {
           "name": "Marseille",
@@ -310,7 +310,7 @@
     {
       "name": "Auvergne-Rhône-Alpes",
       "name_en": "Auvergne-Rhone-Alpes",
-      "region_tags": ["Auvergne-Rhône-Alpes", "Rhône-Alpes", "Auvergne"],
+      "region_tags": ["Rhône-Alpes", "Auvergne"],
       "cities": [
         {
           "name": "Lyon",
@@ -433,7 +433,7 @@
     {
       "name": "Occitanie",
       "name_en": "Occitanie",
-      "region_tags": ["Occitanie", "Languedoc-Roussillon", "Midi-Pyrénées"],
+      "region_tags": ["Languedoc-Roussillon", "Midi-Pyrénées"],
       "cities": [
         {
           "name": "Toulouse",
@@ -556,7 +556,7 @@
     {
       "name": "Nouvelle-Aquitaine",
       "name_en": "Nouvelle-Aquitaine",
-      "region_tags": ["Nouvelle-Aquitaine", "Aquitaine", "Poitou-Charentes", "Limousin"],
+      "region_tags": ["Aquitaine", "Poitou-Charentes", "Limousin"],
       "cities": [
         {
           "name": "Bordeaux",
@@ -641,7 +641,7 @@
     {
       "name": "Hauts-de-France",
       "name_en": "Hauts-de-France",
-      "region_tags": ["Hauts-de-France", "Nord-Pas-de-Calais", "Picardie"],
+      "region_tags": ["Nord-Pas-de-Calais", "Picardie"],
       "cities": [
         {
           "name": "Lille",
@@ -700,7 +700,7 @@
     {
       "name": "Grand Est",
       "name_en": "Grand Est",
-      "region_tags": ["Grand Est", "Alsace", "Lorraine", "Champagne-Ardenne"],
+      "region_tags": ["Alsace", "Lorraine", "Champagne-Ardenne"],
       "cities": [
         {
           "name": "Strasbourg",
@@ -860,7 +860,7 @@
     {
       "name": "Bretagne",
       "name_en": "Brittany",
-      "region_tags": ["Bretagne", "Brittany"],
+      "region_tags": ["Bretagne"],
       "cities": [
         {
           "name": "Rennes",
@@ -927,7 +927,7 @@
     {
       "name": "Pays de la Loire",
       "name_en": "Pays de la Loire",
-      "region_tags": ["Pays de la Loire", "Loire Valley"],
+      "region_tags": ["Loire Valley"],
       "cities": [
         {
           "name": "Nantes",
@@ -1006,7 +1006,7 @@
     {
       "name": "Bourgogne-Franche-Comté",
       "name_en": "Bourgogne-Franche-Comte",
-      "region_tags": ["Bourgogne-Franche-Comté", "Bourgogne", "Franche-Comté"],
+      "region_tags": ["Bourgogne", "Franche-Comté"],
       "cities": [
         {
           "name": "Dijon",
@@ -1053,7 +1053,7 @@
     {
       "name": "Centre-Val de Loire",
       "name_en": "Centre-Val de Loire",
-      "region_tags": ["Centre-Val de Loire"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Tours",
@@ -1100,7 +1100,7 @@
     {
       "name": "Corse",
       "name_en": "Corsica",
-      "region_tags": ["Corse", "Corsica"],
+      "region_tags": ["Corse"],
       "cities": [
         {
           "name": "Ajaccio",

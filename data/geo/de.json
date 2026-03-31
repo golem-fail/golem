@@ -68,7 +68,7 @@
     {
       "name": "Bayern",
       "name_en": "Bavaria",
-      "region_tags": ["Southern Germany", "Bavaria", "Franconia"],
+      "region_tags": ["Southern Germany", "Franconia"],
       "cities": [
         {
           "name": "München",
@@ -543,7 +543,7 @@
     {
       "name": "Sachsen",
       "name_en": "Saxony",
-      "region_tags": ["Eastern Germany", "Saxony"],
+      "region_tags": ["Eastern Germany"],
       "cities": [
         {
           "name": "Dresden",

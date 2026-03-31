@@ -12,7 +12,7 @@
     {
       "name": "서울특별시",
       "name_en": "Seoul",
-      "region_tags": ["Seoul"],
+      "region_tags": [],
       "cities": [
         {
           "name": "서울",
@@ -192,7 +192,7 @@
     {
       "name": "인천광역시",
       "name_en": "Incheon",
-      "region_tags": ["Incheon"],
+      "region_tags": [],
       "cities": [
         {
           "name": "인천",

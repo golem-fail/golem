@@ -12,7 +12,7 @@
     {
       "name": "北海道",
       "name_en": "Hokkaido",
-      "region_tags": ["Hokkaido"],
+      "region_tags": [],
       "cities": [
         {
           "name": "札幌市中央区",

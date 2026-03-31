@@ -305,7 +305,7 @@
     {
       "name": "Western Cape",
       "name_en": "Western Cape",
-      "region_tags": ["Western Cape"],
+      "region_tags": [],
       "cities": [
         {
           "name": "Cape Town",
