@@ -75,7 +75,7 @@
     {
       "name": "Greater Manchester",
       "name_en": "Greater Manchester",
-      "region_tags": ["England"],
+      "region_tags": ["England", "North West England"],
       "cities": [
         {
           "name": "Manchester",
@@ -165,7 +165,7 @@
     {
       "name": "West Yorkshire",
       "name_en": "West Yorkshire",
-      "region_tags": ["Yorkshire", "England"],
+      "region_tags": ["Yorkshire", "England", "Yorkshire and the Humber"],
       "cities": [
         {
           "name": "Leeds",
@@ -390,7 +390,7 @@
     {
       "name": "Merseyside",
       "name_en": "Merseyside",
-      "region_tags": ["England"],
+      "region_tags": ["England", "North West England"],
       "cities": [
         {
           "name": "Liverpool",
@@ -435,7 +435,7 @@
     {
       "name": "City of Bristol",
       "name_en": "City of Bristol",
-      "region_tags": ["England"],
+      "region_tags": ["England", "South West England"],
       "cities": [
         {
           "name": "Bristol",
@@ -480,7 +480,7 @@
     {
       "name": "South Yorkshire",
       "name_en": "South Yorkshire",
-      "region_tags": ["Yorkshire", "England"],
+      "region_tags": ["Yorkshire", "England", "Yorkshire and the Humber"],
       "cities": [
         {
           "name": "Sheffield",
@@ -519,7 +519,7 @@
     {
       "name": "Tyne and Wear",
       "name_en": "Tyne and Wear",
-      "region_tags": ["England"],
+      "region_tags": ["England", "North East England"],
       "cities": [
         {
           "name": "Newcastle upon Tyne",
@@ -642,7 +642,7 @@
     {
       "name": "Hampshire",
       "name_en": "Hampshire",
-      "region_tags": ["England"],
+      "region_tags": ["England", "South East England"],
       "cities": [
         {
           "name": "Southampton",
@@ -681,7 +681,7 @@
     {
       "name": "Oxfordshire",
       "name_en": "Oxfordshire",
-      "region_tags": ["England"],
+      "region_tags": ["England", "South East England"],
       "cities": [
         {
           "name": "Oxford",
@@ -726,7 +726,7 @@
     {
       "name": "Cambridgeshire",
       "name_en": "Cambridgeshire",
-      "region_tags": ["East Anglia", "England"],
+      "region_tags": ["East Anglia", "England", "East of England"],
       "cities": [
         {
           "name": "Cambridge",
@@ -771,7 +771,7 @@
     {
       "name": "East Sussex",
       "name_en": "East Sussex",
-      "region_tags": ["England"],
+      "region_tags": ["England", "South East England"],
       "cities": [
         {
           "name": "Brighton",
@@ -810,7 +810,7 @@
     {
       "name": "North Yorkshire",
       "name_en": "North Yorkshire",
-      "region_tags": ["Yorkshire", "England"],
+      "region_tags": ["Yorkshire", "England", "Yorkshire and the Humber"],
       "cities": [
         {
           "name": "York",
@@ -1005,7 +1005,7 @@
     {
       "name": "Bath and North East Somerset",
       "name_en": "Bath and North East Somerset",
-      "region_tags": ["England"],
+      "region_tags": ["England", "South West England"],
       "cities": [
         {
           "name": "Bath",
@@ -1044,7 +1044,7 @@
     {
       "name": "Norfolk",
       "name_en": "Norfolk",
-      "region_tags": ["East Anglia", "England"],
+      "region_tags": ["East Anglia", "England", "East of England"],
       "cities": [
         {
           "name": "Norwich",
@@ -1077,7 +1077,7 @@
     {
       "name": "Devon",
       "name_en": "Devon",
-      "region_tags": ["England"],
+      "region_tags": ["England", "South West England"],
       "cities": [
         {
           "name": "Exeter",
