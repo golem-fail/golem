@@ -20,8 +20,8 @@ steps = [
   { action = "wait", on_text = "Enter email", timeout = 10000 },
 
   # Type into the email field and verify
-  { action = "type", on_text = "Enter email", input = "testuser@golem.com" },
-  { action = "assert_visible", on_text = "testuser@golem.com" },
+  { action = "type", on_text = "Enter email", input = "testuser@example.com" },
+  { action = "assert_visible", on_text = "testuser@example.com" },
 
   # Type into the password field
   { action = "type", on_text = "Password", input = "P@ssw0rd!123" },
@@ -52,7 +52,7 @@ steps = [
   { action = "hide_keyboard" },
 
   # Read back form values to verify (fields show typed content)
-  { action = "read", on_text = "testuser@golem.com", save_to = "filled_email" },
+  { action = "read", on_text = "testuser@example.com", save_to = "filled_email" },
   { action = "read", on_text = "golem test query", save_to = "filled_search" },
 
   # Take a screenshot before submitting

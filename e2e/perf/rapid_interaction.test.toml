@@ -26,9 +26,9 @@ steps = [
 name = "rapid_form_fill"
 steps = [
   # Rapidly type into all input fields in quick succession
-  { action = "type", on_text = "Enter email", input = "perf@golem.com" },
+  { action = "type", on_text = "Enter email", input = "perf@example.com" },
   { action = "wait", on_text = "Enter email", timeout = 2000 },
-  { action = "assert_visible", on_text = "perf@golem.com" },
+  { action = "assert_visible", on_text = "perf@example.com" },
 
   { action = "type", on_text = "Password", input = "Str0ngP@ss!" },
   { action = "wait", on_text = "Password", timeout = 2000 },
