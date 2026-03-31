@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{Context, Result};
@@ -42,15 +42,15 @@ impl SuiteRunner {
 
     /// Run a suite of flow files and return aggregated results.
     ///
-    /// Flows are executed sequentially. Each flow produces a [`FlowReport`]
-    /// which is collected into the final [`SuiteReport`].
-    pub async fn run_suite(&self, flow_paths: &[std::path::PathBuf]) -> Result<SuiteReport> {
+    /// Flows are executed sequentially. Each flow may produce multiple
+    /// [`FlowReport`]s when it targets more than one platform.
+    pub async fn run_suite(&self, flow_paths: &[PathBuf]) -> Result<SuiteReport> {
         let start = Instant::now();
         let mut flow_reports = Vec::new();
 
         for path in flow_paths {
-            let report = self.run_single_flow(path).await;
-            flow_reports.push(report);
+            let reports = self.run_single_flow(path).await;
+            flow_reports.extend(reports);
         }
 
         Ok(SuiteReport {
@@ -59,17 +59,15 @@ impl SuiteRunner {
         })
     }
 
-    /// Run a single flow file and return its report.
+    /// Run a single flow file on all applicable platforms in parallel.
     ///
     /// Steps:
-    /// 1. Read the TOML flow file.
-    /// 2. Parse it with [`parse_flow`].
-    /// 3. Expand mixins on each block's steps.
-    /// 4. TODO: merge config, connect to device, execute blocks.
-    ///
-    /// Sub-flow execution (via `run_flow` on a block) should also call
-    /// [`expand_mixins`] after parsing the sub-flow.
-    async fn run_single_flow(&self, path: &Path) -> FlowReport {
+    /// 1. Parse the TOML flow file and expand mixins.
+    /// 2. Detect target platforms from CLI override or flow device constraints.
+    /// 3. Discover a device and ensure companion for each platform.
+    /// 4. Spawn parallel `tokio::spawn` tasks — one per device.
+    /// 5. Collect results into a `Vec<FlowReport>`.
+    async fn run_single_flow(&self, path: &Path) -> Vec<FlowReport> {
         let flow_name = path
             .file_stem()
             .and_then(|s| s.to_str())
@@ -82,7 +80,7 @@ impl SuiteRunner {
             Ok(f) => f,
             Err(e) => {
                 eprintln!("  Parse error: {e:#}");
-                return FlowReport {
+                return vec![FlowReport {
                     flow_name,
                     success: false,
                     step_results: Vec::new(),
@@ -91,134 +89,95 @@ impl SuiteRunner {
                     seed: self.config.seed,
                     screenshot_path: None,
                     device_name: None,
-                };
+                }];
             }
         };
 
-        // Detect target platform from CLI override or flow's device constraints.
-        let platform = self.config.platform.unwrap_or_else(|| detect_platform(&flow));
-        eprintln!("  Platform: {platform}");
-
-        // Discover a device for the target platform.
-        let device = match discover_device(platform).await {
-            Ok(d) => d,
-            Err(e) => {
-                eprintln!("  Device discovery failed: {e:#}");
-                return FlowReport {
-                    flow_name,
-                    success: false,
-                    step_results: Vec::new(),
-                    warnings: vec![format!("Device discovery failed: {e}")],
-                    duration_ms: start.elapsed().as_millis() as u64,
-                    seed: self.config.seed,
-                    screenshot_path: None,
-                    device_name: None,
-                };
-            }
+        // Detect target platforms from CLI override or flow's device constraints.
+        let platforms = if let Some(p) = self.config.platform {
+            vec![p]
+        } else {
+            detect_all_platforms(&flow)
         };
 
-        let device_name = device.name.clone();
+        // Discover devices and set up companions for each platform.
+        let mut device_setups = Vec::new();
+        for platform in &platforms {
+            let port = match *platform {
+                Platform::Ios => 8222u16,   // TODO: dynamic via ResourceManager
+                Platform::Android => 8223u16,
+            };
 
-        // Extract bundle ID from the first app in the flow
-        let bundle_id = flow
-            .flow
-            .apps
-            .first()
-            .map(|a| a.bundle.clone())
-            .unwrap_or_else(|| "com.golem.test".to_string());
-
-        // Create platform-appropriate driver and verify companion is running.
-        let companion_port = match platform {
-            Platform::Ios => 8222u16,
-            Platform::Android => 8223u16,
-        };
-        let driver: Box<dyn PlatformDriver> = match platform {
-            Platform::Ios => {
-                Box::new(IosDriver::new(device.udid.clone(), bundle_id, companion_port))
-            }
-            Platform::Android => {
-                Box::new(AndroidDriver::new(device.udid.clone(), bundle_id, companion_port))
-            }
-        };
-
-        // Three-tier companion startup
-        let health = match ensure_companion(&device, platform, companion_port).await {
-            Ok(h) => h,
-            Err(e) => {
-                eprintln!("  Companion startup failed: {e:#}");
-                return FlowReport {
-                    flow_name,
-                    success: false,
-                    step_results: Vec::new(),
-                    warnings: vec![format!("Companion startup failed: {e}")],
-                    duration_ms: start.elapsed().as_millis() as u64,
-                    seed: self.config.seed,
-                    screenshot_path: None,
-                    device_name: Some(device_name),
-                };
-            }
-        };
-        eprintln!(
-            "  Companion: {} v{} on {} ({})",
-            health.platform, health.version, health.device_name, health.os_version
-        );
-
-        // Set up variable store
-        let mut vars = VariableStore::new();
-
-        // Build execution context
-        let flow_dir = path.parent().unwrap_or(Path::new("."));
-        let capture_config = CaptureConfig::default();
-        let mut ctx = ExecutionContext {
-            flow_dir,
-            project_root: flow_dir,
-            capture_config: &capture_config,
-            flow_name: &flow_name,
-            block_name: None,
-            step_index: 0,
-            device: Some(&device),
-        };
-
-        // Execute the flow
-        eprintln!("  Executing on {} ({})", device_name, device.udid);
-        match execute_flow(&flow, driver.as_ref(), &mut vars, None, 10_000, &mut ctx).await {
-            Ok(result) => {
-                if !result.success {
-                    if let Some(ref block) = result.failed_block {
-                        eprintln!("  Failed in block: {block}");
-                    }
-                    if let Some(step) = result.failed_step {
-                        eprintln!("  Failed at step: {step}");
+            match discover_device(*platform).await {
+                Ok(device) => {
+                    eprintln!("  Platform: {platform}");
+                    match ensure_companion(&device, *platform, port).await {
+                        Ok(health) => {
+                            eprintln!(
+                                "  Companion: {} v{} on {} ({})",
+                                health.platform, health.version, health.device_name, health.os_version
+                            );
+                            device_setups.push((device, *platform, port));
+                        }
+                        Err(e) => {
+                            eprintln!("  Companion failed for {platform}: {e:#}");
+                            // Don't fail the whole suite — skip this platform
+                        }
                     }
                 }
-                for w in &result.warnings {
-                    eprintln!("  Warning: {w}");
-                }
-                FlowReport {
-                    flow_name,
-                    success: result.success,
-                    step_results: Vec::new(),
-                    warnings: result.warnings,
-                    duration_ms: start.elapsed().as_millis() as u64,
-                    seed: self.config.seed,
-                    screenshot_path: None,
-                    device_name: Some(device_name),
-                }
-            }
-            Err(e) => {
-                eprintln!("  Error: {e:#}");
-                FlowReport {
-                    flow_name,
-                    success: false,
-                    step_results: Vec::new(),
-                    warnings: vec![format!("Execution error: {e}")],
-                    duration_ms: start.elapsed().as_millis() as u64,
-                    seed: self.config.seed,
-                    screenshot_path: None,
-                    device_name: Some(device_name),
+                Err(e) => {
+                    eprintln!("  No {platform} device available: {e:#}");
+                    // Skip this platform
                 }
             }
         }
+
+        if device_setups.is_empty() {
+            return vec![FlowReport {
+                flow_name,
+                success: false,
+                step_results: Vec::new(),
+                warnings: vec!["No devices available for any target platform".to_string()],
+                duration_ms: start.elapsed().as_millis() as u64,
+                seed: self.config.seed,
+                screenshot_path: None,
+                device_name: None,
+            }];
+        }
+
+        // Spawn parallel execution tasks — one per device.
+        let mut handles = Vec::new();
+        for (device, platform, port) in device_setups {
+            let flow = flow.clone();
+            let flow_name = flow_name.clone();
+            let flow_dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
+            let seed = self.config.seed;
+
+            handles.push(tokio::spawn(async move {
+                run_flow_on_device(flow, flow_name, flow_dir, device, platform, port, seed).await
+            }));
+        }
+
+        // Collect results from all spawned tasks.
+        let mut reports = Vec::new();
+        for handle in handles {
+            match handle.await {
+                Ok(report) => reports.push(report),
+                Err(e) => {
+                    reports.push(FlowReport {
+                        flow_name: flow_name.clone(),
+                        success: false,
+                        step_results: Vec::new(),
+                        warnings: vec![format!("Task panicked: {e}")],
+                        duration_ms: start.elapsed().as_millis() as u64,
+                        seed: self.config.seed,
+                        screenshot_path: None,
+                        device_name: None,
+                    });
+                }
+            }
+        }
+        reports
     }
 
     /// Read, parse, and expand mixins in a flow file.
@@ -482,6 +441,7 @@ fn find_android_apk() -> Result<String> {
 /// Detect the target platform from the flow's device constraints.
 /// Looks at the first app's first device constraint `os` field.
 /// Defaults to iOS if not specified.
+#[allow(dead_code)]
 fn detect_platform(flow: &FlowFile) -> Platform {
     for app in &flow.flow.apps {
         for constraint in &app.devices {
@@ -500,6 +460,114 @@ fn detect_platform(flow: &FlowFile) -> Platform {
         }
     }
     Platform::Ios
+}
+
+/// Detect ALL platforms referenced in the flow's device constraints.
+/// Returns a deduplicated list. Defaults to `[Platform::Ios]` when no
+/// constraints are specified.
+fn detect_all_platforms(flow: &FlowFile) -> Vec<Platform> {
+    let mut platforms = Vec::new();
+    for app in &flow.flow.apps {
+        for constraint in &app.devices {
+            if let Some(ref os) = constraint.os {
+                for os_str in os.to_vec() {
+                    let p = if os_str.starts_with("android") {
+                        Platform::Android
+                    } else {
+                        Platform::Ios
+                    };
+                    if !platforms.contains(&p) {
+                        platforms.push(p);
+                    }
+                }
+            }
+        }
+    }
+    if platforms.is_empty() {
+        platforms.push(Platform::Ios);
+    }
+    platforms
+}
+
+/// Execute a flow on a single device. This is a free function (not a method)
+/// so it can be used with `tokio::spawn` which requires `'static` futures.
+/// All parameters are owned values.
+async fn run_flow_on_device(
+    flow: FlowFile,
+    flow_name: String,
+    flow_dir: PathBuf,
+    device: DeviceInfo,
+    platform: Platform,
+    port: u16,
+    seed: Option<u64>,
+) -> FlowReport {
+    let start = Instant::now();
+    let device_name = device.name.clone();
+    let device_label = format!("{platform}/{device_name}");
+
+    let bundle_id = flow
+        .flow
+        .apps
+        .first()
+        .map(|a| a.bundle.clone())
+        .unwrap_or_else(|| "com.golem.test".to_string());
+
+    let driver: Box<dyn PlatformDriver> = match platform {
+        Platform::Ios => Box::new(IosDriver::new(device.udid.clone(), bundle_id, port)),
+        Platform::Android => Box::new(AndroidDriver::new(device.udid.clone(), bundle_id, port)),
+    };
+
+    let mut vars = VariableStore::new();
+    let capture_config = CaptureConfig::default();
+    let mut ctx = ExecutionContext {
+        flow_dir: &flow_dir,
+        project_root: &flow_dir,
+        capture_config: &capture_config,
+        flow_name: &flow_name,
+        block_name: None,
+        step_index: 0,
+        device: Some(&device),
+    };
+
+    eprintln!("  Executing on {device_label}");
+    match execute_flow(&flow, driver.as_ref(), &mut vars, None, 10_000, &mut ctx).await {
+        Ok(result) => {
+            if !result.success {
+                if let Some(ref block) = result.failed_block {
+                    eprintln!("  [{device_label}] Failed in block: {block}");
+                }
+                if let Some(step) = result.failed_step {
+                    eprintln!("  [{device_label}] Failed at step: {step}");
+                }
+            }
+            for w in &result.warnings {
+                eprintln!("  [{device_label}] Warning: {w}");
+            }
+            FlowReport {
+                flow_name,
+                success: result.success,
+                step_results: Vec::new(),
+                warnings: result.warnings,
+                duration_ms: start.elapsed().as_millis() as u64,
+                seed,
+                screenshot_path: None,
+                device_name: Some(device_label),
+            }
+        }
+        Err(e) => {
+            eprintln!("  [{device_label}] Error: {e:#}");
+            FlowReport {
+                flow_name,
+                success: false,
+                step_results: Vec::new(),
+                warnings: vec![format!("Execution error: {e}")],
+                duration_ms: start.elapsed().as_millis() as u64,
+                seed,
+                screenshot_path: None,
+                device_name: Some(device_label),
+            }
+        }
+    }
 }
 
 /// Discover a suitable device for the given platform.
@@ -575,7 +643,6 @@ pub fn suite_stats(report: &SuiteReport) -> SuiteStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     /// Helper to create a passing FlowReport with the given name.
     fn passing_flow(name: &str) -> FlowReport {
@@ -885,11 +952,12 @@ steps = [
     async fn run_single_flow_fails_for_missing_file() {
         let runner = SuiteRunner::new(SuiteConfig::default());
         let path = PathBuf::from("nonexistent_flow.test.toml");
-        let report = runner.run_single_flow(&path).await;
+        let reports = runner.run_single_flow(&path).await;
 
-        assert!(!report.success, "report SHALL indicate failure for missing file");
+        assert_eq!(reports.len(), 1, "missing file SHALL produce exactly one report");
+        assert!(!reports[0].success, "report SHALL indicate failure for missing file");
         assert!(
-            !report.warnings.is_empty(),
+            !reports[0].warnings.is_empty(),
             "warnings SHALL contain the parse error"
         );
     }
@@ -904,11 +972,12 @@ steps = [
         std::fs::write(&flow_path, "this is not [[[valid toml").expect("write bad flow");
 
         let runner = SuiteRunner::new(SuiteConfig::default());
-        let report = runner.run_single_flow(&flow_path).await;
+        let reports = runner.run_single_flow(&flow_path).await;
 
-        assert!(!report.success, "report SHALL indicate failure for invalid TOML");
+        assert_eq!(reports.len(), 1, "invalid TOML SHALL produce exactly one report");
+        assert!(!reports[0].success, "report SHALL indicate failure for invalid TOML");
         assert!(
-            !report.warnings.is_empty(),
+            !reports[0].warnings.is_empty(),
             "warnings SHALL contain the parse error"
         );
     }
