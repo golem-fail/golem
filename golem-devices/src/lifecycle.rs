@@ -91,7 +91,7 @@ pub fn build_companion_command(device: &DeviceInfo, companion_path: &str) -> Vec
 ///
 /// This command blocks forever (the companion stays alive). It must be
 /// spawned as a background process, not awaited.
-pub fn start_companion_command(device: &DeviceInfo, companion_path: &str) -> Vec<String> {
+pub fn start_companion_command(device: &DeviceInfo, companion_path: &str, port: u16) -> Vec<String> {
     match device.platform {
         Platform::Ios => vec![
             "xcodebuild".into(),
@@ -114,6 +114,9 @@ pub fn start_companion_command(device: &DeviceInfo, companion_path: &str) -> Vec
             "am".into(),
             "instrument".into(),
             "-w".into(),
+            "-e".into(),
+            "port".into(),
+            port.to_string(),
             "com.golem.companion.test/androidx.test.runner.AndroidJUnitRunner".into(),
         ],
     }
@@ -288,17 +291,23 @@ pub async fn install_app(device: &DeviceInfo, app_path: &str) -> Result<()> {
 ///
 /// The server command blocks forever, so it is spawned as a detached process.
 /// Returns once the process has been spawned (does NOT wait for /health).
-pub async fn spawn_companion(device: &DeviceInfo, companion_path: &str) -> Result<()> {
-    let args = start_companion_command(device, companion_path);
+pub async fn spawn_companion(device: &DeviceInfo, companion_path: &str, port: u16) -> Result<()> {
+    let args = start_companion_command(device, companion_path, port);
     let Some((program, arguments)) = args.split_first() else {
         bail!("empty companion start command");
     };
-    tokio::process::Command::new(program)
-        .args(arguments)
+    let mut cmd = tokio::process::Command::new(program);
+    cmd.args(arguments)
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .with_context(|| format!("failed to spawn companion on {}", device.name))?;
+        .stderr(std::process::Stdio::null());
+
+    // iOS companion reads port from GOLEM_PORT env var
+    if device.platform == Platform::Ios {
+        cmd.env("GOLEM_PORT", port.to_string());
+    }
+
+    cmd.spawn()
+        .with_context(|| format!("failed to spawn companion on {} (port {port})", device.name))?;
     Ok(())
 }
 
@@ -588,7 +597,7 @@ mod tests {
     #[test]
     fn ios_start_companion_command_is_correct() {
         let d = ios_device();
-        let cmd = start_companion_command(&d, "/path/to/Companion.xcodeproj");
+        let cmd = start_companion_command(&d, "/path/to/Companion.xcodeproj", 8222);
         assert_eq!(
             cmd,
             vec![
@@ -607,11 +616,11 @@ mod tests {
         );
     }
 
-    // 13. Android start companion command
+    // 13. Android start companion command includes port arg
     #[test]
     fn android_start_companion_command_is_correct() {
         let d = android_device();
-        let cmd = start_companion_command(&d, "/path/to/companion.apk");
+        let cmd = start_companion_command(&d, "/path/to/companion.apk", 8225);
         assert_eq!(
             cmd,
             vec![
@@ -622,6 +631,9 @@ mod tests {
                 "am",
                 "instrument",
                 "-w",
+                "-e",
+                "port",
+                "8225",
                 "com.golem.companion.test/androidx.test.runner.AndroidJUnitRunner",
             ]
         );

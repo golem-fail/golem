@@ -11,7 +11,18 @@ public class CompanionServerTest {
     @Test
     public void startServer() throws Exception {
         UiAutomation uiAutomation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
-        CompanionServer server = new CompanionServer(uiAutomation);
+
+        // Read port from instrumentation args, default to 8223
+        android.os.Bundle args = InstrumentationRegistry.getArguments();
+        int port = 8223;
+        String portStr = args.getString("port");
+        if (portStr != null) {
+            try {
+                port = Integer.parseInt(portStr);
+            } catch (NumberFormatException ignored) {}
+        }
+
+        CompanionServer server = new CompanionServer(uiAutomation, port);
         server.start();
     }
 }

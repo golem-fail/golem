@@ -316,7 +316,7 @@ async fn ensure_companion(
         // Tier 2: try to restart without rebuilding
         eprintln!("  Companion not running. Restarting...");
         let companion_path = find_companion_path(platform)?;
-        if let Err(e) = golem_devices::lifecycle::spawn_companion(device, &companion_path).await {
+        if let Err(e) = golem_devices::lifecycle::spawn_companion(device, &companion_path, port).await {
             eprintln!("  Restart failed: {e:#}");
         } else {
             // Android needs port forwarding
@@ -343,12 +343,12 @@ async fn ensure_companion(
         match platform {
             Platform::Ios => {
                 golem_devices::lifecycle::build_companion(device, &companion_path).await?;
-                golem_devices::lifecycle::spawn_companion(device, &companion_path).await?;
+                golem_devices::lifecycle::spawn_companion(device, &companion_path, port).await?;
             }
             Platform::Android => {
                 let apk_path = find_android_apk()?;
                 golem_devices::lifecycle::install_android_companion(device, &apk_path, port).await?;
-                golem_devices::lifecycle::spawn_companion(device, &companion_path).await?;
+                golem_devices::lifecycle::spawn_companion(device, &companion_path, port).await?;
             }
         }
 
@@ -396,12 +396,12 @@ async fn ensure_companion(
         match platform {
             Platform::Ios => {
                 golem_devices::lifecycle::build_companion(device, &companion_path).await?;
-                golem_devices::lifecycle::spawn_companion(device, &companion_path).await?;
+                golem_devices::lifecycle::spawn_companion(device, &companion_path, port).await?;
             }
             Platform::Android => {
                 let apk_path = find_android_apk()?;
                 golem_devices::lifecycle::install_android_companion(device, &apk_path, port).await?;
-                golem_devices::lifecycle::spawn_companion(device, &companion_path).await?;
+                golem_devices::lifecycle::spawn_companion(device, &companion_path, port).await?;
             }
         }
 

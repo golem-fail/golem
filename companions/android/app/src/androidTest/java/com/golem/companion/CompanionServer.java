@@ -24,19 +24,25 @@ import java.util.Map;
 
 public class CompanionServer {
 
-    private static final int PORT = 8223;
+    private static final int DEFAULT_PORT = 8223;
     /** Inactivity timeout — server exits after this duration with no requests. */
     private static final long INACTIVITY_TIMEOUT_MS = 5 * 60 * 60 * 1000L; // 5 hours
     private final UiAutomation uiAutomation;
+    private final int port;
     private volatile long lastRequestTime = System.currentTimeMillis();
 
     public CompanionServer(UiAutomation uiAutomation) {
+        this(uiAutomation, DEFAULT_PORT);
+    }
+
+    public CompanionServer(UiAutomation uiAutomation, int port) {
         this.uiAutomation = uiAutomation;
+        this.port = port;
     }
 
     public void start() throws IOException {
         startInactivityWatchdog();
-        ServerSocket serverSocket = new ServerSocket(PORT);
+        ServerSocket serverSocket = new ServerSocket(port);
         while (true) {
             Socket client = serverSocket.accept();
             new Thread(() -> {
