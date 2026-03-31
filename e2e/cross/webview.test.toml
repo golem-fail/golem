@@ -27,10 +27,10 @@ steps = [
   { action = "assert_visible", on_text = "Counter" },
 
   # Interact with text input elements inside the web view
-  { action = "type", input = "Enter email", on_text = "webview@test.com" },
+  { action = "type", on_text = "Enter email", input = "webview@test.com" },
   { action = "assert_visible", on_text = "webview@test.com" },
 
-  { action = "type", input = "Search", on_text = "webview search query" },
+  { action = "type", on_text = "Search", input = "webview search query" },
   { action = "assert_visible", on_text = "webview search query" },
   { action = "hide_keyboard" },
 

@@ -40,7 +40,7 @@ steps = [
   { action = "assert_visible", on_text = "5", on_below = "Counter" },
 
   # Type into a form field to set additional state
-  { action = "type", input = "Enter email", on_text = "cross-test@golem.com" },
+  { action = "type", on_text = "Enter email", input = "cross-test@golem.com" },
   { action = "hide_keyboard" },
 
   # Read the counter value into a variable for later verification

@@ -23,14 +23,14 @@ steps = [
   { action = "tap", on_text = "Enter email" },
 
   # Type some text (keyboard should be visible)
-  { action = "type", input = "Enter email", on_text = "test@example.com" },
+  { action = "type", on_text = "Enter email", input = "test@example.com" },
 
   # Dismiss the keyboard
   { action = "hide_keyboard" },
 
   # Tap another text field to bring the keyboard back
   { action = "tap", on_text = "Search" },
-  { action = "type", input = "Search", on_text = "search query" },
+  { action = "type", on_text = "Search", input = "search query" },
 ]
 
 # Dismiss keyboard: Android can use back button, iOS uses hide_keyboard

@@ -20,22 +20,22 @@ steps = [
   { action = "wait", on_text = "Enter email", timeout = 10000 },
 
   # Type into the email field and verify
-  { action = "type", input = "Enter email", on_text = "testuser@golem.com" },
+  { action = "type", on_text = "Enter email", input = "testuser@golem.com" },
   { action = "assert_visible", on_text = "testuser@golem.com" },
 
   # Type into the password field
-  { action = "type", input = "Password", on_text = "P@ssw0rd!123" },
+  { action = "type", on_text = "Password", input = "P@ssw0rd!123" },
 
   # Type into the search field with a deliberate typo
-  { action = "type", input = "Search", on_text = "golem testt" },
+  { action = "type", on_text = "Search", input = "golem testt" },
   { action = "assert_visible", on_text = "golem testt" },
 
-  # Use backspace to correct the typo
-  { action = "backspace", on_text = "Search", count = 1 },
+  # Use backspace to correct the typo (field now shows "golem testt")
+  { action = "backspace", on_text = "golem testt", count = 1 },
   { action = "assert_visible", on_text = "golem test" },
 
-  # Type the correct ending
-  { action = "type", input = "Search", on_text = " query" },
+  # Type the correct ending (field now shows "golem test")
+  { action = "type", on_text = "golem test", input = " query" },
   { action = "assert_visible", on_text = "golem test query" },
 
   # Hide the keyboard
@@ -46,14 +46,14 @@ steps = [
 name = "fill_multiline_and_submit"
 steps = [
   # Type into the multiline text area
-  { action = "type", input = "Multi-line text", on_text = "First line of input\nSecond line with details\nThird line conclusion" },
+  { action = "type", on_text = "Multi-line text", input = "First line of input\nSecond line with details\nThird line conclusion" },
 
   # Hide the keyboard
   { action = "hide_keyboard" },
 
-  # Read back form values to verify
-  { action = "read", on_text = "Enter email", save_to = "filled_email" },
-  { action = "read", on_text = "Search", save_to = "filled_search" },
+  # Read back form values to verify (fields show typed content)
+  { action = "read", on_text = "testuser@golem.com", save_to = "filled_email" },
+  { action = "read", on_text = "golem test query", save_to = "filled_search" },
 
   # Take a screenshot before submitting
   { action = "screenshot", path = "/tmp/golem-cross-form-filled.png" },
