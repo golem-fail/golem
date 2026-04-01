@@ -69,9 +69,19 @@ impl ResourceManager {
         bail!("No free ports in range {PORT_RANGE_START}-{PORT_RANGE_END}")
     }
 
-    /// Try to allocate a device. Checks RAM and concurrency limits.
+    /// Try to allocate a device. Checks that the device isn't already
+    /// allocated, and that RAM and concurrency limits allow it.
     pub fn try_allocate(&self, device: &DeviceInfo, port: u16) -> Result<()> {
         let mut allocations = self.allocations.lock().expect("lock poisoned");
+
+        // Check if device is already allocated (another flow is using it)
+        if allocations.contains_key(&device.udid) {
+            bail!(
+                "Device {} ({}) is already in use by another flow",
+                device.name,
+                device.udid,
+            );
+        }
 
         if !can_launch_device(&self.config, allocations.len(), self.ram_provider.as_ref())? {
             bail!(

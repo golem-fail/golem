@@ -42,15 +42,64 @@ impl SuiteRunner {
 
     /// Run a suite of flow files and return aggregated results.
     ///
-    /// Flows are executed sequentially. Each flow may produce multiple
-    /// [`FlowReport`]s when it targets more than one platform.
+    /// Run a suite of flows in parallel, gated by resource availability.
+    ///
+    /// All flows are spawned as concurrent tasks. The ResourceManager
+    /// controls how many run simultaneously based on RAM and concurrency
+    /// limits. Flows that can't allocate devices immediately will wait.
     pub async fn run_suite(&self, flow_paths: &[PathBuf]) -> Result<SuiteReport> {
         let start = Instant::now();
-        let mut flow_reports = Vec::new();
 
+        if flow_paths.len() == 1 {
+            // Single flow — no need for suite-level parallelism.
+            let reports = self.run_single_flow(&flow_paths[0]).await;
+            return Ok(SuiteReport {
+                flows: reports,
+                total_duration_ms: start.elapsed().as_millis() as u64,
+            });
+        }
+
+        // Multiple flows — run in parallel with shared ResourceManager.
+        let resource_mgr = std::sync::Arc::new(
+            golem_devices::resource_manager::ResourceManager::new(
+                golem_devices::concurrency::ConcurrencyConfig::default(),
+            ),
+        );
+
+        let mut handles = Vec::new();
         for path in flow_paths {
-            let reports = self.run_single_flow(path).await;
-            flow_reports.extend(reports);
+            let path = path.clone();
+            let platform_override = self.config.platform;
+            let seed = self.config.seed;
+            let rm = resource_mgr.clone();
+
+            handles.push(tokio::spawn(async move {
+                let runner = SuiteRunner::new(SuiteConfig {
+                    platform: platform_override,
+                    seed,
+                    ..SuiteConfig::default()
+                });
+                runner.run_single_flow_with_resources(&path, &rm).await
+            }));
+        }
+
+        let mut flow_reports = Vec::new();
+        for handle in handles {
+            match handle.await {
+                Ok(reports) => flow_reports.extend(reports),
+                Err(e) => {
+                    flow_reports.push(FlowReport {
+                        flow_name: "unknown".to_string(),
+                        success: false,
+                        step_results: Vec::new(),
+                        warnings: vec![format!("Task panicked: {e}")],
+                        duration_ms: 0,
+                        seed: self.config.seed,
+                        screenshot_path: None,
+                        device_name: None,
+                    });
+                }
+            }
         }
 
         Ok(SuiteReport {
@@ -59,15 +108,25 @@ impl SuiteRunner {
         })
     }
 
+    /// Run a single flow without resource gating.
+    async fn run_single_flow(&self, path: &Path) -> Vec<FlowReport> {
+        self.run_single_flow_with_resources(path, &golem_devices::resource_manager::ResourceManager::new(
+            golem_devices::concurrency::ConcurrencyConfig {
+                max_concurrency: 100, // effectively unlimited for single flow
+                ..golem_devices::concurrency::ConcurrencyConfig::default()
+            },
+        )).await
+    }
+
     /// Run a single flow file on all applicable platforms in parallel.
     ///
-    /// Steps:
-    /// 1. Parse the TOML flow file and expand mixins.
-    /// 2. Detect target platforms from CLI override or flow device constraints.
-    /// 3. Discover a device and ensure companion for each platform.
-    /// 4. Spawn parallel `tokio::spawn` tasks — one per device.
-    /// 5. Collect results into a `Vec<FlowReport>`.
-    async fn run_single_flow(&self, path: &Path) -> Vec<FlowReport> {
+    /// Uses the ResourceManager to gate device allocation. If resources
+    /// aren't available, waits until they are.
+    async fn run_single_flow_with_resources(
+        &self,
+        path: &Path,
+        resource_mgr: &golem_devices::resource_manager::ResourceManager,
+    ) -> Vec<FlowReport> {
         let flow_name = path
             .file_stem()
             .and_then(|s| s.to_str())
@@ -101,11 +160,14 @@ impl SuiteRunner {
         };
 
         // Discover devices and set up companions for each platform.
+        // Wait for resource availability before allocating each device.
         let mut device_setups = Vec::new();
         for platform in &platforms {
             match discover_device(*platform).await {
                 Ok(device) => {
                     eprintln!("  Platform: {platform}");
+
+                    // Wait for resource availability (RAM + concurrency)
                     let port = match find_or_allocate_port(&device, *platform).await {
                         Ok(p) => p,
                         Err(e) => {
@@ -113,6 +175,17 @@ impl SuiteRunner {
                             continue;
                         }
                     };
+                    // Wait for resource allocation (RAM + concurrency limit)
+                    loop {
+                        match resource_mgr.try_allocate(&device, port) {
+                            Ok(()) => break,
+                            Err(_) => {
+                                eprintln!("  Waiting for resources ({platform})...");
+                                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                            }
+                        }
+                    }
+
                     match ensure_companion(&device, *platform, port).await {
                         Ok(health) => {
                             eprintln!(
@@ -123,7 +196,7 @@ impl SuiteRunner {
                         }
                         Err(e) => {
                             eprintln!("  Companion failed for {platform}: {e:#}");
-                            // Don't fail the whole suite — skip this platform
+                            resource_mgr.release(&device.udid);
                         }
                     }
                 }
@@ -146,6 +219,9 @@ impl SuiteRunner {
                 device_name: None,
             }];
         }
+
+        // Track allocated device UDIDs for release after execution.
+        let allocated_udids: Vec<String> = device_setups.iter().map(|(d, _, _)| d.udid.clone()).collect();
 
         // Spawn parallel execution tasks — one per device.
         // Shared failure barrier: when one device fails, others stop at the same step.
@@ -182,6 +258,12 @@ impl SuiteRunner {
                 }
             }
         }
+
+        // Release all allocated devices back to the ResourceManager.
+        for udid in &allocated_udids {
+            resource_mgr.release(udid);
+        }
+
         reports
     }
 
