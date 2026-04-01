@@ -167,6 +167,161 @@ fn parse_properties(contents: &str) -> HashMap<String, String> {
     map
 }
 
+// ---------------------------------------------------------------------------
+// System image and device profile discovery
+// ---------------------------------------------------------------------------
+
+/// Information about an installed Android system image.
+#[derive(Debug, Clone)]
+pub struct SystemImageInfo {
+    /// API level (e.g., 34)
+    pub api_level: u32,
+    /// ABI (e.g., "arm64-v8a", "x86_64")
+    pub abi: String,
+    /// Target variant (e.g., "google_apis", "google_apis_playstore", "default")
+    pub target: String,
+    /// Full path for avdmanager (e.g., "system-images;android-34;google_apis;arm64-v8a")
+    pub path: String,
+}
+
+/// Information about an available Android device profile.
+#[derive(Debug, Clone)]
+pub struct DeviceProfileInfo {
+    /// Profile ID for avdmanager (e.g., "pixel_9")
+    pub id: String,
+    /// Human-readable name (e.g., "Pixel 9")
+    pub name: String,
+    /// Whether this is a phone (true) or tablet/other (false)
+    pub is_phone: bool,
+}
+
+/// Discover installed Android system images by scanning $ANDROID_HOME/system-images/.
+pub async fn discover_android_system_images() -> anyhow::Result<Vec<SystemImageInfo>> {
+    let android_home = std::env::var("ANDROID_HOME")
+        .or_else(|_| std::env::var("ANDROID_SDK_ROOT"))
+        .map_err(|_| anyhow::anyhow!("ANDROID_HOME not set"))?;
+
+    let images_dir = std::path::PathBuf::from(&android_home).join("system-images");
+    if !images_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut images = Vec::new();
+
+    // Structure: system-images/android-{api}/{target}/{abi}/
+    if let Ok(api_dirs) = std::fs::read_dir(&images_dir) {
+        for api_entry in api_dirs.flatten() {
+            let api_name = api_entry.file_name().to_string_lossy().to_string();
+            let api_level: u32 = api_name
+                .strip_prefix("android-")
+                .and_then(|s| s.split('-').next()) // handle "android-34-ext8"
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+
+            if api_level == 0 {
+                continue;
+            }
+
+            if let Ok(target_dirs) = std::fs::read_dir(api_entry.path()) {
+                for target_entry in target_dirs.flatten() {
+                    let target = target_entry.file_name().to_string_lossy().to_string();
+
+                    if let Ok(abi_dirs) = std::fs::read_dir(target_entry.path()) {
+                        for abi_entry in abi_dirs.flatten() {
+                            let abi = abi_entry.file_name().to_string_lossy().to_string();
+                            images.push(SystemImageInfo {
+                                api_level,
+                                abi: abi.clone(),
+                                target: target.clone(),
+                                path: format!("system-images;{api_name};{target};{abi}"),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Sort by API level descending (latest first), prefer google_apis
+    images.sort_by(|a, b| {
+        b.api_level.cmp(&a.api_level)
+            .then(a.target.cmp(&b.target)) // google_apis before google_apis_playstore
+    });
+
+    Ok(images)
+}
+
+/// Discover available Android device profiles via avdmanager.
+pub async fn discover_android_device_profiles() -> anyhow::Result<Vec<DeviceProfileInfo>> {
+    let android_home = std::env::var("ANDROID_HOME")
+        .or_else(|_| std::env::var("ANDROID_SDK_ROOT"))
+        .map_err(|_| anyhow::anyhow!("ANDROID_HOME not set"))?;
+
+    let avdmanager = std::path::PathBuf::from(&android_home)
+        .join("cmdline-tools/latest/bin/avdmanager");
+
+    if !avdmanager.exists() {
+        anyhow::bail!("avdmanager not found at {}", avdmanager.display());
+    }
+
+    let output = tokio::process::Command::new(&avdmanager)
+        .args(["list", "device"])
+        .output()
+        .await?;
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut profiles = Vec::new();
+
+    // Parse output: lines like 'id: 44 or "pixel_8"' followed by '    Name: Pixel 8'
+    let mut current_id: Option<String> = None;
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("id: ") {
+            // Extract the quoted ID: '44 or "pixel_8"' → "pixel_8"
+            if let Some(start) = rest.find('"') {
+                if let Some(end) = rest[start + 1..].find('"') {
+                    current_id = Some(rest[start + 1..start + 1 + end].to_string());
+                }
+            }
+        } else if let Some(rest) = line.strip_prefix("    Name: ") {
+            if let Some(id) = current_id.take() {
+                let name = rest.trim().to_string();
+                let is_phone = name.contains("Pixel") && !name.contains("Tablet")
+                    && !name.contains("Fold") && !name.contains("C");
+                profiles.push(DeviceProfileInfo { id, name, is_phone });
+            }
+        }
+    }
+
+    Ok(profiles)
+}
+
+/// Pick the best system image for the given API level (or latest if 0).
+/// Prefers arm64-v8a ABI and google_apis target.
+pub fn pick_system_image(images: &[SystemImageInfo], preferred_api: u32) -> Option<&SystemImageInfo> {
+    images
+        .iter()
+        .filter(|img| {
+            (preferred_api == 0 || img.api_level == preferred_api)
+                && img.abi == "arm64-v8a"
+        })
+        .next() // already sorted by api_level desc, google_apis first
+}
+
+/// Pick the best device profile for a phone or tablet.
+/// Prefers the latest Pixel model.
+pub fn pick_device_profile(profiles: &[DeviceProfileInfo], want_phone: bool) -> Option<&DeviceProfileInfo> {
+    profiles
+        .iter()
+        .filter(|p| {
+            if want_phone {
+                p.is_phone
+            } else {
+                p.name.contains("Tablet")
+            }
+        })
+        .last() // last = latest model (avdmanager lists chronologically)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
