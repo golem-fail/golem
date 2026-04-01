@@ -14,6 +14,8 @@ use anyhow::{Context, Result};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 
+use crate::suite::{SuiteConfig, SuiteRunner};
+
 /// Path to the orchestrator socket.
 fn socket_path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
@@ -162,13 +164,63 @@ async fn process_message(msg: &str) -> String {
             .to_string()
         }
         Some("submit") => {
-            // Placeholder — actual work submission in session 2
-            serde_json::json!({
-                "type": "accepted",
-                "job_id": "placeholder",
-                "message": "Work submission not yet implemented. Run flows directly for now.",
-            })
-            .to_string()
+            // Extract flow paths and config from the message
+            let paths: Vec<PathBuf> = json["flow_paths"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(PathBuf::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            if paths.is_empty() {
+                return serde_json::json!({"type": "error", "message": "no flow_paths provided"})
+                    .to_string();
+            }
+
+            let platform_override = json["config"]["platform"]
+                .as_str()
+                .and_then(|p| match p {
+                    "ios" => Some(golem_devices::Platform::Ios),
+                    "android" => Some(golem_devices::Platform::Android),
+                    _ => None,
+                });
+
+            let seed = json["config"]["seed"].as_u64();
+
+            let config = SuiteConfig {
+                platform: platform_override,
+                seed,
+                ..SuiteConfig::default()
+            };
+
+            // Run the suite
+            let runner = SuiteRunner::new(config);
+            match runner.run_suite(&paths).await {
+                Ok(report) => {
+                    serde_json::json!({
+                        "type": "result",
+                        "report": {
+                            "total_duration_ms": report.total_duration_ms,
+                            "flows": report.flows.iter().map(|f| {
+                                serde_json::json!({
+                                    "flow_name": f.flow_name,
+                                    "success": f.success,
+                                    "warnings": f.warnings,
+                                    "duration_ms": f.duration_ms,
+                                    "device_name": f.device_name,
+                                })
+                            }).collect::<Vec<_>>(),
+                        }
+                    })
+                    .to_string()
+                }
+                Err(e) => {
+                    serde_json::json!({"type": "error", "message": format!("suite failed: {e}")})
+                        .to_string()
+                }
+            }
         }
         Some(other) => {
             serde_json::json!({"type": "error", "message": format!("unknown message type: {other}")})
@@ -181,19 +233,83 @@ async fn process_message(msg: &str) -> String {
     }
 }
 
-/// Submit work to a running orchestrator (placeholder for session 2).
+/// Submit work to a running orchestrator and wait for results.
 ///
-/// For now, just prints that the connection was successful and returns.
+/// Sends the flow paths and config to the server, waits for the result,
+/// prints the report, and returns the exit code.
 pub async fn submit_and_wait(
-    _stream: UnixStream,
+    mut stream: UnixStream,
     flow_paths: &[PathBuf],
-    _config: &serde_json::Value,
-) -> Result<()> {
+    config: &serde_json::Value,
+) -> Result<bool> {
     eprintln!(
         "  Connected to orchestrator. Submitting {} flow(s)...",
         flow_paths.len()
     );
-    eprintln!("  Work submission not yet implemented. Run flows directly for now.");
-    // Session 2 will implement actual submission and result streaming
-    Ok(())
+
+    // Send submit message
+    let paths: Vec<String> = flow_paths.iter().map(|p| p.display().to_string()).collect();
+    let msg = serde_json::json!({
+        "type": "submit",
+        "flow_paths": paths,
+        "config": config,
+    });
+    stream
+        .write_all(format!("{}\n", msg).as_bytes())
+        .await
+        .context("failed to send submit message")?;
+
+    // Read response (may take a long time for suite execution)
+    let mut reader = BufReader::new(&mut stream);
+    let mut line = String::new();
+    reader
+        .read_line(&mut line)
+        .await
+        .context("failed to read result from orchestrator")?;
+
+    let response: serde_json::Value = serde_json::from_str(line.trim())
+        .context("invalid JSON response from orchestrator")?;
+
+    match response["type"].as_str() {
+        Some("result") => {
+            let report = &response["report"];
+            let mut all_passed = true;
+
+            if let Some(flows) = report["flows"].as_array() {
+                for flow in flows {
+                    let name = flow["flow_name"].as_str().unwrap_or("unknown");
+                    let success = flow["success"].as_bool().unwrap_or(false);
+                    let duration = flow["duration_ms"].as_u64().unwrap_or(0);
+                    let device = flow["device_name"].as_str().unwrap_or("");
+
+                    let icon = if success { "✓" } else { "✗" };
+                    let status = if success { "PASSED" } else { "FAILED" };
+                    let duration_s = duration as f64 / 1000.0;
+
+                    if !device.is_empty() {
+                        eprintln!("{icon} {status}  {name} [{device}]  [{duration_s:.1}s]");
+                    } else {
+                        eprintln!("{icon} {status}  {name}  [{duration_s:.1}s]");
+                    }
+
+                    if !success {
+                        all_passed = false;
+                    }
+                }
+            }
+
+            let total_ms = report["total_duration_ms"].as_u64().unwrap_or(0);
+            let total_s = total_ms as f64 / 1000.0;
+            eprintln!("\nTotal: [{total_s:.1}s]");
+
+            Ok(all_passed)
+        }
+        Some("error") => {
+            let msg = response["message"].as_str().unwrap_or("unknown error");
+            anyhow::bail!("Orchestrator error: {msg}");
+        }
+        _ => {
+            anyhow::bail!("Unexpected response from orchestrator: {line}");
+        }
+    }
 }
