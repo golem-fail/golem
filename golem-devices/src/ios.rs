@@ -132,6 +132,135 @@ pub async fn discover_ios_devices() -> anyhow::Result<Vec<DeviceInfo>> {
     parse_simctl_output(&json)
 }
 
+// ---------------------------------------------------------------------------
+// Runtime and device type discovery
+// ---------------------------------------------------------------------------
+
+/// Information about an installed iOS runtime.
+#[derive(Debug, Clone)]
+pub struct RuntimeInfo {
+    /// Xcode runtime identifier (e.g., "com.apple.CoreSimulator.SimRuntime.iOS-18-6")
+    pub identifier: String,
+    /// Human-readable name (e.g., "iOS 18.6")
+    pub name: String,
+    /// Dotted version string (e.g., "18.6")
+    pub version: String,
+    /// Major version number (e.g., 18)
+    pub major: u32,
+}
+
+/// Information about an available iOS device type.
+#[derive(Debug, Clone)]
+pub struct DeviceTypeInfo {
+    /// Xcode device type identifier (e.g., "com.apple.CoreSimulator.SimDeviceType.iPhone-16")
+    pub identifier: String,
+    /// Human-readable name (e.g., "iPhone 16")
+    pub name: String,
+    /// Whether this is a phone (true) or tablet/other (false)
+    pub is_phone: bool,
+}
+
+/// Discover available iOS runtimes via `xcrun simctl list runtimes -j`.
+pub async fn discover_ios_runtimes() -> anyhow::Result<Vec<RuntimeInfo>> {
+    let output = tokio::process::Command::new("xcrun")
+        .args(["simctl", "list", "runtimes", "-j"])
+        .output()
+        .await?;
+
+    anyhow::ensure!(output.status.success(), "xcrun simctl list runtimes failed");
+
+    let text = String::from_utf8_lossy(&output.stdout);
+
+    #[derive(Deserialize)]
+    struct RuntimesOutput {
+        runtimes: Vec<RuntimeEntry>,
+    }
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct RuntimeEntry {
+        identifier: String,
+        name: String,
+        version: String,
+        is_available: bool,
+    }
+
+    let parsed: RuntimesOutput = serde_json::from_str(&text)?;
+
+    let mut runtimes: Vec<RuntimeInfo> = parsed
+        .runtimes
+        .into_iter()
+        .filter(|r| r.is_available && r.name.starts_with("iOS"))
+        .filter_map(|r| {
+            let major: u32 = r.version.split('.').next()?.parse().ok()?;
+            Some(RuntimeInfo {
+                identifier: r.identifier,
+                name: r.name,
+                version: r.version,
+                major,
+            })
+        })
+        .collect();
+
+    // Sort by major version descending (latest first)
+    runtimes.sort_by(|a, b| b.major.cmp(&a.major));
+    Ok(runtimes)
+}
+
+/// Discover available iOS device types via `xcrun simctl list devicetypes -j`.
+pub async fn discover_ios_device_types() -> anyhow::Result<Vec<DeviceTypeInfo>> {
+    let output = tokio::process::Command::new("xcrun")
+        .args(["simctl", "list", "devicetypes", "-j"])
+        .output()
+        .await?;
+
+    anyhow::ensure!(output.status.success(), "xcrun simctl list devicetypes failed");
+
+    let text = String::from_utf8_lossy(&output.stdout);
+
+    #[derive(Deserialize)]
+    struct DeviceTypesOutput {
+        devicetypes: Vec<DeviceTypeEntry>,
+    }
+    #[derive(Deserialize)]
+    struct DeviceTypeEntry {
+        identifier: String,
+        name: String,
+    }
+
+    let parsed: DeviceTypesOutput = serde_json::from_str(&text)?;
+
+    Ok(parsed
+        .devicetypes
+        .into_iter()
+        .map(|dt| {
+            let is_phone = dt.name.contains("iPhone");
+            DeviceTypeInfo {
+                identifier: dt.identifier,
+                name: dt.name,
+                is_phone,
+            }
+        })
+        .collect())
+}
+
+/// Pick the best device type for the given form factor.
+///
+/// Prefers the latest model (last in the list from simctl, which tends
+/// to be sorted chronologically). For phones, picks the latest iPhone.
+/// For tablets, picks the latest iPad.
+pub fn pick_device_type(device_types: &[DeviceTypeInfo], want_phone: bool) -> Option<&DeviceTypeInfo> {
+    device_types
+        .iter()
+        .filter(|dt| {
+            if want_phone {
+                dt.is_phone
+            } else {
+                dt.name.contains("iPad")
+            }
+        })
+        .last() // last = latest model (simctl lists chronologically)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
