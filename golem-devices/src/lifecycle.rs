@@ -356,6 +356,160 @@ pub async fn create_simulator(
 }
 
 // ---------------------------------------------------------------------------
+// Auto-create device
+// ---------------------------------------------------------------------------
+
+/// Estimated disk space needed per device (MB).
+const IOS_DEVICE_SIZE_MB: u64 = 5_000;
+const ANDROID_DEVICE_SIZE_MB: u64 = 4_000;
+
+/// Auto-create and boot a simulator/emulator matching the given platform.
+///
+/// Discovers available runtimes/images, picks the best match, creates the
+/// device, and boots it. Checks disk space before creation.
+///
+/// Returns the newly created and booted DeviceInfo.
+pub async fn auto_create_device(
+    platform: Platform,
+    device_type: crate::DeviceType,
+    concurrency_config: &crate::concurrency::ConcurrencyConfig,
+) -> Result<crate::DeviceInfo> {
+    let want_phone = device_type == crate::DeviceType::Phone;
+
+    // Check disk space
+    let estimated_size = match platform {
+        Platform::Ios => IOS_DEVICE_SIZE_MB,
+        Platform::Android => ANDROID_DEVICE_SIZE_MB,
+    };
+    if !crate::concurrency::has_sufficient_disk(concurrency_config, estimated_size)? {
+        bail!(
+            "Insufficient disk space to create a new {} device. \
+             Need {}MB free above min_free_disk_mb ({}MB).",
+            platform,
+            estimated_size,
+            concurrency_config.min_free_disk_mb,
+        );
+    }
+
+    match platform {
+        Platform::Ios => auto_create_ios(want_phone).await,
+        Platform::Android => auto_create_android(want_phone).await,
+    }
+}
+
+async fn auto_create_ios(want_phone: bool) -> Result<crate::DeviceInfo> {
+    use crate::ios::{discover_ios_device_types, discover_ios_runtimes, pick_device_type};
+
+    let runtimes = discover_ios_runtimes().await?;
+    let runtime = runtimes.first()
+        .ok_or_else(|| anyhow::anyhow!("No iOS runtimes installed. Install one via Xcode."))?;
+
+    let device_types = discover_ios_device_types().await?;
+    let device_type = pick_device_type(&device_types, want_phone)
+        .ok_or_else(|| anyhow::anyhow!(
+            "No {} device type found. Install Xcode device support.",
+            if want_phone { "iPhone" } else { "iPad" }
+        ))?;
+
+    let name = format!("golem-{}-ios{}", device_type.name.replace(' ', "-"), runtime.major);
+    eprintln!("  Creating iOS simulator: {name} ({}, {})", device_type.name, runtime.name);
+
+    let output = create_simulator(
+        Platform::Ios,
+        &name,
+        &device_type.identifier,
+        &runtime.identifier,
+    ).await?;
+
+    // xcrun simctl create returns the UDID on stdout
+    let udid = output.trim().to_string();
+    if udid.is_empty() {
+        bail!("Failed to create simulator: no UDID returned");
+    }
+
+    let device = crate::DeviceInfo {
+        name: name.clone(),
+        udid: udid.clone(),
+        platform: Platform::Ios,
+        device_type: if want_phone { crate::DeviceType::Phone } else { crate::DeviceType::Tablet },
+        os_major: runtime.major,
+        os_version: runtime.version.clone(),
+        state: crate::DeviceState::Shutdown,
+        physical: false,
+        playstore: false,
+        screen_width: None,
+        screen_height: None,
+        screen_scale: None,
+        last_booted: None,
+        runtime_id: Some(runtime.identifier.clone()),
+        device_type_id: Some(device_type.identifier.clone()),
+    };
+
+    eprintln!("  Booting {name}...");
+    boot_device(&device).await?;
+
+    Ok(crate::DeviceInfo {
+        state: crate::DeviceState::Booted,
+        ..device
+    })
+}
+
+async fn auto_create_android(want_phone: bool) -> Result<crate::DeviceInfo> {
+    use crate::android::{discover_android_device_profiles, discover_android_system_images,
+                          pick_device_profile, pick_system_image};
+
+    let images = discover_android_system_images().await?;
+    let image = pick_system_image(&images, 0) // 0 = latest
+        .ok_or_else(|| anyhow::anyhow!(
+            "No arm64 Android system images installed. \
+             Install one via: sdkmanager 'system-images;android-35;google_apis;arm64-v8a'"
+        ))?;
+
+    let profiles = discover_android_device_profiles().await?;
+    let profile = pick_device_profile(&profiles, want_phone)
+        .ok_or_else(|| anyhow::anyhow!(
+            "No {} device profile found.",
+            if want_phone { "phone" } else { "tablet" }
+        ))?;
+
+    let name = format!("golem-{}-api{}", profile.id, image.api_level);
+    eprintln!("  Creating Android emulator: {name} ({}, API {})", profile.name, image.api_level);
+
+    create_simulator(
+        Platform::Android,
+        &name,
+        &image.path,
+        &profile.id,
+    ).await?;
+
+    let device = crate::DeviceInfo {
+        name: name.clone(),
+        udid: name.clone(), // Android uses AVD name as identifier
+        platform: Platform::Android,
+        device_type: if want_phone { crate::DeviceType::Phone } else { crate::DeviceType::Tablet },
+        os_major: image.api_level,
+        os_version: image.api_level.to_string(),
+        state: crate::DeviceState::Shutdown,
+        physical: false,
+        playstore: image.target.contains("playstore"),
+        screen_width: None,
+        screen_height: None,
+        screen_scale: None,
+        last_booted: None,
+        runtime_id: None,
+        device_type_id: None,
+    };
+
+    eprintln!("  Booting {name}...");
+    boot_device(&device).await?;
+
+    Ok(crate::DeviceInfo {
+        state: crate::DeviceState::Booted,
+        ..device
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Tests — command construction only (no real devices needed)
 // ---------------------------------------------------------------------------
 
