@@ -65,13 +65,32 @@ pub async fn try_connect() -> Result<UnixStream> {
 /// The orchestrator server.
 ///
 /// Listens on a unix socket and handles client connections.
-/// Runs in the background via `tokio::spawn`.
+/// Runs in the background via `tokio::spawn`. Shares a ResourceManager
+/// with the main suite runner so client and server flows coordinate
+/// device allocation.
 pub struct OrchestratorServer {
     _handle: tokio::task::JoinHandle<()>,
+    /// Shared resource manager for all flows (server + client).
+    pub resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
+    /// Count of active client handlers. Server waits for this to reach 0 before exiting.
+    active_clients: std::sync::Arc<std::sync::atomic::AtomicU32>,
 }
 
 impl OrchestratorServer {
-    /// Clean up the socket file on drop.
+    /// Wait for all active client handlers to complete, then clean up.
+    pub async fn wait_for_clients(&self) {
+        use std::sync::atomic::Ordering;
+        loop {
+            let count = self.active_clients.load(Ordering::Acquire);
+            if count == 0 {
+                break;
+            }
+            eprintln!("  Orchestrator: waiting for {count} active client(s)...");
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
+    }
+
+    /// Clean up the socket file.
     fn cleanup() {
         let path = socket_path();
         let _ = std::fs::remove_file(&path);
@@ -101,11 +120,27 @@ pub async fn start_server() -> Result<OrchestratorServer> {
 
     eprintln!("  Orchestrator: listening on {}", path.display());
 
+    let resource_mgr = std::sync::Arc::new(
+        golem_devices::resource_manager::ResourceManager::new(
+            golem_devices::concurrency::ConcurrencyConfig::default(),
+        ),
+    );
+
+    let active_clients = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+
+    let rm = resource_mgr.clone();
+    let ac = active_clients.clone();
     let handle = tokio::spawn(async move {
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
-                    tokio::spawn(handle_client(stream));
+                    let rm = rm.clone();
+                    let ac = ac.clone();
+                    ac.fetch_add(1, std::sync::atomic::Ordering::Release);
+                    tokio::spawn(async move {
+                        handle_client(stream, rm).await;
+                        ac.fetch_sub(1, std::sync::atomic::Ordering::Release);
+                    });
                 }
                 Err(e) => {
                     eprintln!("  Orchestrator: accept error: {e}");
@@ -115,11 +150,14 @@ pub async fn start_server() -> Result<OrchestratorServer> {
         }
     });
 
-    Ok(OrchestratorServer { _handle: handle })
+    Ok(OrchestratorServer { _handle: handle, resource_mgr, active_clients })
 }
 
 /// Handle a single client connection.
-async fn handle_client(stream: UnixStream) {
+async fn handle_client(
+    stream: UnixStream,
+    resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
+) {
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
     let mut line = String::new();
@@ -129,7 +167,7 @@ async fn handle_client(stream: UnixStream) {
         match reader.read_line(&mut line).await {
             Ok(0) => break, // client disconnected
             Ok(_) => {
-                let response = process_message(&line).await;
+                let response = process_message(&line, &resource_mgr).await;
                 if let Err(e) = writer.write_all(format!("{}\n", response).as_bytes()).await {
                     eprintln!("  Orchestrator: write error: {e}");
                     break;
@@ -144,7 +182,10 @@ async fn handle_client(stream: UnixStream) {
 }
 
 /// Process a single message from a client and return a response.
-async fn process_message(msg: &str) -> String {
+async fn process_message(
+    msg: &str,
+    resource_mgr: &std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
+) -> String {
     let json: serde_json::Value = match serde_json::from_str(msg.trim()) {
         Ok(v) => v,
         Err(e) => {
@@ -195,8 +236,8 @@ async fn process_message(msg: &str) -> String {
                 ..SuiteConfig::default()
             };
 
-            // Run the suite
-            let runner = SuiteRunner::new(config);
+            // Run the suite with the shared ResourceManager
+            let runner = SuiteRunner::with_resource_manager(config, resource_mgr.clone());
             match runner.run_suite(&paths).await {
                 Ok(report) => {
                     serde_json::json!({

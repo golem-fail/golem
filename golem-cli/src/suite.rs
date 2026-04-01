@@ -33,11 +33,28 @@ pub struct SuiteConfig {
 /// Orchestrates the execution of a suite of test flows.
 pub struct SuiteRunner {
     pub config: SuiteConfig,
+    /// Shared resource manager for device allocation across flows.
+    pub resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
 }
 
 impl SuiteRunner {
     pub fn new(config: SuiteConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            resource_mgr: std::sync::Arc::new(
+                golem_devices::resource_manager::ResourceManager::new(
+                    golem_devices::concurrency::ConcurrencyConfig::default(),
+                ),
+            ),
+        }
+    }
+
+    /// Create a runner with a shared ResourceManager (for orchestrator mode).
+    pub fn with_resource_manager(
+        config: SuiteConfig,
+        resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
+    ) -> Self {
+        Self { config, resource_mgr }
     }
 
     /// Run a suite of flow files and return aggregated results.
@@ -60,11 +77,7 @@ impl SuiteRunner {
         }
 
         // Multiple flows — run in parallel with shared ResourceManager.
-        let resource_mgr = std::sync::Arc::new(
-            golem_devices::resource_manager::ResourceManager::new(
-                golem_devices::concurrency::ConcurrencyConfig::default(),
-            ),
-        );
+        let resource_mgr = self.resource_mgr.clone();
 
         let mut handles = Vec::new();
         for path in flow_paths {
@@ -74,12 +87,15 @@ impl SuiteRunner {
             let rm = resource_mgr.clone();
 
             handles.push(tokio::spawn(async move {
-                let runner = SuiteRunner::new(SuiteConfig {
-                    platform: platform_override,
-                    seed,
-                    ..SuiteConfig::default()
-                });
-                runner.run_single_flow_with_resources(&path, &rm).await
+                let runner = SuiteRunner::with_resource_manager(
+                    SuiteConfig {
+                        platform: platform_override,
+                        seed,
+                        ..SuiteConfig::default()
+                    },
+                    rm,
+                );
+                runner.run_single_flow(&path).await
             }));
         }
 
@@ -108,14 +124,9 @@ impl SuiteRunner {
         })
     }
 
-    /// Run a single flow without resource gating.
+    /// Run a single flow using the shared ResourceManager.
     async fn run_single_flow(&self, path: &Path) -> Vec<FlowReport> {
-        self.run_single_flow_with_resources(path, &golem_devices::resource_manager::ResourceManager::new(
-            golem_devices::concurrency::ConcurrencyConfig {
-                max_concurrency: 100, // effectively unlimited for single flow
-                ..golem_devices::concurrency::ConcurrencyConfig::default()
-            },
-        )).await
+        self.run_single_flow_with_resources(path, &self.resource_mgr).await
     }
 
     /// Run a single flow file on all applicable platforms in parallel.

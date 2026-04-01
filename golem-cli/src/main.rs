@@ -79,11 +79,14 @@ async fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
 
-            // Server mode: start orchestrator + run suite
-            let _server = orchestrator::start_server().await?;
+            // Server mode: start orchestrator + run suite with shared ResourceManager
+            let server = orchestrator::start_server().await?;
 
-            let runner = SuiteRunner::new(config);
+            let runner = SuiteRunner::with_resource_manager(config, server.resource_mgr.clone());
             let report = runner.run_suite(&flow_paths).await?;
+
+            // Wait for any active client connections to finish before exiting
+            server.wait_for_clients().await;
 
             // Parse output targets
             let targets: Vec<OutputTarget> = args
