@@ -1,6 +1,7 @@
 // golem-runner: test execution orchestrator
 
 pub mod actions;
+pub mod barrier;
 pub mod capture;
 pub mod cleanup;
 pub mod context;

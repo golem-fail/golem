@@ -148,15 +148,18 @@ impl SuiteRunner {
         }
 
         // Spawn parallel execution tasks — one per device.
+        // Shared failure barrier: when one device fails, others stop at the same step.
+        let barrier = golem_runner::barrier::FailureBarrier::new();
         let mut handles = Vec::new();
         for (device, platform, port) in device_setups {
             let flow = flow.clone();
             let flow_name = flow_name.clone();
             let flow_dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
             let seed = self.config.seed;
+            let barrier = barrier.clone();
 
             handles.push(tokio::spawn(async move {
-                run_flow_on_device(flow, flow_name, flow_dir, device, platform, port, seed).await
+                run_flow_on_device(flow, flow_name, flow_dir, device, platform, port, seed, barrier).await
             }));
         }
 
@@ -563,6 +566,7 @@ async fn run_flow_on_device(
     platform: Platform,
     port: u16,
     seed: Option<u64>,
+    barrier: golem_runner::barrier::FailureBarrier,
 ) -> FlowReport {
     let start = Instant::now();
     let device_name = device.name.clone();
@@ -593,7 +597,7 @@ async fn run_flow_on_device(
     };
 
     eprintln!("  Executing on {device_label}");
-    match execute_flow(&flow, driver.as_ref(), &mut vars, None, 10_000, &mut ctx).await {
+    match execute_flow(&flow, driver.as_ref(), &mut vars, None, 10_000, &mut ctx, Some(&barrier)).await {
         Ok(result) => {
             if !result.success {
                 if let Some(ref block) = result.failed_block {

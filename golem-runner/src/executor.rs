@@ -5,6 +5,7 @@ use golem_driver::PlatformDriver;
 use golem_parser::{Block, FlowFile};
 use golem_vars::VariableStore;
 
+use crate::barrier::FailureBarrier;
 use crate::branch::evaluate_branch;
 use crate::context::ExecutionContext;
 use crate::policy::{execute_step_with_policy, StepOutcome};
@@ -40,6 +41,7 @@ pub async fn execute_flow<'a>(
     start_block: Option<&str>,
     default_timeout_ms: u64,
     ctx: &mut ExecutionContext<'a>,
+    barrier: Option<&FailureBarrier>,
 ) -> Result<FlowResult> {
     let blocks = &flow.block;
 
@@ -155,6 +157,7 @@ pub async fn execute_flow<'a>(
                 None,
                 default_timeout_ms,
                 &mut child_ctx,
+                barrier,
             ))
             .await?;
 
@@ -201,11 +204,27 @@ pub async fn execute_flow<'a>(
             if start_time.elapsed() > max_runtime {
                 bail!("max_runtime exceeded after {:?}", start_time.elapsed());
             }
+            // Check failure barrier before executing the step
+            if let Some(b) = barrier {
+                if b.should_stop(step_count) {
+                    return Ok(FlowResult {
+                        success: false,
+                        warnings,
+                        failed_step: Some(step_idx),
+                        failed_block: block.name.clone(),
+                    });
+                }
+            }
+
             match execute_step_with_policy(step, driver, vars, default_timeout_ms, ctx, &flow.flow.apps).await {
                 Ok(StepOutcome::Success) => {}
                 Ok(StepOutcome::Warning(msg)) => warnings.push(msg),
                 Ok(StepOutcome::Ignored) => {}
                 Err(_e) => {
+                    // Report failure to barrier so other devices stop at this point
+                    if let Some(b) = barrier {
+                        b.report_failure(step_count);
+                    }
                     return Ok(FlowResult {
                         success: false,
                         warnings,
@@ -274,6 +293,7 @@ pub async fn execute_flow_with_data<'a>(
     start_block: Option<&str>,
     default_timeout_ms: u64,
     ctx: &mut ExecutionContext<'a>,
+    barrier: Option<&FailureBarrier>,
 ) -> Result<FlowResult> {
     let runs = crate::data_driven::get_runs(&flow.data);
     let mut last_result = None;
@@ -281,7 +301,7 @@ pub async fn execute_flow_with_data<'a>(
         if !run.vars.is_empty() {
             crate::data_driven::apply_data_vars(vars, &run.vars);
         }
-        let result = execute_flow(flow, driver, vars, start_block, default_timeout_ms, ctx).await?;
+        let result = execute_flow(flow, driver, vars, start_block, default_timeout_ms, ctx, barrier).await?;
         if !result.success {
             return Ok(result);
         }
@@ -524,7 +544,7 @@ mod tests {
             vec![make_success_step(), make_success_step(), make_success_step()],
         )]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow should not error");
 
@@ -552,7 +572,7 @@ mod tests {
             make_block(Some("second"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow should not error");
 
@@ -579,7 +599,7 @@ mod tests {
             make_block(Some("target"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow should not error");
 
@@ -614,7 +634,7 @@ mod tests {
             make_block(Some("dashboard"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow should not error");
 
@@ -640,7 +660,7 @@ mod tests {
         ]);
 
         let result =
-            execute_flow(&flow, &driver, &mut vars, Some("second"), DEFAULT_TIMEOUT, &mut ctx)
+            execute_flow(&flow, &driver, &mut vars, Some("second"), DEFAULT_TIMEOUT, &mut ctx, None)
                 .await
                 .expect("execute_flow should not error");
 
@@ -666,7 +686,7 @@ mod tests {
         let flow = make_flow(vec![make_block(Some("only"), vec![make_success_step()])]);
 
         let result =
-            execute_flow(&flow, &driver, &mut vars, Some("nonexistent"), DEFAULT_TIMEOUT, &mut ctx).await;
+            execute_flow(&flow, &driver, &mut vars, Some("nonexistent"), DEFAULT_TIMEOUT, &mut ctx, None).await;
 
         assert!(result.is_err());
         let err_msg = result.expect_err("should be error").to_string();
@@ -690,7 +710,7 @@ mod tests {
             "does_not_exist",
         )]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx).await;
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None).await;
 
         assert!(result.is_err());
         let err_msg = result.expect_err("should be error").to_string();
@@ -716,7 +736,7 @@ mod tests {
             make_block(Some("second"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow should return Ok(FlowResult), not Err");
 
@@ -742,7 +762,7 @@ mod tests {
             vec![make_success_step(), make_warn_step(), make_success_step()],
         )]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow should not error");
 
@@ -767,7 +787,7 @@ mod tests {
             vec![make_success_step(), make_ignore_step(), make_success_step()],
         )]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow should not error");
 
@@ -788,7 +808,7 @@ mod tests {
         let mut ctx = test_ctx(Path::new("."));
         let flow = make_flow(vec![]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow should not error");
 
@@ -818,7 +838,7 @@ mod tests {
             make_block(Some("login_block"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow should not error");
 
@@ -851,7 +871,7 @@ mod tests {
             make_block(Some("d"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow should not error");
 
@@ -882,7 +902,7 @@ mod tests {
             make_block(Some("block2"), vec![make_warn_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow should not error");
 
@@ -951,7 +971,7 @@ mod tests {
             make_block(Some("end"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow should not error");
 
@@ -978,7 +998,7 @@ mod tests {
             ),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow should return FlowResult");
 
@@ -997,7 +1017,7 @@ mod tests {
         let mut ctx = test_ctx(Path::new("."));
         let flow = make_flow(vec![make_block(None, vec![make_failing_step()])]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow should return FlowResult");
 
@@ -1022,7 +1042,7 @@ mod tests {
             vec![cond_default("nonexistent_target")],
         )]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx).await;
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None).await;
 
         assert!(result.is_err());
         let err_msg = result.expect_err("should be error").to_string();
@@ -1128,7 +1148,7 @@ mod tests {
             options,
         );
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx).await;
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None).await;
         assert!(
             result.is_err(),
             "SHALL fail when step count exceeds max_steps"
@@ -1161,7 +1181,7 @@ mod tests {
             options,
         );
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow SHALL succeed when step count equals max_steps");
         assert!(result.success, "flow SHALL succeed at exact max_steps limit");
@@ -1181,7 +1201,7 @@ mod tests {
             vec![make_success_step(), make_success_step()],
         )]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow SHALL succeed with default limits");
         assert!(result.success);
@@ -1220,7 +1240,7 @@ action = "screenshot"
 
         let flow = make_flow(vec![parent_block]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow SHALL succeed with sub-flow");
         assert!(result.success, "flow SHALL succeed when child flow succeeds");
@@ -1266,7 +1286,7 @@ action = "screenshot"
             make_block(Some("after"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow SHALL succeed");
         assert!(
@@ -1316,7 +1336,7 @@ on_text = "NONEXISTENT_ELEMENT_xyz_12345"
             make_block(Some("never_reached"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow SHALL return FlowResult, not Err");
         assert!(
@@ -1345,7 +1365,7 @@ on_text = "NONEXISTENT_ELEMENT_xyz_12345"
 
         let flow = make_flow(vec![subflow_block]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx).await;
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None).await;
         assert!(
             result.is_err(),
             "SHALL return Err when sub-flow file does not exist"
@@ -1398,7 +1418,7 @@ action = "screenshot"
 
         let flow = make_flow(vec![subflow_block]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
             .await
             .expect("execute_flow SHALL succeed");
         assert!(result.success);
@@ -1434,7 +1454,7 @@ action = "screenshot"
         )]);
 
         let result =
-            execute_flow_with_data(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+            execute_flow_with_data(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
                 .await
                 .expect("execute_flow_with_data SHALL succeed");
         assert!(result.success);
@@ -1468,7 +1488,7 @@ action = "screenshot"
         ];
 
         let result =
-            execute_flow_with_data(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+            execute_flow_with_data(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
                 .await
                 .expect("execute_flow_with_data SHALL succeed");
         assert!(result.success);
@@ -1501,7 +1521,7 @@ action = "screenshot"
         ];
 
         let result =
-            execute_flow_with_data(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+            execute_flow_with_data(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
                 .await
                 .expect("execute_flow_with_data SHALL return FlowResult");
         assert!(
@@ -1530,7 +1550,7 @@ action = "screenshot"
         ])];
 
         let result =
-            execute_flow_with_data(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx)
+            execute_flow_with_data(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
                 .await
                 .expect("execute_flow_with_data SHALL succeed");
         assert!(result.success);
@@ -1590,7 +1610,7 @@ action = "screenshot"
             device: Some(&ios_device),
         };
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
             .await
             .unwrap();
 
@@ -1648,7 +1668,7 @@ action = "screenshot"
             device: Some(&android_device),
         };
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
             .await
             .unwrap();
 
@@ -1715,7 +1735,7 @@ action = "screenshot"
             device: Some(&ios_device),
         };
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx)
+        let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
             .await
             .unwrap();
 
