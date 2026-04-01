@@ -30,6 +30,9 @@ pub struct Selector {
     pub right_of: Option<AnchorSelector>,
     /// Keep only elements whose bounds.right() < anchor.x
     pub left_of: Option<AnchorSelector>,
+    /// Observable traits that the element must have. All must match (AND logic).
+    /// E.g. ["button", "has_text", "square"]
+    pub traits: Vec<String>,
 }
 
 /// Find all elements matching the selector in the hierarchy tree.
@@ -183,7 +186,66 @@ fn matches_selector(element: &Element, selector: &Selector) -> bool {
         }
     }
 
+    // Check observable traits
+    for trait_name in &selector.traits {
+        if !element_has_trait(element, trait_name) {
+            return false;
+        }
+    }
+
     true
+}
+
+/// Check whether an element has a given observable trait.
+///
+/// Traits are computed from existing element data — no companion changes needed.
+/// Element types are compared case-insensitively to handle iOS (lowercase)
+/// vs Android (PascalCase) differences.
+fn element_has_trait(element: &Element, trait_name: &str) -> bool {
+    let et = element.element_type.to_lowercase();
+    let text_len = element.text.as_ref().map_or(0, |t| t.len());
+    let w = element.bounds.width;
+    let h = element.bounds.height;
+
+    match trait_name {
+        // Content type traits
+        "button" => et == "button" || et == "link",
+        "input" => matches!(
+            et.as_str(),
+            "text_field" | "secure_text_field" | "search_field" | "text_view"
+                | "edittext" | "autocompletetextview"
+        ),
+        "toggle" => matches!(
+            et.as_str(),
+            "switch" | "toggle" | "checkbox" | "radio_button"
+                | "togglebutton" | "radiobutton" | "compoundbutton"
+        ),
+
+        // Text traits
+        "has_text" | "text" => text_len > 0,
+        "no_text" => text_len == 0,
+        "short_text" => text_len > 0 && text_len <= 10,
+        "long_text" => text_len > 50,
+
+        // Shape/size traits
+        "square" => {
+            if w == 0 || h == 0 { return false; }
+            let ratio = w as f64 / h as f64;
+            ratio > 0.8 && ratio < 1.2
+        }
+        "wide" => w > 0 && h > 0 && w > 2 * h,
+        "tall" => w > 0 && h > 0 && h > 2 * w,
+        "small" => {
+            let area = w as u64 * h as u64;
+            area > 0 && area < 2500
+        }
+        "large" => {
+            let area = w as u64 * h as u64;
+            area > 100_000
+        }
+
+        _ => false, // Unknown trait — doesn't match
+    }
 }
 
 #[cfg(test)]

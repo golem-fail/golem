@@ -38,6 +38,7 @@ fn build_selector_from_group(g: &golem_parser::SelectorGroup) -> Selector {
         above: g.above.as_ref().map(convert_anchor),
         right_of: g.right_of.as_ref().map(convert_anchor),
         left_of: g.left_of.as_ref().map(convert_anchor),
+        traits: g.traits.clone(),
     }
 }
 
@@ -62,6 +63,7 @@ pub fn build_selector(step: &Step) -> Selector {
             .or(step.on_right_of.as_ref().map(|s| AnchorSelector::Text(s.clone()))),
         left_of: g.and_then(|g| g.left_of.as_ref().map(convert_anchor))
             .or(step.on_left_of.as_ref().map(|s| AnchorSelector::Text(s.clone()))),
+        traits: g.map(|g| g.traits.clone()).unwrap_or_default(),
     }
 }
 

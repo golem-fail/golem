@@ -24,6 +24,10 @@ steps = [
   { action = "assert_visible", on_text = "Enter email" },
   { action = "assert_visible", on_text = "Counter" },
 
+  # assert_visible with traits
+  { action = "assert_visible", on = { text = "Submit", traits = ["button", "has_text"] } },
+  { action = "assert_visible", on = { text = "Increment", traits = ["button"] } },
+
   # assert_not_visible: elements that should not be on screen
   { action = "assert_not_visible", on_text = "GOLEM Test B" },
   { action = "assert_not_visible", on_text = "app-b-title" },

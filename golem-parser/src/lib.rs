@@ -150,6 +150,9 @@ pub struct SelectorGroup {
     pub above: Option<Anchor>,
     pub right_of: Option<Anchor>,
     pub left_of: Option<Anchor>,
+    /// Observable traits: ["button", "has_text", "square"], etc.
+    #[serde(default)]
+    pub traits: Vec<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -594,6 +597,26 @@ steps = [
             }
             other => panic!("expected nested Anchor::Selector, got {other:?}"),
         }
+    }
+
+    // ---------------------------------------------------------------
+    // 8e. Observable traits in grouped selector
+    // ---------------------------------------------------------------
+    #[test]
+    fn step_with_traits() {
+        let toml_str = r#"
+[flow]
+name = "traits"
+
+[[block]]
+steps = [
+  { action = "tap", on = { text = "Submit", traits = ["button", "has_text"] } },
+]
+"#;
+        let flow = parse_flow(toml_str).expect("traits should parse");
+        let step = &flow.block[0].steps[0];
+        let g = step.on.as_ref().expect("on group should be present");
+        assert_eq!(g.traits, vec!["button", "has_text"]);
     }
 
     // ---------------------------------------------------------------

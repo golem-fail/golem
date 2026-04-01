@@ -215,6 +215,7 @@ fn remap_selector_group(g: &crate::SelectorGroup, vars: &HashMap<String, String>
         above: g.above.as_ref().map(|a| remap_anchor(a, vars)),
         right_of: g.right_of.as_ref().map(|a| remap_anchor(a, vars)),
         left_of: g.left_of.as_ref().map(|a| remap_anchor(a, vars)),
+        traits: g.traits.clone(), // traits are string literals, no variable remapping needed
     }
 }
 
