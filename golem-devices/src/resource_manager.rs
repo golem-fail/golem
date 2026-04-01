@@ -13,8 +13,9 @@ use crate::concurrency::{can_launch_device, ConcurrencyConfig, RamProvider, Syst
 use crate::DeviceInfo;
 
 /// Port range for companion servers.
+/// Wide range to support 100+ devices on high-end machines.
 pub const PORT_RANGE_START: u16 = 8222;
-pub const PORT_RANGE_END: u16 = 8270;
+pub const PORT_RANGE_END: u16 = 8999;
 
 /// An allocated device with its companion port.
 #[derive(Debug, Clone)]

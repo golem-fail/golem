@@ -103,14 +103,16 @@ impl SuiteRunner {
         // Discover devices and set up companions for each platform.
         let mut device_setups = Vec::new();
         for platform in &platforms {
-            let port = match *platform {
-                Platform::Ios => 8222u16,   // TODO: dynamic via ResourceManager
-                Platform::Android => 8223u16,
-            };
-
             match discover_device(*platform).await {
                 Ok(device) => {
                     eprintln!("  Platform: {platform}");
+                    let port = match find_or_allocate_port(&device, *platform).await {
+                        Ok(p) => p,
+                        Err(e) => {
+                            eprintln!("  No available port for {platform}: {e:#}");
+                            continue;
+                        }
+                    };
                     match ensure_companion(&device, *platform, port).await {
                         Ok(health) => {
                             eprintln!(
@@ -241,6 +243,67 @@ fn try_acquire_lock(port: u16) -> bool {
 /// Release the companion lock.
 fn release_lock(port: u16) {
     let _ = std::fs::remove_file(companion_lockfile(port));
+}
+
+/// Scan ports for running companion servers.
+///
+/// Checks ports in the companion range concurrently for a responding
+/// /health endpoint. Returns a list of (port, health) for all found.
+/// Fast — unused ports return "connection refused" instantly.
+async fn scan_companions() -> Vec<(u16, golem_driver::CompanionHealth)> {
+    use golem_devices::resource_manager::{PORT_RANGE_START, PORT_RANGE_END};
+    use golem_driver::common::CompanionClient;
+
+    let mut handles = Vec::new();
+    for port in PORT_RANGE_START..=PORT_RANGE_END {
+        handles.push(tokio::spawn(async move {
+            let client = CompanionClient::new(port);
+            match client.check_health().await {
+                Ok(health) => Some((port, health)),
+                Err(_) => None,
+            }
+        }));
+    }
+
+    let mut found = Vec::new();
+    for handle in handles {
+        if let Ok(Some(result)) = handle.await {
+            found.push(result);
+        }
+    }
+    found
+}
+
+/// Find a port for a device: reuse an existing matching companion or allocate a free port.
+async fn find_or_allocate_port(device: &DeviceInfo, platform: Platform) -> Result<u16> {
+    let golem_version = env!("CARGO_PKG_VERSION");
+    let platform_str = match platform {
+        Platform::Ios => "ios",
+        Platform::Android => "android",
+    };
+
+    let companions = scan_companions().await;
+
+    // Try to find an existing companion for this device with matching version
+    for (port, health) in &companions {
+        if health.platform == platform_str
+            && health.version == golem_version
+            && health.device_name == device.name
+        {
+            return Ok(*port);
+        }
+    }
+
+    // No match — find first free port
+    let used_ports: Vec<u16> = companions.iter().map(|(p, _)| *p).collect();
+    use golem_devices::resource_manager::{PORT_RANGE_START, PORT_RANGE_END};
+    for port in PORT_RANGE_START..=PORT_RANGE_END {
+        if !used_ports.contains(&port) {
+            return Ok(port);
+        }
+    }
+
+    anyhow::bail!("No free companion ports in range {PORT_RANGE_START}-{PORT_RANGE_END}")
 }
 
 /// Ensure the companion server is running and version-compatible.
