@@ -159,11 +159,19 @@ impl SuiteRunner {
             detect_all_platforms(&flow)
         };
 
+        // Read create_if_missing from flow options
+        let create_if_missing = flow
+            .flow
+            .options
+            .as_ref()
+            .and_then(|o| o.create_if_missing)
+            .unwrap_or(false);
+
         // Discover devices and set up companions for each platform.
         // Wait for resource availability before allocating each device.
         let mut device_setups = Vec::new();
         for platform in &platforms {
-            match find_available_device(*platform, resource_mgr).await {
+            match find_available_device(*platform, resource_mgr, create_if_missing).await {
                 Ok(device) => {
                     eprintln!("  Platform: {platform}");
 
@@ -771,50 +779,93 @@ async fn discover_all_devices(platform: Platform) -> Result<Vec<DeviceInfo>> {
 /// Returns the device immediately if one is available and not allocated.
 /// If all compatible devices are busy, waits up to 5 minutes.
 /// If no compatible devices exist at all, fails immediately.
+/// Find the best available device for a platform.
+///
+/// Priority:
+/// 1. Free booted device → return immediately
+/// 2. No booted → auto-boot the best shutdown device
+/// 3. No devices at all → auto-create if `create_if_missing` is true
+/// 4. All booted devices busy → wait up to 20 minutes
+/// 5. No compatible devices and create_if_missing is false → fail
 async fn find_available_device(
     platform: Platform,
     resource_mgr: &golem_devices::resource_manager::ResourceManager,
+    create_if_missing: bool,
 ) -> Result<DeviceInfo> {
     let all_devices = discover_all_devices(platform).await?;
 
-    // Filter to compatible devices (booted preferred, but shutdown are valid too)
     let compatible: Vec<&DeviceInfo> = all_devices
         .iter()
         .filter(|d| d.platform == platform)
         .collect();
 
-    if compatible.is_empty() {
-        anyhow::bail!("No {platform} devices found. Boot a simulator/emulator first.");
-    }
-
+    // Separate booted from shutdown
     let booted: Vec<&DeviceInfo> = compatible
         .iter()
         .filter(|d| d.state == DeviceState::Booted)
         .copied()
         .collect();
 
-    if booted.is_empty() {
-        anyhow::bail!(
-            "Found {} {platform} device(s) but none are booted. Boot one first.",
-            compatible.len()
-        );
+    let shutdown: Vec<&DeviceInfo> = compatible
+        .iter()
+        .filter(|d| d.state == DeviceState::Shutdown)
+        .copied()
+        .collect();
+
+    // Step 1: Try to find a free booted device
+    if !booted.is_empty() {
+        eprintln!("  Found {} booted {platform} device(s)", booted.len());
+        for device in &booted {
+            if resource_mgr.port_for(&device.udid).is_none() {
+                return Ok((*device).clone());
+            }
+        }
+        // All booted are busy — fall through to wait loop below
     }
 
-    eprintln!("  Found {} booted {platform} device(s)", booted.len());
+    // Step 2: No booted devices — auto-boot the best shutdown one
+    if booted.is_empty() && !shutdown.is_empty() {
+        // Pick the one with highest OS version
+        let best = shutdown.iter()
+            .max_by_key(|d| d.os_major)
+            .unwrap();
+        eprintln!("  No booted {platform} devices. Booting {}...", best.name);
+        golem_devices::lifecycle::boot_device(best).await?;
+        return Ok(DeviceInfo {
+            state: DeviceState::Booted,
+            ..(*best).clone()
+        });
+    }
 
-    // Try to find one that's not already allocated
+    // Step 3: No compatible devices at all — auto-create or fail
+    if compatible.is_empty() {
+        if create_if_missing {
+            eprintln!("  No {platform} devices found. Creating one...");
+            let config = golem_devices::concurrency::ConcurrencyConfig::default();
+            return golem_devices::lifecycle::auto_create_device(
+                platform,
+                golem_devices::DeviceType::Phone,
+                &config,
+            ).await;
+        } else {
+            anyhow::bail!(
+                "No {platform} devices found. Use create_if_missing = true to auto-create, \
+                 or boot a simulator/emulator manually."
+            );
+        }
+    }
+
+    // Step 4: All booted devices are busy — wait for one to free up
     let timeout = std::time::Duration::from_secs(1200); // 20 minutes
     let deadline = tokio::time::Instant::now() + timeout;
 
     loop {
         for device in &booted {
             if resource_mgr.port_for(&device.udid).is_none() {
-                // This device is free
                 return Ok((*device).clone());
             }
         }
 
-        // All compatible devices are busy
         if tokio::time::Instant::now() >= deadline {
             anyhow::bail!(
                 "Timed out waiting for a free {platform} device (all {} are in use)",
