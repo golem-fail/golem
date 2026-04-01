@@ -385,6 +385,7 @@ dependencies = [
  "golem-report",
  "golem-runner",
  "golem-vars",
+ "serde_json",
  "tempfile",
  "tokio",
  "toml",

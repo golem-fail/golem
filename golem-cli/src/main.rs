@@ -1,6 +1,7 @@
 pub mod cli;
 pub mod devices;
 pub mod discovery;
+pub mod orchestrator;
 pub mod scaffold;
 pub mod suite;
 
@@ -64,7 +65,20 @@ async fn main() -> anyhow::Result<()> {
                 platform: platform_override,
             };
 
-            // Run suite
+            // Check if an orchestrator is already running
+            if let Ok(stream) = orchestrator::try_connect().await {
+                // Client mode: submit to existing orchestrator
+                let config_json = serde_json::json!({
+                    "platform": args.platform,
+                    "seed": args.seed,
+                });
+                orchestrator::submit_and_wait(stream, &flow_paths, &config_json).await?;
+                return Ok(());
+            }
+
+            // Server mode: start orchestrator + run suite
+            let _server = orchestrator::start_server().await?;
+
             let runner = SuiteRunner::new(config);
             let report = runner.run_suite(&flow_paths).await?;
 
