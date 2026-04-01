@@ -17,6 +17,9 @@ pub struct ConcurrencyConfig {
     pub max_concurrency: usize,
     /// Minimum free RAM (MB) required before launching another device.
     pub min_free_ram_mb: u64,
+    /// Minimum free disk space (MB) required before creating a new device.
+    /// Default: 50,000 MB (50 GB) — safe for dev laptops. CI can lower this.
+    pub min_free_disk_mb: u64,
     /// Minimum delay in milliseconds between successive launches.
     pub launch_delay_ms: u64,
 }
@@ -26,6 +29,7 @@ impl Default for ConcurrencyConfig {
         Self {
             max_concurrency: 4,
             min_free_ram_mb: 2048,
+            min_free_disk_mb: 50_000,
             launch_delay_ms: 2000,
         }
     }
@@ -131,6 +135,40 @@ fn get_available_ram_mb_linux() -> Result<u64> {
         }
     }
     anyhow::bail!("MemAvailable not found in /proc/meminfo")
+}
+
+// ---------------------------------------------------------------------------
+// Disk space query
+// ---------------------------------------------------------------------------
+
+/// Check current available disk space in megabytes on the volume containing
+/// the current working directory.
+///
+/// Uses `statvfs` on macOS and Linux.
+pub fn get_available_disk_mb() -> Result<u64> {
+    use std::ffi::CString;
+    use std::mem::MaybeUninit;
+
+    let path = CString::new(".").expect("CString::new failed");
+    let mut stat = MaybeUninit::<libc::statvfs>::uninit();
+
+    let result = unsafe { libc::statvfs(path.as_ptr(), stat.as_mut_ptr()) };
+    if result != 0 {
+        anyhow::bail!("statvfs failed: {}", std::io::Error::last_os_error());
+    }
+
+    let stat = unsafe { stat.assume_init() };
+    let available_bytes = stat.f_bavail as u64 * stat.f_frsize as u64;
+    Ok(available_bytes / (1024 * 1024))
+}
+
+/// Check whether there is sufficient disk space to create a new device.
+///
+/// Returns `true` if available disk minus `estimated_device_size_mb` is
+/// still above `config.min_free_disk_mb`.
+pub fn has_sufficient_disk(config: &ConcurrencyConfig, estimated_device_size_mb: u64) -> Result<bool> {
+    let available = get_available_disk_mb()?;
+    Ok(available >= config.min_free_disk_mb + estimated_device_size_mb)
 }
 
 // ---------------------------------------------------------------------------

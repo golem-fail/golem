@@ -395,6 +395,7 @@ name = "golem-devices"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "libc",
  "serde",
  "serde_json",
  "thiserror",

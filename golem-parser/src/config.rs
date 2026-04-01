@@ -11,6 +11,7 @@ use crate::{FlowFile, FlowOptions, TeardownBlock};
 pub struct ProjectOptions {
     pub max_concurrency: Option<u32>,
     pub min_free_ram_mb: Option<u64>,
+    pub min_free_disk_mb: Option<u64>,
     pub create_if_missing: Option<bool>,
     pub ignore_missing_physical: Option<bool>,
     pub step_timeout: Option<u64>,
@@ -122,6 +123,7 @@ pub fn merge_config(project: &ProjectConfig, flow: &FlowFile) -> FlowFile {
     let merged_opts = FlowOptions {
         max_concurrency: flow_opts.max_concurrency.or(proj_opts.max_concurrency),
         min_free_ram_mb: flow_opts.min_free_ram_mb.or(proj_opts.min_free_ram_mb),
+        min_free_disk_mb: flow_opts.min_free_disk_mb.or(proj_opts.min_free_disk_mb),
         create_if_missing: flow_opts.create_if_missing.or(proj_opts.create_if_missing),
         ignore_missing_physical: flow_opts
             .ignore_missing_physical
@@ -154,6 +156,7 @@ pub fn merge_config(project: &ProjectConfig, flow: &FlowFile) -> FlowFile {
     // Only set options if at least one field is Some
     let has_any_option = merged_opts.max_concurrency.is_some()
         || merged_opts.min_free_ram_mb.is_some()
+        || merged_opts.min_free_disk_mb.is_some()
         || merged_opts.create_if_missing.is_some()
         || merged_opts.ignore_missing_physical.is_some()
         || merged_opts.step_timeout.is_some()

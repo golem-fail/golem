@@ -187,6 +187,7 @@ pub struct Step {
 pub struct FlowOptions {
     pub max_concurrency: Option<u32>,
     pub min_free_ram_mb: Option<u64>,
+    pub min_free_disk_mb: Option<u64>,
     pub create_if_missing: Option<bool>,
     pub ignore_missing_physical: Option<bool>,
     pub step_timeout: Option<u64>,
