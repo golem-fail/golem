@@ -204,14 +204,19 @@ impl PlatformDriver for AndroidDriver {
     }
 
     async fn launch_app(&self, bundle_id: &str) -> Result<()> {
-        let body = serde_json::json!({ "bundle_id": bundle_id }).to_string();
-        self.client.post_json("/launch", &body).await?;
+        // Use adb shell directly — uiAutomation.executeShellCommand doesn't
+        // reliably launch apps on all Android versions.
+        self.adb(&[
+            "shell", "am", "start",
+            "-a", "android.intent.action.MAIN",
+            "-c", "android.intent.category.LAUNCHER",
+            "-n", &format!("{bundle_id}/.MainActivity"),
+        ]).await?;
         Ok(())
     }
 
     async fn stop_app(&self, bundle_id: &str) -> Result<()> {
-        let body = serde_json::json!({ "bundle_id": bundle_id }).to_string();
-        self.client.post_json("/stop", &body).await?;
+        self.adb(&["shell", "am", "force-stop", bundle_id]).await?;
         Ok(())
     }
 

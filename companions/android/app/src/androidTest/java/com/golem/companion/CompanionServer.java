@@ -400,9 +400,13 @@ public class CompanionServer {
             sendJson(out, 400, new JSONObject().put("error", "missing bundle_id"));
             return;
         }
-        String cmd = "am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER "
-                + packageName + "/.MainActivity";
-        uiAutomation.executeShellCommand(cmd);
+        // Use monkey to launch — more reliable than am start via executeShellCommand
+        String cmd = "monkey -p " + packageName + " -c android.intent.category.LAUNCHER 1";
+        ParcelFileDescriptor pfd = uiAutomation.executeShellCommand(cmd);
+        try (InputStream is = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
+            byte[] buf = new byte[4096];
+            while (is.read(buf) != -1) { /* drain */ }
+        }
         sendJson(out, 200, new JSONObject().put("status", "ok"));
     }
 
@@ -413,7 +417,11 @@ public class CompanionServer {
             sendJson(out, 400, new JSONObject().put("error", "missing bundle_id"));
             return;
         }
-        uiAutomation.executeShellCommand("am force-stop " + packageName);
+        ParcelFileDescriptor pfd = uiAutomation.executeShellCommand("am force-stop " + packageName);
+        try (InputStream is = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
+            byte[] buf = new byte[4096];
+            while (is.read(buf) != -1) { /* drain */ }
+        }
         sendJson(out, 200, new JSONObject().put("status", "ok"));
     }
 
