@@ -163,11 +163,11 @@ impl SuiteRunner {
         // Wait for resource availability before allocating each device.
         let mut device_setups = Vec::new();
         for platform in &platforms {
-            match discover_device(*platform).await {
+            match find_available_device(*platform, resource_mgr).await {
                 Ok(device) => {
                     eprintln!("  Platform: {platform}");
 
-                    // Wait for resource availability (RAM + concurrency)
+                    // Find or allocate a port for this device
                     let port = match find_or_allocate_port(&device, *platform).await {
                         Ok(p) => p,
                         Err(e) => {
@@ -176,10 +176,16 @@ impl SuiteRunner {
                         }
                     };
                     // Wait for resource allocation (RAM + concurrency limit)
+                    let alloc_deadline = tokio::time::Instant::now()
+                        + std::time::Duration::from_secs(1200);
                     loop {
                         match resource_mgr.try_allocate(&device, port) {
                             Ok(()) => break,
-                            Err(_) => {
+                            Err(e) => {
+                                if tokio::time::Instant::now() >= alloc_deadline {
+                                    eprintln!("  Timed out waiting for resources ({platform}): {e:#}");
+                                    continue; // skip this platform
+                                }
                                 eprintln!("  Waiting for resources ({platform})...");
                                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                             }
@@ -719,20 +725,13 @@ async fn run_flow_on_device(
     }
 }
 
-/// Discover a suitable device for the given platform.
-async fn discover_device(platform: Platform) -> Result<DeviceInfo> {
+/// Discover ALL devices for the given platform (booted and shutdown).
+async fn discover_all_devices(platform: Platform) -> Result<Vec<DeviceInfo>> {
     match platform {
         Platform::Ios => {
-            let devices = golem_devices::ios::discover_ios_devices().await?;
-            let booted_count = devices.iter().filter(|d| d.state == DeviceState::Booted).count();
-            eprintln!("  Found {booted_count} booted iOS device(s)");
-            devices
-                .into_iter()
-                .find(|d| d.state == DeviceState::Booted)
-                .ok_or_else(|| anyhow::anyhow!("No booted iOS simulator found"))
+            golem_devices::ios::discover_ios_devices().await
         }
         Platform::Android => {
-            // For Android, check `adb devices` for connected/running devices.
             let output = tokio::process::Command::new("adb")
                 .args(["devices"])
                 .output()
@@ -762,11 +761,69 @@ async fn discover_device(platform: Platform) -> Result<DeviceInfo> {
                 }
             }
             eprintln!("  Found {} connected Android device(s)", devices.len());
-            devices
-                .into_iter()
-                .next()
-                .ok_or_else(|| anyhow::anyhow!("No connected Android device/emulator found"))
+            Ok(devices)
         }
+    }
+}
+
+/// Find the best available device for a platform, considering the ResourceManager.
+///
+/// Returns the device immediately if one is available and not allocated.
+/// If all compatible devices are busy, waits up to 5 minutes.
+/// If no compatible devices exist at all, fails immediately.
+async fn find_available_device(
+    platform: Platform,
+    resource_mgr: &golem_devices::resource_manager::ResourceManager,
+) -> Result<DeviceInfo> {
+    let all_devices = discover_all_devices(platform).await?;
+
+    // Filter to compatible devices (booted preferred, but shutdown are valid too)
+    let compatible: Vec<&DeviceInfo> = all_devices
+        .iter()
+        .filter(|d| d.platform == platform)
+        .collect();
+
+    if compatible.is_empty() {
+        anyhow::bail!("No {platform} devices found. Boot a simulator/emulator first.");
+    }
+
+    let booted: Vec<&DeviceInfo> = compatible
+        .iter()
+        .filter(|d| d.state == DeviceState::Booted)
+        .copied()
+        .collect();
+
+    if booted.is_empty() {
+        anyhow::bail!(
+            "Found {} {platform} device(s) but none are booted. Boot one first.",
+            compatible.len()
+        );
+    }
+
+    eprintln!("  Found {} booted {platform} device(s)", booted.len());
+
+    // Try to find one that's not already allocated
+    let timeout = std::time::Duration::from_secs(1200); // 20 minutes
+    let deadline = tokio::time::Instant::now() + timeout;
+
+    loop {
+        for device in &booted {
+            if resource_mgr.port_for(&device.udid).is_none() {
+                // This device is free
+                return Ok((*device).clone());
+            }
+        }
+
+        // All compatible devices are busy
+        if tokio::time::Instant::now() >= deadline {
+            anyhow::bail!(
+                "Timed out waiting for a free {platform} device (all {} are in use)",
+                booted.len()
+            );
+        }
+
+        eprintln!("  All {platform} devices in use, waiting...");
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     }
 }
 
