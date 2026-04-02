@@ -34,7 +34,6 @@ steps = [
   { action = "assert_visible", on = { text = "2", accessibility_id = "counter-b" } },
 
   # Test native toggle checked state
-  # Tap twice: first tap may not register on all devices, second ensures state change
-  { action = "tap", on = { text = "Test Toggle" } },
-  { action = "assert_visible", on = { accessibility_id = "toggle-b", checked = true }, if_fail = "warn" },
+  { action = "tap", on = { accessibility_id = "toggle-b" } },
+  { action = "assert_visible", on = { accessibility_id = "toggle-b", checked = true } },
 ]

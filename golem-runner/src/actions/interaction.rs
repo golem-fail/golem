@@ -27,7 +27,25 @@ pub(crate) async fn handle_tap(step: &Step, driver: &dyn PlatformDriver) -> Resu
     let result = resolve_element(step, driver).await;
 
     let (x, y) = match result {
-        Ok((_elem, coords)) => coords,
+        Ok((elem, coords)) => {
+            // For switch/toggle elements with a child switch control,
+            // tap the child control instead of the center of the whole row.
+            // iOS SwiftUI Toggles render as: parent switch (full row) → child switch (control).
+            // Tapping the label area doesn't toggle; must tap the control.
+            let et = elem.element_type.to_lowercase();
+            if (et == "switch" || et == "toggle") && !elem.children.is_empty() {
+                if let Some(child) = elem.children.iter().find(|c| {
+                    let ct = c.element_type.to_lowercase();
+                    ct == "switch" || ct == "toggle"
+                }) {
+                    (child.bounds.center_x(), child.bounds.center_y())
+                } else {
+                    coords
+                }
+            } else {
+                coords
+            }
+        }
         Err(e) if step.auto_scroll.unwrap_or(false) => {
             // Element not in viewport — try auto-scroll.
             // Check the full tree to see if the element exists off-screen.
