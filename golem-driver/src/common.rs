@@ -151,6 +151,23 @@ fn normalize_json(val: &mut serde_json::Value) {
             }
         }
 
+        // Fix checked state for switches/toggles: iOS reports state via value "0"/"1"
+        // rather than isSelected. Normalize to checked = true/false.
+        let is_switch = map.get("element_type")
+            .and_then(|v| v.as_str())
+            .is_some_and(|et| {
+                let lower = et.to_lowercase();
+                lower == "switch" || lower == "toggle" || lower == "checkbox"
+            });
+        if is_switch {
+            let value_is_on = map.get("value")
+                .and_then(|v| v.as_str())
+                .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+            if value_is_on {
+                map.insert("checked".to_string(), serde_json::Value::Bool(true));
+            }
+        }
+
         // Android: convert bounds from {left,top,right,bottom} → {x,y,width,height}
         if let Some(serde_json::Value::Object(bounds)) = map.get_mut("bounds") {
             if bounds.contains_key("left") && !bounds.contains_key("x") {
