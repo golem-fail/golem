@@ -16,7 +16,7 @@ type = "phone"
 
 [[flow.apps]]
 name = "app-b"
-bundle = "com.golem.test-b"
+bundle = "com.golem.testb"
 
 [[flow.apps.devices]]
 os = "ios:latest"
@@ -44,7 +44,7 @@ steps = [
 name = "deep_link_app_b"
 steps = [
   # Launch app B
-  { action = "launch", app = "com.golem.test-b" },
+  { action = "launch", app = "com.golem.testb" },
   { action = "wait", on_text = "deeplink-display-b", timeout = 10000 },
 
   # Open a deep link for app B and verify it is received
@@ -64,5 +64,5 @@ steps = [
   { action = "assert_visible", on_text = "golem-test://home", on_right_of = "Deep Link:" },
 
   # Stop app B
-  { action = "stop", app = "com.golem.test-b" },
+  { action = "stop", app = "com.golem.testb" },
 ]

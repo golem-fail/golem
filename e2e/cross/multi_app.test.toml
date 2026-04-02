@@ -16,7 +16,7 @@ type = "phone"
 
 [[flow.apps]]
 name = "app-b"
-bundle = "com.golem.test-b"
+bundle = "com.golem.testb"
 
 [[flow.apps.devices]]
 os = "ios:latest"

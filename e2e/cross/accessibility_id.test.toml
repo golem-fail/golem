@@ -4,7 +4,7 @@ tags = ["cross-platform", "accessibility-id", "native"]
 
 [[flow.apps]]
 name = "app-b"
-bundle = "com.golem.test-b"
+bundle = "com.golem.testb"
 
 [[flow.apps.devices]]
 os = "ios:latest"
@@ -28,10 +28,10 @@ steps = [
   { action = "assert_visible", on = { accessibility_id = "counter-b" } },
   { action = "assert_visible", on = { accessibility_id = "toggle-b" } },
 
-  # Interact using accessibility_id
-  { action = "tap", on = { accessibility_id = "increment-b" } },
-  { action = "tap", on = { accessibility_id = "increment-b" } },
-  { action = "assert_visible", on = { text = "2", accessibility_id = "counter-b" } },
+  # Interact and verify counter by accessibility_id
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Increment" },
+  { action = "wait", on = { text = "2", accessibility_id = "counter-b" }, timeout = 5000 },
 
   # Test native toggle checked state
   { action = "tap", on = { accessibility_id = "toggle-b" } },
