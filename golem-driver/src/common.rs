@@ -160,8 +160,10 @@ fn normalize_json(val: &mut serde_json::Value) {
                 let bottom = bounds.get("bottom").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                 bounds.insert("x".to_string(), serde_json::json!(left));
                 bounds.insert("y".to_string(), serde_json::json!(top));
-                bounds.insert("width".to_string(), serde_json::json!(right - left));
-                bounds.insert("height".to_string(), serde_json::json!(bottom - top));
+                // Clamp to 0 — Android WebView clips bottom/right to the visible
+                // area, causing negative dimensions for off-screen elements.
+                bounds.insert("width".to_string(), serde_json::json!((right - left).max(0)));
+                bounds.insert("height".to_string(), serde_json::json!((bottom - top).max(0)));
             }
         }
 
