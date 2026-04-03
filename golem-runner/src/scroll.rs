@@ -50,21 +50,100 @@ fn reverse_direction(dir: Direction) -> Direction {
     }
 }
 
-/// Compute swipe start/end coordinates from viewport dimensions and direction.
+/// Compute swipe coordinates: the swipe starts at `(start_x, start_y)` and
+/// travels 40% of the screen in the given direction.
 ///
-/// Swipes ~40% of the screen in the given direction, starting from the center.
-/// This avoids hardcoded screen sizes and works on any device.
-fn viewport_swipe_coords(viewport: &Viewport, direction: Direction) -> (i32, i32, i32, i32) {
+/// Clamps all coordinates to 10%-90% of the screen to avoid system gesture
+/// areas (notification bar, home indicator). Shorter swipes near edges are
+/// fine — a short scroll beats a wasted one.
+fn swipe_from(
+    viewport: &Viewport,
+    direction: Direction,
+    start_x: i32,
+    start_y: i32,
+) -> (i32, i32, i32, i32) {
+    let dy = viewport.height * 2 / 5; // 40% of screen height
+    let dx = viewport.width * 2 / 5; // 40% of screen width
+
+    let min_x = viewport.width / 10;
+    let max_x = viewport.width * 9 / 10;
+    let min_y = viewport.height / 10;
+    let max_y = viewport.height * 9 / 10;
+
+    let clamp = |v: i32, lo: i32, hi: i32| v.max(lo).min(hi);
+
+    // Direction is the scroll intent (where the user wants content to go),
+    // not the finger direction. "Down" = see content below = finger swipes up.
+    let (fx, fy, tx, ty) = match direction {
+        Direction::Down => (start_x, start_y, start_x, start_y - dy),
+        Direction::Up => (start_x, start_y, start_x, start_y + dy),
+        Direction::Left => (start_x, start_y, start_x + dx, start_y),
+        Direction::Right => (start_x, start_y, start_x - dx, start_y),
+    };
+
+    (
+        clamp(fx, min_x, max_x),
+        clamp(fy, min_y, max_y),
+        clamp(tx, min_x, max_x),
+        clamp(ty, min_y, max_y),
+    )
+}
+
+/// Default swipe start position: finger starts near the trailing edge
+/// (opposite to scroll intent) so it has room to travel AND avoids inner
+/// scrollable elements that typically occupy the middle of the screen.
+/// "Down" scroll = finger starts at 80% from top (below most inner scrollables).
+fn default_swipe_start(viewport: &Viewport, direction: Direction) -> (i32, i32) {
     let cx = viewport.width / 2;
     let cy = viewport.height / 2;
-    let dy = viewport.height * 2 / 5; // 40% of screen height
-    let dx = viewport.width * 2 / 5;  // 40% of screen width
-
     match direction {
-        Direction::Down => (cx, cy - dy / 2, cx, cy + dy / 2),
-        Direction::Up => (cx, cy + dy / 2, cx, cy - dy / 2),
-        Direction::Left => (cx + dx / 2, cy, cx - dx / 2, cy),
-        Direction::Right => (cx - dx / 2, cy, cx + dx / 2, cy),
+        Direction::Down => (cx, viewport.height * 80 / 100),
+        Direction::Up => (cx, viewport.height * 20 / 100),
+        Direction::Left => (viewport.width * 20 / 100, cy),
+        Direction::Right => (viewport.width * 80 / 100, cy),
+    }
+}
+
+/// Alternate swipe start positions to try when the default position is
+/// consumed by an inner scrollable element.
+///
+/// The start position determines which scrollable captures the gesture.
+/// Probes try starting above/below (for vertical) and left/right (for
+/// full-height inner scrollables) of the inner element.
+/// Probe start positions: the start position determines which scrollable
+/// captures the gesture. For "Down" scroll (finger starts low, swipes up),
+/// probes try starting at different Y positions to avoid inner scrollables,
+/// plus left/right X for full-height inner scrollables.
+fn probe_starts(viewport: &Viewport, direction: Direction) -> Vec<(i32, i32)> {
+    let cx = viewport.width / 2;
+    let cy = viewport.height / 2;
+    match direction {
+        Direction::Down => vec![
+            // Finger starts low and swipes up. Try positions outside common
+            // inner scrollable ranges (typically 30%-80% of screen).
+            (cx, viewport.height * 15 / 100),     // near top — above inner scrollables
+            (cx, viewport.height * 90 / 100),     // near bottom — below inner scrollables
+            (viewport.width * 85 / 100, viewport.height * 80 / 100), // right edge, low
+            (viewport.width * 15 / 100, viewport.height * 80 / 100), // left edge, low
+        ],
+        Direction::Up => vec![
+            (cx, viewport.height * 85 / 100),     // near bottom — below inner scrollables
+            (cx, viewport.height * 10 / 100),     // near top — above inner scrollables
+            (viewport.width * 85 / 100, viewport.height * 20 / 100), // right edge, high
+            (viewport.width * 15 / 100, viewport.height * 20 / 100), // left edge, high
+        ],
+        Direction::Left => vec![
+            (viewport.width * 85 / 100, cy),      // near right — beyond inner scrollables
+            (viewport.width * 10 / 100, cy),      // near left
+            (viewport.width * 20 / 100, viewport.height * 85 / 100), // low left
+            (viewport.width * 20 / 100, viewport.height * 15 / 100), // high left
+        ],
+        Direction::Right => vec![
+            (viewport.width * 15 / 100, cy),      // near left
+            (viewport.width * 90 / 100, cy),      // near right
+            (viewport.width * 80 / 100, viewport.height * 85 / 100), // low right
+            (viewport.width * 80 / 100, viewport.height * 15 / 100), // high right
+        ],
     }
 }
 
@@ -72,11 +151,16 @@ fn viewport_swipe_coords(viewport: &Viewport, direction: Direction) -> (i32, i32
 ///
 /// The algorithm:
 /// 1. Check if the element already exists in the current hierarchy.
-/// 2. Swipe in the given direction.
+/// 2. Swipe in the given direction at the current anchor point.
 /// 3. Get the new hierarchy and check again.
-/// 4. If the hierarchy hasn't changed (bounce detection), reverse direction.
-/// 5. If both directions are exhausted, return an error.
-/// 6. If max_scrolls is reached, return an error.
+/// 4. If the swipe was wasted (hierarchy unchanged), probe alternate positions
+///    (right, left, lower, upper edges — one attempt each) to avoid inner
+///    scrollable elements consuming the gesture.
+/// 5. If a probe works, adopt that anchor for subsequent swipes.
+/// 6. If the hierarchy still hasn't changed after probing, treat as bounce
+///    and reverse direction.
+/// 7. If both directions are exhausted, return an error.
+/// 8. If max_scrolls is reached, return an error.
 pub async fn scroll_to_element(
     selector: &Selector,
     driver: &dyn PlatformDriver,
@@ -95,40 +179,67 @@ pub async fn scroll_to_element(
     let mut direction = initial_direction;
     let mut reversed = false;
     let mut prev_fingerprint = hierarchy_fingerprint(&root);
+    // Current swipe start position — may shift after successful probing.
+    let mut start = default_swipe_start(&viewport, direction);
 
     for _ in 0..max_scrolls {
-        // Step 2: Swipe using viewport-derived coordinates (~40% of screen)
-        let (fx, fy, tx, ty) = viewport_swipe_coords(&viewport, direction);
+        // Swipe from the current start position.
+        let (fx, fy, tx, ty) = swipe_from(&viewport, direction, start.0, start.1);
         driver.swipe_coords(fx, fy, tx, ty).await?;
 
-        // Step 3: Wait for scroll to settle, then check viewport
         root = wait_for_settle(driver).await?;
-        let viewport = Viewport::from_root(&root);
-        let visible = filter_viewport(&root, &viewport);
+        let vp = Viewport::from_root(&root);
+        let visible = filter_viewport(&root, &vp);
         let results = find_elements(&visible, selector);
         if let Some(found) = results.into_iter().next() {
             return Ok(found);
         }
 
-        // Step 5: Bounce detection
         let new_fingerprint = hierarchy_fingerprint(&root);
         if new_fingerprint == prev_fingerprint {
-            // Hierarchy didn't change -- we've hit the end
-            if reversed {
-                // Already tried both directions
-                bail!(
-                    "Element not found: scrolled in both directions and hit boundaries. \
-                     Selector: text={:?}, id={:?}",
-                    selector.text,
-                    selector.accessibility_id,
-                );
-            }
-            // Reverse direction and continue
-            direction = reverse_direction(direction);
-            reversed = true;
-        }
+            // Wasted swipe — an inner scrollable may have consumed it.
+            // Probe alternate start positions (one attempt each).
+            let mut probed_ok = false;
+            for (px, py) in probe_starts(&viewport, direction) {
+                let (fx, fy, tx, ty) = swipe_from(&viewport, direction, px, py);
+                driver.swipe_coords(fx, fy, tx, ty).await?;
+                root = wait_for_settle(driver).await?;
 
-        prev_fingerprint = new_fingerprint;
+                let probe_fp = hierarchy_fingerprint(&root);
+                if probe_fp != prev_fingerprint {
+                    // This start position works — adopt it for future swipes.
+                    start = (px, py);
+                    prev_fingerprint = probe_fp;
+                    probed_ok = true;
+
+                    // Check if the element appeared.
+                    let vp = Viewport::from_root(&root);
+                    let visible = filter_viewport(&root, &vp);
+                    let results = find_elements(&visible, selector);
+                    if let Some(found) = results.into_iter().next() {
+                        return Ok(found);
+                    }
+                    break;
+                }
+            }
+
+            if !probed_ok {
+                // All probes wasted — true boundary reached.
+                if reversed {
+                    bail!(
+                        "Element not found: scrolled in both directions and hit boundaries. \
+                         Selector: text={:?}, id={:?}",
+                        selector.text,
+                        selector.accessibility_id,
+                    );
+                }
+                direction = reverse_direction(direction);
+                reversed = true;
+                start = default_swipe_start(&viewport, direction);
+            }
+        } else {
+            prev_fingerprint = new_fingerprint;
+        }
     }
 
     // Step 7: Max scrolls reached
@@ -175,18 +286,21 @@ mod tests {
         Bounds::new(0, 0, 375, 812)
     }
 
-    /// Determine swipe direction from recorded swipe_coords call args.
-    fn swipe_direction(args: &[String]) -> &'static str {
+    /// Determine scroll intent from recorded swipe_coords call args.
+    /// The scroll intent is opposite to the finger movement: finger swipes up
+    /// means content scrolls down (user sees content below).
+    fn scroll_intent(args: &[String]) -> &'static str {
         let from_y: i32 = args[1].parse().unwrap();
         let to_y: i32 = args[3].parse().unwrap();
         let from_x: i32 = args[0].parse().unwrap();
         let to_x: i32 = args[2].parse().unwrap();
         let dy = to_y - from_y;
         let dx = to_x - from_x;
+        // Invert: finger up = scroll down, finger left = scroll right
         if dy.abs() > dx.abs() {
-            if dy > 0 { "Down" } else { "Up" }
+            if dy < 0 { "Down" } else { "Up" }
         } else {
-            if dx > 0 { "Right" } else { "Left" }
+            if dx < 0 { "Right" } else { "Left" }
         }
     }
 
@@ -487,7 +601,7 @@ mod tests {
             .filter(|(m, _)| m == "swipe_coords")
             .collect();
         assert_eq!(swipe_calls.len(), 1);
-        assert_eq!(swipe_direction(&swipe_calls[0].1), "Down");
+        assert_eq!(scroll_intent(&swipe_calls[0].1), "Down");
     }
 
     // ── 3. Element not found after max_scrolls → error ──────────────
@@ -523,10 +637,8 @@ mod tests {
 
     #[tokio::test]
     async fn bounce_detection_triggers_direction_reversal() {
-        // hierarchy_1: initial (no target)
-        // hierarchy_2: same as 1 (bounce!) -- triggers reversal
-        // hierarchy_3: different (after reversal, still no target)
-        // hierarchy_4: yet different (no target, will exhaust max_scrolls)
+        // When a center swipe is wasted (same hierarchy), edge probes are tried
+        // first (4 attempts). If all probes also waste, direction reverses.
         let base = {
             let mut root = make_element("View", default_bounds());
             root.children.push(make_element_with_text(
@@ -545,37 +657,39 @@ mod tests {
             ));
             root
         };
-        let different2 = {
-            let mut root = make_element("View", default_bounds());
-            root.children.push(make_element_with_text(
-                "Label",
-                "Yet Another Page",
-                Bounds::new(0, 0, 200, 40),
-            ));
-            root
-        };
 
-        // Sequence: initial check -> same (bounce) -> different -> different2 -> ...
-        let driver = SequenceMockDriver::new(vec![
-            base.clone(),
-            base.clone(), // bounce on first swipe
-            different,
-            different2,
-        ]);
+        // Need enough identical entries for: initial settle(2) + center swipe settle(2)
+        // + 4 probes × settle(2) + reversed swipe settle(2) + more
+        let mut seq: Vec<Element> = std::iter::repeat(base.clone()).take(14).collect();
+        // After probes exhaust and direction reverses, return different hierarchy
+        seq.push(different.clone());
+        seq.push(different.clone());
+        seq.push(different.clone());
+        seq.push(different.clone());
+
+        let driver = SequenceMockDriver::new(seq);
         let selector = sel_with_text("Nonexistent");
 
-        let _ = scroll_to_element(&selector, &driver, Direction::Down, 3).await;
+        let _ = scroll_to_element(&selector, &driver, Direction::Down, 10).await;
 
-        // Check that swipe direction changed after bounce
+        // Check that swipe direction changed: first batch is Down (center + probes),
+        // then Up after reversal.
         let swipe_calls: Vec<_> = driver
             .get_calls()
             .into_iter()
             .filter(|(m, _)| m == "swipe_coords")
             .collect();
-        assert!(swipe_calls.len() >= 2);
-        // First swipe should be Down, second should be Up (after bounce)
-        assert_eq!(swipe_direction(&swipe_calls[0].1), "Down");
-        assert_eq!(swipe_direction(&swipe_calls[1].1), "Up");
+        let directions: Vec<&str> = swipe_calls.iter().map(|c| scroll_intent(&c.1)).collect();
+        // Should have Down swipes (center + 4 probes), then at least one Up
+        assert!(
+            directions.contains(&"Up"),
+            "direction should reverse after probes exhaust, got: {directions:?}"
+        );
+        let first_up = directions.iter().position(|&d| d == "Up").unwrap();
+        assert!(
+            directions[..first_up].iter().all(|&d| d == "Down"),
+            "all swipes before reversal should be Down"
+        );
     }
 
     // ── 5. Element found after direction reversal ───────────────────
@@ -601,10 +715,15 @@ mod tests {
             root
         };
 
-        // initial check: base (no target)
-        // after swipe down: base again (bounce!) -> reverse to Up
-        // after swipe up: with_target (found!)
-        let driver = SequenceMockDriver::new(vec![base.clone(), base.clone(), with_target]);
+        // Doubled entries: initial settle(2) + center swipe settle(2) [bounce]
+        // + 4 probes × settle(2) = 12 entries of base. Then reversed swipe
+        // settle(2) returns with_target → found.
+        // 6 base (doubled to 12) + with_target at positions 12+.
+        let mut seq: Vec<Element> = std::iter::repeat(base.clone()).take(6).collect();
+        seq.push(with_target.clone());
+        seq.push(with_target.clone());
+
+        let driver = SequenceMockDriver::new(seq);
         let selector = sel_with_text("Target");
 
         let result = scroll_to_element(&selector, &driver, Direction::Down, 20)
@@ -618,9 +737,12 @@ mod tests {
             .into_iter()
             .filter(|(m, _)| m == "swipe_coords")
             .collect();
-        assert_eq!(swipe_calls.len(), 2);
-        assert_eq!(swipe_direction(&swipe_calls[0].1), "Down"); // first try
-        assert_eq!(swipe_direction(&swipe_calls[1].1), "Up"); // reversed
+        let directions: Vec<&str> = swipe_calls.iter().map(|c| scroll_intent(&c.1)).collect();
+        // Should have Down swipes (center + probes), then Up (reversed) which finds target
+        assert!(
+            directions.contains(&"Up"),
+            "should reverse and find target, got: {directions:?}"
+        );
     }
 
     // ── 6. Max scrolls reached returns appropriate error ────────────
@@ -702,7 +824,7 @@ mod tests {
             .filter(|(m, _)| m == "swipe_coords")
             .collect();
         assert_eq!(swipe_calls.len(), 1);
-        assert_eq!(swipe_direction(&swipe_calls[0].1), "Down");
+        assert_eq!(scroll_intent(&swipe_calls[0].1), "Down");
     }
 
     // ── 9. Scroll up direction correct ──────────────────────────────
@@ -741,7 +863,7 @@ mod tests {
             .filter(|(m, _)| m == "swipe_coords")
             .collect();
         assert_eq!(swipe_calls.len(), 1);
-        assert_eq!(swipe_direction(&swipe_calls[0].1), "Up");
+        assert_eq!(scroll_intent(&swipe_calls[0].1), "Up");
     }
 
     // ── 10. Scroll left direction works ─────────────────────────────
@@ -780,7 +902,7 @@ mod tests {
             .filter(|(m, _)| m == "swipe_coords")
             .collect();
         assert_eq!(swipe_calls.len(), 1);
-        assert_eq!(swipe_direction(&swipe_calls[0].1), "Left");
+        assert_eq!(scroll_intent(&swipe_calls[0].1), "Left");
     }
 
     // ── 11. Scroll right direction works ────────────────────────────
@@ -819,7 +941,7 @@ mod tests {
             .filter(|(m, _)| m == "swipe_coords")
             .collect();
         assert_eq!(swipe_calls.len(), 1);
-        assert_eq!(swipe_direction(&swipe_calls[0].1), "Right");
+        assert_eq!(scroll_intent(&swipe_calls[0].1), "Right");
     }
 
     // ── 12. Default max_scrolls behavior ────────────────────────────
