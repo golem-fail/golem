@@ -17,22 +17,20 @@ type = "phone"
 [[block]]
 name = "wait_for_elements"
 steps = [
-  # Wait for the main UI to be ready
-  { action = "wait", on_text = "Submit", timeout = 10000 },
-  { action = "wait", on_text = "Counter", timeout = 5000 },
-  { action = "wait", on_text = "Enter email", timeout = 5000 },
+  { action = "wait", on_text = "Submit" },
+  { action = "wait", on_text = "Counter" },
+]
 
-  # Wait for a specific text to be visible
-  { action = "wait", on_text = "Item 0", timeout = 5000 },
+# Test that auto_scroll works with polling — find an off-screen element
+[[block]]
+name = "scroll_and_tap"
+steps = [
+  # "Show Delayed" is at the bottom, needs scrolling (extra time for inner scroll lists)
+  { action = "tap", on_text = "Show Delayed", auto_scroll = true, timeout = 30000 },
 
-  # Trigger an alert, then wait for it to appear, then dismiss it
-  { action = "tap", on_text = "alert-button" },
-  { action = "wait", on_text = "OK", timeout = 5000 },
-  { action = "tap", on_text = "OK" },
+  # After tapping, wait for delayed text to appear (~3s)
+  { action = "wait", on_text = "Delayed Text", auto_scroll = true },
 
-  # wait_not: wait for the alert to disappear after dismissal
-  { action = "wait_not", on_text = "Show Alert", timeout = 5000, if_fail = "skip" },
-
-  # Wait for the counter to show initial value
-  { action = "wait", on_text = "Counter", timeout = 3000 },
+  # Wait for it to disappear (~3s)
+  { action = "wait_not", on_text = "Delayed Text" },
 ]

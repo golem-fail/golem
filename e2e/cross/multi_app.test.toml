@@ -29,8 +29,6 @@ type = "phone"
 [[block]]
 name = "switch_between_apps"
 steps = [
-  { action = "wait", on_text = "Submit", timeout = 10000 },
-
   # Interact with the primary app
   { action = "tap", on_text = "Increment" },
   { action = "tap", on_text = "Increment" },
@@ -39,7 +37,7 @@ steps = [
 
   # Switch to the companion app
   { action = "launch", app = "app-b" },
-  { action = "wait", on_text = "app-b-title", timeout = 10000 },
+  { action = "assert_visible", on_text = "app-b-title" },
   { action = "assert_visible", on_text = "shared-data-display" },
   { action = "assert_visible", on_text = "refresh-button" },
   { action = "assert_visible", on_text = "Ready", on_right_of = "Status:" },
@@ -49,8 +47,6 @@ steps = [
 
   # Switch back to the primary app
   { action = "launch", app = "app" },
-  { action = "wait", on_text = "Counter", timeout = 10000 },
-
   # Verify primary app state is intact
   { action = "assert_visible", on_text = "3", on_below = "Counter" },
 

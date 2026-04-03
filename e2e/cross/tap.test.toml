@@ -14,25 +14,10 @@ type = "phone"
 os = "android:latest"
 type = "phone"
 
-# Android needs an extra wait for Submit to appear
-[[block]]
-name = "tap_setup_android"
-where = { os = "android" }
-steps = [
-  { action = "wait", on_text = "Submit", timeout = 30000 },
-]
-
-[[block]]
-name = "tap_setup_ios"
-where = { os = "ios" }
-steps = [
-  { action = "wait", on_text = "Submit", timeout = 30000 },
-]
-
 [[block]]
 name = "tap_interactions"
 steps = [
-  { action = "tap", on_text = "Submit" },
+  { action = "tap", on_text = "Submit", timeout = 30000 },
   { action = "tap", on_text = "Action", on_index = 0 },
   { action = "tap", on_text = "Increment" },
   { action = "tap", on_text = "Increment" },

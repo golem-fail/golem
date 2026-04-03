@@ -20,8 +20,6 @@ app_lifecycle = "reset"
 [[block]]
 name = "accessibility_id_selectors"
 steps = [
-  { action = "wait", on_text = "GOLEM Test B", timeout = 10000 },
-
   # Test on_accessibility_id — only works with native apps
   { action = "assert_visible", on = { accessibility_id = "app-b-title" } },
   { action = "assert_visible", on = { accessibility_id = "refresh-button" } },
@@ -31,7 +29,7 @@ steps = [
   # Interact and verify counter by accessibility_id
   { action = "tap", on_text = "Increment" },
   { action = "tap", on_text = "Increment" },
-  { action = "wait", on = { text = "2", accessibility_id = "counter-b" }, timeout = 5000 },
+  { action = "assert_visible", on = { text = "2", accessibility_id = "counter-b" } },
 
   # Test native toggle checked state
   { action = "tap", on = { accessibility_id = "toggle-b" } },

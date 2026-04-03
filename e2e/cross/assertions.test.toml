@@ -17,10 +17,8 @@ type = "phone"
 [[block]]
 name = "visibility_assertions"
 steps = [
-  { action = "wait", on_text = "Submit", timeout = 30000 },
-
   # assert_visible: elements that should be on screen (using grouped on = {} syntax)
-  { action = "assert_visible", on = { text = "Submit" } },
+  { action = "assert_visible", on = { text = "Submit" }, timeout = 30000 },
   { action = "assert_visible", on_text = "Enter email" },
   { action = "assert_visible", on_text = "Counter" },
 

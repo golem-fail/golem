@@ -9,6 +9,7 @@ import NestedLayout from "./lib/NestedLayout.svelte";
 import AlertTriggers from "./lib/AlertTriggers.svelte";
 import Permissions from "./lib/Permissions.svelte";
 import DeviceState from "./lib/DeviceState.svelte";
+import DelayedElement from "./lib/DelayedElement.svelte";
 </script>
 
 <main>
@@ -23,4 +24,5 @@ import DeviceState from "./lib/DeviceState.svelte";
   <AlertTriggers />
   <Permissions />
   <DeviceState />
+  <DelayedElement />
 </main>

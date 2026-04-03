@@ -17,7 +17,6 @@ type = "phone"
 [[block]]
 name = "initial_state"
 steps = [
-  { action = "wait", on_text = "Orientation:", timeout = 10000 },
   { action = "assert_visible", on_text = "Portrait", on_right_of = "Orientation:" },
   { action = "assert_visible", on_text = "Light", on_right_of = "Theme:" },
   { action = "assert_visible", on_text = "0.0, 0.0", on_right_of = "Location:" },
@@ -25,7 +24,7 @@ steps = [
   # Press the home button and re-launch
   { action = "press", button = "home" },
   { action = "launch", app = "app" },
-  { action = "wait", on_text = "Orientation:", timeout = 5000 },
+  { action = "assert_visible", on_text = "Orientation:" },
 ]
 
 # Android-only: test back button navigation
@@ -35,7 +34,7 @@ where = { os = "android" }
 steps = [
   { action = "press", button = "back" },
   { action = "launch", app = "app" },
-  { action = "wait", on_text = "Orientation:", timeout = 5000 },
+  { action = "assert_visible", on_text = "Orientation:" },
 ]
 
 [[block]]

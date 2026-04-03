@@ -27,8 +27,8 @@ steps = [
   { action = "swipe", direction = "down" },
   { action = "swipe", direction = "down" },
 
-  # Wait for a list item near the middle to become visible (using to = {} syntax)
-  { action = "wait", to = { text = "list-item-25" }, timeout = 5000 },
+  # Verify a list item near the middle is now visible (using to = {} syntax)
+  { action = "assert_visible", to = { text = "list-item-25" } },
 
   # Continue scrolling to find an item near the end
   { action = "swipe", direction = "down" },
@@ -38,7 +38,6 @@ steps = [
   { action = "swipe", direction = "down" },
 
   # Verify the last list item is reachable
-  { action = "wait", on_text = "list-item-49", timeout = 5000 },
   { action = "tap", on_text = "list-item-49" },
 
   # Scroll back to the top
@@ -54,5 +53,5 @@ steps = [
   { action = "swipe", direction = "up" },
 
   # Verify we are back at the top
-  { action = "wait", on_text = "list-item-0", timeout = 5000 },
+  { action = "assert_visible", on_text = "list-item-0" },
 ]

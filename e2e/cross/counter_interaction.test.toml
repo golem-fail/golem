@@ -17,8 +17,6 @@ type = "phone"
 [[block]]
 name = "verify_initial_state"
 steps = [
-  { action = "wait", on_text = "Counter", timeout = 10000 },
-
   # Verify the counter starts at zero
   { action = "assert_visible", on_text = "0", on_below = "Counter" },
 

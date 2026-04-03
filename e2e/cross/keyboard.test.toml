@@ -17,7 +17,7 @@ type = "phone"
 [[block]]
 name = "keyboard_management"
 steps = [
-  { action = "wait", on_text = "Submit", timeout = 30000 },
+  { action = "assert_visible", on_text = "Submit", timeout = 30000 },
 
   # Tap a text field to bring up the keyboard
   { action = "tap", on_text = "Enter email" },

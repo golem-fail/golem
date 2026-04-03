@@ -1,59 +1,22 @@
-use std::time::Duration;
-
-use anyhow::{bail, Result};
+use anyhow::Result;
 use golem_driver::PlatformDriver;
-use golem_element::selector::find_elements;
 use golem_parser::Step;
-use tokio::time::Instant;
 
-use crate::resolution::{build_selector, resolve_element};
+use crate::resolution::{poll_for_absence, resolve_element};
 
 /// Wait for an element to appear, polling the hierarchy until found or timeout.
 ///
-/// Default timeout is 10000ms. Poll interval is 500ms.
+/// Default timeout is 10s. Delegates to `resolve_element` which polls internally.
 pub(crate) async fn handle_wait(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let timeout_ms = step.timeout.unwrap_or(10000);
-    let poll_interval = Duration::from_millis(500);
-    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
-
-    loop {
-        match resolve_element(step, driver).await {
-            Ok(_) => return Ok(()),
-            Err(_) if Instant::now() < deadline => {
-                tokio::time::sleep(poll_interval).await;
-            }
-            Err(e) => return Err(anyhow::anyhow!("Timed out waiting for element: {}", e)),
-        }
-    }
+    resolve_element(step, driver).await?;
+    Ok(())
 }
 
 /// Wait for an element to disappear, polling the hierarchy until not found or timeout.
 ///
-/// Default timeout is 10000ms. Poll interval is 500ms.
+/// Default timeout is 10s. Delegates to `poll_for_absence`.
 pub(crate) async fn handle_wait_not(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let timeout_ms = step.timeout.unwrap_or(10000);
-    let poll_interval = Duration::from_millis(500);
-    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
-    let selector = build_selector(step);
-
-    loop {
-        let root = driver.get_hierarchy().await?;
-        let results = find_elements(&root, &selector);
-
-        if results.is_empty() {
-            return Ok(());
-        }
-
-        if Instant::now() >= deadline {
-            bail!(
-                "Timed out waiting for element to disappear: text={:?}, id={:?}",
-                selector.text,
-                selector.accessibility_id,
-            );
-        }
-
-        tokio::time::sleep(poll_interval).await;
-    }
+    poll_for_absence(step, driver).await
 }
 
 #[cfg(test)]

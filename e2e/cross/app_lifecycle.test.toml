@@ -18,7 +18,7 @@ type = "phone"
 name = "launch_and_stop"
 steps = [
   # Verify the app is running by checking for a known element
-  { action = "wait", on_text = "Submit", timeout = 30000 },
+  { action = "assert_visible", on_text = "Submit", timeout = 30000 },
   { action = "assert_visible", on_text = "Counter" },
 
   # Interact to set some state
@@ -32,6 +32,6 @@ steps = [
   { action = "launch", app = "app" },
 
   # Verify the app is running again
-  { action = "wait", on_text = "Submit", timeout = 30000 },
+  { action = "assert_visible", on_text = "Submit", timeout = 30000 },
   { action = "assert_visible", on_text = "Counter" },
 ]

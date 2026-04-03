@@ -17,30 +17,25 @@ type = "phone"
 [[block]]
 name = "alert_tests"
 steps = [
-  { action = "wait", on_text = "Submit", timeout = 30000 },
+  { action = "assert_visible", on_text = "Submit", timeout = 30000 },
 
   # Trigger a simple alert (button is off-screen, use auto_scroll)
   { action = "tap", on_text = "alert-button", auto_scroll = true },
 
-  # Wait for the alert to appear and dismiss it
-  { action = "wait", on_text = "OK", timeout = 5000 },
+  # Dismiss the alert
   { action = "tap", on_text = "OK" },
 
-  # Trigger a confirmation dialog
+  # Trigger a confirmation dialog and accept it
   { action = "tap", on_text = "confirm-button" },
-
-  # Wait for the confirm dialog and accept it
-  { action = "wait", on_text = "Confirm", timeout = 5000 },
   { action = "tap", on_text = "Confirm" },
 
   # Trigger the confirmation dialog again and cancel it
   { action = "tap", on_text = "confirm-button" },
-  { action = "wait", on_text = "Cancel", timeout = 5000 },
   { action = "tap", on_text = "Cancel" },
 
   # Trigger an action sheet
   { action = "tap", on_text = "action-sheet-button" },
-  { action = "wait", on_text = "Action Sheet", timeout = 5000 },
+  { action = "assert_visible", on_text = "Action Sheet" },
 ]
 
 # Dismiss action sheet: Android uses back button, iOS taps Cancel

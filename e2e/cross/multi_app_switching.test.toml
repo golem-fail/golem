@@ -29,8 +29,6 @@ type = "phone"
 [[block]]
 name = "set_state_in_primary_app"
 steps = [
-  { action = "wait", on_text = "Submit", timeout = 10000 },
-
   # Set state by incrementing the counter
   { action = "tap", on_text = "Increment" },
   { action = "tap", on_text = "Increment" },
@@ -53,8 +51,6 @@ name = "switch_to_companion_and_verify"
 steps = [
   # Switch to the companion app
   { action = "launch", app = "app-b" },
-  { action = "wait", on_text = "app-b-title", timeout = 10000 },
-
   # Verify companion app elements are visible
   { action = "assert_visible", on_text = "app-b-title" },
   { action = "assert_visible", on_text = "shared-data-display" },
@@ -76,8 +72,6 @@ name = "switch_back_and_verify_state_preserved"
 steps = [
   # Switch back to the primary app
   { action = "launch", app = "app" },
-  { action = "wait", on_text = "Counter", timeout = 10000 },
-
   # Verify primary app state is preserved after app switching
   { action = "assert_visible", on_text = "5", on_below = "Counter" },
   { action = "assert_visible", on_text = "cross-test@example.com" },

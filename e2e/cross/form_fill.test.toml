@@ -17,8 +17,6 @@ type = "phone"
 [[block]]
 name = "fill_form_fields"
 steps = [
-  { action = "wait", on_text = "Enter email", timeout = 10000 },
-
   # Type into the email field and verify
   { action = "type", on_text = "Enter email", input = "testuser@example.com" },
   { action = "assert_visible", on_text = "testuser@example.com" },

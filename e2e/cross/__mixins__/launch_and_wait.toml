@@ -3,6 +3,5 @@ action = "launch"
 app = "${app_bundle}"
 
 [[step]]
-action = "wait"
+action = "assert_visible"
 text = "${wait_element}"
-timeout = 10000

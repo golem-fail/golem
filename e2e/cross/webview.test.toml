@@ -17,8 +17,6 @@ type = "phone"
 [[block]]
 name = "webview_element_interaction"
 steps = [
-  { action = "wait", on_text = "Submit", timeout = 10000 },
-
   # Verify core UI elements are visible (proxy for webview context loaded)
   { action = "assert_visible", on_text = "Enter email" },
   { action = "assert_visible", on_text = "Password" },
@@ -51,12 +49,12 @@ steps = [
   # Scroll within the web view to find list elements
   { action = "swipe", direction = "down" },
   { action = "swipe", direction = "down" },
-  { action = "wait", on_text = "list-item-0", timeout = 5000 },
+  { action = "assert_visible", on_text = "list-item-0" },
 
   # Scroll back up to the top of the web view
   { action = "swipe", direction = "up" },
   { action = "swipe", direction = "up" },
-  { action = "wait", on_text = "Submit", timeout = 5000 },
+  { action = "assert_visible", on_text = "Submit" },
 
   # Take a screenshot to capture final web view state
   { action = "screenshot", path = "/tmp/golem-cross-webview.png" },

@@ -5,7 +5,7 @@ use golem_driver::{Direction, PlatformDriver};
 use golem_parser::Step;
 use tokio::time::{sleep, Instant};
 
-use crate::resolution::{build_selector, resolve_element, resolve_element_full_tree};
+use crate::resolution::{build_selector, resolve_element};
 use crate::scroll::{scroll_to_element, DEFAULT_MAX_SCROLLS};
 
 
@@ -24,50 +24,26 @@ async fn tap_at(driver: &dyn PlatformDriver, x: i32, y: i32) -> Result<()> {
 ///
 /// Sleeps 300ms after tapping to prevent accidental double-tap side effects.
 pub(crate) async fn handle_tap(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let result = resolve_element(step, driver).await;
+    let (elem, coords) = resolve_element(step, driver).await?;
 
-    let (x, y) = match result {
-        Ok((elem, coords)) => {
-            // For switch/toggle elements with a child switch control,
-            // tap the child control instead of the center of the whole row.
-            // iOS SwiftUI Toggles render as: parent switch (full row) → child switch (control).
-            // Tapping the label area doesn't toggle; must tap the control.
-            let et = elem.element_type.to_lowercase();
-            if (et == "switch" || et == "toggle") && !elem.children.is_empty() {
-                if let Some(child) = elem.children.iter().find(|c| {
-                    let ct = c.element_type.to_lowercase();
-                    ct == "switch" || ct == "toggle"
-                }) {
-                    (child.bounds.center_x(), child.bounds.center_y())
-                } else {
-                    coords
-                }
+    // For switch/toggle elements with a child switch control,
+    // tap the child control instead of the center of the whole row.
+    // iOS SwiftUI Toggles render as: parent switch (full row) → child switch (control).
+    // Tapping the label area doesn't toggle; must tap the control.
+    let (x, y) = {
+        let et = elem.element_type.to_lowercase();
+        if (et == "switch" || et == "toggle") && !elem.children.is_empty() {
+            if let Some(child) = elem.children.iter().find(|c| {
+                let ct = c.element_type.to_lowercase();
+                ct == "switch" || ct == "toggle"
+            }) {
+                (child.bounds.center_x(), child.bounds.center_y())
             } else {
                 coords
             }
+        } else {
+            coords
         }
-        Err(e) if step.auto_scroll.unwrap_or(false) => {
-            // Element not in viewport — try auto-scroll.
-            // Check the full tree to see if the element exists off-screen.
-            let selector = build_selector(step);
-            if resolve_element_full_tree(step, driver).await.is_ok() {
-                // Element exists off-screen — scroll to it.
-                let _found = scroll_to_element(
-                    &selector,
-                    driver,
-                    Direction::Down,
-                    DEFAULT_MAX_SCROLLS,
-                )
-                .await?;
-                // After scrolling, re-resolve in viewport to get correct coordinates.
-                let (_elem, coords) = resolve_element(step, driver).await?;
-                coords
-            } else {
-                // Element doesn't exist at all — propagate original error.
-                return Err(e);
-            }
-        }
-        Err(e) => return Err(e),
     };
 
     tap_at(driver, x, y).await?;

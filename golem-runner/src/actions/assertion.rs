@@ -1,10 +1,9 @@
 use anyhow::{bail, Result};
 use golem_driver::PlatformDriver;
 use golem_element::glob::glob_match;
-use golem_element::selector::find_elements;
 use golem_parser::Step;
 
-use crate::resolution::{build_selector, resolve_element};
+use crate::resolution::{poll_for_absence, resolve_element};
 
 /// Assert that an element matching the step's selectors exists in the hierarchy.
 pub(crate) async fn handle_assert_visible(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
@@ -13,21 +12,11 @@ pub(crate) async fn handle_assert_visible(step: &Step, driver: &dyn PlatformDriv
 }
 
 /// Assert that NO element matches the step's selectors.
+///
+/// Polls the hierarchy until the element disappears or timeout (default 10s).
+/// Passes immediately if the element is already absent.
 pub(crate) async fn handle_assert_not_visible(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let selector = build_selector(step);
-    let root = driver.get_hierarchy().await?;
-    let results = find_elements(&root, &selector);
-
-    if results.is_empty() {
-        Ok(())
-    } else {
-        bail!(
-            "Expected no element matching selector but found {}: text={:?}, id={:?}",
-            results.len(),
-            selector.text,
-            selector.accessibility_id,
-        )
-    }
+    poll_for_absence(step, driver).await
 }
 
 

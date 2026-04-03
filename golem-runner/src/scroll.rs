@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use golem_driver::{Direction, PlatformDriver};
 use golem_element::selector::{find_elements, Selector};
-use golem_element::{Element, FindResult};
+use golem_element::{filter_viewport, Element, FindResult, Viewport};
 
 /// Default maximum number of scroll attempts before giving up.
 pub const DEFAULT_MAX_SCROLLS: u32 = 20;
@@ -26,6 +26,10 @@ fn build_fingerprint(element: &Element, buf: &mut String) {
     if let Some(ref id) = element.accessibility_id {
         buf.push_str(id);
     }
+    // Include bounds so scroll position changes are detected (WebViews report
+    // absolute document coordinates that shift as the page scrolls).
+    let b = &element.bounds;
+    buf.push_str(&format!("@{},{}", b.x, b.y));
     buf.push('[');
     for child in &element.children {
         build_fingerprint(child, buf);
@@ -44,6 +48,24 @@ fn reverse_direction(dir: Direction) -> Direction {
     }
 }
 
+/// Compute swipe start/end coordinates from viewport dimensions and direction.
+///
+/// Swipes ~40% of the screen in the given direction, starting from the center.
+/// This avoids hardcoded screen sizes and works on any device.
+fn viewport_swipe_coords(viewport: &Viewport, direction: Direction) -> (i32, i32, i32, i32) {
+    let cx = viewport.width / 2;
+    let cy = viewport.height / 2;
+    let dy = viewport.height * 2 / 5; // 40% of screen height
+    let dx = viewport.width * 2 / 5;  // 40% of screen width
+
+    match direction {
+        Direction::Down => (cx, cy - dy / 2, cx, cy + dy / 2),
+        Direction::Up => (cx, cy + dy / 2, cx, cy - dy / 2),
+        Direction::Left => (cx + dx / 2, cy, cx - dx / 2, cy),
+        Direction::Right => (cx - dx / 2, cy, cx + dx / 2, cy),
+    }
+}
+
 /// Scroll through a view to find an element matching the given selector.
 ///
 /// The algorithm:
@@ -59,9 +81,11 @@ pub async fn scroll_to_element(
     initial_direction: Direction,
     max_scrolls: u32,
 ) -> Result<FindResult> {
-    // Step 1: Check current hierarchy before any scrolling.
+    // Step 1: Check current viewport-filtered hierarchy before any scrolling.
     let mut root = driver.get_hierarchy().await?;
-    let results = find_elements(&root, selector);
+    let viewport = Viewport::from_root(&root);
+    let visible = filter_viewport(&root, &viewport);
+    let results = find_elements(&visible, selector);
     if let Some(found) = results.into_iter().next() {
         return Ok(found);
     }
@@ -71,12 +95,15 @@ pub async fn scroll_to_element(
     let mut prev_fingerprint = hierarchy_fingerprint(&root);
 
     for _ in 0..max_scrolls {
-        // Step 2: Swipe
-        driver.swipe(direction).await?;
+        // Step 2: Swipe using viewport-derived coordinates (~40% of screen)
+        let (fx, fy, tx, ty) = viewport_swipe_coords(&viewport, direction);
+        driver.swipe_coords(fx, fy, tx, ty).await?;
 
-        // Step 3: Get new hierarchy and check
+        // Step 3: Get new hierarchy and check viewport
         root = driver.get_hierarchy().await?;
-        let results = find_elements(&root, selector);
+        let viewport = Viewport::from_root(&root);
+        let visible = filter_viewport(&root, &viewport);
+        let results = find_elements(&visible, selector);
         if let Some(found) = results.into_iter().next() {
             return Ok(found);
         }
@@ -144,6 +171,21 @@ mod tests {
 
     fn default_bounds() -> Bounds {
         Bounds::new(0, 0, 375, 812)
+    }
+
+    /// Determine swipe direction from recorded swipe_coords call args.
+    fn swipe_direction(args: &[String]) -> &'static str {
+        let from_y: i32 = args[1].parse().unwrap();
+        let to_y: i32 = args[3].parse().unwrap();
+        let from_x: i32 = args[0].parse().unwrap();
+        let to_x: i32 = args[2].parse().unwrap();
+        let dy = to_y - from_y;
+        let dx = to_x - from_x;
+        if dy.abs() > dx.abs() {
+            if dy > 0 { "Down" } else { "Up" }
+        } else {
+            if dx > 0 { "Right" } else { "Left" }
+        }
     }
 
     fn sel_with_text(text: &str) -> Selector {
@@ -390,7 +432,7 @@ mod tests {
         let swipe_calls: Vec<_> = driver
             .get_calls()
             .into_iter()
-            .filter(|(m, _)| m == "swipe")
+            .filter(|(m, _)| m == "swipe_coords")
             .collect();
         assert!(swipe_calls.is_empty(), "no swipes SHALL occur");
     }
@@ -433,10 +475,10 @@ mod tests {
         let swipe_calls: Vec<_> = driver
             .get_calls()
             .into_iter()
-            .filter(|(m, _)| m == "swipe")
+            .filter(|(m, _)| m == "swipe_coords")
             .collect();
         assert_eq!(swipe_calls.len(), 1);
-        assert_eq!(swipe_calls[0].1, vec!["Down"]);
+        assert_eq!(swipe_direction(&swipe_calls[0].1), "Down");
     }
 
     // ── 3. Element not found after max_scrolls → error ──────────────
@@ -519,12 +561,12 @@ mod tests {
         let swipe_calls: Vec<_> = driver
             .get_calls()
             .into_iter()
-            .filter(|(m, _)| m == "swipe")
+            .filter(|(m, _)| m == "swipe_coords")
             .collect();
         assert!(swipe_calls.len() >= 2);
         // First swipe should be Down, second should be Up (after bounce)
-        assert_eq!(swipe_calls[0].1, vec!["Down"]);
-        assert_eq!(swipe_calls[1].1, vec!["Up"]);
+        assert_eq!(swipe_direction(&swipe_calls[0].1), "Down");
+        assert_eq!(swipe_direction(&swipe_calls[1].1), "Up");
     }
 
     // ── 5. Element found after direction reversal ───────────────────
@@ -565,11 +607,11 @@ mod tests {
         let swipe_calls: Vec<_> = driver
             .get_calls()
             .into_iter()
-            .filter(|(m, _)| m == "swipe")
+            .filter(|(m, _)| m == "swipe_coords")
             .collect();
         assert_eq!(swipe_calls.len(), 2);
-        assert_eq!(swipe_calls[0].1, vec!["Down"]); // first try
-        assert_eq!(swipe_calls[1].1, vec!["Up"]); // reversed
+        assert_eq!(swipe_direction(&swipe_calls[0].1), "Down"); // first try
+        assert_eq!(swipe_direction(&swipe_calls[1].1), "Up"); // reversed
     }
 
     // ── 6. Max scrolls reached returns appropriate error ────────────
@@ -648,10 +690,10 @@ mod tests {
         let swipe_calls: Vec<_> = driver
             .get_calls()
             .into_iter()
-            .filter(|(m, _)| m == "swipe")
+            .filter(|(m, _)| m == "swipe_coords")
             .collect();
         assert_eq!(swipe_calls.len(), 1);
-        assert_eq!(swipe_calls[0].1, vec!["Down"]);
+        assert_eq!(swipe_direction(&swipe_calls[0].1), "Down");
     }
 
     // ── 9. Scroll up direction correct ──────────────────────────────
@@ -687,10 +729,10 @@ mod tests {
         let swipe_calls: Vec<_> = driver
             .get_calls()
             .into_iter()
-            .filter(|(m, _)| m == "swipe")
+            .filter(|(m, _)| m == "swipe_coords")
             .collect();
         assert_eq!(swipe_calls.len(), 1);
-        assert_eq!(swipe_calls[0].1, vec!["Up"]);
+        assert_eq!(swipe_direction(&swipe_calls[0].1), "Up");
     }
 
     // ── 10. Scroll left direction works ─────────────────────────────
@@ -726,10 +768,10 @@ mod tests {
         let swipe_calls: Vec<_> = driver
             .get_calls()
             .into_iter()
-            .filter(|(m, _)| m == "swipe")
+            .filter(|(m, _)| m == "swipe_coords")
             .collect();
         assert_eq!(swipe_calls.len(), 1);
-        assert_eq!(swipe_calls[0].1, vec!["Left"]);
+        assert_eq!(swipe_direction(&swipe_calls[0].1), "Left");
     }
 
     // ── 11. Scroll right direction works ────────────────────────────
@@ -765,10 +807,10 @@ mod tests {
         let swipe_calls: Vec<_> = driver
             .get_calls()
             .into_iter()
-            .filter(|(m, _)| m == "swipe")
+            .filter(|(m, _)| m == "swipe_coords")
             .collect();
         assert_eq!(swipe_calls.len(), 1);
-        assert_eq!(swipe_calls[0].1, vec!["Right"]);
+        assert_eq!(swipe_direction(&swipe_calls[0].1), "Right");
     }
 
     // ── 12. Default max_scrolls behavior ────────────────────────────
@@ -801,7 +843,7 @@ mod tests {
         let swipe_calls: Vec<_> = driver
             .get_calls()
             .into_iter()
-            .filter(|(m, _)| m == "swipe")
+            .filter(|(m, _)| m == "swipe_coords")
             .collect();
         assert_eq!(swipe_calls.len(), DEFAULT_MAX_SCROLLS as usize);
     }
@@ -846,7 +888,7 @@ mod tests {
         let swipe_calls: Vec<_> = driver
             .get_calls()
             .into_iter()
-            .filter(|(m, _)| m == "swipe")
+            .filter(|(m, _)| m == "swipe_coords")
             .collect();
         assert_eq!(swipe_calls.len(), max_scrolls as usize);
     }

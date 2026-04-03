@@ -22,16 +22,13 @@ steps = [
 
   # Open a deep link with the golem-test scheme
   { action = "open_link", url = "golem-test://home" },
-  { action = "wait", on_text = "Deep Link:", timeout = 5000 },
   { action = "assert_visible", on_text = "golem-test://home", on_right_of = "Deep Link:" },
 
   # Open a deep link with a path and query parameters
   { action = "open_link", url = "golem-test://profile?user=42&tab=settings" },
-  { action = "wait", on_text = "Deep Link:", timeout = 5000 },
   { action = "assert_visible", on_text = "golem-test://profile?user=42&tab=settings", on_right_of = "Deep Link:" },
 
   # Open a deep link to a specific content item
   { action = "open_link", url = "golem-test://item/12345" },
-  { action = "wait", on_text = "Deep Link:", timeout = 5000 },
   { action = "assert_visible", on_text = "golem-test://item/12345", on_right_of = "Deep Link:" },
 ]

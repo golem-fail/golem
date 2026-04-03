@@ -17,8 +17,6 @@ type = "phone"
 [[block]]
 name = "vertical_list_scroll"
 steps = [
-  { action = "wait", on_text = "Submit", timeout = 10000 },
-
   # Verify initial state - first list items should be visible
   { action = "assert_visible", on_text = "list-item-0" },
   { action = "assert_visible", on_text = "Item 0" },
@@ -32,8 +30,7 @@ steps = [
   { action = "swipe", direction = "down" },
   { action = "swipe", direction = "down" },
 
-  # Wait for a mid-list element to appear
-  { action = "wait", on_text = "list-item-25", timeout = 5000 },
+  # Tap a mid-list element
   { action = "tap", on_text = "list-item-25" },
 
   # Continue scrolling to reach the end of the list
@@ -44,7 +41,6 @@ steps = [
   { action = "swipe", direction = "down" },
 
   # Verify the last list item is reachable
-  { action = "wait", on_text = "list-item-49", timeout = 5000 },
   { action = "assert_visible", on_text = "Item 49" },
   { action = "tap", on_text = "list-item-49" },
 
@@ -61,7 +57,6 @@ steps = [
   { action = "swipe", direction = "up" },
 
   # Verify return to the top of the list
-  { action = "wait", on_text = "list-item-0", timeout = 5000 },
   { action = "assert_visible", on_text = "list-item-0" },
   { action = "assert_visible", on_text = "Item 0" },
 ]
@@ -80,8 +75,8 @@ steps = [
   { action = "swipe", direction = "left" },
   { action = "swipe", direction = "left" },
 
-  # Wait for a carousel item near the middle
-  { action = "wait", on_text = "carousel-item-5", timeout = 5000 },
+  # Verify a carousel item near the middle
+  { action = "assert_visible", on_text = "carousel-item-5" },
 
   # Continue swiping to reach the end of the carousel
   { action = "swipe", direction = "left" },
@@ -90,7 +85,7 @@ steps = [
   { action = "swipe", direction = "left" },
 
   # Verify the last carousel item is reachable
-  { action = "wait", on_text = "carousel-item-9", timeout = 5000 },
+  { action = "assert_visible", on_text = "carousel-item-9" },
 
   # Swipe right to go back through the carousel
   { action = "swipe", direction = "right" },
@@ -104,6 +99,6 @@ steps = [
   { action = "swipe", direction = "right" },
 
   # Verify return to the beginning of the carousel
-  { action = "wait", on_text = "carousel-item-0", timeout = 5000 },
+  { action = "assert_visible", on_text = "carousel-item-0" },
   { action = "assert_visible", on_text = "carousel-item-0" },
 ]

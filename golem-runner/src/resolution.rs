@@ -1,8 +1,17 @@
+use std::time::Duration;
+
 use anyhow::{bail, Result};
 use golem_driver::PlatformDriver;
 use golem_element::selector::{find_elements, AnchorSelector, Selector};
 use golem_element::{filter_viewport, Element, Viewport};
 use golem_parser::{Anchor, Step};
+use tokio::time::Instant;
+
+/// Default timeout for polling the hierarchy when resolving elements (10 seconds).
+const DEFAULT_POLL_TIMEOUT_MS: u64 = 10_000;
+
+/// Interval between poll attempts (500ms).
+const POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 /// Build a `Selector` from the fields of a parsed `Step`.
 ///
@@ -67,10 +76,15 @@ pub fn build_selector(step: &Step) -> Selector {
     }
 }
 
-/// Resolve an element from the **viewport-filtered** hierarchy.
+/// Resolve an element from the **viewport-filtered** hierarchy, polling until
+/// found or timeout.
 ///
 /// Only elements whose bounds intersect the screen viewport are considered.
 /// This matches how a real user interacts — you can only tap what you can see.
+///
+/// Polls the hierarchy every 500ms for up to `step.timeout` (default 10s).
+/// The first check runs immediately — zero overhead when the element is already
+/// present.
 ///
 /// If the element is not found in the viewport but exists in the full tree,
 /// the error message includes a hint about its off-screen location.
@@ -79,46 +93,71 @@ pub async fn resolve_element(
     driver: &dyn PlatformDriver,
 ) -> Result<(Element, (i32, i32))> {
     let selector = build_selector(step);
-    let root = driver.get_hierarchy().await?;
-    let viewport = Viewport::from_root(&root);
-    let visible_root = filter_viewport(&root, &viewport);
+    let timeout_ms = step.timeout.unwrap_or(DEFAULT_POLL_TIMEOUT_MS);
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
 
-    let results = find_elements(&visible_root, &selector);
+    let auto_scroll = step.auto_scroll == Some(true);
 
-    if !results.is_empty() {
-        let first = &results[0];
-        return Ok((first.element.clone(), (first.tap_x, first.tap_y)));
-    }
-
-    // Not found in viewport — if auto_scroll is enabled, try scrolling to find it.
-    if step.auto_scroll == Some(true) {
-        let direction = golem_driver::Direction::Down;
-        let max_scrolls = crate::scroll::DEFAULT_MAX_SCROLLS;
-        match crate::scroll::scroll_to_element(&selector, driver, direction, max_scrolls).await {
-            Ok(found) => return Ok((found.element.clone(), (found.tap_x, found.tap_y))),
+    let (last_root, last_viewport) = loop {
+        // Hierarchy fetch may fail if the app is still launching — retry on error.
+        let root = match driver.get_hierarchy().await {
+            Ok(r) => r,
+            Err(_) if Instant::now() < deadline => {
+                tokio::time::sleep(POLL_INTERVAL).await;
+                continue;
+            }
             Err(e) => return Err(e),
+        };
+        let viewport = Viewport::from_root(&root);
+        let visible_root = filter_viewport(&root, &viewport);
+        let results = find_elements(&visible_root, &selector);
+
+        if !results.is_empty() {
+            let first = &results[0];
+            return Ok((first.element.clone(), (first.tap_x, first.tap_y)));
         }
-    }
+
+        // Element not in viewport — if auto_scroll is set and the element exists
+        // off-screen, scroll to it immediately instead of waiting.
+        if auto_scroll && !find_elements(&root, &selector).is_empty() {
+            let direction = golem_driver::Direction::Down;
+            let max_scrolls = crate::scroll::DEFAULT_MAX_SCROLLS;
+            match crate::scroll::scroll_to_element(&selector, driver, direction, max_scrolls).await
+            {
+                Ok(found) => return Ok((found.element.clone(), (found.tap_x, found.tap_y))),
+                Err(e) => return Err(e),
+            }
+        }
+
+        if Instant::now() >= deadline {
+            break (root, viewport);
+        }
+
+        tokio::time::sleep(POLL_INTERVAL).await;
+    };
+
+    let elapsed_secs = timeout_ms as f64 / 1000.0;
 
     // Check full tree for a better error message.
-    let full_results = find_elements(&root, &selector);
+    let full_results = find_elements(&last_root, &selector);
     if !full_results.is_empty() {
         let offscreen = &full_results[0].element;
         let b = &offscreen.bounds;
         bail!(
-            "Element not in viewport (text={:?}, id={:?}): found off-screen at ({}, {}), viewport {}x{}. \
+            "Element not in viewport after {elapsed_secs:.1}s (text={:?}, id={:?}): \
+             found off-screen at ({}, {}), viewport {}x{}. \
              Use auto_scroll = true to scroll to off-screen elements.",
             selector.text,
             selector.accessibility_id,
             b.x,
             b.y,
-            viewport.width,
-            viewport.height,
+            last_viewport.width,
+            last_viewport.height,
         );
     }
 
     bail!(
-        "No element found matching selector: text={:?}, id={:?}",
+        "No element found after {elapsed_secs:.1}s: text={:?}, id={:?}",
         selector.text,
         selector.accessibility_id,
     );
@@ -145,6 +184,52 @@ pub async fn resolve_element_full_tree(
 
     let first = &results[0];
     Ok((first.element.clone(), (first.tap_x, first.tap_y)))
+}
+
+/// Poll until NO element matches the step's selectors, or timeout.
+///
+/// Searches the **full** hierarchy (not viewport-filtered) — an element that
+/// exists anywhere in the tree counts as present.
+///
+/// Returns `Ok(())` as soon as the element disappears. If still present at
+/// timeout, returns an error. First check runs immediately — zero overhead
+/// when the element is already gone.
+pub async fn poll_for_absence(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+) -> Result<()> {
+    let selector = build_selector(step);
+    let timeout_ms = step.timeout.unwrap_or(DEFAULT_POLL_TIMEOUT_MS);
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+
+    loop {
+        let root = match driver.get_hierarchy().await {
+            Ok(r) => r,
+            Err(_) if Instant::now() < deadline => {
+                tokio::time::sleep(POLL_INTERVAL).await;
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
+        let results = find_elements(&root, &selector);
+
+        if results.is_empty() {
+            return Ok(());
+        }
+
+        if Instant::now() >= deadline {
+            let elapsed_secs = timeout_ms as f64 / 1000.0;
+            bail!(
+                "Expected no element matching selector after {elapsed_secs:.1}s, \
+                 but found {}: text={:?}, id={:?}",
+                results.len(),
+                selector.text,
+                selector.accessibility_id,
+            );
+        }
+
+        tokio::time::sleep(POLL_INTERVAL).await;
+    }
 }
 
 #[cfg(test)]
