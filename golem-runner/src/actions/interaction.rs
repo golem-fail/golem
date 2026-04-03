@@ -6,7 +6,7 @@ use golem_parser::Step;
 use tokio::time::{sleep, Instant};
 
 use crate::resolution::{build_selector, resolve_element, wait_for_settle};
-use crate::scroll::{scroll_to_element, DEFAULT_MAX_SCROLLS};
+use crate::scroll::{scroll_to_element_with_hint, DEFAULT_MAX_SCROLLS};
 
 
 /// Minimum delay after a tap to prevent the OS interpreting sequential taps
@@ -167,7 +167,26 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver) -> R
     let max_scrolls = step.max_scrolls.unwrap_or(DEFAULT_MAX_SCROLLS);
 
     let selector = build_selector(step);
-    scroll_to_element(&selector, driver, direction, max_scrolls).await?;
+
+    // Resolve `within` container from viewport-filtered tree (screen coordinates).
+    let container_bounds = if let Some(ref within_group) = step.within {
+        use crate::resolution::build_selector_from_group;
+        use golem_element::selector::find_elements;
+        let root = driver.get_hierarchy().await?;
+        let vp = golem_element::Viewport::from_root(&root);
+        let visible = golem_element::filter_viewport(&root, &vp);
+        let within_sel = build_selector_from_group(within_group);
+        find_elements(&visible, &within_sel)
+            .first()
+            .map(|r| r.element.bounds.clone())
+    } else {
+        None
+    };
+
+    scroll_to_element_with_hint(
+        &selector, driver, direction, max_scrolls, 0.0,
+        step.scroll_timeout, container_bounds,
+    ).await?;
     Ok(())
 }
 

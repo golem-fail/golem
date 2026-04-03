@@ -464,6 +464,7 @@ mod tests {
             auto_scroll: None,
             max_scrolls: None,
             scroll_timeout: None,
+            within: None,
             params: HashMap::new(),
         }
     }
@@ -493,6 +494,7 @@ mod tests {
             auto_scroll: None,
             max_scrolls: None,
             scroll_timeout: None,
+            within: None,
             params: HashMap::new(),
         }
     }

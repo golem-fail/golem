@@ -192,6 +192,7 @@ fn remap_step_vars(step: &Step, vars: &HashMap<String, String>) -> Step {
         auto_scroll: step.auto_scroll,
         max_scrolls: step.max_scrolls,
         scroll_timeout: step.scroll_timeout,
+        within: step.within.clone(),
         params: remap_params(&step.params, vars),
     }
 }
@@ -314,6 +315,7 @@ mod tests {
             auto_scroll: None,
             max_scrolls: None,
             scroll_timeout: None,
+            within: None,
             params,
         }
     }
@@ -343,6 +345,7 @@ mod tests {
             auto_scroll: None,
             max_scrolls: None,
             scroll_timeout: None,
+            within: None,
             params: HashMap::new(),
         }
     }

@@ -29,6 +29,7 @@ pub fn make_step(action: &str) -> Step {
         auto_scroll: None,
         max_scrolls: None,
         scroll_timeout: None,
+            within: None,
         params: HashMap::new(),
     }
 }

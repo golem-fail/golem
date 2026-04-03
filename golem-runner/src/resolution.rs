@@ -41,7 +41,7 @@ fn convert_anchor(anchor: &Anchor) -> AnchorSelector {
 }
 
 /// Build a `Selector` from a `SelectorGroup` (recursive for nested anchors).
-fn build_selector_from_group(g: &golem_parser::SelectorGroup) -> Selector {
+pub fn build_selector_from_group(g: &golem_parser::SelectorGroup) -> Selector {
     Selector {
         text: g.text.clone(),
         accessibility_id: g.accessibility_id.clone(),
@@ -187,21 +187,35 @@ pub async fn resolve_element(
         if auto_scroll {
             let full_results = find_elements(&root, &selector);
             if let Some(found) = full_results.first() {
+                // Resolve `within` container from viewport-filtered tree.
+                let container_bounds = if let Some(ref within_group) = step.within {
+                    let within_sel = build_selector_from_group(within_group);
+                    find_elements(&visible_root, &within_sel)
+                        .first()
+                        .map(|r| r.element.bounds.clone())
+                } else {
+                    None
+                };
+
                 // Use the element's position to hint direction and distance.
                 let elem_y = found.element.bounds.center_y();
-                let vp_center = viewport.height / 2;
-                let direction = if elem_y > vp_center {
+                let ref_center = container_bounds.as_ref()
+                    .map(|b| b.center_y())
+                    .unwrap_or(viewport.height / 2);
+                let ref_height = container_bounds.as_ref()
+                    .map(|b| b.height)
+                    .unwrap_or(viewport.height);
+                let direction = if elem_y > ref_center {
                     golem_driver::Direction::Down
                 } else {
                     golem_driver::Direction::Up
                 };
-                // Distance ratio: how far off-screen (0.0 = near edge, 3.0+ = very far).
-                let distance = (elem_y - vp_center).unsigned_abs() as f32
-                    / viewport.height as f32;
+                let distance = (elem_y - ref_center).unsigned_abs() as f32
+                    / ref_height as f32;
                 let max_scrolls = step.max_scrolls.unwrap_or(crate::scroll::DEFAULT_MAX_SCROLLS);
                 match crate::scroll::scroll_to_element_with_hint(
                     &selector, driver, direction, max_scrolls, distance,
-                    step.scroll_timeout,
+                    step.scroll_timeout, container_bounds,
                 ).await {
                     Ok(found) => return Ok((found.element.clone(), (found.tap_x, found.tap_y))),
                     Err(e) => return Err(e),
@@ -345,6 +359,7 @@ mod tests {
             auto_scroll: None,
             max_scrolls: None,
             scroll_timeout: None,
+            within: None,
             params: HashMap::new(),
         }
     }

@@ -181,12 +181,13 @@ pub async fn scroll_to_element(
     initial_direction: Direction,
     max_scrolls: u32,
 ) -> Result<FindResult> {
-    scroll_to_element_with_hint(selector, driver, initial_direction, max_scrolls, 0.0, None).await
+    scroll_to_element_with_hint(selector, driver, initial_direction, max_scrolls, 0.0, None, None).await
 }
 
 /// Like `scroll_to_element`, but accepts hints from the caller:
 /// - `distance_ratio`: how many screens away the target is (for adaptive swipe speed)
 /// - `timeout_ms`: optional time limit for the scroll operation
+/// - `container`: optional bounds to constrain swipes within (for `within` selector)
 pub async fn scroll_to_element_with_hint(
     selector: &Selector,
     driver: &dyn PlatformDriver,
@@ -194,6 +195,7 @@ pub async fn scroll_to_element_with_hint(
     max_scrolls: u32,
     distance_ratio: f32,
     timeout_ms: Option<u64>,
+    container: Option<golem_element::Bounds>,
 ) -> Result<FindResult> {
     // Step 1: Check current viewport-filtered hierarchy before any scrolling.
     let mut root = wait_for_settle(driver).await?;
@@ -207,9 +209,29 @@ pub async fn scroll_to_element_with_hint(
     let mut direction = initial_direction;
     let mut reversed = false;
     let mut prev_fingerprint = hierarchy_fingerprint(&root);
-    let mut start = default_swipe_start(&viewport, direction);
     let pct = swipe_pct_for_distance(distance_ratio);
     let deadline = timeout_ms.map(|ms| Instant::now() + Duration::from_millis(ms));
+
+    let mut start = if container.is_some() {
+        // Start inside the container, clamped to the visible portion of the screen.
+        let cb = container.as_ref().unwrap();
+        let cx = cb.x + cb.width / 2;
+        // Visible portion of container: clamp to viewport
+        let vis_top = cb.y.max(0);
+        let vis_bot = (cb.y + cb.height).min(viewport.height);
+        let vis_left = cb.x.max(0);
+        let vis_right = (cb.x + cb.width).min(viewport.width);
+        let vis_cy = (vis_top + vis_bot) / 2;
+        let vis_cx = (vis_left + vis_right) / 2;
+        match direction {
+            Direction::Down => (vis_cx, vis_top + (vis_bot - vis_top) * 70 / 100),
+            Direction::Up => (vis_cx, vis_top + (vis_bot - vis_top) * 30 / 100),
+            Direction::Left => (vis_left + (vis_right - vis_left) * 30 / 100, vis_cy),
+            Direction::Right => (vis_left + (vis_right - vis_left) * 70 / 100, vis_cy),
+        }
+    } else {
+        default_swipe_start(&viewport, direction)
+    };
 
     for _ in 0..max_scrolls {
         if deadline.is_some_and(|d| Instant::now() >= d) {
@@ -220,7 +242,28 @@ pub async fn scroll_to_element_with_hint(
                 selector.accessibility_id,
             );
         }
-        let (fx, fy, tx, ty) = swipe_from(&viewport, direction, start.0, start.1, pct);
+        let (fx, fy, tx, ty) = if let Some(ref cb) = container {
+            // Swipe within the visible portion of the container.
+            let vis_top = cb.y.max(0);
+            let vis_bot = (cb.y + cb.height).min(viewport.height);
+            let vis_left = cb.x.max(0);
+            let vis_right = (cb.x + cb.width).min(viewport.width);
+            let vis_h = vis_bot - vis_top;
+            let vis_w = vis_right - vis_left;
+            let dy = vis_h * 80 / 100;
+            let dx = vis_w * 80 / 100;
+            let clamp_x = |v: i32| v.max(vis_left + 5).min(vis_right - 5);
+            let clamp_y = |v: i32| v.max(vis_top + 5).min(vis_bot - 5);
+            let (fx, fy, tx, ty) = match direction {
+                Direction::Down => (start.0, start.1, start.0, start.1 - dy),
+                Direction::Up => (start.0, start.1, start.0, start.1 + dy),
+                Direction::Left => (start.0, start.1, start.0 + dx, start.1),
+                Direction::Right => (start.0, start.1, start.0 - dx, start.1),
+            };
+            (clamp_x(fx), clamp_y(fy), clamp_x(tx), clamp_y(ty))
+        } else {
+            swipe_from(&viewport, direction, start.0, start.1, pct)
+        };
         driver.swipe_coords(fx, fy, tx, ty).await?;
 
         root = wait_for_settle(driver).await?;
@@ -233,44 +276,63 @@ pub async fn scroll_to_element_with_hint(
 
         let new_fingerprint = hierarchy_fingerprint(&root);
         if new_fingerprint == prev_fingerprint {
-            // Wasted swipe — an inner scrollable may have consumed it.
-            // Probe alternate start positions (one attempt each).
-            let mut probed_ok = false;
-            for (px, py) in probe_starts(&viewport, direction) {
-                let (fx, fy, tx, ty) = swipe_from(&viewport, direction, px, py, 40);
-                driver.swipe_coords(fx, fy, tx, ty).await?;
-                root = wait_for_settle(driver).await?;
+            // When scrolling within a container, skip edge probing — the
+            // container IS the target scrollable. Just detect boundary bounce.
+            if container.is_none() {
+                // Wasted swipe — an inner scrollable may have consumed it.
+                // Probe alternate start positions (one attempt each).
+                let mut probed_ok = false;
+                for (px, py) in probe_starts(&viewport, direction) {
+                    let (fx, fy, tx, ty) = swipe_from(&viewport, direction, px, py, 40);
+                    driver.swipe_coords(fx, fy, tx, ty).await?;
+                    root = wait_for_settle(driver).await?;
 
-                let probe_fp = hierarchy_fingerprint(&root);
-                if probe_fp != prev_fingerprint {
-                    // This start position works — adopt it for future swipes.
-                    start = (px, py);
-                    prev_fingerprint = probe_fp;
-                    probed_ok = true;
+                    let probe_fp = hierarchy_fingerprint(&root);
+                    if probe_fp != prev_fingerprint {
+                        start = (px, py);
+                        prev_fingerprint = probe_fp;
+                        probed_ok = true;
 
-                    // Check if the element appeared.
-                    let vp = Viewport::from_root(&root);
-                    let visible = filter_viewport(&root, &vp);
-                    let results = find_elements(&visible, selector);
-                    if let Some(found) = results.into_iter().next() {
-                        return Ok(found);
+                        let vp = Viewport::from_root(&root);
+                        let visible = filter_viewport(&root, &vp);
+                        let results = find_elements(&visible, selector);
+                        if let Some(found) = results.into_iter().next() {
+                            return Ok(found);
+                        }
+                        break;
                     }
-                    break;
+                }
+
+                if probed_ok {
+                    continue;
                 }
             }
 
-            if !probed_ok {
-                // All probes wasted — true boundary reached.
-                if reversed {
-                    bail!(
-                        "Element not found: scrolled in both directions and hit boundaries. \
-                         Selector: text={:?}, id={:?}",
-                        selector.text,
-                        selector.accessibility_id,
-                    );
-                }
-                direction = reverse_direction(direction);
-                reversed = true;
+            // True boundary reached (or container scroll exhausted).
+            if reversed {
+                bail!(
+                    "Element not found: scrolled in both directions and hit boundaries. \
+                     Selector: text={:?}, id={:?}",
+                    selector.text,
+                    selector.accessibility_id,
+                );
+            }
+            direction = reverse_direction(direction);
+            reversed = true;
+            if container.is_some() {
+                let cb = container.as_ref().unwrap();
+                let vis_top = cb.y.max(0);
+                let vis_bot = (cb.y + cb.height).min(viewport.height);
+                let vis_left = cb.x.max(0);
+                let vis_right = (cb.x + cb.width).min(viewport.width);
+                let vis_cx = (vis_left + vis_right) / 2;
+                start = match direction {
+                    Direction::Down => (vis_cx, vis_top + (vis_bot - vis_top) * 70 / 100),
+                    Direction::Up => (vis_cx, vis_top + (vis_bot - vis_top) * 30 / 100),
+                    Direction::Left => (vis_left + (vis_right - vis_left) * 30 / 100, (vis_top + vis_bot) / 2),
+                    Direction::Right => (vis_left + (vis_right - vis_left) * 70 / 100, (vis_top + vis_bot) / 2),
+                };
+            } else {
                 start = default_swipe_start(&viewport, direction);
             }
         } else {
