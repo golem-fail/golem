@@ -51,7 +51,7 @@ fn reverse_direction(dir: Direction) -> Direction {
 }
 
 /// Compute swipe coordinates: the swipe starts at `(start_x, start_y)` and
-/// travels 40% of the screen in the given direction.
+/// travels `swipe_pct`% of the screen in the given direction.
 ///
 /// Clamps all coordinates to 10%-90% of the screen to avoid system gesture
 /// areas (notification bar, home indicator). Shorter swipes near edges are
@@ -61,9 +61,10 @@ fn swipe_from(
     direction: Direction,
     start_x: i32,
     start_y: i32,
+    swipe_pct: u32,
 ) -> (i32, i32, i32, i32) {
-    let dy = viewport.height * 2 / 5; // 40% of screen height
-    let dx = viewport.width * 2 / 5; // 40% of screen width
+    let dy = viewport.height * swipe_pct as i32 / 100;
+    let dx = viewport.width * swipe_pct as i32 / 100;
 
     let min_x = viewport.width / 10;
     let max_x = viewport.width * 9 / 10;
@@ -147,6 +148,16 @@ fn probe_starts(viewport: &Viewport, direction: Direction) -> Vec<(i32, i32)> {
     }
 }
 
+/// Choose swipe distance based on how far away the target element is.
+/// - Close (< 1 screen): 40% swipe
+/// - Medium (1-2 screens): 60% swipe
+/// - Far (> 2 screens): 80% swipe
+fn swipe_pct_for_distance(distance_ratio: f32) -> u32 {
+    if distance_ratio > 2.0 { return 80; }
+    if distance_ratio > 1.0 { return 60; }
+    40
+}
+
 /// Scroll through a view to find an element matching the given selector.
 ///
 /// The algorithm:
@@ -167,6 +178,18 @@ pub async fn scroll_to_element(
     initial_direction: Direction,
     max_scrolls: u32,
 ) -> Result<FindResult> {
+    scroll_to_element_with_hint(selector, driver, initial_direction, max_scrolls, 0.0).await
+}
+
+/// Like `scroll_to_element`, but accepts a `distance_ratio` hint from the caller
+/// (how many screens away the target is). Used to choose longer swipes for far targets.
+pub async fn scroll_to_element_with_hint(
+    selector: &Selector,
+    driver: &dyn PlatformDriver,
+    initial_direction: Direction,
+    max_scrolls: u32,
+    distance_ratio: f32,
+) -> Result<FindResult> {
     // Step 1: Check current viewport-filtered hierarchy before any scrolling.
     let mut root = wait_for_settle(driver).await?;
     let viewport = Viewport::from_root(&root);
@@ -179,12 +202,12 @@ pub async fn scroll_to_element(
     let mut direction = initial_direction;
     let mut reversed = false;
     let mut prev_fingerprint = hierarchy_fingerprint(&root);
-    // Current swipe start position — may shift after successful probing.
     let mut start = default_swipe_start(&viewport, direction);
+    // Swipe distance adapts to how far the target is: 40% close, 60% medium, 80% far.
+    let pct = swipe_pct_for_distance(distance_ratio);
 
     for _ in 0..max_scrolls {
-        // Swipe from the current start position.
-        let (fx, fy, tx, ty) = swipe_from(&viewport, direction, start.0, start.1);
+        let (fx, fy, tx, ty) = swipe_from(&viewport, direction, start.0, start.1, pct);
         driver.swipe_coords(fx, fy, tx, ty).await?;
 
         root = wait_for_settle(driver).await?;
@@ -201,7 +224,7 @@ pub async fn scroll_to_element(
             // Probe alternate start positions (one attempt each).
             let mut probed_ok = false;
             for (px, py) in probe_starts(&viewport, direction) {
-                let (fx, fy, tx, ty) = swipe_from(&viewport, direction, px, py);
+                let (fx, fy, tx, ty) = swipe_from(&viewport, direction, px, py, 40);
                 driver.swipe_coords(fx, fy, tx, ty).await?;
                 root = wait_for_settle(driver).await?;
 

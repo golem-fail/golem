@@ -184,13 +184,27 @@ pub async fn resolve_element(
 
         // Element not in viewport — if auto_scroll is set and the element exists
         // off-screen, scroll to it immediately instead of waiting.
-        if auto_scroll && !find_elements(&root, &selector).is_empty() {
-            let direction = golem_driver::Direction::Down;
-            let max_scrolls = crate::scroll::DEFAULT_MAX_SCROLLS;
-            match crate::scroll::scroll_to_element(&selector, driver, direction, max_scrolls).await
-            {
-                Ok(found) => return Ok((found.element.clone(), (found.tap_x, found.tap_y))),
-                Err(e) => return Err(e),
+        if auto_scroll {
+            let full_results = find_elements(&root, &selector);
+            if let Some(found) = full_results.first() {
+                // Use the element's position to hint direction and distance.
+                let elem_y = found.element.bounds.center_y();
+                let vp_center = viewport.height / 2;
+                let direction = if elem_y > vp_center {
+                    golem_driver::Direction::Down
+                } else {
+                    golem_driver::Direction::Up
+                };
+                // Distance ratio: how far off-screen (0.0 = near edge, 3.0+ = very far).
+                let distance = (elem_y - vp_center).unsigned_abs() as f32
+                    / viewport.height as f32;
+                let max_scrolls = crate::scroll::DEFAULT_MAX_SCROLLS;
+                match crate::scroll::scroll_to_element_with_hint(
+                    &selector, driver, direction, max_scrolls, distance,
+                ).await {
+                    Ok(found) => return Ok((found.element.clone(), (found.tap_x, found.tap_y))),
+                    Err(e) => return Err(e),
+                }
             }
         }
 
