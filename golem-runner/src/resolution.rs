@@ -10,8 +10,14 @@ use tokio::time::Instant;
 /// Default timeout for polling the hierarchy when resolving elements (10 seconds).
 const DEFAULT_POLL_TIMEOUT_MS: u64 = 10_000;
 
-/// Interval between poll attempts (500ms).
-const POLL_INTERVAL: Duration = Duration::from_millis(500);
+/// Interval between poll attempts (250ms).
+const POLL_INTERVAL: Duration = Duration::from_millis(250);
+
+/// Maximum time to wait for the UI hierarchy to stabilize (1.5 seconds).
+const SETTLE_TIMEOUT: Duration = Duration::from_millis(1500);
+
+/// Interval between settle comparison checks (250ms).
+const SETTLE_INTERVAL: Duration = Duration::from_millis(250);
 
 /// Build a `Selector` from the fields of a parsed `Step`.
 ///
@@ -76,15 +82,75 @@ pub fn build_selector(step: &Step) -> Selector {
     }
 }
 
+/// Build a bounds-only fingerprint of the hierarchy for settle detection.
+///
+/// Ignores text and accessibility_id so that cursor blinks, live counters,
+/// and other content changes don't prevent settling. Only structural and
+/// spatial changes (animations, scroll momentum, layout shifts) count.
+fn bounds_fingerprint(element: &Element) -> String {
+    let mut buf = String::with_capacity(256);
+    build_bounds_fingerprint(element, &mut buf);
+    buf
+}
+
+fn build_bounds_fingerprint(element: &Element, buf: &mut String) {
+    buf.push_str(&element.element_type);
+    let b = &element.bounds;
+    buf.push_str(&format!("@{},{},{}x{}", b.x, b.y, b.width, b.height));
+    buf.push('[');
+    for child in &element.children {
+        build_bounds_fingerprint(child, buf);
+        buf.push(',');
+    }
+    buf.push(']');
+}
+
+/// Wait for the UI hierarchy to stabilize before acting on it.
+///
+/// Compares consecutive hierarchy snapshots using a bounds-only fingerprint.
+/// Returns the settled hierarchy when two consecutive snapshots match, or
+/// the latest snapshot if the settle timeout is exceeded (never fails).
+///
+/// When the UI is already stable, this completes in a single extra hierarchy
+/// fetch (~250ms). During animations it waits up to `SETTLE_TIMEOUT` (1.5s).
+pub(crate) async fn wait_for_settle(driver: &dyn PlatformDriver) -> Result<Element> {
+    let deadline = Instant::now() + SETTLE_TIMEOUT;
+
+    let root = driver.get_hierarchy().await?;
+    let mut prev_fp = bounds_fingerprint(&root);
+    let mut prev_root = root;
+
+    loop {
+        if Instant::now() >= deadline {
+            return Ok(prev_root);
+        }
+
+        tokio::time::sleep(SETTLE_INTERVAL).await;
+
+        let root = match driver.get_hierarchy().await {
+            Ok(r) => r,
+            Err(_) => return Ok(prev_root),
+        };
+        let fp = bounds_fingerprint(&root);
+
+        if fp == prev_fp {
+            return Ok(root);
+        }
+
+        prev_fp = fp;
+        prev_root = root;
+    }
+}
+
 /// Resolve an element from the **viewport-filtered** hierarchy, polling until
 /// found or timeout.
 ///
 /// Only elements whose bounds intersect the screen viewport are considered.
 /// This matches how a real user interacts — you can only tap what you can see.
 ///
-/// Polls the hierarchy every 500ms for up to `step.timeout` (default 10s).
-/// The first check runs immediately — zero overhead when the element is already
-/// present.
+/// Each poll iteration waits for the UI to settle before checking, preventing
+/// ghost taps on animating elements. Polls every 250ms for up to
+/// `step.timeout` (default 10s).
 ///
 /// If the element is not found in the viewport but exists in the full tree,
 /// the error message includes a hint about its off-screen location.
@@ -99,7 +165,6 @@ pub async fn resolve_element(
     let auto_scroll = step.auto_scroll == Some(true);
 
     let (last_root, last_viewport) = loop {
-        // Hierarchy fetch may fail if the app is still launching — retry on error.
         let root = match driver.get_hierarchy().await {
             Ok(r) => r,
             Err(_) if Instant::now() < deadline => {

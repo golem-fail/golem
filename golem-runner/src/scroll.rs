@@ -3,6 +3,8 @@ use golem_driver::{Direction, PlatformDriver};
 use golem_element::selector::{find_elements, Selector};
 use golem_element::{filter_viewport, Element, FindResult, Viewport};
 
+use crate::resolution::wait_for_settle;
+
 /// Default maximum number of scroll attempts before giving up.
 pub const DEFAULT_MAX_SCROLLS: u32 = 20;
 
@@ -82,7 +84,7 @@ pub async fn scroll_to_element(
     max_scrolls: u32,
 ) -> Result<FindResult> {
     // Step 1: Check current viewport-filtered hierarchy before any scrolling.
-    let mut root = driver.get_hierarchy().await?;
+    let mut root = wait_for_settle(driver).await?;
     let viewport = Viewport::from_root(&root);
     let visible = filter_viewport(&root, &viewport);
     let results = find_elements(&visible, selector);
@@ -99,8 +101,8 @@ pub async fn scroll_to_element(
         let (fx, fy, tx, ty) = viewport_swipe_coords(&viewport, direction);
         driver.swipe_coords(fx, fy, tx, ty).await?;
 
-        // Step 3: Get new hierarchy and check viewport
-        root = driver.get_hierarchy().await?;
+        // Step 3: Wait for scroll to settle, then check viewport
+        root = wait_for_settle(driver).await?;
         let viewport = Viewport::from_root(&root);
         let visible = filter_viewport(&root, &viewport);
         let results = find_elements(&visible, selector);
@@ -204,9 +206,16 @@ mod tests {
     }
 
     impl SequenceMockDriver {
+        /// Create a mock that returns each hierarchy twice (for settle compatibility).
+        /// wait_for_settle needs two consecutive identical snapshots to consider
+        /// the UI stable, so each logical step requires a duplicate entry.
         fn new(hierarchies: Vec<Element>) -> Self {
+            let doubled: Vec<Element> = hierarchies
+                .into_iter()
+                .flat_map(|h| [h.clone(), h])
+                .collect();
             Self {
-                hierarchies: Mutex::new(hierarchies),
+                hierarchies: Mutex::new(doubled),
                 call_index: AtomicU32::new(0),
                 calls: Mutex::new(Vec::new()),
             }

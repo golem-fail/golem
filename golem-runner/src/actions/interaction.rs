@@ -5,10 +5,13 @@ use golem_driver::{Direction, PlatformDriver};
 use golem_parser::Step;
 use tokio::time::{sleep, Instant};
 
-use crate::resolution::{build_selector, resolve_element};
+use crate::resolution::{build_selector, resolve_element, wait_for_settle};
 use crate::scroll::{scroll_to_element, DEFAULT_MAX_SCROLLS};
 
 
+/// Minimum delay after a tap to prevent the OS interpreting sequential taps
+/// as a double-tap. The settle check runs concurrently but we enforce at
+/// least this floor.
 const TAP_COOLDOWN: Duration = Duration::from_millis(300);
 const DOUBLE_TAP_INTERVAL: Duration = Duration::from_millis(40);
 
@@ -19,17 +22,15 @@ async fn tap_at(driver: &dyn PlatformDriver, x: i32, y: i32) -> Result<()> {
 /// Find the target element and tap at its center coordinates.
 ///
 /// When `auto_scroll = true`, if the element is not in the viewport but
-/// exists in the full hierarchy, scrolls it into view first. Prefers
-/// in-viewport matches when duplicates exist.
+/// exists in the full hierarchy, scrolls it into view first.
 ///
-/// Sleeps 300ms after tapping to prevent accidental double-tap side effects.
+/// After tapping, waits for the UI to settle so the next step sees
+/// a stable hierarchy.
 pub(crate) async fn handle_tap(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
     let (elem, coords) = resolve_element(step, driver).await?;
 
     // For switch/toggle elements with a child switch control,
     // tap the child control instead of the center of the whole row.
-    // iOS SwiftUI Toggles render as: parent switch (full row) → child switch (control).
-    // Tapping the label area doesn't toggle; must tap the control.
     let (x, y) = {
         let et = elem.element_type.to_lowercase();
         if (et == "switch" || et == "toggle") && !elem.children.is_empty() {
@@ -48,12 +49,12 @@ pub(crate) async fn handle_tap(step: &Step, driver: &dyn PlatformDriver) -> Resu
 
     tap_at(driver, x, y).await?;
     sleep(TAP_COOLDOWN).await;
+    let _ = wait_for_settle(driver).await;
     Ok(())
 }
 
 /// Find the target element and double-tap at its center coordinates.
-/// Two taps are fired with 40ms between the start of each, followed by a
-/// 300ms cooldown.
+/// Two taps are fired with 40ms between the start of each.
 pub(crate) async fn handle_double_tap(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
     let (_elem, (x, y)) = resolve_element(step, driver).await?;
     let start = Instant::now();
@@ -64,6 +65,7 @@ pub(crate) async fn handle_double_tap(step: &Step, driver: &dyn PlatformDriver) 
     }
     tap_at(driver, x, y).await?;
     sleep(TAP_COOLDOWN).await;
+    let _ = wait_for_settle(driver).await;
     Ok(())
 }
 
@@ -75,13 +77,14 @@ pub(crate) async fn handle_type(step: &Step, driver: &dyn PlatformDriver) -> Res
     let (_elem, (x, y)) = resolve_element(step, driver).await?;
     driver.tap(x, y).await?;
 
-    // Use `input` field for the value to type; fall back to `text` for backward compat.
     let value = step
         .input
         .as_deref()
         .or(step.on_text.as_deref())
         .unwrap_or("");
-    driver.type_text(value).await
+    driver.type_text(value).await?;
+    let _ = wait_for_settle(driver).await;
+    Ok(())
 }
 
 /// Find the target element, tap it to focus, then send backspace key presses.
@@ -97,7 +100,9 @@ pub(crate) async fn handle_backspace(step: &Step, driver: &dyn PlatformDriver) -
         .map(|n| n as u32)
         .unwrap_or(1);
 
-    driver.backspace(count).await
+    driver.backspace(count).await?;
+    let _ = wait_for_settle(driver).await;
+    Ok(())
 }
 
 /// Find the target element and long press at its center coordinates.
@@ -112,7 +117,9 @@ pub(crate) async fn handle_long_press(step: &Step, driver: &dyn PlatformDriver) 
         .map(|n| n as u64)
         .unwrap_or(1000);
 
-    driver.long_press(x, y, duration).await
+    driver.long_press(x, y, duration).await?;
+    let _ = wait_for_settle(driver).await;
+    Ok(())
 }
 
 /// Swipe in a direction. May optionally target a specific element (ignored for
@@ -132,7 +139,9 @@ pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver) -> Re
         other => bail!("Invalid swipe direction: \"{}\"", other),
     };
 
-    driver.swipe(direction).await
+    driver.swipe(direction).await?;
+    let _ = wait_for_settle(driver).await;
+    Ok(())
 }
 
 /// Scroll in a direction until an element matching the step's selectors is found.
@@ -552,18 +561,20 @@ mod tests {
 
         let calls = driver.get_calls();
         let method_names: Vec<&str> = calls.iter().map(|c| c.0.as_str()).collect();
-        // type: get_hierarchy, tap, type_text
+        // type: get_hierarchy (resolve), tap, type_text, get_hierarchy x2 (settle)
         // hide_keyboard: hide_keyboard
-        // tap: get_hierarchy, tap
+        // tap: get_hierarchy (resolve), tap, get_hierarchy x2 (settle)
         assert_eq!(
             method_names,
             vec![
                 "get_hierarchy",
                 "tap",
                 "type_text",
+                "get_hierarchy", "get_hierarchy",
                 "hide_keyboard",
                 "get_hierarchy",
                 "tap",
+                "get_hierarchy", "get_hierarchy",
             ]
         );
     }

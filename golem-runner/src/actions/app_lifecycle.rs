@@ -2,6 +2,8 @@ use anyhow::Result;
 use golem_driver::PlatformDriver;
 use golem_parser::{AppConfig, Step};
 
+use crate::resolution::wait_for_settle;
+
 /// Resolve the app identifier from a step to a bundle ID.
 ///
 /// The step's `app` field can be either:
@@ -31,7 +33,9 @@ pub(crate) async fn handle_launch(
     apps: &[AppConfig],
 ) -> Result<()> {
     let bundle_id = resolve_app_bundle(step, apps)?;
-    driver.launch_app(bundle_id).await
+    driver.launch_app(bundle_id).await?;
+    let _ = wait_for_settle(driver).await;
+    Ok(())
 }
 
 /// Stop/terminate the app.
@@ -41,7 +45,9 @@ pub(crate) async fn handle_stop(
     apps: &[AppConfig],
 ) -> Result<()> {
     let bundle_id = resolve_app_bundle(step, apps)?;
-    driver.stop_app(bundle_id).await
+    driver.stop_app(bundle_id).await?;
+    let _ = wait_for_settle(driver).await;
+    Ok(())
 }
 
 /// Clear app data/cache.
