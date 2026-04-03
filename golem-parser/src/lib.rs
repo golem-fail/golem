@@ -182,6 +182,8 @@ pub struct Step {
     pub retry_delay: Option<u64>,
     pub app: Option<String>,
     pub auto_scroll: Option<bool>,
+    pub max_scrolls: Option<u32>,
+    pub scroll_timeout: Option<u64>,
     #[serde(flatten)]
     pub params: HashMap<String, toml::Value>,
 }

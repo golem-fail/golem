@@ -164,12 +164,7 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver) -> R
         other => bail!("Invalid scroll direction: \"{}\"", other),
     };
 
-    let max_scrolls = step
-        .params
-        .get("max_scrolls")
-        .and_then(|v| v.as_integer())
-        .map(|n| n as u32)
-        .unwrap_or(DEFAULT_MAX_SCROLLS);
+    let max_scrolls = step.max_scrolls.unwrap_or(DEFAULT_MAX_SCROLLS);
 
     let selector = build_selector(step);
     scroll_to_element(&selector, driver, direction, max_scrolls).await?;

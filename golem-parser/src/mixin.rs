@@ -190,6 +190,8 @@ fn remap_step_vars(step: &Step, vars: &HashMap<String, String>) -> Step {
         retry_delay: step.retry_delay,
         app: step.app.as_ref().map(|s| remap_string(s, vars)),
         auto_scroll: step.auto_scroll,
+        max_scrolls: step.max_scrolls,
+        scroll_timeout: step.scroll_timeout,
         params: remap_params(&step.params, vars),
     }
 }
@@ -310,6 +312,8 @@ mod tests {
             retry_delay: None,
             app: None,
             auto_scroll: None,
+            max_scrolls: None,
+            scroll_timeout: None,
             params,
         }
     }
@@ -337,6 +341,8 @@ mod tests {
             retry_delay: None,
             app: None,
             auto_scroll: None,
+            max_scrolls: None,
+            scroll_timeout: None,
             params: HashMap::new(),
         }
     }

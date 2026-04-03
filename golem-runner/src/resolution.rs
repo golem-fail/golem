@@ -198,9 +198,10 @@ pub async fn resolve_element(
                 // Distance ratio: how far off-screen (0.0 = near edge, 3.0+ = very far).
                 let distance = (elem_y - vp_center).unsigned_abs() as f32
                     / viewport.height as f32;
-                let max_scrolls = crate::scroll::DEFAULT_MAX_SCROLLS;
+                let max_scrolls = step.max_scrolls.unwrap_or(crate::scroll::DEFAULT_MAX_SCROLLS);
                 match crate::scroll::scroll_to_element_with_hint(
                     &selector, driver, direction, max_scrolls, distance,
+                    step.scroll_timeout,
                 ).await {
                     Ok(found) => return Ok((found.element.clone(), (found.tap_x, found.tap_y))),
                     Err(e) => return Err(e),
@@ -342,6 +343,8 @@ mod tests {
             retry_delay: None,
             app: None,
             auto_scroll: None,
+            max_scrolls: None,
+            scroll_timeout: None,
             params: HashMap::new(),
         }
     }

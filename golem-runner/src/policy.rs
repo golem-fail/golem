@@ -174,6 +174,8 @@ mod tests {
             retry_delay: None,
             app: None,
             auto_scroll: None,
+            max_scrolls: None,
+            scroll_timeout: None,
             params: HashMap::new(),
         }
     }

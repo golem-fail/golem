@@ -1,7 +1,10 @@
+use std::time::Duration;
+
 use anyhow::{bail, Result};
 use golem_driver::{Direction, PlatformDriver};
 use golem_element::selector::{find_elements, Selector};
 use golem_element::{filter_viewport, Element, FindResult, Viewport};
+use tokio::time::Instant;
 
 use crate::resolution::wait_for_settle;
 
@@ -178,17 +181,19 @@ pub async fn scroll_to_element(
     initial_direction: Direction,
     max_scrolls: u32,
 ) -> Result<FindResult> {
-    scroll_to_element_with_hint(selector, driver, initial_direction, max_scrolls, 0.0).await
+    scroll_to_element_with_hint(selector, driver, initial_direction, max_scrolls, 0.0, None).await
 }
 
-/// Like `scroll_to_element`, but accepts a `distance_ratio` hint from the caller
-/// (how many screens away the target is). Used to choose longer swipes for far targets.
+/// Like `scroll_to_element`, but accepts hints from the caller:
+/// - `distance_ratio`: how many screens away the target is (for adaptive swipe speed)
+/// - `timeout_ms`: optional time limit for the scroll operation
 pub async fn scroll_to_element_with_hint(
     selector: &Selector,
     driver: &dyn PlatformDriver,
     initial_direction: Direction,
     max_scrolls: u32,
     distance_ratio: f32,
+    timeout_ms: Option<u64>,
 ) -> Result<FindResult> {
     // Step 1: Check current viewport-filtered hierarchy before any scrolling.
     let mut root = wait_for_settle(driver).await?;
@@ -203,10 +208,18 @@ pub async fn scroll_to_element_with_hint(
     let mut reversed = false;
     let mut prev_fingerprint = hierarchy_fingerprint(&root);
     let mut start = default_swipe_start(&viewport, direction);
-    // Swipe distance adapts to how far the target is: 40% close, 60% medium, 80% far.
     let pct = swipe_pct_for_distance(distance_ratio);
+    let deadline = timeout_ms.map(|ms| Instant::now() + Duration::from_millis(ms));
 
     for _ in 0..max_scrolls {
+        if deadline.is_some_and(|d| Instant::now() >= d) {
+            bail!(
+                "Scroll timed out after {}ms: text={:?}, id={:?}",
+                timeout_ms.unwrap_or(0),
+                selector.text,
+                selector.accessibility_id,
+            );
+        }
         let (fx, fy, tx, ty) = swipe_from(&viewport, direction, start.0, start.1, pct);
         driver.swipe_coords(fx, fy, tx, ty).await?;
 
