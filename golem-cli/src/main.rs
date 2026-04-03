@@ -1,4 +1,5 @@
 pub mod cli;
+pub mod companions;
 pub mod devices;
 pub mod discovery;
 pub mod orchestrator;

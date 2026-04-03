@@ -215,7 +215,6 @@ pub async fn scroll_to_element_with_hint(
     let mut start = if container.is_some() {
         // Start inside the container, clamped to the visible portion of the screen.
         let cb = container.as_ref().unwrap();
-        let cx = cb.x + cb.width / 2;
         // Visible portion of container: clamp to viewport
         let vis_top = cb.y.max(0);
         let vis_bot = (cb.y + cb.height).min(viewport.height);

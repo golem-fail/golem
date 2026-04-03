@@ -454,6 +454,25 @@ async fn ensure_companion(
 
 /// Find the companion project path for the given platform.
 fn find_companion_path(platform: Platform) -> Result<String> {
+    // Check extracted embedded companions first
+    if let Ok(paths) = crate::companions::ensure_extracted() {
+        match platform {
+            Platform::Ios => {
+                if let Some(ref ios_dir) = paths.ios_products {
+                    // For iOS, return the directory containing the .xctestrun file
+                    return Ok(ios_dir.to_string_lossy().into_owned());
+                }
+            }
+            Platform::Android => {
+                if let Some(ref apk) = paths.android_apk {
+                    if let Some(parent) = apk.parent() {
+                        return Ok(parent.to_string_lossy().into_owned());
+                    }
+                }
+            }
+        }
+    }
+
     let relative = match platform {
         Platform::Ios => "companions/ios/GolemRunner.xcodeproj",
         Platform::Android => "companions/android",
@@ -475,19 +494,27 @@ fn find_companion_path(platform: Platform) -> Result<String> {
     }
 
     anyhow::bail!(
-        "Companion project not found at {}. Run golem from the project root.",
-        relative
+        "Companion not found. Embedded companions may not have been built."
     )
 }
 
-/// Find the pre-built Android companion APK.
+/// Find the Android companion APK.
 fn find_android_apk() -> Result<String> {
+    // Check extracted embedded companion first
+    if let Ok(paths) = crate::companions::ensure_extracted() {
+        if let Some(ref apk) = paths.android_apk {
+            if apk.exists() {
+                return Ok(apk.to_string_lossy().into_owned());
+            }
+        }
+    }
+
     let relative = "companions/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk";
     if std::path::Path::new(relative).exists() {
         return Ok(relative.to_string());
     }
     anyhow::bail!(
-        "Android companion APK not found. Run: cd companions/android && ./gradlew assembleAndroidTest"
+        "Android companion APK not found."
     )
 }
 

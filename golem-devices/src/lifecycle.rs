@@ -4,8 +4,23 @@
 //! fully testable without real devices) and an async execution function that runs
 //! the constructed command via `tokio::process::Command`.
 
+use std::path::Path;
+
 use crate::{DeviceInfo, Platform};
 use anyhow::{bail, Context, Result};
+
+/// Find the .xctestrun file in a directory of extracted iOS companion products.
+fn find_xctestrun(dir: &Path) -> Option<String> {
+    std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(|e| e.ok())
+        .find(|e| {
+            e.path()
+                .extension()
+                .is_some_and(|ext| ext == "xctestrun")
+        })
+        .map(|e| e.path().to_string_lossy().into_owned())
+}
 
 // ---------------------------------------------------------------------------
 // Command construction
@@ -73,16 +88,24 @@ pub fn install_app_command(device: &DeviceInfo, app_path: &str) -> Vec<String> {
 /// Construct the command to build the iOS companion for testing.
 pub fn build_companion_command(device: &DeviceInfo, companion_path: &str) -> Vec<String> {
     match device.platform {
-        Platform::Ios => vec![
-            "xcodebuild".into(),
-            "build-for-testing".into(),
-            "-project".into(),
-            companion_path.into(),
-            "-scheme".into(),
-            "GolemRunnerUITests".into(),
-            "-destination".into(),
-            format!("id={}", device.udid),
-        ],
+        Platform::Ios => {
+            if companion_path.ends_with(".xcodeproj") {
+                // Source-based: build from Xcode project
+                vec![
+                    "xcodebuild".into(),
+                    "build-for-testing".into(),
+                    "-project".into(),
+                    companion_path.into(),
+                    "-scheme".into(),
+                    "GolemRunnerUITests".into(),
+                    "-destination".into(),
+                    format!("id={}", device.udid),
+                ]
+            } else {
+                // Embedded: already built, nothing to do
+                vec![]
+            }
+        }
         Platform::Android => vec![],  // Android uses pre-built APK
     }
 }
@@ -93,19 +116,39 @@ pub fn build_companion_command(device: &DeviceInfo, companion_path: &str) -> Vec
 /// spawned as a background process, not awaited.
 pub fn start_companion_command(device: &DeviceInfo, companion_path: &str, port: u16) -> Vec<String> {
     match device.platform {
-        Platform::Ios => vec![
-            "xcodebuild".into(),
-            "test-without-building".into(),
-            "-project".into(),
-            companion_path.into(),
-            "-scheme".into(),
-            "GolemRunnerUITests".into(),
-            "-destination".into(),
-            format!("id={}", device.udid),
-            "-parallel-testing-enabled".into(),
-            "NO".into(),
-            "-only-testing:GolemRunnerUITests/GolemRunnerUITests/testCompanionServer".into(),
-        ],
+        Platform::Ios => {
+            if companion_path.ends_with(".xcodeproj") {
+                // Source-based: build and run from Xcode project
+                vec![
+                    "xcodebuild".into(),
+                    "test-without-building".into(),
+                    "-project".into(),
+                    companion_path.into(),
+                    "-scheme".into(),
+                    "GolemRunnerUITests".into(),
+                    "-destination".into(),
+                    format!("id={}", device.udid),
+                    "-parallel-testing-enabled".into(),
+                    "NO".into(),
+                    "-only-testing:GolemRunnerUITests/GolemRunnerUITests/testCompanionServer".into(),
+                ]
+            } else {
+                // Embedded: use pre-built products with .xctestrun file
+                let dir = std::path::Path::new(companion_path);
+                let xctestrun = find_xctestrun(dir).unwrap_or_default();
+                vec![
+                    "xcodebuild".into(),
+                    "test-without-building".into(),
+                    "-xctestrun".into(),
+                    xctestrun,
+                    "-destination".into(),
+                    format!("id={}", device.udid),
+                    "-parallel-testing-enabled".into(),
+                    "NO".into(),
+                    "-only-testing:GolemRunnerUITests/GolemRunnerUITests/testCompanionServer".into(),
+                ]
+            }
+        }
         Platform::Android => vec![
             "adb".into(),
             "-s".into(),
