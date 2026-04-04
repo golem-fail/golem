@@ -4,15 +4,21 @@
     "name_en": "France",
     "iso_code": "FR",
     "phone_prefix": "+33",
-    "phone_formats": ["+33-#-##-##-##-##", "+33-6-##-##-##-##", "+33-7-##-##-##-##"],
+    "phone_formats": [
+      "+33-#-##-##-##-##",
+      "+33-6-##-##-##-##",
+      "+33-7-##-##-##-##"
+    ],
     "postcode_format": "#####",
     "name_order": "given_first"
   },
   "states": [
     {
-      "name": "Île-de-France",
-      "name_en": "Ile-de-France",
-      "region_tags": ["Paris Region"],
+      "name": "Paris",
+      "name_en": "Paris",
+      "region_tags": [
+        "Île-de-France"
+      ],
       "cities": [
         {
           "name": "Paris",
@@ -141,7 +147,83 @@
               "pattern": "n{1,120} Rue de Bagnolet"
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "Seine-et-Marne",
+      "name_en": "Seine-et-Marne",
+      "region_tags": [
+        "Île-de-France"
+      ],
+      "cities": [
+        {
+          "name": "Melun",
+          "name_en": "Melun",
+          "lat": 48.5396,
+          "lon": 2.6557,
+          "postcodes": [
+            {
+              "code": "77000",
+              "street": "Rue Saint-Aspais",
+              "street_en": "Rue Saint-Aspais",
+              "pattern": "n{1,60} Rue Saint-Aspais"
+            },
+            {
+              "code": "77003",
+              "street": "Rue du Général de Gaulle",
+              "street_en": "Rue du General de Gaulle",
+              "pattern": "n{1,80} Rue du Général de Gaulle"
+            },
+            {
+              "code": "77008",
+              "street": "Avenue Thiers",
+              "street_en": "Avenue Thiers",
+              "pattern": "n{1,100} Avenue Thiers"
+            }
+          ]
         },
+        {
+          "name": "Meaux",
+          "name_en": "Meaux",
+          "lat": 48.9601,
+          "lon": 2.8786,
+          "postcodes": [
+            {
+              "code": "77100",
+              "street": "Rue du Grand Cerf",
+              "street_en": "Rue du Grand Cerf",
+              "pattern": "n{1,60} Rue du Grand Cerf"
+            },
+            {
+              "code": "77109",
+              "street": "Avenue de la Victoire",
+              "street_en": "Avenue de la Victoire",
+              "pattern": "n{1,80} Avenue de la Victoire"
+            },
+            {
+              "code": "77124",
+              "street": "Rue Saint-Rémy",
+              "street_en": "Rue Saint-Remy",
+              "pattern": "n{1,50} Rue Saint-Rémy"
+            },
+            {
+              "code": "77115",
+              "street": "Boulevard Jean Rose",
+              "street_en": "Boulevard Jean Rose",
+              "pattern": "n{1,60} Boulevard Jean Rose"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Yvelines",
+      "name_en": "Yvelines",
+      "region_tags": [
+        "Île-de-France"
+      ],
+      "cities": [
         {
           "name": "Versailles",
           "name_en": "Versailles",
@@ -153,6 +235,114 @@
               "street": "Rue de la Paroisse",
               "street_en": "Rue de la Paroisse",
               "pattern": "n{1,80} Rue de la Paroisse"
+            },
+            {
+              "code": "78008",
+              "street": "Avenue de Saint-Cloud",
+              "street_en": "Avenue de Saint-Cloud",
+              "pattern": "n{1,100} Avenue de Saint-Cloud"
+            },
+            {
+              "code": "78005",
+              "street": "Rue des Réservoirs",
+              "street_en": "Rue des Reservoirs",
+              "pattern": "n{1,60} Rue des Réservoirs"
+            }
+          ]
+        },
+        {
+          "name": "Saint-Germain-en-Laye",
+          "name_en": "Saint-Germain-en-Laye",
+          "lat": 48.8986,
+          "lon": 2.0938,
+          "postcodes": [
+            {
+              "code": "78100",
+              "street": "Rue de Paris",
+              "street_en": "Rue de Paris",
+              "pattern": "n{1,110} Rue de Paris"
+            },
+            {
+              "code": "78112",
+              "street": "Rue au Pain",
+              "street_en": "Rue au Pain",
+              "pattern": "n{1,40} Rue au Pain"
+            },
+            {
+              "code": "78105",
+              "street": "Rue de Pologne",
+              "street_en": "Rue de Pologne",
+              "pattern": "n{1,50} Rue de Pologne"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Essonne",
+      "name_en": "Essonne",
+      "region_tags": [
+        "Île-de-France"
+      ],
+      "cities": [
+        {
+          "name": "Évry-Courcouronnes",
+          "name_en": "Evry-Courcouronnes",
+          "lat": 48.6249,
+          "lon": 2.4295,
+          "postcodes": [
+            {
+              "code": "91000",
+              "street": "Cours Monseigneur Romero",
+              "street_en": "Cours Monseigneur Romero",
+              "pattern": "n{1,60} Cours Monseigneur Romero"
+            },
+            {
+              "code": "91002",
+              "street": "Boulevard de l'Europe",
+              "street_en": "Boulevard de l'Europe",
+              "pattern": "n{1,80} Boulevard de l'Europe"
+            },
+            {
+              "code": "91080",
+              "street": "Avenue du Général de Gaulle",
+              "street_en": "Avenue du General de Gaulle",
+              "pattern": "n{1,100} Avenue du Général de Gaulle"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Hauts-de-Seine",
+      "name_en": "Hauts-de-Seine",
+      "region_tags": [
+        "Île-de-France"
+      ],
+      "cities": [
+        {
+          "name": "Nanterre",
+          "name_en": "Nanterre",
+          "lat": 48.8924,
+          "lon": 2.2071,
+          "postcodes": [
+            {
+              "code": "92000",
+              "street": "Rue Maurice Thorez",
+              "street_en": "Rue Maurice Thorez",
+              "pattern": "n{1,80} Rue Maurice Thorez"
+            },
+            {
+              "code": "92014",
+              "street": "Avenue de la République",
+              "street_en": "Avenue de la Republique",
+              "pattern": "n{1,100} Avenue de la République"
+            },
+            {
+              "code": "92024",
+              "street": "Rue du 8 Mai 1945",
+              "street_en": "Rue du 8 Mai 1945",
+              "pattern": "n{1,60} Rue du 8 Mai 1945"
             }
           ]
         },
@@ -160,162 +350,567 @@
           "name": "Boulogne-Billancourt",
           "name_en": "Boulogne-Billancourt",
           "lat": 48.8352,
-          "lon": 2.2410,
+          "lon": 2.241,
           "postcodes": [
             {
               "code": "92100",
               "street": "Route de la Reine",
               "street_en": "Route de la Reine",
               "pattern": "n{1,120} Route de la Reine"
+            },
+            {
+              "code": "92104",
+              "street": "Avenue Jean-Baptiste Clément",
+              "street_en": "Avenue Jean-Baptiste Clement",
+              "pattern": "n{1,80} Avenue Jean-Baptiste Clément"
+            },
+            {
+              "code": "92109",
+              "street": "Boulevard Jean Jaurès",
+              "street_en": "Boulevard Jean Jaures",
+              "pattern": "n{1,100} Boulevard Jean Jaurès"
             }
           ]
         }
       ]
     },
     {
-      "name": "Provence-Alpes-Côte d'Azur",
-      "name_en": "Provence-Alpes-Cote d'Azur",
-      "region_tags": ["Provence", "PACA", "Midi"],
+      "name": "Seine-Saint-Denis",
+      "name_en": "Seine-Saint-Denis",
+      "region_tags": [
+        "Île-de-France"
+      ],
       "cities": [
         {
-          "name": "Marseille",
-          "name_en": "Marseille",
-          "lat": 43.2965,
-          "lon": 5.3698,
+          "name": "Bobigny",
+          "name_en": "Bobigny",
+          "lat": 48.9106,
+          "lon": 2.4397,
           "postcodes": [
             {
-              "code": "13001",
-              "street": "La Canebière",
-              "street_en": "La Canebiere",
-              "pattern": "n{1,120} La Canebière"
+              "code": "93000",
+              "street": "Avenue Paul Vaillant-Couturier",
+              "street_en": "Avenue Paul Vaillant-Couturier",
+              "pattern": "n{1,100} Avenue Paul Vaillant-Couturier"
             },
             {
-              "code": "13002",
+              "code": "93009",
+              "street": "Rue de l'Union",
+              "street_en": "Rue de l'Union",
+              "pattern": "n{1,60} Rue de l'Union"
+            },
+            {
+              "code": "93013",
+              "street": "Avenue Jean Jaurès",
+              "street_en": "Avenue Jean Jaures",
+              "pattern": "n{1,80} Avenue Jean Jaurès"
+            }
+          ]
+        },
+        {
+          "name": "Saint-Denis",
+          "name_en": "Saint-Denis",
+          "lat": 48.9362,
+          "lon": 2.3574,
+          "postcodes": [
+            {
+              "code": "93200",
               "street": "Rue de la République",
               "street_en": "Rue de la Republique",
-              "pattern": "n{1,200} Rue de la République"
+              "pattern": "n{1,120} Rue de la République"
             },
             {
-              "code": "13005",
-              "street": "Boulevard Baille",
-              "street_en": "Boulevard Baille",
-              "pattern": "n{1,150} Boulevard Baille"
+              "code": "93210",
+              "street": "Boulevard Marcel Sembat",
+              "street_en": "Boulevard Marcel Sembat",
+              "pattern": "n{1,80} Boulevard Marcel Sembat"
             },
             {
-              "code": "13006",
-              "street": "Rue Paradis",
-              "street_en": "Rue Paradis",
-              "pattern": "n{1,190} Rue Paradis"
-            },
-            {
-              "code": "13007",
-              "street": "Corniche Président John Fitzgerald Kennedy",
-              "street_en": "Corniche President John Fitzgerald Kennedy",
-              "pattern": "n{1,350} Corniche Président John Fitzgerald Kennedy"
-            },
-            {
-              "code": "13008",
-              "street": "Avenue du Prado",
-              "street_en": "Avenue du Prado",
-              "pattern": "n{1,300} Avenue du Prado"
-            },
-            {
-              "code": "13009",
-              "street": "Boulevard Michelet",
-              "street_en": "Boulevard Michelet",
-              "pattern": "n{1,180} Boulevard Michelet"
-            },
-            {
-              "code": "13010",
-              "street": "Boulevard Chave",
-              "street_en": "Boulevard Chave",
-              "pattern": "n{1,120} Boulevard Chave"
-            }
-          ]
-        },
-        {
-          "name": "Nice",
-          "name_en": "Nice",
-          "lat": 43.7102,
-          "lon": 7.2620,
-          "postcodes": [
-            {
-              "code": "06000",
-              "street": "Promenade des Anglais",
-              "street_en": "Promenade des Anglais",
-              "pattern": "n{1,400} Promenade des Anglais"
-            },
-            {
-              "code": "06100",
-              "street": "Avenue Jean Médecin",
-              "street_en": "Avenue Jean Medecin",
-              "pattern": "n{1,80} Avenue Jean Médecin"
-            },
-            {
-              "code": "06200",
-              "street": "Boulevard de Cimiez",
-              "street_en": "Boulevard de Cimiez",
-              "pattern": "n{1,90} Boulevard de Cimiez"
-            },
-            {
-              "code": "06300",
-              "street": "Boulevard Gambetta",
-              "street_en": "Boulevard Gambetta",
-              "pattern": "n{1,75} Boulevard Gambetta"
-            }
-          ]
-        },
-        {
-          "name": "Aix-en-Provence",
-          "name_en": "Aix-en-Provence",
-          "lat": 43.5297,
-          "lon": 5.4474,
-          "postcodes": [
-            {
-              "code": "13100",
-              "street": "Cours Mirabeau",
-              "street_en": "Cours Mirabeau",
-              "pattern": "n{1,65} Cours Mirabeau"
-            },
-            {
-              "code": "13090",
-              "street": "Avenue de l'Europe",
-              "street_en": "Avenue de l'Europe",
-              "pattern": "n{1,100} Avenue de l'Europe"
-            }
-          ]
-        },
-        {
-          "name": "Toulon",
-          "name_en": "Toulon",
-          "lat": 43.1242,
-          "lon": 5.9280,
-          "postcodes": [
-            {
-              "code": "83000",
-              "street": "Boulevard de Strasbourg",
-              "street_en": "Boulevard de Strasbourg",
-              "pattern": "n{1,120} Boulevard de Strasbourg"
-            },
-            {
-              "code": "83200",
-              "street": "Avenue de la République",
-              "street_en": "Avenue de la Republique",
-              "pattern": "n{1,100} Avenue de la République"
+              "code": "93216",
+              "street": "Rue Gabriel Péri",
+              "street_en": "Rue Gabriel Peri",
+              "pattern": "n{1,60} Rue Gabriel Péri"
             }
           ]
         }
       ]
     },
     {
-      "name": "Auvergne-Rhône-Alpes",
-      "name_en": "Auvergne-Rhone-Alpes",
-      "region_tags": ["Rhône-Alpes", "Auvergne"],
+      "name": "Val-de-Marne",
+      "name_en": "Val-de-Marne",
+      "region_tags": [
+        "Île-de-France"
+      ],
+      "cities": [
+        {
+          "name": "Créteil",
+          "name_en": "Creteil",
+          "lat": 48.791,
+          "lon": 2.4628,
+          "postcodes": [
+            {
+              "code": "94000",
+              "street": "Avenue du Général de Gaulle",
+              "street_en": "Avenue du General de Gaulle",
+              "pattern": "n{1,100} Avenue du Général de Gaulle"
+            },
+            {
+              "code": "94010",
+              "street": "Rue du Général Leclerc",
+              "street_en": "Rue du General Leclerc",
+              "pattern": "n{1,80} Rue du Général Leclerc"
+            },
+            {
+              "code": "94015",
+              "street": "Avenue du Maréchal de Lattre de Tassigny",
+              "street_en": "Avenue du Marechal de Lattre de Tassigny",
+              "pattern": "n{1,60} Avenue du Maréchal de Lattre de Tassigny"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Val-d'Oise",
+      "name_en": "Val-d'Oise",
+      "region_tags": [
+        "Île-de-France"
+      ],
+      "cities": [
+        {
+          "name": "Pontoise",
+          "name_en": "Pontoise",
+          "lat": 49.05,
+          "lon": 2.1003,
+          "postcodes": [
+            {
+              "code": "95000",
+              "street": "Rue de l'Hôtel de Ville",
+              "street_en": "Rue de l'Hotel de Ville",
+              "pattern": "n{1,40} Rue de l'Hôtel de Ville"
+            },
+            {
+              "code": "95006",
+              "street": "Rue Thiers",
+              "street_en": "Rue Thiers",
+              "pattern": "n{1,110} Rue Thiers"
+            },
+            {
+              "code": "95015",
+              "street": "Rue de la Coutellerie",
+              "street_en": "Rue de la Coutellerie",
+              "pattern": "n{1,50} Rue de la Coutellerie"
+            }
+          ]
+        },
+        {
+          "name": "Argenteuil",
+          "name_en": "Argenteuil",
+          "lat": 48.9472,
+          "lon": 2.2467,
+          "postcodes": [
+            {
+              "code": "95100",
+              "street": "Avenue Gabriel Péri",
+              "street_en": "Avenue Gabriel Peri",
+              "pattern": "n{1,100} Avenue Gabriel Péri"
+            },
+            {
+              "code": "95107",
+              "street": "Boulevard Héloïse",
+              "street_en": "Boulevard Heloise",
+              "pattern": "n{1,80} Boulevard Héloïse"
+            },
+            {
+              "code": "95112",
+              "street": "Rue Paul Vaillant-Couturier",
+              "street_en": "Rue Paul Vaillant-Couturier",
+              "pattern": "n{1,60} Rue Paul Vaillant-Couturier"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ain",
+      "name_en": "Ain",
+      "region_tags": [
+        "Auvergne-Rhône-Alpes"
+      ],
+      "cities": [
+        {
+          "name": "Bourg-en-Bresse",
+          "name_en": "Bourg-en-Bresse",
+          "lat": 46.2056,
+          "lon": 5.2255,
+          "postcodes": [
+            {
+              "code": "01000",
+              "street": "Boulevard de Brou",
+              "street_en": "Boulevard de Brou",
+              "pattern": "n{1,100} Boulevard de Brou"
+            },
+            {
+              "code": "01006",
+              "street": "Rue du 4 Septembre",
+              "street_en": "Rue du 4 Septembre",
+              "pattern": "n{1,60} Rue du 4 Septembre"
+            },
+            {
+              "code": "01012",
+              "street": "Avenue Alsace-Lorraine",
+              "street_en": "Avenue Alsace-Lorraine",
+              "pattern": "n{1,80} Avenue Alsace-Lorraine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Allier",
+      "name_en": "Allier",
+      "region_tags": [
+        "Auvergne-Rhône-Alpes",
+        "Auvergne"
+      ],
+      "cities": [
+        {
+          "name": "Moulins",
+          "name_en": "Moulins",
+          "lat": 46.5647,
+          "lon": 3.3327,
+          "postcodes": [
+            {
+              "code": "03000",
+              "street": "Rue d'Allier",
+              "street_en": "Rue d'Allier",
+              "pattern": "n{1,80} Rue d'Allier"
+            },
+            {
+              "code": "03007",
+              "street": "Rue de Paris",
+              "street_en": "Rue de Paris",
+              "pattern": "n{1,60} Rue de Paris"
+            },
+            {
+              "code": "03014",
+              "street": "Cours Jean Jaurès",
+              "street_en": "Cours Jean Jaures",
+              "pattern": "n{1,100} Cours Jean Jaurès"
+            }
+          ]
+        },
+        {
+          "name": "Vichy",
+          "name_en": "Vichy",
+          "lat": 46.1278,
+          "lon": 3.4267,
+          "postcodes": [
+            {
+              "code": "03200",
+              "street": "Rue de Paris",
+              "street_en": "Rue de Paris",
+              "pattern": "n{1,80} Rue de Paris"
+            },
+            {
+              "code": "03207",
+              "street": "Boulevard des États-Unis",
+              "street_en": "Boulevard des Etats-Unis",
+              "pattern": "n{1,60} Boulevard des États-Unis"
+            },
+            {
+              "code": "03211",
+              "street": "Rue du Maréchal Foch",
+              "street_en": "Rue du Marechal Foch",
+              "pattern": "n{1,80} Rue du Maréchal Foch"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ardèche",
+      "name_en": "Ardeche",
+      "region_tags": [
+        "Auvergne-Rhône-Alpes"
+      ],
+      "cities": [
+        {
+          "name": "Privas",
+          "name_en": "Privas",
+          "lat": 44.7356,
+          "lon": 4.5967,
+          "postcodes": [
+            {
+              "code": "07000",
+              "street": "Avenue du Vanel",
+              "street_en": "Avenue du Vanel",
+              "pattern": "n{1,80} Avenue du Vanel"
+            },
+            {
+              "code": "07004",
+              "street": "Boulevard du Lycée",
+              "street_en": "Boulevard du Lycee",
+              "pattern": "n{1,60} Boulevard du Lycée"
+            },
+            {
+              "code": "07009",
+              "street": "Rue de la République",
+              "street_en": "Rue de la Republique",
+              "pattern": "n{1,50} Rue de la République"
+            },
+            {
+              "code": "07015",
+              "street": "Route de Chomérac",
+              "street_en": "Route de Chomerac",
+              "pattern": "n{1,80} Route de Chomérac"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Cantal",
+      "name_en": "Cantal",
+      "region_tags": [
+        "Auvergne-Rhône-Alpes",
+        "Auvergne"
+      ],
+      "cities": [
+        {
+          "name": "Aurillac",
+          "name_en": "Aurillac",
+          "lat": 44.9261,
+          "lon": 2.4408,
+          "postcodes": [
+            {
+              "code": "15000",
+              "street": "Avenue de la République",
+              "street_en": "Avenue de la Republique",
+              "pattern": "n{1,80} Avenue de la République"
+            },
+            {
+              "code": "15005",
+              "street": "Rue des Carmes",
+              "street_en": "Rue des Carmes",
+              "pattern": "n{1,50} Rue des Carmes"
+            },
+            {
+              "code": "15012",
+              "street": "Avenue du Général Leclerc",
+              "street_en": "Avenue du General Leclerc",
+              "pattern": "n{1,100} Avenue du Général Leclerc"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Drôme",
+      "name_en": "Drome",
+      "region_tags": [
+        "Auvergne-Rhône-Alpes"
+      ],
+      "cities": [
+        {
+          "name": "Valence",
+          "name_en": "Valence",
+          "lat": 44.9334,
+          "lon": 4.8924,
+          "postcodes": [
+            {
+              "code": "26000",
+              "street": "Boulevard Bancel",
+              "street_en": "Boulevard Bancel",
+              "pattern": "n{1,80} Boulevard Bancel"
+            },
+            {
+              "code": "26007",
+              "street": "Avenue Victor Hugo",
+              "street_en": "Avenue Victor Hugo",
+              "pattern": "n{1,100} Avenue Victor Hugo"
+            },
+            {
+              "code": "26015",
+              "street": "Grande Rue",
+              "street_en": "Grande Rue",
+              "pattern": "n{1,60} Grande Rue"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Isère",
+      "name_en": "Isere",
+      "region_tags": [
+        "Auvergne-Rhône-Alpes"
+      ],
+      "cities": [
+        {
+          "name": "Grenoble",
+          "name_en": "Grenoble",
+          "lat": 45.1885,
+          "lon": 5.7245,
+          "postcodes": [
+            {
+              "code": "38000",
+              "street": "Boulevard Gambetta",
+              "street_en": "Boulevard Gambetta",
+              "pattern": "n{1,65} Boulevard Gambetta"
+            },
+            {
+              "code": "38100",
+              "street": "Cours Jean Jaurès",
+              "street_en": "Cours Jean Jaures",
+              "pattern": "n{1,100} Cours Jean Jaurès"
+            },
+            {
+              "code": "38031",
+              "street": "Avenue Alsace-Lorraine",
+              "street_en": "Avenue Alsace-Lorraine",
+              "pattern": "n{1,80} Avenue Alsace-Lorraine"
+            },
+            {
+              "code": "38042",
+              "street": "Rue Félix Poulat",
+              "street_en": "Rue Felix Poulat",
+              "pattern": "n{1,30} Rue Félix Poulat"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Loire",
+      "name_en": "Loire",
+      "region_tags": [
+        "Auvergne-Rhône-Alpes"
+      ],
+      "cities": [
+        {
+          "name": "Saint-Étienne",
+          "name_en": "Saint-Etienne",
+          "lat": 45.4397,
+          "lon": 4.3872,
+          "postcodes": [
+            {
+              "code": "42000",
+              "street": "Rue Gambetta",
+              "street_en": "Rue Gambetta",
+              "pattern": "n{1,80} Rue Gambetta"
+            },
+            {
+              "code": "42100",
+              "street": "Cours Fauriel",
+              "street_en": "Cours Fauriel",
+              "pattern": "n{1,120} Cours Fauriel"
+            },
+            {
+              "code": "42028",
+              "street": "Avenue de la Libération",
+              "street_en": "Avenue de la Liberation",
+              "pattern": "n{1,100} Avenue de la Libération"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Haute-Loire",
+      "name_en": "Haute-Loire",
+      "region_tags": [
+        "Auvergne-Rhône-Alpes",
+        "Auvergne"
+      ],
+      "cities": [
+        {
+          "name": "Le Puy-en-Velay",
+          "name_en": "Le Puy-en-Velay",
+          "lat": 45.0433,
+          "lon": 3.8847,
+          "postcodes": [
+            {
+              "code": "43000",
+              "street": "Boulevard Maréchal Fayolle",
+              "street_en": "Boulevard Marechal Fayolle",
+              "pattern": "n{1,80} Boulevard Maréchal Fayolle"
+            },
+            {
+              "code": "43007",
+              "street": "Rue Pannessac",
+              "street_en": "Rue Pannessac",
+              "pattern": "n{1,50} Rue Pannessac"
+            },
+            {
+              "code": "43012",
+              "street": "Avenue Charles Dupuy",
+              "street_en": "Avenue Charles Dupuy",
+              "pattern": "n{1,60} Avenue Charles Dupuy"
+            },
+            {
+              "code": "43019",
+              "street": "Rue Raphaël",
+              "street_en": "Rue Raphael",
+              "pattern": "n{1,40} Rue Raphaël"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Puy-de-Dôme",
+      "name_en": "Puy-de-Dome",
+      "region_tags": [
+        "Auvergne-Rhône-Alpes",
+        "Auvergne"
+      ],
+      "cities": [
+        {
+          "name": "Clermont-Ferrand",
+          "name_en": "Clermont-Ferrand",
+          "lat": 45.7772,
+          "lon": 3.087,
+          "postcodes": [
+            {
+              "code": "63000",
+              "street": "Avenue des États-Unis",
+              "street_en": "Avenue des Etats-Unis",
+              "pattern": "n{1,100} Avenue des États-Unis"
+            },
+            {
+              "code": "63100",
+              "street": "Boulevard Lafayette",
+              "street_en": "Boulevard Lafayette",
+              "pattern": "n{1,90} Boulevard Lafayette"
+            },
+            {
+              "code": "63037",
+              "street": "Rue Blatin",
+              "street_en": "Rue Blatin",
+              "pattern": "n{1,80} Rue Blatin"
+            },
+            {
+              "code": "63052",
+              "street": "Avenue de la République",
+              "street_en": "Avenue de la Republique",
+              "pattern": "n{1,60} Avenue de la République"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Rhône",
+      "name_en": "Rhone",
+      "region_tags": [
+        "Auvergne-Rhône-Alpes"
+      ],
       "cities": [
         {
           "name": "Lyon",
           "name_en": "Lyon",
-          "lat": 45.7640,
+          "lat": 45.764,
           "lon": 4.8357,
           "postcodes": [
             {
@@ -367,73 +962,2666 @@
               "pattern": "n{1,100} Avenue des Frères Lumière"
             }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "name": "Savoie",
+      "name_en": "Savoie",
+      "region_tags": [
+        "Auvergne-Rhône-Alpes",
+        "Savoie"
+      ],
+      "cities": [
         {
-          "name": "Grenoble",
-          "name_en": "Grenoble",
-          "lat": 45.1885,
-          "lon": 5.7245,
+          "name": "Chambéry",
+          "name_en": "Chambery",
+          "lat": 45.5646,
+          "lon": 5.9178,
           "postcodes": [
             {
-              "code": "38000",
-              "street": "Boulevard Gambetta",
-              "street_en": "Boulevard Gambetta",
-              "pattern": "n{1,65} Boulevard Gambetta"
+              "code": "73000",
+              "street": "Boulevard de la Colonne",
+              "street_en": "Boulevard de la Colonne",
+              "pattern": "n{1,80} Boulevard de la Colonne"
             },
             {
-              "code": "38100",
-              "street": "Cours Jean Jaurès",
-              "street_en": "Cours Jean Jaures",
-              "pattern": "n{1,100} Cours Jean Jaurès"
-            }
-          ]
-        },
-        {
-          "name": "Saint-Étienne",
-          "name_en": "Saint-Etienne",
-          "lat": 45.4397,
-          "lon": 4.3872,
-          "postcodes": [
-            {
-              "code": "42000",
-              "street": "Rue Gambetta",
-              "street_en": "Rue Gambetta",
-              "pattern": "n{1,80} Rue Gambetta"
+              "code": "73006",
+              "street": "Rue de Boigne",
+              "street_en": "Rue de Boigne",
+              "pattern": "n{1,40} Rue de Boigne"
             },
             {
-              "code": "42100",
-              "street": "Cours Fauriel",
-              "street_en": "Cours Fauriel",
-              "pattern": "n{1,120} Cours Fauriel"
-            }
-          ]
-        },
-        {
-          "name": "Clermont-Ferrand",
-          "name_en": "Clermont-Ferrand",
-          "lat": 45.7772,
-          "lon": 3.0870,
-          "postcodes": [
-            {
-              "code": "63000",
-              "street": "Avenue des États-Unis",
-              "street_en": "Avenue des Etats-Unis",
-              "pattern": "n{1,100} Avenue des États-Unis"
+              "code": "73011",
+              "street": "Faubourg Reclus",
+              "street_en": "Faubourg Reclus",
+              "pattern": "n{1,60} Faubourg Reclus"
             },
             {
-              "code": "63100",
-              "street": "Boulevard Lafayette",
-              "street_en": "Boulevard Lafayette",
-              "pattern": "n{1,90} Boulevard Lafayette"
+              "code": "73018",
+              "street": "Avenue du Comte Vert",
+              "street_en": "Avenue du Comte Vert",
+              "pattern": "n{1,60} Avenue du Comte Vert"
             }
           ]
         }
       ]
     },
     {
-      "name": "Occitanie",
-      "name_en": "Occitanie",
-      "region_tags": ["Languedoc-Roussillon", "Midi-Pyrénées", "Midi"],
+      "name": "Haute-Savoie",
+      "name_en": "Haute-Savoie",
+      "region_tags": [
+        "Auvergne-Rhône-Alpes",
+        "Savoie"
+      ],
+      "cities": [
+        {
+          "name": "Annecy",
+          "name_en": "Annecy",
+          "lat": 45.8992,
+          "lon": 6.1294,
+          "postcodes": [
+            {
+              "code": "74000",
+              "street": "Rue Royale",
+              "street_en": "Rue Royale",
+              "pattern": "n{1,60} Rue Royale"
+            },
+            {
+              "code": "74007",
+              "street": "Avenue de France",
+              "street_en": "Avenue de France",
+              "pattern": "n{1,80} Avenue de France"
+            },
+            {
+              "code": "74014",
+              "street": "Rue Sommeiller",
+              "street_en": "Rue Sommeiller",
+              "pattern": "n{1,50} Rue Sommeiller"
+            },
+            {
+              "code": "74021",
+              "street": "Boulevard du Lycée",
+              "street_en": "Boulevard du Lycee",
+              "pattern": "n{1,60} Boulevard du Lycée"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Côte-d'Or",
+      "name_en": "Cote-d'Or",
+      "region_tags": [
+        "Bourgogne-Franche-Comté",
+        "Bourgogne"
+      ],
+      "cities": [
+        {
+          "name": "Dijon",
+          "name_en": "Dijon",
+          "lat": 47.322,
+          "lon": 5.0415,
+          "postcodes": [
+            {
+              "code": "21000",
+              "street": "Rue de la Liberté",
+              "street_en": "Rue de la Liberte",
+              "pattern": "n{1,50} Rue de la Liberté"
+            },
+            {
+              "code": "21100",
+              "street": "Boulevard de l'Université",
+              "street_en": "Boulevard de l'Universite",
+              "pattern": "n{1,80} Boulevard de l'Université"
+            },
+            {
+              "code": "21016",
+              "street": "Rue du Bourg",
+              "street_en": "Rue du Bourg",
+              "pattern": "n{1,40} Rue du Bourg"
+            },
+            {
+              "code": "21034",
+              "street": "Avenue du Drapeau",
+              "street_en": "Avenue du Drapeau",
+              "pattern": "n{1,100} Avenue du Drapeau"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Doubs",
+      "name_en": "Doubs",
+      "region_tags": [
+        "Bourgogne-Franche-Comté",
+        "Franche-Comté"
+      ],
+      "cities": [
+        {
+          "name": "Besançon",
+          "name_en": "Besancon",
+          "lat": 47.2378,
+          "lon": 6.0241,
+          "postcodes": [
+            {
+              "code": "25000",
+              "street": "Grande Rue",
+              "street_en": "Grande Rue",
+              "pattern": "n{1,120} Grande Rue"
+            },
+            {
+              "code": "25030",
+              "street": "Avenue de la Paix",
+              "street_en": "Avenue de la Paix",
+              "pattern": "n{1,60} Avenue de la Paix"
+            },
+            {
+              "code": "25042",
+              "street": "Rue de Vesoul",
+              "street_en": "Rue de Vesoul",
+              "pattern": "n{1,80} Rue de Vesoul"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Jura",
+      "name_en": "Jura",
+      "region_tags": [
+        "Bourgogne-Franche-Comté",
+        "Franche-Comté"
+      ],
+      "cities": [
+        {
+          "name": "Lons-le-Saunier",
+          "name_en": "Lons-le-Saunier",
+          "lat": 46.6753,
+          "lon": 5.554,
+          "postcodes": [
+            {
+              "code": "39000",
+              "street": "Rue du Commerce",
+              "street_en": "Rue du Commerce",
+              "pattern": "n{1,80} Rue du Commerce"
+            },
+            {
+              "code": "39006",
+              "street": "Rue Jean Jaurès",
+              "street_en": "Rue Jean Jaures",
+              "pattern": "n{1,60} Rue Jean Jaurès"
+            },
+            {
+              "code": "39015",
+              "street": "Avenue Thurel",
+              "street_en": "Avenue Thurel",
+              "pattern": "n{1,50} Avenue Thurel"
+            },
+            {
+              "code": "39022",
+              "street": "Place de la Liberté",
+              "street_en": "Place de la Liberte",
+              "pattern": "n{1,30} Place de la Liberté"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Nièvre",
+      "name_en": "Nievre",
+      "region_tags": [
+        "Bourgogne-Franche-Comté",
+        "Bourgogne"
+      ],
+      "cities": [
+        {
+          "name": "Nevers",
+          "name_en": "Nevers",
+          "lat": 46.9897,
+          "lon": 3.159,
+          "postcodes": [
+            {
+              "code": "58000",
+              "street": "Avenue du Général de Gaulle",
+              "street_en": "Avenue du General de Gaulle",
+              "pattern": "n{1,100} Avenue du Général de Gaulle"
+            },
+            {
+              "code": "58007",
+              "street": "Rue du Commerce",
+              "street_en": "Rue du Commerce",
+              "pattern": "n{1,60} Rue du Commerce"
+            },
+            {
+              "code": "58014",
+              "street": "Rue Saint-Martin",
+              "street_en": "Rue Saint-Martin",
+              "pattern": "n{1,50} Rue Saint-Martin"
+            },
+            {
+              "code": "58020",
+              "street": "Boulevard de la République",
+              "street_en": "Boulevard de la Republique",
+              "pattern": "n{1,80} Boulevard de la République"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Haute-Saône",
+      "name_en": "Haute-Saone",
+      "region_tags": [
+        "Bourgogne-Franche-Comté",
+        "Franche-Comté"
+      ],
+      "cities": [
+        {
+          "name": "Vesoul",
+          "name_en": "Vesoul",
+          "lat": 47.6199,
+          "lon": 6.1533,
+          "postcodes": [
+            {
+              "code": "70000",
+              "street": "Rue d'Alsace-Lorraine",
+              "street_en": "Rue d'Alsace-Lorraine",
+              "pattern": "n{1,80} Rue d'Alsace-Lorraine"
+            },
+            {
+              "code": "70005",
+              "street": "Rue Paul Morel",
+              "street_en": "Rue Paul Morel",
+              "pattern": "n{1,60} Rue Paul Morel"
+            },
+            {
+              "code": "70014",
+              "street": "Rue des Bains",
+              "street_en": "Rue des Bains",
+              "pattern": "n{1,40} Rue des Bains"
+            },
+            {
+              "code": "70019",
+              "street": "Avenue Aristide Briand",
+              "street_en": "Avenue Aristide Briand",
+              "pattern": "n{1,80} Avenue Aristide Briand"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Saône-et-Loire",
+      "name_en": "Saone-et-Loire",
+      "region_tags": [
+        "Bourgogne-Franche-Comté",
+        "Bourgogne"
+      ],
+      "cities": [
+        {
+          "name": "Mâcon",
+          "name_en": "Macon",
+          "lat": 46.3067,
+          "lon": 4.8283,
+          "postcodes": [
+            {
+              "code": "71000",
+              "street": "Rue Carnot",
+              "street_en": "Rue Carnot",
+              "pattern": "n{1,60} Rue Carnot"
+            },
+            {
+              "code": "71008",
+              "street": "Quai Lamartine",
+              "street_en": "Quai Lamartine",
+              "pattern": "n{1,80} Quai Lamartine"
+            },
+            {
+              "code": "71015",
+              "street": "Rue de Lyon",
+              "street_en": "Rue de Lyon",
+              "pattern": "n{1,100} Rue de Lyon"
+            }
+          ]
+        },
+        {
+          "name": "Chalon-sur-Saône",
+          "name_en": "Chalon-sur-Saone",
+          "lat": 46.7806,
+          "lon": 4.8533,
+          "postcodes": [
+            {
+              "code": "71100",
+              "street": "Rue du Général Leclerc",
+              "street_en": "Rue du General Leclerc",
+              "pattern": "n{1,90} Rue du Général Leclerc"
+            },
+            {
+              "code": "71107",
+              "street": "Avenue Boucicaut",
+              "street_en": "Avenue Boucicaut",
+              "pattern": "n{1,60} Avenue Boucicaut"
+            },
+            {
+              "code": "71116",
+              "street": "Grande Rue",
+              "street_en": "Grande Rue",
+              "pattern": "n{1,50} Grande Rue"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Yonne",
+      "name_en": "Yonne",
+      "region_tags": [
+        "Bourgogne-Franche-Comté",
+        "Bourgogne"
+      ],
+      "cities": [
+        {
+          "name": "Auxerre",
+          "name_en": "Auxerre",
+          "lat": 47.7979,
+          "lon": 3.5714,
+          "postcodes": [
+            {
+              "code": "89000",
+              "street": "Rue du Temple",
+              "street_en": "Rue du Temple",
+              "pattern": "n{1,60} Rue du Temple"
+            },
+            {
+              "code": "89005",
+              "street": "Rue de Paris",
+              "street_en": "Rue de Paris",
+              "pattern": "n{1,80} Rue de Paris"
+            },
+            {
+              "code": "89012",
+              "street": "Boulevard du 11 Novembre",
+              "street_en": "Boulevard du 11 Novembre",
+              "pattern": "n{1,100} Boulevard du 11 Novembre"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Territoire de Belfort",
+      "name_en": "Territoire de Belfort",
+      "region_tags": [
+        "Bourgogne-Franche-Comté",
+        "Franche-Comté"
+      ],
+      "cities": [
+        {
+          "name": "Belfort",
+          "name_en": "Belfort",
+          "lat": 47.638,
+          "lon": 6.8628,
+          "postcodes": [
+            {
+              "code": "90000",
+              "street": "Faubourg de France",
+              "street_en": "Faubourg de France",
+              "pattern": "n{1,100} Faubourg de France"
+            },
+            {
+              "code": "90005",
+              "street": "Avenue Jean Jaurès",
+              "street_en": "Avenue Jean Jaures",
+              "pattern": "n{1,80} Avenue Jean Jaurès"
+            },
+            {
+              "code": "90012",
+              "street": "Rue de Mulhouse",
+              "street_en": "Rue de Mulhouse",
+              "pattern": "n{1,60} Rue de Mulhouse"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Côtes-d'Armor",
+      "name_en": "Cotes-d'Armor",
+      "region_tags": [
+        "Bretagne"
+      ],
+      "cities": [
+        {
+          "name": "Saint-Brieuc",
+          "name_en": "Saint-Brieuc",
+          "lat": 48.5144,
+          "lon": -2.76,
+          "postcodes": [
+            {
+              "code": "22000",
+              "street": "Rue Saint-Guillaume",
+              "street_en": "Rue Saint-Guillaume",
+              "pattern": "n{1,60} Rue Saint-Guillaume"
+            },
+            {
+              "code": "22007",
+              "street": "Rue de Gouédic",
+              "street_en": "Rue de Gouedic",
+              "pattern": "n{1,50} Rue de Gouédic"
+            },
+            {
+              "code": "22015",
+              "street": "Boulevard Charner",
+              "street_en": "Boulevard Charner",
+              "pattern": "n{1,80} Boulevard Charner"
+            },
+            {
+              "code": "22023",
+              "street": "Rue du Général Leclerc",
+              "street_en": "Rue du General Leclerc",
+              "pattern": "n{1,60} Rue du Général Leclerc"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Finistère",
+      "name_en": "Finistere",
+      "region_tags": [
+        "Bretagne"
+      ],
+      "cities": [
+        {
+          "name": "Brest",
+          "name_en": "Brest",
+          "lat": 48.3904,
+          "lon": -4.4861,
+          "postcodes": [
+            {
+              "code": "29200",
+              "street": "Rue de Siam",
+              "street_en": "Rue de Siam",
+              "pattern": "n{1,80} Rue de Siam"
+            },
+            {
+              "code": "29000",
+              "street": "Rue Jean Jaurès",
+              "street_en": "Rue Jean Jaures",
+              "pattern": "n{1,60} Rue Jean Jaurès"
+            },
+            {
+              "code": "29019",
+              "street": "Rue de Lyon",
+              "street_en": "Rue de Lyon",
+              "pattern": "n{1,80} Rue de Lyon"
+            }
+          ]
+        },
+        {
+          "name": "Quimper",
+          "name_en": "Quimper",
+          "lat": 47.996,
+          "lon": -4.1024,
+          "postcodes": [
+            {
+              "code": "29000",
+              "street": "Rue Kéréon",
+              "street_en": "Rue Kereon",
+              "pattern": "n{1,50} Rue Kéréon"
+            },
+            {
+              "code": "29008",
+              "street": "Boulevard de Kerguélen",
+              "street_en": "Boulevard de Kerguelen",
+              "pattern": "n{1,80} Boulevard de Kerguélen"
+            },
+            {
+              "code": "29017",
+              "street": "Route de Bénodet",
+              "street_en": "Route de Benodet",
+              "pattern": "n{1,100} Route de Bénodet"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ille-et-Vilaine",
+      "name_en": "Ille-et-Vilaine",
+      "region_tags": [
+        "Bretagne"
+      ],
+      "cities": [
+        {
+          "name": "Rennes",
+          "name_en": "Rennes",
+          "lat": 48.1173,
+          "lon": -1.6778,
+          "postcodes": [
+            {
+              "code": "35000",
+              "street": "Rue Le Bastard",
+              "street_en": "Rue Le Bastard",
+              "pattern": "n{1,30} Rue Le Bastard"
+            },
+            {
+              "code": "35200",
+              "street": "Boulevard de la Tour d'Auvergne",
+              "street_en": "Boulevard de la Tour d'Auvergne",
+              "pattern": "n{1,60} Boulevard de la Tour d'Auvergne"
+            },
+            {
+              "code": "35700",
+              "street": "Rue de Fougères",
+              "street_en": "Rue de Fougeres",
+              "pattern": "n{1,80} Rue de Fougères"
+            },
+            {
+              "code": "35042",
+              "street": "Rue d'Antrain",
+              "street_en": "Rue d'Antrain",
+              "pattern": "n{1,80} Rue d'Antrain"
+            }
+          ]
+        },
+        {
+          "name": "Saint-Malo",
+          "name_en": "Saint-Malo",
+          "lat": 48.6493,
+          "lon": -2.0007,
+          "postcodes": [
+            {
+              "code": "35400",
+              "street": "Rue Jacques Cartier",
+              "street_en": "Rue Jacques Cartier",
+              "pattern": "n{1,40} Rue Jacques Cartier"
+            },
+            {
+              "code": "35409",
+              "street": "Chaussée du Sillon",
+              "street_en": "Chaussee du Sillon",
+              "pattern": "n{1,100} Chaussée du Sillon"
+            },
+            {
+              "code": "35412",
+              "street": "Rue de Dinan",
+              "street_en": "Rue de Dinan",
+              "pattern": "n{1,80} Rue de Dinan"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Morbihan",
+      "name_en": "Morbihan",
+      "region_tags": [
+        "Bretagne"
+      ],
+      "cities": [
+        {
+          "name": "Vannes",
+          "name_en": "Vannes",
+          "lat": 47.6586,
+          "lon": -2.76,
+          "postcodes": [
+            {
+              "code": "56000",
+              "street": "Rue du Mené",
+              "street_en": "Rue du Mene",
+              "pattern": "n{1,50} Rue du Mené"
+            },
+            {
+              "code": "56007",
+              "street": "Place de la République",
+              "street_en": "Place de la Republique",
+              "pattern": "n{1,30} Place de la République"
+            },
+            {
+              "code": "56014",
+              "street": "Avenue Victor Hugo",
+              "street_en": "Avenue Victor Hugo",
+              "pattern": "n{1,80} Avenue Victor Hugo"
+            },
+            {
+              "code": "56020",
+              "street": "Rue Thiers",
+              "street_en": "Rue Thiers",
+              "pattern": "n{1,60} Rue Thiers"
+            }
+          ]
+        },
+        {
+          "name": "Lorient",
+          "name_en": "Lorient",
+          "lat": 47.7483,
+          "lon": -3.37,
+          "postcodes": [
+            {
+              "code": "56100",
+              "street": "Rue du Port",
+              "street_en": "Rue du Port",
+              "pattern": "n{1,60} Rue du Port"
+            },
+            {
+              "code": "56106",
+              "street": "Cours de Chazelles",
+              "street_en": "Cours de Chazelles",
+              "pattern": "n{1,80} Cours de Chazelles"
+            },
+            {
+              "code": "56112",
+              "street": "Rue Maréchal Foch",
+              "street_en": "Rue Marechal Foch",
+              "pattern": "n{1,80} Rue Maréchal Foch"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Cher",
+      "name_en": "Cher",
+      "region_tags": [
+        "Centre-Val de Loire",
+        "Loire Valley"
+      ],
+      "cities": [
+        {
+          "name": "Bourges",
+          "name_en": "Bourges",
+          "lat": 47.081,
+          "lon": 2.3988,
+          "postcodes": [
+            {
+              "code": "18000",
+              "street": "Rue Moyenne",
+              "street_en": "Rue Moyenne",
+              "pattern": "n{1,80} Rue Moyenne"
+            },
+            {
+              "code": "18006",
+              "street": "Rue d'Auron",
+              "street_en": "Rue d'Auron",
+              "pattern": "n{1,60} Rue d'Auron"
+            },
+            {
+              "code": "18014",
+              "street": "Avenue Jean Jaurès",
+              "street_en": "Avenue Jean Jaures",
+              "pattern": "n{1,100} Avenue Jean Jaurès"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Eure-et-Loir",
+      "name_en": "Eure-et-Loir",
+      "region_tags": [
+        "Centre-Val de Loire",
+        "Loire Valley"
+      ],
+      "cities": [
+        {
+          "name": "Chartres",
+          "name_en": "Chartres",
+          "lat": 48.4469,
+          "lon": 1.489,
+          "postcodes": [
+            {
+              "code": "28000",
+              "street": "Rue Noël Ballay",
+              "street_en": "Rue Noel Ballay",
+              "pattern": "n{1,60} Rue Noël Ballay"
+            },
+            {
+              "code": "28007",
+              "street": "Boulevard de la Courtille",
+              "street_en": "Boulevard de la Courtille",
+              "pattern": "n{1,80} Boulevard de la Courtille"
+            },
+            {
+              "code": "28014",
+              "street": "Rue de la Pie",
+              "street_en": "Rue de la Pie",
+              "pattern": "n{1,40} Rue de la Pie"
+            },
+            {
+              "code": "28021",
+              "street": "Avenue d'Aligre",
+              "street_en": "Avenue d'Aligre",
+              "pattern": "n{1,60} Avenue d'Aligre"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Indre",
+      "name_en": "Indre",
+      "region_tags": [
+        "Centre-Val de Loire",
+        "Loire Valley"
+      ],
+      "cities": [
+        {
+          "name": "Châteauroux",
+          "name_en": "Chateauroux",
+          "lat": 46.8103,
+          "lon": 1.6912,
+          "postcodes": [
+            {
+              "code": "36000",
+              "street": "Rue Grande",
+              "street_en": "Rue Grande",
+              "pattern": "n{1,80} Rue Grande"
+            },
+            {
+              "code": "36006",
+              "street": "Avenue de la Châtre",
+              "street_en": "Avenue de la Chatre",
+              "pattern": "n{1,100} Avenue de la Châtre"
+            },
+            {
+              "code": "36015",
+              "street": "Place de la République",
+              "street_en": "Place de la Republique",
+              "pattern": "n{1,30} Place de la République"
+            },
+            {
+              "code": "36019",
+              "street": "Rue Victor Hugo",
+              "street_en": "Rue Victor Hugo",
+              "pattern": "n{1,60} Rue Victor Hugo"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Indre-et-Loire",
+      "name_en": "Indre-et-Loire",
+      "region_tags": [
+        "Centre-Val de Loire",
+        "Loire Valley"
+      ],
+      "cities": [
+        {
+          "name": "Tours",
+          "name_en": "Tours",
+          "lat": 47.3941,
+          "lon": 0.6848,
+          "postcodes": [
+            {
+              "code": "37000",
+              "street": "Rue Nationale",
+              "street_en": "Rue Nationale",
+              "pattern": "n{1,120} Rue Nationale"
+            },
+            {
+              "code": "37100",
+              "street": "Boulevard Heurteloup",
+              "street_en": "Boulevard Heurteloup",
+              "pattern": "n{1,60} Boulevard Heurteloup"
+            },
+            {
+              "code": "37042",
+              "street": "Avenue de Grammont",
+              "street_en": "Avenue de Grammont",
+              "pattern": "n{1,100} Avenue de Grammont"
+            },
+            {
+              "code": "37055",
+              "street": "Rue des Halles",
+              "street_en": "Rue des Halles",
+              "pattern": "n{1,40} Rue des Halles"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Loir-et-Cher",
+      "name_en": "Loir-et-Cher",
+      "region_tags": [
+        "Centre-Val de Loire",
+        "Loire Valley"
+      ],
+      "cities": [
+        {
+          "name": "Blois",
+          "name_en": "Blois",
+          "lat": 47.5861,
+          "lon": 1.3359,
+          "postcodes": [
+            {
+              "code": "41000",
+              "street": "Rue du Commerce",
+              "street_en": "Rue du Commerce",
+              "pattern": "n{1,60} Rue du Commerce"
+            },
+            {
+              "code": "41006",
+              "street": "Rue Denis Papin",
+              "street_en": "Rue Denis Papin",
+              "pattern": "n{1,50} Rue Denis Papin"
+            },
+            {
+              "code": "41015",
+              "street": "Avenue de Vendôme",
+              "street_en": "Avenue de Vendome",
+              "pattern": "n{1,80} Avenue de Vendôme"
+            },
+            {
+              "code": "41022",
+              "street": "Rue Porte-Chartraine",
+              "street_en": "Rue Porte-Chartraine",
+              "pattern": "n{1,40} Rue Porte-Chartraine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Loiret",
+      "name_en": "Loiret",
+      "region_tags": [
+        "Centre-Val de Loire",
+        "Loire Valley"
+      ],
+      "cities": [
+        {
+          "name": "Orléans",
+          "name_en": "Orleans",
+          "lat": 47.9029,
+          "lon": 1.9093,
+          "postcodes": [
+            {
+              "code": "45000",
+              "street": "Rue de la République",
+              "street_en": "Rue de la Republique",
+              "pattern": "n{1,100} Rue de la République"
+            },
+            {
+              "code": "45100",
+              "street": "Avenue de la Mouillère",
+              "street_en": "Avenue de la Mouillere",
+              "pattern": "n{1,80} Avenue de la Mouillère"
+            },
+            {
+              "code": "45042",
+              "street": "Rue Royale",
+              "street_en": "Rue Royale",
+              "pattern": "n{1,60} Rue Royale"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Corse-du-Sud",
+      "name_en": "Corse-du-Sud",
+      "region_tags": [
+        "Corse"
+      ],
+      "cities": [
+        {
+          "name": "Ajaccio",
+          "name_en": "Ajaccio",
+          "lat": 41.9192,
+          "lon": 8.7386,
+          "postcodes": [
+            {
+              "code": "20000",
+              "street": "Cours Napoléon",
+              "street_en": "Cours Napoleon",
+              "pattern": "n{1,80} Cours Napoléon"
+            },
+            {
+              "code": "20090",
+              "street": "Route des Sanguinaires",
+              "street_en": "Route des Sanguinaires",
+              "pattern": "n{1,100} Route des Sanguinaires"
+            },
+            {
+              "code": "20017",
+              "street": "Avenue du Premier Consul",
+              "street_en": "Avenue du Premier Consul",
+              "pattern": "n{1,60} Avenue du Premier Consul"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Haute-Corse",
+      "name_en": "Haute-Corse",
+      "region_tags": [
+        "Corse"
+      ],
+      "cities": [
+        {
+          "name": "Bastia",
+          "name_en": "Bastia",
+          "lat": 42.6977,
+          "lon": 9.4529,
+          "postcodes": [
+            {
+              "code": "20200",
+              "street": "Boulevard Paoli",
+              "street_en": "Boulevard Paoli",
+              "pattern": "n{1,60} Boulevard Paoli"
+            },
+            {
+              "code": "20600",
+              "street": "Avenue Émile Sari",
+              "street_en": "Avenue Emile Sari",
+              "pattern": "n{1,40} Avenue Émile Sari"
+            },
+            {
+              "code": "20210",
+              "street": "Rue César Campinchi",
+              "street_en": "Rue Cesar Campinchi",
+              "pattern": "n{1,80} Rue César Campinchi"
+            },
+            {
+              "code": "20220",
+              "street": "Avenue Maréchal Sebastiani",
+              "street_en": "Avenue Marechal Sebastiani",
+              "pattern": "n{1,60} Avenue Maréchal Sebastiani"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ardennes",
+      "name_en": "Ardennes",
+      "region_tags": [
+        "Grand Est",
+        "Champagne"
+      ],
+      "cities": [
+        {
+          "name": "Charleville-Mézières",
+          "name_en": "Charleville-Mezieres",
+          "lat": 49.771,
+          "lon": 4.7203,
+          "postcodes": [
+            {
+              "code": "08000",
+              "street": "Rue de la République",
+              "street_en": "Rue de la Republique",
+              "pattern": "n{1,80} Rue de la République"
+            },
+            {
+              "code": "08007",
+              "street": "Avenue d'Arches",
+              "street_en": "Avenue d'Arches",
+              "pattern": "n{1,100} Avenue d'Arches"
+            },
+            {
+              "code": "08015",
+              "street": "Rue du Moulin",
+              "street_en": "Rue du Moulin",
+              "pattern": "n{1,60} Rue du Moulin"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Aube",
+      "name_en": "Aube",
+      "region_tags": [
+        "Grand Est",
+        "Champagne"
+      ],
+      "cities": [
+        {
+          "name": "Troyes",
+          "name_en": "Troyes",
+          "lat": 48.2974,
+          "lon": 4.0744,
+          "postcodes": [
+            {
+              "code": "10000",
+              "street": "Rue Émile Zola",
+              "street_en": "Rue Emile Zola",
+              "pattern": "n{1,80} Rue Émile Zola"
+            },
+            {
+              "code": "10007",
+              "street": "Rue du Général de Gaulle",
+              "street_en": "Rue du General de Gaulle",
+              "pattern": "n{1,60} Rue du Général de Gaulle"
+            },
+            {
+              "code": "10014",
+              "street": "Boulevard du 14 Juillet",
+              "street_en": "Boulevard du 14 Juillet",
+              "pattern": "n{1,100} Boulevard du 14 Juillet"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Marne",
+      "name_en": "Marne",
+      "region_tags": [
+        "Grand Est",
+        "Champagne"
+      ],
+      "cities": [
+        {
+          "name": "Châlons-en-Champagne",
+          "name_en": "Chalons-en-Champagne",
+          "lat": 48.9564,
+          "lon": 4.3634,
+          "postcodes": [
+            {
+              "code": "51000",
+              "street": "Rue de Vaux",
+              "street_en": "Rue de Vaux",
+              "pattern": "n{1,60} Rue de Vaux"
+            },
+            {
+              "code": "51006",
+              "street": "Rue Léon Bourgeois",
+              "street_en": "Rue Leon Bourgeois",
+              "pattern": "n{1,80} Rue Léon Bourgeois"
+            },
+            {
+              "code": "51015",
+              "street": "Avenue de Paris",
+              "street_en": "Avenue de Paris",
+              "pattern": "n{1,100} Avenue de Paris"
+            }
+          ]
+        },
+        {
+          "name": "Reims",
+          "name_en": "Reims",
+          "lat": 49.2583,
+          "lon": 3.9924,
+          "postcodes": [
+            {
+              "code": "51100",
+              "street": "Place Drouet-d'Erlon",
+              "street_en": "Place Drouet-d'Erlon",
+              "pattern": "n{1,40} Place Drouet-d'Erlon"
+            },
+            {
+              "code": "51058",
+              "street": "Rue de Vesle",
+              "street_en": "Rue de Vesle",
+              "pattern": "n{1,80} Rue de Vesle"
+            },
+            {
+              "code": "51063",
+              "street": "Rue de Talleyrand",
+              "street_en": "Rue de Talleyrand",
+              "pattern": "n{1,60} Rue de Talleyrand"
+            },
+            {
+              "code": "51072",
+              "street": "Boulevard Lundy",
+              "street_en": "Boulevard Lundy",
+              "pattern": "n{1,80} Boulevard Lundy"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Haute-Marne",
+      "name_en": "Haute-Marne",
+      "region_tags": [
+        "Grand Est",
+        "Champagne"
+      ],
+      "cities": [
+        {
+          "name": "Chaumont",
+          "name_en": "Chaumont",
+          "lat": 48.1138,
+          "lon": 5.1392,
+          "postcodes": [
+            {
+              "code": "52000",
+              "street": "Rue de Verdun",
+              "street_en": "Rue de Verdun",
+              "pattern": "n{1,80} Rue de Verdun"
+            },
+            {
+              "code": "52007",
+              "street": "Avenue du Général de Gaulle",
+              "street_en": "Avenue du General de Gaulle",
+              "pattern": "n{1,100} Avenue du Général de Gaulle"
+            },
+            {
+              "code": "52014",
+              "street": "Rue Victoire de la Marne",
+              "street_en": "Rue Victoire de la Marne",
+              "pattern": "n{1,60} Rue Victoire de la Marne"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Meurthe-et-Moselle",
+      "name_en": "Meurthe-et-Moselle",
+      "region_tags": [
+        "Grand Est",
+        "Lorraine"
+      ],
+      "cities": [
+        {
+          "name": "Nancy",
+          "name_en": "Nancy",
+          "lat": 48.6921,
+          "lon": 6.1844,
+          "postcodes": [
+            {
+              "code": "54000",
+              "street": "Rue Saint-Dizier",
+              "street_en": "Rue Saint-Dizier",
+              "pattern": "n{1,120} Rue Saint-Dizier"
+            },
+            {
+              "code": "54100",
+              "street": "Avenue de Strasbourg",
+              "street_en": "Avenue de Strasbourg",
+              "pattern": "n{1,80} Avenue de Strasbourg"
+            },
+            {
+              "code": "54042",
+              "street": "Rue Saint-Jean",
+              "street_en": "Rue Saint-Jean",
+              "pattern": "n{1,50} Rue Saint-Jean"
+            },
+            {
+              "code": "54055",
+              "street": "Grande Rue",
+              "street_en": "Grande Rue",
+              "pattern": "n{1,60} Grande Rue"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Meuse",
+      "name_en": "Meuse",
+      "region_tags": [
+        "Grand Est",
+        "Lorraine"
+      ],
+      "cities": [
+        {
+          "name": "Bar-le-Duc",
+          "name_en": "Bar-le-Duc",
+          "lat": 48.7733,
+          "lon": 5.1594,
+          "postcodes": [
+            {
+              "code": "55000",
+              "street": "Rue du Bourg",
+              "street_en": "Rue du Bourg",
+              "pattern": "n{1,60} Rue du Bourg"
+            },
+            {
+              "code": "55005",
+              "street": "Boulevard de la Rochelle",
+              "street_en": "Boulevard de la Rochelle",
+              "pattern": "n{1,80} Boulevard de la Rochelle"
+            },
+            {
+              "code": "55012",
+              "street": "Rue André Maginot",
+              "street_en": "Rue Andre Maginot",
+              "pattern": "n{1,50} Rue André Maginot"
+            },
+            {
+              "code": "55018",
+              "street": "Rue Lapique",
+              "street_en": "Rue Lapique",
+              "pattern": "n{1,40} Rue Lapique"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Moselle",
+      "name_en": "Moselle",
+      "region_tags": [
+        "Grand Est",
+        "Lorraine"
+      ],
+      "cities": [
+        {
+          "name": "Metz",
+          "name_en": "Metz",
+          "lat": 49.1193,
+          "lon": 6.1757,
+          "postcodes": [
+            {
+              "code": "57000",
+              "street": "Rue Serpenoise",
+              "street_en": "Rue Serpenoise",
+              "pattern": "n{1,50} Rue Serpenoise"
+            },
+            {
+              "code": "57050",
+              "street": "Avenue de Blida",
+              "street_en": "Avenue de Blida",
+              "pattern": "n{1,60} Avenue de Blida"
+            },
+            {
+              "code": "57032",
+              "street": "Rue des Clercs",
+              "street_en": "Rue des Clercs",
+              "pattern": "n{1,40} Rue des Clercs"
+            },
+            {
+              "code": "57045",
+              "street": "Avenue Foch",
+              "street_en": "Avenue Foch",
+              "pattern": "n{1,80} Avenue Foch"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Bas-Rhin",
+      "name_en": "Bas-Rhin",
+      "region_tags": [
+        "Grand Est",
+        "Alsace"
+      ],
+      "cities": [
+        {
+          "name": "Strasbourg",
+          "name_en": "Strasbourg",
+          "lat": 48.5734,
+          "lon": 7.7521,
+          "postcodes": [
+            {
+              "code": "67000",
+              "street": "Rue du Vieux-Marché-aux-Poissons",
+              "street_en": "Rue du Vieux-Marche-aux-Poissons",
+              "pattern": "n{1,30} Rue du Vieux-Marché-aux-Poissons"
+            },
+            {
+              "code": "67100",
+              "street": "Route du Rhin",
+              "street_en": "Route du Rhin",
+              "pattern": "n{1,100} Route du Rhin"
+            },
+            {
+              "code": "67200",
+              "street": "Route de Schirmeck",
+              "street_en": "Route de Schirmeck",
+              "pattern": "n{1,80} Route de Schirmeck"
+            },
+            {
+              "code": "67016",
+              "street": "Grande Rue",
+              "street_en": "Grande Rue",
+              "pattern": "n{1,60} Grande Rue"
+            },
+            {
+              "code": "67028",
+              "street": "Rue du Fossé des Tanneurs",
+              "street_en": "Rue du Fosse des Tanneurs",
+              "pattern": "n{1,40} Rue du Fossé des Tanneurs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Haut-Rhin",
+      "name_en": "Haut-Rhin",
+      "region_tags": [
+        "Grand Est",
+        "Alsace"
+      ],
+      "cities": [
+        {
+          "name": "Colmar",
+          "name_en": "Colmar",
+          "lat": 48.0794,
+          "lon": 7.3584,
+          "postcodes": [
+            {
+              "code": "68000",
+              "street": "Rue des Têtes",
+              "street_en": "Rue des Tetes",
+              "pattern": "n{1,40} Rue des Têtes"
+            },
+            {
+              "code": "68007",
+              "street": "Grand'Rue",
+              "street_en": "Grand'Rue",
+              "pattern": "n{1,60} Grand'Rue"
+            },
+            {
+              "code": "68015",
+              "street": "Avenue de la République",
+              "street_en": "Avenue de la Republique",
+              "pattern": "n{1,100} Avenue de la République"
+            }
+          ]
+        },
+        {
+          "name": "Mulhouse",
+          "name_en": "Mulhouse",
+          "lat": 47.7508,
+          "lon": 7.3359,
+          "postcodes": [
+            {
+              "code": "68100",
+              "street": "Rue du Sauvage",
+              "street_en": "Rue du Sauvage",
+              "pattern": "n{1,50} Rue du Sauvage"
+            },
+            {
+              "code": "68108",
+              "street": "Avenue de Colmar",
+              "street_en": "Avenue de Colmar",
+              "pattern": "n{1,100} Avenue de Colmar"
+            },
+            {
+              "code": "68116",
+              "street": "Rue de la Sinne",
+              "street_en": "Rue de la Sinne",
+              "pattern": "n{1,60} Rue de la Sinne"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Vosges",
+      "name_en": "Vosges",
+      "region_tags": [
+        "Grand Est",
+        "Lorraine"
+      ],
+      "cities": [
+        {
+          "name": "Épinal",
+          "name_en": "Epinal",
+          "lat": 48.1725,
+          "lon": 6.4499,
+          "postcodes": [
+            {
+              "code": "88000",
+              "street": "Rue des Minimes",
+              "street_en": "Rue des Minimes",
+              "pattern": "n{1,60} Rue des Minimes"
+            },
+            {
+              "code": "88006",
+              "street": "Quai de Dogneville",
+              "street_en": "Quai de Dogneville",
+              "pattern": "n{1,80} Quai de Dogneville"
+            },
+            {
+              "code": "88014",
+              "street": "Rue Léopold Bourg",
+              "street_en": "Rue Leopold Bourg",
+              "pattern": "n{1,50} Rue Léopold Bourg"
+            },
+            {
+              "code": "88020",
+              "street": "Avenue du Général de Gaulle",
+              "street_en": "Avenue du General de Gaulle",
+              "pattern": "n{1,80} Avenue du Général de Gaulle"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Aisne",
+      "name_en": "Aisne",
+      "region_tags": [
+        "Hauts-de-France",
+        "Picardie"
+      ],
+      "cities": [
+        {
+          "name": "Laon",
+          "name_en": "Laon",
+          "lat": 49.5639,
+          "lon": 3.62,
+          "postcodes": [
+            {
+              "code": "02000",
+              "street": "Rue Châtelaine",
+              "street_en": "Rue Chatelaine",
+              "pattern": "n{1,110} Rue Châtelaine"
+            },
+            {
+              "code": "02005",
+              "street": "Rue du Bourg",
+              "street_en": "Rue du Bourg",
+              "pattern": "n{1,40} Rue du Bourg"
+            },
+            {
+              "code": "02012",
+              "street": "Rue Saint-Jean",
+              "street_en": "Rue Saint-Jean",
+              "pattern": "n{1,50} Rue Saint-Jean"
+            }
+          ]
+        },
+        {
+          "name": "Saint-Quentin",
+          "name_en": "Saint-Quentin",
+          "lat": 49.8467,
+          "lon": 3.2876,
+          "postcodes": [
+            {
+              "code": "02100",
+              "street": "Rue d'Isle",
+              "street_en": "Rue d'Isle",
+              "pattern": "n{1,80} Rue d'Isle"
+            },
+            {
+              "code": "02106",
+              "street": "Rue de la Sellerie",
+              "street_en": "Rue de la Sellerie",
+              "pattern": "n{1,60} Rue de la Sellerie"
+            },
+            {
+              "code": "02112",
+              "street": "Boulevard Victor Hugo",
+              "street_en": "Boulevard Victor Hugo",
+              "pattern": "n{1,80} Boulevard Victor Hugo"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Nord",
+      "name_en": "Nord",
+      "region_tags": [
+        "Hauts-de-France",
+        "Nord-Pas-de-Calais"
+      ],
+      "cities": [
+        {
+          "name": "Lille",
+          "name_en": "Lille",
+          "lat": 50.6292,
+          "lon": 3.0573,
+          "postcodes": [
+            {
+              "code": "59000",
+              "street": "Rue Faidherbe",
+              "street_en": "Rue Faidherbe",
+              "pattern": "n{1,50} Rue Faidherbe"
+            },
+            {
+              "code": "59800",
+              "street": "Rue Nationale",
+              "street_en": "Rue Nationale",
+              "pattern": "n{1,120} Rue Nationale"
+            },
+            {
+              "code": "59042",
+              "street": "Rue de Béthune",
+              "street_en": "Rue de Bethune",
+              "pattern": "n{1,80} Rue de Béthune"
+            },
+            {
+              "code": "59055",
+              "street": "Boulevard de la Liberté",
+              "street_en": "Boulevard de la Liberte",
+              "pattern": "n{1,100} Boulevard de la Liberté"
+            }
+          ]
+        },
+        {
+          "name": "Dunkerque",
+          "name_en": "Dunkerque",
+          "lat": 51.0343,
+          "lon": 2.3768,
+          "postcodes": [
+            {
+              "code": "59140",
+              "street": "Rue Clemenceau",
+              "street_en": "Rue Clemenceau",
+              "pattern": "n{1,80} Rue Clemenceau"
+            },
+            {
+              "code": "59148",
+              "street": "Avenue de la Mer",
+              "street_en": "Avenue de la Mer",
+              "pattern": "n{1,60} Avenue de la Mer"
+            },
+            {
+              "code": "59155",
+              "street": "Rue de l'Écluse de Bergues",
+              "street_en": "Rue de l'Ecluse de Bergues",
+              "pattern": "n{1,80} Rue de l'Écluse de Bergues"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Oise",
+      "name_en": "Oise",
+      "region_tags": [
+        "Hauts-de-France",
+        "Picardie"
+      ],
+      "cities": [
+        {
+          "name": "Beauvais",
+          "name_en": "Beauvais",
+          "lat": 49.4295,
+          "lon": 2.0807,
+          "postcodes": [
+            {
+              "code": "60000",
+              "street": "Rue de la Madeleine",
+              "street_en": "Rue de la Madeleine",
+              "pattern": "n{1,60} Rue de la Madeleine"
+            },
+            {
+              "code": "60007",
+              "street": "Rue Carnot",
+              "street_en": "Rue Carnot",
+              "pattern": "n{1,80} Rue Carnot"
+            },
+            {
+              "code": "60016",
+              "street": "Boulevard du Général de Gaulle",
+              "street_en": "Boulevard du General de Gaulle",
+              "pattern": "n{1,100} Boulevard du Général de Gaulle"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Pas-de-Calais",
+      "name_en": "Pas-de-Calais",
+      "region_tags": [
+        "Hauts-de-France",
+        "Nord-Pas-de-Calais"
+      ],
+      "cities": [
+        {
+          "name": "Arras",
+          "name_en": "Arras",
+          "lat": 50.291,
+          "lon": 2.7775,
+          "postcodes": [
+            {
+              "code": "62000",
+              "street": "Rue Gambetta",
+              "street_en": "Rue Gambetta",
+              "pattern": "n{1,90} Rue Gambetta"
+            },
+            {
+              "code": "62008",
+              "street": "Rue Saint-Aubert",
+              "street_en": "Rue Saint-Aubert",
+              "pattern": "n{1,60} Rue Saint-Aubert"
+            },
+            {
+              "code": "62016",
+              "street": "Rue Ernestale",
+              "street_en": "Rue Ernestale",
+              "pattern": "n{1,50} Rue Ernestale"
+            }
+          ]
+        },
+        {
+          "name": "Calais",
+          "name_en": "Calais",
+          "lat": 50.9481,
+          "lon": 1.8564,
+          "postcodes": [
+            {
+              "code": "62100",
+              "street": "Boulevard Jacquard",
+              "street_en": "Boulevard Jacquard",
+              "pattern": "n{1,80} Boulevard Jacquard"
+            },
+            {
+              "code": "62107",
+              "street": "Rue Royale",
+              "street_en": "Rue Royale",
+              "pattern": "n{1,60} Rue Royale"
+            },
+            {
+              "code": "62115",
+              "street": "Boulevard Gambetta",
+              "street_en": "Boulevard Gambetta",
+              "pattern": "n{1,80} Boulevard Gambetta"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Somme",
+      "name_en": "Somme",
+      "region_tags": [
+        "Hauts-de-France",
+        "Picardie"
+      ],
+      "cities": [
+        {
+          "name": "Amiens",
+          "name_en": "Amiens",
+          "lat": 49.8941,
+          "lon": 2.2958,
+          "postcodes": [
+            {
+              "code": "80000",
+              "street": "Rue des Trois Cailloux",
+              "street_en": "Rue des Trois Cailloux",
+              "pattern": "n{1,60} Rue des Trois Cailloux"
+            },
+            {
+              "code": "80080",
+              "street": "Chaussée Jules Ferry",
+              "street_en": "Chaussee Jules Ferry",
+              "pattern": "n{1,100} Chaussée Jules Ferry"
+            },
+            {
+              "code": "80042",
+              "street": "Rue de Noyon",
+              "street_en": "Rue de Noyon",
+              "pattern": "n{1,80} Rue de Noyon"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Calvados",
+      "name_en": "Calvados",
+      "region_tags": [
+        "Normandie"
+      ],
+      "cities": [
+        {
+          "name": "Caen",
+          "name_en": "Caen",
+          "lat": 49.1829,
+          "lon": -0.3707,
+          "postcodes": [
+            {
+              "code": "14000",
+              "street": "Rue Saint-Pierre",
+              "street_en": "Rue Saint-Pierre",
+              "pattern": "n{1,60} Rue Saint-Pierre"
+            },
+            {
+              "code": "14200",
+              "street": "Avenue de la Côte de Nacre",
+              "street_en": "Avenue de la Cote de Nacre",
+              "pattern": "n{1,100} Avenue de la Côte de Nacre"
+            },
+            {
+              "code": "14034",
+              "street": "Rue de Bayeux",
+              "street_en": "Rue de Bayeux",
+              "pattern": "n{1,80} Rue de Bayeux"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Eure",
+      "name_en": "Eure",
+      "region_tags": [
+        "Normandie"
+      ],
+      "cities": [
+        {
+          "name": "Évreux",
+          "name_en": "Evreux",
+          "lat": 49.0241,
+          "lon": 1.1508,
+          "postcodes": [
+            {
+              "code": "27000",
+              "street": "Rue du Docteur Oursel",
+              "street_en": "Rue du Docteur Oursel",
+              "pattern": "n{1,60} Rue du Docteur Oursel"
+            },
+            {
+              "code": "27007",
+              "street": "Rue Chartraine",
+              "street_en": "Rue Chartraine",
+              "pattern": "n{1,80} Rue Chartraine"
+            },
+            {
+              "code": "27015",
+              "street": "Boulevard Gambetta",
+              "street_en": "Boulevard Gambetta",
+              "pattern": "n{1,80} Boulevard Gambetta"
+            },
+            {
+              "code": "27022",
+              "street": "Rue de Grenoble",
+              "street_en": "Rue de Grenoble",
+              "pattern": "n{1,50} Rue de Grenoble"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Manche",
+      "name_en": "Manche",
+      "region_tags": [
+        "Normandie"
+      ],
+      "cities": [
+        {
+          "name": "Saint-Lô",
+          "name_en": "Saint-Lo",
+          "lat": 49.1165,
+          "lon": -1.0903,
+          "postcodes": [
+            {
+              "code": "50000",
+              "street": "Rue du Neufbourg",
+              "street_en": "Rue du Neufbourg",
+              "pattern": "n{1,110} Rue du Neufbourg"
+            },
+            {
+              "code": "50006",
+              "street": "Rue Maréchal Juin",
+              "street_en": "Rue Marechal Juin",
+              "pattern": "n{1,50} Rue Maréchal Juin"
+            },
+            {
+              "code": "50014",
+              "street": "Rue de la Poterne",
+              "street_en": "Rue de la Poterne",
+              "pattern": "n{1,40} Rue de la Poterne"
+            }
+          ]
+        },
+        {
+          "name": "Cherbourg-en-Cotentin",
+          "name_en": "Cherbourg-en-Cotentin",
+          "lat": 49.6337,
+          "lon": -1.6222,
+          "postcodes": [
+            {
+              "code": "50100",
+              "street": "Rue du Commerce",
+              "street_en": "Rue du Commerce",
+              "pattern": "n{1,80} Rue du Commerce"
+            },
+            {
+              "code": "50108",
+              "street": "Rue de la Paix",
+              "street_en": "Rue de la Paix",
+              "pattern": "n{1,60} Rue de la Paix"
+            },
+            {
+              "code": "50115",
+              "street": "Avenue de Paris",
+              "street_en": "Avenue de Paris",
+              "pattern": "n{1,100} Avenue de Paris"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Orne",
+      "name_en": "Orne",
+      "region_tags": [
+        "Normandie"
+      ],
+      "cities": [
+        {
+          "name": "Alençon",
+          "name_en": "Alencon",
+          "lat": 48.4309,
+          "lon": 0.0913,
+          "postcodes": [
+            {
+              "code": "61000",
+              "street": "Rue Saint-Blaise",
+              "street_en": "Rue Saint-Blaise",
+              "pattern": "n{1,60} Rue Saint-Blaise"
+            },
+            {
+              "code": "61006",
+              "street": "Grande Rue",
+              "street_en": "Grande Rue",
+              "pattern": "n{1,80} Grande Rue"
+            },
+            {
+              "code": "61015",
+              "street": "Rue du Mans",
+              "street_en": "Rue du Mans",
+              "pattern": "n{1,60} Rue du Mans"
+            },
+            {
+              "code": "61020",
+              "street": "Avenue du Général Leclerc",
+              "street_en": "Avenue du General Leclerc",
+              "pattern": "n{1,80} Avenue du Général Leclerc"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Seine-Maritime",
+      "name_en": "Seine-Maritime",
+      "region_tags": [
+        "Normandie"
+      ],
+      "cities": [
+        {
+          "name": "Rouen",
+          "name_en": "Rouen",
+          "lat": 49.4432,
+          "lon": 1.0993,
+          "postcodes": [
+            {
+              "code": "76000",
+              "street": "Rue du Gros-Horloge",
+              "street_en": "Rue du Gros-Horloge",
+              "pattern": "n{1,40} Rue du Gros-Horloge"
+            },
+            {
+              "code": "76100",
+              "street": "Route de Neufchâtel",
+              "street_en": "Route de Neufchatel",
+              "pattern": "n{1,120} Route de Neufchâtel"
+            },
+            {
+              "code": "76044",
+              "street": "Rue Jeanne d'Arc",
+              "street_en": "Rue Jeanne d'Arc",
+              "pattern": "n{1,80} Rue Jeanne d'Arc"
+            }
+          ]
+        },
+        {
+          "name": "Le Havre",
+          "name_en": "Le Havre",
+          "lat": 49.4944,
+          "lon": 0.1079,
+          "postcodes": [
+            {
+              "code": "76600",
+              "street": "Rue de Paris",
+              "street_en": "Rue de Paris",
+              "pattern": "n{1,200} Rue de Paris"
+            },
+            {
+              "code": "76610",
+              "street": "Avenue du Bois au Coq",
+              "street_en": "Avenue du Bois au Coq",
+              "pattern": "n{1,60} Avenue du Bois au Coq"
+            },
+            {
+              "code": "76620",
+              "street": "Avenue Foch",
+              "street_en": "Avenue Foch",
+              "pattern": "n{1,80} Avenue Foch"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Charente",
+      "name_en": "Charente",
+      "region_tags": [
+        "Nouvelle-Aquitaine"
+      ],
+      "cities": [
+        {
+          "name": "Angoulême",
+          "name_en": "Angouleme",
+          "lat": 45.6485,
+          "lon": 0.156,
+          "postcodes": [
+            {
+              "code": "16000",
+              "street": "Rue de Périgueux",
+              "street_en": "Rue de Perigueux",
+              "pattern": "n{1,80} Rue de Périgueux"
+            },
+            {
+              "code": "16007",
+              "street": "Rampe d'Aguesseau",
+              "street_en": "Rampe d'Aguesseau",
+              "pattern": "n{1,40} Rampe d'Aguesseau"
+            },
+            {
+              "code": "16015",
+              "street": "Boulevard Pasteur",
+              "street_en": "Boulevard Pasteur",
+              "pattern": "n{1,80} Boulevard Pasteur"
+            },
+            {
+              "code": "16022",
+              "street": "Rue de Beaulieu",
+              "street_en": "Rue de Beaulieu",
+              "pattern": "n{1,60} Rue de Beaulieu"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Charente-Maritime",
+      "name_en": "Charente-Maritime",
+      "region_tags": [
+        "Nouvelle-Aquitaine"
+      ],
+      "cities": [
+        {
+          "name": "La Rochelle",
+          "name_en": "La Rochelle",
+          "lat": 46.1603,
+          "lon": -1.1511,
+          "postcodes": [
+            {
+              "code": "17000",
+              "street": "Rue du Palais",
+              "street_en": "Rue du Palais",
+              "pattern": "n{1,60} Rue du Palais"
+            },
+            {
+              "code": "17007",
+              "street": "Rue des Merciers",
+              "street_en": "Rue des Merciers",
+              "pattern": "n{1,40} Rue des Merciers"
+            },
+            {
+              "code": "17015",
+              "street": "Avenue du Général Leclerc",
+              "street_en": "Avenue du General Leclerc",
+              "pattern": "n{1,100} Avenue du Général Leclerc"
+            },
+            {
+              "code": "17022",
+              "street": "Quai Duperré",
+              "street_en": "Quai Duperre",
+              "pattern": "n{1,40} Quai Duperré"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Corrèze",
+      "name_en": "Correze",
+      "region_tags": [
+        "Nouvelle-Aquitaine",
+        "Limousin"
+      ],
+      "cities": [
+        {
+          "name": "Tulle",
+          "name_en": "Tulle",
+          "lat": 45.2667,
+          "lon": 1.7724,
+          "postcodes": [
+            {
+              "code": "19000",
+              "street": "Quai de la République",
+              "street_en": "Quai de la Republique",
+              "pattern": "n{1,60} Quai de la République"
+            },
+            {
+              "code": "19007",
+              "street": "Rue du Canton",
+              "street_en": "Rue du Canton",
+              "pattern": "n{1,40} Rue du Canton"
+            },
+            {
+              "code": "19014",
+              "street": "Avenue Victor Hugo",
+              "street_en": "Avenue Victor Hugo",
+              "pattern": "n{1,100} Avenue Victor Hugo"
+            }
+          ]
+        },
+        {
+          "name": "Brive-la-Gaillarde",
+          "name_en": "Brive-la-Gaillarde",
+          "lat": 45.1588,
+          "lon": 1.5333,
+          "postcodes": [
+            {
+              "code": "19100",
+              "street": "Boulevard du Général Koenig",
+              "street_en": "Boulevard du General Koenig",
+              "pattern": "n{1,80} Boulevard du Général Koenig"
+            },
+            {
+              "code": "19108",
+              "street": "Avenue de Paris",
+              "street_en": "Avenue de Paris",
+              "pattern": "n{1,100} Avenue de Paris"
+            },
+            {
+              "code": "19115",
+              "street": "Rue Toulzac",
+              "street_en": "Rue Toulzac",
+              "pattern": "n{1,50} Rue Toulzac"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Creuse",
+      "name_en": "Creuse",
+      "region_tags": [
+        "Nouvelle-Aquitaine",
+        "Limousin"
+      ],
+      "cities": [
+        {
+          "name": "Guéret",
+          "name_en": "Gueret",
+          "lat": 46.1718,
+          "lon": 1.871,
+          "postcodes": [
+            {
+              "code": "23000",
+              "street": "Avenue de la Sénatorerie",
+              "street_en": "Avenue de la Senatorerie",
+              "pattern": "n{1,80} Avenue de la Sénatorerie"
+            },
+            {
+              "code": "23007",
+              "street": "Rue du Commerce",
+              "street_en": "Rue du Commerce",
+              "pattern": "n{1,60} Rue du Commerce"
+            },
+            {
+              "code": "23015",
+              "street": "Avenue du Président Faye",
+              "street_en": "Avenue du President Faye",
+              "pattern": "n{1,50} Avenue du Président Faye"
+            },
+            {
+              "code": "23020",
+              "street": "Rue de la Paix",
+              "street_en": "Rue de la Paix",
+              "pattern": "n{1,40} Rue de la Paix"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Dordogne",
+      "name_en": "Dordogne",
+      "region_tags": [
+        "Nouvelle-Aquitaine"
+      ],
+      "cities": [
+        {
+          "name": "Périgueux",
+          "name_en": "Perigueux",
+          "lat": 45.1847,
+          "lon": 0.7211,
+          "postcodes": [
+            {
+              "code": "24000",
+              "street": "Cours Tourny",
+              "street_en": "Cours Tourny",
+              "pattern": "n{1,60} Cours Tourny"
+            },
+            {
+              "code": "24007",
+              "street": "Rue Taillefer",
+              "street_en": "Rue Taillefer",
+              "pattern": "n{1,50} Rue Taillefer"
+            },
+            {
+              "code": "24015",
+              "street": "Boulevard Michel Montaigne",
+              "street_en": "Boulevard Michel Montaigne",
+              "pattern": "n{1,80} Boulevard Michel Montaigne"
+            },
+            {
+              "code": "24022",
+              "street": "Rue du Président Wilson",
+              "street_en": "Rue du President Wilson",
+              "pattern": "n{1,60} Rue du Président Wilson"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Gironde",
+      "name_en": "Gironde",
+      "region_tags": [
+        "Nouvelle-Aquitaine",
+        "Aquitaine"
+      ],
+      "cities": [
+        {
+          "name": "Bordeaux",
+          "name_en": "Bordeaux",
+          "lat": 44.8378,
+          "lon": -0.5792,
+          "postcodes": [
+            {
+              "code": "33000",
+              "street": "Cours de l'Intendance",
+              "street_en": "Cours de l'Intendance",
+              "pattern": "n{1,65} Cours de l'Intendance"
+            },
+            {
+              "code": "33100",
+              "street": "Cours de la Marne",
+              "street_en": "Cours de la Marne",
+              "pattern": "n{1,100} Cours de la Marne"
+            },
+            {
+              "code": "33200",
+              "street": "Avenue de la Libération",
+              "street_en": "Avenue de la Liberation",
+              "pattern": "n{1,120} Avenue de la Libération"
+            },
+            {
+              "code": "33300",
+              "street": "Avenue Thiers",
+              "street_en": "Avenue Thiers",
+              "pattern": "n{1,250} Avenue Thiers"
+            },
+            {
+              "code": "33800",
+              "street": "Cours de la Somme",
+              "street_en": "Cours de la Somme",
+              "pattern": "n{1,80} Cours de la Somme"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Landes",
+      "name_en": "Landes",
+      "region_tags": [
+        "Nouvelle-Aquitaine"
+      ],
+      "cities": [
+        {
+          "name": "Mont-de-Marsan",
+          "name_en": "Mont-de-Marsan",
+          "lat": 43.8948,
+          "lon": -0.4992,
+          "postcodes": [
+            {
+              "code": "40000",
+              "street": "Rue Gambetta",
+              "street_en": "Rue Gambetta",
+              "pattern": "n{1,60} Rue Gambetta"
+            },
+            {
+              "code": "40005",
+              "street": "Rue Victor Hugo",
+              "street_en": "Rue Victor Hugo",
+              "pattern": "n{1,80} Rue Victor Hugo"
+            },
+            {
+              "code": "40012",
+              "street": "Avenue du Maréchal Foch",
+              "street_en": "Avenue du Marechal Foch",
+              "pattern": "n{1,60} Avenue du Maréchal Foch"
+            }
+          ]
+        },
+        {
+          "name": "Dax",
+          "name_en": "Dax",
+          "lat": 43.7102,
+          "lon": -1.0536,
+          "postcodes": [
+            {
+              "code": "40100",
+              "street": "Cours du Maréchal Foch",
+              "street_en": "Cours du Marechal Foch",
+              "pattern": "n{1,60} Cours du Maréchal Foch"
+            },
+            {
+              "code": "40107",
+              "street": "Rue des Fusillés",
+              "street_en": "Rue des Fusilles",
+              "pattern": "n{1,50} Rue des Fusillés"
+            },
+            {
+              "code": "40115",
+              "street": "Boulevard Saint-Pierre",
+              "street_en": "Boulevard Saint-Pierre",
+              "pattern": "n{1,90} Boulevard Saint-Pierre"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Lot-et-Garonne",
+      "name_en": "Lot-et-Garonne",
+      "region_tags": [
+        "Nouvelle-Aquitaine"
+      ],
+      "cities": [
+        {
+          "name": "Agen",
+          "name_en": "Agen",
+          "lat": 44.2033,
+          "lon": 0.6163,
+          "postcodes": [
+            {
+              "code": "47000",
+              "street": "Boulevard de la République",
+              "street_en": "Boulevard de la Republique",
+              "pattern": "n{1,100} Boulevard de la République"
+            },
+            {
+              "code": "47007",
+              "street": "Rue des Cornières",
+              "street_en": "Rue des Cornieres",
+              "pattern": "n{1,40} Rue des Cornières"
+            },
+            {
+              "code": "47015",
+              "street": "Avenue du Général de Gaulle",
+              "street_en": "Avenue du General de Gaulle",
+              "pattern": "n{1,80} Avenue du Général de Gaulle"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Pyrénées-Atlantiques",
+      "name_en": "Pyrenees-Atlantiques",
+      "region_tags": [
+        "Nouvelle-Aquitaine",
+        "Pays Basque"
+      ],
+      "cities": [
+        {
+          "name": "Pau",
+          "name_en": "Pau",
+          "lat": 43.2951,
+          "lon": -0.3708,
+          "postcodes": [
+            {
+              "code": "64000",
+              "street": "Boulevard des Pyrénées",
+              "street_en": "Boulevard des Pyrenees",
+              "pattern": "n{1,100} Boulevard des Pyrénées"
+            },
+            {
+              "code": "64007",
+              "street": "Rue du Maréchal Joffre",
+              "street_en": "Rue du Marechal Joffre",
+              "pattern": "n{1,60} Rue du Maréchal Joffre"
+            },
+            {
+              "code": "64015",
+              "street": "Avenue du Général Leclerc",
+              "street_en": "Avenue du General Leclerc",
+              "pattern": "n{1,80} Avenue du Général Leclerc"
+            }
+          ]
+        },
+        {
+          "name": "Bayonne",
+          "name_en": "Bayonne",
+          "lat": 43.4929,
+          "lon": -1.4748,
+          "postcodes": [
+            {
+              "code": "64100",
+              "street": "Rue Port-Neuf",
+              "street_en": "Rue Port-Neuf",
+              "pattern": "n{1,60} Rue Port-Neuf"
+            },
+            {
+              "code": "64109",
+              "street": "Rue d'Espagne",
+              "street_en": "Rue d'Espagne",
+              "pattern": "n{1,50} Rue d'Espagne"
+            },
+            {
+              "code": "64115",
+              "street": "Quai Amiral Jauréguiberry",
+              "street_en": "Quai Amiral Jaureguiberry",
+              "pattern": "n{1,90} Quai Amiral Jauréguiberry"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Deux-Sèvres",
+      "name_en": "Deux-Sevres",
+      "region_tags": [
+        "Nouvelle-Aquitaine",
+        "Poitou"
+      ],
+      "cities": [
+        {
+          "name": "Niort",
+          "name_en": "Niort",
+          "lat": 46.3242,
+          "lon": -0.4599,
+          "postcodes": [
+            {
+              "code": "79000",
+              "street": "Rue Ricard",
+              "street_en": "Rue Ricard",
+              "pattern": "n{1,80} Rue Ricard"
+            },
+            {
+              "code": "79007",
+              "street": "Rue Victor Hugo",
+              "street_en": "Rue Victor Hugo",
+              "pattern": "n{1,60} Rue Victor Hugo"
+            },
+            {
+              "code": "79015",
+              "street": "Avenue de Paris",
+              "street_en": "Avenue de Paris",
+              "pattern": "n{1,100} Avenue de Paris"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Vienne",
+      "name_en": "Vienne",
+      "region_tags": [
+        "Nouvelle-Aquitaine",
+        "Poitou"
+      ],
+      "cities": [
+        {
+          "name": "Poitiers",
+          "name_en": "Poitiers",
+          "lat": 46.5802,
+          "lon": 0.3404,
+          "postcodes": [
+            {
+              "code": "86000",
+              "street": "Rue de la Marne",
+              "street_en": "Rue de la Marne",
+              "pattern": "n{1,50} Rue de la Marne"
+            },
+            {
+              "code": "86100",
+              "street": "Avenue du Recteur Pineau",
+              "street_en": "Avenue du Recteur Pineau",
+              "pattern": "n{1,80} Avenue du Recteur Pineau"
+            },
+            {
+              "code": "86042",
+              "street": "Rue Carnot",
+              "street_en": "Rue Carnot",
+              "pattern": "n{1,60} Rue Carnot"
+            },
+            {
+              "code": "86055",
+              "street": "Boulevard du Grand Cerf",
+              "street_en": "Boulevard du Grand Cerf",
+              "pattern": "n{1,80} Boulevard du Grand Cerf"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Haute-Vienne",
+      "name_en": "Haute-Vienne",
+      "region_tags": [
+        "Nouvelle-Aquitaine",
+        "Limousin"
+      ],
+      "cities": [
+        {
+          "name": "Limoges",
+          "name_en": "Limoges",
+          "lat": 45.8336,
+          "lon": 1.2611,
+          "postcodes": [
+            {
+              "code": "87000",
+              "street": "Boulevard Gambetta",
+              "street_en": "Boulevard Gambetta",
+              "pattern": "n{1,80} Boulevard Gambetta"
+            },
+            {
+              "code": "87100",
+              "street": "Avenue Garibaldi",
+              "street_en": "Avenue Garibaldi",
+              "pattern": "n{1,100} Avenue Garibaldi"
+            },
+            {
+              "code": "87042",
+              "street": "Rue Jean Jaurès",
+              "street_en": "Rue Jean Jaures",
+              "pattern": "n{1,60} Rue Jean Jaurès"
+            },
+            {
+              "code": "87055",
+              "street": "Avenue du Général de Gaulle",
+              "street_en": "Avenue du General de Gaulle",
+              "pattern": "n{1,80} Avenue du Général de Gaulle"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ariège",
+      "name_en": "Ariege",
+      "region_tags": [
+        "Occitanie"
+      ],
+      "cities": [
+        {
+          "name": "Foix",
+          "name_en": "Foix",
+          "lat": 42.9644,
+          "lon": 1.6053,
+          "postcodes": [
+            {
+              "code": "09000",
+              "street": "Rue de la Faurie",
+              "street_en": "Rue de la Faurie",
+              "pattern": "n{1,60} Rue de la Faurie"
+            },
+            {
+              "code": "09007",
+              "street": "Cours Gabriel Fauré",
+              "street_en": "Cours Gabriel Faure",
+              "pattern": "n{1,50} Cours Gabriel Fauré"
+            },
+            {
+              "code": "09015",
+              "street": "Allées de Villote",
+              "street_en": "Allees de Villote",
+              "pattern": "n{1,80} Allées de Villote"
+            },
+            {
+              "code": "09020",
+              "street": "Route de Vernajoul",
+              "street_en": "Route de Vernajoul",
+              "pattern": "n{1,60} Route de Vernajoul"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Aude",
+      "name_en": "Aude",
+      "region_tags": [
+        "Occitanie",
+        "Languedoc"
+      ],
+      "cities": [
+        {
+          "name": "Carcassonne",
+          "name_en": "Carcassonne",
+          "lat": 43.213,
+          "lon": 2.3491,
+          "postcodes": [
+            {
+              "code": "11000",
+              "street": "Rue Courtejaire",
+              "street_en": "Rue Courtejaire",
+              "pattern": "n{1,40} Rue Courtejaire"
+            },
+            {
+              "code": "11007",
+              "street": "Boulevard Barbès",
+              "street_en": "Boulevard Barbes",
+              "pattern": "n{1,80} Boulevard Barbès"
+            },
+            {
+              "code": "11015",
+              "street": "Rue de Verdun",
+              "street_en": "Rue de Verdun",
+              "pattern": "n{1,60} Rue de Verdun"
+            },
+            {
+              "code": "11022",
+              "street": "Avenue du Général Leclerc",
+              "street_en": "Avenue du General Leclerc",
+              "pattern": "n{1,80} Avenue du Général Leclerc"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Aveyron",
+      "name_en": "Aveyron",
+      "region_tags": [
+        "Occitanie"
+      ],
+      "cities": [
+        {
+          "name": "Rodez",
+          "name_en": "Rodez",
+          "lat": 44.3496,
+          "lon": 2.5728,
+          "postcodes": [
+            {
+              "code": "12000",
+              "street": "Boulevard Gally",
+              "street_en": "Boulevard Gally",
+              "pattern": "n{1,80} Boulevard Gally"
+            },
+            {
+              "code": "12007",
+              "street": "Rue du Bal",
+              "street_en": "Rue du Bal",
+              "pattern": "n{1,40} Rue du Bal"
+            },
+            {
+              "code": "12015",
+              "street": "Avenue Victor Hugo",
+              "street_en": "Avenue Victor Hugo",
+              "pattern": "n{1,80} Avenue Victor Hugo"
+            },
+            {
+              "code": "12020",
+              "street": "Place du Bourg",
+              "street_en": "Place du Bourg",
+              "pattern": "n{1,30} Place du Bourg"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Gard",
+      "name_en": "Gard",
+      "region_tags": [
+        "Occitanie",
+        "Languedoc"
+      ],
+      "cities": [
+        {
+          "name": "Nîmes",
+          "name_en": "Nimes",
+          "lat": 43.8367,
+          "lon": 4.3601,
+          "postcodes": [
+            {
+              "code": "30000",
+              "street": "Boulevard Victor Hugo",
+              "street_en": "Boulevard Victor Hugo",
+              "pattern": "n{1,80} Boulevard Victor Hugo"
+            },
+            {
+              "code": "30900",
+              "street": "Avenue Jean Jaurès",
+              "street_en": "Avenue Jean Jaures",
+              "pattern": "n{1,100} Avenue Jean Jaurès"
+            },
+            {
+              "code": "30032",
+              "street": "Boulevard Gambetta",
+              "street_en": "Boulevard Gambetta",
+              "pattern": "n{1,80} Boulevard Gambetta"
+            },
+            {
+              "code": "30045",
+              "street": "Rue de la Madeleine",
+              "street_en": "Rue de la Madeleine",
+              "pattern": "n{1,50} Rue de la Madeleine"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Haute-Garonne",
+      "name_en": "Haute-Garonne",
+      "region_tags": [
+        "Occitanie",
+        "Midi-Pyrénées"
+      ],
       "cities": [
         {
           "name": "Toulouse",
@@ -478,7 +3666,58 @@
               "pattern": "n{1,100} Avenue des Minimes"
             }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "name": "Gers",
+      "name_en": "Gers",
+      "region_tags": [
+        "Occitanie"
+      ],
+      "cities": [
+        {
+          "name": "Auch",
+          "name_en": "Auch",
+          "lat": 43.646,
+          "lon": 0.5857,
+          "postcodes": [
+            {
+              "code": "32000",
+              "street": "Rue Dessoles",
+              "street_en": "Rue Dessoles",
+              "pattern": "n{1,60} Rue Dessoles"
+            },
+            {
+              "code": "32007",
+              "street": "Allées d'Étigny",
+              "street_en": "Allees d'Etigny",
+              "pattern": "n{1,80} Allées d'Étigny"
+            },
+            {
+              "code": "32015",
+              "street": "Avenue de l'Alsace",
+              "street_en": "Avenue de l'Alsace",
+              "pattern": "n{1,60} Avenue de l'Alsace"
+            },
+            {
+              "code": "32020",
+              "street": "Boulevard Sadi Carnot",
+              "street_en": "Boulevard Sadi Carnot",
+              "pattern": "n{1,50} Boulevard Sadi Carnot"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Hérault",
+      "name_en": "Herault",
+      "region_tags": [
+        "Occitanie",
+        "Languedoc"
+      ],
+      "cities": [
         {
           "name": "Montpellier",
           "name_en": "Montpellier",
@@ -510,27 +3749,141 @@
               "pattern": "n{1,60} Rue de la Croix du Capitaine"
             }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "name": "Lot",
+      "name_en": "Lot",
+      "region_tags": [
+        "Occitanie"
+      ],
+      "cities": [
         {
-          "name": "Nîmes",
-          "name_en": "Nimes",
-          "lat": 43.8367,
-          "lon": 4.3601,
+          "name": "Cahors",
+          "name_en": "Cahors",
+          "lat": 44.4475,
+          "lon": 1.4416,
           "postcodes": [
             {
-              "code": "30000",
-              "street": "Boulevard Victor Hugo",
-              "street_en": "Boulevard Victor Hugo",
-              "pattern": "n{1,80} Boulevard Victor Hugo"
+              "code": "46000",
+              "street": "Boulevard Gambetta",
+              "street_en": "Boulevard Gambetta",
+              "pattern": "n{1,100} Boulevard Gambetta"
             },
             {
-              "code": "30900",
+              "code": "46007",
+              "street": "Rue du Maréchal Foch",
+              "street_en": "Rue du Marechal Foch",
+              "pattern": "n{1,50} Rue du Maréchal Foch"
+            },
+            {
+              "code": "46015",
               "street": "Avenue Jean Jaurès",
               "street_en": "Avenue Jean Jaures",
-              "pattern": "n{1,100} Avenue Jean Jaurès"
+              "pattern": "n{1,60} Avenue Jean Jaurès"
+            },
+            {
+              "code": "46020",
+              "street": "Rue Nationale",
+              "street_en": "Rue Nationale",
+              "pattern": "n{1,40} Rue Nationale"
             }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "name": "Lozère",
+      "name_en": "Lozere",
+      "region_tags": [
+        "Occitanie"
+      ],
+      "cities": [
+        {
+          "name": "Mende",
+          "name_en": "Mende",
+          "lat": 44.5185,
+          "lon": 3.4983,
+          "postcodes": [
+            {
+              "code": "48000",
+              "street": "Boulevard Henri Bourrillon",
+              "street_en": "Boulevard Henri Bourrillon",
+              "pattern": "n{1,80} Boulevard Henri Bourrillon"
+            },
+            {
+              "code": "48005",
+              "street": "Rue d'Aigues-Passes",
+              "street_en": "Rue d'Aigues-Passes",
+              "pattern": "n{1,40} Rue d'Aigues-Passes"
+            },
+            {
+              "code": "48012",
+              "street": "Avenue du 11 Novembre",
+              "street_en": "Avenue du 11 Novembre",
+              "pattern": "n{1,60} Avenue du 11 Novembre"
+            },
+            {
+              "code": "48018",
+              "street": "Allée Piencourt",
+              "street_en": "Allee Piencourt",
+              "pattern": "n{1,50} Allée Piencourt"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Hautes-Pyrénées",
+      "name_en": "Hautes-Pyrenees",
+      "region_tags": [
+        "Occitanie",
+        "Midi-Pyrénées"
+      ],
+      "cities": [
+        {
+          "name": "Tarbes",
+          "name_en": "Tarbes",
+          "lat": 43.2327,
+          "lon": 0.0782,
+          "postcodes": [
+            {
+              "code": "65000",
+              "street": "Place de Verdun",
+              "street_en": "Place de Verdun",
+              "pattern": "n{1,40} Place de Verdun"
+            },
+            {
+              "code": "65007",
+              "street": "Rue Maréchal Foch",
+              "street_en": "Rue Marechal Foch",
+              "pattern": "n{1,80} Rue Maréchal Foch"
+            },
+            {
+              "code": "65015",
+              "street": "Rue Brauhauban",
+              "street_en": "Rue Brauhauban",
+              "pattern": "n{1,60} Rue Brauhauban"
+            },
+            {
+              "code": "65020",
+              "street": "Avenue du Régiment de Bigorre",
+              "street_en": "Avenue du Regiment de Bigorre",
+              "pattern": "n{1,80} Avenue du Régiment de Bigorre"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Pyrénées-Orientales",
+      "name_en": "Pyrenees-Orientales",
+      "region_tags": [
+        "Occitanie",
+        "Roussillon"
+      ],
+      "cities": [
         {
           "name": "Perpignan",
           "name_en": "Perpignan",
@@ -548,386 +3901,106 @@
               "street": "Avenue du Général de Gaulle",
               "street_en": "Avenue du General de Gaulle",
               "pattern": "n{1,100} Avenue du Général de Gaulle"
+            },
+            {
+              "code": "66042",
+              "street": "Rue Mailly",
+              "street_en": "Rue Mailly",
+              "pattern": "n{1,40} Rue Mailly"
+            },
+            {
+              "code": "66055",
+              "street": "Boulevard Jean Bourrat",
+              "street_en": "Boulevard Jean Bourrat",
+              "pattern": "n{1,60} Boulevard Jean Bourrat"
             }
           ]
         }
       ]
     },
     {
-      "name": "Nouvelle-Aquitaine",
-      "name_en": "Nouvelle-Aquitaine",
-      "region_tags": ["Aquitaine", "Poitou-Charentes", "Limousin"],
+      "name": "Tarn",
+      "name_en": "Tarn",
+      "region_tags": [
+        "Occitanie"
+      ],
       "cities": [
         {
-          "name": "Bordeaux",
-          "name_en": "Bordeaux",
-          "lat": 44.8378,
-          "lon": -0.5792,
+          "name": "Albi",
+          "name_en": "Albi",
+          "lat": 43.9283,
+          "lon": 2.148,
           "postcodes": [
             {
-              "code": "33000",
-              "street": "Cours de l'Intendance",
-              "street_en": "Cours de l'Intendance",
-              "pattern": "n{1,65} Cours de l'Intendance"
+              "code": "81000",
+              "street": "Rue Mariès",
+              "street_en": "Rue Maries",
+              "pattern": "n{1,60} Rue Mariès"
             },
             {
-              "code": "33100",
-              "street": "Cours de la Marne",
-              "street_en": "Cours de la Marne",
-              "pattern": "n{1,100} Cours de la Marne"
+              "code": "81007",
+              "street": "Boulevard Soult",
+              "street_en": "Boulevard Soult",
+              "pattern": "n{1,80} Boulevard Soult"
             },
             {
-              "code": "33200",
-              "street": "Avenue de la Libération",
-              "street_en": "Avenue de la Liberation",
-              "pattern": "n{1,120} Avenue de la Libération"
+              "code": "81015",
+              "street": "Rue de la République",
+              "street_en": "Rue de la Republique",
+              "pattern": "n{1,50} Rue de la République"
             },
             {
-              "code": "33300",
-              "street": "Avenue Thiers",
-              "street_en": "Avenue Thiers",
-              "pattern": "n{1,250} Avenue Thiers"
-            },
-            {
-              "code": "33800",
-              "street": "Cours de la Somme",
-              "street_en": "Cours de la Somme",
-              "pattern": "n{1,80} Cours de la Somme"
-            }
-          ]
-        },
-        {
-          "name": "Limoges",
-          "name_en": "Limoges",
-          "lat": 45.8336,
-          "lon": 1.2611,
-          "postcodes": [
-            {
-              "code": "87000",
-              "street": "Boulevard Gambetta",
-              "street_en": "Boulevard Gambetta",
-              "pattern": "n{1,80} Boulevard Gambetta"
-            },
-            {
-              "code": "87100",
-              "street": "Avenue Garibaldi",
-              "street_en": "Avenue Garibaldi",
-              "pattern": "n{1,100} Avenue Garibaldi"
-            }
-          ]
-        },
-        {
-          "name": "Poitiers",
-          "name_en": "Poitiers",
-          "lat": 46.5802,
-          "lon": 0.3404,
-          "postcodes": [
-            {
-              "code": "86000",
-              "street": "Rue de la Marne",
-              "street_en": "Rue de la Marne",
-              "pattern": "n{1,50} Rue de la Marne"
-            },
-            {
-              "code": "86100",
-              "street": "Avenue du Recteur Pineau",
-              "street_en": "Avenue du Recteur Pineau",
-              "pattern": "n{1,80} Avenue du Recteur Pineau"
+              "code": "81020",
+              "street": "Avenue du Général de Gaulle",
+              "street_en": "Avenue du General de Gaulle",
+              "pattern": "n{1,80} Avenue du Général de Gaulle"
             }
           ]
         }
       ]
     },
     {
-      "name": "Hauts-de-France",
-      "name_en": "Hauts-de-France",
-      "region_tags": ["Nord-Pas-de-Calais", "Picardie"],
+      "name": "Tarn-et-Garonne",
+      "name_en": "Tarn-et-Garonne",
+      "region_tags": [
+        "Occitanie"
+      ],
       "cities": [
         {
-          "name": "Lille",
-          "name_en": "Lille",
-          "lat": 50.6292,
-          "lon": 3.0573,
+          "name": "Montauban",
+          "name_en": "Montauban",
+          "lat": 44.0176,
+          "lon": 1.3547,
           "postcodes": [
             {
-              "code": "59000",
-              "street": "Rue Faidherbe",
-              "street_en": "Rue Faidherbe",
-              "pattern": "n{1,50} Rue Faidherbe"
+              "code": "82000",
+              "street": "Rue de la Résistance",
+              "street_en": "Rue de la Resistance",
+              "pattern": "n{1,80} Rue de la Résistance"
             },
             {
-              "code": "59800",
-              "street": "Rue Nationale",
-              "street_en": "Rue Nationale",
-              "pattern": "n{1,120} Rue Nationale"
+              "code": "82007",
+              "street": "Allées du Consul Dupuy",
+              "street_en": "Allees du Consul Dupuy",
+              "pattern": "n{1,60} Allées du Consul Dupuy"
             },
             {
-              "code": "59160",
-              "street": "Rue de la Gare",
-              "street_en": "Rue de la Gare",
-              "pattern": "n{1,40} Rue de la Gare"
-            },
-            {
-              "code": "59130",
-              "street": "Rue Jean Jaurès",
-              "street_en": "Rue Jean Jaures",
-              "pattern": "n{1,80} Rue Jean Jaurès"
-            }
-          ]
-        },
-        {
-          "name": "Amiens",
-          "name_en": "Amiens",
-          "lat": 49.8941,
-          "lon": 2.2958,
-          "postcodes": [
-            {
-              "code": "80000",
-              "street": "Rue des Trois Cailloux",
-              "street_en": "Rue des Trois Cailloux",
-              "pattern": "n{1,60} Rue des Trois Cailloux"
-            },
-            {
-              "code": "80080",
-              "street": "Chaussée Jules Ferry",
-              "street_en": "Chaussee Jules Ferry",
-              "pattern": "n{1,100} Chaussée Jules Ferry"
+              "code": "82015",
+              "street": "Avenue de Mayenne",
+              "street_en": "Avenue de Mayenne",
+              "pattern": "n{1,80} Avenue de Mayenne"
             }
           ]
         }
       ]
     },
     {
-      "name": "Grand Est",
-      "name_en": "Grand Est",
-      "region_tags": ["Alsace", "Lorraine", "Champagne-Ardenne"],
-      "cities": [
-        {
-          "name": "Strasbourg",
-          "name_en": "Strasbourg",
-          "lat": 48.5734,
-          "lon": 7.7521,
-          "postcodes": [
-            {
-              "code": "67000",
-              "street": "Rue du Vieux-Marché-aux-Poissons",
-              "street_en": "Rue du Vieux-Marche-aux-Poissons",
-              "pattern": "n{1,30} Rue du Vieux-Marché-aux-Poissons"
-            },
-            {
-              "code": "67100",
-              "street": "Route du Rhin",
-              "street_en": "Route du Rhin",
-              "pattern": "n{1,100} Route du Rhin"
-            },
-            {
-              "code": "67200",
-              "street": "Route de Schirmeck",
-              "street_en": "Route de Schirmeck",
-              "pattern": "n{1,80} Route de Schirmeck"
-            }
-          ]
-        },
-        {
-          "name": "Reims",
-          "name_en": "Reims",
-          "lat": 49.2583,
-          "lon": 3.9924,
-          "postcodes": [
-            {
-              "code": "51100",
-              "street": "Place Drouet-d'Erlon",
-              "street_en": "Place Drouet-d'Erlon",
-              "pattern": "n{1,40} Place Drouet-d'Erlon"
-            },
-            {
-              "code": "51000",
-              "street": "Rue de Vesle",
-              "street_en": "Rue de Vesle",
-              "pattern": "n{1,80} Rue de Vesle"
-            }
-          ]
-        },
-        {
-          "name": "Metz",
-          "name_en": "Metz",
-          "lat": 49.1193,
-          "lon": 6.1757,
-          "postcodes": [
-            {
-              "code": "57000",
-              "street": "Rue Serpenoise",
-              "street_en": "Rue Serpenoise",
-              "pattern": "n{1,50} Rue Serpenoise"
-            },
-            {
-              "code": "57050",
-              "street": "Avenue de Blida",
-              "street_en": "Avenue de Blida",
-              "pattern": "n{1,60} Avenue de Blida"
-            }
-          ]
-        },
-        {
-          "name": "Nancy",
-          "name_en": "Nancy",
-          "lat": 48.6921,
-          "lon": 6.1844,
-          "postcodes": [
-            {
-              "code": "54000",
-              "street": "Rue Saint-Dizier",
-              "street_en": "Rue Saint-Dizier",
-              "pattern": "n{1,120} Rue Saint-Dizier"
-            },
-            {
-              "code": "54100",
-              "street": "Avenue de Strasbourg",
-              "street_en": "Avenue de Strasbourg",
-              "pattern": "n{1,80} Avenue de Strasbourg"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Normandie",
-      "name_en": "Normandy",
-      "region_tags": ["Normandie", "Haute-Normandie", "Basse-Normandie"],
-      "cities": [
-        {
-          "name": "Rouen",
-          "name_en": "Rouen",
-          "lat": 49.4432,
-          "lon": 1.0993,
-          "postcodes": [
-            {
-              "code": "76000",
-              "street": "Rue du Gros-Horloge",
-              "street_en": "Rue du Gros-Horloge",
-              "pattern": "n{1,40} Rue du Gros-Horloge"
-            },
-            {
-              "code": "76100",
-              "street": "Route de Neufchâtel",
-              "street_en": "Route de Neufchatel",
-              "pattern": "n{1,120} Route de Neufchâtel"
-            }
-          ]
-        },
-        {
-          "name": "Caen",
-          "name_en": "Caen",
-          "lat": 49.1829,
-          "lon": -0.3707,
-          "postcodes": [
-            {
-              "code": "14000",
-              "street": "Rue Saint-Pierre",
-              "street_en": "Rue Saint-Pierre",
-              "pattern": "n{1,60} Rue Saint-Pierre"
-            },
-            {
-              "code": "14200",
-              "street": "Avenue de la Côte de Nacre",
-              "street_en": "Avenue de la Cote de Nacre",
-              "pattern": "n{1,100} Avenue de la Côte de Nacre"
-            }
-          ]
-        },
-        {
-          "name": "Le Havre",
-          "name_en": "Le Havre",
-          "lat": 49.4944,
-          "lon": 0.1079,
-          "postcodes": [
-            {
-              "code": "76600",
-              "street": "Rue de Paris",
-              "street_en": "Rue de Paris",
-              "pattern": "n{1,200} Rue de Paris"
-            },
-            {
-              "code": "76610",
-              "street": "Avenue du Bois au Coq",
-              "street_en": "Avenue du Bois au Coq",
-              "pattern": "n{1,60} Avenue du Bois au Coq"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Bretagne",
-      "name_en": "Brittany",
-      "region_tags": ["Bretagne"],
-      "cities": [
-        {
-          "name": "Rennes",
-          "name_en": "Rennes",
-          "lat": 48.1173,
-          "lon": -1.6778,
-          "postcodes": [
-            {
-              "code": "35000",
-              "street": "Rue Le Bastard",
-              "street_en": "Rue Le Bastard",
-              "pattern": "n{1,30} Rue Le Bastard"
-            },
-            {
-              "code": "35200",
-              "street": "Boulevard de la Tour d'Auvergne",
-              "street_en": "Boulevard de la Tour d'Auvergne",
-              "pattern": "n{1,60} Boulevard de la Tour d'Auvergne"
-            },
-            {
-              "code": "35700",
-              "street": "Rue de Fougères",
-              "street_en": "Rue de Fougeres",
-              "pattern": "n{1,80} Rue de Fougères"
-            }
-          ]
-        },
-        {
-          "name": "Brest",
-          "name_en": "Brest",
-          "lat": 48.3904,
-          "lon": -4.4861,
-          "postcodes": [
-            {
-              "code": "29200",
-              "street": "Rue de Siam",
-              "street_en": "Rue de Siam",
-              "pattern": "n{1,80} Rue de Siam"
-            },
-            {
-              "code": "29000",
-              "street": "Rue Jean Jaurès",
-              "street_en": "Rue Jean Jaures",
-              "pattern": "n{1,60} Rue Jean Jaurès"
-            }
-          ]
-        },
-        {
-          "name": "Saint-Malo",
-          "name_en": "Saint-Malo",
-          "lat": 48.6493,
-          "lon": -2.0007,
-          "postcodes": [
-            {
-              "code": "35400",
-              "street": "Rue Jacques Cartier",
-              "street_en": "Rue Jacques Cartier",
-              "pattern": "n{1,40} Rue Jacques Cartier"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Pays de la Loire",
-      "name_en": "Pays de la Loire",
-      "region_tags": ["Loire Valley"],
+      "name": "Loire-Atlantique",
+      "name_en": "Loire-Atlantique",
+      "region_tags": [
+        "Pays de la Loire",
+        "Loire Valley"
+      ],
       "cities": [
         {
           "name": "Nantes",
@@ -962,6 +4035,42 @@
           ]
         },
         {
+          "name": "Saint-Nazaire",
+          "name_en": "Saint-Nazaire",
+          "lat": 47.2736,
+          "lon": -2.2137,
+          "postcodes": [
+            {
+              "code": "44600",
+              "street": "Avenue de la République",
+              "street_en": "Avenue de la Republique",
+              "pattern": "n{1,100} Avenue de la République"
+            },
+            {
+              "code": "44607",
+              "street": "Rue de Nantes",
+              "street_en": "Rue de Nantes",
+              "pattern": "n{1,60} Rue de Nantes"
+            },
+            {
+              "code": "44615",
+              "street": "Boulevard de l'Université",
+              "street_en": "Boulevard de l'Universite",
+              "pattern": "n{1,80} Boulevard de l'Université"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Maine-et-Loire",
+      "name_en": "Maine-et-Loire",
+      "region_tags": [
+        "Pays de la Loire",
+        "Loire Valley"
+      ],
+      "cities": [
+        {
           "name": "Angers",
           "name_en": "Angers",
           "lat": 47.4784,
@@ -978,9 +4087,73 @@
               "street": "Boulevard du Roi René",
               "street_en": "Boulevard du Roi Rene",
               "pattern": "n{1,80} Boulevard du Roi René"
+            },
+            {
+              "code": "49042",
+              "street": "Rue d'Alsace",
+              "street_en": "Rue d'Alsace",
+              "pattern": "n{1,60} Rue d'Alsace"
+            },
+            {
+              "code": "49055",
+              "street": "Rue Plantagenêt",
+              "street_en": "Rue Plantagenet",
+              "pattern": "n{1,40} Rue Plantagenêt"
             }
           ]
-        },
+        }
+      ]
+    },
+    {
+      "name": "Mayenne",
+      "name_en": "Mayenne",
+      "region_tags": [
+        "Pays de la Loire",
+        "Loire Valley"
+      ],
+      "cities": [
+        {
+          "name": "Laval",
+          "name_en": "Laval",
+          "lat": 48.0784,
+          "lon": -0.7694,
+          "postcodes": [
+            {
+              "code": "53000",
+              "street": "Rue de la Paix",
+              "street_en": "Rue de la Paix",
+              "pattern": "n{1,80} Rue de la Paix"
+            },
+            {
+              "code": "53007",
+              "street": "Grande Rue",
+              "street_en": "Grande Rue",
+              "pattern": "n{1,60} Grande Rue"
+            },
+            {
+              "code": "53015",
+              "street": "Quai Jehan Fouquet",
+              "street_en": "Quai Jehan Fouquet",
+              "pattern": "n{1,50} Quai Jehan Fouquet"
+            },
+            {
+              "code": "53020",
+              "street": "Rue du Général de Gaulle",
+              "street_en": "Rue du General de Gaulle",
+              "pattern": "n{1,60} Rue du Général de Gaulle"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sarthe",
+      "name_en": "Sarthe",
+      "region_tags": [
+        "Pays de la Loire",
+        "Loire Valley"
+      ],
+      "cities": [
         {
           "name": "Le Mans",
           "name_en": "Le Mans",
@@ -998,147 +4171,609 @@
               "street": "Boulevard Demorieux",
               "street_en": "Boulevard Demorieux",
               "pattern": "n{1,80} Boulevard Demorieux"
+            },
+            {
+              "code": "72042",
+              "street": "Rue Gambetta",
+              "street_en": "Rue Gambetta",
+              "pattern": "n{1,60} Rue Gambetta"
             }
           ]
         }
       ]
     },
     {
-      "name": "Bourgogne-Franche-Comté",
-      "name_en": "Bourgogne-Franche-Comte",
-      "region_tags": ["Bourgogne", "Franche-Comté"],
+      "name": "Vendée",
+      "name_en": "Vendee",
+      "region_tags": [
+        "Pays de la Loire",
+        "Loire Valley"
+      ],
       "cities": [
         {
-          "name": "Dijon",
-          "name_en": "Dijon",
-          "lat": 47.3220,
-          "lon": 5.0415,
+          "name": "La Roche-sur-Yon",
+          "name_en": "La Roche-sur-Yon",
+          "lat": 46.6699,
+          "lon": -1.4267,
           "postcodes": [
             {
-              "code": "21000",
-              "street": "Rue de la Liberté",
-              "street_en": "Rue de la Liberte",
-              "pattern": "n{1,50} Rue de la Liberté"
+              "code": "85000",
+              "street": "Rue Gutenberg",
+              "street_en": "Rue Gutenberg",
+              "pattern": "n{1,60} Rue Gutenberg"
             },
             {
-              "code": "21100",
-              "street": "Boulevard de l'Université",
-              "street_en": "Boulevard de l'Universite",
-              "pattern": "n{1,80} Boulevard de l'Université"
-            }
-          ]
-        },
-        {
-          "name": "Besançon",
-          "name_en": "Besancon",
-          "lat": 47.2378,
-          "lon": 6.0241,
-          "postcodes": [
-            {
-              "code": "25000",
-              "street": "Grande Rue",
-              "street_en": "Grande Rue",
-              "pattern": "n{1,120} Grande Rue"
+              "code": "85007",
+              "street": "Boulevard d'Angleterre",
+              "street_en": "Boulevard d'Angleterre",
+              "pattern": "n{1,80} Boulevard d'Angleterre"
             },
             {
-              "code": "25030",
-              "street": "Avenue de la Paix",
-              "street_en": "Avenue de la Paix",
-              "pattern": "n{1,60} Avenue de la Paix"
+              "code": "85015",
+              "street": "Rue du Maréchal Foch",
+              "street_en": "Rue du Marechal Foch",
+              "pattern": "n{1,60} Rue du Maréchal Foch"
+            },
+            {
+              "code": "85022",
+              "street": "Boulevard Aristide Briand",
+              "street_en": "Boulevard Aristide Briand",
+              "pattern": "n{1,80} Boulevard Aristide Briand"
             }
           ]
         }
       ]
     },
     {
-      "name": "Centre-Val de Loire",
-      "name_en": "Centre-Val de Loire",
-      "region_tags": ["Loire Valley"],
+      "name": "Alpes-de-Haute-Provence",
+      "name_en": "Alpes-de-Haute-Provence",
+      "region_tags": [
+        "Provence-Alpes-Côte d'Azur"
+      ],
       "cities": [
         {
-          "name": "Tours",
-          "name_en": "Tours",
-          "lat": 47.3941,
-          "lon": 0.6848,
+          "name": "Digne-les-Bains",
+          "name_en": "Digne-les-Bains",
+          "lat": 44.0927,
+          "lon": 6.2357,
           "postcodes": [
             {
-              "code": "37000",
-              "street": "Rue Nationale",
-              "street_en": "Rue Nationale",
-              "pattern": "n{1,120} Rue Nationale"
+              "code": "04000",
+              "street": "Boulevard Gassendi",
+              "street_en": "Boulevard Gassendi",
+              "pattern": "n{1,80} Boulevard Gassendi"
             },
             {
-              "code": "37100",
-              "street": "Boulevard Heurteloup",
-              "street_en": "Boulevard Heurteloup",
-              "pattern": "n{1,60} Boulevard Heurteloup"
+              "code": "04007",
+              "street": "Rue du Pré de Foire",
+              "street_en": "Rue du Pre de Foire",
+              "pattern": "n{1,40} Rue du Pré de Foire"
+            },
+            {
+              "code": "04015",
+              "street": "Avenue du Maréchal Juin",
+              "street_en": "Avenue du Marechal Juin",
+              "pattern": "n{1,60} Avenue du Maréchal Juin"
+            },
+            {
+              "code": "04020",
+              "street": "Boulevard Victor Hugo",
+              "street_en": "Boulevard Victor Hugo",
+              "pattern": "n{1,60} Boulevard Victor Hugo"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Hautes-Alpes",
+      "name_en": "Hautes-Alpes",
+      "region_tags": [
+        "Provence-Alpes-Côte d'Azur"
+      ],
+      "cities": [
+        {
+          "name": "Gap",
+          "name_en": "Gap",
+          "lat": 44.559,
+          "lon": 6.0786,
+          "postcodes": [
+            {
+              "code": "05000",
+              "street": "Rue Carnot",
+              "street_en": "Rue Carnot",
+              "pattern": "n{1,60} Rue Carnot"
+            },
+            {
+              "code": "05007",
+              "street": "Rue Colonel Roux",
+              "street_en": "Rue Colonel Roux",
+              "pattern": "n{1,80} Rue Colonel Roux"
+            },
+            {
+              "code": "05015",
+              "street": "Avenue du Commandant Dumont",
+              "street_en": "Avenue du Commandant Dumont",
+              "pattern": "n{1,80} Avenue du Commandant Dumont"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Alpes-Maritimes",
+      "name_en": "Alpes-Maritimes",
+      "region_tags": [
+        "Provence-Alpes-Côte d'Azur",
+        "Côte d'Azur"
+      ],
+      "cities": [
+        {
+          "name": "Nice",
+          "name_en": "Nice",
+          "lat": 43.7102,
+          "lon": 7.262,
+          "postcodes": [
+            {
+              "code": "06000",
+              "street": "Promenade des Anglais",
+              "street_en": "Promenade des Anglais",
+              "pattern": "n{1,400} Promenade des Anglais"
+            },
+            {
+              "code": "06100",
+              "street": "Avenue Jean Médecin",
+              "street_en": "Avenue Jean Medecin",
+              "pattern": "n{1,80} Avenue Jean Médecin"
+            },
+            {
+              "code": "06200",
+              "street": "Boulevard de Cimiez",
+              "street_en": "Boulevard de Cimiez",
+              "pattern": "n{1,90} Boulevard de Cimiez"
+            },
+            {
+              "code": "06300",
+              "street": "Boulevard Gambetta",
+              "street_en": "Boulevard Gambetta",
+              "pattern": "n{1,75} Boulevard Gambetta"
             }
           ]
         },
         {
-          "name": "Orléans",
-          "name_en": "Orleans",
-          "lat": 47.9029,
-          "lon": 1.9093,
+          "name": "Cannes",
+          "name_en": "Cannes",
+          "lat": 43.5528,
+          "lon": 7.0174,
           "postcodes": [
             {
-              "code": "45000",
+              "code": "06400",
+              "street": "Boulevard de la Croisette",
+              "street_en": "Boulevard de la Croisette",
+              "pattern": "n{1,100} Boulevard de la Croisette"
+            },
+            {
+              "code": "06150",
+              "street": "Rue d'Antibes",
+              "street_en": "Rue d'Antibes",
+              "pattern": "n{1,80} Rue d'Antibes"
+            },
+            {
+              "code": "06110",
+              "street": "Rue Félix Faure",
+              "street_en": "Rue Felix Faure",
+              "pattern": "n{1,60} Rue Félix Faure"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Bouches-du-Rhône",
+      "name_en": "Bouches-du-Rhone",
+      "region_tags": [
+        "Provence-Alpes-Côte d'Azur",
+        "Provence"
+      ],
+      "cities": [
+        {
+          "name": "Marseille",
+          "name_en": "Marseille",
+          "lat": 43.2965,
+          "lon": 5.3698,
+          "postcodes": [
+            {
+              "code": "13001",
+              "street": "La Canebière",
+              "street_en": "La Canebiere",
+              "pattern": "n{1,120} La Canebière"
+            },
+            {
+              "code": "13002",
+              "street": "Rue de la République",
+              "street_en": "Rue de la Republique",
+              "pattern": "n{1,200} Rue de la République"
+            },
+            {
+              "code": "13005",
+              "street": "Boulevard Baille",
+              "street_en": "Boulevard Baille",
+              "pattern": "n{1,150} Boulevard Baille"
+            },
+            {
+              "code": "13006",
+              "street": "Rue Paradis",
+              "street_en": "Rue Paradis",
+              "pattern": "n{1,190} Rue Paradis"
+            },
+            {
+              "code": "13007",
+              "street": "Corniche Président J.F. Kennedy",
+              "street_en": "Corniche President J.F. Kennedy",
+              "pattern": "n{1,350} Corniche Président J.F. Kennedy"
+            },
+            {
+              "code": "13008",
+              "street": "Avenue du Prado",
+              "street_en": "Avenue du Prado",
+              "pattern": "n{1,300} Avenue du Prado"
+            },
+            {
+              "code": "13009",
+              "street": "Boulevard Michelet",
+              "street_en": "Boulevard Michelet",
+              "pattern": "n{1,180} Boulevard Michelet"
+            },
+            {
+              "code": "13010",
+              "street": "Boulevard Chave",
+              "street_en": "Boulevard Chave",
+              "pattern": "n{1,120} Boulevard Chave"
+            }
+          ]
+        },
+        {
+          "name": "Aix-en-Provence",
+          "name_en": "Aix-en-Provence",
+          "lat": 43.5297,
+          "lon": 5.4474,
+          "postcodes": [
+            {
+              "code": "13100",
+              "street": "Cours Mirabeau",
+              "street_en": "Cours Mirabeau",
+              "pattern": "n{1,65} Cours Mirabeau"
+            },
+            {
+              "code": "13090",
+              "street": "Avenue de l'Europe",
+              "street_en": "Avenue de l'Europe",
+              "pattern": "n{1,100} Avenue de l'Europe"
+            },
+            {
+              "code": "13540",
+              "street": "Rue Espariat",
+              "street_en": "Rue Espariat",
+              "pattern": "n{1,50} Rue Espariat"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Var",
+      "name_en": "Var",
+      "region_tags": [
+        "Provence-Alpes-Côte d'Azur",
+        "Provence"
+      ],
+      "cities": [
+        {
+          "name": "Toulon",
+          "name_en": "Toulon",
+          "lat": 43.1242,
+          "lon": 5.928,
+          "postcodes": [
+            {
+              "code": "83000",
+              "street": "Boulevard de Strasbourg",
+              "street_en": "Boulevard de Strasbourg",
+              "pattern": "n{1,120} Boulevard de Strasbourg"
+            },
+            {
+              "code": "83200",
+              "street": "Avenue de la République",
+              "street_en": "Avenue de la Republique",
+              "pattern": "n{1,100} Avenue de la République"
+            },
+            {
+              "code": "83100",
+              "street": "Avenue Lazare Carnot",
+              "street_en": "Avenue Lazare Carnot",
+              "pattern": "n{1,60} Avenue Lazare Carnot"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Vaucluse",
+      "name_en": "Vaucluse",
+      "region_tags": [
+        "Provence-Alpes-Côte d'Azur",
+        "Provence"
+      ],
+      "cities": [
+        {
+          "name": "Avignon",
+          "name_en": "Avignon",
+          "lat": 43.9493,
+          "lon": 4.8055,
+          "postcodes": [
+            {
+              "code": "84000",
               "street": "Rue de la République",
               "street_en": "Rue de la Republique",
               "pattern": "n{1,100} Rue de la République"
             },
             {
-              "code": "45100",
-              "street": "Avenue de la Mouillère",
-              "street_en": "Avenue de la Mouillere",
-              "pattern": "n{1,80} Avenue de la Mouillère"
+              "code": "84007",
+              "street": "Cours Jean Jaurès",
+              "street_en": "Cours Jean Jaures",
+              "pattern": "n{1,80} Cours Jean Jaurès"
+            },
+            {
+              "code": "84015",
+              "street": "Rue Joseph Vernet",
+              "street_en": "Rue Joseph Vernet",
+              "pattern": "n{1,60} Rue Joseph Vernet"
+            },
+            {
+              "code": "84022",
+              "street": "Boulevard Saint-Roch",
+              "street_en": "Boulevard Saint-Roch",
+              "pattern": "n{1,80} Boulevard Saint-Roch"
             }
           ]
         }
       ]
     },
     {
-      "name": "Corse",
-      "name_en": "Corsica",
-      "region_tags": ["Corse"],
+      "name": "Guadeloupe",
+      "name_en": "Guadeloupe",
+      "region_tags": [
+        "Outre-mer",
+        "Antilles"
+      ],
       "cities": [
         {
-          "name": "Ajaccio",
-          "name_en": "Ajaccio",
-          "lat": 41.9192,
-          "lon": 8.7386,
+          "name": "Pointe-à-Pitre",
+          "name_en": "Pointe-a-Pitre",
+          "lat": 16.2411,
+          "lon": -61.5331,
           "postcodes": [
             {
-              "code": "20000",
-              "street": "Cours Napoléon",
-              "street_en": "Cours Napoleon",
-              "pattern": "n{1,80} Cours Napoléon"
+              "code": "97110",
+              "street": "Rue Frébault",
+              "street_en": "Rue Frebault",
+              "pattern": "n{1,80} Rue Frébault"
             },
             {
-              "code": "20090",
-              "street": "Route des Sanguinaires",
-              "street_en": "Route des Sanguinaires",
-              "pattern": "n{1,100} Route des Sanguinaires"
+              "code": "97115",
+              "street": "Rue Achille René-Boisneuf",
+              "street_en": "Rue Achille Rene-Boisneuf",
+              "pattern": "n{1,60} Rue Achille René-Boisneuf"
+            },
+            {
+              "code": "97120",
+              "street": "Boulevard Légitimus",
+              "street_en": "Boulevard Legitimus",
+              "pattern": "n{1,80} Boulevard Légitimus"
             }
           ]
         },
         {
-          "name": "Bastia",
-          "name_en": "Bastia",
-          "lat": 42.6977,
-          "lon": 9.4529,
+          "name": "Basse-Terre",
+          "name_en": "Basse-Terre",
+          "lat": 15.9979,
+          "lon": -61.7321,
           "postcodes": [
             {
-              "code": "20200",
-              "street": "Boulevard Paoli",
-              "street_en": "Boulevard Paoli",
-              "pattern": "n{1,60} Boulevard Paoli"
+              "code": "97100",
+              "street": "Cours Nolivos",
+              "street_en": "Cours Nolivos",
+              "pattern": "n{1,60} Cours Nolivos"
             },
             {
-              "code": "20600",
-              "street": "Avenue Émile Sari",
-              "street_en": "Avenue Emile Sari",
-              "pattern": "n{1,40} Avenue Émile Sari"
+              "code": "97105",
+              "street": "Rue de la République",
+              "street_en": "Rue de la Republique",
+              "pattern": "n{1,40} Rue de la République"
+            },
+            {
+              "code": "97109",
+              "street": "Boulevard du Gouverneur Félix Éboué",
+              "street_en": "Boulevard du Gouverneur Felix Eboue",
+              "pattern": "n{1,100} Boulevard du Gouverneur Félix Éboué"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Martinique",
+      "name_en": "Martinique",
+      "region_tags": [
+        "Outre-mer",
+        "Antilles"
+      ],
+      "cities": [
+        {
+          "name": "Fort-de-France",
+          "name_en": "Fort-de-France",
+          "lat": 14.6161,
+          "lon": -61.0588,
+          "postcodes": [
+            {
+              "code": "97200",
+              "street": "Rue de la Liberté",
+              "street_en": "Rue de la Liberte",
+              "pattern": "n{1,80} Rue de la Liberté"
+            },
+            {
+              "code": "97210",
+              "street": "Rue Victor Hugo",
+              "street_en": "Rue Victor Hugo",
+              "pattern": "n{1,60} Rue Victor Hugo"
+            },
+            {
+              "code": "97220",
+              "street": "Boulevard du Général de Gaulle",
+              "street_en": "Boulevard du General de Gaulle",
+              "pattern": "n{1,100} Boulevard du Général de Gaulle"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Guyane",
+      "name_en": "Guyane",
+      "region_tags": [
+        "Outre-mer"
+      ],
+      "cities": [
+        {
+          "name": "Cayenne",
+          "name_en": "Cayenne",
+          "lat": 4.9372,
+          "lon": -52.326,
+          "postcodes": [
+            {
+              "code": "97300",
+              "street": "Avenue du Général de Gaulle",
+              "street_en": "Avenue du General de Gaulle",
+              "pattern": "n{1,100} Avenue du Général de Gaulle"
+            },
+            {
+              "code": "97305",
+              "street": "Rue François Arago",
+              "street_en": "Rue Francois Arago",
+              "pattern": "n{1,60} Rue François Arago"
+            },
+            {
+              "code": "97310",
+              "street": "Place des Palmistes",
+              "street_en": "Place des Palmistes",
+              "pattern": "n{1,30} Place des Palmistes"
+            },
+            {
+              "code": "97315",
+              "street": "Rue Christophe Colomb",
+              "street_en": "Rue Christophe Colomb",
+              "pattern": "n{1,60} Rue Christophe Colomb"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "La Réunion",
+      "name_en": "La Reunion",
+      "region_tags": [
+        "Outre-mer"
+      ],
+      "cities": [
+        {
+          "name": "Saint-Denis",
+          "name_en": "Saint-Denis",
+          "lat": -20.8823,
+          "lon": 55.4504,
+          "postcodes": [
+            {
+              "code": "97400",
+              "street": "Rue Maréchal Leclerc",
+              "street_en": "Rue Marechal Leclerc",
+              "pattern": "n{1,80} Rue Maréchal Leclerc"
+            },
+            {
+              "code": "97405",
+              "street": "Rue de Paris",
+              "street_en": "Rue de Paris",
+              "pattern": "n{1,60} Rue de Paris"
+            },
+            {
+              "code": "97410",
+              "street": "Avenue de la Victoire",
+              "street_en": "Avenue de la Victoire",
+              "pattern": "n{1,100} Avenue de la Victoire"
+            }
+          ]
+        },
+        {
+          "name": "Saint-Pierre",
+          "name_en": "Saint-Pierre",
+          "lat": -21.3393,
+          "lon": 55.4781,
+          "postcodes": [
+            {
+              "code": "97410",
+              "street": "Rue des Bons Enfants",
+              "street_en": "Rue des Bons Enfants",
+              "pattern": "n{1,60} Rue des Bons Enfants"
+            },
+            {
+              "code": "97415",
+              "street": "Rue Auguste Babet",
+              "street_en": "Rue Auguste Babet",
+              "pattern": "n{1,80} Rue Auguste Babet"
+            },
+            {
+              "code": "97420",
+              "street": "Boulevard Hubert Delisle",
+              "street_en": "Boulevard Hubert Delisle",
+              "pattern": "n{1,60} Boulevard Hubert Delisle"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Mayotte",
+      "name_en": "Mayotte",
+      "region_tags": [
+        "Outre-mer"
+      ],
+      "cities": [
+        {
+          "name": "Mamoudzou",
+          "name_en": "Mamoudzou",
+          "lat": -12.7809,
+          "lon": 45.2278,
+          "postcodes": [
+            {
+              "code": "97600",
+              "street": "Rue du Commerce",
+              "street_en": "Rue du Commerce",
+              "pattern": "n{1,60} Rue du Commerce"
+            },
+            {
+              "code": "97605",
+              "street": "Boulevard de la Corniche",
+              "street_en": "Boulevard de la Corniche",
+              "pattern": "n{1,80} Boulevard de la Corniche"
+            },
+            {
+              "code": "97610",
+              "street": "Rue de la Mosquée",
+              "street_en": "Rue de la Mosquee",
+              "pattern": "n{1,40} Rue de la Mosquée"
+            },
+            {
+              "code": "97615",
+              "street": "Place Mariage",
+              "street_en": "Place Mariage",
+              "pattern": "n{1,30} Place Mariage"
             }
           ]
         }
