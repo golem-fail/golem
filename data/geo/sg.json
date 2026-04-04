@@ -4,21 +4,25 @@
     "name_en": "Singapore",
     "iso_code": "SG",
     "phone_prefix": "+65",
-    "phone_formats": ["+65-####-####", "+65-8###-####", "+65-9###-####"],
+    "phone_formats": [
+      "+65-####-####",
+      "+65-8###-####",
+      "+65-9###-####"
+    ],
     "postcode_format": "######",
     "name_order": "given_first"
   },
   "states": [
     {
-      "name": "Central Singapore",
-      "name_en": "Central Singapore",
+      "name": "Singapore",
+      "name_en": "Singapore",
       "region_tags": [],
       "cities": [
         {
-          "name": "Downtown Core",
-          "name_en": "Downtown Core",
-          "lat": 1.2840,
-          "lon": 103.8515,
+          "name": "Singapore",
+          "name_en": "Singapore",
+          "lat": 1.3521,
+          "lon": 103.8198,
           "postcodes": [
             {
               "code": "018956",
@@ -27,55 +31,17 @@
               "pattern": "n{1,50} Raffles Place"
             },
             {
-              "code": "018972",
+              "code": "068805",
               "street": "Shenton Way",
               "street_en": "Shenton Way",
               "pattern": "n{1,80} Shenton Way"
             },
             {
-              "code": "018981",
-              "street": "Cecil Street",
-              "street_en": "Cecil Street",
-              "pattern": "n{1,138} Cecil Street"
-            },
-            {
-              "code": "018989",
+              "code": "068882",
               "street": "Robinson Road",
               "street_en": "Robinson Road",
               "pattern": "n{1,120} Robinson Road"
             },
-            {
-              "code": "049318",
-              "street": "Collyer Quay",
-              "street_en": "Collyer Quay",
-              "pattern": "n{1,50} Collyer Quay"
-            },
-            {
-              "code": "049145",
-              "street": "Market Street",
-              "street_en": "Market Street",
-              "pattern": "n{1,60} Market Street"
-            },
-            {
-              "code": "018960",
-              "street": "Cross Street",
-              "street_en": "Cross Street",
-              "pattern": "n{1,80} Cross Street"
-            },
-            {
-              "code": "048619",
-              "street": "Telok Ayer Street",
-              "street_en": "Telok Ayer Street",
-              "pattern": "n{1,90} Telok Ayer Street"
-            }
-          ]
-        },
-        {
-          "name": "Marina Bay",
-          "name_en": "Marina Bay",
-          "lat": 1.2814,
-          "lon": 103.8585,
-          "postcodes": [
             {
               "code": "018971",
               "street": "Marina Boulevard",
@@ -89,63 +55,23 @@
               "pattern": "n{1,20} Bayfront Avenue"
             },
             {
-              "code": "039393",
-              "street": "Esplanade Drive",
-              "street_en": "Esplanade Drive",
-              "pattern": "n{1,12} Esplanade Drive"
-            },
-            {
-              "code": "018974",
-              "street": "Straits Boulevard",
-              "street_en": "Straits Boulevard",
-              "pattern": "n{1,10} Straits Boulevard"
-            }
-          ]
-        },
-        {
-          "name": "Orchard",
-          "name_en": "Orchard",
-          "lat": 1.3048,
-          "lon": 103.8318,
-          "postcodes": [
-            {
               "code": "238823",
               "street": "Orchard Road",
               "street_en": "Orchard Road",
               "pattern": "n{1,400} Orchard Road"
             },
             {
-              "code": "238867",
-              "street": "Orchard Boulevard",
-              "street_en": "Orchard Boulevard",
-              "pattern": "n{1,50} Orchard Boulevard"
-            },
-            {
-              "code": "238839",
+              "code": "228209",
               "street": "Scotts Road",
               "street_en": "Scotts Road",
               "pattern": "n{1,120} Scotts Road"
             },
             {
-              "code": "228213",
+              "code": "247905",
               "street": "Tanglin Road",
               "street_en": "Tanglin Road",
               "pattern": "n{1,150} Tanglin Road"
             },
-            {
-              "code": "238851",
-              "street": "Paterson Road",
-              "street_en": "Paterson Road",
-              "pattern": "n{1,40} Paterson Road"
-            }
-          ]
-        },
-        {
-          "name": "Novena",
-          "name_en": "Novena",
-          "lat": 1.3204,
-          "lon": 103.8438,
-          "postcodes": [
             {
               "code": "307684",
               "street": "Thomson Road",
@@ -153,31 +79,11 @@
               "pattern": "n{1,350} Thomson Road"
             },
             {
-              "code": "329563",
-              "street": "Moulmein Road",
-              "street_en": "Moulmein Road",
-              "pattern": "n{1,50} Moulmein Road"
-            },
-            {
-              "code": "308215",
-              "street": "Irrawaddy Road",
-              "street_en": "Irrawaddy Road",
-              "pattern": "n{1,40} Irrawaddy Road"
-            },
-            {
-              "code": "329565",
+              "code": "329675",
               "street": "Balestier Road",
               "street_en": "Balestier Road",
               "pattern": "n{1,400} Balestier Road"
-            }
-          ]
-        },
-        {
-          "name": "Toa Payoh",
-          "name_en": "Toa Payoh",
-          "lat": 1.3343,
-          "lon": 103.8491,
-          "postcodes": [
+            },
             {
               "code": "310101",
               "street": "Lorong 1 Toa Payoh",
@@ -185,31 +91,11 @@
               "pattern": "n{1,150} Lorong 1 Toa Payoh"
             },
             {
-              "code": "310201",
-              "street": "Lorong 2 Toa Payoh",
-              "street_en": "Lorong 2 Toa Payoh",
-              "pattern": "n{1,200} Lorong 2 Toa Payoh"
-            },
-            {
-              "code": "310301",
-              "street": "Lorong 4 Toa Payoh",
-              "street_en": "Lorong 4 Toa Payoh",
-              "pattern": "n{1,180} Lorong 4 Toa Payoh"
-            },
-            {
               "code": "310188",
               "street": "Toa Payoh Central",
               "street_en": "Toa Payoh Central",
               "pattern": "n{1,80} Toa Payoh Central"
-            }
-          ]
-        },
-        {
-          "name": "Bishan",
-          "name_en": "Bishan",
-          "lat": 1.3526,
-          "lon": 103.8352,
-          "postcodes": [
+            },
             {
               "code": "570201",
               "street": "Bishan Street 22",
@@ -223,33 +109,6 @@
               "pattern": "n{1,120} Bishan Street 23"
             },
             {
-              "code": "570203",
-              "street": "Bishan Street 24",
-              "street_en": "Bishan Street 24",
-              "pattern": "n{1,100} Bishan Street 24"
-            },
-            {
-              "code": "579837",
-              "street": "Marymount Road",
-              "street_en": "Marymount Road",
-              "pattern": "n{1,50} Marymount Road"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "North East",
-      "name_en": "North East",
-      "region_tags": [],
-      "cities": [
-        {
-          "name": "Hougang",
-          "name_en": "Hougang",
-          "lat": 1.3612,
-          "lon": 103.8863,
-          "postcodes": [
-            {
               "code": "530101",
               "street": "Hougang Avenue 1",
               "street_en": "Hougang Avenue 1",
@@ -262,48 +121,10 @@
               "pattern": "n{1,150} Hougang Avenue 2"
             },
             {
-              "code": "530301",
-              "street": "Hougang Avenue 3",
-              "street_en": "Hougang Avenue 3",
-              "pattern": "n{1,100} Hougang Avenue 3"
-            },
-            {
-              "code": "530401",
-              "street": "Hougang Avenue 5",
-              "street_en": "Hougang Avenue 5",
-              "pattern": "n{1,120} Hougang Avenue 5"
-            },
-            {
-              "code": "530501",
-              "street": "Hougang Street 51",
-              "street_en": "Hougang Street 51",
-              "pattern": "n{1,80} Hougang Street 51"
-            }
-          ]
-        },
-        {
-          "name": "Sengkang",
-          "name_en": "Sengkang",
-          "lat": 1.3918,
-          "lon": 103.8953,
-          "postcodes": [
-            {
               "code": "541101",
               "street": "Sengkang East Way",
               "street_en": "Sengkang East Way",
               "pattern": "n{1,150} Sengkang East Way"
-            },
-            {
-              "code": "541201",
-              "street": "Sengkang West Way",
-              "street_en": "Sengkang West Way",
-              "pattern": "n{1,120} Sengkang West Way"
-            },
-            {
-              "code": "541301",
-              "street": "Sengkang Square",
-              "street_en": "Sengkang Square",
-              "pattern": "n{1,50} Sengkang Square"
             },
             {
               "code": "544801",
@@ -312,30 +133,10 @@
               "pattern": "n{1,100} Compassvale Road"
             },
             {
-              "code": "544802",
-              "street": "Rivervale Drive",
-              "street_en": "Rivervale Drive",
-              "pattern": "n{1,100} Rivervale Drive"
-            }
-          ]
-        },
-        {
-          "name": "Punggol",
-          "name_en": "Punggol",
-          "lat": 1.4041,
-          "lon": 103.9025,
-          "postcodes": [
-            {
               "code": "821101",
               "street": "Punggol Field",
               "street_en": "Punggol Field",
               "pattern": "n{1,200} Punggol Field"
-            },
-            {
-              "code": "821201",
-              "street": "Punggol Central",
-              "street_en": "Punggol Central",
-              "pattern": "n{1,80} Punggol Central"
             },
             {
               "code": "821301",
@@ -344,57 +145,17 @@
               "pattern": "n{1,150} Punggol Drive"
             },
             {
-              "code": "821401",
-              "street": "Punggol Way",
-              "street_en": "Punggol Way",
-              "pattern": "n{1,120} Punggol Way"
-            },
-            {
-              "code": "821501",
-              "street": "Edgedale Plains",
-              "street_en": "Edgedale Plains",
-              "pattern": "n{1,100} Edgedale Plains"
-            }
-          ]
-        },
-        {
-          "name": "Serangoon",
-          "name_en": "Serangoon",
-          "lat": 1.3554,
-          "lon": 103.8679,
-          "postcodes": [
-            {
-              "code": "556101",
-              "street": "Serangoon Avenue 2",
-              "street_en": "Serangoon Avenue 2",
-              "pattern": "n{1,150} Serangoon Avenue 2"
-            },
-            {
               "code": "556201",
               "street": "Serangoon Avenue 3",
               "street_en": "Serangoon Avenue 3",
               "pattern": "n{1,200} Serangoon Avenue 3"
             },
             {
-              "code": "556301",
-              "street": "Serangoon Central",
-              "street_en": "Serangoon Central",
-              "pattern": "n{1,60} Serangoon Central"
-            },
-            {
-              "code": "556401",
+              "code": "534209",
               "street": "Upper Serangoon Road",
               "street_en": "Upper Serangoon Road",
               "pattern": "n{1,400} Upper Serangoon Road"
-            }
-          ]
-        },
-        {
-          "name": "Ang Mo Kio",
-          "name_en": "Ang Mo Kio",
-          "lat": 1.3691,
-          "lon": 103.8454,
-          "postcodes": [
+            },
             {
               "code": "560101",
               "street": "Ang Mo Kio Avenue 1",
@@ -408,43 +169,10 @@
               "pattern": "n{1,200} Ang Mo Kio Avenue 3"
             },
             {
-              "code": "560301",
-              "street": "Ang Mo Kio Avenue 4",
-              "street_en": "Ang Mo Kio Avenue 4",
-              "pattern": "n{1,150} Ang Mo Kio Avenue 4"
-            },
-            {
               "code": "560401",
               "street": "Ang Mo Kio Avenue 6",
               "street_en": "Ang Mo Kio Avenue 6",
               "pattern": "n{1,180} Ang Mo Kio Avenue 6"
-            },
-            {
-              "code": "560501",
-              "street": "Ang Mo Kio Avenue 10",
-              "street_en": "Ang Mo Kio Avenue 10",
-              "pattern": "n{1,120} Ang Mo Kio Avenue 10"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "North West",
-      "name_en": "North West",
-      "region_tags": [],
-      "cities": [
-        {
-          "name": "Woodlands",
-          "name_en": "Woodlands",
-          "lat": 1.4382,
-          "lon": 103.7891,
-          "postcodes": [
-            {
-              "code": "730101",
-              "street": "Woodlands Avenue 1",
-              "street_en": "Woodlands Avenue 1",
-              "pattern": "n{1,100} Woodlands Avenue 1"
             },
             {
               "code": "730201",
@@ -453,31 +181,11 @@
               "pattern": "n{1,120} Woodlands Avenue 3"
             },
             {
-              "code": "730301",
-              "street": "Woodlands Avenue 5",
-              "street_en": "Woodlands Avenue 5",
-              "pattern": "n{1,80} Woodlands Avenue 5"
-            },
-            {
               "code": "730401",
               "street": "Woodlands Street 31",
               "street_en": "Woodlands Street 31",
               "pattern": "n{1,150} Woodlands Street 31"
             },
-            {
-              "code": "730501",
-              "street": "Woodlands Drive 14",
-              "street_en": "Woodlands Drive 14",
-              "pattern": "n{1,100} Woodlands Drive 14"
-            }
-          ]
-        },
-        {
-          "name": "Sembawang",
-          "name_en": "Sembawang",
-          "lat": 1.4491,
-          "lon": 103.8185,
-          "postcodes": [
             {
               "code": "750101",
               "street": "Sembawang Drive",
@@ -491,36 +199,10 @@
               "pattern": "n{1,200} Sembawang Road"
             },
             {
-              "code": "750301",
-              "street": "Sembawang Way",
-              "street_en": "Sembawang Way",
-              "pattern": "n{1,80} Sembawang Way"
-            },
-            {
-              "code": "750401",
-              "street": "Canberra Road",
-              "street_en": "Canberra Road",
-              "pattern": "n{1,100} Canberra Road"
-            }
-          ]
-        },
-        {
-          "name": "Yishun",
-          "name_en": "Yishun",
-          "lat": 1.4304,
-          "lon": 103.8354,
-          "postcodes": [
-            {
               "code": "760101",
               "street": "Yishun Avenue 2",
               "street_en": "Yishun Avenue 2",
               "pattern": "n{1,200} Yishun Avenue 2"
-            },
-            {
-              "code": "760201",
-              "street": "Yishun Avenue 4",
-              "street_en": "Yishun Avenue 4",
-              "pattern": "n{1,150} Yishun Avenue 4"
             },
             {
               "code": "760301",
@@ -535,20 +217,6 @@
               "pattern": "n{1,50} Yishun Central"
             },
             {
-              "code": "760501",
-              "street": "Yishun Street 11",
-              "street_en": "Yishun Street 11",
-              "pattern": "n{1,100} Yishun Street 11"
-            }
-          ]
-        },
-        {
-          "name": "Bukit Panjang",
-          "name_en": "Bukit Panjang",
-          "lat": 1.3774,
-          "lon": 103.7719,
-          "postcodes": [
-            {
               "code": "670101",
               "street": "Bukit Panjang Ring Road",
               "street_en": "Bukit Panjang Ring Road",
@@ -561,64 +229,17 @@
               "pattern": "n{1,80} Petir Road"
             },
             {
-              "code": "670301",
-              "street": "Fajar Road",
-              "street_en": "Fajar Road",
-              "pattern": "n{1,100} Fajar Road"
-            },
-            {
-              "code": "670401",
-              "street": "Senja Road",
-              "street_en": "Senja Road",
-              "pattern": "n{1,120} Senja Road"
-            }
-          ]
-        },
-        {
-          "name": "Choa Chu Kang",
-          "name_en": "Choa Chu Kang",
-          "lat": 1.3840,
-          "lon": 103.7470,
-          "postcodes": [
-            {
               "code": "680101",
               "street": "Choa Chu Kang Avenue 1",
               "street_en": "Choa Chu Kang Avenue 1",
               "pattern": "n{1,100} Choa Chu Kang Avenue 1"
             },
             {
-              "code": "680201",
-              "street": "Choa Chu Kang Avenue 3",
-              "street_en": "Choa Chu Kang Avenue 3",
-              "pattern": "n{1,80} Choa Chu Kang Avenue 3"
-            },
-            {
-              "code": "680301",
-              "street": "Choa Chu Kang Central",
-              "street_en": "Choa Chu Kang Central",
-              "pattern": "n{1,60} Choa Chu Kang Central"
-            },
-            {
               "code": "680401",
               "street": "Choa Chu Kang Drive",
               "street_en": "Choa Chu Kang Drive",
               "pattern": "n{1,150} Choa Chu Kang Drive"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "South East",
-      "name_en": "South East",
-      "region_tags": [],
-      "cities": [
-        {
-          "name": "Bedok",
-          "name_en": "Bedok",
-          "lat": 1.3236,
-          "lon": 103.9273,
-          "postcodes": [
+            },
             {
               "code": "460101",
               "street": "Bedok North Avenue 1",
@@ -626,42 +247,10 @@
               "pattern": "n{1,200} Bedok North Avenue 1"
             },
             {
-              "code": "460201",
-              "street": "Bedok North Avenue 2",
-              "street_en": "Bedok North Avenue 2",
-              "pattern": "n{1,150} Bedok North Avenue 2"
-            },
-            {
-              "code": "460301",
-              "street": "Bedok North Avenue 3",
-              "street_en": "Bedok North Avenue 3",
-              "pattern": "n{1,100} Bedok North Avenue 3"
-            },
-            {
-              "code": "460401",
-              "street": "Bedok South Avenue 1",
-              "street_en": "Bedok South Avenue 1",
-              "pattern": "n{1,120} Bedok South Avenue 1"
-            },
-            {
               "code": "460501",
               "street": "New Upper Changi Road",
               "street_en": "New Upper Changi Road",
               "pattern": "n{1,500} New Upper Changi Road"
-            }
-          ]
-        },
-        {
-          "name": "Tampines",
-          "name_en": "Tampines",
-          "lat": 1.3496,
-          "lon": 103.9568,
-          "postcodes": [
-            {
-              "code": "520101",
-              "street": "Tampines Avenue 1",
-              "street_en": "Tampines Avenue 1",
-              "pattern": "n{1,100} Tampines Avenue 1"
             },
             {
               "code": "520201",
@@ -670,42 +259,16 @@
               "pattern": "n{1,200} Tampines Avenue 4"
             },
             {
-              "code": "520301",
-              "street": "Tampines Avenue 5",
-              "street_en": "Tampines Avenue 5",
-              "pattern": "n{1,150} Tampines Avenue 5"
-            },
-            {
               "code": "520401",
               "street": "Tampines Street 21",
               "street_en": "Tampines Street 21",
               "pattern": "n{1,80} Tampines Street 21"
             },
             {
-              "code": "520501",
-              "street": "Tampines Central 1",
-              "street_en": "Tampines Central 1",
-              "pattern": "n{1,50} Tampines Central 1"
-            }
-          ]
-        },
-        {
-          "name": "Pasir Ris",
-          "name_en": "Pasir Ris",
-          "lat": 1.3721,
-          "lon": 103.9474,
-          "postcodes": [
-            {
               "code": "510101",
               "street": "Pasir Ris Drive 1",
               "street_en": "Pasir Ris Drive 1",
               "pattern": "n{1,100} Pasir Ris Drive 1"
-            },
-            {
-              "code": "510201",
-              "street": "Pasir Ris Drive 3",
-              "street_en": "Pasir Ris Drive 3",
-              "pattern": "n{1,80} Pasir Ris Drive 3"
             },
             {
               "code": "510301",
@@ -714,57 +277,17 @@
               "pattern": "n{1,120} Pasir Ris Drive 6"
             },
             {
-              "code": "510401",
-              "street": "Pasir Ris Street 11",
-              "street_en": "Pasir Ris Street 11",
-              "pattern": "n{1,60} Pasir Ris Street 11"
-            },
-            {
-              "code": "510501",
-              "street": "Pasir Ris Central",
-              "street_en": "Pasir Ris Central",
-              "pattern": "n{1,50} Pasir Ris Central"
-            }
-          ]
-        },
-        {
-          "name": "Marine Parade",
-          "name_en": "Marine Parade",
-          "lat": 1.3017,
-          "lon": 103.9072,
-          "postcodes": [
-            {
               "code": "440101",
               "street": "Marine Parade Road",
               "street_en": "Marine Parade Road",
               "pattern": "n{1,300} Marine Parade Road"
             },
             {
-              "code": "440201",
-              "street": "Marine Parade Central",
-              "street_en": "Marine Parade Central",
-              "pattern": "n{1,80} Marine Parade Central"
-            },
-            {
-              "code": "440301",
+              "code": "428768",
               "street": "East Coast Road",
               "street_en": "East Coast Road",
               "pattern": "n{1,500} East Coast Road"
             },
-            {
-              "code": "440401",
-              "street": "Still Road",
-              "street_en": "Still Road",
-              "pattern": "n{1,60} Still Road"
-            }
-          ]
-        },
-        {
-          "name": "Geylang",
-          "name_en": "Geylang",
-          "lat": 1.3201,
-          "lon": 103.8918,
-          "postcodes": [
             {
               "code": "380101",
               "street": "Geylang Road",
@@ -778,38 +301,11 @@
               "pattern": "n{1,350} Sims Avenue"
             },
             {
-              "code": "380301",
-              "street": "Aljunied Road",
-              "street_en": "Aljunied Road",
-              "pattern": "n{1,200} Aljunied Road"
-            },
-            {
-              "code": "380401",
-              "street": "Guillemard Road",
-              "street_en": "Guillemard Road",
-              "pattern": "n{1,250} Guillemard Road"
-            },
-            {
               "code": "380501",
               "street": "Changi Road",
               "street_en": "Changi Road",
               "pattern": "n{1,300} Changi Road"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "South West",
-      "name_en": "South West",
-      "region_tags": [],
-      "cities": [
-        {
-          "name": "Jurong East",
-          "name_en": "Jurong East",
-          "lat": 1.3329,
-          "lon": 103.7436,
-          "postcodes": [
+            },
             {
               "code": "600101",
               "street": "Jurong East Avenue 1",
@@ -823,36 +319,10 @@
               "pattern": "n{1,80} Jurong East Street 21"
             },
             {
-              "code": "600301",
-              "street": "Jurong East Street 31",
-              "street_en": "Jurong East Street 31",
-              "pattern": "n{1,100} Jurong East Street 31"
-            },
-            {
-              "code": "600401",
-              "street": "Jurong East Central",
-              "street_en": "Jurong East Central",
-              "pattern": "n{1,50} Jurong East Central"
-            }
-          ]
-        },
-        {
-          "name": "Jurong West",
-          "name_en": "Jurong West",
-          "lat": 1.3404,
-          "lon": 103.7090,
-          "postcodes": [
-            {
               "code": "640101",
               "street": "Jurong West Avenue 1",
               "street_en": "Jurong West Avenue 1",
               "pattern": "n{1,150} Jurong West Avenue 1"
-            },
-            {
-              "code": "640201",
-              "street": "Jurong West Street 42",
-              "street_en": "Jurong West Street 42",
-              "pattern": "n{1,100} Jurong West Street 42"
             },
             {
               "code": "640301",
@@ -861,36 +331,10 @@
               "pattern": "n{1,120} Jurong West Street 52"
             },
             {
-              "code": "640401",
-              "street": "Jurong West Street 61",
-              "street_en": "Jurong West Street 61",
-              "pattern": "n{1,80} Jurong West Street 61"
-            },
-            {
-              "code": "640501",
-              "street": "Jurong West Central 3",
-              "street_en": "Jurong West Central 3",
-              "pattern": "n{1,60} Jurong West Central 3"
-            }
-          ]
-        },
-        {
-          "name": "Bukit Batok",
-          "name_en": "Bukit Batok",
-          "lat": 1.3590,
-          "lon": 103.7637,
-          "postcodes": [
-            {
               "code": "650101",
               "street": "Bukit Batok Central",
               "street_en": "Bukit Batok Central",
               "pattern": "n{1,50} Bukit Batok Central"
-            },
-            {
-              "code": "650201",
-              "street": "Bukit Batok East Avenue 3",
-              "street_en": "Bukit Batok East Avenue 3",
-              "pattern": "n{1,100} Bukit Batok East Avenue 3"
             },
             {
               "code": "650301",
@@ -899,62 +343,16 @@
               "pattern": "n{1,150} Bukit Batok West Avenue 6"
             },
             {
-              "code": "650401",
-              "street": "Bukit Batok Street 21",
-              "street_en": "Bukit Batok Street 21",
-              "pattern": "n{1,80} Bukit Batok Street 21"
-            }
-          ]
-        },
-        {
-          "name": "Clementi",
-          "name_en": "Clementi",
-          "lat": 1.3162,
-          "lon": 103.7649,
-          "postcodes": [
-            {
-              "code": "120101",
-              "street": "Clementi Avenue 1",
-              "street_en": "Clementi Avenue 1",
-              "pattern": "n{1,80} Clementi Avenue 1"
-            },
-            {
-              "code": "120201",
-              "street": "Clementi Avenue 2",
-              "street_en": "Clementi Avenue 2",
-              "pattern": "n{1,100} Clementi Avenue 2"
-            },
-            {
               "code": "120301",
               "street": "Clementi Avenue 3",
               "street_en": "Clementi Avenue 3",
               "pattern": "n{1,120} Clementi Avenue 3"
             },
             {
-              "code": "120401",
-              "street": "Clementi West Street 2",
-              "street_en": "Clementi West Street 2",
-              "pattern": "n{1,60} Clementi West Street 2"
-            },
-            {
               "code": "129588",
               "street": "Commonwealth Avenue West",
               "street_en": "Commonwealth Avenue West",
               "pattern": "n{1,200} Commonwealth Avenue West"
-            }
-          ]
-        },
-        {
-          "name": "Queenstown",
-          "name_en": "Queenstown",
-          "lat": 1.2942,
-          "lon": 103.7861,
-          "postcodes": [
-            {
-              "code": "030101",
-              "street": "Commonwealth Drive",
-              "street_en": "Commonwealth Drive",
-              "pattern": "n{1,100} Commonwealth Drive"
             },
             {
               "code": "030201",
@@ -963,22 +361,40 @@
               "pattern": "n{1,300} Queensway"
             },
             {
-              "code": "030301",
-              "street": "Margaret Drive",
-              "street_en": "Margaret Drive",
-              "pattern": "n{1,50} Margaret Drive"
-            },
-            {
-              "code": "030401",
-              "street": "Stirling Road",
-              "street_en": "Stirling Road",
-              "pattern": "n{1,120} Stirling Road"
-            },
-            {
               "code": "030501",
               "street": "Tanglin Halt Road",
               "street_en": "Tanglin Halt Road",
               "pattern": "n{1,150} Tanglin Halt Road"
+            },
+            {
+              "code": "218101",
+              "street": "Serangoon Road",
+              "street_en": "Serangoon Road",
+              "pattern": "n{1,300} Serangoon Road"
+            },
+            {
+              "code": "058665",
+              "street": "South Bridge Road",
+              "street_en": "South Bridge Road",
+              "pattern": "n{1,200} South Bridge Road"
+            },
+            {
+              "code": "199724",
+              "street": "Arab Street",
+              "street_en": "Arab Street",
+              "pattern": "n{1,80} Arab Street"
+            },
+            {
+              "code": "427726",
+              "street": "Joo Chiat Road",
+              "street_en": "Joo Chiat Road",
+              "pattern": "n{1,200} Joo Chiat Road"
+            },
+            {
+              "code": "259686",
+              "street": "Bukit Timah Road",
+              "street_en": "Bukit Timah Road",
+              "pattern": "n{1,500} Bukit Timah Road"
             }
           ]
         }
