@@ -4,7 +4,7 @@ tags = ["push-notification", "cross-platform"]
 
 [[flow.apps]]
 name = "app"
-bundle = "com.golem.test"
+bundle = "fail.golem.test"
 
 [[flow.apps.devices]]
 os = "ios:latest"
@@ -18,7 +18,7 @@ type = "phone"
 name = "verify_initial_state"
 steps = [
   # Launch the app and verify notification display is initially empty
-  { action = "launch", app = "com.golem.test" },
+  { action = "launch", app = "fail.golem.test" },
   { action = "wait", on_text = "Notification:", timeout = 10000 },
   { action = "assert_visible", on_text = "Notification:" },
 ]
@@ -27,7 +27,7 @@ steps = [
 name = "send_first_notification"
 steps = [
   # Send a push notification to the app
-  { action = "push_notification", title = "Test Alert", body = "Hello from GOLEM", app = "com.golem.test" },
+  { action = "push_notification", title = "Test Alert", body = "Hello from GOLEM", app = "fail.golem.test" },
 
   # Wait for the notification display to update and verify content
   { action = "wait", on_text = "Notification:", timeout = 10000 },
@@ -38,7 +38,7 @@ steps = [
 name = "send_second_notification"
 steps = [
   # Send another push notification with different content
-  { action = "push_notification", title = "Second Alert", body = "Updated notification payload", app = "com.golem.test" },
+  { action = "push_notification", title = "Second Alert", body = "Updated notification payload", app = "fail.golem.test" },
 
   # Verify the notification display updates with the new content
   { action = "wait", on_text = "Notification:", timeout = 10000 },

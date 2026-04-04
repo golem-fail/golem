@@ -591,7 +591,7 @@ async fn run_flow_on_device(
         .apps
         .first()
         .map(|a| a.bundle.clone())
-        .unwrap_or_else(|| "com.golem.test".to_string());
+        .unwrap_or_else(|| "fail.golem.test".to_string());
 
     let driver: Box<dyn PlatformDriver> = match platform {
         Platform::Ios => Box::new(IosDriver::new(device.udid.clone(), bundle_id, port)),

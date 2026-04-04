@@ -348,7 +348,7 @@ pub(crate) fn find_alert(el: &Element) -> Option<Element> {
 /// Thin HTTP client wrapper used by both `AndroidDriver` and `IosDriver`.
 pub struct CompanionClient {
     pub base_url: String,
-    /// Default query string appended to every request (e.g. `"?bundle_id=com.golem.test"`).
+    /// Default query string appended to every request (e.g. `"?bundle_id=fail.golem.test"`).
     pub default_query: String,
     pub client: reqwest::Client,
 }

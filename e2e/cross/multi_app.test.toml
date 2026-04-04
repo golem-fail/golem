@@ -4,7 +4,7 @@ tags = ["cross-platform", "multi-app"]
 
 [[flow.apps]]
 name = "app"
-bundle = "com.golem.test"
+bundle = "fail.golem.test"
 
 [[flow.apps.devices]]
 os = "ios:latest"
@@ -16,7 +16,7 @@ type = "phone"
 
 [[flow.apps]]
 name = "app-b"
-bundle = "com.golem.testb"
+bundle = "fail.golem.testb"
 
 [[flow.apps.devices]]
 os = "ios:latest"

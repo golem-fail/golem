@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "GOLEM Test App",
-    "bundle_id": "com.golem.testapp",
+    "bundle_id": "fail.golem.testapp",
     "url_scheme": "golem-test://",
     "screen_size": {
       "width": 390,

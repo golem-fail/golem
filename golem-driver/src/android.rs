@@ -301,7 +301,7 @@ impl PlatformDriver for AndroidDriver {
             "am",
             "broadcast",
             "-a",
-            "com.golem.PUSH_NOTIFICATION",
+            "fail.golem.PUSH_NOTIFICATION",
             "--es",
             "title",
             title,
@@ -309,7 +309,7 @@ impl PlatformDriver for AndroidDriver {
             "body",
             body,
             "-n",
-            &format!("{}/com.golem.PushReceiver", self.package_name),
+            &format!("{}/fail.golem.PushReceiver", self.package_name),
         ])
         .await?;
         Ok(())

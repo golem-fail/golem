@@ -1,4 +1,4 @@
-package com.golem.companion;
+package fail.golem.companion;
 
 import android.app.Activity;
 import android.os.Bundle;

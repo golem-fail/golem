@@ -4,7 +4,7 @@ tags = ["deep-link", "navigation", "cross-platform"]
 
 [[flow.apps]]
 name = "app"
-bundle = "com.golem.test"
+bundle = "fail.golem.test"
 
 [[flow.apps.devices]]
 os = "ios:latest"
@@ -18,7 +18,7 @@ type = "phone"
 name = "verify_initial_state"
 steps = [
   # Launch the app and verify deep link display is initially empty
-  { action = "launch", app = "com.golem.test" },
+  { action = "launch", app = "fail.golem.test" },
   { action = "wait", on_text = "Deep Link:", timeout = 10000 },
   { action = "assert_visible", on_text = "Deep Link:" },
 ]

@@ -1,4 +1,4 @@
-package com.golem.testb
+package fail.golem.testb
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity

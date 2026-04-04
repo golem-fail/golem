@@ -19,8 +19,8 @@ cargo tauri android build
 ```
 
 The app's bundle identifiers:
-- iOS: `com.golem.testapp`
-- Android: `com.golem.testapp`
+- iOS: `fail.golem.testapp`
+- Android: `fail.golem.testapp`
 
 ## URL Scheme
 

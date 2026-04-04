@@ -4,7 +4,7 @@ tags = ["deep-link", "multi-app", "cross-platform"]
 
 [[flow.apps]]
 name = "app"
-bundle = "com.golem.test"
+bundle = "fail.golem.test"
 
 [[flow.apps.devices]]
 os = "ios:latest"
@@ -16,7 +16,7 @@ type = "phone"
 
 [[flow.apps]]
 name = "app-b"
-bundle = "com.golem.testb"
+bundle = "fail.golem.testb"
 
 [[flow.apps.devices]]
 os = "ios:latest"
@@ -30,7 +30,7 @@ type = "phone"
 name = "deep_link_app_a"
 steps = [
   # Launch app A and verify deep link display is empty
-  { action = "launch", app = "com.golem.test" },
+  { action = "launch", app = "fail.golem.test" },
   { action = "wait", on_text = "Deep Link:", timeout = 10000 },
   { action = "assert_visible", on_text = "Deep Link:" },
 
@@ -44,7 +44,7 @@ steps = [
 name = "deep_link_app_b"
 steps = [
   # Launch app B
-  { action = "launch", app = "com.golem.testb" },
+  { action = "launch", app = "fail.golem.testb" },
   { action = "wait", on_text = "deeplink-display-b", timeout = 10000 },
 
   # Open a deep link for app B and verify it is received
@@ -57,12 +57,12 @@ steps = [
 name = "verify_app_a_state_preserved"
 steps = [
   # Switch back to app A
-  { action = "launch", app = "com.golem.test" },
+  { action = "launch", app = "fail.golem.test" },
   { action = "wait", on_text = "Deep Link:", timeout = 10000 },
 
   # Verify app A's deep link display still shows the previously received link
   { action = "assert_visible", on_text = "golem-test://home", on_right_of = "Deep Link:" },
 
   # Stop app B
-  { action = "stop", app = "com.golem.testb" },
+  { action = "stop", app = "fail.golem.testb" },
 ]

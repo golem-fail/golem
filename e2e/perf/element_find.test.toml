@@ -4,7 +4,7 @@ tags = ["perf", "element-find", "latency"]
 
 [[flow.apps]]
 name = "app"
-bundle = "com.golem.test"
+bundle = "fail.golem.test"
 
 [[flow.apps.devices]]
 os = "ios:latest"
@@ -18,7 +18,7 @@ type = "phone"
 name = "launch_and_wait"
 steps = [
   # Launch the app and wait for initial load
-  { action = "launch", app = "com.golem.test" },
+  { action = "launch", app = "fail.golem.test" },
   { action = "wait", on_text = "Submit", timeout = 10000 },
 ]
 

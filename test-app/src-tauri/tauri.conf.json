@@ -1,7 +1,7 @@
 {
   "productName": "GOLEM Test App",
   "version": "0.1.0",
-  "identifier": "com.golem.test",
+  "identifier": "fail.golem.test",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",

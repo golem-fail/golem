@@ -1,4 +1,4 @@
-package com.golem.companion;
+package fail.golem.companion;
 
 import android.app.UiAutomation;
 import android.graphics.Bitmap;

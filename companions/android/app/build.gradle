@@ -2,10 +2,10 @@ plugins {
     id 'com.android.application'
 }
 android {
-    namespace 'com.golem.companion'
+    namespace 'fail.golem.companion'
     compileSdk 34
     defaultConfig {
-        applicationId "com.golem.companion"
+        applicationId "fail.golem.companion"
         minSdk 24
         targetSdk 34
         versionCode 1

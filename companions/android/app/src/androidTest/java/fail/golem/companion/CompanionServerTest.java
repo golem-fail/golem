@@ -1,4 +1,4 @@
-package com.golem.companion;
+package fail.golem.companion;
 
 import android.app.UiAutomation;
 import androidx.test.ext.junit.runners.AndroidJUnit4;

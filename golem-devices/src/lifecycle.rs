@@ -160,7 +160,7 @@ pub fn start_companion_command(device: &DeviceInfo, companion_path: &str, port: 
             "-e".into(),
             "port".into(),
             port.to_string(),
-            "com.golem.companion.test/androidx.test.runner.AndroidJUnitRunner".into(),
+            "fail.golem.companion.test/androidx.test.runner.AndroidJUnitRunner".into(),
         ],
     }
 }
@@ -831,7 +831,7 @@ mod tests {
                 "-e",
                 "port",
                 "8225",
-                "com.golem.companion.test/androidx.test.runner.AndroidJUnitRunner",
+                "fail.golem.companion.test/androidx.test.runner.AndroidJUnitRunner",
             ]
         );
     }

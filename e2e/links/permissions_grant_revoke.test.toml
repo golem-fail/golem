@@ -4,7 +4,7 @@ tags = ["permissions", "cross-platform"]
 
 [[flow.apps]]
 name = "app"
-bundle = "com.golem.test"
+bundle = "fail.golem.test"
 
 [[flow.apps.devices]]
 os = "ios:latest"
@@ -18,7 +18,7 @@ type = "phone"
 name = "camera_permission_cycle"
 steps = [
   # Launch the app
-  { action = "launch", app = "com.golem.test" },
+  { action = "launch", app = "fail.golem.test" },
   { action = "wait", on_text = "camera-permission-button", timeout = 10000 },
 
   # Grant camera permission before tapping the button

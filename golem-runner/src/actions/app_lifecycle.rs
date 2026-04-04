@@ -8,7 +8,7 @@ use crate::resolution::wait_for_settle;
 ///
 /// The step's `app` field can be either:
 /// - A friendly name defined in `[[flow.apps]]` (e.g. `"app"`) — resolved to the bundle ID.
-/// - A bundle ID directly (e.g. `"com.golem.test"`) — used as-is.
+/// - A bundle ID directly (e.g. `"fail.golem.test"`) — used as-is.
 ///
 /// If `apps` is empty or the name doesn't match, the value is treated as a bundle ID.
 pub fn resolve_app_bundle<'a>(step: &'a Step, apps: &'a [AppConfig]) -> Result<&'a str> {

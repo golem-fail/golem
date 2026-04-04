@@ -4,7 +4,7 @@ A minimal companion app used for multi-app testing with GOLEM. This app is the s
 
 ## Bundle ID
 
-- `com.golem.test-b`
+- `fail.golem.test-b`
 
 ## URL Scheme
 

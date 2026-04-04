@@ -4,7 +4,7 @@ tags = ["deep-link", "cold-start", "cross-platform"]
 
 [[flow.apps]]
 name = "app"
-bundle = "com.golem.test"
+bundle = "fail.golem.test"
 
 [[flow.apps.devices]]
 os = "ios:latest"
@@ -18,7 +18,7 @@ type = "phone"
 name = "cold_start_via_deep_link"
 steps = [
   # Ensure the app is not running by stopping it first
-  { action = "stop", app = "com.golem.test" },
+  { action = "stop", app = "fail.golem.test" },
 
   # Open a deep link while the app is not running (cold start)
   { action = "open_link", url = "golem-test://cold-start-test" },
