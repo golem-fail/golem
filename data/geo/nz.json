@@ -4,7 +4,10 @@
     "name_en": "New Zealand",
     "iso_code": "NZ",
     "phone_prefix": "+64",
-    "phone_formats": ["+64-2#-###-####", "+64-#-###-####"],
+    "phone_formats": [
+      "+64-2#-###-####",
+      "+64-#-###-####"
+    ],
     "postcode_format": "####",
     "name_order": "given_first"
   },
@@ -12,7 +15,10 @@
     {
       "name": "Auckland",
       "name_en": "Auckland",
-      "region_tags": ["North Island", "Upper North Island"],
+      "region_tags": [
+        "North Island",
+        "Upper North Island"
+      ],
       "cities": [
         {
           "name": "Auckland",
@@ -141,7 +147,10 @@
     {
       "name": "Wellington",
       "name_en": "Wellington",
-      "region_tags": ["North Island", "Lower North Island"],
+      "region_tags": [
+        "North Island",
+        "Lower North Island"
+      ],
       "cities": [
         {
           "name": "Wellington",
@@ -266,13 +275,41 @@
               "pattern": "n{1,200} Wainuiomata Road"
             }
           ]
+        },
+        {
+          "name": "Porirua",
+          "name_en": "Porirua",
+          "lat": -41.1337,
+          "lon": 174.8404,
+          "postcodes": [
+            {
+              "code": "5022",
+              "street": "Titahi Bay Road",
+              "street_en": "Titahi Bay Road",
+              "pattern": "n{1,250} Titahi Bay Road"
+            },
+            {
+              "code": "5024",
+              "street": "Kenepuru Drive",
+              "street_en": "Kenepuru Drive",
+              "pattern": "n{1,200} Kenepuru Drive"
+            },
+            {
+              "code": "5026",
+              "street": "Mungavin Avenue",
+              "street_en": "Mungavin Avenue",
+              "pattern": "n{1,180} Mungavin Avenue"
+            }
+          ]
         }
       ]
     },
     {
       "name": "Canterbury",
       "name_en": "Canterbury",
-      "region_tags": ["South Island"],
+      "region_tags": [
+        "South Island"
+      ],
       "cities": [
         {
           "name": "Christchurch",
@@ -353,18 +390,47 @@
               "pattern": "n{1,300} Main North Road"
             }
           ]
+        },
+        {
+          "name": "Timaru",
+          "name_en": "Timaru",
+          "lat": -44.3904,
+          "lon": 171.2373,
+          "postcodes": [
+            {
+              "code": "7910",
+              "street": "Stafford Street",
+              "street_en": "Stafford Street",
+              "pattern": "n{1,250} Stafford Street"
+            },
+            {
+              "code": "7920",
+              "street": "King Street",
+              "street_en": "King Street",
+              "pattern": "n{1,200} King Street"
+            },
+            {
+              "code": "7940",
+              "street": "Church Street",
+              "street_en": "Church Street",
+              "pattern": "n{1,180} Church Street"
+            }
+          ]
         }
       ]
     },
     {
       "name": "Waikato",
       "name_en": "Waikato",
-      "region_tags": ["North Island", "Upper North Island"],
+      "region_tags": [
+        "North Island",
+        "Upper North Island"
+      ],
       "cities": [
         {
           "name": "Hamilton",
           "name_en": "Hamilton",
-          "lat": -37.7870,
+          "lat": -37.787,
           "lon": 175.2793,
           "postcodes": [
             {
@@ -422,7 +488,9 @@
     {
       "name": "Bay of Plenty",
       "name_en": "Bay of Plenty",
-      "region_tags": ["North Island"],
+      "region_tags": [
+        "North Island"
+      ],
       "cities": [
         {
           "name": "Tauranga",
@@ -493,7 +561,9 @@
     {
       "name": "Otago",
       "name_en": "Otago",
-      "region_tags": ["South Island"],
+      "region_tags": [
+        "South Island"
+      ],
       "cities": [
         {
           "name": "Dunedin",
@@ -582,7 +652,10 @@
     {
       "name": "Manawatū-Whanganui",
       "name_en": "Manawatū-Whanganui",
-      "region_tags": ["North Island", "Lower North Island"],
+      "region_tags": [
+        "North Island",
+        "Lower North Island"
+      ],
       "cities": [
         {
           "name": "Palmerston North",
@@ -627,19 +700,47 @@
               "pattern": "n{1,180} College Street"
             }
           ]
+        },
+        {
+          "name": "Whanganui",
+          "name_en": "Whanganui",
+          "lat": -39.9307,
+          "lon": 175.0479,
+          "postcodes": [
+            {
+              "code": "4500",
+              "street": "Victoria Avenue",
+              "street_en": "Victoria Avenue",
+              "pattern": "n{1,300} Victoria Avenue"
+            },
+            {
+              "code": "4501",
+              "street": "Ridgway Street",
+              "street_en": "Ridgway Street",
+              "pattern": "n{1,200} Ridgway Street"
+            },
+            {
+              "code": "4520",
+              "street": "Great North Road",
+              "street_en": "Great North Road",
+              "pattern": "n{1,250} Great North Road"
+            }
+          ]
         }
       ]
     },
     {
       "name": "Hawke's Bay",
       "name_en": "Hawke's Bay",
-      "region_tags": ["North Island"],
+      "region_tags": [
+        "North Island"
+      ],
       "cities": [
         {
           "name": "Napier",
           "name_en": "Napier",
           "lat": -39.4928,
-          "lon": 176.9120,
+          "lon": 176.912,
           "postcodes": [
             {
               "code": "4110",
@@ -698,7 +799,10 @@
     {
       "name": "Northland",
       "name_en": "Northland",
-      "region_tags": ["North Island", "Upper North Island"],
+      "region_tags": [
+        "North Island",
+        "Upper North Island"
+      ],
       "cities": [
         {
           "name": "Whangārei",
@@ -743,7 +847,9 @@
     {
       "name": "Taranaki",
       "name_en": "Taranaki",
-      "region_tags": ["North Island"],
+      "region_tags": [
+        "North Island"
+      ],
       "cities": [
         {
           "name": "New Plymouth",
@@ -788,7 +894,9 @@
     {
       "name": "Southland",
       "name_en": "Southland",
-      "region_tags": ["South Island"],
+      "region_tags": [
+        "South Island"
+      ],
       "cities": [
         {
           "name": "Invercargill",
@@ -833,13 +941,15 @@
     {
       "name": "Nelson",
       "name_en": "Nelson",
-      "region_tags": ["South Island"],
+      "region_tags": [
+        "South Island"
+      ],
       "cities": [
         {
           "name": "Nelson",
           "name_en": "Nelson",
           "lat": -41.2706,
-          "lon": 173.2840,
+          "lon": 173.284,
           "postcodes": [
             {
               "code": "7010",
@@ -854,12 +964,6 @@
               "pattern": "n{1,200} Hardy Street"
             },
             {
-              "code": "7020",
-              "street": "Waimea Road",
-              "street_en": "Waimea Road",
-              "pattern": "n{1,180} Waimea Road"
-            },
-            {
               "code": "7022",
               "street": "Collingwood Street",
               "street_en": "Collingwood Street",
@@ -872,7 +976,9 @@
     {
       "name": "Marlborough",
       "name_en": "Marlborough",
-      "region_tags": ["South Island"],
+      "region_tags": [
+        "South Island"
+      ],
       "cities": [
         {
           "name": "Blenheim",
@@ -911,7 +1017,9 @@
     {
       "name": "Gisborne",
       "name_en": "Gisborne",
-      "region_tags": ["North Island"],
+      "region_tags": [
+        "North Island"
+      ],
       "cities": [
         {
           "name": "Gisborne",
@@ -950,13 +1058,15 @@
     {
       "name": "Tasman",
       "name_en": "Tasman",
-      "region_tags": ["South Island"],
+      "region_tags": [
+        "South Island"
+      ],
       "cities": [
         {
           "name": "Richmond",
           "name_en": "Richmond",
-          "lat": -41.3400,
-          "lon": 173.1820,
+          "lat": -41.34,
+          "lon": 173.182,
           "postcodes": [
             {
               "code": "7020",
@@ -989,7 +1099,9 @@
     {
       "name": "West Coast",
       "name_en": "West Coast",
-      "region_tags": ["South Island"],
+      "region_tags": [
+        "South Island"
+      ],
       "cities": [
         {
           "name": "Greymouth",
