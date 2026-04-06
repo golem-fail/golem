@@ -89,25 +89,41 @@ impl Viewport {
     }
 }
 
-/// Filter an element tree to only include elements whose bounds
-/// intersect the viewport. Structural parent elements are preserved
-/// if they have any visible descendants.
+/// Collect all elements whose bounds intersect the viewport into a flat list.
+///
+/// Uses absolute positions only — an element at y=389 is visible regardless
+/// of where its parent is in the tree. This correctly handles fixed-position
+/// overlays, scrolled content, and dynamic DOM insertions.
 pub fn filter_viewport(root: &Element, viewport: &Viewport) -> Element {
-    let mut filtered = root.clone();
-    filtered.children = root
-        .children
-        .iter()
-        .filter_map(|child| {
-            let filtered_child = filter_viewport(child, viewport);
-            // Keep the child if it's in viewport OR has visible descendants
-            if viewport.contains(&child.bounds) || !filtered_child.children.is_empty() {
-                Some(filtered_child)
-            } else {
-                None
-            }
-        })
-        .collect();
-    filtered
+    let mut visible = Vec::new();
+    // Collect visible descendants (skip the root — it's the container).
+    for child in &root.children {
+        collect_visible(child, viewport, &mut visible);
+    }
+    // Return the root with visible elements as flat children.
+    Element {
+        element_type: root.element_type.clone(),
+        text: root.text.clone(),
+        accessibility_id: root.accessibility_id.clone(),
+        placeholder: root.placeholder.clone(),
+        enabled: root.enabled,
+        checked: root.checked,
+        clickable: root.clickable,
+        focused: root.focused,
+        bounds: root.bounds.clone(),
+        children: visible,
+    }
+}
+
+fn collect_visible(element: &Element, viewport: &Viewport, out: &mut Vec<Element>) {
+    if viewport.contains(&element.bounds) {
+        let mut leaf = element.clone();
+        leaf.children = Vec::new();
+        out.push(leaf);
+    }
+    for child in &element.children {
+        collect_visible(child, viewport, out);
+    }
 }
 
 impl FindResult {

@@ -1,0 +1,62 @@
+[flow]
+name = "In-WebView dialog overlay test"
+tags = ["cross-platform", "interaction", "dialog"]
+
+[[flow.apps]]
+name = "app"
+bundle = "fail.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+# Dialog A: CSS display toggle (always in DOM, hidden via display:none)
+[[block]]
+name = "dialog_a_accept"
+steps = [
+  { action = "assert_visible", on_text = "Submit" },
+  { action = "tap", on_text = "Open Dialog A", auto_scroll = true, timeout = 60000 },
+  { action = "assert_visible", on_text = "Continue with A?" },
+  { action = "assert_visible", on_text = "Accept A" },
+  { action = "assert_visible", on_text = "Cancel A" },
+  { action = "tap", on_text = "Accept A" },
+  { action = "assert_not_visible", on_text = "Continue with A?" },
+  { action = "assert_visible", on_text = "Accepted A" },
+]
+
+[[block]]
+name = "dialog_a_cancel"
+steps = [
+  { action = "tap", on_text = "Open Dialog A" },
+  { action = "assert_visible", on_text = "Continue with A?" },
+  { action = "tap", on_text = "Cancel A" },
+  { action = "assert_not_visible", on_text = "Continue with A?" },
+  { action = "assert_visible", on_text = "Cancelled A" },
+]
+
+# Dialog B: Svelte {#if} conditional rendering (DOM nodes added/removed)
+[[block]]
+name = "dialog_b_accept"
+steps = [
+  { action = "tap", on_text = "Open Dialog B" },
+  { action = "assert_visible", on_text = "Continue with B?" },
+  { action = "assert_visible", on_text = "Accept B" },
+  { action = "assert_visible", on_text = "Cancel B" },
+  { action = "tap", on_text = "Accept B" },
+  { action = "assert_not_visible", on_text = "Continue with B?" },
+  { action = "assert_visible", on_text = "Accepted B" },
+]
+
+[[block]]
+name = "dialog_b_cancel"
+steps = [
+  { action = "tap", on_text = "Open Dialog B" },
+  { action = "assert_visible", on_text = "Continue with B?" },
+  { action = "tap", on_text = "Cancel B" },
+  { action = "assert_not_visible", on_text = "Continue with B?" },
+  { action = "assert_visible", on_text = "Cancelled B" },
+]

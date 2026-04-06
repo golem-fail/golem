@@ -10,6 +10,7 @@ import AlertTriggers from "./lib/AlertTriggers.svelte";
 import Permissions from "./lib/Permissions.svelte";
 import DeviceState from "./lib/DeviceState.svelte";
 import DelayedElement from "./lib/DelayedElement.svelte";
+import DialogOverlay from "./lib/DialogOverlay.svelte";
 </script>
 
 <main>
@@ -25,4 +26,5 @@ import DelayedElement from "./lib/DelayedElement.svelte";
   <Permissions />
   <DeviceState />
   <DelayedElement />
+  <DialogOverlay />
 </main>

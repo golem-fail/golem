@@ -19,6 +19,43 @@ async fn tap_at(driver: &dyn PlatformDriver, x: i32, y: i32) -> Result<()> {
     driver.tap(x, y).await
 }
 
+/// Find a smaller switch/toggle control inside a larger switch/toggle row.
+///
+/// Spatial matching: looks for a switch/toggle element whose bounds fit entirely
+/// inside the outer element AND is positioned on the right half. This handles
+/// the iOS SwiftUI Toggle pattern where the label spans the full row but the
+/// tappable control is on the right.
+async fn find_inner_toggle(
+    driver: &dyn PlatformDriver,
+    outer: &golem_element::Element,
+) -> Option<golem_element::Bounds> {
+    let root = driver.get_hierarchy().await.ok()?;
+    let mut candidates = Vec::new();
+    collect_toggles(&root, &mut candidates);
+
+    let ob = &outer.bounds;
+    candidates.into_iter().find(|b| {
+        let is_toggle_type = true; // already filtered by collect_toggles
+        let fits_inside = b.x >= ob.x
+            && b.y >= ob.y
+            && b.x + b.width <= ob.x + ob.width
+            && b.y + b.height <= ob.y + ob.height;
+        let is_smaller = b.width < ob.width || b.height < ob.height;
+        let on_right = b.center_x() > ob.center_x();
+        is_toggle_type && fits_inside && is_smaller && on_right
+    })
+}
+
+fn collect_toggles(element: &golem_element::Element, out: &mut Vec<golem_element::Bounds>) {
+    let et = element.element_type.to_lowercase();
+    if et == "switch" || et == "toggle" {
+        out.push(element.bounds.clone());
+    }
+    for child in &element.children {
+        collect_toggles(child, out);
+    }
+}
+
 /// Find the target element and tap at its center coordinates.
 ///
 /// When `auto_scroll = true`, if the element is not in the viewport but
@@ -29,16 +66,17 @@ async fn tap_at(driver: &dyn PlatformDriver, x: i32, y: i32) -> Result<()> {
 pub(crate) async fn handle_tap(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
     let (elem, coords) = resolve_element(step, driver).await?;
 
-    // For switch/toggle elements with a child switch control,
-    // tap the child control instead of the center of the whole row.
+    // Workaround: iOS SwiftUI Toggles render as a full-width row with the
+    // tappable switch control on the right. Tapping the row center hits the
+    // label (no effect). We detect this by finding a smaller switch/toggle
+    // element that fits inside the matched element's bounds, positioned on
+    // the right side. This uses spatial matching (not parent-child) since
+    // the visible tree is flat.
     let (x, y) = {
         let et = elem.element_type.to_lowercase();
-        if (et == "switch" || et == "toggle") && !elem.children.is_empty() {
-            if let Some(child) = elem.children.iter().find(|c| {
-                let ct = c.element_type.to_lowercase();
-                ct == "switch" || ct == "toggle"
-            }) {
-                (child.bounds.center_x(), child.bounds.center_y())
+        if et == "switch" || et == "toggle" {
+            if let Some(inner) = find_inner_toggle(driver, &elem).await {
+                (inner.center_x(), inner.center_y())
             } else {
                 coords
             }

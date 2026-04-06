@@ -63,7 +63,7 @@ pub(crate) struct AlertResponse {
 ///
 /// After parsing, promotes `label` → `text` for elements where `text` is absent,
 /// to normalise across different companion server implementations.
-pub(crate) fn parse_hierarchy(json: &str) -> Result<Element> {
+pub fn parse_hierarchy(json: &str) -> Result<Element> {
     // Parse as generic JSON first so we can normalise label → text.
     let mut val: serde_json::Value =
         serde_json::from_str(json).context("failed to parse hierarchy JSON")?;

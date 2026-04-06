@@ -312,6 +312,11 @@ impl SuiteRunner {
     }
 }
 
+/// Public wrapper for scan_companions (used by `golem tree`).
+pub async fn scan_companions_public() -> Vec<(u16, golem_driver::CompanionHealth)> {
+    scan_companions().await
+}
+
 /// Scan ports for running companion servers.
 ///
 /// Checks ports in the companion range concurrently for a responding

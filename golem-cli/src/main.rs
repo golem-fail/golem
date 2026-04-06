@@ -5,6 +5,7 @@ pub mod discovery;
 pub mod orchestrator;
 pub mod scaffold;
 pub mod suite;
+pub mod tree;
 
 use std::path::{Path, PathBuf};
 
@@ -109,6 +110,10 @@ async fn main() -> anyhow::Result<()> {
             if !all_passed {
                 std::process::exit(1);
             }
+        }
+
+        Commands::Tree(args) => {
+            tree::run(&args).await?;
         }
 
         Commands::Devices => {

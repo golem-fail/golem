@@ -12,12 +12,37 @@ pub struct Cli {
 pub enum Commands {
     /// Run test flows
     Run(RunArgs),
+    /// Show the UI element tree from a running companion
+    Tree(TreeArgs),
     /// List available devices
     Devices,
     /// Initialize a new project
     Init,
     /// Create a new flow template
     Create(CreateArgs),
+}
+
+#[derive(clap::Args, Debug)]
+pub struct TreeArgs {
+    /// Filter by platform (ios or android)
+    #[arg(long)]
+    pub platform: Option<String>,
+
+    /// Filter by device name or UDID
+    #[arg(long)]
+    pub device: Option<String>,
+
+    /// Show full tree (no viewport filtering)
+    #[arg(long)]
+    pub full: bool,
+
+    /// Output as JSON
+    #[arg(long)]
+    pub json: bool,
+
+    /// App bundle ID for iOS (needed to target the right app)
+    #[arg(long)]
+    pub bundle: Option<String>,
 }
 
 #[derive(clap::Args, Debug)]
