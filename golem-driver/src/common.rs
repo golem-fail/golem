@@ -184,21 +184,17 @@ fn normalize_json(val: &mut serde_json::Value) {
             }
         }
 
-        // Build `text` using priority chain: value → label → placeholder → content.
-        // This reflects what a human actually sees on screen.
+        // Build `text` reflecting what the user sees on screen.
         //
-        // 1. typed value (for inputs) — most visible thing in an input field
-        // 2. aria-label — accessible name for the element
-        // 3. placeholder (inputs) — hint text when field is empty
-        // 4. content (existing text) — inner text of spans, paragraphs, etc.
-        //
-        // The iOS companion sends: text=label, value=snapshot.value, placeholder=placeholderValue
-        // Android sends: text=getText() (which is already the typed value or content)
+        // For inputs: value → placeholder → label → text content
+        //   (value = what's typed, placeholder = hint when empty)
+        // For everything else: placeholder → label → text content
+        //   (value is unreliable — iOS reports internal state for non-inputs,
+        //    switches report "0"/"1" toggle state)
 
         // Promote label → accessibility_id (always, regardless of text chain)
         promote_label_to_id(map);
 
-        // Now build the text chain
         let current_text = map
             .get("text")
             .and_then(|v| v.as_str())
@@ -220,22 +216,18 @@ fn normalize_json(val: &mut serde_json::Value) {
             .unwrap_or("")
             .to_string();
 
-        // Check if this is an input-type element where value takes priority
         let is_input = matches!(
             map.get("element_type").and_then(|v| v.as_str()),
             Some("text_field" | "secure_text_field" | "search_field" | "text_view"
                 | "EditText" | "AutoCompleteTextView")
         );
 
-        // Pick the highest priority non-empty value.
-        // For inputs: value → label → placeholder → content
-        // For others: label → content (value is often metadata like "0" for switches)
         let resolved_text = if is_input && !value.is_empty() {
             value
+        } else if !placeholder.is_empty() {
+            placeholder
         } else if !label.is_empty() {
             label
-        } else if is_input && !placeholder.is_empty() {
-            placeholder
         } else {
             current_text
         };
