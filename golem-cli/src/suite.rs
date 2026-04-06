@@ -619,11 +619,15 @@ async fn run_flow_on_device(
     match execute_flow(&flow, driver.as_ref(), &mut vars, None, 10_000, &mut ctx, Some(&barrier)).await {
         Ok(result) => {
             if !result.success {
-                if let Some(ref block) = result.failed_block {
-                    eprintln!("  [{device_label}] Failed in block: {block}");
-                }
-                if let Some(step) = result.failed_step {
-                    eprintln!("  [{device_label}] Failed at step: {step}");
+                if result.barrier_aborted {
+                    eprintln!("  [{device_label}] Aborted: another device failed at this point");
+                } else {
+                    if let Some(ref block) = result.failed_block {
+                        eprintln!("  [{device_label}] Failed in block: {block}");
+                    }
+                    if let Some(step) = result.failed_step {
+                        eprintln!("  [{device_label}] Failed at step: {step}");
+                    }
                 }
             }
             for w in &result.warnings {

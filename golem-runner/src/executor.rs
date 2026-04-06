@@ -21,6 +21,8 @@ pub struct FlowResult {
     pub failed_step: Option<usize>,
     /// The name of the block containing the failed step, if any.
     pub failed_block: Option<String>,
+    /// True if this flow was aborted because another device failed (barrier).
+    pub barrier_aborted: bool,
 }
 
 /// Execute a parsed FlowFile by traversing blocks in order.
@@ -170,6 +172,7 @@ pub async fn execute_flow<'a>(
                     warnings,
                     failed_step: child_result.failed_step,
                     failed_block: block.name.clone(),
+                    barrier_aborted: child_result.barrier_aborted,
                 });
             }
 
@@ -212,6 +215,7 @@ pub async fn execute_flow<'a>(
                         warnings,
                         failed_step: Some(step_idx),
                         failed_block: block.name.clone(),
+                        barrier_aborted: true,
                     });
                 }
             }
@@ -230,6 +234,7 @@ pub async fn execute_flow<'a>(
                         warnings,
                         failed_step: Some(step_idx),
                         failed_block: block.name.clone(),
+                        barrier_aborted: false,
                     });
                 }
             }
@@ -258,6 +263,7 @@ pub async fn execute_flow<'a>(
         warnings,
         failed_step: None,
         failed_block: None,
+        barrier_aborted: false,
     })
 }
 
@@ -312,6 +318,7 @@ pub async fn execute_flow_with_data<'a>(
         warnings: Vec::new(),
         failed_step: None,
         failed_block: None,
+        barrier_aborted: false,
     }))
 }
 
