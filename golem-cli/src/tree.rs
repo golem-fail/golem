@@ -116,7 +116,7 @@ fn print_tree(element: &Element, depth: usize) {
     let indent = "  ".repeat(depth);
     let text = element.text.as_deref().unwrap_or("");
     let id = element
-        .accessibility_id
+        .accessibility_label
         .as_deref()
         .map(|s| format!(" id={s}"))
         .unwrap_or_default();

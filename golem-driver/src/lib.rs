@@ -348,7 +348,7 @@ mod tests {
         Element {
             element_type: element_type.to_string(),
             text: None,
-            accessibility_id: None,
+            accessibility_label: None,
             placeholder: None,
             enabled: true,
             checked: false,

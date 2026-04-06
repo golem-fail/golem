@@ -49,7 +49,7 @@ steps = [
   # Scroll within the web view to find list elements
   { action = "swipe", direction = "down" },
   { action = "swipe", direction = "down" },
-  { action = "assert_visible", on_text = "list-item-0" },
+  { action = "assert_visible", on_text = "Item 0" },
 
   # Scroll back up to the top of the web view
   { action = "swipe", direction = "up" },

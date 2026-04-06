@@ -21,24 +21,24 @@ steps = [
   { action = "assert_visible", on_text = "0", on_below = "Counter" },
 
   # Verify both buttons are visible and enabled
-  { action = "assert_visible", on_text = "Increment" },
-  { action = "assert_visible", on_text = "Decrement" },
-  { action = "assert_visible", on_text = "Increment", on_enabled = true },
-  { action = "assert_visible", on_text = "Decrement", on_enabled = true },
+  { action = "assert_visible", on_accessibility_label = "Increment" },
+  { action = "assert_visible", on_accessibility_label = "Decrement" },
+  { action = "assert_visible", on_accessibility_label = "Increment", on_enabled = true },
+  { action = "assert_visible", on_accessibility_label = "Decrement", on_enabled = true },
 ]
 
 [[block]]
 name = "increment_counter"
 steps = [
   # Increment the counter five times
-  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_accessibility_label = "Increment" },
   { action = "assert_visible", on_text = "1", on_below = "Counter" },
-  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_accessibility_label = "Increment" },
   { action = "assert_visible", on_text = "2", on_below = "Counter" },
-  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_accessibility_label = "Increment" },
   { action = "assert_visible", on_text = "3", on_below = "Counter" },
-  { action = "tap", on_text = "Increment" },
-  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_accessibility_label = "Increment" },
+  { action = "tap", on_accessibility_label = "Increment" },
   { action = "assert_visible", on_text = "5", on_below = "Counter" },
 
   # Read and save the counter value
@@ -49,11 +49,11 @@ steps = [
 name = "decrement_counter"
 steps = [
   # Decrement the counter three times
-  { action = "tap", on_text = "Decrement" },
+  { action = "tap", on_accessibility_label = "Decrement" },
   { action = "assert_visible", on_text = "4", on_below = "Counter" },
-  { action = "tap", on_text = "Decrement" },
+  { action = "tap", on_accessibility_label = "Decrement" },
   { action = "assert_visible", on_text = "3", on_below = "Counter" },
-  { action = "tap", on_text = "Decrement" },
+  { action = "tap", on_accessibility_label = "Decrement" },
   { action = "assert_visible", on_text = "2", on_below = "Counter" },
 
   # Read and save the counter value after decrement
@@ -64,12 +64,12 @@ steps = [
 name = "verify_button_states"
 steps = [
   # Verify buttons remain enabled at count = 2
-  { action = "assert_visible", on_text = "Increment", on_enabled = true },
-  { action = "assert_visible", on_text = "Decrement", on_enabled = true },
+  { action = "assert_visible", on_accessibility_label = "Increment", on_enabled = true },
+  { action = "assert_visible", on_accessibility_label = "Decrement", on_enabled = true },
 
   # Decrement to zero
-  { action = "tap", on_text = "Decrement" },
-  { action = "tap", on_text = "Decrement" },
+  { action = "tap", on_accessibility_label = "Decrement" },
+  { action = "tap", on_accessibility_label = "Decrement" },
   { action = "assert_visible", on_text = "0", on_below = "Counter" },
 
   # Verify the counter display shows zero
@@ -77,9 +77,9 @@ steps = [
   { action = "assert_visible", on_text = "0", on_below = "Counter" },
 
   # Verify increment button is still enabled at zero
-  { action = "assert_visible", on_text = "Increment", on_enabled = true },
+  { action = "assert_visible", on_accessibility_label = "Increment", on_enabled = true },
 
   # Increment once more to confirm functionality after reaching zero
-  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_accessibility_label = "Increment" },
   { action = "assert_visible", on_text = "1", on_below = "Counter" },
 ]

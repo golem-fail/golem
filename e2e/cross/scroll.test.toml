@@ -26,6 +26,6 @@ steps = [
 name = "scroll_within_list"
 steps = [
   # Now the list is in view — scroll within it to find Item 45
-  { action = "scroll", to = { text = "Item 45" }, within = { text = "scroll-list" }, timeout = 60000 },
+  { action = "scroll", to = { text = "Item 45" }, within = { below = "Scroll List" }, timeout = 60000 },
   { action = "assert_visible", on_text = "Item 45", timeout = 15000 },
 ]

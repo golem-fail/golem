@@ -156,7 +156,7 @@ mod tests {
         Step {
             action: "tap".to_string(),
             on_text: Some("OK".to_string()),
-            on_accessibility_id: None,
+            on_accessibility_label: None,
             on_index: None,
             on_enabled: None,
             on_checked: None,

@@ -92,7 +92,7 @@ pub fn parse_hierarchy(json: &str) -> Result<Element> {
             let wrapped = serde_json::json!({
                 "element_type": "other",
                 "text": null,
-                "accessibility_id": null,
+                "accessibility_label": null,
                 "placeholder": null,
                 "enabled": true,
                 "checked": false,
@@ -118,10 +118,10 @@ pub fn parse_hierarchy(json: &str) -> Result<Element> {
 ///   `bounds` with `left/top/right/bottom` instead of `x/y/width/height`
 fn normalize_json(val: &mut serde_json::Value) {
     if let serde_json::Value::Object(map) = val {
-        // Rename raw `id` → `accessibility_id` (GOLEM companion format)
-        if map.contains_key("id") && !map.contains_key("accessibility_id") {
+        // Rename raw `id` → `accessibility_label` (GOLEM companion format)
+        if map.contains_key("id") && !map.contains_key("accessibility_label") {
             if let Some(v) = map.remove("id") {
-                map.insert("accessibility_id".to_string(), v);
+                map.insert("accessibility_label".to_string(), v);
             }
         }
 
@@ -142,11 +142,11 @@ fn normalize_json(val: &mut serde_json::Value) {
         if let Some(cd) = map.get("contentDescription").and_then(|v| v.as_str()) {
             if !cd.is_empty() {
                 let id_empty = map
-                    .get("accessibility_id")
+                    .get("accessibility_label")
                     .and_then(|v| v.as_str())
                     .is_none_or(|s| s.is_empty());
                 if id_empty {
-                    map.insert("accessibility_id".to_string(), serde_json::Value::String(cd.to_string()));
+                    map.insert("accessibility_label".to_string(), serde_json::Value::String(cd.to_string()));
                 }
             }
         }
@@ -192,7 +192,7 @@ fn normalize_json(val: &mut serde_json::Value) {
         //   (value is unreliable — iOS reports internal state for non-inputs,
         //    switches report "0"/"1" toggle state)
 
-        // Promote label → accessibility_id (always, regardless of text chain)
+        // Promote label → accessibility_label (always, regardless of text chain)
         promote_label_to_id(map);
 
         let current_text = map
@@ -245,7 +245,7 @@ fn normalize_json(val: &mut serde_json::Value) {
     }
 }
 
-/// Promote `label` (aria-label) to `accessibility_id` when id is absent/empty.
+/// Promote `label` (aria-label) to `accessibility_label` when id is absent/empty.
 fn promote_label_to_id(map: &mut serde_json::Map<String, serde_json::Value>) {
     let label_str = map
         .get("label")
@@ -253,13 +253,13 @@ fn promote_label_to_id(map: &mut serde_json::Map<String, serde_json::Value>) {
         .unwrap_or("")
         .to_string();
 
-    let id_empty = match map.get("accessibility_id") {
+    let id_empty = match map.get("accessibility_label") {
         Some(serde_json::Value::String(s)) => s.is_empty(),
         Some(serde_json::Value::Null) | None => true,
         _ => false,
     };
     if id_empty && !label_str.is_empty() {
-        map.insert("accessibility_id".to_string(), serde_json::Value::String(label_str));
+        map.insert("accessibility_label".to_string(), serde_json::Value::String(label_str));
     }
 }
 

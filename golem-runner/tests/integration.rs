@@ -47,7 +47,7 @@ fn hierarchy_with_texts(texts: &[&str]) -> Element {
         .map(|(i, t)| Element {
             element_type: "Button".to_string(),
             text: Some(t.to_string()),
-            accessibility_id: None,
+            accessibility_label: None,
             placeholder: None,
             enabled: true,
             checked: false,
@@ -61,7 +61,7 @@ fn hierarchy_with_texts(texts: &[&str]) -> Element {
     Element {
         element_type: "View".to_string(),
         text: None,
-        accessibility_id: None,
+        accessibility_label: None,
         placeholder: None,
         enabled: true,
         checked: false,
@@ -77,7 +77,7 @@ fn empty_hierarchy() -> Element {
     Element {
         element_type: "View".to_string(),
         text: None,
-        accessibility_id: None,
+        accessibility_label: None,
         placeholder: None,
         enabled: true,
         checked: false,

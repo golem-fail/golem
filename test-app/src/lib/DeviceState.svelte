@@ -35,10 +35,10 @@ onMount(() => {
 </script>
 <div class="section">
   <h2>Device State</h2>
-  <div><span>Orientation:</span> <span aria-label="orientation-label">{orientation}</span></div>
-  <div><span>Theme:</span> <span aria-label="theme-label">{theme}</span></div>
-  <div><span>Location:</span> <span aria-label="location-label">{location}</span></div>
-  <div><span>Deep Link:</span> <span aria-label="deeplink-display">{deeplink}</span></div>
-  <div><span>Notification:</span> <span aria-label="notification-display">{notification}</span></div>
-  <div><span>Media Count:</span> <span aria-label="media-count-label">{mediaCount}</span></div>
+  <div><span>Orientation:</span> <span>{orientation}</span></div>
+  <div><span>Theme:</span> <span>{theme}</span></div>
+  <div><span>Location:</span> <span>{location}</span></div>
+  <div><span>Deep Link:</span> <span>{deeplink}</span></div>
+  <div><span>Notification:</span> <span>{notification}</span></div>
+  <div><span>Media Count:</span> <span>{mediaCount}</span></div>
 </div>

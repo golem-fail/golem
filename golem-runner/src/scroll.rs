@@ -28,7 +28,7 @@ fn build_fingerprint(element: &Element, buf: &mut String) {
         buf.push_str(text);
     }
     buf.push(':');
-    if let Some(ref id) = element.accessibility_id {
+    if let Some(ref id) = element.accessibility_label {
         buf.push_str(id);
     }
     // Include bounds so scroll position changes are detected (WebViews report
@@ -238,7 +238,7 @@ pub async fn scroll_to_element_with_hint(
                 "Scroll timed out after {}ms: text={:?}, id={:?}",
                 timeout_ms.unwrap_or(0),
                 selector.text,
-                selector.accessibility_id,
+                selector.accessibility_label,
             );
         }
         let (fx, fy, tx, ty) = if let Some(ref cb) = container {
@@ -313,7 +313,7 @@ pub async fn scroll_to_element_with_hint(
                     "Element not found: scrolled in both directions and hit boundaries. \
                      Selector: text={:?}, id={:?}",
                     selector.text,
-                    selector.accessibility_id,
+                    selector.accessibility_label,
                 );
             }
             direction = reverse_direction(direction);
@@ -344,7 +344,7 @@ pub async fn scroll_to_element_with_hint(
         "Element not found after {max_scrolls} scroll attempts. \
          Selector: text={:?}, id={:?}",
         selector.text,
-        selector.accessibility_id,
+        selector.accessibility_label,
     )
 }
 
@@ -362,7 +362,7 @@ mod tests {
         Element {
             element_type: element_type.to_string(),
             text: None,
-            accessibility_id: None,
+            accessibility_label: None,
             placeholder: None,
             enabled: true,
             checked: false,

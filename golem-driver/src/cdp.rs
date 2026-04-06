@@ -28,10 +28,14 @@ fn find_free_port() -> std::io::Result<u16> {
 /// - Uses `getBoundingClientRect()` for viewport-relative coordinates
 /// Returns JSON: `{ tree: {...}, meta: { elapsed_ms, node_count, dpr, url } }`
 ///
-/// Text priority chain (matches common.rs normalization):
-/// Inputs: value → placeholder → aria-label → text content
-/// Others: placeholder → aria-label → text content
-const DOM_TRAVERSAL_JS: &str = r#"(function(){var dpr=window.devicePixelRatio||1;var nc=0;var t0=performance.now();function t(el){nc++;var r=el.getBoundingClientRect();var al=el.getAttribute('aria-label')||'';var ph=el.placeholder||'';var tx='';for(var c of el.childNodes){if(c.nodeType===3&&c.textContent.trim()){tx=c.textContent.trim();break;}}var isInput=el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT';var val=(isInput&&el.type!=='checkbox'&&el.type!=='radio')?el.value||'':'';var text=val?val:ph?ph:al?al:tx;var n={class:el.tagName.toLowerCase(),text:text,contentDescription:al||el.id||'',bounds:{left:Math.round(r.left*dpr),top:Math.round(r.top*dpr),right:Math.round((r.left+r.width)*dpr),bottom:Math.round((r.top+r.height)*dpr)},clickable:el.tagName==='BUTTON'||el.tagName==='A'||el.getAttribute('role')==='button',enabled:!el.disabled,checked:!!el.checked,focused:document.activeElement===el,scrollable:false,selected:false,children:[]};for(var c of el.children){if(c.tagName!=='SCRIPT'&&c.tagName!=='STYLE'){var s=window.getComputedStyle(c);if(s.display!=='none'&&s.visibility!=='hidden'){n.children.push(t(c));}}}return n;}var tree=t(document.body);return JSON.stringify({tree:tree,meta:{elapsed_ms:Math.round(performance.now()-t0),node_count:nc,dpr:dpr,url:location.href}});})()
+/// Text = what the user SEES. accessibility_label = aria-label (for screen readers).
+///
+/// Text priority:
+///   Inputs: value → placeholder → text content → aria-label
+///   Others: text content → aria-label
+///
+/// contentDescription (→ accessibility_label): always aria-label || id
+const DOM_TRAVERSAL_JS: &str = r#"(function(){var dpr=window.devicePixelRatio||1;var nc=0;var t0=performance.now();function t(el){nc++;var r=el.getBoundingClientRect();var al=el.getAttribute('aria-label')||'';var ph=el.placeholder||'';var tx='';for(var c of el.childNodes){if(c.nodeType===3&&c.textContent.trim()){tx=c.textContent.trim();break;}}var isInput=el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT';var val=(isInput&&el.type!=='checkbox'&&el.type!=='radio')?el.value||'':'';var text=val?val:ph?ph:tx?tx:al;var n={class:el.tagName.toLowerCase(),text:text,contentDescription:al||el.id||'',bounds:{left:Math.round(r.left*dpr),top:Math.round(r.top*dpr),right:Math.round((r.left+r.width)*dpr),bottom:Math.round((r.top+r.height)*dpr)},clickable:el.tagName==='BUTTON'||el.tagName==='A'||el.getAttribute('role')==='button',enabled:!el.disabled,checked:!!el.checked,focused:document.activeElement===el,scrollable:false,selected:false,children:[]};for(var c of el.children){if(c.tagName!=='SCRIPT'&&c.tagName!=='STYLE'){var s=window.getComputedStyle(c);if(s.display!=='none'&&s.visibility!=='hidden'){n.children.push(t(c));}}}return n;}var tree=t(document.body);return JSON.stringify({tree:tree,meta:{elapsed_ms:Math.round(performance.now()-t0),node_count:nc,dpr:dpr,url:location.href}});})()
 "#;
 
 /// Discover the WebView debug socket name for a device.

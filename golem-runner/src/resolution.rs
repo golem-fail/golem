@@ -44,7 +44,7 @@ fn convert_anchor(anchor: &Anchor) -> AnchorSelector {
 pub fn build_selector_from_group(g: &golem_parser::SelectorGroup) -> Selector {
     Selector {
         text: g.text.clone(),
-        accessibility_id: g.accessibility_id.clone(),
+        accessibility_label: g.accessibility_label.clone(),
         index: g.index,
         enabled: g.enabled,
         checked: g.checked,
@@ -65,7 +65,7 @@ pub fn build_selector(step: &Step) -> Selector {
     let g = step.on.as_ref();
     Selector {
         text: g.and_then(|g| g.text.clone()).or(step.on_text.clone()),
-        accessibility_id: g.and_then(|g| g.accessibility_id.clone()).or(step.on_accessibility_id.clone()),
+        accessibility_label: g.and_then(|g| g.accessibility_label.clone()).or(step.on_accessibility_label.clone()),
         index: g.and_then(|g| g.index).or(step.on_index),
         enabled: g.and_then(|g| g.enabled).or(step.on_enabled),
         checked: g.and_then(|g| g.checked).or(step.on_checked),
@@ -84,7 +84,7 @@ pub fn build_selector(step: &Step) -> Selector {
 
 /// Build a bounds-only fingerprint of the hierarchy for settle detection.
 ///
-/// Ignores text and accessibility_id so that cursor blinks, live counters,
+/// Ignores text and accessibility_label so that cursor blinks, live counters,
 /// and other content changes don't prevent settling. Only structural and
 /// spatial changes (animations, scroll momentum, layout shifts) count.
 fn bounds_fingerprint(element: &Element) -> String {
@@ -182,22 +182,23 @@ pub async fn resolve_element(
             return Ok((first.element.clone(), (first.tap_x, first.tap_y)));
         }
 
-        // Element not in viewport — if auto_scroll is set and the element exists
-        // off-screen, scroll to it immediately instead of waiting.
+        // Element not in viewport — if auto_scroll is set, scroll to find it.
         if auto_scroll {
-            let full_results = find_elements(&root, &selector);
-            if let Some(found) = full_results.first() {
-                // Resolve `within` container from viewport-filtered tree.
-                let container_bounds = if let Some(ref within_group) = step.within {
-                    let within_sel = build_selector_from_group(within_group);
-                    find_elements(&visible_root, &within_sel)
-                        .first()
-                        .map(|r| r.element.bounds.clone())
-                } else {
-                    None
-                };
+            // Resolve `within` container if specified.
+            let container_bounds = if let Some(ref within_group) = step.within {
+                let within_sel = build_selector_from_group(within_group);
+                find_elements(&visible_root, &within_sel)
+                    .first()
+                    .map(|r| r.element.bounds.clone())
+            } else {
+                None
+            };
 
-                // Use the element's position to hint direction and distance.
+            // Use position hints from the full tree if available.
+            // If the element isn't in the tree at all (e.g. Android WebView
+            // accessibility gap), scroll with defaults (down, normal speed).
+            let full_results = find_elements(&root, &selector);
+            let (direction, distance) = if let Some(found) = full_results.first() {
                 let elem_y = found.element.bounds.center_y();
                 let ref_center = container_bounds.as_ref()
                     .map(|b| b.center_y())
@@ -205,21 +206,26 @@ pub async fn resolve_element(
                 let ref_height = container_bounds.as_ref()
                     .map(|b| b.height)
                     .unwrap_or(viewport.height);
-                let direction = if elem_y > ref_center {
+                let dir = if elem_y > ref_center {
                     golem_driver::Direction::Down
                 } else {
                     golem_driver::Direction::Up
                 };
-                let distance = (elem_y - ref_center).unsigned_abs() as f32
+                let dist = (elem_y - ref_center).unsigned_abs() as f32
                     / ref_height as f32;
-                let max_scrolls = step.max_scrolls.unwrap_or(crate::scroll::DEFAULT_MAX_SCROLLS);
-                match crate::scroll::scroll_to_element_with_hint(
-                    &selector, driver, direction, max_scrolls, distance,
-                    step.scroll_timeout, container_bounds,
-                ).await {
-                    Ok(found) => return Ok((found.element.clone(), (found.tap_x, found.tap_y))),
-                    Err(e) => return Err(e),
-                }
+                (dir, dist)
+            } else {
+                // No hints — scroll down with default speed
+                (golem_driver::Direction::Down, 0.0)
+            };
+
+            let max_scrolls = step.max_scrolls.unwrap_or(crate::scroll::DEFAULT_MAX_SCROLLS);
+            match crate::scroll::scroll_to_element_with_hint(
+                &selector, driver, direction, max_scrolls, distance,
+                step.scroll_timeout, container_bounds,
+            ).await {
+                Ok(found) => return Ok((found.element.clone(), (found.tap_x, found.tap_y))),
+                Err(e) => return Err(e),
             }
         }
 
@@ -242,7 +248,7 @@ pub async fn resolve_element(
              found off-screen at ({}, {}), viewport {}x{}. \
              Use auto_scroll = true to scroll to off-screen elements.",
             selector.text,
-            selector.accessibility_id,
+            selector.accessibility_label,
             b.x,
             b.y,
             last_viewport.width,
@@ -253,7 +259,7 @@ pub async fn resolve_element(
     bail!(
         "No element found after {elapsed_secs:.1}s: text={:?}, id={:?}",
         selector.text,
-        selector.accessibility_id,
+        selector.accessibility_label,
     );
 }
 
@@ -272,7 +278,7 @@ pub async fn resolve_element_full_tree(
         bail!(
             "No element found matching selector: text={:?}, id={:?}",
             selector.text,
-            selector.accessibility_id,
+            selector.accessibility_label,
         );
     }
 
@@ -318,7 +324,7 @@ pub async fn poll_for_absence(
                  but found {}: text={:?}, id={:?}",
                 results.len(),
                 selector.text,
-                selector.accessibility_id,
+                selector.accessibility_label,
             );
         }
 
@@ -339,7 +345,7 @@ mod tests {
         Step {
             action: action.to_string(),
             on_text: None,
-            on_accessibility_id: None,
+            on_accessibility_label: None,
             on_index: None,
             on_enabled: None,
             on_checked: None,
@@ -368,7 +374,7 @@ mod tests {
         Element {
             element_type: element_type.to_string(),
             text: None,
-            accessibility_id: None,
+            accessibility_label: None,
             placeholder: None,
             enabled: true,
             checked: false,
@@ -419,22 +425,22 @@ mod tests {
     async fn resolve_element_finds_by_id() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         let mut btn = make_element("Button", Bounds::new(10, 10, 80, 40));
-        btn.accessibility_id = Some("btn-login".to_string());
+        btn.accessibility_label = Some("btn-login".to_string());
         btn.text = Some("Login".to_string());
         root.children.push(btn);
 
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
-        step.on_accessibility_id = Some("btn-login".to_string());
+        step.on_accessibility_label = Some("btn-login".to_string());
 
         let (elem, _coords) = resolve_element(&step, &driver)
             .await
             .expect("should find element by id");
-        assert_eq!(elem.accessibility_id.as_deref(), Some("btn-login"));
+        assert_eq!(elem.accessibility_label.as_deref(), Some("btn-login"));
         assert_eq!(elem.text.as_deref(), Some("Login"));
     }
 
-    // ── 3. resolve_element with combined text + accessibility_id ─────
+    // ── 3. resolve_element with combined text + accessibility_label ─────
 
     #[tokio::test]
     async fn resolve_element_combined_text_and_id() {
@@ -451,18 +457,18 @@ mod tests {
             "Save",
             Bounds::new(10, 50, 80, 40),
         );
-        btn.accessibility_id = Some("btn-save".to_string());
+        btn.accessibility_label = Some("btn-save".to_string());
         root.children.push(btn);
 
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
         step.on_text = Some("Save".to_string());
-        step.on_accessibility_id = Some("btn-save".to_string());
+        step.on_accessibility_label = Some("btn-save".to_string());
 
         let (elem, _coords) = resolve_element(&step, &driver)
             .await
             .expect("should find button with text Save and id btn-save");
-        assert_eq!(elem.accessibility_id.as_deref(), Some("btn-save"));
+        assert_eq!(elem.accessibility_label.as_deref(), Some("btn-save"));
         assert_eq!(elem.text.as_deref(), Some("Save"));
     }
 
@@ -591,7 +597,7 @@ mod tests {
     fn build_selector_maps_all_fields() {
         let mut step = make_step("tap");
         step.on_text = Some("Submit".to_string());
-        step.on_accessibility_id = Some("btn-1".to_string());
+        step.on_accessibility_label = Some("btn-1".to_string());
         step.on_index = Some(2);
         step.on_enabled = Some(true);
         step.on_checked = Some(false);
@@ -603,7 +609,7 @@ mod tests {
 
         let sel = build_selector(&step);
         assert_eq!(sel.text.as_deref(), Some("Submit"));
-        assert_eq!(sel.accessibility_id.as_deref(), Some("btn-1"));
+        assert_eq!(sel.accessibility_label.as_deref(), Some("btn-1"));
         assert_eq!(sel.index, Some(2));
         assert_eq!(sel.enabled, Some(true));
         assert_eq!(sel.checked, Some(false));

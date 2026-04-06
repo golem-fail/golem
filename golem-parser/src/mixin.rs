@@ -172,7 +172,7 @@ fn remap_step_vars(step: &Step, vars: &HashMap<String, String>) -> Step {
     Step {
         action: remap_string(&step.action, vars),
         on_text: step.on_text.as_ref().map(|s| remap_string(s, vars)),
-        on_accessibility_id: step.on_accessibility_id.as_ref().map(|s| remap_string(s, vars)),
+        on_accessibility_label: step.on_accessibility_label.as_ref().map(|s| remap_string(s, vars)),
         on_index: step.on_index,
         on_enabled: step.on_enabled,
         on_checked: step.on_checked,
@@ -209,7 +209,7 @@ fn remap_anchor(a: &crate::Anchor, vars: &HashMap<String, String>) -> crate::Anc
 fn remap_selector_group(g: &crate::SelectorGroup, vars: &HashMap<String, String>) -> crate::SelectorGroup {
     crate::SelectorGroup {
         text: g.text.as_ref().map(|s| remap_string(s, vars)),
-        accessibility_id: g.accessibility_id.as_ref().map(|s| remap_string(s, vars)),
+        accessibility_label: g.accessibility_label.as_ref().map(|s| remap_string(s, vars)),
         index: g.index,
         enabled: g.enabled,
         checked: g.checked,
@@ -295,7 +295,7 @@ mod tests {
         Step {
             action: "load_mixin".to_string(),
             on_text: None,
-            on_accessibility_id: None,
+            on_accessibility_label: None,
             on_index: None,
             on_enabled: None,
             on_checked: None,
@@ -325,7 +325,7 @@ mod tests {
         Step {
             action: action.to_string(),
             on_text: None,
-            on_accessibility_id: None,
+            on_accessibility_label: None,
             on_index: None,
             on_enabled: None,
             on_checked: None,
@@ -365,7 +365,7 @@ mod tests {
             r#"
 [[step]]
 action = "tap"
-on_accessibility_id = "email-input"
+on_accessibility_label = "email-input"
 
 [[step]]
 action = "type"
@@ -379,7 +379,7 @@ on_text = "hello"
 
         assert_eq!(expanded.len(), 2);
         assert_eq!(expanded[0].action, "tap");
-        assert_eq!(expanded[0].on_accessibility_id.as_deref(), Some("email-input"));
+        assert_eq!(expanded[0].on_accessibility_label.as_deref(), Some("email-input"));
         assert_eq!(expanded[1].action, "type");
         assert_eq!(expanded[1].on_text.as_deref(), Some("hello"));
     }
@@ -429,12 +429,12 @@ on_text = "${email}"
             r#"
 [[step]]
 action = "type"
-on_accessibility_id = "${email_field}"
+on_accessibility_label = "${email_field}"
 on_text = "${email}"
 
 [[step]]
 action = "type"
-on_accessibility_id = "${password_field}"
+on_accessibility_label = "${password_field}"
 on_text = "${password}"
 "#,
         );
@@ -450,9 +450,9 @@ on_text = "${password}"
             expand_mixins(&steps, flow_dir, project_root).expect("expansion should succeed");
 
         assert_eq!(expanded.len(), 2);
-        assert_eq!(expanded[0].on_accessibility_id.as_deref(), Some("login-email"));
+        assert_eq!(expanded[0].on_accessibility_label.as_deref(), Some("login-email"));
         assert_eq!(expanded[0].on_text.as_deref(), Some("alice@example.com"));
-        assert_eq!(expanded[1].on_accessibility_id.as_deref(), Some("login-password"));
+        assert_eq!(expanded[1].on_accessibility_label.as_deref(), Some("login-password"));
         assert_eq!(expanded[1].on_text.as_deref(), Some("secret123"));
     }
 
@@ -501,7 +501,7 @@ on_text = "${greeting} ${name}"
             r#"
 [[step]]
 action = "read"
-on_accessibility_id = "price-label"
+on_accessibility_label = "price-label"
 save_to = "captured_price"
 "#,
         );

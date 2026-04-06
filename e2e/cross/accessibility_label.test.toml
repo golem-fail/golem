@@ -1,0 +1,37 @@
+[flow]
+name = "Accessibility ID test (native app)"
+tags = ["cross-platform", "accessibility-id", "native"]
+
+[[flow.apps]]
+name = "app-b"
+bundle = "fail.golem.testb"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[flow.options]
+app_lifecycle = "reset"
+
+[[block]]
+name = "accessibility_label_selectors"
+steps = [
+  # Test on_accessibility_label — only works with native apps
+  { action = "assert_visible", on = { accessibility_label = "app-b-title" } },
+  { action = "assert_visible", on = { accessibility_label = "refresh-button" } },
+  { action = "assert_visible", on = { accessibility_label = "counter-b" } },
+  { action = "assert_visible", on = { accessibility_label = "toggle-b" } },
+
+  # Interact and verify counter by accessibility_label
+  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "Increment" },
+  { action = "assert_visible", on = { text = "2", accessibility_label = "counter-b" } },
+
+  # Test native toggle checked state
+  { action = "tap", on = { accessibility_label = "toggle-b" } },
+  { action = "assert_visible", on = { accessibility_label = "toggle-b", checked = true } },
+]

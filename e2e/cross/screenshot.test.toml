@@ -33,6 +33,6 @@ steps = [
   { action = "screenshot", path = "/tmp/golem-screenshot-after-interaction.png" },
 
   # Toggle dark mode and capture
-  { action = "tap", on_text = "dark-mode-toggle", auto_scroll = true },
+  { action = "tap", on_text = "Dark Mode", auto_scroll = true },
   { action = "screenshot", path = "/tmp/golem-screenshot-dark-mode.png" },
 ]

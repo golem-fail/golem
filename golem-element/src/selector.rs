@@ -17,7 +17,7 @@ pub enum AnchorSelector {
 #[derive(Debug, Clone, Default)]
 pub struct Selector {
     pub text: Option<String>,
-    pub accessibility_id: Option<String>,
+    pub accessibility_label: Option<String>,
     pub index: Option<usize>,
     pub enabled: Option<bool>,
     pub checked: Option<bool>,
@@ -157,8 +157,8 @@ fn matches_selector(element: &Element, selector: &Selector) -> bool {
         }
     }
 
-    if let Some(ref pattern) = selector.accessibility_id {
-        match &element.accessibility_id {
+    if let Some(ref pattern) = selector.accessibility_label {
+        match &element.accessibility_label {
             Some(aid) => {
                 if !GlobMatcher::new(pattern).is_match(aid) {
                     return false;
@@ -263,7 +263,7 @@ mod tests {
         Element {
             element_type: element_type.to_string(),
             text: None,
-            accessibility_id: None,
+            accessibility_label: None,
             placeholder: None,
             enabled: true,
             checked: false,
@@ -358,16 +358,16 @@ mod tests {
     fn id_match() {
         let mut root = elem("View");
         let mut btn = elem("Button");
-        btn.accessibility_id = Some("btn-submit".to_string());
+        btn.accessibility_label = Some("btn-submit".to_string());
         root.children.push(btn);
 
         let s = Selector {
-            accessibility_id: Some("btn-submit".to_string()),
+            accessibility_label: Some("btn-submit".to_string()),
             ..sel()
         };
         let results = find_elements(&root, &s);
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].element.accessibility_id.as_deref(), Some("btn-submit"));
+        assert_eq!(results[0].element.accessibility_label.as_deref(), Some("btn-submit"));
     }
 
     // ── 6. ID glob ──────────────────────────────────────────────────
@@ -376,17 +376,17 @@ mod tests {
     fn id_glob() {
         let mut root = elem("View");
         let mut btn1 = elem("Button");
-        btn1.accessibility_id = Some("btn-submit".to_string());
+        btn1.accessibility_label = Some("btn-submit".to_string());
         let mut btn2 = elem("Button");
-        btn2.accessibility_id = Some("btn-cancel".to_string());
+        btn2.accessibility_label = Some("btn-cancel".to_string());
         let mut lbl = elem("Label");
-        lbl.accessibility_id = Some("lbl-title".to_string());
+        lbl.accessibility_label = Some("lbl-title".to_string());
         root.children.push(btn1);
         root.children.push(btn2);
         root.children.push(lbl);
 
         let s = Selector {
-            accessibility_id: Some("btn-*".to_string()),
+            accessibility_label: Some("btn-*".to_string()),
             ..sel()
         };
         let results = find_elements(&root, &s);

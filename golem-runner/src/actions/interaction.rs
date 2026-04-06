@@ -294,7 +294,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("type");
-        step.on_accessibility_id = Some("email".to_string());
+        step.on_accessibility_label = Some("email".to_string());
         step.input = Some("user@example.com".to_string());
 
         handle_type(&step, &driver)
@@ -321,7 +321,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("backspace");
-        step.on_accessibility_id = Some("search".to_string());
+        step.on_accessibility_label = Some("search".to_string());
         step.params
             .insert("count".to_string(), toml::Value::Integer(5));
 
@@ -406,7 +406,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("backspace");
-        step.on_accessibility_id = Some("field".to_string());
+        step.on_accessibility_label = Some("field".to_string());
         // No count param set
 
         handle_backspace(&step, &driver)
@@ -592,7 +592,7 @@ mod tests {
 
         // Type into username field
         let mut type_step = make_step("type");
-        type_step.on_accessibility_id = Some("username".to_string());
+        type_step.on_accessibility_label = Some("username".to_string());
         type_step.input = Some("admin".to_string());
         crate::actions::execute_action(&type_step, &driver, &mut vars, &ctx, &[])
             .await

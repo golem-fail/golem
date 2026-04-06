@@ -8,6 +8,6 @@ function requestLocation() {
 </script>
 <div class="section">
   <h2>Permissions</h2>
-  <button aria-label="camera-permission-button" onclick={requestCamera}>Request Camera</button>
-  <button aria-label="location-permission-button" onclick={requestLocation}>Request Location</button>
+  <button onclick={requestCamera}>Request Camera</button>
+  <button onclick={requestLocation}>Request Location</button>
 </div>

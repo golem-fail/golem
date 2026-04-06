@@ -17,5 +17,5 @@ function triggerDelay() {
 <div class="section">
   <h2>Delayed Element</h2>
   <button onclick={triggerDelay}>Show Delayed</button>
-  <input type="text" value={delayedValue} readonly aria-label="delayed-result" />
+  <input type="text" value={delayedValue} readonly />
 </div>

@@ -125,7 +125,7 @@ mod tests {
             Ok(Element {
                 element_type: "View".into(),
                 text: None,
-                accessibility_id: None,
+                accessibility_label: None,
                 placeholder: None,
                 enabled: true,
                 checked: false,

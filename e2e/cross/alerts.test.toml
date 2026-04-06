@@ -20,21 +20,21 @@ steps = [
   { action = "assert_visible", on_text = "Submit", timeout = 30000 },
 
   # Trigger a simple alert (button is off-screen, use auto_scroll)
-  { action = "tap", on_text = "alert-button", auto_scroll = true },
+  { action = "tap", on_text = "Show Alert", auto_scroll = true },
 
   # Dismiss the alert
   { action = "tap", on_text = "OK" },
 
   # Trigger a confirmation dialog and accept it
-  { action = "tap", on_text = "confirm-button" },
+  { action = "tap", on_text = "Show Confirm" },
   { action = "tap", on_text = "Confirm" },
 
   # Trigger the confirmation dialog again and cancel it
-  { action = "tap", on_text = "confirm-button" },
+  { action = "tap", on_text = "Show Confirm" },
   { action = "tap", on_text = "Cancel" },
 
   # Trigger an action sheet
-  { action = "tap", on_text = "action-sheet-button" },
+  { action = "tap", on_text = "Action Sheet" },
   { action = "assert_visible", on_text = "Action Sheet" },
 ]
 

@@ -59,7 +59,7 @@ pub struct DeviceConstraint {
     #[serde(rename = "type")]
     pub device_type: Option<StringOrVec>,
     pub name: Option<String>,
-    pub accessibility_id: Option<String>,
+    pub accessibility_label: Option<String>,
     pub physical: Option<bool>,
     pub playstore: Option<bool>,
     pub expand: Option<String>,
@@ -141,7 +141,7 @@ pub enum Anchor {
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct SelectorGroup {
     pub text: Option<String>,
-    pub accessibility_id: Option<String>,
+    pub accessibility_label: Option<String>,
     pub index: Option<usize>,
     pub enabled: Option<bool>,
     pub checked: Option<bool>,
@@ -160,7 +160,7 @@ pub struct Step {
     pub action: String,
     // Flat selectors (on_* prefix)
     pub on_text: Option<String>,
-    pub on_accessibility_id: Option<String>,
+    pub on_accessibility_label: Option<String>,
     pub on_index: Option<usize>,
     pub on_enabled: Option<bool>,
     pub on_checked: Option<bool>,
@@ -520,7 +520,7 @@ name = "selectors"
 [[block.steps]]
 action = "tap"
 on_text = "Submit"
-on_accessibility_id = "btn_submit"
+on_accessibility_label = "btn_submit"
 on_index = 2
 on_enabled = true
 on_below = "Header"
@@ -528,7 +528,7 @@ on_below = "Header"
         let flow = parse_flow(toml_str).expect("selectors should parse");
         let step = &flow.block[0].steps[0];
         assert_eq!(step.on_text.as_deref(), Some("Submit"));
-        assert_eq!(step.on_accessibility_id.as_deref(), Some("btn_submit"));
+        assert_eq!(step.on_accessibility_label.as_deref(), Some("btn_submit"));
         assert_eq!(step.on_index, Some(2));
         assert_eq!(step.on_enabled, Some(true));
         assert_eq!(step.on_below.as_deref(), Some("Header"));
