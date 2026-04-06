@@ -364,14 +364,32 @@ pub async fn build_companion(device: &DeviceInfo, companion_path: &str) -> Resul
     Ok(())
 }
 
-/// Install the Android companion APK and set up port forwarding.
+/// Install the Android companion APKs and set up port forwarding.
+///
+/// Installs the main APK first (required for instrumentation), then the
+/// test APK. `main_apk_path` is optional — if None, only the test APK
+/// is installed (assumes the main APK is already on the device).
 pub async fn install_android_companion(
     device: &DeviceInfo,
     apk_path: &str,
     port: u16,
 ) -> Result<()> {
-    let install = install_companion_command(device, apk_path);
-    run_command(&install, "install companion APK").await?;
+    install_android_companion_with_main(device, apk_path, None, port).await
+}
+
+/// Install both Android companion APKs and set up port forwarding.
+pub async fn install_android_companion_with_main(
+    device: &DeviceInfo,
+    test_apk_path: &str,
+    main_apk_path: Option<&str>,
+    port: u16,
+) -> Result<()> {
+    if let Some(main_path) = main_apk_path {
+        let install_main = install_companion_command(device, main_path);
+        run_command(&install_main, "install companion main APK").await?;
+    }
+    let install_test = install_companion_command(device, test_apk_path);
+    run_command(&install_test, "install companion test APK").await?;
     let forward = port_forward_command(device, port);
     run_command(&forward, "set up port forwarding").await?;
     Ok(())

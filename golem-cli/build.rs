@@ -89,18 +89,20 @@ fn build_ios_companion(workspace_root: &Path, out_dir: &Path) {
 
 fn build_android_companion(workspace_root: &Path, out_dir: &Path) {
     let android_dir = workspace_root.join("companions/android");
-    let target_apk = out_dir.join("companion-android.apk");
+    let target_test_apk = out_dir.join("companion-android-test.apk");
+    let target_main_apk = out_dir.join("companion-android-main.apk");
 
     if !android_dir.exists() {
         println!("cargo:warning=Android companion directory not found, skipping");
-        write_empty_marker(out_dir, "companion-android.apk");
+        write_empty_marker(out_dir, "companion-android-test.apk");
+        write_empty_marker(out_dir, "companion-android-main.apk");
         return;
     }
 
     // Check if source changed
     let source_hash = hash_directory(&android_dir.join("app/src"));
     let hash_file = out_dir.join("companion-android.hash");
-    if target_apk.exists() && hash_file.exists() {
+    if target_test_apk.exists() && target_main_apk.exists() && hash_file.exists() {
         if let Ok(prev_hash) = fs::read_to_string(&hash_file) {
             if prev_hash.trim() == source_hash {
                 println!("cargo:warning=Android companion unchanged, skipping rebuild");
@@ -109,12 +111,17 @@ fn build_android_companion(workspace_root: &Path, out_dir: &Path) {
         }
     }
 
-    // Try to find a pre-built APK first
-    let prebuilt_apk = android_dir.join("app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk");
-    if prebuilt_apk.exists() {
-        if fs::copy(&prebuilt_apk, &target_apk).is_ok() {
+    // Pre-built APK paths
+    let prebuilt_test = android_dir.join("app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk");
+    let prebuilt_main = android_dir.join("app/build/outputs/apk/debug/app-debug.apk");
+
+    // Try to use pre-built APKs first
+    if prebuilt_test.exists() && prebuilt_main.exists() {
+        if fs::copy(&prebuilt_test, &target_test_apk).is_ok()
+            && fs::copy(&prebuilt_main, &target_main_apk).is_ok()
+        {
             let _ = fs::write(&hash_file, &source_hash);
-            println!("cargo:warning=Android companion: using pre-built APK");
+            println!("cargo:warning=Android companion: using pre-built APKs");
             println!("cargo:rerun-if-changed=../companions/android/app/src");
             return;
         }
@@ -124,37 +131,48 @@ fn build_android_companion(workspace_root: &Path, out_dir: &Path) {
     let gradlew = android_dir.join("gradlew");
     if !gradlew.exists() {
         println!("cargo:warning=gradlew not found, skipping Android companion build");
-        write_empty_marker(out_dir, "companion-android.apk");
+        write_empty_marker(out_dir, "companion-android-test.apk");
+        write_empty_marker(out_dir, "companion-android-main.apk");
         return;
     }
 
     println!("cargo:warning=Building Android companion...");
 
+    // Build both debug and androidTest APKs
     let status = Command::new(&gradlew)
-        .arg("assembleAndroidTest")
+        .args(["assembleDebug", "assembleAndroidTest"])
         .current_dir(&android_dir)
         .output();
 
     match status {
         Ok(output) if output.status.success() => {
-            if prebuilt_apk.exists() {
-                if fs::copy(&prebuilt_apk, &target_apk).is_ok() {
-                    let _ = fs::write(&hash_file, &source_hash);
-                    println!("cargo:warning=Android companion built: {}", target_apk.display());
-                }
+            let mut ok = true;
+            if prebuilt_test.exists() {
+                if fs::copy(&prebuilt_test, &target_test_apk).is_err() { ok = false; }
+            } else { ok = false; }
+            if prebuilt_main.exists() {
+                if fs::copy(&prebuilt_main, &target_main_apk).is_err() { ok = false; }
+            } else { ok = false; }
+
+            if ok {
+                let _ = fs::write(&hash_file, &source_hash);
+                println!("cargo:warning=Android companion built (both APKs)");
             } else {
-                println!("cargo:warning=Android companion build succeeded but APK not found");
-                write_empty_marker(out_dir, "companion-android.apk");
+                println!("cargo:warning=Android companion build succeeded but APKs not found");
+                write_empty_marker(out_dir, "companion-android-test.apk");
+                write_empty_marker(out_dir, "companion-android-main.apk");
             }
         }
         Ok(output) => {
             let stderr = String::from_utf8_lossy(&output.stderr);
             println!("cargo:warning=Android companion build failed: {}", stderr.lines().last().unwrap_or("unknown error"));
-            write_empty_marker(out_dir, "companion-android.apk");
+            write_empty_marker(out_dir, "companion-android-test.apk");
+            write_empty_marker(out_dir, "companion-android-main.apk");
         }
         Err(e) => {
             println!("cargo:warning=Failed to run gradlew: {e}");
-            write_empty_marker(out_dir, "companion-android.apk");
+            write_empty_marker(out_dir, "companion-android-test.apk");
+            write_empty_marker(out_dir, "companion-android-main.apk");
         }
     }
 

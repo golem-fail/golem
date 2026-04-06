@@ -436,7 +436,14 @@ async fn ensure_companion(
         }
         Platform::Android => {
             let apk_path = find_android_apk()?;
-            golem_devices::lifecycle::install_android_companion(device, &apk_path, port).await?;
+            let main_apk_path = find_android_main_apk();
+            golem_devices::lifecycle::install_android_companion_with_main(
+                device,
+                &apk_path,
+                main_apk_path.as_deref(),
+                port,
+            )
+            .await?;
             golem_devices::lifecycle::spawn_companion(device, &companion_path, port).await?;
         }
     }
@@ -503,9 +510,8 @@ fn find_companion_path(platform: Platform) -> Result<String> {
     )
 }
 
-/// Find the Android companion APK.
+/// Find the Android companion test APK.
 fn find_android_apk() -> Result<String> {
-    // Check extracted embedded companion first
     if let Ok(paths) = crate::companions::ensure_extracted() {
         if let Some(ref apk) = paths.android_apk {
             if apk.exists() {
@@ -518,9 +524,24 @@ fn find_android_apk() -> Result<String> {
     if std::path::Path::new(relative).exists() {
         return Ok(relative.to_string());
     }
-    anyhow::bail!(
-        "Android companion APK not found."
-    )
+    anyhow::bail!("Android companion test APK not found.")
+}
+
+/// Find the Android companion main APK (optional, needed for fresh installs).
+fn find_android_main_apk() -> Option<String> {
+    if let Ok(paths) = crate::companions::ensure_extracted() {
+        if let Some(ref apk) = paths.android_main_apk {
+            if apk.exists() {
+                return Some(apk.to_string_lossy().into_owned());
+            }
+        }
+    }
+
+    let relative = "companions/android/app/build/outputs/apk/debug/app-debug.apk";
+    if std::path::Path::new(relative).exists() {
+        return Some(relative.to_string());
+    }
+    None
 }
 
 /// Detect the target platform from the flow's device constraints.
