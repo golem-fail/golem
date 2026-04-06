@@ -4,7 +4,10 @@
     "name_en": "South Africa",
     "iso_code": "ZA",
     "phone_prefix": "+27",
-    "phone_formats": ["+27-##-###-####", "+27-7#-###-####"],
+    "phone_formats": [
+      "+27-##-###-####",
+      "+27-7#-###-####"
+    ],
     "postcode_format": "####",
     "name_order": "given_first"
   },
@@ -12,7 +15,9 @@
     {
       "name": "Gauteng",
       "name_en": "Gauteng",
-      "region_tags": ["Highveld"],
+      "region_tags": [
+        "Highveld"
+      ],
       "cities": [
         {
           "name": "Johannesburg",
@@ -23,115 +28,115 @@
             {
               "code": "2000",
               "street": "Commissioner Street",
-              "street_en": "Commissioner Street, Johannesburg CBD",
+              "street_en": "Commissioner Street",
               "pattern": "n{1,200} Commissioner Street"
             },
             {
               "code": "2001",
               "street": "Jeppe Street",
-              "street_en": "Jeppe Street, Johannesburg CBD",
+              "street_en": "Jeppe Street",
               "pattern": "n{1,180} Jeppe Street"
             },
             {
               "code": "2017",
               "street": "Fox Street",
-              "street_en": "Fox Street, Marshalltown",
+              "street_en": "Fox Street",
               "pattern": "n{1,150} Fox Street"
             },
             {
               "code": "2024",
               "street": "Main Street",
-              "street_en": "Main Street, Johannesburg CBD",
+              "street_en": "Main Street",
               "pattern": "n{1,200} Main Street"
             },
             {
               "code": "2028",
               "street": "Pritchard Street",
-              "street_en": "Pritchard Street, Johannesburg CBD",
+              "street_en": "Pritchard Street",
               "pattern": "n{1,160} Pritchard Street"
             },
             {
               "code": "2031",
               "street": "Anderson Street",
-              "street_en": "Anderson Street, Marshalltown",
+              "street_en": "Anderson Street",
               "pattern": "n{1,140} Anderson Street"
             },
             {
               "code": "2041",
               "street": "Jan Smuts Avenue",
-              "street_en": "Jan Smuts Avenue, Parktown",
+              "street_en": "Jan Smuts Avenue",
               "pattern": "n{1,250} Jan Smuts Avenue"
             },
             {
               "code": "2050",
               "street": "Empire Road",
-              "street_en": "Empire Road, Parktown",
+              "street_en": "Empire Road",
               "pattern": "n{1,120} Empire Road"
             },
             {
               "code": "2092",
               "street": "Main Reef Road",
-              "street_en": "Main Reef Road, Langlaagte",
+              "street_en": "Main Reef Road",
               "pattern": "n{1,300} Main Reef Road"
             },
             {
               "code": "2094",
               "street": "Ontdekkers Road",
-              "street_en": "Ontdekkers Road, Florida",
+              "street_en": "Ontdekkers Road",
               "pattern": "n{1,200} Ontdekkers Road"
             },
             {
               "code": "2107",
               "street": "Oxford Road",
-              "street_en": "Oxford Road, Rosebank",
+              "street_en": "Oxford Road",
               "pattern": "n{1,180} Oxford Road"
             },
             {
               "code": "2113",
               "street": "Louis Botha Avenue",
-              "street_en": "Louis Botha Avenue, Orange Grove",
+              "street_en": "Louis Botha Avenue",
               "pattern": "n{1,250} Louis Botha Avenue"
             },
             {
               "code": "2121",
               "street": "Pretoria Main Road",
-              "street_en": "Pretoria Main Road, Wynberg",
+              "street_en": "Pretoria Main Road",
               "pattern": "n{1,200} Pretoria Main Road"
             },
             {
               "code": "2128",
               "street": "Modderfontein Road",
-              "street_en": "Modderfontein Road, Edenvale",
+              "street_en": "Modderfontein Road",
               "pattern": "n{1,160} Modderfontein Road"
             },
             {
-              "code": "2146",
+              "code": "2145",
               "street": "Beyers Naude Drive",
-              "street_en": "Beyers Naude Drive, Cresta",
+              "street_en": "Beyers Naude Drive",
               "pattern": "n{1,300} Beyers Naude Drive"
             },
             {
               "code": "2170",
               "street": "Hendrik Potgieter Road",
-              "street_en": "Hendrik Potgieter Road, Ruimsig",
+              "street_en": "Hendrik Potgieter Road",
               "pattern": "n{1,250} Hendrik Potgieter Road"
             },
             {
-              "code": "2196",
+              "code": "2195",
               "street": "Rivonia Road",
-              "street_en": "Rivonia Road, Morningside",
+              "street_en": "Rivonia Road",
               "pattern": "n{1,180} Rivonia Road"
             },
             {
               "code": "2055",
               "street": "Barry Hertzog Avenue",
-              "street_en": "Barry Hertzog Avenue, Emmarentia",
+              "street_en": "Barry Hertzog Avenue",
               "pattern": "n{1,200} Barry Hertzog Avenue"
             },
             {
               "code": "2193",
               "street": "Corlett Drive",
-              "street_en": "Corlett Drive, Illovo",
+              "street_en": "Corlett Drive",
               "pattern": "n{1,160} Corlett Drive"
             }
           ]
@@ -145,73 +150,73 @@
             {
               "code": "0001",
               "street": "Church Street",
-              "street_en": "Church Street, Pretoria Central",
+              "street_en": "Church Street",
               "pattern": "n{1,200} Church Street"
             },
             {
               "code": "0002",
               "street": "Paul Kruger Street",
-              "street_en": "Paul Kruger Street, Pretoria Central",
+              "street_en": "Paul Kruger Street",
               "pattern": "n{1,180} Paul Kruger Street"
             },
             {
               "code": "0007",
               "street": "Pretorius Street",
-              "street_en": "Pretorius Street, Pretoria Central",
+              "street_en": "Pretorius Street",
               "pattern": "n{1,160} Pretorius Street"
             },
             {
               "code": "0028",
               "street": "Stanza Bopape Street",
-              "street_en": "Stanza Bopape Street, Arcadia",
+              "street_en": "Stanza Bopape Street",
               "pattern": "n{1,120} Stanza Bopape Street"
             },
             {
               "code": "0040",
               "street": "Lynnwood Road",
-              "street_en": "Lynnwood Road, Hatfield",
+              "street_en": "Lynnwood Road",
               "pattern": "n{1,200} Lynnwood Road"
             },
             {
               "code": "0081",
               "street": "Burnett Street",
-              "street_en": "Burnett Street, Hatfield",
+              "street_en": "Burnett Street",
               "pattern": "n{1,150} Burnett Street"
             },
             {
               "code": "0083",
               "street": "Atterbury Road",
-              "street_en": "Atterbury Road, Menlo Park",
+              "street_en": "Atterbury Road",
               "pattern": "n{1,180} Atterbury Road"
             },
             {
               "code": "0084",
               "street": "Sussex Avenue",
-              "street_en": "Sussex Avenue, Lynnwood Glen",
+              "street_en": "Sussex Avenue",
               "pattern": "n{1,100} Sussex Avenue"
             },
             {
               "code": "0102",
               "street": "Simon Vermooten Road",
-              "street_en": "Simon Vermooten Road, Die Wilgers",
+              "street_en": "Simon Vermooten Road",
               "pattern": "n{1,200} Simon Vermooten Road"
             },
             {
-              "code": "0157",
+              "code": "0155",
               "street": "Zambezi Drive",
-              "street_en": "Zambezi Drive, Montana",
+              "street_en": "Zambezi Drive",
               "pattern": "n{1,250} Zambezi Drive"
             },
             {
               "code": "0181",
               "street": "Rabie Street",
-              "street_en": "Rabie Street, Fontainebleau",
+              "street_en": "Rabie Street",
               "pattern": "n{1,140} Rabie Street"
             },
             {
               "code": "0186",
               "street": "Jean Avenue",
-              "street_en": "Jean Avenue, Centurion",
+              "street_en": "Jean Avenue",
               "pattern": "n{1,160} Jean Avenue"
             }
           ]
@@ -225,25 +230,25 @@
             {
               "code": "2146",
               "street": "Sandton Drive",
-              "street_en": "Sandton Drive, Sandton Central",
+              "street_en": "Sandton Drive",
               "pattern": "n{1,120} Sandton Drive"
             },
             {
               "code": "2148",
               "street": "William Nicol Drive",
-              "street_en": "William Nicol Drive, Bryanston",
+              "street_en": "William Nicol Drive",
               "pattern": "n{1,250} William Nicol Drive"
             },
             {
               "code": "2191",
               "street": "Grayston Drive",
-              "street_en": "Grayston Drive, Sandown",
+              "street_en": "Grayston Drive",
               "pattern": "n{1,140} Grayston Drive"
             },
             {
               "code": "2196",
               "street": "Maude Street",
-              "street_en": "Maude Street, Sandown",
+              "street_en": "Maude Street",
               "pattern": "n{1,100} Maude Street"
             }
           ]
@@ -257,19 +262,19 @@
             {
               "code": "1804",
               "street": "Klipspruit Valley Road",
-              "street_en": "Klipspruit Valley Road, Pimville",
+              "street_en": "Klipspruit Valley Road",
               "pattern": "n{1,200} Klipspruit Valley Road"
             },
             {
               "code": "1811",
               "street": "Vilakazi Street",
-              "street_en": "Vilakazi Street, Orlando West",
+              "street_en": "Vilakazi Street",
               "pattern": "n{1,80} Vilakazi Street"
             },
             {
               "code": "1818",
               "street": "Chris Hani Road",
-              "street_en": "Chris Hani Road, Meadowlands",
+              "street_en": "Chris Hani Road",
               "pattern": "n{1,250} Chris Hani Road"
             }
           ]
@@ -283,19 +288,19 @@
             {
               "code": "0157",
               "street": "Lenchen Avenue",
-              "street_en": "Lenchen Avenue, Centurion Central",
+              "street_en": "Lenchen Avenue",
               "pattern": "n{1,160} Lenchen Avenue"
             },
             {
               "code": "0169",
               "street": "John Vorster Drive",
-              "street_en": "John Vorster Drive, Centurion",
+              "street_en": "John Vorster Drive",
               "pattern": "n{1,300} John Vorster Drive"
             },
             {
               "code": "0178",
               "street": "Embankment Road",
-              "street_en": "Embankment Road, Zwartkop",
+              "street_en": "Embankment Road",
               "pattern": "n{1,120} Embankment Road"
             }
           ]
@@ -305,7 +310,9 @@
     {
       "name": "Western Cape",
       "name_en": "Western Cape",
-      "region_tags": [],
+      "region_tags": [
+        "Cape Region"
+      ],
       "cities": [
         {
           "name": "Cape Town",
@@ -316,91 +323,91 @@
             {
               "code": "8001",
               "street": "Long Street",
-              "street_en": "Long Street, Cape Town CBD",
+              "street_en": "Long Street",
               "pattern": "n{1,300} Long Street"
             },
             {
               "code": "8000",
               "street": "Adderley Street",
-              "street_en": "Adderley Street, Cape Town CBD",
+              "street_en": "Adderley Street",
               "pattern": "n{1,200} Adderley Street"
             },
             {
               "code": "8005",
               "street": "Bree Street",
-              "street_en": "Bree Street, Cape Town CBD",
+              "street_en": "Bree Street",
               "pattern": "n{1,250} Bree Street"
             },
             {
               "code": "8006",
               "street": "Kloof Street",
-              "street_en": "Kloof Street, Gardens",
+              "street_en": "Kloof Street",
               "pattern": "n{1,180} Kloof Street"
             },
             {
               "code": "7700",
               "street": "Main Road",
-              "street_en": "Main Road, Rondebosch",
+              "street_en": "Main Road",
               "pattern": "n{1,200} Main Road"
             },
             {
               "code": "7708",
               "street": "Belvedere Road",
-              "street_en": "Belvedere Road, Claremont",
+              "street_en": "Belvedere Road",
               "pattern": "n{1,120} Belvedere Road"
             },
             {
               "code": "7806",
               "street": "Victoria Road",
-              "street_en": "Victoria Road, Camps Bay",
+              "street_en": "Victoria Road",
               "pattern": "n{1,150} Victoria Road"
             },
             {
               "code": "7441",
               "street": "Voortrekker Road",
-              "street_en": "Voortrekker Road, Bellville",
+              "street_en": "Voortrekker Road",
               "pattern": "n{1,300} Voortrekker Road"
             },
             {
               "code": "7530",
               "street": "Durban Road",
-              "street_en": "Durban Road, Durbanville",
+              "street_en": "Durban Road",
               "pattern": "n{1,180} Durban Road"
             },
             {
               "code": "7945",
               "street": "Main Road",
-              "street_en": "Main Road, Muizenberg",
+              "street_en": "Main Road",
               "pattern": "n{1,200} Main Road"
             },
             {
               "code": "7975",
               "street": "Main Road",
-              "street_en": "Main Road, Fish Hoek",
+              "street_en": "Main Road",
               "pattern": "n{1,160} Main Road"
             },
             {
               "code": "7800",
               "street": "Beach Road",
-              "street_en": "Beach Road, Sea Point",
+              "street_en": "Beach Road",
               "pattern": "n{1,200} Beach Road"
             },
             {
               "code": "7925",
               "street": "Imam Haron Road",
-              "street_en": "Imam Haron Road, Claremont",
+              "street_en": "Imam Haron Road",
               "pattern": "n{1,140} Imam Haron Road"
             },
             {
               "code": "7580",
               "street": "Koeberg Road",
-              "street_en": "Koeberg Road, Table View",
+              "street_en": "Koeberg Road",
               "pattern": "n{1,250} Koeberg Road"
             },
             {
               "code": "7785",
               "street": "Strandfontein Road",
-              "street_en": "Strandfontein Road, Mitchells Plain",
+              "street_en": "Strandfontein Road",
               "pattern": "n{1,300} Strandfontein Road"
             }
           ]
@@ -414,19 +421,19 @@
             {
               "code": "7600",
               "street": "Dorp Street",
-              "street_en": "Dorp Street, Stellenbosch",
+              "street_en": "Dorp Street",
               "pattern": "n{1,180} Dorp Street"
             },
             {
               "code": "7602",
               "street": "Bird Street",
-              "street_en": "Bird Street, Stellenbosch",
+              "street_en": "Bird Street",
               "pattern": "n{1,100} Bird Street"
             },
             {
               "code": "7607",
               "street": "Merriman Avenue",
-              "street_en": "Merriman Avenue, Stellenbosch",
+              "street_en": "Merriman Avenue",
               "pattern": "n{1,80} Merriman Avenue"
             }
           ]
@@ -440,14 +447,20 @@
             {
               "code": "7646",
               "street": "Main Street",
-              "street_en": "Main Street, Paarl",
+              "street_en": "Main Street",
               "pattern": "n{1,300} Main Street"
             },
             {
               "code": "7649",
               "street": "Lady Grey Street",
-              "street_en": "Lady Grey Street, Paarl",
+              "street_en": "Lady Grey Street",
               "pattern": "n{1,140} Lady Grey Street"
+            },
+            {
+              "code": "7651",
+              "street": "Pastorie Street",
+              "street_en": "Pastorie Street",
+              "pattern": "n{1,120} Pastorie Street"
             }
           ]
         }
@@ -456,7 +469,9 @@
     {
       "name": "KwaZulu-Natal",
       "name_en": "KwaZulu-Natal",
-      "region_tags": [],
+      "region_tags": [
+        "Coastal KZN"
+      ],
       "cities": [
         {
           "name": "Durban",
@@ -467,79 +482,79 @@
             {
               "code": "4001",
               "street": "Smith Street",
-              "street_en": "Smith Street, Durban CBD",
+              "street_en": "Smith Street",
               "pattern": "n{1,200} Smith Street"
             },
             {
               "code": "4000",
               "street": "West Street",
-              "street_en": "West Street, Durban CBD",
+              "street_en": "West Street",
               "pattern": "n{1,180} West Street"
             },
             {
               "code": "4004",
               "street": "Point Road",
-              "street_en": "Point Road, Durban Point",
+              "street_en": "Point Road",
               "pattern": "n{1,250} Point Road"
             },
             {
               "code": "4019",
               "street": "Florida Road",
-              "street_en": "Florida Road, Morningside",
+              "street_en": "Florida Road",
               "pattern": "n{1,160} Florida Road"
             },
             {
               "code": "4051",
               "street": "Umhlanga Rocks Drive",
-              "street_en": "Umhlanga Rocks Drive, Umhlanga",
+              "street_en": "Umhlanga Rocks Drive",
               "pattern": "n{1,200} Umhlanga Rocks Drive"
             },
             {
               "code": "4091",
               "street": "Kingsway",
-              "street_en": "Kingsway, Amanzimtoti",
+              "street_en": "Kingsway",
               "pattern": "n{1,180} Kingsway"
             },
             {
               "code": "4013",
               "street": "Musgrave Road",
-              "street_en": "Musgrave Road, Musgrave",
+              "street_en": "Musgrave Road",
               "pattern": "n{1,150} Musgrave Road"
             },
             {
               "code": "4023",
               "street": "Innes Road",
-              "street_en": "Innes Road, Durban North",
+              "street_en": "Innes Road",
               "pattern": "n{1,120} Innes Road"
             },
             {
               "code": "4037",
               "street": "Northway",
-              "street_en": "Northway, Durban North",
+              "street_en": "Northway",
               "pattern": "n{1,140} Northway"
             },
             {
               "code": "4060",
               "street": "Lighthouse Road",
-              "street_en": "Lighthouse Road, Umhlanga",
+              "street_en": "Lighthouse Road",
               "pattern": "n{1,100} Lighthouse Road"
             },
             {
               "code": "4068",
               "street": "Herrwood Drive",
-              "street_en": "Herrwood Drive, Umhlanga",
+              "street_en": "Herrwood Drive",
               "pattern": "n{1,160} Herrwood Drive"
             },
             {
               "code": "4025",
               "street": "Argyle Road",
-              "street_en": "Argyle Road, Durban North",
+              "street_en": "Argyle Road",
               "pattern": "n{1,130} Argyle Road"
             },
             {
               "code": "4052",
               "street": "Chartwell Drive",
-              "street_en": "Chartwell Drive, Umhlanga",
+              "street_en": "Chartwell Drive",
               "pattern": "n{1,180} Chartwell Drive"
             }
           ]
@@ -553,37 +568,37 @@
             {
               "code": "3201",
               "street": "Church Street",
-              "street_en": "Church Street, Pietermaritzburg CBD",
+              "street_en": "Church Street",
               "pattern": "n{1,200} Church Street"
             },
             {
               "code": "3200",
               "street": "Commercial Road",
-              "street_en": "Commercial Road, Pietermaritzburg CBD",
+              "street_en": "Commercial Road",
               "pattern": "n{1,180} Commercial Road"
             },
             {
               "code": "3209",
               "street": "Oribi Road",
-              "street_en": "Oribi Road, Oribi",
+              "street_en": "Oribi Road",
               "pattern": "n{1,150} Oribi Road"
             },
             {
               "code": "3245",
               "street": "Old Howick Road",
-              "street_en": "Old Howick Road, Hilton",
+              "street_en": "Old Howick Road",
               "pattern": "n{1,120} Old Howick Road"
             },
             {
               "code": "3202",
               "street": "Burger Street",
-              "street_en": "Burger Street, Pietermaritzburg CBD",
+              "street_en": "Burger Street",
               "pattern": "n{1,160} Burger Street"
             },
             {
               "code": "3214",
               "street": "Alan Paton Road",
-              "street_en": "Alan Paton Road, Scottsville",
+              "street_en": "Alan Paton Road",
               "pattern": "n{1,200} Alan Paton Road"
             }
           ]
@@ -593,7 +608,9 @@
     {
       "name": "Eastern Cape",
       "name_en": "Eastern Cape",
-      "region_tags": [],
+      "region_tags": [
+        "Eastern Seaboard"
+      ],
       "cities": [
         {
           "name": "Gqeberha",
@@ -604,37 +621,37 @@
             {
               "code": "6001",
               "street": "Main Street",
-              "street_en": "Main Street, Port Elizabeth CBD",
+              "street_en": "Main Street",
               "pattern": "n{1,200} Main Street"
             },
             {
               "code": "6045",
               "street": "Heugh Road",
-              "street_en": "Heugh Road, Walmer",
+              "street_en": "Heugh Road",
               "pattern": "n{1,120} Heugh Road"
             },
             {
               "code": "6059",
               "street": "Cape Road",
-              "street_en": "Cape Road, Mill Park",
+              "street_en": "Cape Road",
               "pattern": "n{1,250} Cape Road"
             },
             {
               "code": "6070",
               "street": "William Moffett Expressway",
-              "street_en": "William Moffett Expressway, Summerstrand",
+              "street_en": "William Moffett Expressway",
               "pattern": "n{1,180} William Moffett Expressway"
             },
             {
               "code": "6020",
               "street": "Prospect Road",
-              "street_en": "Prospect Road, Walmer",
+              "street_en": "Prospect Road",
               "pattern": "n{1,150} Prospect Road"
             },
             {
               "code": "6025",
               "street": "Circular Drive",
-              "street_en": "Circular Drive, Lorraine",
+              "street_en": "Circular Drive",
               "pattern": "n{1,200} Circular Drive"
             }
           ]
@@ -648,25 +665,25 @@
             {
               "code": "5201",
               "street": "Oxford Street",
-              "street_en": "Oxford Street, East London CBD",
+              "street_en": "Oxford Street",
               "pattern": "n{1,200} Oxford Street"
             },
             {
               "code": "5241",
               "street": "Bonza Bay Road",
-              "street_en": "Bonza Bay Road, Beacon Bay",
+              "street_en": "Bonza Bay Road",
               "pattern": "n{1,150} Bonza Bay Road"
             },
             {
               "code": "5247",
               "street": "Quenera Drive",
-              "street_en": "Quenera Drive, Gonubie",
+              "street_en": "Quenera Drive",
               "pattern": "n{1,120} Quenera Drive"
             },
             {
               "code": "5209",
               "street": "Fleet Street",
-              "street_en": "Fleet Street, Quigney",
+              "street_en": "Fleet Street",
               "pattern": "n{1,140} Fleet Street"
             }
           ]
@@ -676,7 +693,9 @@
     {
       "name": "Free State",
       "name_en": "Free State",
-      "region_tags": ["Highveld"],
+      "region_tags": [
+        "Highveld"
+      ],
       "cities": [
         {
           "name": "Bloemfontein",
@@ -687,44 +706,70 @@
             {
               "code": "9301",
               "street": "President Brand Street",
-              "street_en": "President Brand Street, Bloemfontein CBD",
+              "street_en": "President Brand Street",
               "pattern": "n{1,200} President Brand Street"
             },
             {
               "code": "9300",
               "street": "Maitland Street",
-              "street_en": "Maitland Street, Bloemfontein CBD",
+              "street_en": "Maitland Street",
               "pattern": "n{1,160} Maitland Street"
             },
             {
-              "code": "9301",
+              "code": "9302",
               "street": "Voortrekker Street",
-              "street_en": "Voortrekker Street, Bloemfontein CBD",
+              "street_en": "Voortrekker Street",
               "pattern": "n{1,180} Voortrekker Street"
             },
             {
               "code": "9322",
               "street": "Nelson Mandela Drive",
-              "street_en": "Nelson Mandela Drive, Brandwag",
+              "street_en": "Nelson Mandela Drive",
               "pattern": "n{1,250} Nelson Mandela Drive"
             },
             {
               "code": "9338",
               "street": "Dan Pienaar Avenue",
-              "street_en": "Dan Pienaar Avenue, Dan Pienaar",
+              "street_en": "Dan Pienaar Avenue",
               "pattern": "n{1,140} Dan Pienaar Avenue"
             },
             {
               "code": "9310",
               "street": "Zastron Street",
-              "street_en": "Zastron Street, Westdene",
+              "street_en": "Zastron Street",
               "pattern": "n{1,120} Zastron Street"
             },
             {
               "code": "9313",
               "street": "Kellner Street",
-              "street_en": "Kellner Street, Universitas",
+              "street_en": "Kellner Street",
               "pattern": "n{1,160} Kellner Street"
+            }
+          ]
+        },
+        {
+          "name": "Welkom",
+          "name_en": "Welkom",
+          "lat": -27.9767,
+          "lon": 26.7349,
+          "postcodes": [
+            {
+              "code": "9459",
+              "street": "Stateway",
+              "street_en": "Stateway",
+              "pattern": "n{1,200} Stateway"
+            },
+            {
+              "code": "9460",
+              "street": "Tempest Road",
+              "street_en": "Tempest Road",
+              "pattern": "n{1,160} Tempest Road"
+            },
+            {
+              "code": "9463",
+              "street": "Bok Street",
+              "street_en": "Bok Street",
+              "pattern": "n{1,120} Bok Street"
             }
           ]
         }
@@ -733,7 +778,9 @@
     {
       "name": "Mpumalanga",
       "name_en": "Mpumalanga",
-      "region_tags": ["Lowveld"],
+      "region_tags": [
+        "Lowveld"
+      ],
       "cities": [
         {
           "name": "Mbombela",
@@ -744,19 +791,19 @@
             {
               "code": "1200",
               "street": "Samora Machel Drive",
-              "street_en": "Samora Machel Drive, Nelspruit CBD",
+              "street_en": "Samora Machel Drive",
               "pattern": "n{1,200} Samora Machel Drive"
             },
             {
               "code": "1201",
               "street": "Paul Kruger Street",
-              "street_en": "Paul Kruger Street, Nelspruit CBD",
+              "street_en": "Paul Kruger Street",
               "pattern": "n{1,150} Paul Kruger Street"
             },
             {
               "code": "1211",
               "street": "Ferreira Street",
-              "street_en": "Ferreira Street, Nelspruit CBD",
+              "street_en": "Ferreira Street",
               "pattern": "n{1,120} Ferreira Street"
             }
           ]
@@ -765,24 +812,24 @@
           "name": "Emalahleni",
           "name_en": "Emalahleni (Witbank)",
           "lat": -25.8717,
-          "lon": 29.2350,
+          "lon": 29.235,
           "postcodes": [
             {
               "code": "1035",
               "street": "Mandela Street",
-              "street_en": "Mandela Street, Witbank CBD",
+              "street_en": "Mandela Street",
               "pattern": "n{1,180} Mandela Street"
             },
             {
               "code": "1038",
               "street": "President Avenue",
-              "street_en": "President Avenue, Witbank CBD",
+              "street_en": "President Avenue",
               "pattern": "n{1,160} President Avenue"
             },
             {
               "code": "1042",
               "street": "Beatty Avenue",
-              "street_en": "Beatty Avenue, Del Judor",
+              "street_en": "Beatty Avenue",
               "pattern": "n{1,120} Beatty Avenue"
             }
           ]
@@ -792,7 +839,9 @@
     {
       "name": "Limpopo",
       "name_en": "Limpopo",
-      "region_tags": [],
+      "region_tags": [
+        "Bushveld"
+      ],
       "cities": [
         {
           "name": "Polokwane",
@@ -803,32 +852,58 @@
             {
               "code": "0700",
               "street": "Landdros Mare Street",
-              "street_en": "Landdros Mare Street, Polokwane CBD",
+              "street_en": "Landdros Mare Street",
               "pattern": "n{1,200} Landdros Mare Street"
             },
             {
               "code": "0699",
               "street": "Thabo Mbeki Street",
-              "street_en": "Thabo Mbeki Street, Polokwane CBD",
+              "street_en": "Thabo Mbeki Street",
               "pattern": "n{1,180} Thabo Mbeki Street"
             },
             {
               "code": "0709",
               "street": "Grobler Street",
-              "street_en": "Grobler Street, Polokwane CBD",
+              "street_en": "Grobler Street",
               "pattern": "n{1,160} Grobler Street"
             },
             {
               "code": "0723",
               "street": "Marshall Street",
-              "street_en": "Marshall Street, Bendor",
+              "street_en": "Marshall Street",
               "pattern": "n{1,120} Marshall Street"
             },
             {
               "code": "0742",
               "street": "Marais Street",
-              "street_en": "Marais Street, Flora Park",
+              "street_en": "Marais Street",
               "pattern": "n{1,100} Marais Street"
+            }
+          ]
+        },
+        {
+          "name": "Tzaneen",
+          "name_en": "Tzaneen",
+          "lat": -23.8333,
+          "lon": 30.1667,
+          "postcodes": [
+            {
+              "code": "0850",
+              "street": "Agatha Street",
+              "street_en": "Agatha Street",
+              "pattern": "n{1,160} Agatha Street"
+            },
+            {
+              "code": "0855",
+              "street": "Peace Street",
+              "street_en": "Peace Street",
+              "pattern": "n{1,120} Peace Street"
+            },
+            {
+              "code": "0852",
+              "street": "Danie Joubert Street",
+              "street_en": "Danie Joubert Street",
+              "pattern": "n{1,140} Danie Joubert Street"
             }
           ]
         }
@@ -837,30 +912,32 @@
     {
       "name": "North West",
       "name_en": "North West",
-      "region_tags": [],
+      "region_tags": [
+        "Bushveld"
+      ],
       "cities": [
         {
           "name": "Rustenburg",
           "name_en": "Rustenburg",
           "lat": -25.6715,
-          "lon": 27.2420,
+          "lon": 27.242,
           "postcodes": [
             {
               "code": "0299",
               "street": "Nelson Mandela Drive",
-              "street_en": "Nelson Mandela Drive, Rustenburg CBD",
+              "street_en": "Nelson Mandela Drive",
               "pattern": "n{1,250} Nelson Mandela Drive"
             },
             {
               "code": "0300",
               "street": "Beyers Naude Drive",
-              "street_en": "Beyers Naude Drive, Rustenburg",
+              "street_en": "Beyers Naude Drive",
               "pattern": "n{1,200} Beyers Naude Drive"
             },
             {
               "code": "0309",
               "street": "Kock Street",
-              "street_en": "Kock Street, Rustenburg CBD",
+              "street_en": "Kock Street",
               "pattern": "n{1,140} Kock Street"
             }
           ]
@@ -874,19 +951,19 @@
             {
               "code": "2735",
               "street": "Carrington Street",
-              "street_en": "Carrington Street, Mahikeng CBD",
+              "street_en": "Carrington Street",
               "pattern": "n{1,160} Carrington Street"
             },
             {
               "code": "2745",
               "street": "University Drive",
-              "street_en": "University Drive, Mahikeng",
+              "street_en": "University Drive",
               "pattern": "n{1,120} University Drive"
             },
             {
               "code": "2790",
               "street": "Lichtenburg Road",
-              "street_en": "Lichtenburg Road, Mahikeng",
+              "street_en": "Lichtenburg Road",
               "pattern": "n{1,200} Lichtenburg Road"
             }
           ]
@@ -896,7 +973,9 @@
     {
       "name": "Northern Cape",
       "name_en": "Northern Cape",
-      "region_tags": ["Karoo"],
+      "region_tags": [
+        "Karoo"
+      ],
       "cities": [
         {
           "name": "Kimberley",
@@ -907,25 +986,25 @@
             {
               "code": "8301",
               "street": "Du Toitspan Road",
-              "street_en": "Du Toitspan Road, Kimberley CBD",
+              "street_en": "Du Toitspan Road",
               "pattern": "n{1,200} Du Toitspan Road"
             },
             {
               "code": "8300",
               "street": "Jones Street",
-              "street_en": "Jones Street, Kimberley CBD",
+              "street_en": "Jones Street",
               "pattern": "n{1,160} Jones Street"
             },
             {
               "code": "8306",
               "street": "Long Street",
-              "street_en": "Long Street, Kimberley CBD",
+              "street_en": "Long Street",
               "pattern": "n{1,180} Long Street"
             },
             {
               "code": "8345",
               "street": "Memorial Road",
-              "street_en": "Memorial Road, Monument Heights",
+              "street_en": "Memorial Road",
               "pattern": "n{1,140} Memorial Road"
             }
           ]
@@ -939,19 +1018,19 @@
             {
               "code": "8800",
               "street": "Schroder Street",
-              "street_en": "Schroder Street, Upington CBD",
+              "street_en": "Schroder Street",
               "pattern": "n{1,160} Schroder Street"
             },
             {
               "code": "8801",
               "street": "Scott Street",
-              "street_en": "Scott Street, Upington CBD",
+              "street_en": "Scott Street",
               "pattern": "n{1,140} Scott Street"
             },
             {
               "code": "8812",
               "street": "Murray Avenue",
-              "street_en": "Murray Avenue, Upington",
+              "street_en": "Murray Avenue",
               "pattern": "n{1,120} Murray Avenue"
             }
           ]
