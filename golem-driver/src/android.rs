@@ -16,6 +16,24 @@ pub struct AndroidDriver {
     client: CompanionClient,
     device_serial: String,
     package_name: String,
+    /// CDP lifecycle: None → SetupInProgress → Ready | Failed
+    cdp: std::sync::Mutex<CdpLifecycle>,
+}
+
+enum CdpLifecycle {
+    /// Haven't seen a WebView yet — no CDP needed.
+    Idle,
+    /// Background setup task is running.
+    SetupInProgress(tokio::sync::oneshot::Receiver<Option<CdpState>>),
+    /// CDP is ready — use for enrichment.
+    Ready(CdpState),
+    /// CDP setup failed — don't retry.
+    Failed,
+}
+
+struct CdpState {
+    port: u16,
+    page_id: String,
 }
 
 /// Convert a `Direction` to swipe coordinate deltas.
@@ -99,6 +117,7 @@ impl AndroidDriver {
             client: CompanionClient::new(port),
             device_serial,
             package_name,
+            cdp: std::sync::Mutex::new(CdpLifecycle::Idle),
         }
     }
 
@@ -146,11 +165,156 @@ impl AndroidDriver {
     }
 }
 
+/// What to do with CDP on this hierarchy call.
+enum CdpAction {
+    Skip,
+    Enrich(u16, String), // port, page_id
+}
+
+/// Set up CDP: discover socket, ADB forward, get page ID.
+async fn setup_cdp(device_serial: &str) -> Option<CdpState> {
+    let socket_name = crate::cdp::find_webview_socket(device_serial).await?;
+    let port = crate::cdp::setup_forward(device_serial, &socket_name).await.ok()?;
+    let page_id = crate::cdp::get_page_id(port).await.ok()?;
+    Some(CdpState { port, page_id })
+}
+
+/// Try to enrich a WebView node with CDP DOM data.
+/// Returns false if CDP failed (caller should reset state for recovery).
+async fn try_enrich(raw: &mut serde_json::Value, port: u16, page_id: &str, wv_left: i32, wv_top: i32) -> bool {
+    let dom_json = match crate::cdp::evaluate_dom_js_cached(port, page_id).await {
+        Ok(json) => json,
+        Err(_) => return false, // Dead socket — signal recovery
+    };
+
+    let wrapper = match serde_json::from_str::<serde_json::Value>(&dom_json) {
+        Ok(w) => w,
+        Err(_) => return false,
+    };
+
+    if let Some(meta) = wrapper.get("meta") {
+        eprintln!(
+            "  [cdp] DOM traversal: {}ms, {} nodes, dpr={}, url={}",
+            meta.get("elapsed_ms").and_then(|v| v.as_i64()).unwrap_or(-1),
+            meta.get("node_count").and_then(|v| v.as_i64()).unwrap_or(-1),
+            meta.get("dpr").and_then(|v| v.as_f64()).unwrap_or(-1.0),
+            meta.get("url").and_then(|v| v.as_str()).unwrap_or("?"),
+        );
+    }
+
+    if let Some(mut tree) = wrapper.get("tree").cloned() {
+        crate::cdp::offset_bounds(&mut tree, wv_left, wv_top);
+        replace_webview_children(raw, tree);
+    }
+    true
+}
+
+/// Find the first android.webkit.WebView in the hierarchy and return its bounds (left, top).
+fn find_webview_bounds(val: &serde_json::Value) -> Option<(i32, i32)> {
+    if let Some(cls) = val.get("class").and_then(|v| v.as_str()) {
+        if cls == "android.webkit.WebView" {
+            let bounds = val.get("bounds")?;
+            let left = bounds.get("left").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            let top = bounds.get("top").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            return Some((left, top));
+        }
+    }
+    if let Some(children) = val.get("children").and_then(|c| c.as_array()) {
+        for child in children {
+            if let Some(bounds) = find_webview_bounds(child) {
+                return Some(bounds);
+            }
+        }
+    }
+    None
+}
+
+/// Replace the first android.webkit.WebView's children with CDP DOM data.
+fn replace_webview_children(val: &mut serde_json::Value, cdp_dom: serde_json::Value) -> bool {
+    if let Some(cls) = val.get("class").and_then(|v| v.as_str()) {
+        if cls == "android.webkit.WebView" {
+            if let Some(children) = val.get_mut("children").and_then(|c| c.as_array_mut()) {
+                children.clear();
+                children.push(cdp_dom);
+            }
+            return true;
+        }
+    }
+    if let Some(children) = val.get_mut("children").and_then(|c| c.as_array_mut()) {
+        for child in children {
+            if replace_webview_children(child, cdp_dom.clone()) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 #[async_trait]
 impl PlatformDriver for AndroidDriver {
     async fn get_hierarchy(&self) -> Result<Element> {
         let text = self.client.get_text("/hierarchy").await?;
-        parse_hierarchy(&text)
+        let mut raw: serde_json::Value = serde_json::from_str(&text)
+            .context("failed to parse hierarchy JSON")?;
+
+        // Check if hierarchy contains a WebView
+        if let Some((wv_left, wv_top)) = find_webview_bounds(&raw) {
+            // Check CDP state (short lock, no async while held)
+            let cdp_action = {
+                let mut cdp = self.cdp.lock().expect("cdp mutex poisoned");
+                match &mut *cdp {
+                    CdpLifecycle::Idle => {
+                        // First WebView sighting — kick off background setup
+                        let (tx, rx) = tokio::sync::oneshot::channel();
+                        let serial = self.device_serial.clone();
+                        tokio::spawn(async move {
+                            let result = setup_cdp(&serial).await;
+                            let _ = tx.send(result);
+                        });
+                        *cdp = CdpLifecycle::SetupInProgress(rx);
+                        CdpAction::Skip // Return accessibility tree this time
+                    }
+                    CdpLifecycle::SetupInProgress(rx) => {
+                        match rx.try_recv() {
+                            Ok(Some(state)) => {
+                                let port = state.port;
+                                let page_id = state.page_id.clone();
+                                *cdp = CdpLifecycle::Ready(state);
+                                CdpAction::Enrich(port, page_id)
+                            }
+                            Ok(None) => {
+                                *cdp = CdpLifecycle::Failed;
+                                CdpAction::Skip
+                            }
+                            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
+                                CdpAction::Skip // Still setting up
+                            }
+                            Err(_) => {
+                                *cdp = CdpLifecycle::Failed;
+                                CdpAction::Skip
+                            }
+                        }
+                    }
+                    CdpLifecycle::Ready(state) => {
+                        CdpAction::Enrich(state.port, state.page_id.clone())
+                    }
+                    CdpLifecycle::Failed => CdpAction::Skip,
+                }
+            }; // mutex dropped here
+
+            // Now do async CDP work outside the lock
+            if let CdpAction::Enrich(port, page_id) = cdp_action {
+                if !try_enrich(&mut raw, port, &page_id, wv_left, wv_top).await {
+                    // CDP failed (dead socket, app restart) — reset to Idle for auto-recovery
+                    let mut cdp = self.cdp.lock().expect("cdp mutex poisoned");
+                    *cdp = CdpLifecycle::Idle;
+                }
+            }
+        }
+
+        let enriched_str = serde_json::to_string(&raw)
+            .context("failed to serialize hierarchy")?;
+        parse_hierarchy(&enriched_str)
     }
 
     async fn tap(&self, x: i32, y: i32) -> Result<()> {
