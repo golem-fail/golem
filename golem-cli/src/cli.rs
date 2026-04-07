@@ -43,6 +43,10 @@ pub struct TreeArgs {
     /// App bundle ID for iOS (needed to target the right app)
     #[arg(long)]
     pub bundle: Option<String>,
+
+    /// Show debug metadata (CDP status, enrichment source, etc.)
+    #[arg(long)]
+    pub debug: bool,
 }
 
 #[derive(clap::Args, Debug)]
