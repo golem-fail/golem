@@ -117,8 +117,11 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Devices => {
-            let ios_devices = golem_devices::ios::discover_ios_devices().await?;
-            let output = devices::format_device_list(&ios_devices);
+            let mut all_devices = golem_devices::ios::discover_ios_devices().await?;
+            if let Ok(android) = golem_devices::android::discover_android_devices().await {
+                all_devices.extend(android);
+            }
+            let output = devices::format_device_list(&all_devices);
             println!("{output}");
         }
 

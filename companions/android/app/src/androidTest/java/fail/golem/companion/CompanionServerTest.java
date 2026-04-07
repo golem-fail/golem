@@ -22,7 +22,9 @@ public class CompanionServerTest {
             } catch (NumberFormatException ignored) {}
         }
 
-        CompanionServer server = new CompanionServer(uiAutomation, port);
+        String deviceSerial = args.getString("device_serial");
+
+        CompanionServer server = new CompanionServer(uiAutomation, port, deviceSerial);
         server.start();
     }
 }

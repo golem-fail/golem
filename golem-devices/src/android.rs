@@ -121,35 +121,110 @@ pub fn parse_avd_list(output: &str) -> Vec<String> {
 /// Runs `emulator -list-avds` to get names, then reads each AVD's
 /// `config.ini` from `~/.android/avd/<name>.avd/config.ini`.
 pub async fn discover_android_devices() -> anyhow::Result<Vec<DeviceInfo>> {
-    let output = tokio::process::Command::new("emulator")
+    // Get running devices from adb
+    let running = discover_running_android_devices().await;
+
+    // Get AVD definitions from emulator -list-avds + config files
+    let mut devices = Vec::new();
+    if let Ok(output) = tokio::process::Command::new("emulator")
         .arg("-list-avds")
         .output()
-        .await?;
+        .await
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8(output.stdout)?;
+            let avd_names = parse_avd_list(&stdout);
+            let home = std::env::var("HOME").unwrap_or_default();
+            let avd_dir = std::path::PathBuf::from(&home).join(".android").join("avd");
 
-    if !output.status.success() {
-        // emulator command not available or failed — return empty list
-        return Ok(Vec::new());
-    }
-
-    let stdout = String::from_utf8(output.stdout)?;
-    let avd_names = parse_avd_list(&stdout);
-
-    let home = std::env::var("HOME").unwrap_or_default();
-    let avd_dir = std::path::PathBuf::from(&home).join(".android").join("avd");
-
-    let mut devices = Vec::new();
-
-    for name in &avd_names {
-        let config_path = avd_dir.join(format!("{name}.avd")).join("config.ini");
-        if let Ok(contents) = tokio::fs::read_to_string(&config_path).await {
-            match parse_avd_config(name, &contents) {
-                Ok(device) => devices.push(device),
-                Err(_) => continue,
+            for name in &avd_names {
+                let config_path = avd_dir.join(format!("{name}.avd")).join("config.ini");
+                if let Ok(contents) = tokio::fs::read_to_string(&config_path).await {
+                    if let Ok(mut device) = parse_avd_config(name, &contents) {
+                        // Check if this AVD is running by matching against adb devices
+                        if let Some(serial) = running.iter().find(|(_, avd)| avd.as_deref() == Some(name)) {
+                            device.state = DeviceState::Booted;
+                            device.udid = serial.0.clone();
+                        }
+                        devices.push(device);
+                    }
+                }
             }
         }
     }
 
+    // Add any running devices not found via AVD configs (e.g. physical devices,
+    // emulators with unparseable configs)
+    for (serial, _) in &running {
+        if !devices.iter().any(|d| d.udid == *serial) {
+            devices.push(DeviceInfo {
+                name: serial.clone(),
+                udid: serial.clone(),
+                platform: Platform::Android,
+                device_type: DeviceType::Phone,
+                os_major: 0,
+                os_version: String::new(),
+                state: DeviceState::Booted,
+                physical: !serial.starts_with("emulator-"),
+                playstore: false,
+                screen_width: None,
+                screen_height: None,
+                screen_scale: None,
+                last_booted: None,
+                runtime_id: None,
+                device_type_id: None,
+            });
+        }
+    }
+
     Ok(devices)
+}
+
+/// Get running Android devices from `adb devices`, with optional AVD name.
+/// Returns: Vec<(serial, Option<avd_name>)>
+async fn discover_running_android_devices() -> Vec<(String, Option<String>)> {
+    let output = match tokio::process::Command::new("adb")
+        .args(["devices"])
+        .output()
+        .await
+    {
+        Ok(o) if o.status.success() => o,
+        _ => return Vec::new(),
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut result = Vec::new();
+
+    for line in stdout.lines().skip(1) {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 2 && parts[1] == "device" {
+            let serial = parts[0].to_string();
+            // Try to get AVD name for emulators
+            let avd_name = get_emulator_avd_name(&serial).await;
+            result.push((serial, avd_name));
+        }
+    }
+    result
+}
+
+/// Get the AVD name for a running emulator via `adb emu avd name`.
+async fn get_emulator_avd_name(serial: &str) -> Option<String> {
+    let output = tokio::process::Command::new("adb")
+        .args(["-s", serial, "emu", "avd", "name"])
+        .output()
+        .await
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    String::from_utf8(output.stdout)
+        .ok()?
+        .lines()
+        .next()
+        .filter(|s| !s.is_empty() && !s.starts_with("OK"))
+        .map(|s| s.trim().to_string())
 }
 
 /// Parse key=value properties from config.ini content.

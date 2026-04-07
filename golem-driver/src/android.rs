@@ -193,13 +193,20 @@ async fn try_enrich(raw: &mut serde_json::Value, port: u16, page_id: &str, wv_le
     };
 
     if let Some(meta) = wrapper.get("meta") {
+        let url = meta.get("url").and_then(|v| v.as_str()).unwrap_or("");
         eprintln!(
             "  [cdp] DOM traversal: {}ms, {} nodes, dpr={}, url={}",
             meta.get("elapsed_ms").and_then(|v| v.as_i64()).unwrap_or(-1),
             meta.get("node_count").and_then(|v| v.as_i64()).unwrap_or(-1),
             meta.get("dpr").and_then(|v| v.as_f64()).unwrap_or(-1.0),
-            meta.get("url").and_then(|v| v.as_str()).unwrap_or("?"),
+            url,
         );
+
+        // Skip enrichment if the page hasn't loaded yet — don't replace
+        // valid accessibility tree data with an empty/blank page.
+        if url == "about:blank" || url.is_empty() {
+            return true; // CDP is working, just not ready — don't reset state
+        }
     }
 
     if let Some(mut tree) = wrapper.get("tree").cloned() {

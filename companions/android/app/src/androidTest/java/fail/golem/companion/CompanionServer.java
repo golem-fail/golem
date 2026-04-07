@@ -29,15 +29,18 @@ public class CompanionServer {
     private static final long INACTIVITY_TIMEOUT_MS = 5 * 60 * 60 * 1000L; // 5 hours
     private final UiAutomation uiAutomation;
     private final int port;
+    /** ADB serial passed from the host (e.g. "emulator-5554"). */
+    private final String deviceSerial;
     private volatile long lastRequestTime = System.currentTimeMillis();
 
     public CompanionServer(UiAutomation uiAutomation) {
-        this(uiAutomation, DEFAULT_PORT);
+        this(uiAutomation, DEFAULT_PORT, null);
     }
 
-    public CompanionServer(UiAutomation uiAutomation, int port) {
+    public CompanionServer(UiAutomation uiAutomation, int port, String deviceSerial) {
         this.uiAutomation = uiAutomation;
         this.port = port;
+        this.deviceSerial = deviceSerial != null ? deviceSerial : "unknown";
     }
 
     public void start() throws IOException {
@@ -127,7 +130,7 @@ public class CompanionServer {
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
-                        .put("device_id", android.os.Build.SERIAL));
+                        .put("device_id", deviceSerial));
                     break;
                 case "/hierarchy":
                     handleHierarchy(out);
@@ -367,6 +370,19 @@ public class CompanionServer {
         try (InputStream is = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
             byte[] buf = new byte[1024];
             while (is.read(buf) != -1) { /* drain */ }
+        }
+    }
+
+    private String executeShellAndRead(String command) throws Exception {
+        ParcelFileDescriptor pfd = uiAutomation.executeShellCommand(command);
+        try (InputStream is = new ParcelFileDescriptor.AutoCloseInputStream(pfd);
+             BufferedReader reader = new BufferedReader(new InputStreamReader(is))) {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line).append("\n");
+            }
+            return sb.toString();
         }
     }
 

@@ -356,14 +356,27 @@ async fn find_or_allocate_port(device: &DeviceInfo, platform: Platform) -> Resul
 
     let companions = scan_companions().await;
 
-    // Try to find an existing companion for this device with matching version
-    for (port, health) in &companions {
-        if health.platform == platform_str
-            && health.version == golem_version
-            && health.device_name == device.name
+    // Try to find an existing companion for this device with matching version.
+    // First try exact match by device name or ID. Then fall back to matching
+    // by platform+version if there's only one companion for that platform
+    // (handles Android where the companion can't report the ADB serial).
+    let platform_companions: Vec<_> = companions
+        .iter()
+        .filter(|(_, h)| h.platform == platform_str && h.version == golem_version)
+        .collect();
+
+    for (port, health) in &platform_companions {
+        if health.device_id == device.udid
+            || health.device_name == device.name
+            || health.device_name == device.udid
         {
             return Ok(*port);
         }
+    }
+
+    // If exactly one companion for this platform, assume it's ours
+    if platform_companions.len() == 1 {
+        return Ok(platform_companions[0].0);
     }
 
     // No match — find first free port
