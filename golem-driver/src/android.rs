@@ -175,7 +175,14 @@ enum CdpAction {
 async fn setup_cdp(device_serial: &str) -> Option<CdpState> {
     let socket_name = crate::cdp::find_webview_socket(device_serial).await?;
     let port = crate::cdp::setup_forward(device_serial, &socket_name).await.ok()?;
-    let page_id = crate::cdp::get_page_id(port).await.ok()?;
+    let page_id = match crate::cdp::get_page_id(port).await {
+        Ok(id) => id,
+        Err(e) => {
+            eprintln!("  [cdp] setup failed at get_page_id: {e}");
+            return None;
+        }
+    };
+    eprintln!("  [cdp] setup complete: port={port}, page_id={page_id}");
     Some(CdpState { port, page_id })
 }
 
@@ -305,16 +312,34 @@ impl PlatformDriver for AndroidDriver {
                     CdpLifecycle::Ready(state) => {
                         CdpAction::Enrich(state.port, state.page_id.clone())
                     }
-                    CdpLifecycle::Failed => CdpAction::Skip,
+                    CdpLifecycle::Failed => {
+                        // Retry — the app may have been relaunched with a new WebView
+                        let (tx, rx) = tokio::sync::oneshot::channel();
+                        let serial = self.device_serial.clone();
+                        tokio::spawn(async move {
+                            let result = setup_cdp(&serial).await;
+                            let _ = tx.send(result);
+                        });
+                        *cdp = CdpLifecycle::SetupInProgress(rx);
+                        CdpAction::Skip
+                    }
                 }
             }; // mutex dropped here
 
             // Now do async CDP work outside the lock
             if let CdpAction::Enrich(port, page_id) = cdp_action {
                 if !try_enrich(&mut raw, port, &page_id, wv_left, wv_top).await {
-                    // CDP failed (dead socket, app restart) — reset to Idle for auto-recovery
-                    let mut cdp = self.cdp.lock().expect("cdp mutex poisoned");
-                    *cdp = CdpLifecycle::Idle;
+                    // CDP failed (dead socket, app restart). Reconnect immediately
+                    // rather than deferring to background — the caller is already
+                    // waiting for hierarchy data.
+                    if let Some(new_state) = setup_cdp(&self.device_serial).await {
+                        try_enrich(&mut raw, new_state.port, &new_state.page_id, wv_left, wv_top).await;
+                        let mut cdp = self.cdp.lock().expect("cdp mutex poisoned");
+                        *cdp = CdpLifecycle::Ready(new_state);
+                    } else {
+                        let mut cdp = self.cdp.lock().expect("cdp mutex poisoned");
+                        *cdp = CdpLifecycle::Failed;
+                    }
                 }
             }
         }
