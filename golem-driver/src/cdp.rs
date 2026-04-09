@@ -83,6 +83,29 @@ pub async fn setup_forward(device_serial: &str, socket_name: &str) -> Result<u16
     Ok(port)
 }
 
+/// Remove all ADB forwards to webview_devtools_remote sockets for this device.
+/// Prevents stale forwards from accumulating across test runs.
+pub async fn cleanup_stale_forwards(device_serial: &str) {
+    let output = tokio::process::Command::new("adb")
+        .args(["-s", device_serial, "forward", "--list"])
+        .output()
+        .await;
+
+    if let Ok(output) = output {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            if line.contains("webview_devtools_remote") {
+                if let Some(tcp_part) = line.split_whitespace().nth(1) {
+                    let _ = tokio::process::Command::new("adb")
+                        .args(["-s", device_serial, "forward", "--remove", tcp_part])
+                        .output()
+                        .await;
+                }
+            }
+        }
+    }
+}
+
 /// Remove an ADB forward.
 pub async fn remove_forward(device_serial: &str, port: u16) -> Result<()> {
     let _ = tokio::process::Command::new("adb")

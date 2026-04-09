@@ -172,17 +172,21 @@ enum CdpAction {
 }
 
 /// Set up CDP: discover socket, ADB forward, get page ID.
+/// Cleans up any previous forward before creating a new one.
 async fn setup_cdp(device_serial: &str) -> Option<CdpState> {
+    // Clean up stale CDP forwards from previous sessions
+    crate::cdp::cleanup_stale_forwards(device_serial).await;
+
     let socket_name = crate::cdp::find_webview_socket(device_serial).await?;
     let port = crate::cdp::setup_forward(device_serial, &socket_name).await.ok()?;
     let page_id = match crate::cdp::get_page_id(port).await {
         Ok(id) => id,
         Err(e) => {
             eprintln!("  [cdp] setup failed at get_page_id: {e}");
+            let _ = crate::cdp::remove_forward(device_serial, port).await;
             return None;
         }
     };
-    eprintln!("  [cdp] setup complete: port={port}, page_id={page_id}");
     Some(CdpState { port, page_id })
 }
 
