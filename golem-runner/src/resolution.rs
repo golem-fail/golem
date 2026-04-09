@@ -82,6 +82,35 @@ pub fn build_selector(step: &Step) -> Selector {
     }
 }
 
+/// Minimum visible area (px) for an element to be tappable.
+const TAP_MARGIN: i32 = 5;
+
+/// Compute tap coordinates as the center of the element's visible portion
+/// within the viewport, with a safety margin from edges to avoid triggering
+/// system gestures (notification pull, back swipe, home indicator).
+///
+/// Returns None if the visible portion after margin is too small to tap.
+fn safe_tap_coords(bounds: &golem_element::Bounds, viewport: &Viewport) -> Option<(i32, i32)> {
+    // Intersect element bounds with viewport
+    let vis_left = bounds.x.max(0);
+    let vis_top = bounds.y.max(0);
+    let vis_right = (bounds.x + bounds.width).min(viewport.width);
+    let vis_bottom = (bounds.y + bounds.height).min(viewport.height);
+
+    // Apply safety margin from viewport edges
+    let safe_left = vis_left.max(TAP_MARGIN);
+    let safe_top = vis_top.max(TAP_MARGIN);
+    let safe_right = vis_right.min(viewport.width - TAP_MARGIN);
+    let safe_bottom = vis_bottom.min(viewport.height - TAP_MARGIN);
+
+    // Check if there's enough tappable area
+    if safe_right - safe_left < TAP_MARGIN || safe_bottom - safe_top < TAP_MARGIN {
+        return None; // Too small to tap reliably
+    }
+
+    Some(((safe_left + safe_right) / 2, (safe_top + safe_bottom) / 2))
+}
+
 /// Build a bounds-only fingerprint of the hierarchy for settle detection.
 ///
 /// Ignores text and accessibility_label so that cursor blinks, live counters,
@@ -179,7 +208,9 @@ pub async fn resolve_element(
 
         if !results.is_empty() {
             let first = &results[0];
-            return Ok((first.element.clone(), (first.tap_x, first.tap_y)));
+            let coords = safe_tap_coords(&first.element.bounds, &viewport)
+                .unwrap_or((first.tap_x, first.tap_y));
+            return Ok((first.element.clone(), coords));
         }
 
         // Element not in viewport — if auto_scroll is set, scroll to find it.
@@ -224,7 +255,11 @@ pub async fn resolve_element(
                 &selector, driver, direction, max_scrolls, distance,
                 step.scroll_timeout, container_bounds,
             ).await {
-                Ok(found) => return Ok((found.element.clone(), (found.tap_x, found.tap_y))),
+                Ok(found) => {
+                    let coords = safe_tap_coords(&found.element.bounds, &viewport)
+                        .unwrap_or((found.tap_x, found.tap_y));
+                    return Ok((found.element.clone(), coords));
+                }
                 Err(e) => return Err(e),
             }
         }
