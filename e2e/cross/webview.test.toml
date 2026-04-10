@@ -46,15 +46,11 @@ steps = [
   { action = "assert_visible", on_text = "Portrait", on_right_of = "Orientation:" },
   { action = "assert_visible", on_text = "Light", on_right_of = "Theme:" },
 
-  # Scroll within the web view to find list elements
-  { action = "swipe", direction = "down" },
-  { action = "swipe", direction = "down" },
-  { action = "assert_visible", on_text = "Item 0" },
+  # Scroll to find list elements
+  { action = "assert_visible", on_text = "Item 0", auto_scroll = true, timeout = 60000 },
 
-  # Scroll back up to the top of the web view
-  { action = "swipe", direction = "up" },
-  { action = "swipe", direction = "up" },
-  { action = "assert_visible", on_text = "Submit" },
+  # Scroll back to the top
+  { action = "assert_visible", on_text = "Submit", auto_scroll = true, timeout = 60000 },
 
   # Take a screenshot to capture final web view state
   { action = "screenshot", path = "/tmp/golem-cross-webview.png" },
