@@ -660,7 +660,7 @@ async fn run_flow_on_device(
                         eprintln!("  [{device_label}] Failed in block: {block}");
                     }
                     if let Some(step) = result.failed_step {
-                        eprintln!("  [{device_label}] Failed at step: {step}");
+                        eprintln!("  [{device_label}] Failed at step: {}", step + 1);
                     }
                 }
             }

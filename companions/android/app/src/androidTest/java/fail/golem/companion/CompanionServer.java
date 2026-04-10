@@ -126,7 +126,7 @@ public class CompanionServer {
                     sendJson(out, 200, new JSONObject()
                         .put("status", "ok")
                         .put("platform", "android")
-                        .put("version", "0.3.0")
+                        .put("version", "0.3.1")
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
@@ -249,8 +249,17 @@ public class CompanionServer {
     private void handleType(OutputStream out, String body) throws Exception {
         JSONObject req = new JSONObject(body);
         String text = req.getString("text");
-        String escaped = escapeForInputText(text);
-        executeShell("input text " + escaped);
+        // Split on newlines — type each line separately with Enter between them.
+        // Android's `input text` doesn't support newline characters.
+        String[] lines = text.split("\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            if (!lines[i].isEmpty()) {
+                executeShell("input text " + escapeForInputText(lines[i]));
+            }
+            if (i < lines.length - 1) {
+                executeShell("input keyevent KEYCODE_ENTER");
+            }
+        }
         sendJson(out, 200, new JSONObject().put("status", "ok"));
     }
 
