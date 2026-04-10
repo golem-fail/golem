@@ -57,16 +57,34 @@ pub(crate) struct AlertResponse {
 
 /// Parse a hierarchy JSON response body into an `Element` tree.
 ///
-/// The companion server may return either a single root element or an array
-/// of root elements. When an array is returned, wrap them under a synthetic
-/// root element so callers always see a single tree.
+/// Metadata returned alongside the hierarchy.
+#[derive(Debug, Default, Clone)]
+pub struct HierarchyMeta {
+    /// Height of the on-screen keyboard (0 if hidden).
+    pub keyboard_height: i32,
+}
+
+/// Parse a hierarchy JSON response from a companion server.
 ///
-/// After parsing, promotes `label` → `text` for elements where `text` is absent,
-/// to normalise across different companion server implementations.
-pub fn parse_hierarchy(json: &str) -> Result<Element> {
-    // Parse as generic JSON first so we can normalise label → text.
+/// Handles three formats:
+/// - `{ "tree": [...], "keyboard_height": N }` — wrapper with metadata
+/// - `[{...}, ...]` — array of root elements
+/// - `{...}` — single root element
+pub fn parse_hierarchy(json: &str) -> Result<(Element, HierarchyMeta)> {
     let mut val: serde_json::Value =
         serde_json::from_str(json).context("failed to parse hierarchy JSON")?;
+
+    // Extract metadata from wrapper format
+    let mut meta = HierarchyMeta::default();
+    if let Some(obj) = val.as_object() {
+        if obj.contains_key("tree") {
+            meta.keyboard_height = obj
+                .get("keyboard_height")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+            val = obj.get("tree").cloned().unwrap_or(val);
+        }
+    }
 
     // Handle array wrapper: some companions return `[{...}]` instead of `{...}`.
     if let serde_json::Value::Array(ref mut arr) = val {
@@ -107,7 +125,8 @@ pub fn parse_hierarchy(json: &str) -> Result<Element> {
         normalize_json(&mut val);
     }
 
-    serde_json::from_value(val).context("failed to deserialize hierarchy into Element")
+    let element = serde_json::from_value(val).context("failed to deserialize hierarchy into Element")?;
+    Ok((element, meta))
 }
 
 /// Recursively normalize a JSON hierarchy node to match the `Element` schema.

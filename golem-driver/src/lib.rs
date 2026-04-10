@@ -30,8 +30,8 @@ pub struct ScreenshotResult {
 /// Implemented by IosDriver and AndroidDriver, mocked for testing
 #[async_trait]
 pub trait PlatformDriver: Send + Sync {
-    /// Get the full element hierarchy from the device
-    async fn get_hierarchy(&self) -> anyhow::Result<Element>;
+    /// Get the full element hierarchy and metadata (keyboard state, etc.)
+    async fn get_hierarchy(&self) -> anyhow::Result<(Element, common::HierarchyMeta)>;
 
     /// Tap at specific screen coordinates
     async fn tap(&self, x: i32, y: i32) -> anyhow::Result<()>;
@@ -167,9 +167,9 @@ impl MockPlatformDriver {
 
 #[async_trait]
 impl PlatformDriver for MockPlatformDriver {
-    async fn get_hierarchy(&self) -> anyhow::Result<Element> {
+    async fn get_hierarchy(&self) -> anyhow::Result<(Element, common::HierarchyMeta)> {
         self.record_call("get_hierarchy", vec![]);
-        Ok(self.hierarchy.lock().expect("lock poisoned").clone())
+        Ok((self.hierarchy.lock().expect("lock poisoned").clone(), common::HierarchyMeta::default()))
     }
 
     async fn tap(&self, x: i32, y: i32) -> anyhow::Result<()> {

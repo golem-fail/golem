@@ -116,7 +116,7 @@ impl IosDriver {
 
 #[async_trait]
 impl PlatformDriver for IosDriver {
-    async fn get_hierarchy(&self) -> Result<Element> {
+    async fn get_hierarchy(&self) -> Result<(Element, crate::common::HierarchyMeta)> {
         let text = self.client.get_text("/hierarchy").await?;
         parse_hierarchy(&text)
     }
@@ -306,7 +306,7 @@ impl PlatformDriver for IosDriver {
 
     async fn get_alert(&self) -> Result<Option<Element>> {
         let text = self.client.get_text("/hierarchy").await?;
-        let root = parse_hierarchy(&text)?;
+        let (root, _meta) = parse_hierarchy(&text)?;
         Ok(find_alert(&root))
     }
 

@@ -270,10 +270,13 @@ fn replace_webview_children(val: &mut serde_json::Value, cdp_dom: serde_json::Va
 
 #[async_trait]
 impl PlatformDriver for AndroidDriver {
-    async fn get_hierarchy(&self) -> Result<Element> {
+    async fn get_hierarchy(&self) -> Result<(Element, crate::common::HierarchyMeta)> {
         let text = self.client.get_text("/hierarchy").await?;
-        let mut raw: serde_json::Value = serde_json::from_str(&text)
+        let wrapper: serde_json::Value = serde_json::from_str(&text)
             .context("failed to parse hierarchy JSON")?;
+
+        // Extract tree from wrapper (companion sends {"tree": {...}, "keyboard_height": N})
+        let mut raw = wrapper.get("tree").cloned().unwrap_or(wrapper);
 
         // Check if hierarchy contains a WebView
         if let Some((wv_left, wv_top)) = find_webview_bounds(&raw) {
@@ -348,7 +351,15 @@ impl PlatformDriver for AndroidDriver {
             }
         }
 
-        let enriched_str = serde_json::to_string(&raw)
+        // Reconstruct the wrapper with the enriched tree for parse_hierarchy
+        let response = serde_json::json!({
+            "tree": raw,
+            "keyboard_height": serde_json::from_str::<serde_json::Value>(&text)
+                .ok()
+                .and_then(|w| w.get("keyboard_height").cloned())
+                .unwrap_or(serde_json::json!(0))
+        });
+        let enriched_str = serde_json::to_string(&response)
             .context("failed to serialize hierarchy")?;
         parse_hierarchy(&enriched_str)
     }
@@ -548,7 +559,7 @@ impl PlatformDriver for AndroidDriver {
 
     async fn get_alert(&self) -> Result<Option<Element>> {
         let text = self.client.get_text("/hierarchy").await?;
-        let root = parse_hierarchy(&text)?;
+        let (root, _meta) = parse_hierarchy(&text)?;
         Ok(find_alert(&root))
     }
 

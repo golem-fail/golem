@@ -88,11 +88,42 @@ final class RequestRouter {
 
     private func handleHierarchy(query: [String: String]) -> HTTPResponse {
         let application = app(query: query)
-        let hierarchy: [[String: Any]] = DispatchQueue.main.sync {
+        let (hierarchy, keyboardHeight): ([[String: Any]], Int) = DispatchQueue.main.sync {
             application.activate()
-            return HierarchySerializer.serialize(app: application)
+            let tree = HierarchySerializer.serialize(app: application)
+            // Detect keyboard area: from the top of the toolbar (above keys)
+            // to the bottom of the screen. Includes toolbar, predictions, and keys.
+            let kbHeight: Int
+            let keyboards = application.keyboards
+            if keyboards.count > 0 {
+                let screenHeight = application.frame.height
+                // Find the topmost keyboard-related element (toolbar sits above keys)
+                var topY = screenHeight
+                // Check keyboard keys
+                for i in 0..<keyboards.count {
+                    topY = min(topY, keyboards.element(boundBy: i).frame.minY)
+                }
+                // Check toolbars (the input accessory toolbar sits above the keyboard)
+                let toolbars = application.toolbars
+                for i in 0..<toolbars.count {
+                    let tb = toolbars.element(boundBy: i)
+                    // Only count toolbars in the lower half of the screen
+                    if tb.frame.minY > screenHeight / 2 {
+                        topY = min(topY, tb.frame.minY)
+                    }
+                }
+                kbHeight = Int(screenHeight - topY)
+            } else {
+                kbHeight = 0
+            }
+            return (tree, kbHeight)
         }
-        return .json(hierarchy)
+        // Wrap hierarchy with metadata
+        let response: [String: Any] = [
+            "tree": hierarchy,
+            "keyboard_height": keyboardHeight
+        ]
+        return .json(response)
     }
 
     private func handleTap(body: Data?, query: [String: String]) -> HTTPResponse {

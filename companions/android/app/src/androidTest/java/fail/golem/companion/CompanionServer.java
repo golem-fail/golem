@@ -185,8 +185,34 @@ public class CompanionServer {
             return;
         }
         try {
-            JSONObject json = buildNodeJson(root);
-            sendJson(out, 200, json);
+            // Detect keyboard height from IME insets.
+            // Scan dumpsys window output for: type=ime frame=[0,TOP][W,BOT] visible=true
+            int keyboardHeight = 0;
+            try {
+                String windowDump = executeShellAndRead("dumpsys window");
+                for (String line : windowDump.split("\n")) {
+                    if (line.contains("type=ime") && line.contains("visible=true") && line.contains("frame=[")) {
+                        int frameIdx = line.indexOf("frame=[");
+                        String frameStr = line.substring(frameIdx + 7);
+                        String[] parts = frameStr.split("[\\[\\],]+");
+                        if (parts.length >= 4) {
+                            int top = Integer.parseInt(parts[1].trim());
+                            int bottom = Integer.parseInt(parts[3].trim());
+                            if (bottom > top && top > 0) {
+                                keyboardHeight = bottom - top;
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+                // Keyboard detection is best-effort
+            }
+            JSONObject tree = buildNodeJson(root);
+            JSONObject response = new JSONObject();
+            response.put("tree", tree);
+            response.put("keyboard_height", keyboardHeight);
+            sendJson(out, 200, response);
         } finally {
             root.recycle();
         }

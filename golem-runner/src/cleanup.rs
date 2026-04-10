@@ -121,8 +121,8 @@ mod tests {
 
     #[async_trait]
     impl PlatformDriver for FailableMockDriver {
-        async fn get_hierarchy(&self) -> anyhow::Result<Element> {
-            Ok(Element {
+        async fn get_hierarchy(&self) -> anyhow::Result<(Element, golem_driver::common::HierarchyMeta)> {
+            Ok((Element {
                 element_type: "View".into(),
                 text: None,
                 accessibility_label: None,
@@ -133,7 +133,7 @@ mod tests {
                 focused: false,
                 bounds: Bounds::new(0, 0, 375, 812),
                 children: vec![],
-            })
+            }, golem_driver::common::HierarchyMeta::default()))
         }
 
         async fn tap(&self, _x: i32, _y: i32) -> anyhow::Result<()> {

@@ -145,7 +145,7 @@ fn build_bounds_fingerprint(element: &Element, buf: &mut String) {
 pub(crate) async fn wait_for_settle(driver: &dyn PlatformDriver) -> Result<Element> {
     let deadline = Instant::now() + SETTLE_TIMEOUT;
 
-    let root = driver.get_hierarchy().await?;
+    let (root, _meta) = driver.get_hierarchy().await?;
     let mut prev_fp = bounds_fingerprint(&root);
     let mut prev_root = root;
 
@@ -156,7 +156,7 @@ pub(crate) async fn wait_for_settle(driver: &dyn PlatformDriver) -> Result<Eleme
 
         tokio::time::sleep(SETTLE_INTERVAL).await;
 
-        let root = match driver.get_hierarchy().await {
+        let (root, _meta) = match driver.get_hierarchy().await {
             Ok(r) => r,
             Err(_) => return Ok(prev_root),
         };
@@ -194,7 +194,7 @@ pub async fn resolve_element(
     let auto_scroll = step.auto_scroll == Some(true);
 
     let (last_root, last_viewport) = loop {
-        let root = match driver.get_hierarchy().await {
+        let (root, meta) = match driver.get_hierarchy().await {
             Ok(r) => r,
             Err(_) if Instant::now() < deadline => {
                 tokio::time::sleep(POLL_INTERVAL).await;
@@ -202,7 +202,12 @@ pub async fn resolve_element(
             }
             Err(e) => return Err(e),
         };
-        let viewport = Viewport::from_root(&root);
+        // Reduce viewport by keyboard height — elements behind the keyboard
+        // are not visible to the user.
+        let mut viewport = Viewport::from_root(&root);
+        if meta.keyboard_height > 0 {
+            viewport.height -= meta.keyboard_height;
+        }
         let visible_root = filter_viewport(&root, &viewport);
         let results = find_elements(&visible_root, &selector);
 
@@ -306,7 +311,7 @@ pub async fn resolve_element_full_tree(
     driver: &dyn PlatformDriver,
 ) -> Result<(Element, (i32, i32))> {
     let selector = build_selector(step);
-    let root = driver.get_hierarchy().await?;
+    let (root, _meta) = driver.get_hierarchy().await?;
     let results = find_elements(&root, &selector);
 
     if results.is_empty() {
@@ -338,7 +343,7 @@ pub async fn poll_for_absence(
     let deadline = Instant::now() + Duration::from_millis(timeout_ms);
 
     loop {
-        let root = match driver.get_hierarchy().await {
+        let (root, _meta) = match driver.get_hierarchy().await {
             Ok(r) => r,
             Err(_) if Instant::now() < deadline => {
                 tokio::time::sleep(POLL_INTERVAL).await;

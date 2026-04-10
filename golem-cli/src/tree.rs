@@ -73,7 +73,7 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
 
         // First call triggers async CDP setup for Android WebViews.
         // Second call (after a brief wait) gets the CDP-enriched tree.
-        let root = match driver.get_hierarchy().await {
+        let (root, meta) = match driver.get_hierarchy().await {
             Ok(r) => r,
             Err(e) => {
                 eprintln!("  {name} ({platform}, port {port}): failed to fetch hierarchy: {e}");
@@ -84,7 +84,7 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
         // If Android, wait for CDP setup and fetch again with enrichment.
         let root = if platform == "android" {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            driver.get_hierarchy().await.unwrap_or(root)
+            driver.get_hierarchy().await.map(|(r, _)| r).unwrap_or(root)
         } else {
             root
         };
@@ -94,10 +94,14 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
         if args.debug {
             println!("  device_id: {device_id}");
             println!("  bundle: {bundle}");
+            if meta.keyboard_height > 0 {
+                println!("  keyboard: open ({}px)", meta.keyboard_height);
+            } else {
+                println!("  keyboard: closed");
+            }
             if platform == "android" {
                 let has_webview = has_webview_element(&root);
                 if has_webview {
-                    // CDP log is printed by the driver via eprintln
                     println!("  webview: detected, CDP enrichment active");
                 } else {
                     println!("  webview: not detected");
@@ -108,7 +112,10 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
         let display = if args.full {
             root
         } else {
-            let vp = Viewport::from_root(&root);
+            let mut vp = Viewport::from_root(&root);
+            if meta.keyboard_height > 0 {
+                vp.height -= meta.keyboard_height;
+            }
             filter_viewport(&root, &vp)
         };
 

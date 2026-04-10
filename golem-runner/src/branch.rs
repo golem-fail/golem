@@ -28,7 +28,7 @@ async fn matches_condition(
 ) -> Result<bool> {
     // Screen-based: if_visible
     if let Some(ref text_pattern) = cond.if_visible {
-        let hierarchy = driver.get_hierarchy().await?;
+        let (hierarchy, _meta) = driver.get_hierarchy().await?;
         let selector = Selector {
             text: Some(text_pattern.clone()),
             ..Selector::default()
@@ -39,7 +39,7 @@ async fn matches_condition(
 
     // Screen-based: if_not_visible
     if let Some(ref text_pattern) = cond.if_not_visible {
-        let hierarchy = driver.get_hierarchy().await?;
+        let (hierarchy, _meta) = driver.get_hierarchy().await?;
         let selector = Selector {
             text: Some(text_pattern.clone()),
             ..Selector::default()

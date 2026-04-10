@@ -29,7 +29,7 @@ async fn find_inner_toggle(
     driver: &dyn PlatformDriver,
     outer: &golem_element::Element,
 ) -> Option<golem_element::Bounds> {
-    let root = driver.get_hierarchy().await.ok()?;
+    let (root, _meta) = driver.get_hierarchy().await.ok()?;
     let mut candidates = Vec::new();
     collect_toggles(&root, &mut candidates);
 
@@ -210,7 +210,7 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver) -> R
     let container_bounds = if let Some(ref within_group) = step.within {
         use crate::resolution::build_selector_from_group;
         use golem_element::selector::find_elements;
-        let root = driver.get_hierarchy().await?;
+        let (root, _meta) = driver.get_hierarchy().await?;
         let vp = golem_element::Viewport::from_root(&root);
         let visible = golem_element::filter_viewport(&root, &vp);
         let within_sel = build_selector_from_group(within_group);

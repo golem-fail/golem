@@ -446,13 +446,12 @@ mod tests {
 
     #[async_trait::async_trait]
     impl PlatformDriver for SequenceMockDriver {
-        async fn get_hierarchy(&self) -> anyhow::Result<Element> {
+        async fn get_hierarchy(&self) -> anyhow::Result<(Element, golem_driver::common::HierarchyMeta)> {
             self.record_call("get_hierarchy", vec![]);
             let hierarchies = self.hierarchies.lock().expect("lock poisoned");
             let idx = self.call_index.fetch_add(1, Ordering::SeqCst) as usize;
-            // Clamp to last hierarchy if we exceed the sequence
             let clamped = idx.min(hierarchies.len().saturating_sub(1));
-            Ok(hierarchies[clamped].clone())
+            Ok((hierarchies[clamped].clone(), golem_driver::common::HierarchyMeta::default()))
         }
 
         async fn tap(&self, x: i32, y: i32) -> anyhow::Result<()> {
