@@ -85,6 +85,73 @@ pub fn build_selector(step: &Step) -> Selector {
 /// Minimum visible area (px) for an element to be tappable.
 const TAP_MARGIN: i32 = 5;
 
+/// Resolve a CoordValue to an absolute pixel position.
+///
+/// - Standalone (no element): pixels are absolute, percentages are of viewport.
+/// - With element: pixels are offset from element center, percentages are of element dimensions.
+fn resolve_coord(
+    val: &golem_parser::CoordValue,
+    viewport_size: i32,
+    element_pos: Option<i32>,   // element center position
+    element_size: Option<i32>,  // element width or height
+    element_origin: Option<i32>, // element x or y
+) -> i32 {
+    match val {
+        golem_parser::CoordValue::Pixels(px) => {
+            if let Some(center) = element_pos {
+                // Offset from element center
+                center + px
+            } else {
+                // Absolute screen coordinate
+                *px
+            }
+        }
+        golem_parser::CoordValue::Percent(pct_str) => {
+            let pct: f32 = pct_str.trim_end_matches('%').parse().unwrap_or(50.0) / 100.0;
+            if let (Some(origin), Some(size)) = (element_origin, element_size) {
+                // Percentage of element dimensions from element origin
+                origin + (size as f32 * pct) as i32
+            } else {
+                // Percentage of viewport
+                (viewport_size as f32 * pct) as i32
+            }
+        }
+    }
+}
+
+/// Apply x/y coordinate adjustments from the step's selector to tap coordinates.
+fn apply_coord_adjustments(
+    step: &golem_parser::Step,
+    base_x: i32,
+    base_y: i32,
+    viewport: &Viewport,
+    element_bounds: Option<&golem_element::Bounds>,
+) -> (i32, i32) {
+    let group = step.on.as_ref();
+    let x_val = group.and_then(|g| g.x.as_ref());
+    let y_val = group.and_then(|g| g.y.as_ref());
+
+    let (elem_cx, elem_cy, elem_w, elem_h, elem_x, elem_y) = if let Some(b) = element_bounds {
+        (Some(b.center_x()), Some(b.center_y()), Some(b.width), Some(b.height), Some(b.x), Some(b.y))
+    } else {
+        (None, None, None, None, None, None)
+    };
+
+    let x = if let Some(xv) = x_val {
+        resolve_coord(xv, viewport.width, elem_cx, elem_w, elem_x)
+    } else {
+        base_x
+    };
+
+    let y = if let Some(yv) = y_val {
+        resolve_coord(yv, viewport.height, elem_cy, elem_h, elem_y)
+    } else {
+        base_y
+    };
+
+    (x, y)
+}
+
 /// Compute tap coordinates as the center of the element's visible portion
 /// within the viewport, with a safety margin from edges to avoid triggering
 /// system gestures (notification pull, back swipe, home indicator).
@@ -193,6 +260,39 @@ pub async fn resolve_element(
 
     let auto_scroll = step.auto_scroll == Some(true);
 
+    // Handle coordinate-only selector: { x = 150, y = 300 } or { x = "50%", y = "25%" }
+    // No element resolution needed — just return the coordinates.
+    let has_element_selector = selector.text.is_some()
+        || selector.accessibility_label.is_some()
+        || selector.below.is_some()
+        || selector.above.is_some()
+        || selector.right_of.is_some()
+        || selector.left_of.is_some();
+
+    if !has_element_selector {
+        let group = step.on.as_ref();
+        let has_coords = group.is_some_and(|g| g.x.is_some() || g.y.is_some());
+        if has_coords {
+            let (root, meta) = driver.get_hierarchy().await?;
+            let mut vp = Viewport::from_root(&root);
+            if meta.keyboard_height > 0 { vp.height -= meta.keyboard_height; }
+            let (x, y) = apply_coord_adjustments(step, vp.width / 2, vp.height / 2, &vp, None);
+            let dummy = golem_element::Element {
+                element_type: "point".to_string(),
+                text: None,
+                accessibility_label: None,
+                placeholder: None,
+                enabled: true,
+                checked: false,
+                clickable: true,
+                focused: false,
+                bounds: golem_element::Bounds::new(x, y, 1, 1),
+                children: vec![],
+            };
+            return Ok((dummy, (x, y)));
+        }
+    }
+
     let (last_root, last_viewport) = loop {
         let (root, meta) = match driver.get_hierarchy().await {
             Ok(r) => r,
@@ -213,8 +313,9 @@ pub async fn resolve_element(
 
         if !results.is_empty() {
             let first = &results[0];
-            let coords = safe_tap_coords(&first.element.bounds, &viewport)
+            let base = safe_tap_coords(&first.element.bounds, &viewport)
                 .unwrap_or((first.tap_x, first.tap_y));
+            let coords = apply_coord_adjustments(step, base.0, base.1, &viewport, Some(&first.element.bounds));
             return Ok((first.element.clone(), coords));
         }
 

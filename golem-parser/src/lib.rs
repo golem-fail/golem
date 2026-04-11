@@ -138,6 +138,14 @@ pub enum Anchor {
 /// All fields match the flat `on_*` fields on Step but without the prefix.
 /// Relational fields (below, above, right_of, left_of) accept either a
 /// text pattern or a nested selector group.
+/// A coordinate value: either an absolute pixel or a percentage string.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum CoordValue {
+    Pixels(i32),
+    Percent(String), // e.g. "50%"
+}
+
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct SelectorGroup {
     pub text: Option<String>,
@@ -153,6 +161,10 @@ pub struct SelectorGroup {
     /// Observable traits: ["button", "has_text", "square"], etc.
     #[serde(default)]
     pub traits: Vec<String>,
+    /// X coordinate: absolute pixels, percentage of screen/element, or offset from center.
+    pub x: Option<CoordValue>,
+    /// Y coordinate: same as x.
+    pub y: Option<CoordValue>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
