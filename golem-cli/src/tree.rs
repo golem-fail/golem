@@ -17,37 +17,43 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
         }
     });
 
-    // Scan for running companions
-    let companions = crate::suite::scan_companions_public().await;
-
-    if companions.is_empty() {
-        bail!("No running companions found. Start a test or launch a companion first.");
-    }
+    // Scan for running companions first
+    let mut companions = crate::suite::scan_companions_public().await;
 
     // Filter by platform
-    let companions: Vec<_> = companions
-        .into_iter()
-        .filter(|(_, health)| {
-            platform_filter.is_none_or(|f| health.platform == f)
-        })
-        .collect();
+    if let Some(pf) = platform_filter {
+        companions.retain(|(_, h)| h.platform == pf);
+    }
 
     // Filter by device name/UDID
-    let companions: Vec<_> = if let Some(ref filter) = args.device {
+    if let Some(ref filter) = args.device {
         let f = filter.to_lowercase();
-        companions
-            .into_iter()
-            .filter(|(_, health)| {
-                health.device_name.to_lowercase().contains(&f)
-                    || health.device_id.to_lowercase().contains(&f)
-            })
-            .collect()
-    } else {
-        companions
-    };
+        companions.retain(|(_, h)| {
+            h.device_name.to_lowercase().contains(&f)
+                || h.device_id.to_lowercase().contains(&f)
+        });
+    }
+
+    // If no companions found, discover devices and start them
+    if companions.is_empty() {
+        eprintln!("  No running companions found. Starting...");
+        let started = crate::suite::start_companions_public(platform_filter).await?;
+        companions = started;
+
+        if let Some(pf) = platform_filter {
+            companions.retain(|(_, h)| h.platform == pf);
+        }
+        if let Some(ref filter) = args.device {
+            let f = filter.to_lowercase();
+            companions.retain(|(_, h)| {
+                h.device_name.to_lowercase().contains(&f)
+                    || h.device_id.to_lowercase().contains(&f)
+            });
+        }
+    }
 
     if companions.is_empty() {
-        bail!("No matching companions found.");
+        bail!("No devices found. Start a simulator or emulator first.");
     }
 
     for (port, health) in &companions {

@@ -343,6 +343,102 @@ impl SuiteRunner {
     }
 }
 
+// Public wrappers (used by golem tree)
+pub fn find_companion_path_public(platform: Platform) -> Result<String> {
+    find_companion_path(platform)
+}
+pub fn find_android_apk_public() -> Result<String> {
+    find_android_apk()
+}
+pub fn find_android_main_apk_public() -> Option<String> {
+    find_android_main_apk()
+}
+
+/// Discover booted devices and start companions for all platforms.
+/// Used by `golem tree` and potentially other commands that need companions.
+pub async fn start_companions_public(
+    platform_filter: Option<&str>,
+) -> Result<Vec<(u16, golem_driver::CompanionHealth)>> {
+    let mut platforms = Vec::new();
+    if platform_filter.is_none() || platform_filter == Some("ios") {
+        platforms.push(Platform::Ios);
+    }
+    if platform_filter.is_none() || platform_filter == Some("android") {
+        platforms.push(Platform::Android);
+    }
+
+    let (reg_state, _rx) = crate::registration::RegistrationState::new();
+    let reg_port = crate::registration::start_registration_server(reg_state.clone()).await?;
+
+    let mut results = Vec::new();
+
+    for platform in platforms {
+        let devices = match platform {
+            Platform::Ios => golem_devices::ios::discover_ios_devices().await.unwrap_or_default(),
+            Platform::Android => golem_devices::android::discover_android_devices().await.unwrap_or_default(),
+        };
+
+        let booted: Vec<_> = devices.into_iter()
+            .filter(|d| d.state == golem_devices::DeviceState::Booted)
+            .collect();
+
+        if booted.is_empty() {
+            continue;
+        }
+
+        let device = &booted[0];
+        let companion_path = match find_companion_path(platform) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+
+        if platform == Platform::Android {
+            if let Ok(apk) = find_android_apk() {
+                let cmd = golem_devices::lifecycle::install_companion_command(device, &apk);
+                let _ = golem_devices::lifecycle::run_command_public(&cmd, "install test APK").await;
+            }
+            if let Some(main) = find_android_main_apk() {
+                let cmd = golem_devices::lifecycle::install_companion_command(device, &main);
+                let _ = golem_devices::lifecycle::run_command_public(&cmd, "install main APK").await;
+            }
+        } else {
+            let _ = golem_devices::lifecycle::build_companion(device, &companion_path).await;
+        }
+
+        if let Ok(()) = golem_devices::lifecycle::spawn_companion_with_reg(
+            device, &companion_path, 0, Some(reg_port),
+        ).await {
+            let mut rx = reg_state.subscribe();
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
+            loop {
+                tokio::select! {
+                    msg = rx.recv() => {
+                        if let Ok(id) = msg {
+                            if let Some(comp) = reg_state.get(&id) {
+                                if platform == Platform::Android {
+                                    let fwd = golem_devices::lifecycle::port_forward_command(device, comp.port);
+                                    let _ = golem_devices::lifecycle::run_command_public(&fwd, "port forward").await;
+                                }
+                                let client = golem_driver::common::CompanionClient::new(comp.port);
+                                if let Ok(health) = client.wait_for_health(std::time::Duration::from_secs(15)).await {
+                                    results.push((comp.port, health));
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    _ = tokio::time::sleep_until(deadline) => {
+                        eprintln!("  Companion startup timed out for {platform}");
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(results)
+}
+
 /// Public wrapper for scan_companions (used by `golem tree`).
 pub async fn scan_companions_public() -> Vec<(u16, golem_driver::CompanionHealth)> {
     scan_companions().await
