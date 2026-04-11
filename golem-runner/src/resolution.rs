@@ -220,12 +220,32 @@ pub async fn resolve_element(
 
         // Element not in viewport — if auto_scroll is set, scroll to find it.
         if auto_scroll {
-            // Resolve `within` container if specified.
+            // Resolve `within` container — scroll to it first if off-screen.
             let container_bounds = if let Some(ref within_group) = step.within {
                 let within_sel = build_selector_from_group(within_group);
-                find_elements(&visible_root, &within_sel)
+                let in_viewport = find_elements(&visible_root, &within_sel)
                     .first()
-                    .map(|r| r.element.bounds.clone())
+                    .map(|r| r.element.bounds.clone());
+
+                if in_viewport.is_some() {
+                    in_viewport
+                } else {
+                    // Container not visible — scroll the page to bring it into view
+                    let max_s = step.max_scrolls.unwrap_or(crate::scroll::DEFAULT_MAX_SCROLLS);
+                    let _ = crate::scroll::scroll_to_element(
+                        &within_sel, driver, golem_driver::Direction::Down, max_s,
+                    ).await;
+                    // Re-fetch hierarchy and find the container in the updated viewport
+                    let (fresh_root, fresh_meta) = driver.get_hierarchy().await?;
+                    let mut fresh_vp = Viewport::from_root(&fresh_root);
+                    if fresh_meta.keyboard_height > 0 {
+                        fresh_vp.height -= fresh_meta.keyboard_height;
+                    }
+                    let fresh_visible = filter_viewport(&fresh_root, &fresh_vp);
+                    find_elements(&fresh_visible, &within_sel)
+                        .first()
+                        .map(|r| r.element.bounds.clone())
+                }
             } else {
                 None
             };

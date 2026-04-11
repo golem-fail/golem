@@ -206,17 +206,36 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver) -> R
 
     let selector = build_selector(step);
 
-    // Resolve `within` container from viewport-filtered tree (screen coordinates).
+    // Resolve `within` container — scroll to it first if off-screen.
     let container_bounds = if let Some(ref within_group) = step.within {
         use crate::resolution::build_selector_from_group;
         use golem_element::selector::find_elements;
-        let (root, _meta) = driver.get_hierarchy().await?;
-        let vp = golem_element::Viewport::from_root(&root);
+        let (root, meta) = driver.get_hierarchy().await?;
+        let mut vp = golem_element::Viewport::from_root(&root);
+        if meta.keyboard_height > 0 { vp.height -= meta.keyboard_height; }
         let visible = golem_element::filter_viewport(&root, &vp);
         let within_sel = build_selector_from_group(within_group);
-        find_elements(&visible, &within_sel)
+
+        let in_viewport = find_elements(&visible, &within_sel)
             .first()
-            .map(|r| r.element.bounds.clone())
+            .map(|r| r.element.bounds.clone());
+
+        if in_viewport.is_some() {
+            in_viewport
+        } else {
+            // Container not visible — scroll to bring it into view
+            let _ = crate::scroll::scroll_to_element(
+                &within_sel, driver, golem_driver::Direction::Down,
+                crate::scroll::DEFAULT_MAX_SCROLLS,
+            ).await;
+            let (fresh, fresh_meta) = driver.get_hierarchy().await?;
+            let mut fresh_vp = golem_element::Viewport::from_root(&fresh);
+            if fresh_meta.keyboard_height > 0 { fresh_vp.height -= fresh_meta.keyboard_height; }
+            let fresh_visible = golem_element::filter_viewport(&fresh, &fresh_vp);
+            find_elements(&fresh_visible, &within_sel)
+                .first()
+                .map(|r| r.element.bounds.clone())
+        }
     } else {
         None
     };
