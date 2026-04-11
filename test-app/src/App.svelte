@@ -11,8 +11,10 @@ import Permissions from "./lib/Permissions.svelte";
 import DeviceState from "./lib/DeviceState.svelte";
 import DelayedElement from "./lib/DelayedElement.svelte";
 import DialogOverlay from "./lib/DialogOverlay.svelte";
+import TouchVisualizer from "./lib/TouchVisualizer.svelte";
 </script>
 
+<TouchVisualizer />
 <main>
   <h1>GOLEM Test App</h1>
   <Counter />
