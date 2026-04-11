@@ -273,7 +273,7 @@ pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver) -> Re
         return Ok(());
     }
 
-    // Legacy: direction-only swipe at screen center
+    // Direction-only swipe: use shared swipe_from for consistent coordinates
     let direction_str = step
         .params
         .get("direction")
@@ -288,7 +288,12 @@ pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver) -> Re
         other => bail!("Invalid swipe direction: \"{}\"", other),
     };
 
-    driver.swipe(direction).await?;
+    let (root, meta) = driver.get_hierarchy().await?;
+    let mut vp = golem_element::Viewport::from_root(&root);
+    if meta.keyboard_height > 0 { vp.height -= meta.keyboard_height; }
+    let (sx, sy) = crate::scroll::default_swipe_start(&vp, direction);
+    let (fx, fy, tx, ty) = crate::scroll::swipe_from(&vp, direction, sx, sy, 40);
+    driver.swipe_coords(fx, fy, tx, ty).await?;
     let _ = wait_for_settle(driver).await;
     Ok(())
 }

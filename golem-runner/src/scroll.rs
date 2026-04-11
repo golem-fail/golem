@@ -59,7 +59,7 @@ fn reverse_direction(dir: Direction) -> Direction {
 /// Clamps all coordinates to 10%-90% of the screen to avoid system gesture
 /// areas (notification bar, home indicator). Shorter swipes near edges are
 /// fine — a short scroll beats a wasted one.
-fn swipe_from(
+pub fn swipe_from(
     viewport: &Viewport,
     direction: Direction,
     start_x: i32,
@@ -97,7 +97,7 @@ fn swipe_from(
 /// (opposite to scroll intent) so it has room to travel AND avoids inner
 /// scrollable elements that typically occupy the middle of the screen.
 /// "Down" scroll = finger starts at 80% from top (below most inner scrollables).
-fn default_swipe_start(viewport: &Viewport, direction: Direction) -> (i32, i32) {
+pub fn default_swipe_start(viewport: &Viewport, direction: Direction) -> (i32, i32) {
     let cx = viewport.width / 2;
     let cy = viewport.height / 2;
     match direction {
