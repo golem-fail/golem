@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use golem_devices::{DeviceInfo, DeviceState, Platform};
 use golem_driver::android::AndroidDriver;
 use golem_driver::ios::IosDriver;
@@ -576,86 +576,6 @@ async fn ensure_companion_with_reg(
     }
 }
 
-/// Legacy ensure_companion (used when reusing existing companions).
-async fn ensure_companion(
-    device: &DeviceInfo,
-    platform: Platform,
-    port: u16,
-) -> Result<golem_driver::CompanionHealth> {
-    use golem_driver::common::CompanionClient;
-
-    let client = CompanionClient::new(port);
-    let golem_version = env!("CARGO_PKG_VERSION");
-
-    // Tier 1: check if companion is already running with correct version
-    if let Ok(health) = client.check_health().await {
-        if health.version == golem_version {
-            return Ok(health);
-        }
-        eprintln!(
-            "  Companion version {} does not match golem {}. Rebuilding...",
-            health.version, golem_version
-        );
-        // Fall through to tier 3 (rebuild)
-    } else {
-        // Tier 2: try to restart without rebuilding
-        eprintln!("  Companion not running. Restarting...");
-        let companion_path = find_companion_path(platform)?;
-        if let Ok(()) = golem_devices::lifecycle::spawn_companion(device, &companion_path, port).await {
-            if platform == Platform::Android {
-                let fwd = golem_devices::lifecycle::port_forward_command(device, port);
-                let _ = golem_devices::lifecycle::run_command_public(&fwd, "port forward").await;
-            }
-            if let Ok(health) = client.wait_for_health(std::time::Duration::from_secs(15)).await {
-                if health.version == golem_version {
-                    return Ok(health);
-                }
-                eprintln!(
-                    "  Restarted companion has wrong version {}. Rebuilding...",
-                    health.version
-                );
-            }
-        }
-    }
-
-    // Tier 3: full rebuild + install + start
-    eprintln!("  Building companion...");
-    let companion_path = find_companion_path(platform)?;
-
-    match platform {
-        Platform::Ios => {
-            golem_devices::lifecycle::build_companion(device, &companion_path).await?;
-            golem_devices::lifecycle::spawn_companion(device, &companion_path, port).await?;
-        }
-        Platform::Android => {
-            let apk_path = find_android_apk()?;
-            let main_apk_path = find_android_main_apk();
-            golem_devices::lifecycle::install_android_companion_with_main(
-                device,
-                &apk_path,
-                main_apk_path.as_deref(),
-                port,
-            )
-            .await?;
-            golem_devices::lifecycle::spawn_companion(device, &companion_path, port).await?;
-        }
-    }
-
-    let health = client
-        .wait_for_health(std::time::Duration::from_secs(60))
-        .await
-        .context("Companion did not start within 60 seconds")?;
-
-    if health.version != golem_version {
-        anyhow::bail!(
-            "Companion version {} does not match golem version {}",
-            health.version,
-            golem_version
-        );
-    }
-
-    Ok(health)
-}
 
 /// Find the companion project path for the given platform.
 fn find_companion_path(platform: Platform) -> Result<String> {

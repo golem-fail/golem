@@ -43,9 +43,20 @@ public class CompanionServer {
         this.deviceSerial = deviceSerial != null ? deviceSerial : "unknown";
     }
 
+    /** Optional callback to re-register and get a new port when bind fails. */
+    interface PortAllocator {
+        int allocatePort() throws Exception;
+    }
+
+    private PortAllocator portAllocator;
+
+    public void setPortAllocator(PortAllocator allocator) {
+        this.portAllocator = allocator;
+    }
+
     public void start() throws IOException {
         startInactivityWatchdog();
-        ServerSocket serverSocket = new ServerSocket(port);
+        ServerSocket serverSocket = tryBind(port);
         while (true) {
             Socket client = serverSocket.accept();
             new Thread(() -> {
@@ -398,6 +409,31 @@ public class CompanionServer {
         }
         json.put("children", children);
         return json;
+    }
+
+    /**
+     * Try to bind to the given port. If it fails and a PortAllocator is set,
+     * re-register to get a new port and retry (up to 3 times).
+     */
+    private ServerSocket tryBind(int initialPort) throws IOException {
+        int currentPort = initialPort;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                return new ServerSocket(currentPort);
+            } catch (IOException e) {
+                if (portAllocator == null || attempt == 2) {
+                    throw e; // No re-registration available or max retries
+                }
+                System.err.println("[golem] Port " + currentPort + " in use, re-registering...");
+                try {
+                    currentPort = portAllocator.allocatePort();
+                    System.err.println("[golem] Re-registered on port " + currentPort);
+                } catch (Exception re) {
+                    throw new IOException("Re-registration failed: " + re.getMessage(), e);
+                }
+            }
+        }
+        throw new IOException("Failed to bind after 3 attempts");
     }
 
     private void executeShell(String command) throws IOException {

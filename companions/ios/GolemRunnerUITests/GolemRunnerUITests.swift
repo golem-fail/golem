@@ -67,16 +67,34 @@ final class GolemRunnerUITests: XCTestCase {
     override func setUp() {
         super.setUp()
         continueAfterFailure = true
-        let port = Self.resolvePort()
         let router = RequestRouter()
-        let httpServer = HTTPServer(port: port) { method, path, body in
-            return router.handle(method: method, path: path, body: body)
-        }
-        do {
-            try httpServer.start()
-            server = httpServer
-        } catch {
-            XCTFail("Failed to start HTTP server on port \(port): \(error)")
+
+        // Try to bind, re-registering on port conflict (up to 3 attempts)
+        var port = Self.resolvePort()
+        let regPort: UInt16? = {
+            if let s = ProcessInfo.processInfo.environment["GOLEM_REG_PORT"],
+               let p = UInt16(s) { return p }
+            return nil
+        }()
+
+        for attempt in 0..<3 {
+            let httpServer = HTTPServer(port: port) { method, path, body in
+                return router.handle(method: method, path: path, body: body)
+            }
+            do {
+                try httpServer.start()
+                server = httpServer
+                return
+            } catch {
+                if attempt < 2, let rp = regPort,
+                   let newPort = Self.registerWithGolem(regPort: rp) {
+                    print("[golem] Port \(port) in use, re-registered on port \(newPort)")
+                    port = newPort
+                } else {
+                    XCTFail("Failed to start HTTP server on port \(port): \(error)")
+                    return
+                }
+            }
         }
     }
 

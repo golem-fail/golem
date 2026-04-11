@@ -45,6 +45,14 @@ public class CompanionServerTest {
         }
 
         CompanionServer server = new CompanionServer(uiAutomation, port, deviceSerial);
+
+        // If using registration, set up re-registration callback for port conflicts
+        if (regPort > 0) {
+            final int rp = regPort;
+            final String ds = deviceSerial;
+            server.setPortAllocator(() -> registerWithGolem(rp, ds));
+        }
+
         server.start();
     }
 
