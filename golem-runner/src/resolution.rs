@@ -89,6 +89,16 @@ const TAP_MARGIN: i32 = 5;
 ///
 /// - Standalone (no element): pixels are absolute, percentages are of viewport.
 /// - With element: pixels are offset from element center, percentages are of element dimensions.
+pub fn resolve_coord_public(
+    val: &golem_parser::CoordValue,
+    viewport_size: i32,
+    element_pos: Option<i32>,
+    element_size: Option<i32>,
+    element_origin: Option<i32>,
+) -> i32 {
+    resolve_coord(val, viewport_size, element_pos, element_size, element_origin)
+}
+
 fn resolve_coord(
     val: &golem_parser::CoordValue,
     viewport_size: i32,
@@ -549,7 +559,7 @@ mod tests {
             auto_scroll: None,
             max_scrolls: None,
             scroll_timeout: None,
-            within: None,
+            within: None, start: None, end: None, duration: None,
             params: HashMap::new(),
         }
     }

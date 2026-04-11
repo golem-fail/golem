@@ -192,6 +192,88 @@ pub(crate) async fn handle_long_press(step: &Step, driver: &dyn PlatformDriver) 
 /// Swipe in a direction. May optionally target a specific element (ignored for
 /// the swipe call itself, but element resolution validates the element exists).
 pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let duration_ms = step.duration.unwrap_or(300);
+
+    // If start and/or end selectors are provided, resolve coordinates from them.
+    if step.start.is_some() || step.end.is_some() {
+        let (root, meta) = driver.get_hierarchy().await?;
+        let mut vp = golem_element::Viewport::from_root(&root);
+        if meta.keyboard_height > 0 { vp.height -= meta.keyboard_height; }
+
+        let resolve_point = |group: &golem_parser::SelectorGroup| -> Option<(i32, i32)> {
+            use crate::resolution::build_selector_from_group;
+            use golem_element::selector::find_elements;
+
+            let has_element = group.text.is_some() || group.accessibility_label.is_some()
+                || group.below.is_some() || group.above.is_some();
+
+            if has_element {
+                let sel = build_selector_from_group(group);
+                let visible = golem_element::filter_viewport(&root, &vp);
+                let results = find_elements(&visible, &sel);
+                if let Some(first) = results.first() {
+                    let base_x = first.element.bounds.center_x();
+                    let base_y = first.element.bounds.center_y();
+                    let x = group.x.as_ref().map(|xv| crate::resolution::resolve_coord_public(
+                        xv, vp.width, Some(base_x), Some(first.element.bounds.width), Some(first.element.bounds.x)
+                    )).unwrap_or(base_x);
+                    let y = group.y.as_ref().map(|yv| crate::resolution::resolve_coord_public(
+                        yv, vp.height, Some(base_y), Some(first.element.bounds.height), Some(first.element.bounds.y)
+                    )).unwrap_or(base_y);
+                    return Some((x, y));
+                }
+            }
+
+            // Coordinate-only
+            if group.x.is_some() || group.y.is_some() {
+                let x = group.x.as_ref().map(|xv| crate::resolution::resolve_coord_public(
+                    xv, vp.width, None, None, None
+                )).unwrap_or(vp.width / 2);
+                let y = group.y.as_ref().map(|yv| crate::resolution::resolve_coord_public(
+                    yv, vp.height, None, None, None
+                )).unwrap_or(vp.height / 2);
+                return Some((x, y));
+            }
+
+            None
+        };
+
+        let start_pt = step.start.as_ref().and_then(resolve_point);
+        let end_pt = step.end.as_ref().and_then(resolve_point);
+
+        // If we have start but no end, use direction to compute end
+        let direction_str = step.params.get("direction").and_then(|v| v.as_str()).unwrap_or("");
+        let (fx, fy, tx, ty) = match (start_pt, end_pt) {
+            (Some((sx, sy)), Some((ex, ey))) => (sx, sy, ex, ey),
+            (Some((sx, sy)), None) => {
+                let dist = vp.height * 2 / 5;
+                match direction_str {
+                    "up" => (sx, sy, sx, sy - dist),
+                    "down" => (sx, sy, sx, sy + dist),
+                    "left" => (sx, sy, sx - dist, sy),
+                    "right" => (sx, sy, sx + dist, sy),
+                    _ => bail!("swipe with start requires direction or end"),
+                }
+            }
+            (None, Some((ex, ey))) => {
+                let dist = vp.height * 2 / 5;
+                match direction_str {
+                    "up" => (ex, ey + dist, ex, ey),
+                    "down" => (ex, ey - dist, ex, ey),
+                    "left" => (ex + dist, ey, ex, ey),
+                    "right" => (ex - dist, ey, ex, ey),
+                    _ => bail!("swipe with end requires direction or start"),
+                }
+            }
+            (None, None) => bail!("swipe with start/end but no resolvable points"),
+        };
+
+        driver.swipe_coords(fx, fy, tx, ty).await?;
+        let _ = wait_for_settle(driver).await;
+        return Ok(());
+    }
+
+    // Legacy: direction-only swipe at screen center
     let direction_str = step
         .params
         .get("direction")

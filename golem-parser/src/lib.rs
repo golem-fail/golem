@@ -198,6 +198,12 @@ pub struct Step {
     pub scroll_timeout: Option<u64>,
     /// Constrain scrolling to within a specific element's bounds.
     pub within: Option<SelectorGroup>,
+    /// Swipe start position (selector with optional coordinates).
+    pub start: Option<SelectorGroup>,
+    /// Swipe end position (selector with optional coordinates).
+    pub end: Option<SelectorGroup>,
+    /// Swipe/gesture duration in milliseconds.
+    pub duration: Option<u64>,
     #[serde(flatten)]
     pub params: HashMap<String, toml::Value>,
 }
