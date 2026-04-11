@@ -114,11 +114,24 @@ pub fn build_companion_command(device: &DeviceInfo, companion_path: &str) -> Vec
 ///
 /// This command blocks forever (the companion stays alive). It must be
 /// spawned as a background process, not awaited.
+/// Construct the command to start the companion server.
+///
+/// If `reg_port` is provided, the companion will register with golem's
+/// registration server to get its port allocation. Otherwise falls back
+/// to the legacy `port` parameter.
 pub fn start_companion_command(device: &DeviceInfo, companion_path: &str, port: u16) -> Vec<String> {
+    start_companion_command_with_reg(device, companion_path, port, None)
+}
+
+pub fn start_companion_command_with_reg(
+    device: &DeviceInfo,
+    companion_path: &str,
+    port: u16,
+    reg_port: Option<u16>,
+) -> Vec<String> {
     match device.platform {
         Platform::Ios => {
             if companion_path.ends_with(".xcodeproj") {
-                // Source-based: build and run from Xcode project
                 vec![
                     "xcodebuild".into(),
                     "test-without-building".into(),
@@ -133,7 +146,6 @@ pub fn start_companion_command(device: &DeviceInfo, companion_path: &str, port: 
                     "-only-testing:GolemRunnerUITests/GolemRunnerUITests/testCompanionServer".into(),
                 ]
             } else {
-                // Embedded: use pre-built products with .xctestrun file
                 let dir = std::path::Path::new(companion_path);
                 let xctestrun = find_xctestrun(dir).unwrap_or_default();
                 vec![
@@ -149,23 +161,50 @@ pub fn start_companion_command(device: &DeviceInfo, companion_path: &str, port: 
                 ]
             }
         }
-        Platform::Android => vec![
-            "adb".into(),
-            "-s".into(),
-            device.udid.clone(),
-            "shell".into(),
-            "am".into(),
-            "instrument".into(),
-            "-w".into(),
-            "-e".into(),
-            "port".into(),
-            port.to_string(),
-            "-e".into(),
-            "device_serial".into(),
-            device.udid.clone(),
-            "fail.golem.companion.test/androidx.test.runner.AndroidJUnitRunner".into(),
-        ],
+        Platform::Android => {
+            let mut args = vec![
+                "adb".into(),
+                "-s".into(),
+                device.udid.clone(),
+                "shell".into(),
+                "am".into(),
+                "instrument".into(),
+                "-w".into(),
+                "-e".into(),
+                "device_serial".into(),
+                device.udid.clone(),
+            ];
+            if let Some(rp) = reg_port {
+                args.extend(["-e".into(), "reg_port".into(), rp.to_string()]);
+            } else {
+                args.extend(["-e".into(), "port".into(), port.to_string()]);
+            }
+            args.push("fail.golem.companion.test/androidx.test.runner.AndroidJUnitRunner".into());
+            args
+        }
     }
+}
+
+/// Set up ADB reverse so the Android emulator can reach the host's
+/// registration server.
+pub async fn setup_adb_reverse(device: &DeviceInfo, host_port: u16) -> Result<()> {
+    let output = tokio::process::Command::new("adb")
+        .args([
+            "-s",
+            &device.udid,
+            "reverse",
+            &format!("tcp:{host_port}"),
+            &format!("tcp:{host_port}"),
+        ])
+        .output()
+        .await
+        .context("failed to set up ADB reverse")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("ADB reverse failed: {stderr}");
+    }
+    Ok(())
 }
 
 /// Construct the command to install the Android companion APK.
@@ -337,17 +376,35 @@ pub async fn install_app(device: &DeviceInfo, app_path: &str) -> Result<()> {
 ///
 /// The server command blocks forever, so it is spawned as a detached process.
 /// Returns once the process has been spawned (does NOT wait for /health).
-pub async fn spawn_companion(device: &DeviceInfo, companion_path: &str, port: u16) -> Result<()> {
-    // For embedded iOS companion (xctestrun), inject GOLEM_PORT into the plist
-    // because env vars don't propagate through xcodebuild -xctestrun.
-    if device.platform == Platform::Ios && !companion_path.ends_with(".xcodeproj") {
-        let dir = Path::new(companion_path);
-        if let Some(xctestrun) = find_xctestrun(dir) {
-            inject_port_into_xctestrun(&xctestrun, port)?;
+/// Spawn companion with registration support.
+/// If `reg_port` is provided, the companion registers with golem to get its port.
+/// Otherwise uses the legacy port parameter.
+pub async fn spawn_companion_with_reg(
+    device: &DeviceInfo,
+    companion_path: &str,
+    port: u16,
+    reg_port: Option<u16>,
+) -> Result<()> {
+    // For Android with registration: set up ADB reverse so companion can reach host
+    if device.platform == Platform::Android {
+        if let Some(rp) = reg_port {
+            setup_adb_reverse(device, rp).await?;
         }
     }
 
-    let args = start_companion_command(device, companion_path, port);
+    // For embedded iOS companion: inject env vars into xctestrun plist
+    if device.platform == Platform::Ios && !companion_path.ends_with(".xcodeproj") {
+        let dir = Path::new(companion_path);
+        if let Some(xctestrun) = find_xctestrun(dir) {
+            if let Some(rp) = reg_port {
+                inject_env_into_xctestrun(&xctestrun, "GOLEM_REG_PORT", &rp.to_string())?;
+            } else {
+                inject_env_into_xctestrun(&xctestrun, "GOLEM_PORT", &port.to_string())?;
+            }
+        }
+    }
+
+    let args = start_companion_command_with_reg(device, companion_path, port, reg_port);
     let Some((program, arguments)) = args.split_first() else {
         bail!("empty companion start command");
     };
@@ -356,9 +413,13 @@ pub async fn spawn_companion(device: &DeviceInfo, companion_path: &str, port: u1
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
 
-    // iOS companion reads port from GOLEM_PORT env var (source-based path)
-    if device.platform == Platform::Ios {
-        cmd.env("GOLEM_PORT", port.to_string());
+    // iOS source-based: pass via env var
+    if device.platform == Platform::Ios && companion_path.ends_with(".xcodeproj") {
+        if let Some(rp) = reg_port {
+            cmd.env("GOLEM_REG_PORT", rp.to_string());
+        } else {
+            cmd.env("GOLEM_PORT", port.to_string());
+        }
     }
 
     cmd.spawn()
@@ -366,16 +427,20 @@ pub async fn spawn_companion(device: &DeviceInfo, companion_path: &str, port: u1
     Ok(())
 }
 
-/// Inject GOLEM_PORT into the xctestrun plist's environment variables.
-/// Injects into all env var sections for compatibility across Xcode versions.
-fn inject_port_into_xctestrun(xctestrun_path: &str, port: u16) -> Result<()> {
-    let port_str = port.to_string();
-    for key in [
-        "TestConfigurations.0.TestTargets.0.EnvironmentVariables.GOLEM_PORT",
-        "TestConfigurations.0.TestTargets.0.TestingEnvironmentVariables.GOLEM_PORT",
+/// Legacy spawn without registration.
+pub async fn spawn_companion(device: &DeviceInfo, companion_path: &str, port: u16) -> Result<()> {
+    spawn_companion_with_reg(device, companion_path, port, None).await
+}
+
+/// Inject an environment variable into the xctestrun plist.
+fn inject_env_into_xctestrun(xctestrun_path: &str, key: &str, value: &str) -> Result<()> {
+    for section in [
+        "TestConfigurations.0.TestTargets.0.EnvironmentVariables",
+        "TestConfigurations.0.TestTargets.0.TestingEnvironmentVariables",
     ] {
+        let full_key = format!("{section}.{key}");
         let _ = std::process::Command::new("plutil")
-            .args(["-replace", key, "-string", &port_str, xctestrun_path])
+            .args(["-replace", &full_key, "-string", value, xctestrun_path])
             .output();
     }
     Ok(())

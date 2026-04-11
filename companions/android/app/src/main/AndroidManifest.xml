@@ -3,7 +3,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:allowBackup="false"
-        android:label="Golem Companion">
+        android:label="Golem Companion"
+        android:networkSecurityConfig="@xml/network_security_config">
         <activity
             android:name=".MainActivity"
             android:exported="true">

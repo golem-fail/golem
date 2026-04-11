@@ -178,22 +178,51 @@ impl SuiteRunner {
             .and_then(|o| o.create_if_missing)
             .unwrap_or(false);
 
+        // Start the registration server for companion port allocation.
+        let (reg_state, _reg_rx) = crate::registration::RegistrationState::new();
+        let reg_port = crate::registration::start_registration_server(reg_state.clone())
+            .await
+            .unwrap_or(0);
+
         // Discover devices and set up companions for each platform.
-        // Wait for resource availability before allocating each device.
         let mut device_setups = Vec::new();
         for platform in &platforms {
             match find_available_device(*platform, resource_mgr, create_if_missing).await {
                 Ok(device) => {
                     eprintln!("  Platform: {platform}");
 
-                    // Find or allocate a port for this device
-                    let port = match find_or_allocate_port(&device, *platform).await {
-                        Ok(p) => p,
-                        Err(e) => {
-                            eprintln!("  No available port for {platform}: {e:#}");
-                            continue;
+                    // Try to find an existing companion first (legacy scan)
+                    let existing_port = find_or_allocate_port(&device, *platform).await.ok();
+                    let port = if let Some(p) = existing_port {
+                        // Check if it's actually running with correct version
+                        let client = golem_driver::common::CompanionClient::new(p);
+                        if let Ok(health) = client.check_health().await {
+                            if health.version == env!("CARGO_PKG_VERSION") {
+                                // Reuse existing companion
+                                p
+                            } else {
+                                0 // Version mismatch, need to restart
+                            }
+                        } else {
+                            0 // Not running
+                        }
+                    } else {
+                        0
+                    };
+
+                    let port = if port > 0 {
+                        port
+                    } else {
+                        // Launch companion with registration
+                        match ensure_companion_with_reg(&device, *platform, reg_port, &reg_state).await {
+                            Ok(p) => p,
+                            Err(e) => {
+                                eprintln!("  Companion failed for {platform}: {e:#}");
+                                continue;
+                            }
                         }
                     };
+
                     // Wait for resource allocation (RAM + concurrency limit)
                     let alloc_deadline = tokio::time::Instant::now()
                         + std::time::Duration::from_secs(1200);
@@ -211,7 +240,9 @@ impl SuiteRunner {
                         }
                     }
 
-                    match ensure_companion(&device, *platform, port).await {
+                    // Verify companion health
+                    let client = golem_driver::common::CompanionClient::new(port);
+                    match client.check_health().await {
                         Ok(health) => {
                             eprintln!(
                                 "  Companion: {} v{} on {} ({})",
@@ -391,12 +422,65 @@ async fn find_or_allocate_port(device: &DeviceInfo, platform: Platform) -> Resul
     anyhow::bail!("No free companion ports in range {PORT_RANGE_START}-{PORT_RANGE_END}")
 }
 
-/// Ensure the companion server is running and version-compatible.
-///
-/// Three-tier startup (no locking needed — orchestrator serializes access):
-/// 1. Health check passes → reuse existing companion
-/// 2. Health check fails → try to restart the server process (no rebuild)
-/// 3. Restart fails or version mismatch → full rebuild + install + start
+/// Launch a companion using the registration server.
+/// Returns the port the companion registered on.
+async fn ensure_companion_with_reg(
+    device: &DeviceInfo,
+    platform: Platform,
+    reg_port: u16,
+    reg_state: &crate::registration::RegistrationState,
+) -> Result<u16> {
+    eprintln!("  Companion not running. Starting...");
+    let companion_path = find_companion_path(platform)?;
+
+    // Install/build companion
+    if platform == Platform::Android {
+        let apk_path = find_android_apk()?;
+        let main_apk_path = find_android_main_apk();
+        // Install APKs only (no port forward — that happens after registration)
+        let install_main = golem_devices::lifecycle::install_companion_command(device, &apk_path);
+        let _ = golem_devices::lifecycle::run_command_public(&install_main, "install test APK").await;
+        if let Some(ref main_path) = main_apk_path {
+            let install_app = golem_devices::lifecycle::install_companion_command(device, main_path);
+            let _ = golem_devices::lifecycle::run_command_public(&install_app, "install main APK").await;
+        }
+    } else {
+        golem_devices::lifecycle::build_companion(device, &companion_path).await?;
+    }
+
+    // Launch companion with registration port
+    golem_devices::lifecycle::spawn_companion_with_reg(
+        device, &companion_path, 0, Some(reg_port),
+    ).await?;
+
+    // Wait for the companion to register (up to 60s)
+    let mut rx = reg_state.subscribe();
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
+    loop {
+        tokio::select! {
+            msg = rx.recv() => {
+                if let Ok(registered_id) = msg {
+                    if let Some(comp) = reg_state.get(&registered_id) {
+                        // For Android, set up ADB forward for the assigned port
+                        if platform == Platform::Android {
+                            let fwd = golem_devices::lifecycle::port_forward_command(device, comp.port);
+                            let _ = golem_devices::lifecycle::run_command_public(&fwd, "port forward").await;
+                        }
+                        // Wait briefly for the companion to start serving after registration
+                        let client = golem_driver::common::CompanionClient::new(comp.port);
+                        let _ = client.wait_for_health(std::time::Duration::from_secs(15)).await;
+                        return Ok(comp.port);
+                    }
+                }
+            }
+            _ = tokio::time::sleep_until(deadline) => {
+                anyhow::bail!("Companion did not register within 60 seconds");
+            }
+        }
+    }
+}
+
+/// Legacy ensure_companion (used when reusing existing companions).
 async fn ensure_companion(
     device: &DeviceInfo,
     platform: Platform,

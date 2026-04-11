@@ -3,6 +3,7 @@ pub mod companions;
 pub mod devices;
 pub mod discovery;
 pub mod orchestrator;
+pub mod registration;
 pub mod scaffold;
 pub mod suite;
 pub mod tree;
