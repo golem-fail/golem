@@ -35,9 +35,7 @@ steps = [
 [[block]]
 name = "horizontal_carousel_scroll"
 steps = [
-  { action = "assert_visible", on_text = "Submit" },
-
-  # Scroll within the carousel to find mid and end items
+  # Smart within auto-scrolls to the carousel from wherever the page is
   { action = "scroll", to = { text = "Card 5" }, within = { below = "Carousel" }, direction = "left", timeout = 60000 },
   { action = "assert_visible", on_text = "Card 5" },
 
