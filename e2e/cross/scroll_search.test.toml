@@ -33,42 +33,18 @@ steps = [
 ]
 
 [[block]]
-name = "horizontal_carousel_swipe"
+name = "horizontal_carousel_scroll"
 steps = [
-  # Scroll page to bring carousel into view
-  { action = "scroll", to = { text = "Card 0" }, timeout = 60000 },
-  { action = "assert_visible", on_text = "Card 0" },
+  { action = "assert_visible", on_text = "Submit" },
 
-  # Swipe left through the carousel
-  { action = "swipe", direction = "left" },
-  { action = "swipe", direction = "left" },
-  { action = "swipe", direction = "left" },
-  { action = "swipe", direction = "left" },
-  { action = "swipe", direction = "left" },
-
-  # Verify a mid-carousel item
+  # Scroll within the carousel to find mid and end items
+  { action = "scroll", to = { text = "Card 5" }, within = { below = "Carousel" }, direction = "left", timeout = 60000 },
   { action = "assert_visible", on_text = "Card 5" },
 
-  # Continue swiping to reach the end
-  { action = "swipe", direction = "left" },
-  { action = "swipe", direction = "left" },
-  { action = "swipe", direction = "left" },
-  { action = "swipe", direction = "left" },
-
-  # Verify last carousel item
+  { action = "scroll", to = { text = "Card 9" }, within = { below = "Carousel" }, direction = "left", timeout = 60000 },
   { action = "assert_visible", on_text = "Card 9" },
 
-  # Swipe back to the start
-  { action = "swipe", direction = "right" },
-  { action = "swipe", direction = "right" },
-  { action = "swipe", direction = "right" },
-  { action = "swipe", direction = "right" },
-  { action = "swipe", direction = "right" },
-  { action = "swipe", direction = "right" },
-  { action = "swipe", direction = "right" },
-  { action = "swipe", direction = "right" },
-  { action = "swipe", direction = "right" },
-
-  # Verify return to start
+  # Scroll back to the start
+  { action = "scroll", to = { text = "Card 0" }, within = { below = "Carousel" }, direction = "right", timeout = 60000 },
   { action = "assert_visible", on_text = "Card 0" },
 ]

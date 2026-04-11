@@ -218,9 +218,9 @@ fn print_tree(element: &Element, depth: usize) {
             "{indent}{et} \"{text}\"{label} ({},{} {}x{}){state}",
             b.x, b.y, b.width, b.height
         );
-    } else if !element.children.is_empty() {
+    } else {
         println!(
-            "{indent}{et} ({},{} {}x{})",
+            "{indent}{et} ({},{} {}x{}){state}",
             b.x, b.y, b.width, b.height
         );
     }
