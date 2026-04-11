@@ -219,12 +219,15 @@ fn write_empty_marker(out_dir: &Path, name: &str) {
     let _ = fs::write(out_dir.join(name), b"");
 }
 
-/// Compute a simple hash of all files in a directory (for change detection).
+/// Compute a hash of all files in a directory plus the golem version.
+/// Version is included so that version bumps trigger companion rebuilds.
 fn hash_directory(dir: &Path) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
     let mut hasher = DefaultHasher::new();
+    // Include version so bumps trigger rebuild
+    env::var("CARGO_PKG_VERSION").unwrap_or_default().hash(&mut hasher);
     if let Ok(entries) = walkdir(dir) {
         for path in entries {
             if let Ok(contents) = fs::read(&path) {

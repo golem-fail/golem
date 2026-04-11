@@ -338,6 +338,15 @@ pub async fn install_app(device: &DeviceInfo, app_path: &str) -> Result<()> {
 /// The server command blocks forever, so it is spawned as a detached process.
 /// Returns once the process has been spawned (does NOT wait for /health).
 pub async fn spawn_companion(device: &DeviceInfo, companion_path: &str, port: u16) -> Result<()> {
+    // For embedded iOS companion (xctestrun), inject GOLEM_PORT into the plist
+    // because env vars don't propagate through xcodebuild -xctestrun.
+    if device.platform == Platform::Ios && !companion_path.ends_with(".xcodeproj") {
+        let dir = Path::new(companion_path);
+        if let Some(xctestrun) = find_xctestrun(dir) {
+            inject_port_into_xctestrun(&xctestrun, port)?;
+        }
+    }
+
     let args = start_companion_command(device, companion_path, port);
     let Some((program, arguments)) = args.split_first() else {
         bail!("empty companion start command");
@@ -347,13 +356,28 @@ pub async fn spawn_companion(device: &DeviceInfo, companion_path: &str, port: u1
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
 
-    // iOS companion reads port from GOLEM_PORT env var
+    // iOS companion reads port from GOLEM_PORT env var (source-based path)
     if device.platform == Platform::Ios {
         cmd.env("GOLEM_PORT", port.to_string());
     }
 
     cmd.spawn()
         .with_context(|| format!("failed to spawn companion on {} (port {port})", device.name))?;
+    Ok(())
+}
+
+/// Inject GOLEM_PORT into the xctestrun plist's environment variables.
+/// Injects into all env var sections for compatibility across Xcode versions.
+fn inject_port_into_xctestrun(xctestrun_path: &str, port: u16) -> Result<()> {
+    let port_str = port.to_string();
+    for key in [
+        "TestConfigurations.0.TestTargets.0.EnvironmentVariables.GOLEM_PORT",
+        "TestConfigurations.0.TestTargets.0.TestingEnvironmentVariables.GOLEM_PORT",
+    ] {
+        let _ = std::process::Command::new("plutil")
+            .args(["-replace", key, "-string", &port_str, xctestrun_path])
+            .output();
+    }
     Ok(())
 }
 
