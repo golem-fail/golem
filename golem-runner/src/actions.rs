@@ -3,7 +3,7 @@ mod assertion;
 mod capture;
 mod device;
 mod external;
-mod interaction;
+pub(crate) mod interaction;
 mod media;
 mod wait;
 

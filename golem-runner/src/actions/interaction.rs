@@ -15,6 +15,35 @@ use crate::scroll::{scroll_to_element_with_hint, DEFAULT_MAX_SCROLLS};
 const TAP_COOLDOWN: Duration = Duration::from_millis(300);
 const DOUBLE_TAP_INTERVAL: Duration = Duration::from_millis(40);
 
+/// If an element is partially off-screen, do a small swipe to bring more of
+/// it into view. Useful for `within` containers that are just peeking in.
+pub(crate) async fn nudge_into_view(
+    driver: &dyn PlatformDriver,
+    bounds: &golem_element::Bounds,
+    viewport: &golem_element::Viewport,
+) {
+    let bottom_overflow = (bounds.y + bounds.height) - viewport.height;
+    let top_overflow = -(bounds.y);
+
+    // If the container extends significantly below the viewport, swipe up
+    // to bring more of it into view
+    if bottom_overflow > 50 && bounds.y > 50 {
+        let swipe_distance = bottom_overflow.min(viewport.height / 3);
+        let cx = viewport.width / 2;
+        let cy = viewport.height / 2;
+        let _ = driver.swipe_coords(cx, cy + swipe_distance / 2, cx, cy - swipe_distance / 2).await;
+        let _ = crate::resolution::wait_for_settle(driver).await;
+    }
+    // If the container extends above the viewport, swipe down
+    else if top_overflow > 50 && bounds.y + bounds.height < viewport.height - 50 {
+        let swipe_distance = top_overflow.min(viewport.height / 3);
+        let cx = viewport.width / 2;
+        let cy = viewport.height / 2;
+        let _ = driver.swipe_coords(cx, cy - swipe_distance / 2, cx, cy + swipe_distance / 2).await;
+        let _ = crate::resolution::wait_for_settle(driver).await;
+    }
+}
+
 async fn tap_at(driver: &dyn PlatformDriver, x: i32, y: i32) -> Result<()> {
     driver.tap(x, y).await
 }
@@ -221,20 +250,45 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver) -> R
             .map(|r| r.element.bounds.clone());
 
         if in_viewport.is_some() {
-            in_viewport
+            // Container is visible — but try to get more of it on screen
+            nudge_into_view(driver, &in_viewport.clone().expect("checked"), &vp).await;
+            // Re-fetch bounds after nudge
+            let (r, m) = driver.get_hierarchy().await?;
+            let mut v = golem_element::Viewport::from_root(&r);
+            if m.keyboard_height > 0 { v.height -= m.keyboard_height; }
+            let vis = golem_element::filter_viewport(&r, &v);
+            find_elements(&vis, &within_sel)
+                .first()
+                .map(|r| r.element.bounds.clone())
+                .or(in_viewport)
         } else {
             // Container not visible — scroll to bring it into view
             let _ = crate::scroll::scroll_to_element(
                 &within_sel, driver, golem_driver::Direction::Down,
                 crate::scroll::DEFAULT_MAX_SCROLLS,
             ).await;
+            // Nudge to get more of the container visible
             let (fresh, fresh_meta) = driver.get_hierarchy().await?;
             let mut fresh_vp = golem_element::Viewport::from_root(&fresh);
             if fresh_meta.keyboard_height > 0 { fresh_vp.height -= fresh_meta.keyboard_height; }
             let fresh_visible = golem_element::filter_viewport(&fresh, &fresh_vp);
-            find_elements(&fresh_visible, &within_sel)
+            let bounds = find_elements(&fresh_visible, &within_sel)
                 .first()
-                .map(|r| r.element.bounds.clone())
+                .map(|r| r.element.bounds.clone());
+            if let Some(ref b) = bounds {
+                nudge_into_view(driver, b, &fresh_vp).await;
+                // Re-fetch after nudge
+                let (r2, m2) = driver.get_hierarchy().await?;
+                let mut v2 = golem_element::Viewport::from_root(&r2);
+                if m2.keyboard_height > 0 { v2.height -= m2.keyboard_height; }
+                let vis2 = golem_element::filter_viewport(&r2, &v2);
+                find_elements(&vis2, &within_sel)
+                    .first()
+                    .map(|r| r.element.bounds.clone())
+                    .or(bounds)
+            } else {
+                bounds
+            }
         }
     } else {
         None

@@ -227,24 +227,47 @@ pub async fn resolve_element(
                     .first()
                     .map(|r| r.element.bounds.clone());
 
-                if in_viewport.is_some() {
-                    in_viewport
+                let resolve_within = |bounds: Option<golem_element::Bounds>| bounds;
+
+                if let Some(ref b) = in_viewport {
+                    // Container visible — nudge to get more of it on screen
+                    crate::actions::interaction::nudge_into_view(driver, b, &viewport).await;
+                    let (r, m) = driver.get_hierarchy().await?;
+                    let mut v = Viewport::from_root(&r);
+                    if m.keyboard_height > 0 { v.height -= m.keyboard_height; }
+                    let vis = filter_viewport(&r, &v);
+                    resolve_within(find_elements(&vis, &within_sel)
+                        .first()
+                        .map(|r| r.element.bounds.clone())
+                        .or(in_viewport))
                 } else {
                     // Container not visible — scroll the page to bring it into view
                     let max_s = step.max_scrolls.unwrap_or(crate::scroll::DEFAULT_MAX_SCROLLS);
                     let _ = crate::scroll::scroll_to_element(
                         &within_sel, driver, golem_driver::Direction::Down, max_s,
                     ).await;
-                    // Re-fetch hierarchy and find the container in the updated viewport
                     let (fresh_root, fresh_meta) = driver.get_hierarchy().await?;
                     let mut fresh_vp = Viewport::from_root(&fresh_root);
                     if fresh_meta.keyboard_height > 0 {
                         fresh_vp.height -= fresh_meta.keyboard_height;
                     }
                     let fresh_visible = filter_viewport(&fresh_root, &fresh_vp);
-                    find_elements(&fresh_visible, &within_sel)
+                    let bounds = find_elements(&fresh_visible, &within_sel)
                         .first()
-                        .map(|r| r.element.bounds.clone())
+                        .map(|r| r.element.bounds.clone());
+                    if let Some(ref b) = bounds {
+                        crate::actions::interaction::nudge_into_view(driver, b, &fresh_vp).await;
+                        let (r2, m2) = driver.get_hierarchy().await?;
+                        let mut v2 = Viewport::from_root(&r2);
+                        if m2.keyboard_height > 0 { v2.height -= m2.keyboard_height; }
+                        let vis2 = filter_viewport(&r2, &v2);
+                        resolve_within(find_elements(&vis2, &within_sel)
+                            .first()
+                            .map(|r| r.element.bounds.clone())
+                            .or(bounds))
+                    } else {
+                        resolve_within(bounds)
+                    }
                 }
             } else {
                 None
