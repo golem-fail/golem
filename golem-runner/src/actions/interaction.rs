@@ -201,7 +201,7 @@ pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver) -> Re
     if let Some(ref s) = step.start {
         path_groups.push(s);
     }
-    for p in &step.path {
+    for p in &step.points {
         path_groups.push(p);
     }
     if let Some(ref e) = step.end {

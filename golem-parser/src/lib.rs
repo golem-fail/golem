@@ -204,8 +204,9 @@ pub struct Step {
     pub end: Option<SelectorGroup>,
     /// Gesture path: array of points the finger travels through.
     /// start prepends, end appends. Internally everything becomes a path.
-    #[serde(default)]
-    pub path: Vec<SelectorGroup>,
+    /// Named `points` in TOML to avoid conflict with screenshot `path`.
+    #[serde(default, alias = "points")]
+    pub points: Vec<SelectorGroup>,
     /// Swipe/gesture duration in milliseconds (total or per-segment).
     pub duration: Option<u64>,
     #[serde(flatten)]

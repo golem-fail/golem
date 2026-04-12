@@ -198,8 +198,11 @@ pub async fn scroll_to_element_with_hint(
     container: Option<golem_element::Bounds>,
 ) -> Result<FindResult> {
     // Step 1: Check current viewport-filtered hierarchy before any scrolling.
-    let mut root = wait_for_settle(driver).await?;
-    let viewport = Viewport::from_root(&root);
+    let (mut root, meta) = wait_for_settle(driver).await?;
+    let mut viewport = Viewport::from_root(&root);
+    if meta.keyboard_height > 0 {
+        viewport.height -= meta.keyboard_height;
+    }
     let visible = filter_viewport(&root, &viewport);
     let results = find_elements(&visible, selector);
     if let Some(found) = results.into_iter().next() {
@@ -265,8 +268,10 @@ pub async fn scroll_to_element_with_hint(
         };
         driver.swipe_coords(fx, fy, tx, ty).await?;
 
-        root = wait_for_settle(driver).await?;
-        let vp = Viewport::from_root(&root);
+        let settle_meta;
+        (root, settle_meta) = wait_for_settle(driver).await?;
+        let mut vp = Viewport::from_root(&root);
+        if settle_meta.keyboard_height > 0 { vp.height -= settle_meta.keyboard_height; }
         let visible = filter_viewport(&root, &vp);
         let results = find_elements(&visible, selector);
         if let Some(found) = results.into_iter().next() {
@@ -284,7 +289,7 @@ pub async fn scroll_to_element_with_hint(
                 for (px, py) in probe_starts(&viewport, direction) {
                     let (fx, fy, tx, ty) = swipe_from(&viewport, direction, px, py, 40);
                     driver.swipe_coords(fx, fy, tx, ty).await?;
-                    root = wait_for_settle(driver).await?;
+                    (root, _) = wait_for_settle(driver).await?;
 
                     let probe_fp = hierarchy_fingerprint(&root);
                     if probe_fp != prev_fingerprint {

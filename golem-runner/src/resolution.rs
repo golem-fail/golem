@@ -219,32 +219,34 @@ fn build_bounds_fingerprint(element: &Element, buf: &mut String) {
 ///
 /// When the UI is already stable, this completes in a single extra hierarchy
 /// fetch (~250ms). During animations it waits up to `SETTLE_TIMEOUT` (1.5s).
-pub(crate) async fn wait_for_settle(driver: &dyn PlatformDriver) -> Result<Element> {
+pub(crate) async fn wait_for_settle(driver: &dyn PlatformDriver) -> Result<(Element, golem_driver::common::HierarchyMeta)> {
     let deadline = Instant::now() + SETTLE_TIMEOUT;
 
-    let (root, _meta) = driver.get_hierarchy().await?;
+    let (root, meta) = driver.get_hierarchy().await?;
     let mut prev_fp = bounds_fingerprint(&root);
     let mut prev_root = root;
+    let mut prev_meta = meta;
 
     loop {
         if Instant::now() >= deadline {
-            return Ok(prev_root);
+            return Ok((prev_root, prev_meta));
         }
 
         tokio::time::sleep(SETTLE_INTERVAL).await;
 
-        let (root, _meta) = match driver.get_hierarchy().await {
+        let (root, meta) = match driver.get_hierarchy().await {
             Ok(r) => r,
-            Err(_) => return Ok(prev_root),
+            Err(_) => return Ok((prev_root, prev_meta)),
         };
         let fp = bounds_fingerprint(&root);
 
         if fp == prev_fp {
-            return Ok(root);
+            return Ok((root, meta));
         }
 
         prev_fp = fp;
         prev_root = root;
+        prev_meta = meta;
     }
 }
 
@@ -559,7 +561,7 @@ mod tests {
             auto_scroll: None,
             max_scrolls: None,
             scroll_timeout: None,
-            within: None, start: None, end: None, path: vec![], duration: None,
+            within: None, start: None, end: None, points: vec![], duration: None,
             params: HashMap::new(),
         }
     }

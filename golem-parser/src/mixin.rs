@@ -195,7 +195,7 @@ fn remap_step_vars(step: &Step, vars: &HashMap<String, String>) -> Step {
         within: step.within.clone(),
         start: step.start.clone(),
         end: step.end.clone(),
-        path: step.path.clone(),
+        points: step.points.clone(),
         duration: step.duration,
         params: remap_params(&step.params, vars),
     }
@@ -321,7 +321,7 @@ mod tests {
             auto_scroll: None,
             max_scrolls: None,
             scroll_timeout: None,
-            within: None, start: None, end: None, path: vec![], duration: None,
+            within: None, start: None, end: None, points: vec![], duration: None,
             params,
         }
     }
@@ -351,7 +351,7 @@ mod tests {
             auto_scroll: None,
             max_scrolls: None,
             scroll_timeout: None,
-            within: None, start: None, end: None, path: vec![], duration: None,
+            within: None, start: None, end: None, points: vec![], duration: None,
             params: HashMap::new(),
         }
     }
