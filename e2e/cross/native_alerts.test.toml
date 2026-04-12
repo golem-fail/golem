@@ -1,0 +1,55 @@
+[flow]
+name = "Native alert dialog test"
+tags = ["cross-platform", "alert", "dialog"]
+
+[[flow.apps]]
+name = "app"
+bundle = "fail.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+[[block]]
+name = "alert_show_and_dismiss"
+steps = [
+  { action = "assert_visible", on_text = "Submit" },
+
+  # Trigger a native alert dialog
+  { action = "tap", on_text = "Show Alert", auto_scroll = true, timeout = 60000 },
+
+  # Verify the alert appeared
+  { action = "assert_alert" },
+
+  # Verify the alert text
+  { action = "assert_alert", on_text = "This is a test alert" },
+
+  # Dismiss the alert
+  { action = "dismiss_alert" },
+
+  # Verify the alert is gone
+  { action = "assert_visible", on_text = "Show Alert" },
+]
+
+[[block]]
+name = "confirm_show_and_dismiss"
+steps = [
+  # Trigger a confirm dialog
+  { action = "tap", on_text = "Show Confirm" },
+
+  # Verify the confirm appeared
+  { action = "assert_alert" },
+
+  # Verify the confirm text
+  { action = "assert_alert", on_text = "Are you sure?" },
+
+  # Dismiss the confirm
+  { action = "dismiss_alert" },
+
+  # Verify back to normal
+  { action = "assert_visible", on_text = "Show Confirm" },
+]

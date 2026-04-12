@@ -333,23 +333,29 @@ public class CompanionServer {
         JSONObject req = new JSONObject(body.isEmpty() ? "{}" : body);
         String action = req.optString("action", "dismiss");
 
-        List<AccessibilityWindowInfo> windows = uiAutomation.getWindows();
-        for (AccessibilityWindowInfo window : windows) {
-            if (window.getType() == AccessibilityWindowInfo.TYPE_SYSTEM) {
-                AccessibilityNodeInfo root = window.getRoot();
-                if (root != null) {
-                    try {
-                        if (clickButtonByText(root, action)) {
-                            sendJson(out, 200, new JSONObject().put("status", "ok"));
-                            return;
+        // Try clicking a specific button by text first
+        if (!"dismiss".equals(action) && !"accept".equals(action)) {
+            List<AccessibilityWindowInfo> windows = uiAutomation.getWindows();
+            for (AccessibilityWindowInfo window : windows) {
+                if (window.getType() == AccessibilityWindowInfo.TYPE_SYSTEM) {
+                    AccessibilityNodeInfo root = window.getRoot();
+                    if (root != null) {
+                        try {
+                            if (clickButtonByText(root, action)) {
+                                sendJson(out, 200, new JSONObject().put("status", "ok"));
+                                return;
+                            }
+                        } finally {
+                            root.recycle();
                         }
-                    } finally {
-                        root.recycle();
                     }
                 }
             }
         }
-        sendJson(out, 404, new JSONObject().put("error", "alert button not found"));
+
+        // Native dismiss: press Back to dismiss the dialog
+        uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK);
+        sendJson(out, 200, new JSONObject().put("status", "ok"));
     }
 
     private boolean clickButtonByText(AccessibilityNodeInfo node, String text) {
