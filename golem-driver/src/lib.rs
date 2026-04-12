@@ -45,9 +45,6 @@ pub trait PlatformDriver: Send + Sync {
     /// Delete characters (backspace)
     async fn backspace(&self, count: u32) -> anyhow::Result<()>;
 
-    /// Perform a swipe gesture
-    async fn swipe(&self, direction: Direction) -> anyhow::Result<()>;
-
     /// Perform a swipe between specific coordinates
     async fn swipe_coords(
         &self,
@@ -195,10 +192,6 @@ impl PlatformDriver for MockPlatformDriver {
         Ok(())
     }
 
-    async fn swipe(&self, direction: Direction) -> anyhow::Result<()> {
-        self.record_call("swipe", vec![format!("{direction:?}")]);
-        Ok(())
-    }
 
     async fn swipe_coords(
         &self,

@@ -477,10 +477,6 @@ mod tests {
             Ok(())
         }
 
-        async fn swipe(&self, direction: Direction) -> anyhow::Result<()> {
-            self.record_call("swipe", vec![format!("{direction:?}")]);
-            Ok(())
-        }
 
         async fn swipe_coords(
             &self,

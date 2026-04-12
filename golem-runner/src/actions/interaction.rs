@@ -192,7 +192,7 @@ pub(crate) async fn handle_long_press(step: &Step, driver: &dyn PlatformDriver) 
 /// Swipe in a direction. May optionally target a specific element (ignored for
 /// the swipe call itself, but element resolution validates the element exists).
 pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let duration_ms = step.duration.unwrap_or(300);
+    let _duration_ms = step.duration.unwrap_or(300);
 
     // If start and/or end selectors are provided, resolve coordinates from them.
     if step.start.is_some() || step.end.is_some() {

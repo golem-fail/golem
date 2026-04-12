@@ -1,8 +1,8 @@
 use crate::common::{
     build_alert_body, build_backspace_body, build_long_press_body, build_swipe_body,
-    build_tap_body, build_type_body, find_alert, parse_hierarchy, CompanionClient, SwipeRequest,
+    build_tap_body, build_type_body, find_alert, parse_hierarchy, CompanionClient,
 };
-use crate::{Direction, PlatformDriver, ScreenshotResult};
+use crate::{PlatformDriver, ScreenshotResult};
 use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use golem_element::Element;
@@ -36,47 +36,6 @@ struct CdpState {
     page_id: String,
 }
 
-/// Convert a `Direction` to swipe coordinate deltas.
-///
-/// Uses a standard Android phone screen size (1080x2400 in dp-equivalent
-/// ~360x800) with the center as the origin point and a 200pt gesture distance.
-fn direction_to_swipe_coords(direction: Direction) -> SwipeRequest {
-    let center_x: i32 = 180;
-    let center_y: i32 = 400;
-    let distance: i32 = 200;
-    let duration_ms: u64 = 300;
-
-    match direction {
-        Direction::Up => SwipeRequest {
-            from_x: center_x,
-            from_y: center_y + distance / 2,
-            to_x: center_x,
-            to_y: center_y - distance / 2,
-            duration_ms,
-        },
-        Direction::Down => SwipeRequest {
-            from_x: center_x,
-            from_y: center_y - distance / 2,
-            to_x: center_x,
-            to_y: center_y + distance / 2,
-            duration_ms,
-        },
-        Direction::Left => SwipeRequest {
-            from_x: center_x + distance / 2,
-            from_y: center_y,
-            to_x: center_x - distance / 2,
-            to_y: center_y,
-            duration_ms,
-        },
-        Direction::Right => SwipeRequest {
-            from_x: center_x - distance / 2,
-            from_y: center_y,
-            to_x: center_x + distance / 2,
-            to_y: center_y,
-            duration_ms,
-        },
-    }
-}
 
 /// Build the adb command arguments for launching an app via monkey.
 #[cfg(test)]
@@ -385,13 +344,6 @@ impl PlatformDriver for AndroidDriver {
     async fn backspace(&self, count: u32) -> Result<()> {
         let body = build_backspace_body(count)?;
         self.client.post_json("/backspace", &body).await?;
-        Ok(())
-    }
-
-    async fn swipe(&self, direction: Direction) -> Result<()> {
-        let req = direction_to_swipe_coords(direction);
-        let body = serde_json::to_string(&req).context("failed to serialize swipe request")?;
-        self.client.post_json("/swipe", &body).await?;
         Ok(())
     }
 
@@ -757,42 +709,8 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // 7. Swipe request with Direction conversion
+    // 7. Swipe body serialization
     // -----------------------------------------------------------------------
-    #[test]
-    fn swipe_direction_up() {
-        let req = direction_to_swipe_coords(Direction::Up);
-        assert!(req.from_y > req.to_y, "swiping up means from_y > to_y");
-        assert_eq!(req.from_x, req.to_x, "vertical swipe keeps x constant");
-    }
-
-    #[test]
-    fn swipe_direction_down() {
-        let req = direction_to_swipe_coords(Direction::Down);
-        assert!(req.from_y < req.to_y, "swiping down means from_y < to_y");
-        assert_eq!(req.from_x, req.to_x, "vertical swipe keeps x constant");
-    }
-
-    #[test]
-    fn swipe_direction_left() {
-        let req = direction_to_swipe_coords(Direction::Left);
-        assert!(
-            req.from_x > req.to_x,
-            "swiping left means from_x > to_x"
-        );
-        assert_eq!(req.from_y, req.to_y, "horizontal swipe keeps y constant");
-    }
-
-    #[test]
-    fn swipe_direction_right() {
-        let req = direction_to_swipe_coords(Direction::Right);
-        assert!(
-            req.from_x < req.to_x,
-            "swiping right means from_x < to_x"
-        );
-        assert_eq!(req.from_y, req.to_y, "horizontal swipe keeps y constant");
-    }
-
     #[test]
     fn swipe_body_serialization() {
         let body = build_swipe_body(10, 20, 30, 40, 500).expect("serialize");
