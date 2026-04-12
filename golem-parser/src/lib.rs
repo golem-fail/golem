@@ -202,7 +202,11 @@ pub struct Step {
     pub start: Option<SelectorGroup>,
     /// Swipe end position (selector with optional coordinates).
     pub end: Option<SelectorGroup>,
-    /// Swipe/gesture duration in milliseconds.
+    /// Gesture path: array of points the finger travels through.
+    /// start prepends, end appends. Internally everything becomes a path.
+    #[serde(default)]
+    pub path: Vec<SelectorGroup>,
+    /// Swipe/gesture duration in milliseconds (total or per-segment).
     pub duration: Option<u64>,
     #[serde(flatten)]
     pub params: HashMap<String, toml::Value>,

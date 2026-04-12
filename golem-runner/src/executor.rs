@@ -471,7 +471,7 @@ mod tests {
             auto_scroll: None,
             max_scrolls: None,
             scroll_timeout: None,
-            within: None, start: None, end: None, duration: None,
+            within: None, start: None, end: None, path: vec![], duration: None,
             params: HashMap::new(),
         }
     }
@@ -501,7 +501,7 @@ mod tests {
             auto_scroll: None,
             max_scrolls: None,
             scroll_timeout: None,
-            within: None, start: None, end: None, duration: None,
+            within: None, start: None, end: None, path: vec![], duration: None,
             params: HashMap::new(),
         }
     }
