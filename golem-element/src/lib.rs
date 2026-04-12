@@ -60,21 +60,27 @@ pub struct FindResult {
     pub tap_y: i32,
 }
 
-/// Screen viewport dimensions for filtering visible elements.
+/// Screen viewport for filtering visible elements.
+/// Origin (x, y) handles windows not at (0,0) like alert dialogs.
+/// Width and height are dimensions, not absolute coordinates.
 #[derive(Debug, Clone, Copy)]
 pub struct Viewport {
+    pub x: i32,
+    pub y: i32,
     pub width: i32,
     pub height: i32,
 }
 
 impl Viewport {
     pub fn new(width: i32, height: i32) -> Self {
-        Self { width, height }
+        Self { x: 0, y: 0, width, height }
     }
 
-    /// Detect viewport from the root element's bounds (assumes root = full screen).
+    /// Detect viewport from the root element's bounds.
     pub fn from_root(root: &Element) -> Self {
         Self {
+            x: root.bounds.x,
+            y: root.bounds.y,
             width: root.bounds.width,
             height: root.bounds.height,
         }
@@ -82,10 +88,12 @@ impl Viewport {
 
     /// Check if an element's bounds intersect this viewport (partially or fully visible).
     pub fn contains(&self, bounds: &Bounds) -> bool {
-        bounds.x + bounds.width > 0
-            && bounds.x < self.width
-            && bounds.y + bounds.height > 0
-            && bounds.y < self.height
+        let right = self.x + self.width;
+        let bottom = self.y + self.height;
+        bounds.x + bounds.width > self.x
+            && bounds.x < right
+            && bounds.y + bounds.height > self.y
+            && bounds.y < bottom
     }
 }
 
