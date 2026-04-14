@@ -346,13 +346,18 @@ pub(crate) fn parse_alert_response(json: &str) -> Result<Option<Element>> {
 pub(crate) fn find_alert(el: &Element) -> Option<Element> {
     // iOS: native alert element type
     if el.element_type.eq_ignore_ascii_case("alert") {
-        return Some(el.clone());
+        let mut alert = el.clone();
+        // Always extract the message body — the alert's own text is the title
+        alert.text = extract_alert_message(&alert).or(alert.text);
+        return Some(alert);
     }
     // Android: dialog window pattern — FrameLayout at non-zero y with
     // a Button child (native alert dialogs have this structure)
     if el.element_type == "FrameLayout" && el.bounds.y > 0 {
         if has_button_descendant(el) {
-            return Some(el.clone());
+            let mut alert = el.clone();
+            alert.text = extract_alert_message(&alert);
+            return Some(alert);
         }
     }
     for child in &el.children {
@@ -361,6 +366,46 @@ pub(crate) fn find_alert(el: &Element) -> Option<Element> {
         }
     }
     None
+}
+
+/// Extract the message text from an alert's descendants.
+/// The first non-button text is the title, the second is the message.
+fn extract_alert_message(el: &Element) -> Option<String> {
+    let mut texts = Vec::new();
+    collect_non_button_text(el, &mut texts);
+    // Skip the title (first text), return the message (second text)
+    if texts.len() >= 2 {
+        Some(texts[1].clone())
+    } else {
+        texts.into_iter().next()
+    }
+}
+
+fn collect_non_button_text(el: &Element, texts: &mut Vec<String>) {
+    // Skip buttons and the alert root — collect leaf text elements
+    let et = el.element_type.to_lowercase();
+    if et == "button" {
+        return;
+    }
+    if let Some(ref text) = el.text {
+        if !text.is_empty() && et != "alert" {
+            texts.push(text.clone());
+        }
+    }
+    for child in &el.children {
+        collect_non_button_text(child, texts);
+    }
+}
+
+fn collect_text_descendants(el: &Element, texts: &mut Vec<(String, String)>) {
+    if let Some(ref text) = el.text {
+        if !text.is_empty() {
+            texts.push((el.element_type.clone(), text.clone()));
+        }
+    }
+    for child in &el.children {
+        collect_text_descendants(child, texts);
+    }
 }
 
 fn has_button_descendant(el: &Element) -> bool {
