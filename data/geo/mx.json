@@ -4,7 +4,10 @@
     "name_en": "Mexico",
     "iso_code": "MX",
     "phone_prefix": "+52",
-    "phone_formats": ["+52-##-####-####", "+52-###-###-####"],
+    "phone_formats": [
+      "+52-##-####-####",
+      "+52-###-###-####"
+    ],
     "postcode_format": "#####",
     "name_order": "given_first"
   },
@@ -12,7 +15,10 @@
     {
       "name": "Ciudad de México",
       "name_en": "Mexico City",
-      "region_tags": ["Central Mexico"],
+      "region_tags": [
+        "Central Mexico",
+        "Valley of Mexico"
+      ],
       "cities": [
         {
           "name": "Ciudad de México",
@@ -129,7 +135,10 @@
     {
       "name": "Estado de México",
       "name_en": "State of Mexico",
-      "region_tags": ["Central Mexico"],
+      "region_tags": [
+        "Central Mexico",
+        "Valley of Mexico"
+      ],
       "cities": [
         {
           "name": "Toluca",
@@ -180,14 +189,20 @@
               "street": "Boulevard Toluca",
               "street_en": "Boulevard Toluca",
               "pattern": "Boulevard Toluca n{1,300}"
+            },
+            {
+              "code": "53200",
+              "street": "Avenida Lomas Verdes",
+              "street_en": "Avenida Lomas Verdes",
+              "pattern": "Avenida Lomas Verdes n{1,80}"
             }
           ]
         },
         {
           "name": "Ecatepec",
           "name_en": "Ecatepec",
-          "lat": 19.6010,
-          "lon": -99.0500,
+          "lat": 19.601,
+          "lon": -99.05,
           "postcodes": [
             {
               "code": "55000",
@@ -200,6 +215,12 @@
               "street": "Avenida Revolución",
               "street_en": "Avenida Revolucion",
               "pattern": "Avenida Revolución n{1,180}"
+            },
+            {
+              "code": "55018",
+              "street": "Avenida Central",
+              "street_en": "Avenida Central",
+              "pattern": "Avenida Central n{1,80}"
             }
           ]
         }
@@ -208,7 +229,10 @@
     {
       "name": "Jalisco",
       "name_en": "Jalisco",
-      "region_tags": ["Pacific Coast"],
+      "region_tags": [
+        "Western Mexico",
+        "Pacific Coast"
+      ],
       "cities": [
         {
           "name": "Guadalajara",
@@ -283,13 +307,48 @@
               "pattern": "Calzada Independencia n{1,400}"
             }
           ]
+        },
+        {
+          "name": "Puerto Vallarta",
+          "name_en": "Puerto Vallarta",
+          "lat": 20.6534,
+          "lon": -105.2253,
+          "postcodes": [
+            {
+              "code": "48300",
+              "street": "Calle Morelos",
+              "street_en": "Calle Morelos",
+              "pattern": "Calle Morelos n{1,80}"
+            },
+            {
+              "code": "48310",
+              "street": "Avenida México",
+              "street_en": "Avenida Mexico",
+              "pattern": "Avenida México n{1,100}"
+            },
+            {
+              "code": "48325",
+              "street": "Boulevard Francisco Medina Ascencio",
+              "street_en": "Boulevard Francisco Medina Ascencio",
+              "pattern": "Boulevard Francisco Medina Ascencio n{1,80}"
+            },
+            {
+              "code": "48350",
+              "street": "Calle Basilio Badillo",
+              "street_en": "Calle Basilio Badillo",
+              "pattern": "Calle Basilio Badillo n{1,50}"
+            }
+          ]
         }
       ]
     },
     {
       "name": "Nuevo León",
       "name_en": "Nuevo Leon",
-      "region_tags": ["Northern Mexico"],
+      "region_tags": [
+        "Northern Mexico",
+        "Northeast"
+      ],
       "cities": [
         {
           "name": "Monterrey",
@@ -364,13 +423,48 @@
               "pattern": "Avenida Ruiz Cortines n{1,400}"
             }
           ]
+        },
+        {
+          "name": "San Pedro Garza García",
+          "name_en": "San Pedro Garza Garcia",
+          "lat": 25.658,
+          "lon": -100.402,
+          "postcodes": [
+            {
+              "code": "66220",
+              "street": "Calzada del Valle",
+              "street_en": "Calzada del Valle",
+              "pattern": "Calzada del Valle n{1,80}"
+            },
+            {
+              "code": "66230",
+              "street": "Avenida Vasconcelos",
+              "street_en": "Avenida Vasconcelos",
+              "pattern": "Avenida Vasconcelos n{1,100}"
+            },
+            {
+              "code": "66260",
+              "street": "Avenida Humberto Lobo",
+              "street_en": "Avenida Humberto Lobo",
+              "pattern": "Avenida Humberto Lobo n{1,60}"
+            },
+            {
+              "code": "66269",
+              "street": "Calzada San Pedro",
+              "street_en": "Calzada San Pedro",
+              "pattern": "Calzada San Pedro n{1,50}"
+            }
+          ]
         }
       ]
     },
     {
       "name": "Puebla",
       "name_en": "Puebla",
-      "region_tags": ["Central Mexico"],
+      "region_tags": [
+        "Central Mexico",
+        "Valley of Puebla"
+      ],
       "cities": [
         {
           "name": "Puebla",
@@ -403,13 +497,48 @@
               "pattern": "Avenida Juárez n{1,250}"
             }
           ]
+        },
+        {
+          "name": "San Pedro Cholula",
+          "name_en": "San Pedro Cholula",
+          "lat": 19.0586,
+          "lon": -98.3069,
+          "postcodes": [
+            {
+              "code": "72760",
+              "street": "Avenida Morelos",
+              "street_en": "Avenida Morelos",
+              "pattern": "Avenida Morelos n{1,80}"
+            },
+            {
+              "code": "72810",
+              "street": "Calle 2 Norte",
+              "street_en": "Calle 2 Norte",
+              "pattern": "Calle 2 Norte n{1,60}"
+            },
+            {
+              "code": "72820",
+              "street": "Calle 4 Poniente",
+              "street_en": "Calle 4 Poniente",
+              "pattern": "Calle 4 Poniente n{1,50}"
+            },
+            {
+              "code": "72756",
+              "street": "Avenida 14 Oriente",
+              "street_en": "Avenida 14 Oriente",
+              "pattern": "Avenida 14 Oriente n{1,40}"
+            }
+          ]
         }
       ]
     },
     {
       "name": "Guanajuato",
       "name_en": "Guanajuato",
-      "region_tags": ["Bajio"],
+      "region_tags": [
+        "Bajío",
+        "Central Mexico"
+      ],
       "cities": [
         {
           "name": "León",
@@ -440,7 +569,7 @@
         {
           "name": "Guanajuato",
           "name_en": "Guanajuato",
-          "lat": 21.0190,
+          "lat": 21.019,
           "lon": -101.2574,
           "postcodes": [
             {
@@ -454,6 +583,12 @@
               "street": "Calle Hidalgo",
               "street_en": "Calle Hidalgo",
               "pattern": "Calle Hidalgo n{1,80}"
+            },
+            {
+              "code": "36040",
+              "street": "Calle Alonso",
+              "street_en": "Calle Alonso",
+              "pattern": "Calle Alonso n{1,50}"
             }
           ]
         }
@@ -462,7 +597,10 @@
     {
       "name": "Veracruz",
       "name_en": "Veracruz",
-      "region_tags": ["Gulf Coast"],
+      "region_tags": [
+        "Gulf Coast",
+        "Eastern Mexico"
+      ],
       "cities": [
         {
           "name": "Veracruz",
@@ -481,6 +619,12 @@
               "street": "Boulevard Manuel Ávila Camacho",
               "street_en": "Boulevard Manuel Avila Camacho",
               "pattern": "Boulevard Manuel Ávila Camacho n{1,400}"
+            },
+            {
+              "code": "91709",
+              "street": "Boulevard Manuel Ávila Camacho",
+              "street_en": "Boulevard Manuel Avila Camacho",
+              "pattern": "Boulevard Manuel Ávila Camacho n{1,80}"
             }
           ]
         },
@@ -501,6 +645,12 @@
               "street": "Avenida Camacho",
               "street_en": "Avenida Camacho",
               "pattern": "Avenida Camacho n{1,250}"
+            },
+            {
+              "code": "91040",
+              "street": "Calle Enríquez",
+              "street_en": "Calle Enriquez",
+              "pattern": "Calle Enríquez n{1,60}"
             }
           ]
         }
@@ -509,7 +659,10 @@
     {
       "name": "Querétaro",
       "name_en": "Queretaro",
-      "region_tags": ["Bajio"],
+      "region_tags": [
+        "Bajío",
+        "Central Mexico"
+      ],
       "cities": [
         {
           "name": "Querétaro",
@@ -542,13 +695,42 @@
               "pattern": "Boulevard Bernardo Quintana n{1,500}"
             }
           ]
+        },
+        {
+          "name": "San Juan del Río",
+          "name_en": "San Juan del Rio",
+          "lat": 20.3896,
+          "lon": -99.9964,
+          "postcodes": [
+            {
+              "code": "76800",
+              "street": "Avenida Juárez",
+              "street_en": "Avenida Juarez",
+              "pattern": "Avenida Juárez n{1,100}"
+            },
+            {
+              "code": "76803",
+              "street": "Calle Hidalgo",
+              "street_en": "Calle Hidalgo",
+              "pattern": "Calle Hidalgo n{1,60}"
+            },
+            {
+              "code": "76806",
+              "street": "Avenida Central",
+              "street_en": "Avenida Central",
+              "pattern": "Avenida Central n{1,50}"
+            }
+          ]
         }
       ]
     },
     {
       "name": "Yucatán",
       "name_en": "Yucatan",
-      "region_tags": ["Yucatan Peninsula"],
+      "region_tags": [
+        "Yucatán Peninsula",
+        "Southeast Mexico"
+      ],
       "cities": [
         {
           "name": "Mérida",
@@ -581,13 +763,42 @@
               "pattern": "Calle 59 n{1,180}"
             }
           ]
+        },
+        {
+          "name": "Valladolid",
+          "name_en": "Valladolid",
+          "lat": 20.6896,
+          "lon": -88.2014,
+          "postcodes": [
+            {
+              "code": "97780",
+              "street": "Calle 41",
+              "street_en": "Calle 41",
+              "pattern": "Calle 41 n{1,120}"
+            },
+            {
+              "code": "97783",
+              "street": "Calle 39",
+              "street_en": "Calle 39",
+              "pattern": "Calle 39 n{1,50}"
+            },
+            {
+              "code": "97784",
+              "street": "Calle 40",
+              "street_en": "Calle 40",
+              "pattern": "Calle 40 n{1,40}"
+            }
+          ]
         }
       ]
     },
     {
       "name": "Quintana Roo",
       "name_en": "Quintana Roo",
-      "region_tags": ["Yucatan Peninsula"],
+      "region_tags": [
+        "Yucatán Peninsula",
+        "Caribbean Coast"
+      ],
       "cities": [
         {
           "name": "Cancún",
@@ -638,6 +849,12 @@
               "street": "Avenida 10",
               "street_en": "Avenida 10",
               "pattern": "Avenida 10 n{1,250}"
+            },
+            {
+              "code": "77712",
+              "street": "Quinta Avenida",
+              "street_en": "Fifth Avenue",
+              "pattern": "Quinta Avenida n{1,80}"
             }
           ]
         }
@@ -646,7 +863,10 @@
     {
       "name": "Chihuahua",
       "name_en": "Chihuahua",
-      "region_tags": ["Northern Mexico"],
+      "region_tags": [
+        "Northern Mexico",
+        "Sierra Madre"
+      ],
       "cities": [
         {
           "name": "Chihuahua",
@@ -691,6 +911,12 @@
               "street": "Avenida de las Américas",
               "street_en": "Avenida de las Americas",
               "pattern": "Avenida de las Américas n{1,400}"
+            },
+            {
+              "code": "32020",
+              "street": "Avenida de las Américas",
+              "street_en": "Avenida de las Americas",
+              "pattern": "Avenida de las Américas n{1,80}"
             }
           ]
         }
@@ -699,7 +925,10 @@
     {
       "name": "Sonora",
       "name_en": "Sonora",
-      "region_tags": ["Northern Mexico"],
+      "region_tags": [
+        "Northern Mexico",
+        "Sonoran Desert"
+      ],
       "cities": [
         {
           "name": "Hermosillo",
@@ -726,19 +955,48 @@
               "pattern": "Avenida Serna n{1,250}"
             }
           ]
+        },
+        {
+          "name": "Ciudad Obregón",
+          "name_en": "Ciudad Obregon",
+          "lat": 27.4827,
+          "lon": -109.9304,
+          "postcodes": [
+            {
+              "code": "85000",
+              "street": "Calle Guerrero",
+              "street_en": "Calle Guerrero",
+              "pattern": "Calle Guerrero n{1,90}"
+            },
+            {
+              "code": "85010",
+              "street": "Avenida Allende",
+              "street_en": "Avenida Allende",
+              "pattern": "Avenida Allende n{1,60}"
+            },
+            {
+              "code": "85019",
+              "street": "Boulevard Rodolfo Elías Calles",
+              "street_en": "Boulevard Rodolfo Elias Calles",
+              "pattern": "Boulevard Rodolfo Elías Calles n{1,60}"
+            }
+          ]
         }
       ]
     },
     {
       "name": "Sinaloa",
       "name_en": "Sinaloa",
-      "region_tags": ["Pacific Coast"],
+      "region_tags": [
+        "Pacific Coast",
+        "Northwest Mexico"
+      ],
       "cities": [
         {
           "name": "Culiacán",
           "name_en": "Culiacan",
           "lat": 24.7994,
-          "lon": -107.3940,
+          "lon": -107.394,
           "postcodes": [
             {
               "code": "80000",
@@ -751,6 +1009,12 @@
               "street": "Boulevard Zapata",
               "street_en": "Boulevard Zapata",
               "pattern": "Boulevard Zapata n{1,250}"
+            },
+            {
+              "code": "80040",
+              "street": "Avenida Obregón",
+              "street_en": "Avenida Obregon",
+              "pattern": "Avenida Obregón n{1,80}"
             }
           ]
         },
@@ -771,6 +1035,12 @@
               "street": "Avenida Camarón Sábalo",
               "street_en": "Avenida Camaron Sabalo",
               "pattern": "Avenida Camarón Sábalo n{1,350}"
+            },
+            {
+              "code": "82110",
+              "street": "Avenida del Mar",
+              "street_en": "Avenida del Mar",
+              "pattern": "Avenida del Mar n{1,100}"
             }
           ]
         }
@@ -779,7 +1049,10 @@
     {
       "name": "Baja California",
       "name_en": "Baja California",
-      "region_tags": ["Northern Mexico"],
+      "region_tags": [
+        "Northern Mexico",
+        "Baja Peninsula"
+      ],
       "cities": [
         {
           "name": "Tijuana",
@@ -824,6 +1097,12 @@
               "street": "Boulevard López Mateos",
               "street_en": "Boulevard Lopez Mateos",
               "pattern": "Boulevard López Mateos n{1,400}"
+            },
+            {
+              "code": "21200",
+              "street": "Boulevard Benito Juárez",
+              "street_en": "Boulevard Benito Juarez",
+              "pattern": "Boulevard Benito Juárez n{1,80}"
             }
           ]
         }
@@ -832,7 +1111,10 @@
     {
       "name": "Baja California Sur",
       "name_en": "Baja California Sur",
-      "region_tags": ["Pacific Coast"],
+      "region_tags": [
+        "Baja Peninsula",
+        "Pacific Coast"
+      ],
       "cities": [
         {
           "name": "La Paz",
@@ -851,6 +1133,12 @@
               "street": "Calle 5 de Mayo",
               "street_en": "Calle 5 de Mayo",
               "pattern": "Calle 5 de Mayo n{1,150}"
+            },
+            {
+              "code": "23020",
+              "street": "Avenida Abasolo",
+              "street_en": "Avenida Abasolo",
+              "pattern": "Avenida Abasolo n{1,60}"
             }
           ]
         },
@@ -865,6 +1153,18 @@
               "street": "Boulevard Marina",
               "street_en": "Boulevard Marina",
               "pattern": "Boulevard Marina n{1,200}"
+            },
+            {
+              "code": "23410",
+              "street": "Boulevard Marina",
+              "street_en": "Boulevard Marina",
+              "pattern": "Boulevard Marina n{1,50}"
+            },
+            {
+              "code": "23450",
+              "street": "Calle Hidalgo",
+              "street_en": "Calle Hidalgo",
+              "pattern": "Calle Hidalgo n{1,60}"
             }
           ]
         }
@@ -873,7 +1173,10 @@
     {
       "name": "Coahuila",
       "name_en": "Coahuila",
-      "region_tags": ["Northern Mexico"],
+      "region_tags": [
+        "Northern Mexico",
+        "Northeast"
+      ],
       "cities": [
         {
           "name": "Saltillo",
@@ -900,13 +1203,48 @@
               "pattern": "Boulevard Nazario Ortiz Garza n{1,350}"
             }
           ]
+        },
+        {
+          "name": "Torreón",
+          "name_en": "Torreon",
+          "lat": 25.5428,
+          "lon": -103.4068,
+          "postcodes": [
+            {
+              "code": "27000",
+              "street": "Boulevard Independencia",
+              "street_en": "Boulevard Independencia",
+              "pattern": "Boulevard Independencia n{1,120}"
+            },
+            {
+              "code": "27010",
+              "street": "Avenida Morelos",
+              "street_en": "Avenida Morelos",
+              "pattern": "Avenida Morelos n{1,80}"
+            },
+            {
+              "code": "27018",
+              "street": "Calzada Colón",
+              "street_en": "Calzada Colon",
+              "pattern": "Calzada Colón n{1,60}"
+            },
+            {
+              "code": "27020",
+              "street": "Avenida Juárez",
+              "street_en": "Avenida Juarez",
+              "pattern": "Avenida Juárez n{1,60}"
+            }
+          ]
         }
       ]
     },
     {
       "name": "Tamaulipas",
       "name_en": "Tamaulipas",
-      "region_tags": ["Gulf Coast"],
+      "region_tags": [
+        "Gulf Coast",
+        "Northeast Mexico"
+      ],
       "cities": [
         {
           "name": "Tampico",
@@ -925,6 +1263,12 @@
               "street": "Boulevard Adolfo López Mateos",
               "street_en": "Boulevard Adolfo Lopez Mateos",
               "pattern": "Boulevard Adolfo López Mateos n{1,350}"
+            },
+            {
+              "code": "89110",
+              "street": "Avenida Hidalgo",
+              "street_en": "Avenida Hidalgo",
+              "pattern": "Avenida Hidalgo n{1,60}"
             }
           ]
         },
@@ -945,6 +1289,12 @@
               "street": "Boulevard Morelos",
               "street_en": "Boulevard Morelos",
               "pattern": "Boulevard Morelos n{1,250}"
+            },
+            {
+              "code": "88620",
+              "street": "Boulevard Morelos",
+              "street_en": "Boulevard Morelos",
+              "pattern": "Boulevard Morelos n{1,80}"
             }
           ]
         }
@@ -953,7 +1303,10 @@
     {
       "name": "San Luis Potosí",
       "name_en": "San Luis Potosi",
-      "region_tags": ["Central Mexico"],
+      "region_tags": [
+        "Central Mexico",
+        "Altiplano"
+      ],
       "cities": [
         {
           "name": "San Luis Potosí",
@@ -980,13 +1333,42 @@
               "pattern": "Avenida Himno Nacional n{1,300}"
             }
           ]
+        },
+        {
+          "name": "Ciudad Valles",
+          "name_en": "Ciudad Valles",
+          "lat": 21.9961,
+          "lon": -99.0117,
+          "postcodes": [
+            {
+              "code": "79000",
+              "street": "Calle Hidalgo",
+              "street_en": "Calle Hidalgo",
+              "pattern": "Calle Hidalgo n{1,60}"
+            },
+            {
+              "code": "79010",
+              "street": "Boulevard México-Laredo",
+              "street_en": "Boulevard Mexico-Laredo",
+              "pattern": "Boulevard México-Laredo n{1,100}"
+            },
+            {
+              "code": "79020",
+              "street": "Avenida Juárez",
+              "street_en": "Avenida Juarez",
+              "pattern": "Avenida Juárez n{1,50}"
+            }
+          ]
         }
       ]
     },
     {
       "name": "Aguascalientes",
       "name_en": "Aguascalientes",
-      "region_tags": ["Bajio"],
+      "region_tags": [
+        "Bajío",
+        "Central Mexico"
+      ],
       "cities": [
         {
           "name": "Aguascalientes",
@@ -1019,13 +1401,16 @@
     {
       "name": "Michoacán",
       "name_en": "Michoacan",
-      "region_tags": ["Pacific Coast"],
+      "region_tags": [
+        "Western Mexico",
+        "Pacific Coast"
+      ],
       "cities": [
         {
           "name": "Morelia",
           "name_en": "Morelia",
-          "lat": 19.7060,
-          "lon": -101.1950,
+          "lat": 19.706,
+          "lon": -101.195,
           "postcodes": [
             {
               "code": "58000",
@@ -1046,13 +1431,42 @@
               "pattern": "Avenida Acueducto n{1,200}"
             }
           ]
+        },
+        {
+          "name": "Uruapan",
+          "name_en": "Uruapan",
+          "lat": 19.4173,
+          "lon": -102.0522,
+          "postcodes": [
+            {
+              "code": "60000",
+              "street": "Calle Independencia",
+              "street_en": "Calle Independencia",
+              "pattern": "Calle Independencia n{1,100}"
+            },
+            {
+              "code": "60010",
+              "street": "Avenida Latinoamericana",
+              "street_en": "Avenida Latinoamericana",
+              "pattern": "Avenida Latinoamericana n{1,60}"
+            },
+            {
+              "code": "60020",
+              "street": "Calle Emilio Carranza",
+              "street_en": "Calle Emilio Carranza",
+              "pattern": "Calle Emilio Carranza n{1,50}"
+            }
+          ]
         }
       ]
     },
     {
       "name": "Oaxaca",
       "name_en": "Oaxaca",
-      "region_tags": ["Southern Mexico"],
+      "region_tags": [
+        "Southern Mexico",
+        "Oaxacan Highlands"
+      ],
       "cities": [
         {
           "name": "Oaxaca de Juárez",
@@ -1079,13 +1493,42 @@
               "pattern": "Calle García Vigil n{1,180}"
             }
           ]
+        },
+        {
+          "name": "Salina Cruz",
+          "name_en": "Salina Cruz",
+          "lat": 16.1728,
+          "lon": -95.1947,
+          "postcodes": [
+            {
+              "code": "70600",
+              "street": "Avenida Tampico",
+              "street_en": "Avenida Tampico",
+              "pattern": "Avenida Tampico n{1,120}"
+            },
+            {
+              "code": "70610",
+              "street": "Calle Puerto Ángel",
+              "street_en": "Calle Puerto Angel",
+              "pattern": "Calle Puerto Ángel n{1,50}"
+            },
+            {
+              "code": "70620",
+              "street": "Avenida 5 de Mayo",
+              "street_en": "Avenida 5 de Mayo",
+              "pattern": "Avenida 5 de Mayo n{1,40}"
+            }
+          ]
         }
       ]
     },
     {
       "name": "Guerrero",
       "name_en": "Guerrero",
-      "region_tags": ["Pacific Coast"],
+      "region_tags": [
+        "Pacific Coast",
+        "Southern Mexico"
+      ],
       "cities": [
         {
           "name": "Acapulco",
@@ -1112,13 +1555,42 @@
               "pattern": "Boulevard de las Naciones n{1,400}"
             }
           ]
+        },
+        {
+          "name": "Chilpancingo de los Bravo",
+          "name_en": "Chilpancingo",
+          "lat": 17.551,
+          "lon": -99.5007,
+          "postcodes": [
+            {
+              "code": "39000",
+              "street": "Calle Nicolás Bravo",
+              "street_en": "Calle Nicolas Bravo",
+              "pattern": "Calle Nicolás Bravo n{1,60}"
+            },
+            {
+              "code": "39010",
+              "street": "Avenida Insurgentes",
+              "street_en": "Avenida Insurgentes",
+              "pattern": "Avenida Insurgentes n{1,100}"
+            },
+            {
+              "code": "39018",
+              "street": "Calle Hermenegildo Galeana",
+              "street_en": "Calle Hermenegildo Galeana",
+              "pattern": "Calle Hermenegildo Galeana n{1,50}"
+            }
+          ]
         }
       ]
     },
     {
       "name": "Chiapas",
       "name_en": "Chiapas",
-      "region_tags": ["Southern Mexico"],
+      "region_tags": [
+        "Southern Mexico",
+        "Sierra Madre del Sur"
+      ],
       "cities": [
         {
           "name": "Tuxtla Gutiérrez",
@@ -1149,7 +1621,7 @@
         {
           "name": "San Cristóbal de las Casas",
           "name_en": "San Cristobal de las Casas",
-          "lat": 16.7370,
+          "lat": 16.737,
           "lon": -92.6376,
           "postcodes": [
             {
@@ -1157,6 +1629,18 @@
               "street": "Calle Real de Guadalupe",
               "street_en": "Calle Real de Guadalupe",
               "pattern": "Calle Real de Guadalupe n{1,120}"
+            },
+            {
+              "code": "29220",
+              "street": "Calle Real de Guadalupe",
+              "street_en": "Calle Real de Guadalupe",
+              "pattern": "Calle Real de Guadalupe n{1,60}"
+            },
+            {
+              "code": "29230",
+              "street": "Avenida Insurgentes",
+              "street_en": "Avenida Insurgentes",
+              "pattern": "Avenida Insurgentes n{1,50}"
             }
           ]
         }
@@ -1165,7 +1649,10 @@
     {
       "name": "Tabasco",
       "name_en": "Tabasco",
-      "region_tags": ["Gulf Coast"],
+      "region_tags": [
+        "Gulf Coast",
+        "Southeast Mexico"
+      ],
       "cities": [
         {
           "name": "Villahermosa",
@@ -1192,13 +1679,42 @@
               "pattern": "Boulevard Adolfo Ruiz Cortines n{1,350}"
             }
           ]
+        },
+        {
+          "name": "Cárdenas",
+          "name_en": "Cardenas",
+          "lat": 18.0,
+          "lon": -93.3808,
+          "postcodes": [
+            {
+              "code": "86500",
+              "street": "Avenida Lázaro Cárdenas",
+              "street_en": "Avenida Lazaro Cardenas",
+              "pattern": "Avenida Lázaro Cárdenas n{1,100}"
+            },
+            {
+              "code": "86510",
+              "street": "Calle Juárez",
+              "street_en": "Calle Juarez",
+              "pattern": "Calle Juárez n{1,60}"
+            },
+            {
+              "code": "86520",
+              "street": "Calle Francisco I. Madero",
+              "street_en": "Calle Francisco I. Madero",
+              "pattern": "Calle Francisco I. Madero n{1,50}"
+            }
+          ]
         }
       ]
     },
     {
       "name": "Hidalgo",
       "name_en": "Hidalgo",
-      "region_tags": ["Central Mexico"],
+      "region_tags": [
+        "Central Mexico",
+        "Huasteca"
+      ],
       "cities": [
         {
           "name": "Pachuca",
@@ -1217,6 +1733,38 @@
               "street": "Avenida Revolución",
               "street_en": "Avenida Revolucion",
               "pattern": "Avenida Revolución n{1,250}"
+            },
+            {
+              "code": "42020",
+              "street": "Avenida Juárez",
+              "street_en": "Avenida Juarez",
+              "pattern": "Avenida Juárez n{1,60}"
+            }
+          ]
+        },
+        {
+          "name": "Tulancingo de Bravo",
+          "name_en": "Tulancingo",
+          "lat": 20.0849,
+          "lon": -98.3633,
+          "postcodes": [
+            {
+              "code": "43600",
+              "street": "Calle 21 de Marzo",
+              "street_en": "Calle 21 de Marzo",
+              "pattern": "Calle 21 de Marzo n{1,60}"
+            },
+            {
+              "code": "43610",
+              "street": "Boulevard Nuevo Hidalgo",
+              "street_en": "Boulevard Nuevo Hidalgo",
+              "pattern": "Boulevard Nuevo Hidalgo n{1,100}"
+            },
+            {
+              "code": "43620",
+              "street": "Calle Juárez",
+              "street_en": "Calle Juarez",
+              "pattern": "Calle Juárez n{1,50}"
             }
           ]
         }
@@ -1225,7 +1773,10 @@
     {
       "name": "Morelos",
       "name_en": "Morelos",
-      "region_tags": ["Central Mexico"],
+      "region_tags": [
+        "Central Mexico",
+        "Valley of Mexico"
+      ],
       "cities": [
         {
           "name": "Cuernavaca",
@@ -1252,13 +1803,42 @@
               "pattern": "Avenida Plan de Ayala n{1,350}"
             }
           ]
+        },
+        {
+          "name": "Cuautla",
+          "name_en": "Cuautla",
+          "lat": 18.8149,
+          "lon": -98.954,
+          "postcodes": [
+            {
+              "code": "62740",
+              "street": "Calle Galeana",
+              "street_en": "Calle Galeana",
+              "pattern": "Calle Galeana n{1,60}"
+            },
+            {
+              "code": "62741",
+              "street": "Avenida Insurgentes",
+              "street_en": "Avenida Insurgentes",
+              "pattern": "Avenida Insurgentes n{1,100}"
+            },
+            {
+              "code": "62746",
+              "street": "Calle 2 de Mayo",
+              "street_en": "Calle 2 de Mayo",
+              "pattern": "Calle 2 de Mayo n{1,50}"
+            }
+          ]
         }
       ]
     },
     {
       "name": "Tlaxcala",
       "name_en": "Tlaxcala",
-      "region_tags": ["Central Mexico"],
+      "region_tags": [
+        "Central Mexico",
+        "Valley of Puebla"
+      ],
       "cities": [
         {
           "name": "Tlaxcala",
@@ -1277,6 +1857,38 @@
               "street": "Calle Independencia",
               "street_en": "Calle Independencia",
               "pattern": "Calle Independencia n{1,150}"
+            },
+            {
+              "code": "90020",
+              "street": "Avenida Juárez",
+              "street_en": "Avenida Juarez",
+              "pattern": "Avenida Juárez n{1,50}"
+            }
+          ]
+        },
+        {
+          "name": "Apizaco",
+          "name_en": "Apizaco",
+          "lat": 19.4173,
+          "lon": -98.1411,
+          "postcodes": [
+            {
+              "code": "90300",
+              "street": "Calle 16 de Septiembre",
+              "street_en": "Calle 16 de Septiembre",
+              "pattern": "Calle 16 de Septiembre n{1,110}"
+            },
+            {
+              "code": "90301",
+              "street": "Avenida Xicoténcatl",
+              "street_en": "Avenida Xicotencatl",
+              "pattern": "Avenida Xicoténcatl n{1,50}"
+            },
+            {
+              "code": "90302",
+              "street": "Calle Juárez",
+              "street_en": "Calle Juarez",
+              "pattern": "Calle Juárez n{1,50}"
             }
           ]
         }
@@ -1285,7 +1897,10 @@
     {
       "name": "Durango",
       "name_en": "Durango",
-      "region_tags": ["Northern Mexico"],
+      "region_tags": [
+        "Northern Mexico",
+        "Sierra Madre"
+      ],
       "cities": [
         {
           "name": "Durango",
@@ -1304,6 +1919,38 @@
               "street": "Boulevard Dolores del Río",
               "street_en": "Boulevard Dolores del Rio",
               "pattern": "Boulevard Dolores del Río n{1,250}"
+            },
+            {
+              "code": "34040",
+              "street": "Avenida 20 de Noviembre",
+              "street_en": "Avenida 20 de Noviembre",
+              "pattern": "Avenida 20 de Noviembre n{1,60}"
+            }
+          ]
+        },
+        {
+          "name": "Gómez Palacio",
+          "name_en": "Gomez Palacio",
+          "lat": 25.5649,
+          "lon": -103.4961,
+          "postcodes": [
+            {
+              "code": "35000",
+              "street": "Boulevard Miguel Alemán",
+              "street_en": "Boulevard Miguel Aleman",
+              "pattern": "Boulevard Miguel Alemán n{1,100}"
+            },
+            {
+              "code": "35010",
+              "street": "Avenida Madero",
+              "street_en": "Avenida Madero",
+              "pattern": "Avenida Madero n{1,80}"
+            },
+            {
+              "code": "35019",
+              "street": "Calle Hidalgo",
+              "street_en": "Calle Hidalgo",
+              "pattern": "Calle Hidalgo n{1,60}"
             }
           ]
         }
@@ -1312,7 +1959,10 @@
     {
       "name": "Nayarit",
       "name_en": "Nayarit",
-      "region_tags": ["Pacific Coast"],
+      "region_tags": [
+        "Pacific Coast",
+        "Western Mexico"
+      ],
       "cities": [
         {
           "name": "Tepic",
@@ -1331,6 +1981,38 @@
               "street": "Boulevard Tepic-Xalisco",
               "street_en": "Boulevard Tepic-Xalisco",
               "pattern": "Boulevard Tepic-Xalisco n{1,300}"
+            },
+            {
+              "code": "63040",
+              "street": "Avenida Insurgentes",
+              "street_en": "Avenida Insurgentes",
+              "pattern": "Avenida Insurgentes n{1,60}"
+            }
+          ]
+        },
+        {
+          "name": "Bahía de Banderas",
+          "name_en": "Bahia de Banderas",
+          "lat": 20.755,
+          "lon": -105.3795,
+          "postcodes": [
+            {
+              "code": "63732",
+              "street": "Avenida Revolución",
+              "street_en": "Avenida Revolucion",
+              "pattern": "Avenida Revolución n{1,60}"
+            },
+            {
+              "code": "63734",
+              "street": "Boulevard Nuevo Vallarta",
+              "street_en": "Boulevard Nuevo Vallarta",
+              "pattern": "Boulevard Nuevo Vallarta n{1,100}"
+            },
+            {
+              "code": "63735",
+              "street": "Calle Paseo de los Cocoteros",
+              "street_en": "Calle Paseo de los Cocoteros",
+              "pattern": "Calle Paseo de los Cocoteros n{1,50}"
             }
           ]
         }
@@ -1339,7 +2021,10 @@
     {
       "name": "Zacatecas",
       "name_en": "Zacatecas",
-      "region_tags": ["Northern Mexico"],
+      "region_tags": [
+        "Northern Mexico",
+        "Altiplano"
+      ],
       "cities": [
         {
           "name": "Zacatecas",
@@ -1366,13 +2051,42 @@
               "pattern": "Boulevard López Portillo n{1,300}"
             }
           ]
+        },
+        {
+          "name": "Fresnillo",
+          "name_en": "Fresnillo",
+          "lat": 23.1757,
+          "lon": -102.8696,
+          "postcodes": [
+            {
+              "code": "99000",
+              "street": "Calle Juárez",
+              "street_en": "Calle Juarez",
+              "pattern": "Calle Juárez n{1,100}"
+            },
+            {
+              "code": "99010",
+              "street": "Avenida Hidalgo",
+              "street_en": "Avenida Hidalgo",
+              "pattern": "Avenida Hidalgo n{1,60}"
+            },
+            {
+              "code": "99020",
+              "street": "Calle González Ortega",
+              "street_en": "Calle Gonzalez Ortega",
+              "pattern": "Calle González Ortega n{1,50}"
+            }
+          ]
         }
       ]
     },
     {
       "name": "Colima",
       "name_en": "Colima",
-      "region_tags": ["Pacific Coast"],
+      "region_tags": [
+        "Pacific Coast",
+        "Western Mexico"
+      ],
       "cities": [
         {
           "name": "Colima",
@@ -1391,6 +2105,12 @@
               "street": "Boulevard Camino Real",
               "street_en": "Boulevard Camino Real",
               "pattern": "Boulevard Camino Real n{1,300}"
+            },
+            {
+              "code": "28020",
+              "street": "Avenida Tecnológico",
+              "street_en": "Avenida Tecnologico",
+              "pattern": "Avenida Tecnológico n{1,60}"
             }
           ]
         },
@@ -1405,6 +2125,18 @@
               "street": "Boulevard Miguel de la Madrid",
               "street_en": "Boulevard Miguel de la Madrid",
               "pattern": "Boulevard Miguel de la Madrid n{1,400}"
+            },
+            {
+              "code": "28210",
+              "street": "Boulevard Miguel de la Madrid",
+              "street_en": "Boulevard Miguel de la Madrid",
+              "pattern": "Boulevard Miguel de la Madrid n{1,80}"
+            },
+            {
+              "code": "28218",
+              "street": "Avenida Morelos",
+              "street_en": "Avenida Morelos",
+              "pattern": "Avenida Morelos n{1,60}"
             }
           ]
         }
@@ -1413,7 +2145,10 @@
     {
       "name": "Campeche",
       "name_en": "Campeche",
-      "region_tags": ["Yucatan Peninsula"],
+      "region_tags": [
+        "Yucatán Peninsula",
+        "Gulf Coast"
+      ],
       "cities": [
         {
           "name": "Campeche",
@@ -1432,6 +2167,38 @@
               "street": "Avenida Ruiz Cortines",
               "street_en": "Avenida Ruiz Cortines",
               "pattern": "Avenida Ruiz Cortines n{1,300}"
+            },
+            {
+              "code": "24020",
+              "street": "Avenida 16 de Septiembre",
+              "street_en": "Avenida 16 de Septiembre",
+              "pattern": "Avenida 16 de Septiembre n{1,60}"
+            }
+          ]
+        },
+        {
+          "name": "Ciudad del Carmen",
+          "name_en": "Ciudad del Carmen",
+          "lat": 18.65,
+          "lon": -91.8279,
+          "postcodes": [
+            {
+              "code": "24100",
+              "street": "Calle 22",
+              "street_en": "Calle 22",
+              "pattern": "Calle 22 n{1,60}"
+            },
+            {
+              "code": "24110",
+              "street": "Avenida Periférica Norte",
+              "street_en": "Avenida Periferica Norte",
+              "pattern": "Avenida Periférica Norte n{1,100}"
+            },
+            {
+              "code": "24115",
+              "street": "Calle 31",
+              "street_en": "Calle 31",
+              "pattern": "Calle 31 n{1,50}"
             }
           ]
         }
