@@ -3,6 +3,22 @@ import XCTest
 /// Routes HTTP requests to XCUITest actions.
 final class RequestRouter {
 
+    /// Device model identifier (e.g. "iPhone17,3").
+    /// On physical devices, reads from uname(). On simulators, reads from
+    /// SIMULATOR_MODEL_IDENTIFIER environment variable.
+    private static let deviceModel: String = {
+        if let simModel = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] {
+            return simModel
+        }
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        return withUnsafePointer(to: &systemInfo.machine) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1) {
+                String(validatingUTF8: $0) ?? "unknown"
+            }
+        }
+    }()
+
     /// Handle an incoming HTTP request and return an HTTPResponse.
     func handle(method: String, path: String, body: Data?) -> HTTPResponse {
         // Parse path and query string.
@@ -74,7 +90,7 @@ final class RequestRouter {
         return .json([
             "status": "ok",
             "platform": "ios",
-            "version": "0.4.0",
+            "version": "0.4.1",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
@@ -117,7 +133,8 @@ final class RequestRouter {
         // Wrap hierarchy with metadata
         let response: [String: Any] = [
             "tree": hierarchy,
-            "keyboard_height": keyboardHeight
+            "keyboard_height": keyboardHeight,
+            "device_model": Self.deviceModel
         ]
         return .json(response)
     }

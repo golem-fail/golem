@@ -2,6 +2,8 @@ use anyhow::{Context, Result};
 use golem_element::Element;
 use serde::Serialize;
 
+use crate::ios_display;
+
 // ---------------------------------------------------------------------------
 // Request / response DTOs for companion server communication
 // ---------------------------------------------------------------------------
@@ -50,6 +52,38 @@ pub(crate) struct SwipeRequest {
 pub struct HierarchyMeta {
     /// Height of the on-screen keyboard (0 if hidden).
     pub keyboard_height: i32,
+    /// Display cutout regions where physical pixels don't exist (notch, punch-hole).
+    pub cutouts: Vec<CutoutRect>,
+    /// Rounded display corners where physical pixels don't exist.
+    pub rounded_corners: Vec<RoundedCorner>,
+}
+
+/// A rectangular region of the display with no physical pixels (notch, Dynamic Island, etc.).
+/// Coordinates are in the device's native coordinate space (pixels on Android, points on iOS).
+#[derive(Debug, Clone)]
+pub struct CutoutRect {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+}
+
+/// A rounded display corner where physical pixels don't exist outside the curve.
+#[derive(Debug, Clone)]
+pub struct RoundedCorner {
+    pub position: CornerPosition,
+    pub radius: i32,
+    pub center_x: i32,
+    pub center_y: i32,
+}
+
+/// Which corner of the display.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CornerPosition {
+    TopLeft,
+    TopRight,
+    BottomRight,
+    BottomLeft,
 }
 
 /// Parse a hierarchy JSON response from a companion server.
@@ -64,12 +98,16 @@ pub fn parse_hierarchy(json: &str) -> Result<(Element, HierarchyMeta)> {
 
     // Extract metadata from wrapper format
     let mut meta = HierarchyMeta::default();
+    let mut device_model: Option<String> = None;
     if let Some(obj) = val.as_object() {
         if obj.contains_key("tree") {
             meta.keyboard_height = obj
                 .get("keyboard_height")
                 .and_then(|v| v.as_i64())
                 .unwrap_or(0) as i32;
+            meta.cutouts = parse_cutouts_json(obj.get("cutouts"));
+            meta.rounded_corners = parse_corners_json(obj.get("rounded_corners"));
+            device_model = obj.get("device_model").and_then(|v| v.as_str()).map(String::from);
             val = obj.get("tree").cloned().unwrap_or(val);
         }
     }
@@ -113,7 +151,23 @@ pub fn parse_hierarchy(json: &str) -> Result<(Element, HierarchyMeta)> {
         normalize_json(&mut val);
     }
 
-    let element = serde_json::from_value(val).context("failed to deserialize hierarchy into Element")?;
+    let element: Element = serde_json::from_value(val).context("failed to deserialize hierarchy into Element")?;
+
+    // iOS: look up cutouts/corners from device model using screen dimensions from the parsed tree
+    if let Some(model) = device_model {
+        let (cutouts, corners) = ios_display::lookup(
+            &model,
+            element.bounds.width,
+            element.bounds.height,
+        );
+        if meta.cutouts.is_empty() {
+            meta.cutouts = cutouts;
+        }
+        if meta.rounded_corners.is_empty() {
+            meta.rounded_corners = corners;
+        }
+    }
+
     Ok((element, meta))
 }
 
@@ -314,6 +368,56 @@ pub(crate) fn build_swipe_body(
     .context("failed to serialize swipe request")
 }
 
+
+// ---------------------------------------------------------------------------
+// Cutout / corner JSON parsing helpers
+// ---------------------------------------------------------------------------
+
+/// Parse cutout rects from a JSON array: `[{"x":N,"y":N,"width":N,"height":N}, ...]`
+fn parse_cutouts_json(val: Option<&serde_json::Value>) -> Vec<CutoutRect> {
+    let arr = match val.and_then(|v| v.as_array()) {
+        Some(a) => a,
+        None => return Vec::new(),
+    };
+    arr.iter()
+        .filter_map(|item| {
+            let x = item.get("x")?.as_i64()? as i32;
+            let y = item.get("y")?.as_i64()? as i32;
+            let w = item.get("width")?.as_i64()? as i32;
+            let h = item.get("height")?.as_i64()? as i32;
+            if w > 0 && h > 0 {
+                Some(CutoutRect { x, y, width: w, height: h })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Parse rounded corners from a JSON array:
+/// `[{"position":"top_left","radius":N,"center_x":N,"center_y":N}, ...]`
+fn parse_corners_json(val: Option<&serde_json::Value>) -> Vec<RoundedCorner> {
+    let arr = match val.and_then(|v| v.as_array()) {
+        Some(a) => a,
+        None => return Vec::new(),
+    };
+    arr.iter()
+        .filter_map(|item| {
+            let pos_str = item.get("position")?.as_str()?;
+            let position = match pos_str {
+                "top_left" => CornerPosition::TopLeft,
+                "top_right" => CornerPosition::TopRight,
+                "bottom_right" => CornerPosition::BottomRight,
+                "bottom_left" => CornerPosition::BottomLeft,
+                _ => return None,
+            };
+            let radius = item.get("radius")?.as_i64()? as i32;
+            let center_x = item.get("center_x")?.as_i64()? as i32;
+            let center_y = item.get("center_y")?.as_i64()? as i32;
+            Some(RoundedCorner { position, radius, center_x, center_y })
+        })
+        .collect()
+}
 
 /// Walk an element tree looking for an alert-type element.
 /// Find an alert dialog in the hierarchy.

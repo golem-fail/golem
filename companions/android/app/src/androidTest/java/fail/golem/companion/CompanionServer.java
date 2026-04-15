@@ -137,7 +137,7 @@ public class CompanionServer {
                     sendJson(out, 200, new JSONObject()
                         .put("status", "ok")
                         .put("platform", "android")
-                        .put("version", "0.4.0")
+                        .put("version", "0.4.1")
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
@@ -189,13 +189,16 @@ public class CompanionServer {
             return;
         }
         try {
-            // Detect keyboard height from IME insets.
-            // Scan dumpsys window output for: type=ime frame=[0,TOP][W,BOT] visible=true
+            // Parse dumpsys window for keyboard, cutouts, and corners.
             int keyboardHeight = 0;
+            JSONArray cutouts = new JSONArray();
+            JSONArray roundedCorners = new JSONArray();
             try {
                 String windowDump = executeShellAndRead("dumpsys window");
                 for (String line : windowDump.split("\n")) {
-                    if (line.contains("type=ime") && line.contains("visible=true") && line.contains("frame=[")) {
+                    // Keyboard: type=ime frame=[0,TOP][W,BOT] visible=true
+                    if (keyboardHeight == 0 && line.contains("type=ime")
+                            && line.contains("visible=true") && line.contains("frame=[")) {
                         int frameIdx = line.indexOf("frame=[");
                         String frameStr = line.substring(frameIdx + 7);
                         String[] parts = frameStr.split("[\\[\\],]+");
@@ -204,18 +207,27 @@ public class CompanionServer {
                             int bottom = Integer.parseInt(parts[3].trim());
                             if (bottom > top && top > 0) {
                                 keyboardHeight = bottom - top;
-                                break;
                             }
                         }
                     }
+                    // Cutouts: mDisplayCutout=DisplayCutout{...boundingRect={Bounds=[Rect(...), ...]}}
+                    if (line.contains("mDisplayCutout=") && line.contains("boundingRect=")) {
+                        cutouts = parseCutoutBounds(line);
+                    }
+                    // Corners: mRoundedCorners=RoundedCorners{[RoundedCorner{...}, ...]}
+                    if (line.contains("mRoundedCorners=RoundedCorners")) {
+                        roundedCorners = parseRoundedCorners(line);
+                    }
                 }
             } catch (Exception ignored) {
-                // Keyboard detection is best-effort
+                // Display info detection is best-effort
             }
             JSONObject tree = buildNodeJson(root);
             JSONObject response = new JSONObject();
             response.put("tree", tree);
             response.put("keyboard_height", keyboardHeight);
+            response.put("cutouts", cutouts);
+            response.put("rounded_corners", roundedCorners);
             sendJson(out, 200, response);
         } finally {
             root.recycle();
@@ -338,6 +350,79 @@ public class CompanionServer {
         }
         json.put("children", children);
         return json;
+    }
+
+    /**
+     * Parse cutout bounding rects from a mDisplayCutout line.
+     * Format: boundingRect={Bounds=[Rect(0, 0 - 0, 0), Rect(480, 0 - 625, 136), ...]}
+     * Returns non-zero-area rects as JSON: [{"x":480,"y":0,"width":145,"height":136}]
+     */
+    private JSONArray parseCutoutBounds(String line) {
+        JSONArray result = new JSONArray();
+        try {
+            int boundsIdx = line.indexOf("Bounds=[");
+            if (boundsIdx < 0) return result;
+            String boundsStr = line.substring(boundsIdx + 8);
+            int endIdx = boundsStr.indexOf("]}");
+            if (endIdx > 0) boundsStr = boundsStr.substring(0, endIdx);
+            // Match each Rect(left, top - right, bottom)
+            java.util.regex.Pattern p = java.util.regex.Pattern.compile(
+                    "Rect\\((\\d+),\\s*(\\d+)\\s*-\\s*(\\d+),\\s*(\\d+)\\)");
+            java.util.regex.Matcher m = p.matcher(boundsStr);
+            while (m.find()) {
+                int left = Integer.parseInt(m.group(1));
+                int top = Integer.parseInt(m.group(2));
+                int right = Integer.parseInt(m.group(3));
+                int bottom = Integer.parseInt(m.group(4));
+                int w = right - left;
+                int h = bottom - top;
+                if (w > 0 && h > 0) {
+                    JSONObject rect = new JSONObject();
+                    rect.put("x", left);
+                    rect.put("y", top);
+                    rect.put("width", w);
+                    rect.put("height", h);
+                    result.put(rect);
+                }
+            }
+        } catch (Exception ignored) {}
+        return result;
+    }
+
+    /**
+     * Parse rounded corners from a mRoundedCorners line.
+     * Format: RoundedCorners{[RoundedCorner{position=TopLeft, radius=47, center=Point(47, 47)}, ...]}
+     */
+    private JSONArray parseRoundedCorners(String line) {
+        JSONArray result = new JSONArray();
+        try {
+            java.util.regex.Pattern p = java.util.regex.Pattern.compile(
+                    "position=(\\w+),\\s*radius=(\\d+),\\s*center=Point\\((\\d+),\\s*(\\d+)\\)");
+            java.util.regex.Matcher m = p.matcher(line);
+            while (m.find()) {
+                String pos = m.group(1);
+                int radius = Integer.parseInt(m.group(2));
+                int cx = Integer.parseInt(m.group(3));
+                int cy = Integer.parseInt(m.group(4));
+                if (radius > 0) {
+                    String posKey;
+                    switch (pos) {
+                        case "TopLeft": posKey = "top_left"; break;
+                        case "TopRight": posKey = "top_right"; break;
+                        case "BottomRight": posKey = "bottom_right"; break;
+                        case "BottomLeft": posKey = "bottom_left"; break;
+                        default: continue;
+                    }
+                    JSONObject corner = new JSONObject();
+                    corner.put("position", posKey);
+                    corner.put("radius", radius);
+                    corner.put("center_x", cx);
+                    corner.put("center_y", cy);
+                    result.put(corner);
+                }
+            }
+        } catch (Exception ignored) {}
+        return result;
     }
 
     /**

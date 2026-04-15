@@ -105,6 +105,26 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
             } else {
                 println!("  keyboard: closed");
             }
+            if !meta.cutouts.is_empty() {
+                let rects: Vec<String> = meta.cutouts.iter()
+                    .map(|c| format!("Rect({},{} {}x{})", c.x, c.y, c.width, c.height))
+                    .collect();
+                println!("  cutouts: {}", rects.join(", "));
+            }
+            if !meta.rounded_corners.is_empty() {
+                let corners: Vec<String> = meta.rounded_corners.iter()
+                    .map(|c| {
+                        let pos = match c.position {
+                            golem_driver::common::CornerPosition::TopLeft => "TL",
+                            golem_driver::common::CornerPosition::TopRight => "TR",
+                            golem_driver::common::CornerPosition::BottomRight => "BR",
+                            golem_driver::common::CornerPosition::BottomLeft => "BL",
+                        };
+                        format!("{}={}", pos, c.radius)
+                    })
+                    .collect();
+                println!("  corners: {}", corners.join(" "));
+            }
             if platform == "android" {
                 let has_webview = has_webview_element(&root);
                 if has_webview {

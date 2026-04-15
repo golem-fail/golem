@@ -3,6 +3,7 @@ pub mod cdp;
 pub mod common;
 pub mod commands;
 pub mod ios;
+pub mod ios_display;
 
 pub use common::CompanionHealth;
 

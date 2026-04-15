@@ -311,13 +311,15 @@ impl PlatformDriver for AndroidDriver {
         }
 
         // Reconstruct the wrapper with the enriched tree for parse_hierarchy
-        let response = serde_json::json!({
-            "tree": raw,
-            "keyboard_height": serde_json::from_str::<serde_json::Value>(&text)
-                .ok()
-                .and_then(|w| w.get("keyboard_height").cloned())
-                .unwrap_or(serde_json::json!(0))
-        });
+        let original: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+        let mut response = serde_json::json!({ "tree": raw });
+        if let Some(obj) = original.as_object() {
+            for key in ["keyboard_height", "cutouts", "rounded_corners"] {
+                if let Some(val) = obj.get(key) {
+                    response[key] = val.clone();
+                }
+            }
+        }
         let enriched_str = serde_json::to_string(&response)
             .context("failed to serialize hierarchy")?;
         parse_hierarchy(&enriched_str)

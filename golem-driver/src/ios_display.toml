@@ -1,0 +1,238 @@
+# iOS device display data: cutout rects and corner radii.
+#
+# Detects physical dead zones (notches, Dynamic Island, rounded corners).
+# Coordinates in points, portrait, origin top-left.
+#
+# Cutout x is computed at runtime as (screen_width - width) / 2 when
+# centered = true (default). Explicit [x, y, width, height] for non-centered.
+#
+# Keys are model identifier prefixes — longest match wins.
+# "iPhone10" matches iPhone10,1, iPhone10,3, iPhone10,6 etc.
+
+# =============================================================================
+# iPhone X / XS family — notch 209x31, r=39
+# iPhone10,1/4 = iPhone 8/8+ (no notch, no rounded corners — not listed)
+# iPhone10,3/6 = iPhone X
+# =============================================================================
+
+["iPhone10,3"]
+# iPhone X (Global) — 375x812
+cutout_size = [209, 31]
+corner_radius = 39
+
+["iPhone10,6"]
+# iPhone X (GSM) — 375x812
+cutout_size = [209, 31]
+corner_radius = 39
+
+# =============================================================================
+# iPhone XS/XR/11 family — mixed screen sizes and corner radii
+# =============================================================================
+
+["iPhone11,2"]
+# iPhone XS — 375x812
+cutout_size = [209, 31]
+corner_radius = 39
+
+["iPhone11,4"]
+# iPhone XS Max — 414x896
+cutout_size = [209, 31]
+corner_radius = 39
+
+["iPhone11,6"]
+# iPhone XS Max (Global) — 414x896
+cutout_size = [209, 31]
+corner_radius = 39
+
+["iPhone11,8"]
+# iPhone XR — 414x896, LCD, wider corners
+cutout_size = [209, 31]
+corner_radius = 42
+
+["iPhone12,1"]
+# iPhone 11 — 414x896, LCD
+cutout_size = [209, 31]
+corner_radius = 42
+
+["iPhone12,3"]
+# iPhone 11 Pro — 375x812
+cutout_size = [209, 31]
+corner_radius = 39
+
+["iPhone12,5"]
+# iPhone 11 Pro Max — 414x896
+cutout_size = [209, 31]
+corner_radius = 39
+
+# =============================================================================
+# iPhone 12 family — taller notch (32pt), new screen sizes
+# =============================================================================
+
+["iPhone13,1"]
+# iPhone 12 mini — 375x812
+cutout_size = [209, 32]
+corner_radius = 44
+
+["iPhone13,2"]
+# iPhone 12 — 390x844
+cutout_size = [209, 32]
+corner_radius = 47
+
+["iPhone13,3"]
+# iPhone 12 Pro — 390x844
+cutout_size = [209, 32]
+corner_radius = 47
+
+["iPhone13,4"]
+# iPhone 12 Pro Max — 428x926
+cutout_size = [209, 32]
+corner_radius = 53
+
+# =============================================================================
+# iPhone 13 family — narrower notch (167x33)
+# =============================================================================
+
+["iPhone14,4"]
+# iPhone 13 mini — 375x812
+cutout_size = [167, 33]
+corner_radius = 44
+
+["iPhone14,5"]
+# iPhone 13 — 390x844
+cutout_size = [167, 33]
+corner_radius = 47
+
+["iPhone14,2"]
+# iPhone 13 Pro — 390x844
+cutout_size = [167, 33]
+corner_radius = 47
+
+["iPhone14,3"]
+# iPhone 13 Pro Max — 428x926
+cutout_size = [167, 33]
+corner_radius = 53
+
+# =============================================================================
+# iPhone 14 / 14 Plus — same notch as iPhone 13
+# =============================================================================
+
+["iPhone14,7"]
+# iPhone 14 — 390x844
+cutout_size = [167, 33]
+corner_radius = 47
+
+["iPhone14,8"]
+# iPhone 14 Plus — 428x926
+cutout_size = [167, 33]
+corner_radius = 53
+
+# =============================================================================
+# iPhone 14 Pro+ — Dynamic Island (126x37 pill, 11pt from top)
+# Dimensions from developer design specs, not officially documented.
+# =============================================================================
+
+["iPhone15,2"]
+# iPhone 14 Pro — 393x852
+cutout_size = [126, 37]
+cutout_y = 11
+corner_radius = 55
+
+["iPhone15,3"]
+# iPhone 14 Pro Max — 430x932
+cutout_size = [126, 37]
+cutout_y = 11
+corner_radius = 55
+
+# =============================================================================
+# iPhone 15 — all Dynamic Island
+# =============================================================================
+
+["iPhone15,4"]
+# iPhone 15 — 393x852
+cutout_size = [126, 37]
+cutout_y = 11
+corner_radius = 55
+
+["iPhone15,5"]
+# iPhone 15 Plus — 430x932
+cutout_size = [126, 37]
+cutout_y = 11
+corner_radius = 55
+
+["iPhone16,1"]
+# iPhone 15 Pro — 393x852
+cutout_size = [126, 37]
+cutout_y = 11
+corner_radius = 55
+
+["iPhone16,2"]
+# iPhone 15 Pro Max — 430x932
+cutout_size = [126, 37]
+cutout_y = 11
+corner_radius = 55
+
+# =============================================================================
+# iPhone 16 — all Dynamic Island
+# =============================================================================
+
+["iPhone17,1"]
+# iPhone 16 Pro — 402x874
+cutout_size = [126, 37]
+cutout_y = 11
+corner_radius = 62
+
+["iPhone17,2"]
+# iPhone 16 Pro Max — 440x956
+cutout_size = [126, 37]
+cutout_y = 11
+corner_radius = 62
+
+["iPhone17,3"]
+# iPhone 16 — 393x852
+cutout_size = [126, 37]
+cutout_y = 11
+corner_radius = 55
+
+["iPhone17,4"]
+# iPhone 16 Plus — 430x932
+cutout_size = [126, 37]
+cutout_y = 11
+corner_radius = 55
+
+["iPhone17,5"]
+# iPhone 16e — 390x844
+cutout_size = [126, 37]
+cutout_y = 11
+corner_radius = 47
+
+# =============================================================================
+# iPad Pro — rounded corners only, no cutout
+# iPad8 = Pro 11" 1st-2nd / 12.9" 3rd-4th (all have 18pt corners)
+# =============================================================================
+
+[iPad8]
+# iPad Pro 11-inch (1st/2nd gen), 12.9-inch (3rd/4th gen)
+cutouts = []
+corner_radius = 18
+
+# iPad13: mixed products but all r=18, no cutouts
+# iPad13,1-2 = Air 4th gen, iPad13,4-7 = Pro 11" 3rd gen,
+# iPad13,8-11 = Pro 12.9" 5th gen, iPad13,16-17 = Air 5th gen
+[iPad13]
+cutouts = []
+corner_radius = 18
+
+# iPad14: Pro 4th gen (14,3-6) + Air M2 (14,8-11) — all r=18
+[iPad14]
+cutouts = []
+corner_radius = 18
+
+# iPad15: Air M3 — all r=18
+[iPad15]
+cutouts = []
+corner_radius = 18
+
+# iPad16: Pro M4 — all r=18
+[iPad16]
+cutouts = []
+corner_radius = 18
