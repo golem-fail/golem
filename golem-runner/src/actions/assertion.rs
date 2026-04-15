@@ -25,11 +25,12 @@ pub(crate) async fn handle_assert_not_visible(step: &Step, driver: &dyn Platform
 /// If the step has a `text` field, the alert element's text is glob-matched
 /// against it. If no `text` is provided, any alert satisfies the assertion.
 pub(crate) async fn handle_assert_alert(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let alert = driver.get_alert().await?;
-    let alert_elem = alert.ok_or_else(|| anyhow::anyhow!("assert_alert failed: no alert is displayed"))?;
+    let (root, _meta) = driver.get_hierarchy().await?;
+    let alert = golem_driver::common::find_alert(&root)
+        .ok_or_else(|| anyhow::anyhow!("assert_alert failed: no alert is displayed"))?;
 
     if let Some(ref expected_pattern) = step.on_text {
-        let alert_text = alert_elem.text.as_deref().unwrap_or("");
+        let alert_text = alert.text.as_deref().unwrap_or("");
         if !glob_match(expected_pattern, alert_text) {
             bail!(
                 "assert_alert failed: alert text {:?} does not match pattern {:?}",
@@ -234,12 +235,10 @@ mod tests {
 
     #[tokio::test]
     async fn assert_alert_succeeds_when_alert_present() {
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let driver = MockPlatformDriver::new(root);
-
-        // Set up an alert element
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         let alert = make_element_with_text("Alert", "Delete this item?", Bounds::new(50, 200, 275, 150));
-        driver.set_alert(Some(alert));
+        root.children.push(alert);
+        let driver = MockPlatformDriver::new(root);
 
         let step = make_step("assert_alert");
 
@@ -250,11 +249,10 @@ mod tests {
 
     #[tokio::test]
     async fn assert_alert_with_matching_text_pattern() {
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let driver = MockPlatformDriver::new(root);
-
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         let alert = make_element_with_text("Alert", "Delete this item?", Bounds::new(50, 200, 275, 150));
-        driver.set_alert(Some(alert));
+        root.children.push(alert);
+        let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_alert");
         step.on_text = Some("Delete*".to_string());
@@ -266,11 +264,10 @@ mod tests {
 
     #[tokio::test]
     async fn assert_alert_fails_with_mismatched_text_pattern() {
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let driver = MockPlatformDriver::new(root);
-
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         let alert = make_element_with_text("Alert", "Delete this item?", Bounds::new(50, 200, 275, 150));
-        driver.set_alert(Some(alert));
+        root.children.push(alert);
+        let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("assert_alert");
         step.on_text = Some("Save*".to_string());
@@ -288,7 +285,6 @@ mod tests {
     async fn assert_alert_fails_when_no_alert_displayed() {
         let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
-        // No alert set -- default is None
 
         let step = make_step("assert_alert");
 

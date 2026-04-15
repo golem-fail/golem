@@ -1,6 +1,6 @@
 use crate::common::{
-    build_alert_body, build_backspace_body, build_long_press_body, build_swipe_body,
-    build_tap_body, build_type_body, find_alert, parse_hierarchy, CompanionClient,
+    build_backspace_body, build_long_press_body, build_swipe_body,
+    build_tap_body, build_type_body, parse_hierarchy, CompanionClient,
 };
 use crate::{PlatformDriver, ScreenshotResult};
 use anyhow::{Context, Result};
@@ -259,21 +259,7 @@ impl PlatformDriver for IosDriver {
         anyhow::bail!("stop_recording is not yet supported on iOS")
     }
 
-    async fn get_alert(&self) -> Result<Option<Element>> {
-        let text = self.client.get_text("/hierarchy").await?;
-        let (root, _meta) = parse_hierarchy(&text)?;
-        Ok(find_alert(&root))
-    }
 
-    async fn dismiss_alert(&self, button: Option<&str>) -> Result<()> {
-        let action = match button {
-            Some("OK") | Some("Accept") | Some("Yes") | Some("Allow") => "accept",
-            _ => "dismiss",
-        };
-        let body = build_alert_body(action)?;
-        self.client.post_json("/alert", &body).await?;
-        Ok(())
-    }
 
     async fn remove_port_forwards(&self) -> Result<()> {
         Ok(()) // Not applicable to iOS
@@ -287,7 +273,6 @@ impl PlatformDriver for IosDriver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::parse_alert_response;
     use golem_element::Bounds;
 
     // -----------------------------------------------------------------------
@@ -499,54 +484,6 @@ mod tests {
             9999,
         );
         assert_eq!(driver.base_url(), "http://localhost:9999");
-    }
-
-    // -----------------------------------------------------------------------
-    // 10. Parse alert response
-    // -----------------------------------------------------------------------
-    #[test]
-    fn parse_alert_response_with_alert() {
-        let json = r#"{
-            "alert": {
-                "element_type": "Alert",
-                "text": "Are you sure?",
-                "id": null,
-                "placeholder": null,
-                "enabled": true,
-                "checked": false,
-                "clickable": true,
-                "focused": false,
-                "bounds": { "x": 50, "y": 300, "width": 290, "height": 150 },
-                "children": []
-            }
-        }"#;
-
-        let alert = parse_alert_response(json).expect("should parse");
-        assert!(alert.is_some());
-        let el = alert.expect("alert present");
-        assert_eq!(el.element_type, "Alert");
-        assert_eq!(el.text.as_deref(), Some("Are you sure?"));
-    }
-
-    #[test]
-    fn parse_alert_response_no_alert() {
-        let json = r#"{ "alert": null }"#;
-        let alert = parse_alert_response(json).expect("should parse");
-        assert!(alert.is_none());
-    }
-
-    #[test]
-    fn alert_body_accept() {
-        let body = build_alert_body("accept").expect("serialize");
-        let parsed: serde_json::Value = serde_json::from_str(&body).expect("parse");
-        assert_eq!(parsed["action"], "accept");
-    }
-
-    #[test]
-    fn alert_body_dismiss() {
-        let body = build_alert_body("dismiss").expect("serialize");
-        let parsed: serde_json::Value = serde_json::from_str(&body).expect("parse");
-        assert_eq!(parsed["action"], "dismiss");
     }
 
     // -----------------------------------------------------------------------

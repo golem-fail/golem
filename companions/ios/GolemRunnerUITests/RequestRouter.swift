@@ -29,10 +29,6 @@ final class RequestRouter {
             return handleScreenshot()
         case ("POST", "/hide-keyboard"):
             return handleHideKeyboard(query: query)
-        case ("GET", "/alert"):
-            return handleGetAlert(query: query)
-        case ("POST", "/alert"):
-            return handlePostAlert(body: body, query: query)
         case ("POST", "/launch"):
             return handleLaunch(body: body, query: query)
         case ("POST", "/stop"):
@@ -226,64 +222,6 @@ final class RequestRouter {
             target.tap()
         }
         return .json(["status": "ok"])
-    }
-
-    private func handleGetAlert(query: [String: String]) -> HTTPResponse {
-        let application = app(query: query)
-        let result: [String: Any] = DispatchQueue.main.sync {
-            application.activate()
-            let alert = application.alerts.firstMatch
-            guard alert.exists else {
-                return ["exists": false]
-            }
-            let label = alert.label
-            let buttons = alert.buttons.allElementsBoundByIndex.map { $0.label }
-            return [
-                "exists": true,
-                "text": label,
-                "buttons": buttons
-            ]
-        }
-        return .json(result)
-    }
-
-    private func handlePostAlert(body: Data?, query: [String: String]) -> HTTPResponse {
-        guard let params = parseBody(body),
-              let action = params["action"] as? String else {
-            return .error("Missing 'action' field (accept/dismiss)", status: 400)
-        }
-        let application = app(query: query)
-        let success: Bool = DispatchQueue.main.sync {
-            application.activate()
-            let alert = application.alerts.firstMatch
-            guard alert.exists else { return false }
-
-            switch action {
-            case "accept":
-                // Tap the last button (typically the accept/OK button).
-                let buttons = alert.buttons.allElementsBoundByIndex
-                guard let acceptButton = buttons.last else { return false }
-                acceptButton.tap()
-                return true
-            case "dismiss":
-                // Tap the first button (typically the cancel/dismiss button).
-                let buttons = alert.buttons.allElementsBoundByIndex
-                guard let dismissButton = buttons.first else { return false }
-                dismissButton.tap()
-                return true
-            default:
-                // Try to find a button matching the action text.
-                let button = alert.buttons[action]
-                guard button.exists else { return false }
-                button.tap()
-                return true
-            }
-        }
-        if success {
-            return .json(["status": "ok"])
-        } else {
-            return .error("Alert not found or button not found", status: 400)
-        }
     }
 
     private func handleLaunch(body: Data?, query: [String: String]) -> HTTPResponse {

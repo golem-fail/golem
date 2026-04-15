@@ -1,8 +1,6 @@
 use anyhow::{Context, Result};
 use golem_element::Element;
 use serde::Serialize;
-#[cfg(test)]
-use serde::Deserialize;
 
 // ---------------------------------------------------------------------------
 // Request / response DTOs for companion server communication
@@ -40,16 +38,6 @@ pub(crate) struct SwipeRequest {
     pub duration_ms: u64,
 }
 
-#[derive(Debug, Serialize)]
-pub(crate) struct AlertRequest<'a> {
-    pub action: &'a str,
-}
-
-#[cfg(test)]
-#[derive(Debug, Deserialize)]
-pub(crate) struct AlertResponse {
-    pub alert: Option<Element>,
-}
 
 // ---------------------------------------------------------------------------
 // Parsing helpers (testable without HTTP)
@@ -326,24 +314,12 @@ pub(crate) fn build_swipe_body(
     .context("failed to serialize swipe request")
 }
 
-/// Build the JSON body for an alert action request.
-pub(crate) fn build_alert_body(action: &str) -> Result<String> {
-    serde_json::to_string(&AlertRequest { action }).context("failed to serialize alert request")
-}
-
-/// Parse an alert response body.
-#[cfg(test)]
-pub(crate) fn parse_alert_response(json: &str) -> Result<Option<Element>> {
-    let resp: AlertResponse =
-        serde_json::from_str(json).context("failed to parse alert response")?;
-    Ok(resp.alert)
-}
 
 /// Walk an element tree looking for an alert-type element.
 /// Find an alert dialog in the hierarchy.
 /// iOS: element_type == "alert". Android: detects the dialog pattern
 /// (a top-level window containing a title + message + button).
-pub(crate) fn find_alert(el: &Element) -> Option<Element> {
+pub fn find_alert(el: &Element) -> Option<Element> {
     // iOS: native alert element type
     if el.element_type.eq_ignore_ascii_case("alert") {
         let mut alert = el.clone();
@@ -397,6 +373,23 @@ fn collect_non_button_text(el: &Element, texts: &mut Vec<String>) {
     }
 }
 
+
+/// Find all buttons in an alert element.
+pub fn find_alert_buttons(alert: &Element) -> Vec<Element> {
+    let mut buttons = Vec::new();
+    collect_buttons(alert, &mut buttons);
+    buttons
+}
+
+fn collect_buttons(el: &Element, buttons: &mut Vec<Element>) {
+    let et = el.element_type.to_lowercase();
+    if et == "button" {
+        buttons.push(el.clone());
+    }
+    for child in &el.children {
+        collect_buttons(child, buttons);
+    }
+}
 
 fn has_button_descendant(el: &Element) -> bool {
     if el.element_type == "Button" {

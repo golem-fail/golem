@@ -608,20 +608,7 @@ mod tests {
             Ok("mock.mp4".to_string())
         }
 
-        async fn get_alert(&self) -> anyhow::Result<Option<Element>> {
-            self.record_call("get_alert", vec![]);
-            Ok(None)
-        }
 
-        async fn dismiss_alert(&self, button: Option<&str>) -> anyhow::Result<()> {
-            self.record_call(
-                "dismiss_alert",
-                button
-                    .map(|b| vec![b.to_string()])
-                    .unwrap_or_default(),
-            );
-            Ok(())
-        }
 
         async fn remove_port_forwards(&self) -> anyhow::Result<()> {
             self.record_call("remove_port_forwards", vec![]);

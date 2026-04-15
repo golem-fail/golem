@@ -259,13 +259,7 @@ mod tests {
             Ok("recording.mp4".into())
         }
 
-        async fn get_alert(&self) -> anyhow::Result<Option<Element>> {
-            Ok(None)
-        }
 
-        async fn dismiss_alert(&self, _button: Option<&str>) -> anyhow::Result<()> {
-            Ok(())
-        }
 
         async fn remove_port_forwards(&self) -> anyhow::Result<()> {
             self.record("remove_port_forwards");

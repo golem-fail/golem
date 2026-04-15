@@ -107,12 +107,6 @@ pub trait PlatformDriver: Send + Sync {
     /// Stop screen recording
     async fn stop_recording(&self) -> anyhow::Result<String>;
 
-    /// Get alert/dialog info (returns element if alert is present)
-    async fn get_alert(&self) -> anyhow::Result<Option<Element>>;
-
-    /// Dismiss alert by tapping a button
-    async fn dismiss_alert(&self, button: Option<&str>) -> anyhow::Result<()>;
-
     /// Remove adb port forwards (Android-only; no-op on iOS)
     async fn remove_port_forwards(&self) -> anyhow::Result<()>;
 }
@@ -123,8 +117,6 @@ pub struct MockPlatformDriver {
     pub hierarchy: Mutex<Element>,
     /// Record of all method calls (method_name, args)
     pub calls: Mutex<Vec<(String, Vec<String>)>>,
-    /// Alert to return from get_alert()
-    pub alert: Mutex<Option<Element>>,
 }
 
 impl MockPlatformDriver {
@@ -132,16 +124,11 @@ impl MockPlatformDriver {
         Self {
             hierarchy: Mutex::new(hierarchy),
             calls: Mutex::new(Vec::new()),
-            alert: Mutex::new(None),
         }
     }
 
     pub fn set_hierarchy(&self, hierarchy: Element) {
         *self.hierarchy.lock().expect("lock poisoned") = hierarchy;
-    }
-
-    pub fn set_alert(&self, alert: Option<Element>) {
-        *self.alert.lock().expect("lock poisoned") = alert;
     }
 
     /// Get all recorded calls
@@ -310,22 +297,6 @@ impl PlatformDriver for MockPlatformDriver {
         Ok("mock_recording.mp4".to_string())
     }
 
-    async fn get_alert(&self) -> anyhow::Result<Option<Element>> {
-        self.record_call("get_alert", vec![]);
-        Ok(self.alert.lock().expect("lock poisoned").clone())
-    }
-
-    async fn dismiss_alert(&self, button: Option<&str>) -> anyhow::Result<()> {
-        self.record_call(
-            "dismiss_alert",
-            button
-                .map(|b| vec![b.to_string()])
-                .unwrap_or_default(),
-        );
-        *self.alert.lock().expect("lock poisoned") = None;
-        Ok(())
-    }
-
     async fn remove_port_forwards(&self) -> anyhow::Result<()> {
         self.record_call("remove_port_forwards", vec![]);
         Ok(())
@@ -412,40 +383,6 @@ mod tests {
         assert_eq!(calls[0].1, vec!["hello world"]);
         assert_eq!(calls[1].0, "type_text");
         assert_eq!(calls[1].1, vec!["goodbye"]);
-    }
-
-    #[tokio::test]
-    async fn mock_handles_alert_get_dismiss_cycle() {
-        let driver = MockPlatformDriver::new(default_hierarchy());
-
-        // No alert initially
-        let alert = driver.get_alert().await.expect("get_alert failed");
-        assert!(alert.is_none());
-
-        // Set an alert
-        let alert_element = make_element("Alert", Bounds::new(50, 200, 275, 150));
-        driver.set_alert(Some(alert_element));
-
-        // Alert is now present
-        let alert = driver.get_alert().await.expect("get_alert failed");
-        assert!(alert.is_some());
-        assert_eq!(alert.expect("alert should exist").element_type, "Alert");
-
-        // Dismiss the alert
-        driver
-            .dismiss_alert(Some("OK"))
-            .await
-            .expect("dismiss_alert failed");
-
-        // Alert is gone after dismissal
-        let alert = driver.get_alert().await.expect("get_alert failed");
-        assert!(alert.is_none());
-
-        // Verify dismiss_alert was recorded with the button argument
-        let calls = driver.get_calls();
-        let dismiss_calls: Vec<_> = calls.iter().filter(|c| c.0 == "dismiss_alert").collect();
-        assert_eq!(dismiss_calls.len(), 1);
-        assert_eq!(dismiss_calls[0].1, vec!["OK"]);
     }
 
     #[test]

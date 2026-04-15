@@ -363,25 +363,35 @@ pub(crate) fn handle_fail(step: &Step) -> Result<()> {
 ///
 /// If the step has a `text` param or `button` param, it is passed as the button
 /// label to dismiss with. Otherwise the alert is dismissed with the default action.
-/// Dismiss (negative): Cancel, No, Back, tap outside.
-pub(crate) async fn handle_dismiss_alert(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let button = step
-        .on_text
-        .as_deref()
-        .or_else(|| step.params.get("button").and_then(|v| v.as_str()));
+/// Accept (positive): tap the last button in the alert (OK, Yes).
+pub(crate) async fn handle_accept_alert(_step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let (root, _meta) = driver.get_hierarchy().await?;
+    let alert = golem_driver::common::find_alert(&root)
+        .ok_or_else(|| anyhow::anyhow!("accept_alert failed: no alert is displayed"))?;
 
-    driver.dismiss_alert(button).await
+    let buttons = golem_driver::common::find_alert_buttons(&alert);
+    if buttons.is_empty() {
+        bail!("accept_alert failed: no buttons found in alert");
+    }
+    // Last button is the positive action (OK, Yes)
+    let btn = &buttons[buttons.len() - 1];
+    driver.tap(btn.bounds.center_x(), btn.bounds.center_y()).await
 }
 
-/// Accept (positive): OK, Yes.
-pub(crate) async fn handle_accept_alert(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let button = step
-        .on_text
-        .as_deref()
-        .or_else(|| step.params.get("button").and_then(|v| v.as_str()))
-        .or(Some("OK")); // Default to positive action
+/// Dismiss (negative): tap the first button in the alert (Cancel, No).
+/// For single-button alerts, taps the only button.
+pub(crate) async fn handle_dismiss_alert(_step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let (root, _meta) = driver.get_hierarchy().await?;
+    let alert = golem_driver::common::find_alert(&root)
+        .ok_or_else(|| anyhow::anyhow!("dismiss_alert failed: no alert is displayed"))?;
 
-    driver.dismiss_alert(button).await
+    let buttons = golem_driver::common::find_alert_buttons(&alert);
+    if buttons.is_empty() {
+        bail!("dismiss_alert failed: no buttons found in alert");
+    }
+    // First button is the negative action (Cancel, No)
+    let btn = &buttons[0];
+    driver.tap(btn.bounds.center_x(), btn.bounds.center_y()).await
 }
 
 #[cfg(test)]
@@ -625,62 +635,61 @@ mod tests {
     // ── dismiss_alert tests ───────────────────────────────────────────
 
     #[tokio::test]
-    async fn dismiss_alert_calls_driver_dismiss_alert() {
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+    async fn dismiss_alert_taps_first_button() {
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let mut alert = make_element("Alert", Bounds::new(50, 200, 275, 150));
+        let cancel_btn = make_element_with_text("Button", "Cancel", Bounds::new(60, 310, 80, 30));
+        let ok_btn = make_element_with_text("Button", "OK", Bounds::new(200, 310, 80, 30));
+        alert.children.push(cancel_btn);
+        alert.children.push(ok_btn);
+        root.children.push(alert);
         let driver = MockPlatformDriver::new(root);
 
         let step = make_step("dismiss_alert");
-
         handle_dismiss_alert(&step, &driver)
             .await
             .expect("dismiss_alert SHALL succeed");
 
         let calls = driver.get_calls();
-        let dismiss_calls: Vec<_> = calls.iter().filter(|c| c.0 == "dismiss_alert").collect();
-        assert_eq!(dismiss_calls.len(), 1, "driver.dismiss_alert SHALL be called once");
-        assert!(
-            dismiss_calls[0].1.is_empty(),
-            "no button text SHALL be passed when none specified"
-        );
+        let tap_calls: Vec<_> = calls.iter().filter(|c| c.0 == "tap").collect();
+        assert_eq!(tap_calls.len(), 1, "SHALL tap exactly one button");
+        // First button (Cancel) center: x=60+40=100, y=310+15=325
+        assert_eq!(tap_calls[0].1, vec!["100", "325"], "SHALL tap first button (negative)");
+    }
+
+    // ── accept_alert tests ───────────────────────────────────────────
+
+    #[tokio::test]
+    async fn accept_alert_taps_last_button() {
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let mut alert = make_element("Alert", Bounds::new(50, 200, 275, 150));
+        let cancel_btn = make_element_with_text("Button", "Cancel", Bounds::new(60, 310, 80, 30));
+        let ok_btn = make_element_with_text("Button", "OK", Bounds::new(200, 310, 80, 30));
+        alert.children.push(cancel_btn);
+        alert.children.push(ok_btn);
+        root.children.push(alert);
+        let driver = MockPlatformDriver::new(root);
+
+        let step = make_step("accept_alert");
+        handle_accept_alert(&step, &driver)
+            .await
+            .expect("accept_alert SHALL succeed");
+
+        let calls = driver.get_calls();
+        let tap_calls: Vec<_> = calls.iter().filter(|c| c.0 == "tap").collect();
+        assert_eq!(tap_calls.len(), 1, "SHALL tap exactly one button");
+        // Last button (OK) center: x=200+40=240, y=310+15=325
+        assert_eq!(tap_calls[0].1, vec!["240", "325"], "SHALL tap last button (positive)");
     }
 
     #[tokio::test]
-    async fn dismiss_alert_with_button_text_from_text_field() {
+    async fn dismiss_alert_fails_when_no_alert() {
         let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
-        let mut step = make_step("dismiss_alert");
-        step.on_text = Some("OK".to_string());
-
-        handle_dismiss_alert(&step, &driver)
-            .await
-            .expect("dismiss_alert with button text SHALL succeed");
-
-        let calls = driver.get_calls();
-        let dismiss_calls: Vec<_> = calls.iter().filter(|c| c.0 == "dismiss_alert").collect();
-        assert_eq!(dismiss_calls.len(), 1);
-        assert_eq!(dismiss_calls[0].1, vec!["OK"]);
-    }
-
-    #[tokio::test]
-    async fn dismiss_alert_with_button_from_params() {
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let driver = MockPlatformDriver::new(root);
-
-        let mut step = make_step("dismiss_alert");
-        step.params.insert(
-            "button".to_string(),
-            toml::Value::String("Cancel".to_string()),
-        );
-
-        handle_dismiss_alert(&step, &driver)
-            .await
-            .expect("dismiss_alert with button param SHALL succeed");
-
-        let calls = driver.get_calls();
-        let dismiss_calls: Vec<_> = calls.iter().filter(|c| c.0 == "dismiss_alert").collect();
-        assert_eq!(dismiss_calls.len(), 1);
-        assert_eq!(dismiss_calls[0].1, vec!["Cancel"]);
+        let step = make_step("dismiss_alert");
+        let result = handle_dismiss_alert(&step, &driver).await;
+        assert!(result.is_err(), "dismiss_alert SHALL fail when no alert is displayed");
     }
 
     // ── run action path validation tests ──────────────────────────────
