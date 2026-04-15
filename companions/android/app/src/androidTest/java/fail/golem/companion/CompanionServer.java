@@ -137,7 +137,7 @@ public class CompanionServer {
                     sendJson(out, 200, new JSONObject()
                         .put("status", "ok")
                         .put("platform", "android")
-                        .put("version", "0.4.1")
+                        .put("version", "0.4.2")
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
@@ -189,8 +189,10 @@ public class CompanionServer {
             return;
         }
         try {
-            // Parse dumpsys window for keyboard, cutouts, and corners.
+            // Parse dumpsys window for keyboard, safe area, cutouts, and corners.
             int keyboardHeight = 0;
+            int safeAreaTop = 0;
+            int safeAreaBottom = 0;
             JSONArray cutouts = new JSONArray();
             JSONArray roundedCorners = new JSONArray();
             try {
@@ -210,6 +212,21 @@ public class CompanionServer {
                             }
                         }
                     }
+                    // Status bar: InsetsSource type=statusBars frame=[0,0][W,H]
+                    if (safeAreaTop == 0 && line.contains("type=statusBars") && line.contains("frame=[")) {
+                        int[] frame = parseInsetsFrame(line);
+                        if (frame != null && frame[3] > 0) {
+                            safeAreaTop = frame[3]; // bottom of status bar frame
+                        }
+                    }
+                    // Navigation bar: InsetsSource type=navigationBars frame=[0,TOP][W,BOT] visible=true
+                    if (safeAreaBottom == 0 && line.contains("type=navigationBars")
+                            && line.contains("visible=true") && line.contains("frame=[")) {
+                        int[] frame = parseInsetsFrame(line);
+                        if (frame != null && frame[3] > frame[1]) {
+                            safeAreaBottom = frame[3] - frame[1]; // height of nav bar
+                        }
+                    }
                     // Cutouts: mDisplayCutout=DisplayCutout{...boundingRect={Bounds=[Rect(...), ...]}}
                     if (line.contains("mDisplayCutout=") && line.contains("boundingRect=")) {
                         cutouts = parseCutoutBounds(line);
@@ -226,6 +243,8 @@ public class CompanionServer {
             JSONObject response = new JSONObject();
             response.put("tree", tree);
             response.put("keyboard_height", keyboardHeight);
+            response.put("safe_area_top", safeAreaTop);
+            response.put("safe_area_bottom", safeAreaBottom);
             response.put("cutouts", cutouts);
             response.put("rounded_corners", roundedCorners);
             sendJson(out, 200, response);
@@ -357,6 +376,28 @@ public class CompanionServer {
      * Format: boundingRect={Bounds=[Rect(0, 0 - 0, 0), Rect(480, 0 - 625, 136), ...]}
      * Returns non-zero-area rects as JSON: [{"x":480,"y":0,"width":145,"height":136}]
      */
+    /**
+     * Parse an InsetsSource frame: "frame=[LEFT,TOP][RIGHT,BOTTOM]"
+     * Returns [left, top, right, bottom] or null on failure.
+     */
+    private int[] parseInsetsFrame(String line) {
+        try {
+            int frameIdx = line.indexOf("frame=[");
+            if (frameIdx < 0) return null;
+            String frameStr = line.substring(frameIdx + 7);
+            String[] parts = frameStr.split("[\\[\\],]+");
+            if (parts.length >= 4) {
+                return new int[] {
+                    Integer.parseInt(parts[0].trim()),
+                    Integer.parseInt(parts[1].trim()),
+                    Integer.parseInt(parts[2].trim()),
+                    Integer.parseInt(parts[3].trim())
+                };
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
     private JSONArray parseCutoutBounds(String line) {
         JSONArray result = new JSONArray();
         try {

@@ -90,7 +90,7 @@ final class RequestRouter {
         return .json([
             "status": "ok",
             "platform": "ios",
-            "version": "0.4.1",
+            "version": "0.4.2",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
@@ -100,7 +100,7 @@ final class RequestRouter {
 
     private func handleHierarchy(query: [String: String]) -> HTTPResponse {
         let application = app(query: query)
-        let (hierarchy, keyboardHeight): ([[String: Any]], Int) = DispatchQueue.main.sync {
+        let (hierarchy, keyboardHeight, safeAreaTop, safeAreaBottom): ([[String: Any]], Int, Int, Int) = DispatchQueue.main.sync {
             application.activate()
             let tree = HierarchySerializer.serialize(app: application)
             // Detect keyboard area: from the top of the toolbar (above keys)
@@ -128,12 +128,20 @@ final class RequestRouter {
             } else {
                 kbHeight = 0
             }
-            return (tree, kbHeight)
+            // Detect safe area from status bar height
+            let statusBar = application.statusBars.firstMatch
+            let safeTop = statusBar.exists ? Int(statusBar.frame.height) : 0
+            // Bottom safe area: 34pt on home indicator devices (status bar > 20pt), 0 otherwise
+            let safeBottom = safeTop > 20 ? 34 : 0
+
+            return (tree, kbHeight, safeTop, safeBottom)
         }
         // Wrap hierarchy with metadata
         let response: [String: Any] = [
             "tree": hierarchy,
             "keyboard_height": keyboardHeight,
+            "safe_area_top": safeAreaTop,
+            "safe_area_bottom": safeAreaBottom,
             "device_model": Self.deviceModel
         ]
         return .json(response)

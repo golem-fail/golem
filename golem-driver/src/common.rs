@@ -52,6 +52,10 @@ pub(crate) struct SwipeRequest {
 pub struct HierarchyMeta {
     /// Height of the on-screen keyboard (0 if hidden).
     pub keyboard_height: i32,
+    /// Safe area inset from top (status bar / notch area, in device units).
+    pub safe_area_top: i32,
+    /// Safe area inset from bottom (navigation bar / home indicator, in device units).
+    pub safe_area_bottom: i32,
     /// Display cutout regions where physical pixels don't exist (notch, punch-hole).
     pub cutouts: Vec<CutoutRect>,
     /// Rounded display corners where physical pixels don't exist.
@@ -105,6 +109,14 @@ pub fn parse_hierarchy(json: &str) -> Result<(Element, HierarchyMeta)> {
                 .get("keyboard_height")
                 .and_then(|v| v.as_i64())
                 .unwrap_or(0) as i32;
+            meta.safe_area_top = obj
+                .get("safe_area_top")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+            meta.safe_area_bottom = obj
+                .get("safe_area_bottom")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
             meta.cutouts = parse_cutouts_json(obj.get("cutouts"));
             meta.rounded_corners = parse_corners_json(obj.get("rounded_corners"));
             device_model = obj.get("device_model").and_then(|v| v.as_str()).map(String::from);
@@ -153,18 +165,19 @@ pub fn parse_hierarchy(json: &str) -> Result<(Element, HierarchyMeta)> {
 
     let element: Element = serde_json::from_value(val).context("failed to deserialize hierarchy into Element")?;
 
-    // iOS: look up cutouts/corners from device model using screen dimensions from the parsed tree
+    // iOS: look up display data from device model using screen dimensions from the parsed tree
     if let Some(model) = device_model {
-        let (cutouts, corners) = ios_display::lookup(
+        if let Some(display) = ios_display::lookup(
             &model,
             element.bounds.width,
             element.bounds.height,
-        );
-        if meta.cutouts.is_empty() {
-            meta.cutouts = cutouts;
-        }
-        if meta.rounded_corners.is_empty() {
-            meta.rounded_corners = corners;
+        ) {
+            if meta.cutouts.is_empty() {
+                meta.cutouts = display.cutouts;
+            }
+            if meta.rounded_corners.is_empty() {
+                meta.rounded_corners = display.rounded_corners;
+            }
         }
     }
 

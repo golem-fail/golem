@@ -314,7 +314,7 @@ impl PlatformDriver for AndroidDriver {
         let original: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
         let mut response = serde_json::json!({ "tree": raw });
         if let Some(obj) = original.as_object() {
-            for key in ["keyboard_height", "cutouts", "rounded_corners"] {
+            for key in ["keyboard_height", "safe_area_top", "safe_area_bottom", "cutouts", "rounded_corners"] {
                 if let Some(val) = obj.get(key) {
                     response[key] = val.clone();
                 }

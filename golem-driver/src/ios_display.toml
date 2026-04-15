@@ -1,17 +1,16 @@
 # iOS device display data: cutout rects and corner radii.
 #
 # Detects physical dead zones (notches, Dynamic Island, rounded corners).
+# Safe area insets are detected at runtime via statusBars API — not stored here.
 # Coordinates in points, portrait, origin top-left.
 #
-# Cutout x is computed at runtime as (screen_width - width) / 2 when
-# centered = true (default). Explicit [x, y, width, height] for non-centered.
-#
+# Cutout x is computed at runtime as (screen_width - width) / 2.
 # Keys are model identifier prefixes — longest match wins.
-# "iPhone10" matches iPhone10,1, iPhone10,3, iPhone10,6 etc.
+# "iPad8" matches iPad8,1, iPad8,2 etc.
 
 # =============================================================================
 # iPhone X / XS family — notch 209x31, r=39
-# iPhone10,1/4 = iPhone 8/8+ (no notch, no rounded corners — not listed)
+# iPhone10,1/4 = iPhone 8/8+ (no notch — not listed)
 # iPhone10,3/6 = iPhone X
 # =============================================================================
 
@@ -26,7 +25,7 @@ cutout_size = [209, 31]
 corner_radius = 39
 
 # =============================================================================
-# iPhone XS/XR/11 family — mixed screen sizes and corner radii
+# iPhone XS/XR/11 family
 # =============================================================================
 
 ["iPhone11,2"]
@@ -65,7 +64,7 @@ cutout_size = [209, 31]
 corner_radius = 39
 
 # =============================================================================
-# iPhone 12 family — taller notch (32pt), new screen sizes
+# iPhone 12 family — taller notch (32pt)
 # =============================================================================
 
 ["iPhone13,1"]
@@ -128,7 +127,6 @@ corner_radius = 53
 
 # =============================================================================
 # iPhone 14 Pro+ — Dynamic Island (126x37 pill, 11pt from top)
-# Dimensions from developer design specs, not officially documented.
 # =============================================================================
 
 ["iPhone15,2"]
@@ -207,7 +205,6 @@ corner_radius = 47
 
 # =============================================================================
 # iPad Pro — rounded corners only, no cutout
-# iPad8 = Pro 11" 1st-2nd / 12.9" 3rd-4th (all have 18pt corners)
 # =============================================================================
 
 [iPad8]
@@ -215,24 +212,19 @@ corner_radius = 47
 cutouts = []
 corner_radius = 18
 
-# iPad13: mixed products but all r=18, no cutouts
-# iPad13,1-2 = Air 4th gen, iPad13,4-7 = Pro 11" 3rd gen,
-# iPad13,8-11 = Pro 12.9" 5th gen, iPad13,16-17 = Air 5th gen
+# iPad13: mixed products but all share display characteristics
 [iPad13]
 cutouts = []
 corner_radius = 18
 
-# iPad14: Pro 4th gen (14,3-6) + Air M2 (14,8-11) — all r=18
 [iPad14]
 cutouts = []
 corner_radius = 18
 
-# iPad15: Air M3 — all r=18
 [iPad15]
 cutouts = []
 corner_radius = 18
 
-# iPad16: Pro M4 — all r=18
 [iPad16]
 cutouts = []
 corner_radius = 18

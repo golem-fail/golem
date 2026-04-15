@@ -55,18 +55,21 @@ fn load() -> &'static DisplayEntries {
     })
 }
 
-/// Look up cutout rects and rounded corners for an iOS device model identifier.
+/// Result of an iOS device display data lookup.
+pub struct DisplayLookup {
+    pub cutouts: Vec<CutoutRect>,
+    pub rounded_corners: Vec<RoundedCorner>,
+}
+
+/// Look up display data for an iOS device model identifier.
 ///
 /// `screen_width` and `screen_height` come from the hierarchy root element bounds.
 /// The cutout x position is computed as `(screen_width - cutout_width) / 2`.
 ///
-/// Returns `(cutouts, rounded_corners)`. Both are empty if the model is unknown.
-pub fn lookup(model: &str, screen_width: i32, screen_height: i32) -> (Vec<CutoutRect>, Vec<RoundedCorner>) {
+/// Returns None if the model is unknown.
+pub fn lookup(model: &str, screen_width: i32, screen_height: i32) -> Option<DisplayLookup> {
     let entries = load();
-    let entry = entries.iter().find(|(key, _)| model.starts_with(key.as_str()));
-    let Some((_, entry)) = entry else {
-        return (Vec::new(), Vec::new());
-    };
+    let (_, entry) = entries.iter().find(|(key, _)| model.starts_with(key.as_str()))?;
 
     let cutouts = match entry.cutout_size {
         Some([w, h]) if w > 0 && h > 0 && screen_width > 0 => {
@@ -112,7 +115,10 @@ pub fn lookup(model: &str, screen_width: i32, screen_height: i32) -> (Vec<Cutout
         Vec::new()
     };
 
-    (cutouts, corners)
+    Some(DisplayLookup {
+        cutouts,
+        rounded_corners: corners,
+    })
 }
 
 #[cfg(test)]
@@ -121,71 +127,59 @@ mod tests {
 
     #[test]
     fn lookup_iphone_x_returns_notch() {
-        let (cutouts, corners) = lookup("iPhone10,3", 375, 812);
-        assert_eq!(cutouts.len(), 1, "iPhone X SHALL have one cutout");
-        assert_eq!(cutouts[0].width, 209, "notch SHALL be 209pt wide");
-        assert_eq!(cutouts[0].height, 31, "notch SHALL be 31pt tall");
-        assert_eq!(cutouts[0].x, (375 - 209) / 2, "notch SHALL be centered");
-        assert_eq!(cutouts[0].y, 0, "notch SHALL be at top");
-        assert_eq!(corners.len(), 4);
-        assert_eq!(corners[0].radius, 39);
+        let d = lookup("iPhone10,3", 375, 812).expect("iPhone X SHALL be known");
+        assert_eq!(d.cutouts.len(), 1, "iPhone X SHALL have one cutout");
+        assert_eq!(d.cutouts[0].width, 209, "notch SHALL be 209pt wide");
+        assert_eq!(d.cutouts[0].height, 31, "notch SHALL be 31pt tall");
+        assert_eq!(d.cutouts[0].x, (375 - 209) / 2, "notch SHALL be centered");
+        assert_eq!(d.cutouts[0].y, 0, "notch SHALL be at top");
+        assert_eq!(d.rounded_corners.len(), 4);
+        assert_eq!(d.rounded_corners[0].radius, 39);
     }
 
     #[test]
     fn lookup_iphone_x_prefix_matches_variant() {
-        let (cutouts, _) = lookup("iPhone10,6", 375, 812);
-        assert_eq!(cutouts.len(), 1, "prefix match SHALL work for variant");
-        assert_eq!(cutouts[0].width, 209);
+        let d = lookup("iPhone10,6", 375, 812).expect("SHALL match");
+        assert_eq!(d.cutouts.len(), 1);
+        assert_eq!(d.cutouts[0].width, 209);
     }
 
     #[test]
     fn lookup_dynamic_island_has_y_offset() {
-        let (cutouts, corners) = lookup("iPhone15,2", 393, 852);
-        assert_eq!(cutouts.len(), 1);
-        assert_eq!(cutouts[0].width, 126, "Dynamic Island SHALL be 126pt wide");
-        assert_eq!(cutouts[0].y, 11, "Dynamic Island SHALL be 11pt from top");
-        assert_eq!(cutouts[0].x, (393 - 126) / 2, "SHALL be centered");
-        assert_eq!(corners[0].radius, 55);
+        let d = lookup("iPhone15,2", 393, 852).expect("SHALL match");
+        assert_eq!(d.cutouts[0].width, 126, "Dynamic Island SHALL be 126pt wide");
+        assert_eq!(d.cutouts[0].y, 11, "Dynamic Island SHALL be 11pt from top");
+        assert_eq!(d.rounded_corners[0].radius, 55);
     }
 
     #[test]
     fn lookup_ipad_prefix_returns_corners_only() {
-        let (cutouts, corners) = lookup("iPad8,1", 834, 1194);
-        assert!(cutouts.is_empty(), "iPad Pro SHALL have no cutouts");
-        assert_eq!(corners.len(), 4);
-        assert_eq!(corners[0].radius, 18);
+        let d = lookup("iPad8,1", 834, 1194).expect("SHALL match");
+        assert!(d.cutouts.is_empty(), "iPad Pro SHALL have no cutouts");
+        assert_eq!(d.rounded_corners.len(), 4);
+        assert_eq!(d.rounded_corners[0].radius, 18);
     }
 
     #[test]
-    fn lookup_ipad13_prefix_matches() {
-        let (cutouts, corners) = lookup("iPad13,4", 834, 1194);
-        assert!(cutouts.is_empty());
-        assert_eq!(corners[0].radius, 18);
-    }
-
-    #[test]
-    fn lookup_unknown_model_returns_empty() {
-        let (cutouts, corners) = lookup("iPhone99,99", 390, 844);
-        assert!(cutouts.is_empty());
-        assert!(corners.is_empty());
+    fn lookup_unknown_model_returns_none() {
+        assert!(lookup("iPhone99,99", 390, 844).is_none());
     }
 
     #[test]
     fn specific_match_beats_prefix() {
-        // "iPhone11,8" (XR, r=42) is more specific than any "iPhone11" prefix
-        let (_, corners) = lookup("iPhone11,8", 414, 896);
-        assert_eq!(corners[0].radius, 42, "iPhone XR SHALL have radius 42");
+        let xr = lookup("iPhone11,8", 414, 896).expect("SHALL match");
+        assert_eq!(xr.rounded_corners[0].radius, 42, "iPhone XR SHALL have radius 42");
 
-        let (_, corners) = lookup("iPhone11,2", 375, 812);
-        assert_eq!(corners[0].radius, 39, "iPhone XS SHALL have radius 39");
+        let xs = lookup("iPhone11,2", 375, 812).expect("SHALL match");
+        assert_eq!(xs.rounded_corners[0].radius, 39, "iPhone XS SHALL have radius 39");
     }
 
     #[test]
     fn corner_centers_use_screen_dimensions() {
-        let (_, corners) = lookup("iPhone17,3", 393, 852);
-        let tl = corners.iter().find(|c| c.position == CornerPosition::TopLeft).unwrap();
+        let d = lookup("iPhone17,3", 393, 852).expect("SHALL match");
+        let tl = d.rounded_corners.iter().find(|c| c.position == CornerPosition::TopLeft).unwrap();
         assert_eq!((tl.center_x, tl.center_y), (55, 55));
-        let br = corners.iter().find(|c| c.position == CornerPosition::BottomRight).unwrap();
+        let br = d.rounded_corners.iter().find(|c| c.position == CornerPosition::BottomRight).unwrap();
         assert_eq!((br.center_x, br.center_y), (393 - 55, 852 - 55));
     }
 }

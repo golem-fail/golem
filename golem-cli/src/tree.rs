@@ -105,6 +105,9 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
             } else {
                 println!("  keyboard: closed");
             }
+            if meta.safe_area_top > 0 || meta.safe_area_bottom > 0 {
+                println!("  safe_area: top={} bottom={}", meta.safe_area_top, meta.safe_area_bottom);
+            }
             if !meta.cutouts.is_empty() {
                 let rects: Vec<String> = meta.cutouts.iter()
                     .map(|c| format!("Rect({},{} {}x{})", c.x, c.y, c.width, c.height))

@@ -66,13 +66,27 @@ pub fn swipe_from(
     start_y: i32,
     swipe_pct: u32,
 ) -> (i32, i32, i32, i32) {
+    swipe_from_with_insets(viewport, direction, start_x, start_y, swipe_pct, 0, 0)
+}
+
+/// Like `swipe_from` but uses safe area insets to avoid system gesture zones.
+/// Falls back to 10%/90% margins when insets are smaller.
+pub fn swipe_from_with_insets(
+    viewport: &Viewport,
+    direction: Direction,
+    start_x: i32,
+    start_y: i32,
+    swipe_pct: u32,
+    safe_area_top: i32,
+    safe_area_bottom: i32,
+) -> (i32, i32, i32, i32) {
     let dy = viewport.height * swipe_pct as i32 / 100;
     let dx = viewport.width * swipe_pct as i32 / 100;
 
     let min_x = viewport.width / 10;
     let max_x = viewport.width * 9 / 10;
-    let min_y = viewport.height / 10;
-    let max_y = viewport.height * 9 / 10;
+    let min_y = (viewport.height / 10).max(safe_area_top);
+    let max_y = (viewport.height * 9 / 10).min(viewport.height - safe_area_bottom);
 
     let clamp = |v: i32, lo: i32, hi: i32| v.max(lo).min(hi);
 
@@ -203,7 +217,17 @@ pub async fn scroll_to_element_with_hint(
     if meta.keyboard_height > 0 {
         viewport.height -= meta.keyboard_height;
     }
-    let visible = filter_viewport(&root, &viewport);
+    // Use safe-area-adjusted viewport for visibility check so scroll continues
+    // past the status bar / nav bar until element is in the safe zone.
+    let mut safe_vp = viewport.clone();
+    if meta.safe_area_top > 0 {
+        safe_vp.y += meta.safe_area_top;
+        safe_vp.height -= meta.safe_area_top;
+    }
+    if meta.safe_area_bottom > meta.keyboard_height {
+        safe_vp.height -= meta.safe_area_bottom - meta.keyboard_height;
+    }
+    let visible = filter_viewport(&root, &safe_vp);
     let results = find_elements(&visible, selector);
     if let Some(found) = results.into_iter().next() {
         return Ok(found);
@@ -264,7 +288,7 @@ pub async fn scroll_to_element_with_hint(
             };
             (clamp_x(fx), clamp_y(fy), clamp_x(tx), clamp_y(ty))
         } else {
-            swipe_from(&viewport, direction, start.0, start.1, pct)
+            swipe_from_with_insets(&viewport, direction, start.0, start.1, pct, meta.safe_area_top, meta.safe_area_bottom.max(meta.keyboard_height))
         };
         driver.swipe_coords(fx, fy, tx, ty).await?;
 
@@ -272,7 +296,16 @@ pub async fn scroll_to_element_with_hint(
         (root, settle_meta) = wait_for_settle(driver).await?;
         let mut vp = Viewport::from_root(&root);
         if settle_meta.keyboard_height > 0 { vp.height -= settle_meta.keyboard_height; }
-        let visible = filter_viewport(&root, &vp);
+        // Safe-area-adjusted viewport for scroll visibility check
+        let mut safe_vp = vp.clone();
+        if settle_meta.safe_area_top > 0 {
+            safe_vp.y += settle_meta.safe_area_top;
+            safe_vp.height -= settle_meta.safe_area_top;
+        }
+        if settle_meta.safe_area_bottom > settle_meta.keyboard_height {
+            safe_vp.height -= settle_meta.safe_area_bottom - settle_meta.keyboard_height;
+        }
+        let visible = filter_viewport(&root, &safe_vp);
         let results = find_elements(&visible, selector);
         if let Some(found) = results.into_iter().next() {
             return Ok(found);
@@ -287,7 +320,7 @@ pub async fn scroll_to_element_with_hint(
                 // Probe alternate start positions (one attempt each).
                 let mut probed_ok = false;
                 for (px, py) in probe_starts(&viewport, direction) {
-                    let (fx, fy, tx, ty) = swipe_from(&viewport, direction, px, py, 40);
+                    let (fx, fy, tx, ty) = swipe_from_with_insets(&viewport, direction, px, py, 40, meta.safe_area_top, meta.safe_area_bottom.max(meta.keyboard_height));
                     driver.swipe_coords(fx, fy, tx, ty).await?;
                     (root, _) = wait_for_settle(driver).await?;
 
