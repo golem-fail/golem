@@ -32,3 +32,6 @@ dist/
 
 # Tauri generated platform projects (machine-specific)
 **/src-tauri/gen/
+
+# Xcode build output
+companions/ios/build/

@@ -12,6 +12,7 @@
 		A1000003 /* HTTPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000003 /* HTTPServer.swift */; };
 		A1000004 /* HierarchySerializer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000004 /* HierarchySerializer.swift */; };
 		A1000005 /* RequestRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000005 /* RequestRouter.swift */; };
+		A1000006 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000008 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -34,6 +35,7 @@
 		A2000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000010 /* GolemRunnerApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GolemRunnerApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000011 /* GolemRunnerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GolemRunnerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2000008 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -53,6 +55,17 @@
 		};
 /* End PBXFrameworksBuildPhase section */
 
+/* Begin PBXResourcesBuildPhase section */
+		A6000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000006 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXGroup section */
 		A7000001 = {
 			isa = PBXGroup;
@@ -67,6 +80,7 @@
 			isa = PBXGroup;
 			children = (
 				A2000001 /* AppDelegate.swift */,
+				A2000008 /* Assets.xcassets */,
 				A2000006 /* Info.plist */,
 			);
 			path = GolemRunnerApp;
@@ -101,6 +115,7 @@
 			buildConfigurationList = A9000001 /* Build configuration list for PBXNativeTarget "GolemRunnerApp" */;
 			buildPhases = (
 				A8000001 /* Sources */,
+				A6000003 /* Resources */,
 				A6000001 /* Frameworks */,
 			);
 			buildRules = (
@@ -315,6 +330,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				PRODUCT_BUNDLE_IDENTIFIER = fail.golem.runner.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -326,6 +342,7 @@
 		B2000002 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = NO;
