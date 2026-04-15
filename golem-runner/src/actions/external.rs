@@ -363,11 +363,23 @@ pub(crate) fn handle_fail(step: &Step) -> Result<()> {
 ///
 /// If the step has a `text` param or `button` param, it is passed as the button
 /// label to dismiss with. Otherwise the alert is dismissed with the default action.
+/// Dismiss (negative): Cancel, No, Back, tap outside.
 pub(crate) async fn handle_dismiss_alert(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
     let button = step
         .on_text
         .as_deref()
         .or_else(|| step.params.get("button").and_then(|v| v.as_str()));
+
+    driver.dismiss_alert(button).await
+}
+
+/// Accept (positive): OK, Yes.
+pub(crate) async fn handle_accept_alert(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+    let button = step
+        .on_text
+        .as_deref()
+        .or_else(|| step.params.get("button").and_then(|v| v.as_str()))
+        .or(Some("OK")); // Default to positive action
 
     driver.dismiss_alert(button).await
 }

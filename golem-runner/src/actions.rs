@@ -25,8 +25,8 @@ use device::{
     handle_rotate, handle_set_location,
 };
 use external::{
-    handle_await_email, handle_bash, handle_dismiss_alert, handle_fail, handle_http,
-    handle_load_fixture, handle_open_link, handle_push_notification, handle_run,
+    handle_accept_alert, handle_await_email, handle_bash, handle_dismiss_alert, handle_fail,
+    handle_http, handle_load_fixture, handle_open_link, handle_push_notification, handle_run,
 };
 use interaction::{
     handle_backspace, handle_double_tap, handle_hide_keyboard, handle_long_press, handle_scroll,
@@ -60,6 +60,7 @@ pub async fn execute_action(
             handle_assert_visible(step, driver).await,
         "assert_not_visible" => handle_assert_not_visible(step, driver).await,
         "assert_alert" => handle_assert_alert(step, driver).await,
+        "accept_alert" => handle_accept_alert(step, driver).await,
         "dismiss_alert" => handle_dismiss_alert(step, driver).await,
         "wait" => handle_wait(step, driver).await,
         "wait_not" => handle_wait_not(step, driver).await,

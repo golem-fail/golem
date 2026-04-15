@@ -14,42 +14,54 @@ type = "phone"
 os = "android:latest"
 type = "phone"
 
+# Alert dialog: single OK button
 [[block]]
-name = "alert_show_and_dismiss"
+name = "alert_accept"
 steps = [
   { action = "assert_visible", on_text = "Submit" },
-
-  # Trigger a native alert dialog
   { action = "tap", on_text = "Show Alert", auto_scroll = true, timeout = 60000 },
-
-  # Verify the alert appeared
   { action = "assert_alert" },
-
-  # Verify the alert text
   { action = "assert_alert", on_text = "This is a test alert" },
+  { action = "accept_alert" },
+  { action = "assert_visible", on_text = "Alert dismissed" },
+]
 
-  # Dismiss the alert
-  { action = "dismiss_alert" },
-
-  # Verify the alert is gone
-  { action = "assert_visible", on_text = "Show Alert" },
+# Confirm dialog: OK and Cancel buttons
+[[block]]
+name = "confirm_accept"
+steps = [
+  { action = "tap", on_text = "Show Confirm" },
+  { action = "assert_alert" },
+  { action = "assert_alert", on_text = "Are you sure?" },
+  { action = "accept_alert" },
+  { action = "assert_visible", on_text = "Confirm OK" },
 ]
 
 [[block]]
-name = "confirm_show_and_dismiss"
+name = "confirm_dismiss"
 steps = [
-  # Trigger a confirm dialog
   { action = "tap", on_text = "Show Confirm" },
-
-  # Verify the confirm appeared
   { action = "assert_alert" },
-
-  # Verify the confirm text
-  { action = "assert_alert", on_text = "Are you sure?" },
-
-  # Dismiss the confirm
   { action = "dismiss_alert" },
+  { action = "assert_visible", on_text = "Confirm Cancel" },
+]
 
-  # Verify back to normal
-  { action = "assert_visible", on_text = "Show Confirm" },
+# Yes/No dialog
+[[block]]
+name = "yes_no_accept"
+steps = [
+  { action = "tap", on_text = "Show Yes/No" },
+  { action = "assert_alert" },
+  { action = "assert_alert", on_text = "Do you agree?" },
+  { action = "accept_alert" },
+  { action = "assert_visible", on_text = "Question Yes" },
+]
+
+[[block]]
+name = "yes_no_dismiss"
+steps = [
+  { action = "tap", on_text = "Show Yes/No" },
+  { action = "assert_alert" },
+  { action = "dismiss_alert" },
+  { action = "assert_visible", on_text = "Question No" },
 ]

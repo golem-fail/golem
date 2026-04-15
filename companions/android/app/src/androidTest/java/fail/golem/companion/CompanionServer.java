@@ -333,29 +333,60 @@ public class CompanionServer {
         JSONObject req = new JSONObject(body.isEmpty() ? "{}" : body);
         String action = req.optString("action", "dismiss");
 
-        // Try clicking a specific button by text first
-        if (!"dismiss".equals(action) && !"accept".equals(action)) {
-            List<AccessibilityWindowInfo> windows = uiAutomation.getWindows();
-            for (AccessibilityWindowInfo window : windows) {
-                if (window.getType() == AccessibilityWindowInfo.TYPE_SYSTEM) {
-                    AccessibilityNodeInfo root = window.getRoot();
-                    if (root != null) {
-                        try {
+        List<AccessibilityWindowInfo> windows = uiAutomation.getWindows();
+        for (AccessibilityWindowInfo window : windows) {
+            if (window.getType() == AccessibilityWindowInfo.TYPE_SYSTEM) {
+                AccessibilityNodeInfo root = window.getRoot();
+                if (root != null) {
+                    try {
+                        if ("accept".equals(action)) {
+                            // Accept: click the last button (positive button on Android)
+                            if (clickLastButton(root)) {
+                                sendJson(out, 200, new JSONObject().put("status", "ok"));
+                                return;
+                            }
+                        } else if (!"dismiss".equals(action)) {
+                            // Specific button text
                             if (clickButtonByText(root, action)) {
                                 sendJson(out, 200, new JSONObject().put("status", "ok"));
                                 return;
                             }
-                        } finally {
-                            root.recycle();
                         }
+                    } finally {
+                        root.recycle();
                     }
                 }
             }
         }
 
-        // Native dismiss: press Back to dismiss the dialog
+        // Dismiss: press Back
         uiAutomation.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK);
         sendJson(out, 200, new JSONObject().put("status", "ok"));
+    }
+
+    private boolean clickLastButton(AccessibilityNodeInfo node) {
+        if (node == null) return false;
+        // Collect all buttons, click the last one (positive action on Android)
+        java.util.List<AccessibilityNodeInfo> buttons = new java.util.ArrayList<>();
+        collectButtons(node, buttons);
+        if (!buttons.isEmpty()) {
+            buttons.get(buttons.size() - 1).performAction(AccessibilityNodeInfo.ACTION_CLICK);
+            return true;
+        }
+        return false;
+    }
+
+    private void collectButtons(AccessibilityNodeInfo node, java.util.List<AccessibilityNodeInfo> buttons) {
+        if (node == null) return;
+        if ("android.widget.Button".equals(String.valueOf(node.getClassName()))) {
+            buttons.add(node);
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child != null) {
+                collectButtons(child, buttons);
+            }
+        }
     }
 
     private boolean clickButtonByText(AccessibilityNodeInfo node, String text) {
