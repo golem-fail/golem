@@ -10,7 +10,7 @@ members = [
     "golem-report",
     "golem-email",
 ]
-exclude = ["test-app/src-tauri", "test-app-b/src-tauri"]
+exclude = ["test-app/src-tauri"]
 resolver = "2"
 
 [workspace.lints.clippy]

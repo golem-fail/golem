@@ -9,12 +9,14 @@
 /* Begin PBXBuildFile section */
 		A1000001 /* GolemTestBApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001; };
 		A1000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000002; };
+		A1000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000004 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A2000001 /* GolemTestBApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GolemTestBApp.swift; sourceTree = "<group>"; };
 		A2000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A2000003 /* GolemTestB.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GolemTestB.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2000004 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -31,6 +33,7 @@
 			children = (
 				A2000001 /* GolemTestBApp.swift */,
 				A2000002 /* ContentView.swift */,
+				A2000004 /* Assets.xcassets */,
 			);
 			path = GolemTestB;
 			sourceTree = "<group>";
@@ -51,6 +54,7 @@
 			buildConfigurationList = A6000001;
 			buildPhases = (
 				A5000001 /* Sources */,
+				A5000002 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -100,6 +104,17 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A5000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1000003 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
 		A8000001 /* Debug */ = {

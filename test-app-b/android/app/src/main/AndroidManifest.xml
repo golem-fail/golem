@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
         android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
         android:label="GOLEM Test B"
         android:theme="@style/Theme.GolemTestB">
         <activity
