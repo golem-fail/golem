@@ -397,16 +397,6 @@ fn collect_non_button_text(el: &Element, texts: &mut Vec<String>) {
     }
 }
 
-fn collect_text_descendants(el: &Element, texts: &mut Vec<(String, String)>) {
-    if let Some(ref text) = el.text {
-        if !text.is_empty() {
-            texts.push((el.element_type.clone(), text.clone()));
-        }
-    }
-    for child in &el.children {
-        collect_text_descendants(child, texts);
-    }
-}
 
 fn has_button_descendant(el: &Element) -> bool {
     if el.element_type == "Button" {

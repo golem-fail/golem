@@ -939,11 +939,11 @@ mod tests {
                 "instrument",
                 "-w",
                 "-e",
-                "port",
-                "8225",
-                "-e",
                 "device_serial",
                 "emulator-5554",
+                "-e",
+                "port",
+                "8225",
                 "fail.golem.companion.test/androidx.test.runner.AndroidJUnitRunner",
             ]
         );

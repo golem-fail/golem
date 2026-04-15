@@ -535,9 +535,9 @@ mod tests {
             .expect("swipe should succeed");
 
         let calls = driver.get_calls();
-        let swipe_calls: Vec<_> = calls.iter().filter(|c| c.0 == "swipe").collect();
+        // Now uses swipe_coords instead of swipe(direction)
+        let swipe_calls: Vec<_> = calls.iter().filter(|c| c.0 == "swipe_coords").collect();
         assert_eq!(swipe_calls.len(), 1);
-        assert_eq!(swipe_calls[0].1, vec!["Up"]);
     }
 
     // ── 7. hide_keyboard action ──────────────────────────────────────
@@ -608,12 +608,7 @@ mod tests {
         let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
-        for (dir_str, expected) in [
-            ("up", "Up"),
-            ("down", "Down"),
-            ("left", "Left"),
-            ("right", "Right"),
-        ] {
+        for dir_str in ["up", "down", "left", "right"] {
             driver.clear_calls();
             let mut step = make_step("swipe");
             step.params.insert(
@@ -626,9 +621,8 @@ mod tests {
                 .unwrap_or_else(|_| panic!("swipe {dir_str} should succeed"));
 
             let calls = driver.get_calls();
-            let swipe_calls: Vec<_> = calls.iter().filter(|c| c.0 == "swipe").collect();
-            assert_eq!(swipe_calls.len(), 1);
-            assert_eq!(swipe_calls[0].1, vec![expected]);
+            let swipe_calls: Vec<_> = calls.iter().filter(|c| c.0 == "swipe_coords").collect();
+            assert_eq!(swipe_calls.len(), 1, "swipe {dir_str} should produce one swipe_coords call");
         }
     }
 

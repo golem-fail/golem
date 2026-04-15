@@ -940,10 +940,7 @@ duration = 500
             step.params.get("direction"),
             Some(&toml::Value::String("down".to_string()))
         );
-        assert_eq!(
-            step.params.get("duration"),
-            Some(&toml::Value::Integer(500))
-        );
+        assert_eq!(step.duration, Some(500));
     }
 
     // ---------------------------------------------------------------

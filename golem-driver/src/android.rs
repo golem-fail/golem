@@ -580,11 +580,11 @@ mod tests {
         }"#;
 
         let element = parse_hierarchy(json).expect("should parse");
-        assert_eq!(element.element_type, "FrameLayout");
-        assert_eq!(element.accessibility_label.as_deref(), Some("root"));
-        assert_eq!(element.children.len(), 1);
+        assert_eq!(element.0.element_type, "FrameLayout");
+        assert_eq!(element.0.accessibility_label.as_deref(), Some("root"));
+        assert_eq!(element.0.children.len(), 1);
 
-        let btn = &element.children[0];
+        let btn = &element.0.children[0];
         assert_eq!(btn.element_type, "Button");
         assert_eq!(btn.text.as_deref(), Some("Login"));
         assert_eq!(btn.accessibility_label.as_deref(), Some("login_btn"));
@@ -610,8 +610,8 @@ mod tests {
         }"#;
 
         let element = parse_hierarchy(json).expect("should parse");
-        assert_eq!(element.element_type, "View");
-        assert!(element.children.is_empty());
+        assert_eq!(element.0.element_type, "View");
+        assert!(element.0.children.is_empty());
     }
 
     // -----------------------------------------------------------------------
@@ -655,13 +655,13 @@ mod tests {
         }"#;
 
         let element = parse_hierarchy(json).expect("should parse");
-        assert_eq!(element.element_type, "DecorView");
-        assert_eq!(element.children.len(), 1);
-        assert_eq!(element.children[0].element_type, "LinearLayout");
-        assert_eq!(element.children[0].children.len(), 1);
-        assert_eq!(element.children[0].children[0].element_type, "TextView");
+        assert_eq!(element.0.element_type, "DecorView");
+        assert_eq!(element.0.children.len(), 1);
+        assert_eq!(element.0.children[0].element_type, "LinearLayout");
+        assert_eq!(element.0.children[0].children.len(), 1);
+        assert_eq!(element.0.children[0].children[0].element_type, "TextView");
         assert_eq!(
-            element.children[0].children[0].text.as_deref(),
+            element.0.children[0].children[0].text.as_deref(),
             Some("Hello")
         );
     }

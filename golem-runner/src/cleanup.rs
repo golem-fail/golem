@@ -81,7 +81,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use golem_devices::{DeviceState, DeviceType, Platform};
-    use golem_driver::{Direction, PlatformDriver, ScreenshotResult};
+    use golem_driver::{PlatformDriver, ScreenshotResult};
     use golem_element::{Bounds, Element};
     use std::sync::Mutex;
 
@@ -152,9 +152,6 @@ mod tests {
             Ok(())
         }
 
-        async fn swipe(&self, _direction: Direction) -> anyhow::Result<()> {
-            Ok(())
-        }
 
         async fn swipe_coords(
             &self,

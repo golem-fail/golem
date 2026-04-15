@@ -380,17 +380,17 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let hierarchy = driver.get_hierarchy().await.expect("get_hierarchy failed");
-        assert_eq!(hierarchy.element_type, "View");
-        assert_eq!(hierarchy.children.len(), 1);
-        assert_eq!(hierarchy.children[0].element_type, "Button");
+        assert_eq!(hierarchy.0.element_type, "View");
+        assert_eq!(hierarchy.0.children.len(), 1);
+        assert_eq!(hierarchy.0.children[0].element_type, "Button");
 
         // Update hierarchy and verify it changes
         let new_root = make_element("Screen", Bounds::new(0, 0, 390, 844));
         driver.set_hierarchy(new_root);
 
         let updated = driver.get_hierarchy().await.expect("get_hierarchy failed");
-        assert_eq!(updated.element_type, "Screen");
-        assert!(updated.children.is_empty());
+        assert_eq!(updated.0.element_type, "Screen");
+        assert!(updated.0.children.is_empty());
     }
 
     #[tokio::test]
