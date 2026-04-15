@@ -62,12 +62,27 @@ impl RegistrationState {
         (state, rx)
     }
 
-    /// Allocate a port for a companion. If the device_id is already known,
-    /// skip to the next port (assume the old one is bad).
+    /// Allocate a free port for a companion. Skips ports that are already
+    /// in use (e.g. a companion left running from a previous golem session).
     fn allocate_port(&self, device_id: &str, platform: &str, device_name: &str, version: &str) -> u16 {
         let mut inner = self.inner.lock().expect("lock poisoned");
-        let port = inner.next_port;
-        inner.next_port += 1;
+
+        // Find next free port, skipping any that are already bound
+        let mut port = inner.next_port;
+        let start = port;
+        loop {
+            if TcpListener::bind(format!("127.0.0.1:{port}")).is_ok() {
+                break; // Port is free
+            }
+            port += 1;
+            if port > COMPANION_PORT_END {
+                port = COMPANION_PORT_START;
+            }
+            if port == start {
+                break; // Wrapped around, use it anyway
+            }
+        }
+        inner.next_port = port + 1;
         if inner.next_port > COMPANION_PORT_END {
             inner.next_port = COMPANION_PORT_START;
         }
