@@ -128,8 +128,10 @@ final class RequestRouter {
             } else {
                 kbHeight = 0
             }
-            // Detect safe area from status bar height
-            let statusBar = application.statusBars.firstMatch
+            // Detect safe area from SpringBoard's status bar (not the app's —
+            // the status bar belongs to SpringBoard, same approach as Appium/WDA)
+            let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+            let statusBar = springboard.statusBars.firstMatch
             let safeTop = statusBar.exists ? Int(statusBar.frame.height) : 0
             // Bottom safe area: 34pt on home indicator devices (status bar > 20pt), 0 otherwise
             let safeBottom = safeTop > 20 ? 34 : 0
