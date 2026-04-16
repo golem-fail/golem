@@ -276,6 +276,7 @@ pub async fn execute_flow<'a>(
                     ThresholdResult::Ok => {}
                     ThresholdResult::Warn(msg) => warnings.push(msg),
                     ThresholdResult::Error(msg) => {
+                        warnings.push(msg);
                         return Ok(FlowResult {
                             success: false,
                             warnings,

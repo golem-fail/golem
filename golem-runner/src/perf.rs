@@ -178,8 +178,16 @@ impl PerfCollector {
     }
 
     async fn ios_pid(&self) -> Option<u32> {
-        let output = run_cmd("pgrep", &["-f", &self.bundle_id]).await.ok()?;
-        output.trim().lines().next()?.trim().parse().ok()
+        // Use simctl spawn + launchctl list to find the real app PID.
+        // This avoids false matches from `pgrep -f` which picks up log stream
+        // and npm processes that have the bundle ID in their arguments.
+        let output = run_cmd(
+            "xcrun",
+            &["simctl", "spawn", &self.device_id, "launchctl", "list"],
+        )
+        .await
+        .ok()?;
+        parse_ios_launchctl_pid(&output, &self.bundle_id)
     }
 
     async fn adb(&self, args: &[&str]) -> Result<String> {
@@ -220,9 +228,10 @@ fn parse_android_memory(output: &str) -> Option<f64> {
 /// Parse CPU percentage for a package from `dumpsys cpuinfo`.
 fn parse_android_cpu(output: &str, package: &str) -> Option<f64> {
     // Lines look like: "  23.1% 1234/com.example.app: 15% user + 8.1% kernel"
+    // or: " +0% 13819/fail.golem.test: 0% user + 0% kernel"
     for line in output.lines() {
         if line.contains(package) {
-            let trimmed = line.trim();
+            let trimmed = line.trim().trim_start_matches('+');
             let pct_str = trimmed.split('%').next()?.trim();
             return pct_str.parse().ok();
         }
@@ -259,9 +268,13 @@ fn parse_android_disk(output: &str) -> Option<f64> {
 
 /// Extract UID from `dumpsys package <package>` output.
 fn parse_android_uid(output: &str) -> Option<u32> {
-    // Look for "userId=10123" pattern
+    // Newer Android: "uid=10198 gids=[] type=0 ..."
+    // Older Android: "userId=10123"
     for line in output.lines() {
         let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("uid=") {
+            return rest.split_whitespace().next()?.parse().ok();
+        }
         if let Some(rest) = trimmed.strip_prefix("userId=") {
             return rest.split_whitespace().next()?.parse().ok();
         }
@@ -296,6 +309,20 @@ fn parse_android_network(output: &str, uid: u32) -> (Option<f64>, Option<f64>) {
     } else {
         (None, None)
     }
+}
+
+/// Parse the PID from `launchctl list` output for an iOS simulator app.
+///
+/// Lines look like: `81329\t0\tUIKitApplication:fail.golem.test[7351][rb-legacy]`
+fn parse_ios_launchctl_pid(output: &str, bundle_id: &str) -> Option<u32> {
+    let pattern = format!("UIKitApplication:{bundle_id}");
+    for line in output.lines() {
+        if line.contains(&pattern) {
+            // First field is the PID
+            return line.trim().split('\t').next()?.parse().ok();
+        }
+    }
+    None
 }
 
 // ── iOS parsers ──────────────────────────────────────────────────────
@@ -412,6 +439,14 @@ Uptime: 123456 Realtime: 123456
     }
 
     #[test]
+    fn android_cpu_plus_prefix() {
+        let output = " +0% 13819/fail.golem.test: 0% user + 0% kernel\n";
+        let cpu = parse_android_cpu(output, "fail.golem.test")
+            .expect("SHALL parse CPU with + prefix");
+        assert!((cpu - 0.0).abs() < 0.01);
+    }
+
+    #[test]
     fn android_cpu_not_found() {
         let output = "  12.5% 5678/system_server: 8% user\n";
         assert!(parse_android_cpu(output, "com.example.app").is_none());
@@ -492,6 +527,15 @@ Threads:        42
         assert_eq!(
             parse_android_uid(output).expect("SHALL parse UID"),
             10123
+        );
+    }
+
+    #[test]
+    fn android_uid_modern_format() {
+        let output = "    uid=10198 gids=[] type=0 prot=signature\n    installerPackageUid=-1\n";
+        assert_eq!(
+            parse_android_uid(output).expect("SHALL parse modern uid= format"),
+            10198
         );
     }
 
@@ -650,5 +694,26 @@ user     12345   ??    0.0 S    31T   0:00.02   0:00.05 /path/to/app
         let (rx, tx) = parse_ios_network("time,interface,bytes_in,bytes_out\n");
         assert!(rx.is_none());
         assert!(tx.is_none());
+    }
+
+    // ── iOS launchctl PID ────────────────────────────────────────────
+
+    #[test]
+    fn ios_launchctl_pid_parses() {
+        let output = "80823\t0\tUIKitApplication:fail.golem.runner.uitests.xctrunner[90d1][rb-legacy]\n81329\t0\tUIKitApplication:fail.golem.test[7351][rb-legacy]\n";
+        let pid = parse_ios_launchctl_pid(output, "fail.golem.test")
+            .expect("SHALL parse PID from launchctl list");
+        assert_eq!(pid, 81329);
+    }
+
+    #[test]
+    fn ios_launchctl_pid_not_found() {
+        let output = "80823\t0\tUIKitApplication:com.other.app[1234][rb-legacy]\n";
+        assert!(parse_ios_launchctl_pid(output, "fail.golem.test").is_none());
+    }
+
+    #[test]
+    fn ios_launchctl_pid_empty() {
+        assert!(parse_ios_launchctl_pid("", "fail.golem.test").is_none());
     }
 }
