@@ -17,4 +17,5 @@ pub mod scroll;
 pub mod subflow;
 pub mod parallel;
 pub mod for_each;
+pub mod perf;
 pub mod teardown;
