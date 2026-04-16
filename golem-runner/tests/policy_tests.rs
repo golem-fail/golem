@@ -28,6 +28,8 @@ fn test_ctx() -> ExecutionContext<'static> {
         block_name: None,
         step_index: 0,
         device: None,
+        perf_collector: None,
+        last_launch_ms: std::sync::atomic::AtomicU64::new(0),
     }
 }
 
@@ -933,6 +935,8 @@ steps = [
         block_name: None,
         step_index: 0,
         device: None,
+        perf_collector: None,
+        last_launch_ms: std::sync::atomic::AtomicU64::new(0),
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -984,6 +988,8 @@ steps = [
         block_name: None,
         step_index: 0,
         device: None,
+        perf_collector: None,
+        last_launch_ms: std::sync::atomic::AtomicU64::new(0),
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -1035,6 +1041,8 @@ steps = [
         block_name: None,
         step_index: 0,
         device: None,
+        perf_collector: None,
+        last_launch_ms: std::sync::atomic::AtomicU64::new(0),
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -1086,6 +1094,8 @@ steps = [
         block_name: None,
         step_index: 0,
         device: None,
+        perf_collector: None,
+        last_launch_ms: std::sync::atomic::AtomicU64::new(0),
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -1137,6 +1147,8 @@ steps = [
         block_name: None,
         step_index: 0,
         device: None,
+        perf_collector: None,
+        last_launch_ms: std::sync::atomic::AtomicU64::new(0),
     };
 
     let _result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -1204,6 +1216,8 @@ steps = [
         block_name: None,
         step_index: 0,
         device: None,
+        perf_collector: None,
+        last_launch_ms: std::sync::atomic::AtomicU64::new(0),
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)

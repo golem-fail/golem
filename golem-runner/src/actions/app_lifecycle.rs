@@ -1,7 +1,10 @@
+use std::time::Instant;
+
 use anyhow::Result;
 use golem_driver::PlatformDriver;
 use golem_parser::{AppConfig, Step};
 
+use crate::context::ExecutionContext;
 use crate::resolution::wait_for_settle;
 
 /// Resolve the app identifier from a step to a bundle ID.
@@ -26,15 +29,21 @@ pub fn resolve_app_bundle<'a>(step: &'a Step, apps: &'a [AppConfig]) -> Result<&
     Ok(app_ref)
 }
 
-/// Launch the app with the given bundle_id.
+/// Launch the app with the given bundle_id. Records wall-clock launch timing
+/// on the execution context when perf capture is active.
 pub(crate) async fn handle_launch(
     step: &Step,
     driver: &dyn PlatformDriver,
     apps: &[AppConfig],
+    ctx: &ExecutionContext<'_>,
 ) -> Result<()> {
     let bundle_id = resolve_app_bundle(step, apps)?;
+    let start = Instant::now();
     driver.launch_app(bundle_id).await?;
     let _ = wait_for_settle(driver).await;
+    if ctx.perf_collector.is_some() {
+        ctx.set_launch_ms(start.elapsed().as_millis() as u64);
+    }
     Ok(())
 }
 
@@ -64,8 +73,10 @@ pub(crate) async fn handle_clear_data(
 mod tests {
     use super::*;
     use crate::actions::test_helpers::*;
+    use crate::context::test_ctx;
     use golem_driver::MockPlatformDriver;
     use golem_element::Bounds;
+    use std::path::Path;
 
     // ── launch action calls driver.launch_app ─────────────────────────
 
@@ -73,11 +84,12 @@ mod tests {
     async fn launch_action_calls_driver_launch_app() {
         let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
+        let ctx = test_ctx(Path::new("."));
 
         let mut step = make_step("launch");
         step.app = Some("com.example.app".to_string());
 
-        handle_launch(&step, &driver, &[])
+        handle_launch(&step, &driver, &[], &ctx)
             .await
             .expect("launch should succeed");
 
@@ -137,7 +149,8 @@ mod tests {
         let step = make_step("launch");
         // No app set
 
-        let result = handle_launch(&step, &driver, &[]).await;
+        let ctx = test_ctx(Path::new("."));
+        let result = handle_launch(&step, &driver, &[], &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(

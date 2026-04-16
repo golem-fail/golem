@@ -1,8 +1,10 @@
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use golem_devices::DeviceInfo;
 
 use crate::capture::CaptureConfig;
+use crate::perf::PerfCollector;
 
 /// Flow-level context threaded through the execution pipeline.
 pub struct ExecutionContext<'a> {
@@ -14,6 +16,23 @@ pub struct ExecutionContext<'a> {
     pub step_index: usize,
     /// The device running this flow. Used for block-level `where` filtering.
     pub device: Option<&'a DeviceInfo>,
+    /// Performance collector — `None` when perf is disabled.
+    pub perf_collector: Option<&'a PerfCollector>,
+    /// Last launch duration in ms, shared between action handlers and executor.
+    pub last_launch_ms: AtomicU64,
+}
+
+impl ExecutionContext<'_> {
+    /// Record a launch timing measurement.
+    pub fn set_launch_ms(&self, ms: u64) {
+        self.last_launch_ms.store(ms, Ordering::Relaxed);
+    }
+
+    /// Take the last launch timing (resets to 0).
+    pub fn take_launch_ms(&self) -> Option<u64> {
+        let val = self.last_launch_ms.swap(0, Ordering::Relaxed);
+        if val > 0 { Some(val) } else { None }
+    }
 }
 
 #[cfg(test)]
@@ -31,5 +50,7 @@ pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
         block_name: None,
         step_index: 0,
         device: None,
+        perf_collector: None,
+        last_launch_ms: AtomicU64::new(0),
     }
 }

@@ -751,6 +751,8 @@ async fn run_flow_on_device(
         block_name: None,
         step_index: 0,
         device: Some(&device),
+        perf_collector: None,
+        last_launch_ms: std::sync::atomic::AtomicU64::new(0),
     };
 
     eprintln!("  Executing on {device_label}");

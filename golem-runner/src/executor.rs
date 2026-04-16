@@ -1,13 +1,16 @@
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 use golem_driver::PlatformDriver;
-use golem_parser::{Block, FlowFile};
-use golem_vars::VariableStore;
+use golem_parser::{Block, FlowFile, FlowOptions};
+use golem_report::PerfSnapshot;
+use golem_vars::{ScopeLevel, VarValue, VariableStore};
 
 use crate::barrier::FailureBarrier;
 use crate::branch::evaluate_branch;
 use crate::context::ExecutionContext;
+use crate::perf::RawPerfData;
 use crate::policy::{execute_step_with_policy, StepOutcome};
 
 /// The result of executing a complete flow.
@@ -100,6 +103,13 @@ pub async fn execute_flow<'a>(
     let mut step_count: u64 = 0;
 
     let mut warnings = Vec::new();
+    let mut perf_snapshots: Vec<PerfSnapshot> = Vec::new();
+    let perf_enabled = flow
+        .flow
+        .options
+        .as_ref()
+        .and_then(|o| o.perf)
+        .unwrap_or(true);
 
     loop {
         if current_idx >= blocks.len() {
@@ -152,6 +162,8 @@ pub async fn execute_flow<'a>(
                 block_name: None,
                 step_index: 0,
                 device: ctx.device,
+                perf_collector: ctx.perf_collector,
+                last_launch_ms: std::sync::atomic::AtomicU64::new(0),
             };
 
             let child_result = Box::pin(execute_flow(
@@ -245,6 +257,38 @@ pub async fn execute_flow<'a>(
             }
         }
 
+        // Capture perf snapshot after block completes
+        if perf_enabled {
+            if let Some(collector) = ctx.perf_collector {
+                let raw = collector.capture().await;
+                let launch_ms = ctx.take_launch_ms();
+                let device_name = ctx.device.map_or("unknown", |d| d.name.as_str());
+
+                let label = build_snapshot_label(block, current_idx, device_name, 0);
+                let timestamp = chrono_now();
+
+                let snapshot = build_snapshot(&raw, label, launch_ms, timestamp);
+                write_perf_var(vars, &snapshot);
+                let threshold_result = evaluate_thresholds(&snapshot, flow.flow.options.as_ref());
+                perf_snapshots.push(snapshot);
+
+                match threshold_result {
+                    ThresholdResult::Ok => {}
+                    ThresholdResult::Warn(msg) => warnings.push(msg),
+                    ThresholdResult::Error(msg) => {
+                        return Ok(FlowResult {
+                            success: false,
+                            warnings,
+                            failed_step: None,
+                            failed_block: block.name.clone(),
+                            barrier_aborted: false,
+                            perf_snapshots,
+                        });
+                    }
+                }
+            }
+        }
+
         // Determine next block
         if !block.branch.is_empty() {
             match evaluate_branch(&block.branch, driver, vars).await? {
@@ -269,7 +313,7 @@ pub async fn execute_flow<'a>(
         failed_step: None,
         failed_block: None,
         barrier_aborted: false,
-        perf_snapshots: vec![],
+        perf_snapshots,
     })
 }
 
@@ -292,6 +336,140 @@ fn parse_duration(s: &str) -> Option<Duration> {
         return n.trim().parse::<u64>().ok().map(|v| Duration::from_secs(v * 3600));
     }
     None
+}
+
+// ── Perf helpers ─────────────────────────────────────────────────────
+
+fn build_snapshot_label(block: &Block, block_idx: usize, device_name: &str, iteration: u32) -> String {
+    match &block.name {
+        Some(name) => format!("{name}:{device_name}:{iteration}"),
+        None => {
+            let hint = block
+                .steps
+                .first()
+                .map(|s| {
+                    let target = s
+                        .on_text
+                        .as_deref()
+                        .or(s.on.as_ref().and_then(|g| g.text.as_deref()))
+                        .unwrap_or("_");
+                    format!("{}:{}", s.action, target)
+                })
+                .unwrap_or_else(|| "empty".to_string());
+            format!("block_{block_idx}({hint}):{device_name}:{iteration}")
+        }
+    }
+}
+
+fn build_snapshot(raw: &RawPerfData, label: String, launch_ms: Option<u64>, timestamp: String) -> PerfSnapshot {
+    PerfSnapshot {
+        label,
+        memory_mb: raw.memory_mb,
+        cpu_percent: raw.cpu_percent,
+        threads: raw.threads,
+        file_descriptors: raw.file_descriptors,
+        disk_mb: raw.disk_mb,
+        net_rx_kb: raw.net_rx_kb,
+        net_tx_kb: raw.net_tx_kb,
+        launch_ms,
+        timestamp,
+    }
+}
+
+fn write_perf_var(vars: &mut VariableStore, snapshot: &PerfSnapshot) {
+    let mut map = HashMap::new();
+
+    fn opt_f64(val: Option<f64>) -> VarValue {
+        VarValue::String(val.map_or(String::new(), |v| format!("{v:.1}")))
+    }
+    fn opt_u32(val: Option<u32>) -> VarValue {
+        VarValue::String(val.map_or(String::new(), |v| v.to_string()))
+    }
+    fn opt_u64(val: Option<u64>) -> VarValue {
+        VarValue::String(val.map_or(String::new(), |v| v.to_string()))
+    }
+
+    map.insert("memory_mb".into(), opt_f64(snapshot.memory_mb));
+    map.insert("cpu_percent".into(), opt_f64(snapshot.cpu_percent));
+    map.insert("threads".into(), opt_u32(snapshot.threads));
+    map.insert("file_descriptors".into(), opt_u32(snapshot.file_descriptors));
+    map.insert("disk_mb".into(), opt_f64(snapshot.disk_mb));
+    map.insert("net_rx_kb".into(), opt_f64(snapshot.net_rx_kb));
+    map.insert("net_tx_kb".into(), opt_f64(snapshot.net_tx_kb));
+    map.insert("launch_ms".into(), opt_u64(snapshot.launch_ms));
+    map.insert("label".into(), VarValue::String(snapshot.label.clone()));
+    map.insert("timestamp".into(), VarValue::String(snapshot.timestamp.clone()));
+
+    vars.set_in_scope(ScopeLevel::Generator, "_perf", VarValue::Object(map));
+}
+
+enum ThresholdResult {
+    Ok,
+    Warn(String),
+    Error(String),
+}
+
+fn evaluate_thresholds(snapshot: &PerfSnapshot, options: Option<&FlowOptions>) -> ThresholdResult {
+    let Some(opts) = options else {
+        return ThresholdResult::Ok;
+    };
+
+    // Check error thresholds first (more severe)
+    if let (Some(val), Some(limit)) = (snapshot.memory_mb, opts.perf_memory_error_mb) {
+        if val > limit {
+            return ThresholdResult::Error(format!("perf: memory {val:.1} MB exceeds error threshold {limit:.1} MB"));
+        }
+    }
+    if let (Some(val), Some(limit)) = (snapshot.cpu_percent, opts.perf_cpu_error_percent) {
+        if val > limit {
+            return ThresholdResult::Error(format!("perf: CPU {val:.1}% exceeds error threshold {limit:.1}%"));
+        }
+    }
+    if let (Some(val), Some(limit)) = (snapshot.threads, opts.perf_threads_error) {
+        if val > limit {
+            return ThresholdResult::Error(format!("perf: {val} threads exceeds error threshold {limit}"));
+        }
+    }
+    if let (Some(val), Some(limit)) = (snapshot.file_descriptors, opts.perf_fd_error) {
+        if val > limit {
+            return ThresholdResult::Error(format!("perf: {val} FDs exceeds error threshold {limit}"));
+        }
+    }
+
+    // Check warning thresholds
+    if let (Some(val), Some(limit)) = (snapshot.memory_mb, opts.perf_memory_warn_mb) {
+        if val > limit {
+            return ThresholdResult::Warn(format!("perf: memory {val:.1} MB exceeds warning threshold {limit:.1} MB"));
+        }
+    }
+    if let (Some(val), Some(limit)) = (snapshot.cpu_percent, opts.perf_cpu_warn_percent) {
+        if val > limit {
+            return ThresholdResult::Warn(format!("perf: CPU {val:.1}% exceeds warning threshold {limit:.1}%"));
+        }
+    }
+    if let (Some(val), Some(limit)) = (snapshot.threads, opts.perf_threads_warn) {
+        if val > limit {
+            return ThresholdResult::Warn(format!("perf: {val} threads exceeds warning threshold {limit}"));
+        }
+    }
+    if let (Some(val), Some(limit)) = (snapshot.file_descriptors, opts.perf_fd_warn) {
+        if val > limit {
+            return ThresholdResult::Warn(format!("perf: {val} FDs exceeds warning threshold {limit}"));
+        }
+    }
+
+    ThresholdResult::Ok
+}
+
+fn chrono_now() -> String {
+    // ISO 8601 with timezone
+    let now = std::time::SystemTime::now();
+    let since_epoch = now
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    let secs = since_epoch.as_secs();
+    // Simple UTC timestamp without external dependency
+    format!("{secs}")
 }
 
 /// Execute a flow once per data-driven row (or once if there are no data rows).
@@ -1628,6 +1806,8 @@ action = "screenshot"
             block_name: None,
             step_index: 0,
             device: Some(&ios_device),
+            perf_collector: None,
+            last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -1686,6 +1866,8 @@ action = "screenshot"
             block_name: None,
             step_index: 0,
             device: Some(&android_device),
+            perf_collector: None,
+            last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -1753,6 +1935,8 @@ action = "screenshot"
             block_name: None,
             step_index: 0,
             device: Some(&ios_device),
+            perf_collector: None,
+            last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -1766,6 +1950,215 @@ action = "screenshot"
             calls.len(),
             2,
             "only the ios and shared blocks SHALL execute (got {calls:?})"
+        );
+    }
+
+    // ── perf: snapshot labeling ──────────────────────────────────────
+
+    fn empty_block(name: Option<&str>) -> Block {
+        Block {
+            name: name.map(String::from),
+            app: None,
+            steps: vec![],
+            next: None,
+            branch: vec![],
+            for_each: None,
+            r#where: None,
+            run_flow: None,
+            max_iterations: None,
+            vars: HashMap::new(),
+            save_to: HashMap::new(),
+        }
+    }
+
+    fn empty_step(action: &str) -> golem_parser::Step {
+        golem_parser::Step {
+            action: action.into(),
+            on_text: None,
+            on_accessibility_label: None,
+            on_index: None,
+            on_enabled: None,
+            on_checked: None,
+            on_clickable: None,
+            on_below: None,
+            on_above: None,
+            on_right_of: None,
+            on_left_of: None,
+            on: None,
+            input: None,
+            if_fail: None,
+            save_to: None,
+            timeout: None,
+            retry: None,
+            retry_delay: None,
+            app: None,
+            auto_scroll: None,
+            max_scrolls: None,
+            scroll_timeout: None,
+            within: None,
+            start: None,
+            end: None,
+            points: vec![],
+            duration: None,
+            params: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn snapshot_label_named_block() {
+        let block = empty_block(Some("login"));
+        let label = build_snapshot_label(&block, 0, "iPhone_16", 0);
+        assert_eq!(label, "login:iPhone_16:0");
+    }
+
+    #[test]
+    fn snapshot_label_unnamed_block() {
+        let mut block = empty_block(None);
+        let mut step = empty_step("tap");
+        step.on_text = Some("Submit".into());
+        block.steps.push(step);
+        let label = build_snapshot_label(&block, 2, "Pixel_8", 1);
+        assert_eq!(label, "block_2(tap:Submit):Pixel_8:1");
+    }
+
+    #[test]
+    fn snapshot_label_unnamed_no_steps() {
+        let block = empty_block(None);
+        let label = build_snapshot_label(&block, 0, "device", 0);
+        assert_eq!(label, "block_0(empty):device:0");
+    }
+
+    // ── perf: threshold evaluation ───────────────────────────────────
+
+    #[test]
+    fn threshold_warn_on_memory() {
+        let snapshot = PerfSnapshot {
+            label: "test:dev:0".into(),
+            memory_mb: Some(250.0),
+            cpu_percent: None,
+            threads: None,
+            file_descriptors: None,
+            disk_mb: None,
+            net_rx_kb: None,
+            net_tx_kb: None,
+            launch_ms: None,
+            timestamp: "0".into(),
+        };
+        let opts = FlowOptions {
+            perf_memory_warn_mb: Some(200.0),
+            ..Default::default()
+        };
+        match evaluate_thresholds(&snapshot, Some(&opts)) {
+            ThresholdResult::Warn(msg) => assert!(msg.contains("250.0"), "SHALL mention value"),
+            other => panic!("expected Warn, got {}", match other { ThresholdResult::Ok => "Ok", ThresholdResult::Error(_) => "Error", _ => "?" }),
+        }
+    }
+
+    #[test]
+    fn threshold_error_on_memory() {
+        let snapshot = PerfSnapshot {
+            label: "test:dev:0".into(),
+            memory_mb: Some(600.0),
+            cpu_percent: None,
+            threads: None,
+            file_descriptors: None,
+            disk_mb: None,
+            net_rx_kb: None,
+            net_tx_kb: None,
+            launch_ms: None,
+            timestamp: "0".into(),
+        };
+        let opts = FlowOptions {
+            perf_memory_warn_mb: Some(200.0),
+            perf_memory_error_mb: Some(500.0),
+            ..Default::default()
+        };
+        match evaluate_thresholds(&snapshot, Some(&opts)) {
+            ThresholdResult::Error(msg) => assert!(msg.contains("error threshold")),
+            _ => panic!("expected Error"),
+        }
+    }
+
+    #[test]
+    fn threshold_ok_when_below() {
+        let snapshot = PerfSnapshot {
+            label: "test:dev:0".into(),
+            memory_mb: Some(100.0),
+            cpu_percent: Some(50.0),
+            threads: Some(30),
+            file_descriptors: Some(50),
+            disk_mb: None,
+            net_rx_kb: None,
+            net_tx_kb: None,
+            launch_ms: None,
+            timestamp: "0".into(),
+        };
+        let opts = FlowOptions {
+            perf_memory_warn_mb: Some(200.0),
+            perf_cpu_warn_percent: Some(80.0),
+            perf_threads_warn: Some(100),
+            perf_fd_warn: Some(200),
+            ..Default::default()
+        };
+        assert!(matches!(evaluate_thresholds(&snapshot, Some(&opts)), ThresholdResult::Ok));
+    }
+
+    #[test]
+    fn threshold_ok_with_no_options() {
+        let snapshot = PerfSnapshot {
+            label: "test:dev:0".into(),
+            memory_mb: Some(9999.0),
+            cpu_percent: None,
+            threads: None,
+            file_descriptors: None,
+            disk_mb: None,
+            net_rx_kb: None,
+            net_tx_kb: None,
+            launch_ms: None,
+            timestamp: "0".into(),
+        };
+        assert!(matches!(evaluate_thresholds(&snapshot, None), ThresholdResult::Ok));
+    }
+
+    // ── perf: _perf variable writing ─────────────────────────────────
+
+    #[test]
+    fn write_perf_var_creates_object_with_dot_paths() {
+        let snapshot = PerfSnapshot {
+            label: "login:dev:0".into(),
+            memory_mb: Some(142.5),
+            cpu_percent: Some(23.1),
+            threads: Some(42),
+            file_descriptors: Some(87),
+            disk_mb: Some(24.1),
+            net_rx_kb: Some(156.0),
+            net_tx_kb: Some(32.0),
+            launch_ms: Some(1240),
+            timestamp: "12345".into(),
+        };
+        let mut vars = VariableStore::new();
+        write_perf_var(&mut vars, &snapshot);
+
+        let val = vars.get("_perf").expect("_perf SHALL exist");
+        assert_eq!(
+            val.get_path("memory_mb").and_then(|v| v.as_str()),
+            Some("142.5")
+        );
+        assert_eq!(
+            val.get_path("cpu_percent").and_then(|v| v.as_str()),
+            Some("23.1")
+        );
+        assert_eq!(
+            val.get_path("threads").and_then(|v| v.as_str()),
+            Some("42")
+        );
+        assert_eq!(
+            val.get_path("launch_ms").and_then(|v| v.as_str()),
+            Some("1240")
+        );
+        assert_eq!(
+            val.get_path("label").and_then(|v| v.as_str()),
+            Some("login:dev:0")
         );
     }
 }
