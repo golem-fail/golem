@@ -4,7 +4,7 @@
 //! Uses intermediate serialization structs so the JSON shape can evolve
 //! independently of the internal report types.
 
-use crate::{FlowReport, StepOutcome, StepReport, SuiteReport};
+use crate::{FlowReport, PerfSnapshot, StepOutcome, StepReport, SuiteReport};
 use serde::Serialize;
 
 // ── JSON-specific intermediate types ────────────────────────────────
@@ -34,6 +34,30 @@ struct JsonFlow {
     screenshot: Option<String>,
     steps: Vec<JsonStep>,
     warnings: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    perf_snapshots: Vec<JsonPerfSnapshot>,
+}
+
+#[derive(Serialize)]
+struct JsonPerfSnapshot {
+    label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    memory_mb: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cpu_percent: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    threads: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    file_descriptors: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    disk_mb: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    net_rx_kb: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    net_tx_kb: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    launch_ms: Option<u64>,
+    timestamp: String,
 }
 
 #[derive(Serialize)]
@@ -71,6 +95,21 @@ fn step_to_json(step: &StepReport) -> JsonStep {
     }
 }
 
+fn perf_to_json(snap: &PerfSnapshot) -> JsonPerfSnapshot {
+    JsonPerfSnapshot {
+        label: snap.label.clone(),
+        memory_mb: snap.memory_mb,
+        cpu_percent: snap.cpu_percent,
+        threads: snap.threads,
+        file_descriptors: snap.file_descriptors,
+        disk_mb: snap.disk_mb,
+        net_rx_kb: snap.net_rx_kb,
+        net_tx_kb: snap.net_tx_kb,
+        launch_ms: snap.launch_ms,
+        timestamp: snap.timestamp.clone(),
+    }
+}
+
 fn flow_to_json(report: &FlowReport) -> JsonFlow {
     JsonFlow {
         name: report.flow_name.clone(),
@@ -81,6 +120,7 @@ fn flow_to_json(report: &FlowReport) -> JsonFlow {
         screenshot: report.screenshot_path.clone(),
         steps: report.step_results.iter().map(step_to_json).collect(),
         warnings: report.warnings.clone(),
+        perf_snapshots: report.perf_snapshots.iter().map(perf_to_json).collect(),
     }
 }
 
@@ -456,5 +496,72 @@ mod tests {
         let warnings = v["warnings"].as_array().expect("warnings should be array");
         assert_eq!(warnings.len(), 1);
         assert_eq!(warnings[0], "element 'Promo' not found");
+    }
+
+    // ── Perf rendering tests ────────────────────────────────────────
+
+    fn sample_perf_snapshot() -> PerfSnapshot {
+        PerfSnapshot {
+            label: "login:iPhone_16:0".into(),
+            memory_mb: Some(142.5),
+            cpu_percent: Some(23.1),
+            threads: Some(42),
+            file_descriptors: Some(87),
+            disk_mb: Some(24.1),
+            net_rx_kb: Some(156.0),
+            net_tx_kb: Some(32.0),
+            launch_ms: Some(1240),
+            timestamp: "12345".into(),
+        }
+    }
+
+    #[test]
+    fn json_includes_perf_snapshots() {
+        let report = FlowReport {
+            flow_name: "perf_flow".to_string(),
+            success: true,
+            step_results: vec![success_step("launch", "", 100)],
+            warnings: vec![],
+            duration_ms: 100,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            perf_snapshots: vec![sample_perf_snapshot()],
+        };
+
+        let json_str = format_flow_json(&report).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        assert_eq!(
+            v["perf_snapshots"][0]["label"], "login:iPhone_16:0",
+            "SHALL contain snapshot label"
+        );
+        assert_eq!(
+            v["perf_snapshots"][0]["memory_mb"], 142.5,
+            "SHALL contain memory_mb value"
+        );
+    }
+
+    #[test]
+    fn json_omits_perf_when_empty() {
+        let report = FlowReport {
+            flow_name: "no_perf_flow".to_string(),
+            success: true,
+            step_results: vec![success_step("launch", "", 100)],
+            warnings: vec![],
+            duration_ms: 100,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            perf_snapshots: vec![],
+        };
+
+        let json_str = format_flow_json(&report).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        assert!(
+            v.get("perf_snapshots").is_none(),
+            "SHALL NOT contain perf_snapshots key when empty"
+        );
     }
 }

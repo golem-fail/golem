@@ -109,6 +109,49 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
         }
     }
 
+    // Perf properties
+    if !report.perf_snapshots.is_empty() {
+        let _ = writeln!(out, "    <properties>");
+        for snap in &report.perf_snapshots {
+            if let Some(v) = snap.memory_mb {
+                let _ = writeln!(
+                    out,
+                    "      <property name=\"perf.{}.memory_mb\" value=\"{v:.1}\"/>",
+                    xml_escape(&snap.label)
+                );
+            }
+            if let Some(v) = snap.cpu_percent {
+                let _ = writeln!(
+                    out,
+                    "      <property name=\"perf.{}.cpu_percent\" value=\"{v:.1}\"/>",
+                    xml_escape(&snap.label)
+                );
+            }
+            if let Some(v) = snap.threads {
+                let _ = writeln!(
+                    out,
+                    "      <property name=\"perf.{}.threads\" value=\"{v}\"/>",
+                    xml_escape(&snap.label)
+                );
+            }
+            if let Some(v) = snap.file_descriptors {
+                let _ = writeln!(
+                    out,
+                    "      <property name=\"perf.{}.file_descriptors\" value=\"{v}\"/>",
+                    xml_escape(&snap.label)
+                );
+            }
+            if let Some(v) = snap.launch_ms {
+                let _ = writeln!(
+                    out,
+                    "      <property name=\"perf.{}.launch_ms\" value=\"{v}\"/>",
+                    xml_escape(&snap.label)
+                );
+            }
+        }
+        let _ = writeln!(out, "    </properties>");
+    }
+
     let _ = writeln!(out, "  </testsuite>");
     out
 }
@@ -507,6 +550,67 @@ mod tests {
         assert_eq!(
             xml_escape("a & b < c > d \"e\" 'f'"),
             "a &amp; b &lt; c &gt; d &quot;e&quot; &apos;f&apos;"
+        );
+    }
+
+    // ── Perf rendering tests ────────────────────────────────────────
+
+    fn sample_perf_snapshot() -> crate::PerfSnapshot {
+        crate::PerfSnapshot {
+            label: "login:iPhone_16:0".into(),
+            memory_mb: Some(142.5),
+            cpu_percent: Some(23.1),
+            threads: Some(42),
+            file_descriptors: Some(87),
+            disk_mb: Some(24.1),
+            net_rx_kb: Some(156.0),
+            net_tx_kb: Some(32.0),
+            launch_ms: Some(1240),
+            timestamp: "12345".into(),
+        }
+    }
+
+    #[test]
+    fn junit_includes_perf_properties() {
+        let flow = FlowReport {
+            flow_name: "perf_flow".to_string(),
+            success: true,
+            step_results: vec![success_step("launch", "", 100)],
+            warnings: vec![],
+            duration_ms: 100,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            perf_snapshots: vec![sample_perf_snapshot()],
+        };
+
+        let xml = format_flow_junit(&flow);
+        assert!(xml.contains("<properties>"), "SHALL contain <properties> element");
+        assert!(
+            xml.contains("perf.login:iPhone_16:0.memory_mb"),
+            "SHALL contain perf property name with label"
+        );
+        assert!(xml.contains("142.5"), "SHALL contain memory_mb value");
+    }
+
+    #[test]
+    fn junit_omits_properties_when_no_perf() {
+        let flow = FlowReport {
+            flow_name: "no_perf_flow".to_string(),
+            success: true,
+            step_results: vec![success_step("launch", "", 100)],
+            warnings: vec![],
+            duration_ms: 100,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            perf_snapshots: vec![],
+        };
+
+        let xml = format_flow_junit(&flow);
+        assert!(
+            !xml.contains("<properties>"),
+            "SHALL NOT contain <properties> when no perf snapshots"
         );
     }
 

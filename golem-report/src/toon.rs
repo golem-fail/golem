@@ -80,6 +80,36 @@ pub fn format_flow_toon(report: &FlowReport) -> String {
         }
     }
 
+    // Perf lines: P label m:val c:val t:val f:val d:val nr:val nt:val l:val
+    for snap in &report.perf_snapshots {
+        let _ = write!(out, "P {}", snap.label);
+        if let Some(v) = snap.memory_mb {
+            let _ = write!(out, " m:{v:.1}");
+        }
+        if let Some(v) = snap.cpu_percent {
+            let _ = write!(out, " c:{v:.1}");
+        }
+        if let Some(v) = snap.threads {
+            let _ = write!(out, " t:{v}");
+        }
+        if let Some(v) = snap.file_descriptors {
+            let _ = write!(out, " f:{v}");
+        }
+        if let Some(v) = snap.disk_mb {
+            let _ = write!(out, " d:{v:.1}");
+        }
+        if let Some(v) = snap.net_rx_kb {
+            let _ = write!(out, " nr:{v:.0}");
+        }
+        if let Some(v) = snap.net_tx_kb {
+            let _ = write!(out, " nt:{v:.0}");
+        }
+        if let Some(v) = snap.launch_ms {
+            let _ = write!(out, " l:{v}");
+        }
+        out.push('\n');
+    }
+
     // Result line: R:PASS|FAIL passed/warned/failed
     let status = if report.success { "PASS" } else { "FAIL" };
     let _ = writeln!(out, "R:{status} {passed}/{warned}/{failed}");
@@ -406,5 +436,65 @@ mod tests {
         let step = success_step("launch", "", 120);
         let out = format_step_toon(&step);
         assert_eq!(out, " +launch 120");
+    }
+
+    // ── Perf rendering tests ────────────────────────────────────────
+
+    fn sample_perf_snapshot() -> crate::PerfSnapshot {
+        crate::PerfSnapshot {
+            label: "login:iPhone_16:0".into(),
+            memory_mb: Some(142.5),
+            cpu_percent: Some(23.1),
+            threads: Some(42),
+            file_descriptors: Some(87),
+            disk_mb: Some(24.1),
+            net_rx_kb: Some(156.0),
+            net_tx_kb: Some(32.0),
+            launch_ms: Some(1240),
+            timestamp: "12345".into(),
+        }
+    }
+
+    #[test]
+    fn toon_includes_perf_lines() {
+        let report = FlowReport {
+            flow_name: "perf_flow".to_string(),
+            success: true,
+            step_results: vec![success_step("launch", "", 100)],
+            warnings: vec![],
+            duration_ms: 100,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            perf_snapshots: vec![sample_perf_snapshot()],
+        };
+
+        let out = format_flow_toon(&report);
+        let perf_line = out.lines().find(|l| l.starts_with("P ")).expect("SHALL contain a P line");
+        assert!(perf_line.contains("login:iPhone_16:0"), "SHALL contain snapshot label");
+        assert!(perf_line.contains("m:142.5"), "SHALL contain memory value");
+        assert!(perf_line.contains("c:23.1"), "SHALL contain cpu value");
+        assert!(perf_line.contains("l:1240"), "SHALL contain launch value");
+    }
+
+    #[test]
+    fn toon_omits_perf_when_empty() {
+        let report = FlowReport {
+            flow_name: "no_perf_flow".to_string(),
+            success: true,
+            step_results: vec![success_step("launch", "", 100)],
+            warnings: vec![],
+            duration_ms: 100,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            perf_snapshots: vec![],
+        };
+
+        let out = format_flow_toon(&report);
+        assert!(
+            !out.lines().any(|l| l.starts_with("P ")),
+            "SHALL NOT contain P lines when no perf snapshots"
+        );
     }
 }

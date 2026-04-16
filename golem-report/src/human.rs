@@ -3,7 +3,7 @@
 //! Formats [`FlowReport`], [`StepReport`], and [`SuiteReport`] as coloured,
 //! Unicode-decorated text suitable for terminal display.
 
-use crate::{FlowReport, StepOutcome, StepReport, SuiteReport};
+use crate::{FlowReport, PerfSnapshot, StepOutcome, StepReport, SuiteReport};
 use std::fmt::Write;
 
 // ── Unicode symbols ──────────────────────────────────────────────────
@@ -28,6 +28,38 @@ fn format_duration(ms: u64) -> String {
         let secs = ms as f64 / 1_000.0;
         format!("{secs:.1}s")
     }
+}
+
+/// Format a single perf snapshot as a compact one-line summary.
+fn format_perf_snapshot(snap: &PerfSnapshot) -> String {
+    let mut parts = Vec::new();
+
+    // Pad label to 40 chars for alignment
+    let label = format!("{:<40}", snap.label);
+
+    if let Some(v) = snap.memory_mb {
+        parts.push(format!("mem: {v:.1} MB"));
+    }
+    if let Some(v) = snap.cpu_percent {
+        parts.push(format!("cpu: {v:.1}%"));
+    }
+    if let Some(v) = snap.threads {
+        parts.push(format!("thr: {v}"));
+    }
+    if let Some(v) = snap.file_descriptors {
+        parts.push(format!("fd: {v}"));
+    }
+    if let Some(v) = snap.disk_mb {
+        parts.push(format!("disk: {v:.1} MB"));
+    }
+    if let (Some(rx), Some(tx)) = (snap.net_rx_kb, snap.net_tx_kb) {
+        parts.push(format!("net: {rx:.0}/{tx:.0} KB"));
+    }
+    if let Some(v) = snap.launch_ms {
+        parts.push(format!("launch: {v}ms"));
+    }
+
+    format!("{label}{}", parts.join("  "))
 }
 
 // ── Public API ───────────────────────────────────────────────────────
@@ -75,6 +107,14 @@ pub fn format_flow(report: &FlowReport) -> String {
     // Steps
     for step in &report.step_results {
         let _ = writeln!(out, "{}", format_step(step));
+    }
+
+    // Performance snapshots
+    if !report.perf_snapshots.is_empty() {
+        let _ = writeln!(out, "  Performance:");
+        for snap in &report.perf_snapshots {
+            let _ = writeln!(out, "    {}", format_perf_snapshot(snap));
+        }
     }
 
     // Blank line before summary
@@ -445,5 +485,62 @@ mod tests {
         // No seed or screenshot lines
         assert!(!out.contains("Seed:"), "no seed line");
         assert!(!out.contains("Screenshot:"), "no screenshot line");
+    }
+
+    // ── Perf rendering tests ────────────────────────────────────────
+
+    fn sample_perf_snapshot() -> PerfSnapshot {
+        PerfSnapshot {
+            label: "login:iPhone_16:0".into(),
+            memory_mb: Some(142.5),
+            cpu_percent: Some(23.1),
+            threads: Some(42),
+            file_descriptors: Some(87),
+            disk_mb: Some(24.1),
+            net_rx_kb: Some(156.0),
+            net_tx_kb: Some(32.0),
+            launch_ms: Some(1240),
+            timestamp: "12345".into(),
+        }
+    }
+
+    #[test]
+    fn perf_section_renders_when_snapshots_present() {
+        let report = FlowReport {
+            flow_name: "perf_flow".to_string(),
+            success: true,
+            step_results: vec![success_step("launch", "", 100)],
+            warnings: vec![],
+            duration_ms: 100,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            perf_snapshots: vec![sample_perf_snapshot()],
+        };
+
+        let out = format_flow(&report);
+        assert!(out.contains("Performance:"), "SHALL contain Performance: header");
+        assert!(out.contains("login:iPhone_16:0"), "SHALL contain snapshot label");
+        assert!(out.contains("mem: 142.5 MB"), "SHALL contain memory value");
+        assert!(out.contains("cpu: 23.1%"), "SHALL contain cpu value");
+        assert!(out.contains("launch: 1240ms"), "SHALL contain launch value");
+    }
+
+    #[test]
+    fn perf_section_omitted_when_empty() {
+        let report = FlowReport {
+            flow_name: "no_perf_flow".to_string(),
+            success: true,
+            step_results: vec![success_step("launch", "", 100)],
+            warnings: vec![],
+            duration_ms: 100,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            perf_snapshots: vec![],
+        };
+
+        let out = format_flow(&report);
+        assert!(!out.contains("Performance:"), "SHALL NOT contain Performance: when no snapshots");
     }
 }
