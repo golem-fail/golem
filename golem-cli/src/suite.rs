@@ -28,6 +28,8 @@ pub struct SuiteConfig {
     pub seed: Option<u64>,
     /// Force a specific platform, overriding flow device constraints.
     pub platform: Option<Platform>,
+    /// Disable automatic performance capture.
+    pub no_perf: bool,
 }
 
 /// Orchestrates the execution of a suite of test flows.
@@ -292,9 +294,10 @@ impl SuiteRunner {
             let flow_dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
             let seed = self.config.seed;
             let barrier = barrier.clone();
+            let no_perf = self.config.no_perf;
 
             handles.push(tokio::spawn(async move {
-                run_flow_on_device(flow, flow_name, flow_dir, device, platform, port, seed, barrier).await
+                run_flow_on_device(flow, flow_name, flow_dir, device, platform, port, seed, barrier, no_perf).await
             }));
         }
 
@@ -724,6 +727,7 @@ async fn run_flow_on_device(
     port: u16,
     seed: Option<u64>,
     barrier: golem_runner::barrier::FailureBarrier,
+    no_perf: bool,
 ) -> FlowReport {
     let start = Instant::now();
     let device_name = device.name.clone();
@@ -737,8 +741,22 @@ async fn run_flow_on_device(
         .unwrap_or_else(|| "fail.golem.test".to_string());
 
     let driver: Box<dyn PlatformDriver> = match platform {
-        Platform::Ios => Box::new(IosDriver::new(device.udid.clone(), bundle_id, port)),
-        Platform::Android => Box::new(AndroidDriver::new(device.udid.clone(), bundle_id, port)),
+        Platform::Ios => Box::new(IosDriver::new(device.udid.clone(), bundle_id.clone(), port)),
+        Platform::Android => Box::new(AndroidDriver::new(device.udid.clone(), bundle_id.clone(), port)),
+    };
+
+    // Resolve perf setting: CLI --no-perf overrides flow perf option (default: true)
+    let flow_perf = flow.flow.options.as_ref().and_then(|o| o.perf).unwrap_or(true);
+    let perf_enabled = !no_perf && flow_perf;
+
+    let collector = if perf_enabled {
+        Some(golem_runner::perf::PerfCollector::new(
+            platform,
+            device.udid.clone(),
+            bundle_id,
+        ))
+    } else {
+        None
     };
 
     let mut vars = VariableStore::new();
@@ -751,7 +769,7 @@ async fn run_flow_on_device(
         block_name: None,
         step_index: 0,
         device: Some(&device),
-        perf_collector: None,
+        perf_collector: collector.as_ref(),
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
     };
 
@@ -782,7 +800,7 @@ async fn run_flow_on_device(
                 seed,
                 screenshot_path: None,
                 device_name: Some(device_label),
-                perf_snapshots: vec![],
+                perf_snapshots: result.perf_snapshots,
             }
         }
         Err(e) => {
@@ -1010,6 +1028,7 @@ mod tests {
         assert!(!config.no_teardown);
         assert!(!config.keep_devices);
         assert!(config.seed.is_none());
+        assert!(!config.no_perf);
     }
 
     // ---------------------------------------------------------------

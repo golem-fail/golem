@@ -66,6 +66,7 @@ async fn main() -> anyhow::Result<()> {
                 keep_devices: args.keep_devices,
                 seed: args.seed,
                 platform: platform_override,
+                no_perf: args.no_perf,
             };
 
             // Check if an orchestrator is already running
