@@ -182,6 +182,7 @@ mod tests {
                 ".golem/screenshots/login_flow_main_step5_error.png".to_string(),
             ),
             device_name: Some("iPhone 15 Pro".to_string()),
+            perf_snapshots: vec![],
         }
     }
 
@@ -200,6 +201,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    perf_snapshots: vec![],
                 },
                 FlowReport {
                     flow_name: "signup_flow".to_string(),
@@ -210,6 +212,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    perf_snapshots: vec![],
                 },
                 FlowReport {
                     flow_name: "checkout_flow".to_string(),
@@ -220,6 +223,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    perf_snapshots: vec![],
                 },
                 FlowReport {
                     flow_name: "broken_flow".to_string(),
@@ -233,6 +237,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    perf_snapshots: vec![],
                 },
             ],
             total_duration_ms: 45300,
@@ -316,6 +321,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            perf_snapshots: vec![],
         };
 
         let json_str = format_flow_json(&report).expect("serialization should succeed");
@@ -398,6 +404,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            perf_snapshots: vec![],
         };
 
         let json_str = format_flow_json(&report).expect("serialization should succeed");
@@ -427,6 +434,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            perf_snapshots: vec![],
         };
 
         let json_str = format_flow_json(&report).expect("serialization should succeed");

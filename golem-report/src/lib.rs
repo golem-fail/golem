@@ -31,6 +31,31 @@ pub enum StepOutcome {
     Skipped,
 }
 
+/// A single performance snapshot captured at a block boundary.
+#[derive(Debug, Clone)]
+pub struct PerfSnapshot {
+    /// Label: `{block_name}:{device_name}:{iteration}` or `block_N({action}:{target}):...`
+    pub label: String,
+    /// Resident memory in MB (PSS on Android, RSS on iOS).
+    pub memory_mb: Option<f64>,
+    /// CPU usage percentage.
+    pub cpu_percent: Option<f64>,
+    /// Thread count.
+    pub threads: Option<u32>,
+    /// Open file descriptor count.
+    pub file_descriptors: Option<u32>,
+    /// App container size on disk in MB.
+    pub disk_mb: Option<f64>,
+    /// Cumulative network bytes received in KB.
+    pub net_rx_kb: Option<f64>,
+    /// Cumulative network bytes sent in KB.
+    pub net_tx_kb: Option<f64>,
+    /// Last app launch duration in milliseconds.
+    pub launch_ms: Option<u64>,
+    /// ISO 8601 capture timestamp.
+    pub timestamp: String,
+}
+
 /// Result of a complete test flow.
 pub struct FlowReport {
     /// Name of the flow (e.g. "login_flow").
@@ -49,6 +74,8 @@ pub struct FlowReport {
     pub screenshot_path: Option<String>,
     /// Name of the device the flow ran on.
     pub device_name: Option<String>,
+    /// Performance snapshots captured at block boundaries.
+    pub perf_snapshots: Vec<PerfSnapshot>,
 }
 
 /// Result of an entire test suite (multiple flows).

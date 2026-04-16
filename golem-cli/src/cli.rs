@@ -97,6 +97,10 @@ pub struct RunArgs {
     /// Force target platform (ios or android). Overrides flow device constraints.
     #[arg(long)]
     pub platform: Option<String>,
+
+    /// Disable automatic performance capture
+    #[arg(long)]
+    pub no_perf: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -288,7 +292,27 @@ mod tests {
         );
     }
 
-    // 15. Multiple files
+    // 15. `run --no-perf`
+    #[test]
+    fn run_no_perf() {
+        let cli = parse(&["run", "--no-perf"]);
+        let Commands::Run(run) = cli.command else {
+            panic!("expected Run");
+        };
+        assert!(run.no_perf);
+    }
+
+    // 15b. no-perf defaults to false
+    #[test]
+    fn run_no_perf_default() {
+        let cli = parse(&["run"]);
+        let Commands::Run(run) = cli.command else {
+            panic!("expected Run");
+        };
+        assert!(!run.no_perf);
+    }
+
+    // 16. Multiple files
     #[test]
     fn run_multiple_files() {
         let cli = parse(&["run", "login.test.toml", "signup.test.toml", "flows/"]);

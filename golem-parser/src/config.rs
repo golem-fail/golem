@@ -24,6 +24,15 @@ pub struct ProjectOptions {
     pub suite_concurrency: Option<u32>,
     pub keep_devices: Option<bool>,
     pub app_lifecycle: Option<crate::AppLifecycle>,
+    pub perf: Option<bool>,
+    pub perf_memory_warn_mb: Option<f64>,
+    pub perf_memory_error_mb: Option<f64>,
+    pub perf_cpu_warn_percent: Option<f64>,
+    pub perf_cpu_error_percent: Option<f64>,
+    pub perf_threads_warn: Option<u32>,
+    pub perf_threads_error: Option<u32>,
+    pub perf_fd_warn: Option<u32>,
+    pub perf_fd_error: Option<u32>,
 }
 
 /// Internal deserialization target for `golem.toml`.
@@ -151,6 +160,15 @@ pub fn merge_config(project: &ProjectConfig, flow: &FlowFile) -> FlowFile {
             .or(proj_opts.suite_concurrency),
         keep_devices: flow_opts.keep_devices.or(proj_opts.keep_devices),
         app_lifecycle: flow_opts.app_lifecycle.or(proj_opts.app_lifecycle),
+        perf: flow_opts.perf.or(proj_opts.perf),
+        perf_memory_warn_mb: flow_opts.perf_memory_warn_mb.or(proj_opts.perf_memory_warn_mb),
+        perf_memory_error_mb: flow_opts.perf_memory_error_mb.or(proj_opts.perf_memory_error_mb),
+        perf_cpu_warn_percent: flow_opts.perf_cpu_warn_percent.or(proj_opts.perf_cpu_warn_percent),
+        perf_cpu_error_percent: flow_opts.perf_cpu_error_percent.or(proj_opts.perf_cpu_error_percent),
+        perf_threads_warn: flow_opts.perf_threads_warn.or(proj_opts.perf_threads_warn),
+        perf_threads_error: flow_opts.perf_threads_error.or(proj_opts.perf_threads_error),
+        perf_fd_warn: flow_opts.perf_fd_warn.or(proj_opts.perf_fd_warn),
+        perf_fd_error: flow_opts.perf_fd_error.or(proj_opts.perf_fd_error),
     };
 
     // Only set options if at least one field is Some

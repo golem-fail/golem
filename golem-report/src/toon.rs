@@ -182,6 +182,7 @@ mod tests {
             seed,
             screenshot_path: None,
             device_name: None,
+            perf_snapshots: vec![],
         }
     }
 
@@ -257,6 +258,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            perf_snapshots: vec![],
         };
         let out = format_flow_toon(&report);
         let last_line = out.lines().last().expect("should have lines");
@@ -290,6 +292,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    perf_snapshots: vec![],
                 },
                 FlowReport {
                     flow_name: "signup_flow".to_string(),
@@ -303,6 +306,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    perf_snapshots: vec![],
                 },
             ],
             total_duration_ms: 45300,
@@ -328,6 +332,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    perf_snapshots: vec![],
                 },
                 FlowReport {
                     flow_name: "flow_b".to_string(),
@@ -338,6 +343,7 @@ mod tests {
                     seed: Some(42),
                     screenshot_path: None,
                     device_name: None,
+                    perf_snapshots: vec![],
                 },
                 FlowReport {
                     flow_name: "flow_c".to_string(),
@@ -350,6 +356,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    perf_snapshots: vec![],
                 },
             ],
             total_duration_ms: 600,

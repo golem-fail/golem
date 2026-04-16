@@ -265,6 +265,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            perf_snapshots: vec![],
         };
 
         let out = format_flow(&report);
@@ -300,6 +301,7 @@ mod tests {
                 ".golem/screenshots/login_flow_main_step5_error.png".to_string(),
             ),
             device_name: None,
+            perf_snapshots: vec![],
         };
 
         let out = format_flow(&report);
@@ -331,6 +333,7 @@ mod tests {
             seed: Some(847_291_036),
             screenshot_path: None,
             device_name: None,
+            perf_snapshots: vec![],
         };
 
         let out = format_flow(&report);
@@ -358,6 +361,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    perf_snapshots: vec![],
                 },
                 FlowReport {
                     flow_name: "signup_flow".to_string(),
@@ -371,6 +375,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    perf_snapshots: vec![],
                 },
             ],
             total_duration_ms: 45300,
@@ -396,6 +401,7 @@ mod tests {
                 seed: None,
                 screenshot_path: None,
                 device_name: None,
+                perf_snapshots: vec![],
             }],
             total_duration_ms: 45300,
         };
@@ -428,6 +434,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            perf_snapshots: vec![],
         };
 
         let out = format_flow(&report);

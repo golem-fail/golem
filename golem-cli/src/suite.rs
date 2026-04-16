@@ -113,6 +113,7 @@ impl SuiteRunner {
                         seed: self.config.seed,
                         screenshot_path: None,
                         device_name: None,
+                        perf_snapshots: vec![],
                     });
                 }
             }
@@ -159,6 +160,7 @@ impl SuiteRunner {
                     seed: self.config.seed,
                     screenshot_path: None,
                     device_name: None,
+                    perf_snapshots: vec![],
                 }];
             }
         };
@@ -273,6 +275,7 @@ impl SuiteRunner {
                 seed: self.config.seed,
                 screenshot_path: None,
                 device_name: None,
+                perf_snapshots: vec![],
             }];
         }
 
@@ -310,6 +313,7 @@ impl SuiteRunner {
                         seed: self.config.seed,
                         screenshot_path: None,
                         device_name: None,
+                        perf_snapshots: vec![],
                     });
                 }
             }
@@ -776,6 +780,7 @@ async fn run_flow_on_device(
                 seed,
                 screenshot_path: None,
                 device_name: Some(device_label),
+                perf_snapshots: vec![],
             }
         }
         Err(e) => {
@@ -789,6 +794,7 @@ async fn run_flow_on_device(
                 seed,
                 screenshot_path: None,
                 device_name: Some(device_label),
+                perf_snapshots: vec![],
             }
         }
     }
@@ -973,6 +979,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            perf_snapshots: vec![],
         }
     }
 
@@ -987,6 +994,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            perf_snapshots: vec![],
         }
     }
 

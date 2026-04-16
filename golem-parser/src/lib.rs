@@ -234,6 +234,24 @@ pub struct FlowOptions {
     /// - `"launch"` — launch first app if not running; preserves state.
     /// - `"manual"` — do nothing; flow manages its own lifecycle.
     pub app_lifecycle: Option<AppLifecycle>,
+    /// Enable/disable automatic performance capture. Default: true.
+    pub perf: Option<bool>,
+    /// Memory warning threshold in MB.
+    pub perf_memory_warn_mb: Option<f64>,
+    /// Memory error threshold in MB.
+    pub perf_memory_error_mb: Option<f64>,
+    /// CPU warning threshold as percentage.
+    pub perf_cpu_warn_percent: Option<f64>,
+    /// CPU error threshold as percentage.
+    pub perf_cpu_error_percent: Option<f64>,
+    /// Thread count warning threshold.
+    pub perf_threads_warn: Option<u32>,
+    /// Thread count error threshold.
+    pub perf_threads_error: Option<u32>,
+    /// File descriptor warning threshold.
+    pub perf_fd_warn: Option<u32>,
+    /// File descriptor error threshold.
+    pub perf_fd_error: Option<u32>,
 }
 
 /// Controls how the runner manages the app before executing a flow.
@@ -956,5 +974,74 @@ name = "empty"
         assert!(flow.block.is_empty());
         assert!(flow.data.is_empty());
         assert!(flow.teardown.is_empty());
+    }
+
+    // ---------------------------------------------------------------
+    // 23. Perf options — disabled
+    // ---------------------------------------------------------------
+    #[test]
+    fn perf_disabled() {
+        let toml_str = r#"
+[flow]
+name = "perf off"
+
+[flow.options]
+perf = false
+"#;
+        let flow = parse_flow(toml_str).expect("perf disabled should parse");
+        let opts = flow.flow.options.expect("options should be present");
+        assert_eq!(opts.perf, Some(false));
+    }
+
+    // ---------------------------------------------------------------
+    // 24. Perf options — thresholds
+    // ---------------------------------------------------------------
+    #[test]
+    fn perf_thresholds() {
+        let toml_str = r#"
+[flow]
+name = "perf thresholds"
+
+[flow.options]
+perf_memory_warn_mb = 200.0
+perf_memory_error_mb = 500.0
+perf_cpu_warn_percent = 80.0
+perf_cpu_error_percent = 95.0
+perf_threads_warn = 100
+perf_threads_error = 200
+perf_fd_warn = 200
+perf_fd_error = 500
+"#;
+        let flow = parse_flow(toml_str).expect("thresholds should parse");
+        let opts = flow.flow.options.expect("options should be present");
+        assert_eq!(opts.perf_memory_warn_mb, Some(200.0));
+        assert_eq!(opts.perf_memory_error_mb, Some(500.0));
+        assert_eq!(opts.perf_cpu_warn_percent, Some(80.0));
+        assert_eq!(opts.perf_cpu_error_percent, Some(95.0));
+        assert_eq!(opts.perf_threads_warn, Some(100));
+        assert_eq!(opts.perf_threads_error, Some(200));
+        assert_eq!(opts.perf_fd_warn, Some(200));
+        assert_eq!(opts.perf_fd_error, Some(500));
+    }
+
+    // ---------------------------------------------------------------
+    // 25. Perf options — defaults are None
+    // ---------------------------------------------------------------
+    #[test]
+    fn perf_defaults_none() {
+        let toml_str = r#"
+[flow]
+name = "no perf opts"
+
+[flow.options]
+max_steps = 100
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let opts = flow.flow.options.expect("options should be present");
+        assert!(opts.perf.is_none());
+        assert!(opts.perf_memory_warn_mb.is_none());
+        assert!(opts.perf_cpu_warn_percent.is_none());
+        assert!(opts.perf_threads_warn.is_none());
+        assert!(opts.perf_fd_warn.is_none());
     }
 }

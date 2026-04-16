@@ -23,6 +23,8 @@ pub struct FlowResult {
     pub failed_block: Option<String>,
     /// True if this flow was aborted because another device failed (barrier).
     pub barrier_aborted: bool,
+    /// Performance snapshots captured at block boundaries.
+    pub perf_snapshots: Vec<golem_report::PerfSnapshot>,
 }
 
 /// Execute a parsed FlowFile by traversing blocks in order.
@@ -173,6 +175,7 @@ pub async fn execute_flow<'a>(
                     failed_step: child_result.failed_step,
                     failed_block: block.name.clone(),
                     barrier_aborted: child_result.barrier_aborted,
+                    perf_snapshots: vec![],
                 });
             }
 
@@ -216,6 +219,7 @@ pub async fn execute_flow<'a>(
                         failed_step: Some(step_idx),
                         failed_block: block.name.clone(),
                         barrier_aborted: true,
+                        perf_snapshots: vec![],
                     });
                 }
             }
@@ -235,6 +239,7 @@ pub async fn execute_flow<'a>(
                         failed_step: Some(step_idx),
                         failed_block: block.name.clone(),
                         barrier_aborted: false,
+                        perf_snapshots: vec![],
                     });
                 }
             }
@@ -264,6 +269,7 @@ pub async fn execute_flow<'a>(
         failed_step: None,
         failed_block: None,
         barrier_aborted: false,
+        perf_snapshots: vec![],
     })
 }
 
@@ -319,6 +325,7 @@ pub async fn execute_flow_with_data<'a>(
         failed_step: None,
         failed_block: None,
         barrier_aborted: false,
+        perf_snapshots: vec![],
     }))
 }
 

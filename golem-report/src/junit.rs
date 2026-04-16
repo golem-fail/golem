@@ -211,6 +211,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            perf_snapshots: vec![],
         }
     }
 
@@ -229,6 +230,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    perf_snapshots: vec![],
                 },
                 FlowReport {
                     flow_name: "signup_flow".to_string(),
@@ -242,6 +244,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    perf_snapshots: vec![],
                 },
             ],
             total_duration_ms: 45300,
@@ -361,6 +364,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            perf_snapshots: vec![],
         };
         let xml = format_flow_junit(&flow);
         assert!(
@@ -382,6 +386,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            perf_snapshots: vec![],
         };
         let xml = format_flow_junit(&flow);
         // Flow-level time: 120ms -> 0.120
@@ -416,6 +421,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            perf_snapshots: vec![],
         };
         let xml = format_flow_junit(&flow);
 
