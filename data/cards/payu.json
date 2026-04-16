@@ -1,0 +1,17 @@
+{
+  "id": "payu",
+  "name": "PayU",
+  "defaults": {
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "5123456789012346", "brand": "mastercard", "cvv": "123", "expiry": "05/30", "otp": "123456" },
+      { "number": "4012001037141112", "brand": "visa", "cvv": "123", "expiry": "05/30", "otp": "123456" },
+      { "number": "6082015309577308", "brand": "rupay", "cvv": "123", "expiry": "05/30", "otp": "123456" },
+      { "number": "370295061673669", "brand": "amex", "cvv": "1234", "expiry": "03/30", "otp": "725356" },
+      { "number": "5118700000000003", "brand": "mastercard", "cvv": "123", "expiry": "05/30", "otp": "123456" },
+      { "number": "4594538050639999", "brand": "visa", "cvv": "123", "expiry": "05/30", "otp": "123456" }
+    ]
+  }
+}

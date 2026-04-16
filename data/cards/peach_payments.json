@@ -1,0 +1,47 @@
+{
+  "id": "peach_payments",
+  "name": "Peach Payments",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4711100000000000", "brand": "visa" },
+      { "number": "5212345678901234", "brand": "mastercard" },
+      { "number": "3759870000000005", "brand": "amex" }
+    ],
+    "threeds:frictionless": [
+      { "number": "4200000000000091", "brand": "visa" },
+      { "number": "5200000000000007", "brand": "mastercard" },
+      { "number": "374500262001008", "brand": "amex" }
+    ],
+    "threeds:challenge": [
+      { "number": "4200000000000042", "brand": "visa" },
+      { "number": "5200000000000015", "brand": "mastercard" },
+      { "number": "343434343434343", "brand": "amex" }
+    ],
+    "threeds:failed": [
+      { "number": "4200000000000026", "brand": "visa" },
+      { "number": "5200000000000056", "brand": "mastercard" },
+      { "number": "375987000000062", "brand": "amex" }
+    ],
+    "threeds:challenge_failed": [
+      { "number": "4200000000000018", "brand": "visa" },
+      { "number": "5200000000000064", "brand": "mastercard" },
+      { "number": "375987000169867", "brand": "amex" }
+    ],
+    "threeds:not_enrolled": [
+      { "number": "4012001037141112", "brand": "visa" },
+      { "number": "5457350076543210", "brand": "mastercard" },
+      { "number": "375987000169883", "brand": "amex" }
+    ],
+    "error": [
+      { "number": "4012001037461114", "brand": "visa" },
+      { "number": "5434580000000006", "brand": "mastercard" },
+      { "number": "375987000169875", "brand": "amex" }
+    ]
+  }
+}

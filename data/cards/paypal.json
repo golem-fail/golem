@@ -1,0 +1,68 @@
+{
+  "id": "paypal",
+  "name": "PayPal",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4111111111111111", "brand": "visa" },
+      { "number": "5555555555554444", "brand": "mastercard" },
+      { "number": "378282246310005", "brand": "amex" }
+    ],
+    "declined": [
+      { "number": "4111111111111111", "brand": "visa", "name": "CCREJECT-REFUSED" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "4111111111111111", "brand": "visa", "name": "CCREJECT-IF" }
+    ],
+    "declined:expired": [
+      { "number": "4111111111111111", "brand": "visa", "name": "CCREJECT-EC" }
+    ],
+    "declined:invalid_number": [
+      { "number": "4111111111111111", "brand": "visa", "name": "CCREJECT-IRC" }
+    ],
+    "declined:invalid_cvv": [
+      { "number": "4111111111111111", "brand": "visa", "name": "CCREJECT-CVV_F" }
+    ],
+    "declined:lost": [
+      { "number": "4111111111111111", "brand": "visa", "name": "CCREJECT-LS" }
+    ],
+    "declined:stolen": [
+      { "number": "4111111111111111", "brand": "visa", "name": "CCREJECT-LS" }
+    ],
+    "declined:closed_account": [
+      { "number": "4111111111111111", "brand": "visa", "name": "CCREJECT-IA" }
+    ],
+    "fraud": [
+      { "number": "4111111111111111", "brand": "visa", "name": "CCREJECT-SF" }
+    ],
+    "fraud:review": [
+      { "number": "4111140000000002", "brand": "visa" }
+    ],
+    "threeds:frictionless": [
+      { "number": "4868719196829038", "brand": "visa" },
+      { "number": "5329879707824603", "brand": "mastercard" }
+    ],
+    "threeds:failed": [
+      { "number": "4868719158130060", "brand": "visa" },
+      { "number": "5329879769571910", "brand": "mastercard" }
+    ],
+    "threeds:challenge": [
+      { "number": "4868719166101368", "brand": "visa" },
+      { "number": "5329879735316929", "brand": "mastercard" }
+    ],
+    "threeds:challenge_failed": [
+      { "number": "4868719181895556", "brand": "visa" },
+      { "number": "5329879768013724", "brand": "mastercard" }
+    ],
+    "error": [
+      { "number": "4111111111111111", "brand": "visa", "name": "CCREJECT-BANK_ERROR" }
+    ],
+    "dispute:fraudulent": [
+      { "number": "4023898493988028", "brand": "visa" }
+    ]
+  }
+}

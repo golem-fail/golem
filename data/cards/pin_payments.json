@@ -1,0 +1,38 @@
+{
+  "id": "pin_payments",
+  "name": "Pin Payments",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4200000000000000", "brand": "visa" },
+      { "number": "5520000000000000", "brand": "mastercard" },
+      { "number": "3528800000000000", "brand": "jcb" },
+      { "number": "6011200000000000", "brand": "discover" },
+      { "number": "3720000000000000", "brand": "amex" },
+      { "number": "3640000000000000", "brand": "diners" }
+    ],
+    "declined": [
+      { "number": "4100000000000001", "brand": "visa" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "4000000000000002", "brand": "visa" }
+    ],
+    "declined:invalid_cvv": [
+      { "number": "4900000000000003", "brand": "visa" }
+    ],
+    "fraud": [
+      { "number": "4600000000000006", "brand": "visa" }
+    ],
+    "threeds:challenge": [
+      { "number": "4242424242424242", "brand": "visa" }
+    ],
+    "threeds:frictionless": [
+      { "number": "4539164428142547", "brand": "visa" }
+    ]
+  }
+}

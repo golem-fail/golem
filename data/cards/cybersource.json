@@ -1,0 +1,22 @@
+{
+  "id": "cybersource",
+  "name": "CyberSource",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4111111111111111", "brand": "visa" },
+      { "number": "5555555555554444", "brand": "mastercard" },
+      { "number": "378282246310005", "brand": "amex" },
+      { "number": "6011111111111117", "brand": "discover" },
+      { "number": "3566111111111113", "brand": "jcb" }
+    ],
+    "declined:invalid_number": [
+      { "number": "4111111111111112", "brand": "visa" }
+    ]
+  }
+}

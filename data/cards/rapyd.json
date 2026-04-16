@@ -1,0 +1,52 @@
+{
+  "id": "rapyd",
+  "name": "Rapyd",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4111111111111111", "brand": "visa" },
+      { "number": "4462030000000000", "brand": "visa" }
+    ],
+    "declined": [
+      { "number": "4111111111111105", "brand": "visa" }
+    ],
+    "declined:stolen": [
+      { "number": "4111111111111143", "brand": "visa" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "4111111111111151", "brand": "visa" }
+    ],
+    "declined:expired": [
+      { "number": "4111111111111154", "brand": "visa" }
+    ],
+    "declined:invalid_number": [
+      { "number": "4111111111111114", "brand": "visa" }
+    ],
+    "declined:lost": [
+      { "number": "4111111111111141", "brand": "visa" }
+    ],
+    "declined:restricted": [
+      { "number": "4111111111111162", "brand": "visa" }
+    ],
+    "declined:closed_account": [
+      { "number": "4111111111111146", "brand": "visa" }
+    ],
+    "declined:refer_to_issuer": [
+      { "number": "4111111111111101", "brand": "visa" }
+    ],
+    "declined:velocity": [
+      { "number": "4111111111111161", "brand": "visa" }
+    ],
+    "fraud": [
+      { "number": "4111111111111159", "brand": "visa" }
+    ],
+    "error": [
+      { "number": "4111111111111191", "brand": "visa" }
+    ]
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "id": "dlocal",
+  "name": "dLocal",
+  "defaults": {
+    "number": "4111111111111111",
+    "cvv": "123",
+    "expiry": "10/40",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "brand": "visa", "description": "200" }
+    ],
+    "declined": [
+      { "brand": "visa", "description": "300" }
+    ],
+    "declined:insufficient_funds": [
+      { "brand": "visa", "description": "302" }
+    ],
+    "declined:expired": [
+      { "brand": "visa", "description": "309" }
+    ],
+    "declined:lost": [
+      { "brand": "visa", "description": "310" }
+    ],
+    "declined:stolen": [
+      { "brand": "visa", "description": "313" }
+    ],
+    "declined:invalid_number": [
+      { "brand": "visa", "description": "314" }
+    ],
+    "declined:invalid_cvv": [
+      { "brand": "visa", "description": "315" }
+    ],
+    "declined:restricted": [
+      { "brand": "visa", "description": "312" }
+    ],
+    "declined:closed_account": [
+      { "brand": "visa", "description": "308" }
+    ],
+    "declined:velocity": [
+      { "brand": "visa", "description": "319" }
+    ],
+    "declined:refer_to_issuer": [
+      { "brand": "visa", "description": "306" }
+    ],
+    "fraud": [
+      { "brand": "visa", "description": "317" }
+    ],
+    "threeds": [
+      { "brand": "visa", "description": "101" }
+    ],
+    "threeds:not_enrolled": [
+      { "brand": "visa", "description": "330" }
+    ],
+    "error": [
+      { "brand": "visa", "description": "321" }
+    ],
+    "pending": [
+      { "brand": "visa", "description": "100" }
+    ],
+    "cancelled": [
+      { "brand": "visa", "description": "400" }
+    ]
+  }
+}

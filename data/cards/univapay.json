@@ -1,0 +1,39 @@
+{
+  "id": "univapay",
+  "name": "UnivaPay",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4000020000000000", "brand": "visa" },
+      { "number": "5454545454545454", "brand": "mastercard" },
+      { "number": "5498760000000007", "brand": "mastercard" },
+      { "number": "3566000000000018", "brand": "jcb" },
+      { "number": "378282246310005", "brand": "amex" },
+      { "number": "36000000000008", "brand": "diners" },
+      { "number": "6555555555555555", "brand": "discover" }
+    ],
+    "declined": [
+      { "number": "4111111111111111", "brand": "visa" }
+    ],
+    "declined:expired": [
+      { "number": "4000020000000000", "brand": "visa", "email": "test+charge-failure-309@univapay.com" }
+    ],
+    "declined:lost": [
+      { "number": "4000020000000000", "brand": "visa", "email": "test+charge-failure-310@univapay.com" }
+    ],
+    "declined:stolen": [
+      { "number": "4000020000000000", "brand": "visa", "email": "test+charge-failure-313@univapay.com" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "4000020000000000", "brand": "visa", "email": "test+charge-failure-302@univapay.com" }
+    ],
+    "declined:invalid_number": [
+      { "number": "4000020000000000", "brand": "visa", "email": "test+charge-failure-314@univapay.com" }
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "id": "windcave",
+  "name": "Windcave",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4111111111111111", "brand": "visa" },
+      { "number": "5431111111111111", "brand": "mastercard" },
+      { "number": "3711111111111114", "brand": "amex" },
+      { "number": "3562350000000003", "brand": "jcb" },
+      { "number": "3600000000000008", "brand": "diners" },
+      { "number": "6011111111111117", "brand": "discover" }
+    ],
+    "declined:expired": [
+      { "number": "4999999999999996", "brand": "visa" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "5431111111111228", "brand": "mastercard" }
+    ],
+    "declined:restricted": [
+      { "number": "4999999999999236", "brand": "visa" }
+    ]
+  }
+}

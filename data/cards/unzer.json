@@ -1,0 +1,32 @@
+{
+  "id": "unzer",
+  "name": "Unzer",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "1234",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "5188340000000011", "brand": "mastercard" },
+      { "number": "4016360000000010", "brand": "visa" },
+      { "number": "373953192351004", "brand": "amex", "cvv": "1234" },
+      { "number": "36070500109948", "brand": "diners", "cvv": "669" },
+      { "number": "6510000000001131", "brand": "discover", "cvv": "860" },
+      { "number": "3569990010082211", "brand": "jcb", "cvv": "615" }
+    ],
+    "threeds:frictionless": [
+      { "number": "5188340000000011", "brand": "mastercard" },
+      { "number": "4016360000000010", "brand": "visa" }
+    ],
+    "declined": [
+      { "number": "5188340000000029", "brand": "mastercard" },
+      { "number": "4016360000000028", "brand": "visa" }
+    ],
+    "threeds:challenge": [
+      { "number": "5188340000000003", "brand": "mastercard" },
+      { "number": "4016360000000002", "brand": "visa" }
+    ]
+  }
+}

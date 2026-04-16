@@ -1,0 +1,26 @@
+{
+  "id": "conekta",
+  "name": "Conekta",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4242424242424242", "brand": "visa" },
+      { "number": "4012888888881881", "brand": "visa" },
+      { "number": "5555555555554444", "brand": "mastercard" },
+      { "number": "378282246310005", "brand": "amex" },
+      { "number": "4915669353237603", "brand": "visa" },
+      { "number": "5576041385402646", "brand": "mastercard" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "4000000000000127", "brand": "visa" }
+    ],
+    "declined": [
+      { "number": "4000000000000002", "brand": "visa" }
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "buckaroo",
+  "name": "Buckaroo",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "5386860000000000", "brand": "mastercard", "amount": 2.00, "amount_currency": "EUR" },
+      { "number": "4563550000000005", "brand": "visa", "amount": 2.00, "amount_currency": "EUR" },
+      { "number": "371849971840005", "brand": "amex", "amount": 2.00, "amount_currency": "EUR" }
+    ],
+    "declined": [
+      { "number": "5386860000000000", "brand": "mastercard", "amount": 15.00, "amount_currency": "EUR" }
+    ],
+    "threeds:failed": [
+      { "number": "5386860000000000", "brand": "mastercard", "amount": 7.00, "amount_currency": "EUR" }
+    ]
+  }
+}

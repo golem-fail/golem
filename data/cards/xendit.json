@@ -1,0 +1,29 @@
+{
+  "id": "xendit",
+  "name": "Xendit",
+  "defaults": {
+    "cvv": "random:3",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4000000000000002", "brand": "visa", "amount": 10000, "amount_currency": "IDR" }
+    ],
+    "threeds": [
+      { "number": "4000000000001091", "brand": "visa", "amount": 10000, "amount_currency": "IDR" }
+    ],
+    "threeds:not_enrolled": [
+      { "number": "5200000000000056", "brand": "mastercard", "amount": 10000, "amount_currency": "IDR" }
+    ],
+    "declined": [
+      { "number": "4000000000000002", "brand": "visa", "amount": 5001, "amount_currency": "IDR" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "4000000000000002", "brand": "visa", "amount": 5004, "amount_currency": "IDR" }
+    ],
+    "declined:restricted": [
+      { "number": "4000000000000002", "brand": "visa", "amount": 5006, "amount_currency": "IDR" }
+    ]
+  }
+}

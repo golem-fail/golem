@@ -1,0 +1,17 @@
+{
+  "id": "nuvei",
+  "name": "Nuvei",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4000027891380961", "brand": "visa" },
+      { "number": "5333306999999995", "brand": "mastercard" },
+      { "number": "375510288656924", "brand": "amex" }
+    ]
+  }
+}

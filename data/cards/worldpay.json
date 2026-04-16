@@ -1,0 +1,18 @@
+{
+  "id": "worldpay",
+  "name": "Worldpay",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4444333322221111", "brand": "visa" },
+      { "number": "5555555555554444", "brand": "mastercard" }
+    ],
+    "declined:restricted": [
+      { "number": "4444333322221111", "brand": "visa", "name": "REFUSED62" }
+    ]
+  }
+}

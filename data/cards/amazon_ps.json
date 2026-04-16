@@ -1,0 +1,28 @@
+{
+  "id": "amazon_ps",
+  "name": "Amazon Payment Services",
+  "defaults": {
+    "cvv": "123",
+    "cvv_amex": "1234",
+    "expiry": "05/30",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4005550000000001", "brand": "visa" },
+      { "number": "5123456789012346", "brand": "mastercard" },
+      { "number": "345678901234564", "brand": "amex" },
+      { "number": "5297410000000002", "brand": "mada" },
+      { "number": "5078036246600381", "brand": "meeza", "cvv": "331" },
+      { "number": "4600410123456789", "brand": "benefit" },
+      { "number": "4215375500883243", "brand": "naps", "pin": "1234" }
+    ],
+    "threeds:challenge": [
+      { "number": "4557012345678902", "brand": "visa" },
+      { "number": "5313581000123430", "brand": "mastercard" }
+    ],
+    "declined": [
+      { "number": "4916783391760242", "brand": "visa" }
+    ]
+  }
+}

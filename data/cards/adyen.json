@@ -1,0 +1,24 @@
+{
+  "id": "adyen",
+  "name": "Adyen",
+  "defaults": {
+    "cvv": "737",
+    "cvv_amex": "7373",
+    "expiry": "03/30",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4111111111111111", "brand": "visa" },
+      { "number": "5555555555554444", "brand": "mastercard" },
+      { "number": "3700000000000002", "brand": "amex" },
+      { "number": "6011601160116611", "brand": "discover" },
+      { "number": "3569990010095841", "brand": "jcb" }
+    ],
+    "threeds": [
+      { "number": "4917610000000000", "brand": "visa" },
+      { "number": "5454545454545454", "brand": "mastercard" },
+      { "number": "3714496353984310", "brand": "amex" }
+    ]
+  }
+}

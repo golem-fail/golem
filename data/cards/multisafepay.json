@@ -1,0 +1,26 @@
+{
+  "id": "multisafepay",
+  "name": "MultiSafepay",
+  "defaults": {
+    "cvv": "123",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4111111111111111", "brand": "visa" },
+      { "number": "5500000000000004", "brand": "mastercard" },
+      { "number": "374500000000015", "brand": "amex" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "4012001038488884", "brand": "visa" }
+    ],
+    "threeds:failed": [
+      { "number": "4012001037461114", "brand": "visa" },
+      { "number": "374200000000004", "brand": "amex" }
+    ],
+    "pending": [
+      { "number": "4111111111111111", "brand": "visa", "email": "rejection@multisafepay.com" }
+    ]
+  }
+}

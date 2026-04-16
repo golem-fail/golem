@@ -1,0 +1,25 @@
+{
+  "id": "flutterwave",
+  "name": "Flutterwave",
+  "defaults": {
+    "name": "random",
+    "otp": "12345",
+    "pin": "3310"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4242424242424242", "brand": "visa", "cvv": "812", "expiry": "01/31" },
+      { "number": "5531886652142950", "brand": "mastercard", "cvv": "564", "expiry": "09/32" },
+      { "number": "5061460410120223210", "brand": "verve", "cvv": "780", "expiry": "12/31" }
+    ],
+    "fraud": [
+      { "number": "5590131743294314", "brand": "mastercard", "cvv": "random:3", "expiry": "random_future" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "5258585922666506", "brand": "mastercard", "cvv": "random:3", "expiry": "random_future" }
+    ],
+    "declined": [
+      { "number": "5143010522339965", "brand": "mastercard", "cvv": "random:3", "expiry": "random_future" }
+    ]
+  }
+}

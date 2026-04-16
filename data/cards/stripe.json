@@ -1,0 +1,70 @@
+{
+  "id": "stripe",
+  "name": "Stripe",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4242424242424242", "brand": "visa" },
+      { "number": "5555555555554444", "brand": "mastercard" },
+      { "number": "378282246310005", "brand": "amex" },
+      { "number": "6011111111111117", "brand": "discover" }
+    ],
+    "declined": [
+      { "number": "4000000000000002", "brand": "visa" },
+      { "number": "5000000000000002", "brand": "mastercard" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "4000000000009995", "brand": "visa" },
+      { "number": "5000000000000019", "brand": "mastercard" }
+    ],
+    "declined:expired": [
+      { "number": "4000000000000069", "brand": "visa" }
+    ],
+    "declined:lost": [
+      { "number": "4000000000009987", "brand": "visa" },
+      { "number": "5000000000000043", "brand": "mastercard" }
+    ],
+    "declined:stolen": [
+      { "number": "4000000000009979", "brand": "visa" }
+    ],
+    "declined:invalid_number": [
+      { "number": "4242424242424241", "brand": "visa" }
+    ],
+    "declined:invalid_cvv": [
+      { "number": "4000000000000127", "brand": "visa" }
+    ],
+    "declined:velocity": [
+      { "number": "4000000000006975", "brand": "visa" }
+    ],
+    "fraud": [
+      { "number": "4100000000000019", "brand": "visa" }
+    ],
+    "fraud:review": [
+      { "number": "4000000000009235", "brand": "visa" }
+    ],
+    "threeds": [
+      { "number": "4000000000003220", "brand": "visa" },
+      { "number": "5200000000000007", "brand": "mastercard" }
+    ],
+    "threeds:failed": [
+      { "number": "5200000000000015", "brand": "mastercard" }
+    ],
+    "error": [
+      { "number": "4000000000000119", "brand": "visa" }
+    ],
+    "dispute:fraudulent": [
+      { "number": "4000000000000259", "brand": "visa" }
+    ],
+    "dispute:product_not_received": [
+      { "number": "4000000000002685", "brand": "visa" }
+    ],
+    "avs:postal_fail": [
+      { "number": "4000000000000036", "brand": "visa" }
+    ]
+  }
+}

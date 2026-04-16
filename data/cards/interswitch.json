@@ -1,0 +1,27 @@
+{
+  "id": "interswitch",
+  "name": "Interswitch",
+  "defaults": {
+    "cvv": "123",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "5061030000000000084", "brand": "verve", "pin": "1234", "expiry": "random_future" },
+      { "number": "6280511000000095", "brand": "verve", "pin": "0000", "expiry": "random_future" },
+      { "number": "4000000000000002", "brand": "visa", "expiry": "random_future" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "5061030000000000027", "brand": "verve", "pin": "1234", "expiry": "random_future" }
+    ],
+    "declined:invalid_pin": [
+      { "number": "5061030000000000035", "brand": "verve", "pin": "0000", "expiry": "random_future" }
+    ],
+    "declined:refer_to_issuer": [
+      { "number": "5061030000000000050", "brand": "verve", "pin": "1234", "expiry": "random_future" }
+    ],
+    "declined:velocity": [
+      { "number": "5061030000000000068", "brand": "verve", "pin": "1234", "expiry": "random_future" }
+    ]
+  }
+}

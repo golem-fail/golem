@@ -1,0 +1,25 @@
+{
+  "id": "myfatoorah",
+  "name": "MyFatoorah",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4508750015741019", "brand": "visa" },
+      { "number": "5123450000000008", "brand": "mastercard" },
+      { "number": "2223000000000007", "brand": "mastercard" },
+      { "number": "345678901234564", "brand": "amex" },
+      { "number": "4600410123456789", "brand": "benefit" }
+    ],
+    "declined:expired": [
+      { "number": "4550120123456789", "brand": "benefit" }
+    ],
+    "declined:invalid_pin": [
+      { "number": "4845550123456789", "brand": "benefit" }
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "paytabs",
+  "name": "PayTabs",
+  "defaults": {
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4000000000000002", "brand": "visa", "cvv": "123" },
+      { "number": "4111111111111111", "brand": "visa", "cvv": "123" },
+      { "number": "5498383801606532", "brand": "mastercard", "cvv": "977" },
+      { "number": "5200000000000007", "brand": "mastercard", "cvv": "977" }
+    ],
+    "threeds": [
+      { "number": "4000000000000002", "brand": "visa", "cvv": "123" },
+      { "number": "5498383801606532", "brand": "mastercard", "cvv": "977" },
+      { "number": "5200000000000007", "brand": "mastercard", "cvv": "977" }
+    ]
+  }
+}

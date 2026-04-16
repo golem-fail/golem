@@ -1,0 +1,35 @@
+{
+  "id": "mercado_pago",
+  "name": "Mercado Pago",
+  "defaults": {
+    "cvv": "123",
+    "cvv_amex": "1234",
+    "expiry": "11/30"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "5031755734530604", "brand": "mastercard", "name": "APRO" },
+      { "number": "4509953566233704", "brand": "visa", "name": "APRO" },
+      { "number": "371180303257522", "brand": "amex", "name": "APRO" }
+    ],
+    "declined": [
+      { "number": "5031755734530604", "brand": "mastercard", "name": "OTHE" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "5031755734530604", "brand": "mastercard", "name": "FUND" },
+      { "number": "4509953566233704", "brand": "visa", "name": "FUND" }
+    ],
+    "declined:expired": [
+      { "number": "5031755734530604", "brand": "mastercard", "name": "EXPI" }
+    ],
+    "declined:invalid_cvv": [
+      { "number": "5031755734530604", "brand": "mastercard", "name": "SECU" }
+    ],
+    "declined:refer_to_issuer": [
+      { "number": "5031755734530604", "brand": "mastercard", "name": "CALL" }
+    ],
+    "pending": [
+      { "number": "5031755734530604", "brand": "mastercard", "name": "CONT" }
+    ]
+  }
+}

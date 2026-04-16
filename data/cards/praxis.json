@@ -1,0 +1,51 @@
+{
+  "id": "praxis",
+  "name": "Praxis Cashier",
+  "defaults": {
+    "number": "random_luhn",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "cvv": "568" },
+      { "cvv": "5681", "brand": "amex" }
+    ],
+    "approved:partial": [
+      { "cvv": "353" },
+      { "cvv": "3531", "brand": "amex" }
+    ],
+    "declined": [
+      { "cvv": "000" },
+      { "cvv": "0001", "brand": "amex" }
+    ],
+    "declined:insufficient_funds": [
+      { "cvv": "801" },
+      { "cvv": "8011", "brand": "amex" }
+    ],
+    "declined:lost": [
+      { "cvv": "900" },
+      { "cvv": "9001", "brand": "amex" }
+    ],
+    "declined:stolen": [
+      { "cvv": "901" },
+      { "cvv": "9011", "brand": "amex" }
+    ],
+    "fraud": [
+      { "cvv": "902" },
+      { "cvv": "9021", "brand": "amex" }
+    ],
+    "threeds": [
+      { "cvv": "333" },
+      { "cvv": "3331", "brand": "amex" }
+    ],
+    "error": [
+      { "cvv": "444" },
+      { "cvv": "4441", "brand": "amex" }
+    ],
+    "pending": [
+      { "cvv": "454" },
+      { "cvv": "4541", "brand": "amex" }
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "id": "opayo",
+  "name": "Opayo",
+  "defaults": {
+    "cvv": "123",
+    "cvv_amex": "1234",
+    "expiry": "random_future"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4929000000006", "brand": "visa" },
+      { "number": "5186150660000009", "brand": "mastercard" },
+      { "number": "374200000000004", "brand": "amex" },
+      { "number": "36000000000008", "brand": "diners" },
+      { "number": "3569990000000009", "brand": "jcb" }
+    ],
+    "declined": [
+      { "number": "4929602110085639", "brand": "visa" },
+      { "number": "5403814948608092", "brand": "mastercard" }
+    ],
+    "threeds": [
+      { "number": "4929000005559", "brand": "visa", "name": "SUCCESSFUL" },
+      { "number": "5186150660000025", "brand": "mastercard", "name": "SUCCESSFUL" }
+    ],
+    "threeds:failed": [
+      { "number": "4929000005559", "brand": "visa", "name": "NOTAUTH" },
+      { "number": "5186150660000025", "brand": "mastercard", "name": "NOTAUTH" }
+    ],
+    "threeds:challenge": [
+      { "number": "4929000005559", "brand": "visa", "name": "CHALLENGE" },
+      { "number": "5186150660000025", "brand": "mastercard", "name": "CHALLENGE" }
+    ],
+    "threeds:not_enrolled": [
+      { "number": "4929000005559", "brand": "visa", "name": "NOTENROLLED" }
+    ],
+    "error": [
+      { "number": "4929000005559", "brand": "visa", "name": "ERROR" }
+    ]
+  }
+}

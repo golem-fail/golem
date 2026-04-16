@@ -1,0 +1,29 @@
+{
+  "id": "nmi",
+  "name": "NMI",
+  "defaults": {
+    "cvv": "999",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4012000033330026", "brand": "visa", "amount": 1.00 },
+      { "number": "5123450033330008", "brand": "mastercard", "amount": 1.00 },
+      { "number": "341111597241002", "brand": "amex", "amount": 1.00 },
+      { "number": "6011000991300009", "brand": "discover", "amount": 1.00 },
+      { "number": "3561000000000005", "brand": "jcb", "amount": 1.00 },
+      { "number": "6761000000000006", "brand": "maestro", "amount": 1.00 }
+    ],
+    "declined": [
+      { "number": "4012000033330026", "brand": "visa", "amount": 0.50 }
+    ],
+    "threeds": [
+      { "number": "4000000000002537", "brand": "visa", "amount": 1.00 }
+    ],
+    "avs:match": [
+      { "number": "4012000033330026", "brand": "visa", "cvv": "999", "postal_code": "77777", "amount": 1.00 }
+    ]
+  }
+}

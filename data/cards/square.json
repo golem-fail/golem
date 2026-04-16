@@ -1,0 +1,32 @@
+{
+  "id": "square",
+  "name": "Square",
+  "defaults": {
+    "cvv": "111",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4111111111111111", "brand": "visa" },
+      { "number": "5105105105105100", "brand": "mastercard" },
+      { "number": "6011000000000004", "brand": "discover" },
+      { "number": "3000000000000004", "brand": "diners" },
+      { "number": "3569990010095841", "brand": "jcb" },
+      { "number": "340000000000009", "brand": "amex", "cvv": "1111" },
+      { "number": "6222988812340000", "brand": "unionpay", "cvv": "123" }
+    ],
+    "declined": [
+      { "number": "4000000000000002", "brand": "visa" }
+    ],
+    "declined:invalid_cvv": [
+      { "number": "4111111111111111", "brand": "visa", "cvv": "911" }
+    ],
+    "avs:postal_fail": [
+      { "number": "4111111111111111", "brand": "visa", "postal_code": "99999" }
+    ],
+    "declined:expired": [
+      { "number": "4111111111111111", "brand": "visa", "expiry": "01/40" }
+    ]
+  }
+}

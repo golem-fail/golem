@@ -1,0 +1,26 @@
+{
+  "id": "nets_nexi",
+  "name": "Nets/Nexi",
+  "defaults": {
+    "cvv": "random:3",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4999340261977289", "brand": "visa", "cvv": "663", "amount": 1.00 },
+      { "number": "5593497948332903", "brand": "mastercard", "cvv": "399", "amount": 1.00 }
+    ],
+    "threeds": [
+      { "number": "4349940199004549", "brand": "visa", "cvv": "396", "amount": 1.00 },
+      { "number": "5472886984585836", "brand": "mastercard", "cvv": "125", "amount": 1.00 }
+    ],
+    "threeds:failed": [
+      { "number": "4349940199997007", "brand": "visa", "cvv": "829" },
+      { "number": "5311082291191543", "brand": "mastercard", "cvv": "555" }
+    ],
+    "declined": [
+      { "number": "5515931855858729", "brand": "mastercard", "cvv": "015" }
+    ]
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "id": "worldline",
+  "name": "Worldline",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "1234",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4600000010000000", "brand": "visa" },
+      { "number": "5017679210000000", "brand": "mastercard" }
+    ],
+    "declined": [
+      { "number": "4600000010000005", "brand": "visa" },
+      { "number": "5017679210000005", "brand": "mastercard" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "4600000010000051", "brand": "visa" }
+    ],
+    "declined:expired": [
+      { "number": "4600000010000054", "brand": "visa" }
+    ],
+    "declined:invalid_number": [
+      { "number": "4600000010000014", "brand": "visa" }
+    ],
+    "declined:velocity": [
+      { "number": "4600000010000063", "brand": "visa" }
+    ],
+    "fraud": [
+      { "number": "4600000010000034", "brand": "visa" }
+    ],
+    "cancelled": [
+      { "number": "4600000010000017", "brand": "visa" }
+    ],
+    "error": [
+      { "number": "4600000010000090", "brand": "visa" }
+    ],
+    "threeds": [
+      { "number": "374500261001009", "brand": "amex", "cvv": "1234" }
+    ],
+    "threeds:challenge": [
+      { "number": "375705004001005", "brand": "amex", "cvv": "1234" }
+    ]
+  }
+}

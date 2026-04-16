@@ -1,0 +1,29 @@
+{
+  "id": "klarna",
+  "name": "Klarna",
+  "defaults": {
+    "cvv": "123",
+    "expiry": "12/28",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4111111111111111", "brand": "visa", "email": "customer+cc@klarna.com" }
+    ],
+    "declined": [
+      { "number": "4111111111111111", "brand": "visa", "email": "customer+cc+denied@klarna.com" }
+    ],
+    "dispute": [
+      { "number": "4111111111111111", "brand": "visa", "email": "customer+cc+disputed-return@klarna.com" }
+    ],
+    "dispute:fraudulent": [
+      { "number": "4111111111111111", "brand": "visa", "email": "customer+cc+disputed-unauthorized_purchase@klarna.com" }
+    ],
+    "dispute:product_not_received": [
+      { "number": "4111111111111111", "brand": "visa", "email": "customer+cc+disputed-goods_not_received@klarna.com" }
+    ],
+    "threeds": [
+      { "number": "4687388888888881", "brand": "visa" }
+    ]
+  }
+}

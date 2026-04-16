@@ -1,0 +1,33 @@
+{
+  "id": "authorize_net",
+  "name": "Authorize.net",
+  "defaults": {
+    "cvv": "900",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4111111111111111", "brand": "visa" },
+      { "number": "5424000000000015", "brand": "mastercard" },
+      { "number": "370000000000002", "brand": "amex" },
+      { "number": "6011000000000012", "brand": "discover" }
+    ],
+    "declined": [
+      { "number": "4111111111111111", "brand": "visa", "postal_code": "46282" }
+    ],
+    "declined:invalid_cvv": [
+      { "number": "4111111111111111", "brand": "visa", "cvv": "901" }
+    ],
+    "avs:match": [
+      { "number": "4111111111111111", "brand": "visa", "cvv": "900", "postal_code": "46201" }
+    ],
+    "avs:no_match": [
+      { "number": "4111111111111111", "brand": "visa", "postal_code": "46205" }
+    ],
+    "avs:postal_fail": [
+      { "number": "4111111111111111", "brand": "visa", "postal_code": "46201" }
+    ]
+  }
+}

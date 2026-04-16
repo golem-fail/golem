@@ -1,0 +1,34 @@
+{
+  "id": "braintree",
+  "name": "Braintree",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4111111111111111", "brand": "visa", "amount": 100.00 },
+      { "number": "5555555555554444", "brand": "mastercard", "amount": 100.00 },
+      { "number": "378282246310005", "brand": "amex", "amount": 100.00 },
+      { "number": "6011000991300009", "brand": "discover", "amount": 100.00 }
+    ],
+    "declined": [
+      { "number": "4111111111111111", "brand": "visa", "amount": 2000.00 },
+      { "number": "5555555555554444", "brand": "mastercard", "amount": 2000.00 }
+    ],
+    "fraud": [
+      { "number": "4000111111111511", "brand": "visa" }
+    ],
+    "fraud:review": [
+      { "number": "4111140000000002", "brand": "visa" }
+    ],
+    "dispute:fraudulent": [
+      { "number": "4023898493988028", "brand": "visa" }
+    ],
+    "error": [
+      { "number": "4111111111111111", "brand": "visa", "amount": 3000.00 }
+    ]
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "id": "global_payments",
+  "name": "Global Payments",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4263970000005262", "brand": "visa" },
+      { "number": "5425230000004415", "brand": "mastercard" },
+      { "number": "374101000000608", "brand": "amex" },
+      { "number": "36256000000725", "brand": "diners" },
+      { "number": "6011000000000087", "brand": "discover" },
+      { "number": "3566000000000000", "brand": "jcb" }
+    ],
+    "declined": [
+      { "number": "4000120000001154", "brand": "visa" }
+    ],
+    "declined:refer_to_issuer": [
+      { "number": "4000130000001724", "brand": "visa" }
+    ],
+    "declined:lost": [
+      { "number": "4000160000004147", "brand": "visa" }
+    ],
+    "threeds:sca_required": [
+      { "number": "4242420000000091", "brand": "visa" }
+    ],
+    "error": [
+      { "number": "4009830000001985", "brand": "visa" }
+    ],
+    "threeds:frictionless": [
+      { "number": "4222000006285344", "brand": "visa" },
+      { "number": "5354560000000004", "brand": "mastercard" }
+    ],
+    "threeds:challenge": [
+      { "number": "4222000001227408", "brand": "visa" },
+      { "number": "5506874496684651", "brand": "mastercard" }
+    ],
+    "threeds:failed": [
+      { "number": "4222000002144131", "brand": "visa" },
+      { "number": "5540010585397800", "brand": "mastercard" }
+    ]
+  }
+}

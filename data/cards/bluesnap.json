@@ -1,0 +1,41 @@
+{
+  "id": "bluesnap",
+  "name": "BlueSnap",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "374245455400126", "brand": "amex", "expiry": "05/26" },
+      { "number": "5425233430109903", "brand": "mastercard", "expiry": "04/26" },
+      { "number": "2222420000001113", "brand": "mastercard", "expiry": "08/26" },
+      { "number": "4701322211111234", "brand": "visa", "cvv": "837", "expiry": "12/26" },
+      { "number": "6011000180331112", "brand": "discover", "expiry": "02/26" },
+      { "number": "3566000020000410", "brand": "jcb", "cvv": "123", "expiry": "02/26" },
+      { "number": "6250941006528599", "brand": "unionpay", "expiry": "06/26" }
+    ],
+    "declined:lost": [
+      { "number": "4000000000001000", "brand": "visa", "cvv": "905", "expiry": "11/26" }
+    ],
+    "declined:invalid_cvv": [
+      { "number": "4000000000001000", "brand": "visa", "cvv": "906", "expiry": "11/26" }
+    ],
+    "declined": [
+      { "number": "4000000000001000", "brand": "visa", "cvv": "907", "expiry": "11/26" }
+    ],
+    "declined:expired": [
+      { "number": "4000000000001000", "brand": "visa", "cvv": "908", "expiry": "11/26" }
+    ],
+    "fraud": [
+      { "number": "4000000000001000", "brand": "visa", "cvv": "909", "expiry": "11/26" }
+    ],
+    "error": [
+      { "number": "378282246310005", "brand": "amex" },
+      { "number": "4917484589897107", "brand": "visa" },
+      { "number": "3530111333300000", "brand": "jcb" }
+    ]
+  }
+}

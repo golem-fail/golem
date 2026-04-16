@@ -1,0 +1,60 @@
+{
+  "id": "checkout_com",
+  "name": "Checkout.com",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4242424242424242", "brand": "visa" },
+      { "number": "5436031030606378", "brand": "mastercard" },
+      { "number": "345678901234564", "brand": "amex" }
+    ],
+    "declined": [
+      { "number": "4539467987109256", "brand": "visa" },
+      { "number": "5585076576791786", "brand": "mastercard" },
+      { "number": "341829238058580", "brand": "amex" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "4544249167673670", "brand": "visa" },
+      { "number": "5437821135399682", "brand": "mastercard" }
+    ],
+    "declined:lost": [
+      { "number": "4941202060999329", "brand": "visa" },
+      { "number": "5363450180402239", "brand": "mastercard" }
+    ],
+    "declined:stolen": [
+      { "number": "4539253655711767", "brand": "visa" }
+    ],
+    "declined:restricted": [
+      { "number": "4818924250131070", "brand": "visa" },
+      { "number": "5279988405398834", "brand": "mastercard" }
+    ],
+    "declined:closed_account": [
+      { "number": "5525192142230002", "brand": "mastercard" }
+    ],
+    "fraud": [
+      { "number": "4897453568485113", "brand": "visa" }
+    ],
+    "error:timeout": [
+      { "number": "4095254802642505", "brand": "visa" },
+      { "number": "5265162270587964", "brand": "mastercard" }
+    ],
+    "threeds:frictionless": [
+      { "number": "4485040371536584", "brand": "visa" },
+      { "number": "5588686116426417", "brand": "mastercard" },
+      { "number": "345678901234564", "brand": "amex" }
+    ],
+    "threeds:challenge": [
+      { "number": "5385308360135181", "brand": "mastercard" },
+      { "number": "372688581899681", "brand": "amex" }
+    ],
+    "threeds:challenge_failed": [
+      { "number": "4275765574319271", "brand": "visa" },
+      { "number": "5596061690670931", "brand": "mastercard" }
+    ]
+  }
+}

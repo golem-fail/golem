@@ -1,0 +1,38 @@
+{
+  "id": "pay_jp",
+  "name": "PAY.JP",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4242424242424242", "brand": "visa" },
+      { "number": "5555555555554444", "brand": "mastercard" },
+      { "number": "3530111333300000", "brand": "jcb" },
+      { "number": "378282246310005", "brand": "amex" },
+      { "number": "38520000023237", "brand": "diners" },
+      { "number": "6011111111111117", "brand": "discover" }
+    ],
+    "declined": [
+      { "number": "4000000000000002", "brand": "visa" }
+    ],
+    "declined:expired": [
+      { "number": "4000000000000069", "brand": "visa" }
+    ],
+    "declined:invalid_cvv": [
+      { "number": "4000000000000127", "brand": "visa" }
+    ],
+    "error": [
+      { "number": "4000000000000119", "brand": "visa" }
+    ],
+    "threeds": [
+      { "number": "4000000000003220", "brand": "visa" }
+    ],
+    "threeds:failed": [
+      { "number": "4000000000003063", "brand": "visa" }
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "id": "pagseguro",
+  "name": "PagSeguro",
+  "defaults": {
+    "cvv": "123",
+    "cvv_amex": "1234",
+    "expiry": "12/26",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4539620659922097", "brand": "visa" },
+      { "number": "5240082975622454", "brand": "mastercard" },
+      { "number": "345817690311361", "brand": "amex" },
+      { "number": "4514161122113757", "brand": "elo" },
+      { "number": "6062828598919021", "brand": "hipercard" }
+    ],
+    "declined": [
+      { "number": "4929291898380766", "brand": "visa" },
+      { "number": "5530062640663264", "brand": "mastercard" },
+      { "number": "4389350446134811", "brand": "elo" },
+      { "number": "6062822916014409", "brand": "hipercard" }
+    ]
+  }
+}

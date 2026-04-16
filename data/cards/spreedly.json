@@ -1,0 +1,36 @@
+{
+  "id": "spreedly",
+  "name": "Spreedly",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4111111111111111", "brand": "visa" },
+      { "number": "5555555555554444", "brand": "mastercard" },
+      { "number": "2223003122003222", "brand": "mastercard" },
+      { "number": "378282246310005", "brand": "amex" },
+      { "number": "6011111111111117", "brand": "discover" },
+      { "number": "30569309025904", "brand": "diners" },
+      { "number": "3569990010030400", "brand": "jcb" }
+    ],
+    "declined": [
+      { "number": "4012888888881881", "brand": "visa" },
+      { "number": "5105105105105100", "brand": "mastercard" },
+      { "number": "371449635398431", "brand": "amex" },
+      { "number": "6011000990139424", "brand": "discover" }
+    ],
+    "threeds": [
+      { "number": "4556761029983886", "brand": "visa" }
+    ],
+    "threeds:failed": [
+      { "number": "4024007101934890", "brand": "visa" }
+    ],
+    "error": [
+      { "number": "4111111111111111", "brand": "visa", "amount": 0.44 }
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "bambora",
+  "name": "Bambora",
+  "defaults": {
+    "cvv": "123",
+    "cvv_amex": "1234",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4030000010001234", "brand": "visa" },
+      { "number": "5100000010001004", "brand": "mastercard" },
+      { "number": "2223000048400011", "brand": "mastercard" },
+      { "number": "5555555555554444", "brand": "mastercard" },
+      { "number": "371100001000131", "brand": "amex" },
+      { "number": "6011500080009080", "brand": "discover" }
+    ],
+    "declined": [
+      { "number": "4003050500040005", "brand": "visa" },
+      { "number": "5100000020002000", "brand": "mastercard" },
+      { "number": "342400001000180", "brand": "amex" },
+      { "number": "6011000900901111", "brand": "discover" }
+    ]
+  }
+}

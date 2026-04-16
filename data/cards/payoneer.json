@@ -1,0 +1,15 @@
+{
+  "id": "payoneer",
+  "name": "Payoneer",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4444333322221111", "brand": "visa" }
+    ]
+  }
+}

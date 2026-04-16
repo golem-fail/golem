@@ -1,0 +1,39 @@
+{
+  "id": "two_checkout",
+  "name": "2Checkout",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4111111111111111", "brand": "visa", "name": "John Doe" },
+      { "number": "5555555555554444", "brand": "mastercard", "name": "John Doe" },
+      { "number": "378282246310005", "brand": "amex", "name": "John Doe" },
+      { "number": "6011111111111117", "brand": "discover", "name": "John Doe" },
+      { "number": "3566111111111113", "brand": "jcb", "name": "John Doe" }
+    ],
+    "declined": [
+      { "number": "4111111111111111", "brand": "visa", "name": "Mark Doe" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "4111111111111111", "brand": "visa", "name": "Mona Doe" }
+    ],
+    "declined:stolen": [
+      { "number": "4111111111111111", "brand": "visa", "name": "Red Doe" }
+    ],
+    "declined:expired": [
+      { "number": "4111111111111111", "brand": "visa", "name": "Angela Doe" }
+    ],
+    "declined:invalid_number": [
+      { "number": "4111111111111111", "brand": "visa", "name": "Adrian Doe" }
+    ],
+    "declined:invalid_cvv": [
+      { "number": "4111111111111111", "brand": "visa", "name": "Jack Doe" }
+    ],
+    "threeds:failed": [
+      { "number": "4111111111111111", "brand": "visa", "name": "Joy Doe" }
+    ]
+  }
+}

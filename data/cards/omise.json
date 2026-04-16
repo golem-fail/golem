@@ -1,0 +1,27 @@
+{
+  "id": "omise",
+  "name": "Omise/Opn",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4242424242424242", "brand": "visa" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "4111111111140011", "brand": "visa" }
+    ],
+    "declined:stolen": [
+      { "number": "4111111111130012", "brand": "visa" }
+    ],
+    "error": [
+      { "number": "4111111111120013", "brand": "visa" }
+    ],
+    "declined": [
+      { "number": "4111111111110014", "brand": "visa" }
+    ]
+  }
+}

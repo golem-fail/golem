@@ -1,0 +1,26 @@
+{
+  "id": "tap_payments",
+  "name": "Tap Payments",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4508750015741019", "brand": "visa" },
+      { "number": "5123450000000008", "brand": "mastercard" },
+      { "number": "345678901234564", "brand": "amex" },
+      { "number": "4464040000000007", "brand": "mada" },
+      { "number": "4600410123456789", "brand": "benefit" },
+      { "number": "4215375500883243", "brand": "naps", "otp": "1234" },
+      { "number": "4837915060379278", "brand": "omannet" }
+    ],
+    "threeds": [
+      { "number": "4508750015741019", "brand": "visa" },
+      { "number": "5123450000000008", "brand": "mastercard" },
+      { "number": "345678901234564", "brand": "amex" }
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "id": "paystack",
+  "name": "Paystack",
+  "defaults": {
+    "name": "random",
+    "otp": "123456"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4084084008408408", "brand": "visa", "cvv": "408", "expiry": "10/21" },
+      { "number": "507850785078507812", "brand": "verve", "cvv": "081", "expiry": "10/21", "pin": "1111" },
+      { "number": "506066666666666666", "brand": "verve", "cvv": "123", "expiry": "10/21", "pin": "1234" },
+      { "number": "507850785078507804", "brand": "verve", "cvv": "884", "expiry": "03/27", "pin": "0000" },
+      { "number": "5192602720584796", "brand": "mastercard", "cvv": "123", "expiry": "03/27" }
+    ],
+    "declined": [
+      { "number": "4084080000054008", "brand": "visa", "cvv": "001", "expiry": "random_future" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "4084080000670037", "brand": "visa", "cvv": "random:3", "expiry": "random_future" }
+    ],
+    "error": [
+      { "number": "5060660000000064", "brand": "verve", "cvv": "random:3", "expiry": "random_future" }
+    ],
+    "error:timeout": [
+      { "number": "506066506066506067", "brand": "verve", "cvv": "060", "expiry": "random_future" }
+    ]
+  }
+}

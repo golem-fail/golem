@@ -1,0 +1,25 @@
+{
+  "id": "ebanx",
+  "name": "EBANX",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4111111111111111", "brand": "visa" },
+      { "number": "5555555555554444", "brand": "mastercard" },
+      { "number": "378282246310005", "brand": "amex" },
+      { "number": "6362970000457013", "brand": "elo" },
+      { "number": "6062825624254001", "brand": "hipercard" },
+      { "number": "5895626292990446", "brand": "naranja" },
+      { "number": "5896578742026538", "brand": "cabal" },
+      { "number": "5062224607440872", "brand": "carnet" }
+    ],
+    "declined": [
+      { "number": "4716909774636285", "brand": "visa" }
+    ]
+  }
+}

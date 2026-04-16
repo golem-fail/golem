@@ -1,0 +1,52 @@
+{
+  "id": "komoju",
+  "name": "KOMOJU",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4111111111111111", "brand": "visa" },
+      { "number": "5555555555554444", "brand": "mastercard" },
+      { "number": "3530111333300000", "brand": "jcb" },
+      { "number": "378282246310005", "brand": "amex" },
+      { "number": "30569309025904", "brand": "diners" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "4123111111111000", "brand": "visa" }
+    ],
+    "declined:velocity": [
+      { "number": "4123111111111018", "brand": "visa" }
+    ],
+    "declined:invalid_cvv": [
+      { "number": "4123111111111034", "brand": "visa" }
+    ],
+    "declined:expired": [
+      { "number": "4123111111111042", "brand": "visa" }
+    ],
+    "declined:restricted": [
+      { "number": "4123111111111059", "brand": "visa" }
+    ],
+    "declined:invalid_number": [
+      { "number": "4123111111111075", "brand": "visa" }
+    ],
+    "threeds:frictionless": [
+      { "number": "4100000000000100", "brand": "visa" },
+      { "number": "5100000000000107", "brand": "mastercard" },
+      { "number": "3528000000000106", "brand": "jcb" }
+    ],
+    "threeds:challenge": [
+      { "number": "4100000000005000", "brand": "visa" },
+      { "number": "5100000000005007", "brand": "mastercard" },
+      { "number": "3528000000005006", "brand": "jcb" }
+    ],
+    "threeds:failed": [
+      { "number": "4100000000500000", "brand": "visa" },
+      { "number": "5100000000500007", "brand": "mastercard" },
+      { "number": "3528000000500006", "brand": "jcb" }
+    ]
+  }
+}

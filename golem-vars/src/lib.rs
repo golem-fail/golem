@@ -1,5 +1,6 @@
 // golem-vars: variable and data generation
 
+mod card_loader;
 pub mod evaluate;
 pub mod generators;
 pub mod geo;

@@ -1,0 +1,44 @@
+{
+  "id": "mollie",
+  "name": "Mollie",
+  "defaults": {
+    "cvv": "random:3",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4543474002249996", "brand": "visa" },
+      { "number": "2223000010479399", "brand": "mastercard" },
+      { "number": "378282246310005", "brand": "amex" }
+    ],
+    "declined": [
+      { "number": "4543474002249996", "brand": "visa", "amount": 1011.00, "amount_currency": "EUR" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "4543474002249996", "brand": "visa", "amount": 1007.00, "amount_currency": "EUR" }
+    ],
+    "declined:expired": [
+      { "number": "4543474002249996", "brand": "visa", "amount": 1004.00, "amount_currency": "EUR" }
+    ],
+    "declined:invalid_number": [
+      { "number": "4543474002249996", "brand": "visa", "amount": 1001.00, "amount_currency": "EUR" }
+    ],
+    "declined:invalid_cvv": [
+      { "number": "4543474002249996", "brand": "visa", "amount": 1002.00, "amount_currency": "EUR" }
+    ],
+    "declined:restricted": [
+      { "number": "4543474002249996", "brand": "visa", "amount": 1008.00, "amount_currency": "EUR" }
+    ],
+    "fraud": [
+      { "number": "4543474002249996", "brand": "visa", "amount": 1009.00, "amount_currency": "EUR" }
+    ],
+    "threeds:failed": [
+      { "number": "4543474002249996", "brand": "visa", "amount": 1010.00, "amount_currency": "EUR" }
+    ],
+    "declined:refer_to_issuer": [
+      { "number": "4543474002249996", "brand": "visa", "amount": 1006.00, "amount_currency": "EUR" }
+    ]
+  }
+}

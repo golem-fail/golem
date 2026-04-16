@@ -1,0 +1,43 @@
+{
+  "id": "paysafe",
+  "name": "Paysafe",
+  "defaults": {
+    "cvv": "111",
+    "cvv_amex": "random:4",
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4530910000012345", "brand": "visa", "amount": 1.00 },
+      { "number": "5191330000004415", "brand": "mastercard", "amount": 1.00 },
+      { "number": "373511000000005", "brand": "amex", "amount": 1.00 },
+      { "number": "6011234567890123", "brand": "discover", "amount": 1.00 },
+      { "number": "3569990000000009", "brand": "jcb", "amount": 1.00 }
+    ],
+    "declined": [
+      { "number": "4530910000012345", "brand": "visa", "amount": 0.05 }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "4530910000012345", "brand": "visa", "amount": 0.11 }
+    ],
+    "declined:restricted": [
+      { "number": "4530910000012345", "brand": "visa", "amount": 0.12 }
+    ],
+    "fraud": [
+      { "number": "4530910000012345", "brand": "visa", "amount": 0.23 }
+    ],
+    "avs:no_match": [
+      { "number": "4530910000012345", "brand": "visa", "amount": 0.24 }
+    ],
+    "threeds:sca_required": [
+      { "number": "4530910000012345", "brand": "visa", "amount": 0.77 }
+    ],
+    "error": [
+      { "number": "4530910000012345", "brand": "visa", "amount": 0.20 }
+    ],
+    "error:timeout": [
+      { "number": "4530910000012345", "brand": "visa", "amount": 0.96 }
+    ]
+  }
+}

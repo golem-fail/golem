@@ -1,0 +1,25 @@
+{
+  "id": "telr",
+  "name": "Telr",
+  "defaults": {
+    "expiry": "random_future",
+    "name": "random"
+  },
+  "statuses": {
+    "approved": [
+      { "number": "4000000000000002", "brand": "visa", "cvv": "123" },
+      { "number": "4111111111111111", "brand": "visa", "cvv": "123" },
+      { "number": "5105105105105100", "brand": "mastercard", "cvv": "123" },
+      { "number": "5555555555554444", "brand": "mastercard", "cvv": "123" },
+      { "number": "371449635398431", "brand": "amex", "cvv": "1234" },
+      { "number": "3566002020140006", "brand": "jcb", "cvv": "123" },
+      { "number": "4464040000000007", "brand": "mada", "cvv": "123" }
+    ],
+    "declined:insufficient_funds": [
+      { "number": "4111111111111111", "brand": "visa", "cvv": "041" }
+    ],
+    "pending": [
+      { "number": "4111111111111111", "brand": "visa", "cvv": "999" }
+    ]
+  }
+}
