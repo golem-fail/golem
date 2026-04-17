@@ -522,8 +522,8 @@ fn has_button_descendant(el: &Element) -> bool {
 /// Thin HTTP client wrapper used by both `AndroidDriver` and `IosDriver`.
 pub struct CompanionClient {
     pub base_url: String,
-    /// Default query string appended to every request (e.g. `"?bundle_id=fail.golem.test"`).
-    pub default_query: String,
+    /// Default query string appended to every request (e.g. `"bundle_id=fail.golem.test"`).
+    default_query: std::sync::RwLock<String>,
     pub client: reqwest::Client,
 }
 
@@ -541,8 +541,15 @@ impl CompanionClient {
     pub fn new(port: u16) -> Self {
         Self {
             base_url: format!("http://localhost:{port}"),
-            default_query: String::new(),
+            default_query: std::sync::RwLock::new(String::new()),
             client: reqwest::Client::new(),
+        }
+    }
+
+    /// Update the default query string (e.g. on app switch).
+    pub fn set_default_query(&self, query: &str) {
+        if let Ok(mut q) = self.default_query.write() {
+            *q = query.to_string();
         }
     }
 
@@ -596,11 +603,12 @@ impl CompanionClient {
 
     /// Build the full URL for a request, appending the default query string.
     fn url(&self, path: &str) -> String {
+        let dq = self.default_query.read().map(|q| q.clone()).unwrap_or_default();
         let sep = if path.contains('?') { "&" } else { "?" };
-        if self.default_query.is_empty() {
+        if dq.is_empty() {
             format!("{}{}", self.base_url, path)
         } else {
-            format!("{}{}{}{}", self.base_url, path, sep, self.default_query)
+            format!("{}{}{}{}", self.base_url, path, sep, dq)
         }
     }
 

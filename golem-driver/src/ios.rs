@@ -24,8 +24,8 @@ pub struct IosDriver {
 impl IosDriver {
     /// Create a new iOS driver targeting the companion server at the given port.
     pub fn new(device_id: String, bundle_id: String, port: u16) -> Self {
-        let mut client = CompanionClient::new(port);
-        client.default_query = format!("bundle_id={bundle_id}");
+        let client = CompanionClient::new(port);
+        client.set_default_query(&format!("bundle_id={bundle_id}"));
         Self {
             client,
             device_id,
@@ -129,6 +129,8 @@ impl PlatformDriver for IosDriver {
     async fn launch_app(&self, bundle_id: &str) -> Result<()> {
         let body = serde_json::json!({ "bundle_id": bundle_id }).to_string();
         self.client.post_json("/launch", &body).await?;
+        // Switch hierarchy target so subsequent /hierarchy calls see the new app.
+        self.client.set_default_query(&format!("bundle_id={bundle_id}"));
         Ok(())
     }
 
