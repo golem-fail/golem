@@ -4,7 +4,10 @@
     "name_en": "Israel",
     "iso_code": "IL",
     "phone_prefix": "+972",
-    "phone_formats": ["+972-5#-###-####", "+972-#-###-####"],
+    "phone_formats": [
+      "+972-5#-###-####",
+      "+972-#-###-####"
+    ],
     "postcode_format": "#######",
     "name_order": "given_first"
   },
@@ -12,7 +15,9 @@
     {
       "name": "ירושלים",
       "name_en": "Jerusalem District",
-      "region_tags": ["Central Israel"],
+      "region_tags": [
+        "Central Israel"
+      ],
       "cities": [
         {
           "name": "ירושלים",
@@ -117,13 +122,48 @@
               "pattern": "רחוב רבי עקיבא n{1,100}"
             }
           ]
+        },
+        {
+          "name": "בית שמש",
+          "name_en": "Beit Shemesh",
+          "lat": 31.751,
+          "lon": 34.9876,
+          "postcodes": [
+            {
+              "code": "9910001",
+              "street": "רחוב הרצל",
+              "street_en": "Herzl Street",
+              "pattern": "רחוב הרצל n{1,80}"
+            },
+            {
+              "code": "9910102",
+              "street": "רחוב נהר הירדן",
+              "street_en": "Jordan River Street",
+              "pattern": "רחוב נהר הירדן n{1,60}"
+            },
+            {
+              "code": "9910203",
+              "street": "שדרות יצחק רבין",
+              "street_en": "Yitzhak Rabin Boulevard",
+              "pattern": "שדרות יצחק רבין n{1,50}"
+            },
+            {
+              "code": "9910304",
+              "street": "רחוב האורן",
+              "street_en": "HaOren Street",
+              "pattern": "רחוב האורן n{1,40}"
+            }
+          ]
         }
       ]
     },
     {
       "name": "תל אביב",
       "name_en": "Tel Aviv District",
-      "region_tags": ["Central Israel", "Gush Dan"],
+      "region_tags": [
+        "Central Israel",
+        "Gush Dan"
+      ],
       "cities": [
         {
           "name": "תל אביב-יפו",
@@ -232,7 +272,7 @@
         {
           "name": "רמת גן",
           "name_en": "Ramat Gan",
-          "lat": 32.0680,
+          "lat": 32.068,
           "lon": 34.8248,
           "postcodes": [
             {
@@ -344,12 +384,14 @@
     {
       "name": "חיפה",
       "name_en": "Haifa District",
-      "region_tags": ["Northern Israel"],
+      "region_tags": [
+        "Northern Israel"
+      ],
       "cities": [
         {
           "name": "חיפה",
           "name_en": "Haifa",
-          "lat": 32.7940,
+          "lat": 32.794,
           "lon": 34.9896,
           "postcodes": [
             {
@@ -411,8 +453,8 @@
         {
           "name": "קריות",
           "name_en": "Krayot",
-          "lat": 32.8340,
-          "lon": 35.0740,
+          "lat": 32.834,
+          "lon": 35.074,
           "postcodes": [
             {
               "code": "2610001",
@@ -445,12 +487,15 @@
     {
       "name": "מרכז",
       "name_en": "Central District",
-      "region_tags": ["Central Israel", "Sharon"],
+      "region_tags": [
+        "Central Israel",
+        "Sharon"
+      ],
       "cities": [
         {
           "name": "ראשון לציון",
           "name_en": "Rishon LeZion",
-          "lat": 31.9730,
+          "lat": 31.973,
           "lon": 34.7925,
           "postcodes": [
             {
@@ -612,7 +657,7 @@
         {
           "name": "כפר סבא",
           "name_en": "Kfar Saba",
-          "lat": 32.1750,
+          "lat": 32.175,
           "lon": 34.9072,
           "postcodes": [
             {
@@ -692,7 +737,10 @@
     {
       "name": "צפון",
       "name_en": "Northern District",
-      "region_tags": ["Northern Israel", "Galilee"],
+      "region_tags": [
+        "Northern Israel",
+        "Galilee"
+      ],
       "cities": [
         {
           "name": "נצרת",
@@ -795,7 +843,10 @@
     {
       "name": "דרום",
       "name_en": "Southern District",
-      "region_tags": ["Southern Israel", "Negev"],
+      "region_tags": [
+        "Southern Israel",
+        "Negev"
+      ],
       "cities": [
         {
           "name": "באר שבע",
