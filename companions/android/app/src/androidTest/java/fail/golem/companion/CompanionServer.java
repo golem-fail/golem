@@ -102,7 +102,9 @@ public class CompanionServer {
         if (parts.length < 2) return;
 
         String method = parts[0];
-        String path = parts[1].split("\\?")[0];
+        String fullPath = parts[1];
+        String path = fullPath.split("\\?")[0];
+        Map<String, String> queryParams = parseQueryParams(fullPath);
 
         // Read headers
         Map<String, String> headers = new HashMap<>();
@@ -172,6 +174,9 @@ public class CompanionServer {
                     break;
                 case "/stop":
                     handleStop(out, body);
+                    break;
+                case "/perf":
+                    handlePerf(out, queryParams);
                     break;
                 default:
                     sendJson(out, 404, new JSONObject().put("error", "not found"));
@@ -565,6 +570,106 @@ public class CompanionServer {
             while (is.read(buf) != -1) { /* drain */ }
         }
         sendJson(out, 200, new JSONObject().put("status", "ok"));
+    }
+
+    private Map<String, String> parseQueryParams(String fullPath) {
+        Map<String, String> params = new HashMap<>();
+        int qIdx = fullPath.indexOf('?');
+        if (qIdx < 0) return params;
+        String query = fullPath.substring(qIdx + 1);
+        for (String pair : query.split("&")) {
+            String[] kv = pair.split("=", 2);
+            if (kv.length == 2) {
+                params.put(kv[0], kv[1]);
+            }
+        }
+        return params;
+    }
+
+    /**
+     * Collect performance metrics for a package: file descriptors, disk usage, network bytes.
+     * These require run-as or TrafficStats and can't be done from the host via adb shell.
+     *
+     * FDs and disk use `run-as <pkg>` which executes as the app's UID, granting access
+     * to /proc/<pid>/fd and /data/data/<pkg> that the shell user (UID 2000) cannot read.
+     */
+    private void handlePerf(OutputStream out, Map<String, String> queryParams) throws Exception {
+        String pkg = queryParams.get("package");
+        if (pkg == null || pkg.isEmpty()) {
+            sendJson(out, 400, new JSONObject().put("error", "missing ?package= query parameter"));
+            return;
+        }
+
+        JSONObject result = new JSONObject();
+
+        // Get PID — needed for FD counting
+        int pid = -1;
+        try {
+            String pidOutput = executeShellAndRead("pidof " + pkg).trim();
+            // pidof may return multiple PIDs (space-separated); take the first
+            String firstPid = pidOutput.split("\\s+")[0];
+            pid = Integer.parseInt(firstPid);
+        } catch (Exception ignored) {}
+
+        // File descriptors: run-as <pkg> ls /proc/<pid>/fd
+        if (pid > 0) {
+            try {
+                String fdOutput = executeShellAndRead(
+                    "run-as " + pkg + " ls /proc/" + pid + "/fd");
+                int fdCount = 0;
+                for (String line : fdOutput.split("\n")) {
+                    if (!line.trim().isEmpty()) fdCount++;
+                }
+                if (fdCount > 0) {
+                    result.put("file_descriptors", fdCount);
+                } else {
+                    result.put("file_descriptors", JSONObject.NULL);
+                }
+            } catch (Exception e) {
+                result.put("file_descriptors", JSONObject.NULL);
+            }
+        } else {
+            result.put("file_descriptors", JSONObject.NULL);
+        }
+
+        // Disk: run-as <pkg> du -sk /data/data/<pkg>
+        try {
+            String duOutput = executeShellAndRead(
+                "run-as " + pkg + " du -sk /data/data/" + pkg);
+            String firstField = duOutput.trim().split("\\s+")[0];
+            long diskKb = Long.parseLong(firstField);
+            result.put("disk_kb", diskKb);
+        } catch (Exception e) {
+            result.put("disk_kb", JSONObject.NULL);
+        }
+
+        // Network: TrafficStats by UID
+        try {
+            // Parse UID from dumpsys package (works on all Android versions)
+            int uid = -1;
+            String pkgInfo = executeShellAndRead("dumpsys package " + pkg);
+            for (String line : pkgInfo.split("\n")) {
+                String trimmed = line.trim();
+                if (trimmed.startsWith("uid=")) {
+                    uid = Integer.parseInt(trimmed.split("\\s+")[0].substring(4));
+                    break;
+                }
+            }
+            if (uid >= 0) {
+                long rxBytes = android.net.TrafficStats.getUidRxBytes(uid);
+                long txBytes = android.net.TrafficStats.getUidTxBytes(uid);
+                result.put("net_rx_bytes", rxBytes >= 0 ? rxBytes : JSONObject.NULL);
+                result.put("net_tx_bytes", txBytes >= 0 ? txBytes : JSONObject.NULL);
+            } else {
+                result.put("net_rx_bytes", JSONObject.NULL);
+                result.put("net_tx_bytes", JSONObject.NULL);
+            }
+        } catch (Exception e) {
+            result.put("net_rx_bytes", JSONObject.NULL);
+            result.put("net_tx_bytes", JSONObject.NULL);
+        }
+
+        sendJson(out, 200, result);
     }
 
     private void sendJson(OutputStream out, int status, JSONObject json) throws IOException {
