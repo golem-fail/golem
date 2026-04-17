@@ -66,7 +66,7 @@ pub async fn execute_action(
         "wait_not" => handle_wait_not(step, driver).await,
         "fail" => handle_fail(step),
         "launch" => handle_launch(step, driver, apps, ctx).await,
-        "stop" => handle_stop(step, driver, apps).await,
+        "stop" => handle_stop(step, driver, apps, ctx).await,
         "clear_data" => handle_clear_data(step, driver, apps).await,
         "rotate" => handle_rotate(step, driver).await,
         "dark_mode" => handle_dark_mode(step, driver).await,

@@ -41,8 +41,9 @@ pub(crate) async fn handle_launch(
     let start = Instant::now();
     driver.launch_app(bundle_id).await?;
     let _ = wait_for_settle(driver).await;
-    if ctx.perf_collector.is_some() {
+    if let Some(collector) = ctx.perf_collector {
         ctx.set_launch_ms(start.elapsed().as_millis() as u64);
+        collector.set_active(bundle_id);
     }
     Ok(())
 }
@@ -52,10 +53,14 @@ pub(crate) async fn handle_stop(
     step: &Step,
     driver: &dyn PlatformDriver,
     apps: &[AppConfig],
+    ctx: &ExecutionContext<'_>,
 ) -> Result<()> {
     let bundle_id = resolve_app_bundle(step, apps)?;
     driver.stop_app(bundle_id).await?;
     let _ = wait_for_settle(driver).await;
+    if let Some(collector) = ctx.perf_collector {
+        collector.clear_active(bundle_id);
+    }
     Ok(())
 }
 
@@ -109,7 +114,8 @@ mod tests {
         let mut step = make_step("stop");
         step.app = Some("com.example.app".to_string());
 
-        handle_stop(&step, &driver, &[])
+        let ctx = test_ctx(Path::new("."));
+        handle_stop(&step, &driver, &[], &ctx)
             .await
             .expect("stop should succeed");
 

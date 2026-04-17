@@ -263,8 +263,9 @@ pub async fn execute_flow<'a>(
                 let raw = collector.capture().await;
                 let launch_ms = ctx.take_launch_ms();
                 let device_name = ctx.device.map_or("unknown", |d| d.name.as_str());
+                let active_app = collector.active_bundle_id();
 
-                let label = build_snapshot_label(block, current_idx, device_name, 0);
+                let label = build_snapshot_label(block, current_idx, active_app.as_deref(), device_name, 0);
                 let timestamp = chrono_now();
 
                 let snapshot = build_snapshot(&raw, label, launch_ms, timestamp);
@@ -341,9 +342,9 @@ fn parse_duration(s: &str) -> Option<Duration> {
 
 // ── Perf helpers ─────────────────────────────────────────────────────
 
-fn build_snapshot_label(block: &Block, block_idx: usize, device_name: &str, iteration: u32) -> String {
-    match &block.name {
-        Some(name) => format!("{name}:{device_name}:{iteration}"),
+fn build_snapshot_label(block: &Block, block_idx: usize, active_app: Option<&str>, device_name: &str, iteration: u32) -> String {
+    let block_part = match &block.name {
+        Some(name) => name.clone(),
         None => {
             let hint = block
                 .steps
@@ -357,8 +358,12 @@ fn build_snapshot_label(block: &Block, block_idx: usize, device_name: &str, iter
                     format!("{}:{}", s.action, target)
                 })
                 .unwrap_or_else(|| "empty".to_string());
-            format!("block_{block_idx}({hint}):{device_name}:{iteration}")
+            format!("block_{block_idx}({hint})")
         }
+    };
+    match active_app {
+        Some(app) => format!("{block_part}:{app}:{device_name}:{iteration}"),
+        None => format!("{block_part}:{device_name}:{iteration}"),
     }
 }
 
@@ -2006,10 +2011,17 @@ action = "screenshot"
     }
 
     #[test]
-    fn snapshot_label_named_block() {
+    fn snapshot_label_named_block_no_app() {
         let block = empty_block(Some("login"));
-        let label = build_snapshot_label(&block, 0, "iPhone_16", 0);
+        let label = build_snapshot_label(&block, 0, None, "iPhone_16", 0);
         assert_eq!(label, "login:iPhone_16:0");
+    }
+
+    #[test]
+    fn snapshot_label_named_block_with_app() {
+        let block = empty_block(Some("login"));
+        let label = build_snapshot_label(&block, 0, Some("com.example.app"), "iPhone_16", 0);
+        assert_eq!(label, "login:com.example.app:iPhone_16:0");
     }
 
     #[test]
@@ -2018,14 +2030,14 @@ action = "screenshot"
         let mut step = empty_step("tap");
         step.on_text = Some("Submit".into());
         block.steps.push(step);
-        let label = build_snapshot_label(&block, 2, "Pixel_8", 1);
+        let label = build_snapshot_label(&block, 2, None, "Pixel_8", 1);
         assert_eq!(label, "block_2(tap:Submit):Pixel_8:1");
     }
 
     #[test]
     fn snapshot_label_unnamed_no_steps() {
         let block = empty_block(None);
-        let label = build_snapshot_label(&block, 0, "device", 0);
+        let label = build_snapshot_label(&block, 0, None, "device", 0);
         assert_eq!(label, "block_0(empty):device:0");
     }
 

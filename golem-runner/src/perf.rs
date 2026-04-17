@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::sync::Mutex;
+
 use anyhow::Result;
 use golem_devices::Platform;
 
@@ -179,6 +182,74 @@ impl PerfCollector {
             .output()
             .await?;
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+}
+
+/// Multi-app performance collector. Holds one `PerfCollector` per app and
+/// tracks which app is currently active (foregrounded).
+pub struct PerfCollectorSet {
+    collectors: HashMap<String, PerfCollector>,
+    /// The bundle ID of the currently active (foregrounded) app.
+    active_bundle: Mutex<Option<String>>,
+}
+
+impl PerfCollectorSet {
+    /// Create a collector set for all apps in the flow.
+    /// `apps` is a list of `(friendly_name, bundle_id)` pairs.
+    pub fn new(
+        apps: &[(String, String)],
+        platform: Platform,
+        device_id: String,
+        companion_port: Option<u16>,
+    ) -> Self {
+        let mut collectors = HashMap::new();
+        let mut first_bundle = None;
+        for (_, bundle_id) in apps {
+            if first_bundle.is_none() {
+                first_bundle = Some(bundle_id.clone());
+            }
+            collectors.insert(
+                bundle_id.clone(),
+                PerfCollector::new(platform, device_id.clone(), bundle_id.clone(), companion_port),
+            );
+        }
+        Self {
+            collectors,
+            active_bundle: Mutex::new(first_bundle),
+        }
+    }
+
+    /// Set the active app (called on `launch` actions).
+    pub fn set_active(&self, bundle_id: &str) {
+        if let Ok(mut active) = self.active_bundle.lock() {
+            *active = Some(bundle_id.to_string());
+        }
+    }
+
+    /// Clear the active app (called on `stop` actions).
+    pub fn clear_active(&self, bundle_id: &str) {
+        if let Ok(mut active) = self.active_bundle.lock() {
+            if active.as_deref() == Some(bundle_id) {
+                *active = None;
+            }
+        }
+    }
+
+    /// Get the active bundle ID.
+    pub fn active_bundle_id(&self) -> Option<String> {
+        self.active_bundle.lock().ok()?.clone()
+    }
+
+    /// Capture perf for the currently active app.
+    pub async fn capture(&self) -> RawPerfData {
+        let bundle_id = match self.active_bundle_id() {
+            Some(id) => id,
+            None => return RawPerfData::default(),
+        };
+        match self.collectors.get(&bundle_id) {
+            Some(collector) => collector.capture().await,
+            None => RawPerfData::default(),
+        }
     }
 }
 

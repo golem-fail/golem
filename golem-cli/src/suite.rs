@@ -750,11 +750,17 @@ async fn run_flow_on_device(
     let perf_enabled = !no_perf && flow_perf;
 
     let companion_port = if platform == Platform::Android { Some(port) } else { None };
+    let apps: Vec<(String, String)> = flow
+        .flow
+        .apps
+        .iter()
+        .map(|a| (a.name.clone(), a.bundle.clone()))
+        .collect();
     let collector = if perf_enabled {
-        Some(golem_runner::perf::PerfCollector::new(
+        Some(golem_runner::perf::PerfCollectorSet::new(
+            &apps,
             platform,
             device.udid.clone(),
-            bundle_id,
             companion_port,
         ))
     } else {

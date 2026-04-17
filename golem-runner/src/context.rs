@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use golem_devices::DeviceInfo;
 
 use crate::capture::CaptureConfig;
-use crate::perf::PerfCollector;
+use crate::perf::PerfCollectorSet;
 
 /// Flow-level context threaded through the execution pipeline.
 pub struct ExecutionContext<'a> {
@@ -16,8 +16,8 @@ pub struct ExecutionContext<'a> {
     pub step_index: usize,
     /// The device running this flow. Used for block-level `where` filtering.
     pub device: Option<&'a DeviceInfo>,
-    /// Performance collector — `None` when perf is disabled.
-    pub perf_collector: Option<&'a PerfCollector>,
+    /// Performance collector set — `None` when perf is disabled.
+    pub perf_collector: Option<&'a PerfCollectorSet>,
     /// Last launch duration in ms, shared between action handlers and executor.
     pub last_launch_ms: AtomicU64,
 }
