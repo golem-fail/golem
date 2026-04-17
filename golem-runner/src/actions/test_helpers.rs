@@ -12,7 +12,6 @@ pub fn make_step(action: &str) -> Step {
         on_accessibility_label: None,
         on_index: None,
         on_enabled: None,
-        on_checked: None,
         on_clickable: None,
         on_below: None,
         on_above: None,

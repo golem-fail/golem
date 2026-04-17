@@ -47,7 +47,6 @@ pub fn build_selector_from_group(g: &golem_parser::SelectorGroup) -> Selector {
         accessibility_label: g.accessibility_label.clone(),
         index: g.index,
         enabled: g.enabled,
-        checked: g.checked,
         clickable: g.clickable,
         below: g.below.as_ref().map(convert_anchor),
         above: g.above.as_ref().map(convert_anchor),
@@ -68,7 +67,6 @@ pub fn build_selector(step: &Step) -> Selector {
         accessibility_label: g.and_then(|g| g.accessibility_label.clone()).or(step.on_accessibility_label.clone()),
         index: g.and_then(|g| g.index).or(step.on_index),
         enabled: g.and_then(|g| g.enabled).or(step.on_enabled),
-        checked: g.and_then(|g| g.checked).or(step.on_checked),
         clickable: g.and_then(|g| g.clickable).or(step.on_clickable),
         below: g.and_then(|g| g.below.as_ref().map(convert_anchor))
             .or(step.on_below.as_ref().map(|s| AnchorSelector::Text(s.clone()))),
@@ -558,7 +556,6 @@ mod tests {
             on_accessibility_label: None,
             on_index: None,
             on_enabled: None,
-            on_checked: None,
             on_clickable: None,
             on_below: None,
             on_above: None,
@@ -810,7 +807,6 @@ mod tests {
         step.on_accessibility_label = Some("btn-1".to_string());
         step.on_index = Some(2);
         step.on_enabled = Some(true);
-        step.on_checked = Some(false);
         step.on_clickable = Some(true);
         step.on_below = Some("Header".to_string());
         step.on_above = Some("Footer".to_string());
@@ -822,7 +818,6 @@ mod tests {
         assert_eq!(sel.accessibility_label.as_deref(), Some("btn-1"));
         assert_eq!(sel.index, Some(2));
         assert_eq!(sel.enabled, Some(true));
-        assert_eq!(sel.checked, Some(false));
         assert_eq!(sel.clickable, Some(true));
         assert!(matches!(&sel.below, Some(AnchorSelector::Text(s)) if s == "Header"));
         assert!(matches!(&sel.above, Some(AnchorSelector::Text(s)) if s == "Footer"));
@@ -862,56 +857,42 @@ mod tests {
         assert_eq!(elem.text.as_deref(), Some("Item 1"));
     }
 
-    // ── 10. resolve_element with enabled/checked/clickable filters ───
+    // ── 10. resolve_element with enabled/clickable filters ───
 
     #[tokio::test]
     async fn resolve_element_with_state_filters() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
 
-        let mut enabled_checked = make_element_with_text(
-            "Checkbox",
+        let mut enabled = make_element_with_text(
+            "Button",
             "Option A",
             Bounds::new(0, 0, 100, 30),
         );
-        enabled_checked.enabled = true;
-        enabled_checked.checked = true;
-        enabled_checked.clickable = true;
+        enabled.enabled = true;
+        enabled.clickable = true;
 
-        let mut enabled_unchecked = make_element_with_text(
-            "Checkbox",
+        let mut disabled = make_element_with_text(
+            "Button",
             "Option B",
             Bounds::new(0, 40, 100, 30),
         );
-        enabled_unchecked.enabled = true;
-        enabled_unchecked.checked = false;
-        enabled_unchecked.clickable = true;
+        disabled.enabled = false;
+        disabled.clickable = false;
 
-        let mut disabled_checked = make_element_with_text(
-            "Checkbox",
-            "Option C",
-            Bounds::new(0, 80, 100, 30),
-        );
-        disabled_checked.enabled = false;
-        disabled_checked.checked = true;
-        disabled_checked.clickable = false;
-
-        root.children.push(enabled_checked);
-        root.children.push(enabled_unchecked);
-        root.children.push(disabled_checked);
+        root.children.push(enabled);
+        root.children.push(disabled);
 
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
         step.on_text = Some("Option *".to_string());
         step.on_enabled = Some(true);
-        step.on_checked = Some(true);
         step.on_clickable = Some(true);
 
         let (elem, _coords) = resolve_element(&step, &driver)
             .await
-            .expect("should find enabled, checked, clickable checkbox");
+            .expect("should find enabled, clickable button");
         assert_eq!(elem.text.as_deref(), Some("Option A"));
         assert!(elem.enabled);
-        assert!(elem.checked);
         assert!(elem.clickable);
     }
 }

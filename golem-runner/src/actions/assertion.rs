@@ -194,43 +194,6 @@ mod tests {
         assert!(result.is_err(), "assert_visible SHALL fail when element is disabled");
     }
 
-    // ── assert_visible with checked selector ─────────────────────────
-
-    #[tokio::test]
-    async fn assert_visible_with_checked_succeeds() {
-        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let mut cb = make_element_with_text("Checkbox", "Agree", Bounds::new(50, 300, 30, 30));
-        cb.checked = true;
-        root.children.push(cb);
-        let driver = MockPlatformDriver::new(root);
-
-        let mut step = make_step("assert_visible");
-        step.on_text = Some("Agree".to_string());
-        step.on_checked = Some(true);
-
-        handle_assert_visible(&step, &driver)
-            .await
-            .expect("assert_visible SHALL succeed when element is checked");
-    }
-
-    // ── assert_visible with checked selector fails when unchecked ────
-
-    #[tokio::test]
-    async fn assert_visible_with_checked_fails_when_unchecked() {
-        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let mut cb = make_element_with_text("Checkbox", "Agree", Bounds::new(50, 300, 30, 30));
-        cb.checked = false;
-        root.children.push(cb);
-        let driver = MockPlatformDriver::new(root);
-
-        let mut step = make_step("assert_visible");
-        step.on_text = Some("Agree".to_string());
-        step.on_checked = Some(true);
-
-        let result = handle_assert_visible(&step, &driver).await;
-        assert!(result.is_err(), "assert_visible SHALL fail when element is unchecked");
-    }
-
     // ── assert_alert tests ────────────────────────────────────────────
 
     #[tokio::test]

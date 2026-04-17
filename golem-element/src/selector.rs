@@ -20,7 +20,6 @@ pub struct Selector {
     pub accessibility_label: Option<String>,
     pub index: Option<usize>,
     pub enabled: Option<bool>,
-    pub checked: Option<bool>,
     pub clickable: Option<bool>,
     /// Keep only elements whose bounds.y > anchor.bottom()
     pub below: Option<AnchorSelector>,
@@ -170,12 +169,6 @@ fn matches_selector(element: &Element, selector: &Selector) -> bool {
 
     if let Some(expected) = selector.enabled {
         if element.enabled != expected {
-            return false;
-        }
-    }
-
-    if let Some(expected) = selector.checked {
-        if element.checked != expected {
             return false;
         }
     }
@@ -449,28 +442,7 @@ mod tests {
         assert_eq!(results[0].element.text.as_deref(), Some("Enabled"));
     }
 
-    // ── 11. State filter checked ────────────────────────────────────
-
-    #[test]
-    fn state_filter_checked() {
-        let mut root = elem("View");
-        let mut checked = elem_with_text("Checkbox", "Option A");
-        checked.checked = true;
-        let unchecked = elem_with_text("Checkbox", "Option B");
-        root.children.push(checked);
-        root.children.push(unchecked);
-
-        let s = Selector {
-            checked: Some(false),
-            text: Some("Option *".to_string()),
-            ..sel()
-        };
-        let results = find_elements(&root, &s);
-        assert_eq!(results.len(), 1);
-        assert!(!results[0].element.checked);
-    }
-
-    // ── 12. State filter clickable ──────────────────────────────────
+    // ── 11. State filter clickable ──────────────────────────────────
 
     #[test]
     fn state_filter_clickable() {

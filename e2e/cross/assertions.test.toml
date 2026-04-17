@@ -41,8 +41,6 @@ steps = [
   { action = "assert_visible", on_text = "Enter email", on_enabled = true },
   { action = "assert_visible", on_text = "Dark Mode", on_enabled = true, auto_scroll = true },
 
-  # assert_visible with checked: scroll to toggles, toggle checkbox and verify
+  # Tap checkbox to verify it's interactable
   { action = "tap", on_text = "I agree", auto_scroll = true },
-  # WebView checkboxes don't reliably propagate checked state to iOS accessibility
-  { action = "assert_visible", on_text = "I agree", on_checked = true, if_fail = "warn" },
 ]

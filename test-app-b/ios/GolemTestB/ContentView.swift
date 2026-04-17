@@ -44,6 +44,20 @@ struct ContentView: View {
             Toggle("Test Toggle", isOn: $toggleOn)
                 .accessibilityIdentifier("toggle-b")
                 .padding(.horizontal)
+
+            Divider()
+
+            Text("Native Scroll List")
+                .font(.headline)
+                .accessibilityIdentifier("native-list-title")
+
+            // Native List in a fixed-height frame — items beyond 200pt are clipped
+            List(0..<50, id: \.self) { index in
+                Text("Native Item \(index)")
+                    .accessibilityIdentifier("native-item-\(index)")
+            }
+            .frame(height: 200)
+            .accessibilityIdentifier("native-list")
         }
         .padding()
     }

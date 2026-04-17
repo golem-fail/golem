@@ -4,6 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -98,6 +100,32 @@ fun TestScreen() {
                 onCheckedChange = { toggleOn = it },
                 modifier = Modifier.semantics { contentDescription = "toggle-b" }
             )
+        }
+
+        Divider()
+
+        Text(
+            "Native Scroll List",
+            fontSize = 18.sp,
+            modifier = Modifier.semantics { contentDescription = "native-list-title" }
+        )
+
+        // Native LazyColumn in a fixed-height container — items beyond 200dp are clipped
+        LazyColumn(
+            modifier = Modifier
+                .height(200.dp)
+                .fillMaxWidth()
+                .semantics { contentDescription = "native-list" }
+        ) {
+            items((0..49).toList()) { index ->
+                Text(
+                    "Native Item $index",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .semantics { contentDescription = "native-item-$index" }
+                )
+            }
         }
     }
 }
