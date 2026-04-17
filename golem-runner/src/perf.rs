@@ -13,19 +13,28 @@ pub struct RawPerfData {
     pub net_tx_kb: Option<f64>,
 }
 
-/// Collects performance metrics from a running app via host-side commands.
+/// Collects performance metrics from a running app via host-side commands
+/// and (on Android) the companion HTTP server.
 pub struct PerfCollector {
     platform: Platform,
     device_id: String,
     bundle_id: String,
+    /// Companion HTTP port (localhost). Used on Android for FDs, disk, and network.
+    companion_port: Option<u16>,
 }
 
 impl PerfCollector {
-    pub fn new(platform: Platform, device_id: String, bundle_id: String) -> Self {
+    pub fn new(
+        platform: Platform,
+        device_id: String,
+        bundle_id: String,
+        companion_port: Option<u16>,
+    ) -> Self {
         Self {
             platform,
             device_id,
             bundle_id,
+            companion_port,
         }
     }
 
@@ -40,65 +49,37 @@ impl PerfCollector {
     async fn capture_android(&self) -> RawPerfData {
         let mut data = RawPerfData::default();
 
-        // Memory: dumpsys meminfo
+        // Memory: dumpsys meminfo (host-side, works without permissions)
         if let Ok(output) = self.adb(&["shell", "dumpsys", "meminfo", &self.bundle_id]).await {
             data.memory_mb = parse_android_memory(&output);
         }
 
-        // CPU: dumpsys cpuinfo
+        // CPU: dumpsys cpuinfo (host-side, works without permissions)
         if let Ok(output) = self.adb(&["shell", "dumpsys", "cpuinfo"]).await {
             data.cpu_percent = parse_android_cpu(&output, &self.bundle_id);
         }
 
-        // PID-dependent metrics
+        // Threads: /proc/{pid}/status (host-side, readable by shell user)
         if let Some(pid) = self.android_pid().await {
-            // Threads
             if let Ok(output) = self
                 .adb(&["shell", "cat", &format!("/proc/{pid}/status")])
                 .await
             {
                 data.threads = parse_android_threads(&output);
             }
-            // File descriptors
-            if let Ok(output) = self
-                .adb(&["shell", "ls", &format!("/proc/{pid}/fd")])
-                .await
-            {
-                data.file_descriptors = parse_android_fds(&output);
-            }
         }
 
-        // Disk: du on app data directory
-        if let Ok(output) = self
-            .adb(&[
-                "shell",
-                "du",
-                "-sk",
-                &format!("/data/data/{}", self.bundle_id),
-            ])
-            .await
-        {
-            data.disk_mb = parse_android_disk(&output);
-        }
-
-        // Network: /proc/net/xt_qtaguid/stats filtered by UID
-        if let Ok(uid_output) = self
-            .adb(&[
-                "shell",
-                "dumpsys",
-                "package",
-                &self.bundle_id,
-            ])
-            .await
-        {
-            if let Some(uid) = parse_android_uid(&uid_output) {
-                if let Ok(net_output) = self
-                    .adb(&["shell", "cat", "/proc/net/xt_qtaguid/stats"])
-                    .await
-                {
-                    let (rx, tx) = parse_android_network(&net_output, uid);
-                    data.net_rx_kb = rx;
-                    data.net_tx_kb = tx;
+        // FDs, disk, network: companion endpoint (needs app UID / run-as)
+        if let Some(port) = self.companion_port {
+            match fetch_companion_perf(port, &self.bundle_id).await {
+                Ok(perf) => {
+                    data.file_descriptors = perf.file_descriptors;
+                    data.disk_mb = perf.disk_kb.map(|kb| kb as f64 / 1024.0);
+                    data.net_rx_kb = perf.net_rx_bytes.map(|b| b as f64 / 1024.0);
+                    data.net_tx_kb = perf.net_tx_bytes.map(|b| b as f64 / 1024.0);
+                }
+                Err(e) => {
+                    eprintln!("  [perf] companion /perf failed: {e}");
                 }
             }
         }
@@ -209,6 +190,34 @@ async fn run_cmd(cmd: &str, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
+// ── Android companion client ─────────────────────────────────────────
+
+/// Response from the companion's `/perf` endpoint.
+#[derive(Debug)]
+struct CompanionPerfResponse {
+    file_descriptors: Option<u32>,
+    disk_kb: Option<u64>,
+    net_rx_bytes: Option<u64>,
+    net_tx_bytes: Option<u64>,
+}
+
+/// Fetch FDs, disk, and network from the Android companion's `/perf` endpoint.
+async fn fetch_companion_perf(port: u16, package: &str) -> Result<CompanionPerfResponse> {
+    let url = format!("http://localhost:{port}/perf?package={package}");
+    let body = reqwest::get(&url).await?.text().await?;
+    parse_companion_perf_json(&body)
+}
+
+fn parse_companion_perf_json(json: &str) -> Result<CompanionPerfResponse> {
+    let v: serde_json::Value = serde_json::from_str(json)?;
+    Ok(CompanionPerfResponse {
+        file_descriptors: v["file_descriptors"].as_u64().map(|n| n as u32),
+        disk_kb: v["disk_kb"].as_u64(),
+        net_rx_bytes: v["net_rx_bytes"].as_u64(),
+        net_tx_bytes: v["net_tx_bytes"].as_u64(),
+    })
+}
+
 // ── Android parsers ──────────────────────────────────────────────────
 
 /// Parse TOTAL PSS from `dumpsys meminfo <package>` output.
@@ -247,68 +256,6 @@ fn parse_android_threads(output: &str) -> Option<u32> {
         }
     }
     None
-}
-
-/// Parse file descriptor count from `ls /proc/{pid}/fd`.
-fn parse_android_fds(output: &str) -> Option<u32> {
-    let count = output.lines().filter(|l| !l.trim().is_empty()).count();
-    if count == 0 {
-        None
-    } else {
-        Some(count as u32)
-    }
-}
-
-/// Parse app disk usage from `du -sk /data/data/<package>`.
-fn parse_android_disk(output: &str) -> Option<f64> {
-    let first_line = output.lines().next()?;
-    let kb: f64 = first_line.trim().split_whitespace().next()?.parse().ok()?;
-    Some(kb / 1024.0)
-}
-
-/// Extract UID from `dumpsys package <package>` output.
-fn parse_android_uid(output: &str) -> Option<u32> {
-    // Newer Android: "uid=10198 gids=[] type=0 ..."
-    // Older Android: "userId=10123"
-    for line in output.lines() {
-        let trimmed = line.trim();
-        if let Some(rest) = trimmed.strip_prefix("uid=") {
-            return rest.split_whitespace().next()?.parse().ok();
-        }
-        if let Some(rest) = trimmed.strip_prefix("userId=") {
-            return rest.split_whitespace().next()?.parse().ok();
-        }
-    }
-    None
-}
-
-/// Parse network stats from `/proc/net/xt_qtaguid/stats` filtered by UID.
-fn parse_android_network(output: &str, uid: u32) -> (Option<f64>, Option<f64>) {
-    let uid_str = uid.to_string();
-    let mut rx_bytes: u64 = 0;
-    let mut tx_bytes: u64 = 0;
-    let mut found = false;
-
-    for line in output.lines() {
-        let fields: Vec<&str> = line.split_whitespace().collect();
-        // Format: idx iface acct_tag_hex uid_tag_int cnt_set rx_bytes rx_packets tx_bytes tx_packets
-        if fields.len() >= 8 && fields[3] == uid_str {
-            if let (Ok(rx), Ok(tx)) = (fields[5].parse::<u64>(), fields[7].parse::<u64>()) {
-                rx_bytes += rx;
-                tx_bytes += tx;
-                found = true;
-            }
-        }
-    }
-
-    if found {
-        (
-            Some(rx_bytes as f64 / 1024.0),
-            Some(tx_bytes as f64 / 1024.0),
-        )
-    } else {
-        (None, None)
-    }
 }
 
 /// Parse the PID from `launchctl list` output for an iOS simulator app.
@@ -479,95 +426,36 @@ Threads:        42
         assert!(parse_android_threads("").is_none());
     }
 
-    // ── Android FDs ──────────────────────────────────────────────────
+    // ── Companion JSON parser ─────────────────────────────────────────
 
     #[test]
-    fn android_fds_parses() {
-        let output = "0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n";
-        assert_eq!(
-            parse_android_fds(output).expect("SHALL parse FD count"),
-            10
-        );
+    fn companion_perf_json_full() {
+        let json = r#"{"file_descriptors":241,"disk_kb":4924,"net_rx_bytes":159744,"net_tx_bytes":46080}"#;
+        let r = parse_companion_perf_json(json).expect("SHALL parse companion JSON");
+        assert_eq!(r.file_descriptors, Some(241));
+        assert_eq!(r.disk_kb, Some(4924));
+        assert_eq!(r.net_rx_bytes, Some(159744));
+        assert_eq!(r.net_tx_bytes, Some(46080));
     }
 
     #[test]
-    fn android_fds_empty() {
-        assert!(parse_android_fds("").is_none());
+    fn companion_perf_json_nulls() {
+        let json = r#"{"file_descriptors":null,"disk_kb":null,"net_rx_bytes":null,"net_tx_bytes":null}"#;
+        let r = parse_companion_perf_json(json).expect("SHALL parse companion JSON with nulls");
+        assert!(r.file_descriptors.is_none());
+        assert!(r.disk_kb.is_none());
+        assert!(r.net_rx_bytes.is_none());
+        assert!(r.net_tx_bytes.is_none());
     }
 
     #[test]
-    fn android_fds_blank_lines() {
-        let output = "0\n1\n\n2\n";
-        assert_eq!(parse_android_fds(output).expect("SHALL skip blank lines"), 3);
-    }
-
-    // ── Android disk ─────────────────────────────────────────────────
-
-    #[test]
-    fn android_disk_parses() {
-        let output = "24680\t/data/data/com.example.app\n";
-        let mb = parse_android_disk(output).expect("SHALL parse disk usage");
-        assert!((mb - 24.1).abs() < 0.1);
-    }
-
-    #[test]
-    fn android_disk_empty() {
-        assert!(parse_android_disk("").is_none());
-    }
-
-    // ── Android UID ──────────────────────────────────────────────────
-
-    #[test]
-    fn android_uid_parses() {
-        let output = r#"Packages:
-  Package [com.example.app] (abc1234):
-    userId=10123
-    pkg=Package{abc1234 com.example.app}
-"#;
-        assert_eq!(
-            parse_android_uid(output).expect("SHALL parse UID"),
-            10123
-        );
-    }
-
-    #[test]
-    fn android_uid_modern_format() {
-        let output = "    uid=10198 gids=[] type=0 prot=signature\n    installerPackageUid=-1\n";
-        assert_eq!(
-            parse_android_uid(output).expect("SHALL parse modern uid= format"),
-            10198
-        );
-    }
-
-    #[test]
-    fn android_uid_not_found() {
-        assert!(parse_android_uid("no userId here\n").is_none());
-    }
-
-    // ── Android network ──────────────────────────────────────────────
-
-    #[test]
-    fn android_network_parses() {
-        let output = r#"idx iface acct_tag_hex uid_tag_int cnt_set rx_bytes rx_packets tx_bytes tx_packets
-2 wlan0 0x0 10123 0 156000 120 32000 80
-3 wlan0 0x0 10123 1 4000 10 1000 5
-4 wlan0 0x0 10999 0 999999 500 888888 400
-"#;
-        let (rx, tx) = parse_android_network(output, 10123);
-        let rx = rx.expect("SHALL parse rx bytes");
-        let tx = tx.expect("SHALL parse tx bytes");
-        // (156000 + 4000) / 1024 = 156.25
-        assert!((rx - 156.25).abs() < 0.01);
-        // (32000 + 1000) / 1024 = 32.22...
-        assert!((tx - 32.226).abs() < 0.01);
-    }
-
-    #[test]
-    fn android_network_no_matching_uid() {
-        let output = "idx iface acct_tag_hex uid_tag_int cnt_set rx_bytes rx_packets tx_bytes tx_packets\n2 wlan0 0x0 10999 0 999 10 888 5\n";
-        let (rx, tx) = parse_android_network(output, 10123);
-        assert!(rx.is_none());
-        assert!(tx.is_none());
+    fn companion_perf_json_partial() {
+        let json = r#"{"file_descriptors":87,"disk_kb":null,"net_rx_bytes":1024,"net_tx_bytes":null}"#;
+        let r = parse_companion_perf_json(json).expect("SHALL parse partial companion JSON");
+        assert_eq!(r.file_descriptors, Some(87));
+        assert!(r.disk_kb.is_none());
+        assert_eq!(r.net_rx_bytes, Some(1024));
+        assert!(r.net_tx_bytes.is_none());
     }
 
     // ── iOS memory ───────────────────────────────────────────────────
