@@ -38,6 +38,22 @@ enum HierarchySerializer {
             ]
         ]
 
+        // Access private visibleFrame via Objective-C helper (avoids Swift
+        // protocol existential issues with KVC on struct-returning properties).
+        let visibleFrame: CGRect
+        let vf = SnapshotHelper.visibleFrame(of: snapshot)
+        if !vf.isNull {
+            visibleFrame = vf
+        } else {
+            visibleFrame = frame
+        }
+        node["visible_bounds"] = [
+            "x": Int(visibleFrame.origin.x),
+            "y": Int(visibleFrame.origin.y),
+            "width": Int(visibleFrame.size.width),
+            "height": Int(visibleFrame.size.height)
+        ]
+
         let children = snapshot.children.map { serializeNode($0) }
         if !children.isEmpty {
             node["children"] = children

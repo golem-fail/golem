@@ -1,6 +1,7 @@
 use crate::common::{
     build_backspace_body, build_long_press_body, build_swipe_body,
-    build_tap_body, build_type_body, parse_hierarchy, CompanionClient,
+    build_tap_body, build_type_body, find_webview_bounds, parse_hierarchy,
+    replace_webview_children, CompanionClient,
 };
 use crate::{PlatformDriver, ScreenshotResult};
 use anyhow::{Context, Result};
@@ -15,6 +16,24 @@ pub struct IosDriver {
     client: CompanionClient,
     device_id: String,
     bundle_id: String,
+    /// WebKit Inspector lifecycle for WKWebView DOM access.
+    webkit: std::sync::Mutex<WebKitLifecycle>,
+}
+
+/// WebKit Inspector connection lifecycle — mirrors `CdpLifecycle` in android.rs.
+enum WebKitLifecycle {
+    /// Haven't seen a WKWebView yet — no inspector needed.
+    Idle,
+    /// Background setup task is running.
+    SetupInProgress(tokio::sync::oneshot::Receiver<Option<WebKitState>>),
+    /// Inspector is connected and ready.
+    Ready(WebKitState),
+    /// Setup failed — will retry on next WebView sighting.
+    Failed,
+}
+
+struct WebKitState {
+    inspector: crate::webkit::WebKitInspector,
 }
 
 /// Convert a `Direction` to swipe coordinate deltas.
@@ -30,6 +49,7 @@ impl IosDriver {
             client,
             device_id,
             bundle_id,
+            webkit: std::sync::Mutex::new(WebKitLifecycle::Idle),
         }
     }
 
@@ -76,11 +96,158 @@ impl IosDriver {
     }
 }
 
+/// What to do with WebKit Inspector on this hierarchy call.
+enum WebKitAction {
+    Skip,
+    Enrich(WebKitState),
+}
+
+/// Set up WebKit Inspector: discover socket, connect, handshake.
+async fn setup_webkit() -> Option<WebKitState> {
+    match crate::webkit::WebKitInspector::connect().await {
+        Ok(inspector) => Some(WebKitState { inspector }),
+        Err(e) => {
+            eprintln!("  [webkit] setup failed: {e}");
+            None
+        }
+    }
+}
+
+/// Try to enrich a WebView node with WebKit Inspector DOM data.
+/// Returns the WebKitState back if successful (for reuse), None if failed.
+async fn try_enrich(
+    raw: &mut serde_json::Value,
+    mut state: WebKitState,
+    wv_x: i32,
+    wv_y: i32,
+) -> Option<WebKitState> {
+    match crate::webkit::fetch_webview_dom(&mut state.inspector, wv_x, wv_y).await {
+        Some(dom) => {
+            replace_webview_children(raw, dom);
+            Some(state)
+        }
+        None => None, // Inspector connection lost
+    }
+}
+
 #[async_trait]
 impl PlatformDriver for IosDriver {
     async fn get_hierarchy(&self) -> Result<(Element, crate::common::HierarchyMeta)> {
         let text = self.client.get_text("/hierarchy").await?;
-        parse_hierarchy(&text)
+        let wrapper: serde_json::Value = serde_json::from_str(&text)
+            .context("failed to parse hierarchy JSON")?;
+
+        // Extract tree from wrapper (companion sends {"tree": [...], ...})
+        let mut raw = wrapper.get("tree").cloned().unwrap_or(wrapper.clone());
+
+        // Check if hierarchy contains a WKWebView
+        // CSS getBoundingClientRect() returns coordinates relative to the web
+        // viewport, which starts below the safe area. Add safe_area_top so DOM
+        // coordinates match the native accessibility tree (screen coordinates).
+        let safe_area_top = wrapper
+            .get("safe_area_top")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as i32;
+        if let Some((wv_x, wv_y)) = find_webview_bounds(&raw) {
+            let wv_y = wv_y + safe_area_top;
+            // Check WebKit state (short lock, no async while held)
+            let webkit_action = {
+                let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
+                match &mut *wk {
+                    WebKitLifecycle::Idle => {
+                        // First WebView sighting — kick off background setup
+                        let (tx, rx) = tokio::sync::oneshot::channel();
+                        tokio::spawn(async move {
+                            let result = setup_webkit().await;
+                            let _ = tx.send(result);
+                        });
+                        *wk = WebKitLifecycle::SetupInProgress(rx);
+                        WebKitAction::Skip
+                    }
+                    WebKitLifecycle::SetupInProgress(rx) => {
+                        match rx.try_recv() {
+                            Ok(Some(state)) => {
+                                WebKitAction::Enrich(state)
+                            }
+                            Ok(None) => {
+                                *wk = WebKitLifecycle::Failed;
+                                WebKitAction::Skip
+                            }
+                            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
+                                WebKitAction::Skip // Still setting up
+                            }
+                            Err(_) => {
+                                *wk = WebKitLifecycle::Failed;
+                                WebKitAction::Skip
+                            }
+                        }
+                    }
+                    WebKitLifecycle::Ready(_) => {
+                        // Take ownership of the state for async work
+                        let old = std::mem::replace(&mut *wk, WebKitLifecycle::Failed);
+                        if let WebKitLifecycle::Ready(state) = old {
+                            WebKitAction::Enrich(state)
+                        } else {
+                            WebKitAction::Skip
+                        }
+                    }
+                    WebKitLifecycle::Failed => {
+                        // Retry — the app may have been relaunched
+                        let (tx, rx) = tokio::sync::oneshot::channel();
+                        tokio::spawn(async move {
+                            let result = setup_webkit().await;
+                            let _ = tx.send(result);
+                        });
+                        *wk = WebKitLifecycle::SetupInProgress(rx);
+                        WebKitAction::Skip
+                    }
+                }
+            }; // mutex dropped here
+
+            // Now do async WebKit work outside the lock
+            if let WebKitAction::Enrich(state) = webkit_action {
+                if let Some(state) = try_enrich(&mut raw, state, wv_x, wv_y).await {
+                    // Put state back
+                    let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
+                    *wk = WebKitLifecycle::Ready(state);
+                } else {
+                    // Inspector failed — reconnect immediately
+                    if let Some(new_state) = setup_webkit().await {
+                        if let Some(new_state) =
+                            try_enrich(&mut raw, new_state, wv_x, wv_y).await
+                        {
+                            let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
+                            *wk = WebKitLifecycle::Ready(new_state);
+                        } else {
+                            let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
+                            *wk = WebKitLifecycle::Failed;
+                        }
+                    } else {
+                        let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
+                        *wk = WebKitLifecycle::Failed;
+                    }
+                }
+            }
+        }
+
+        // Reconstruct wrapper with enriched tree for parse_hierarchy
+        let original: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+        let mut response = serde_json::json!({ "tree": raw });
+        if let Some(obj) = original.as_object() {
+            for key in [
+                "keyboard_height",
+                "safe_area_top",
+                "safe_area_bottom",
+                "device_model",
+            ] {
+                if let Some(val) = obj.get(key) {
+                    response[key] = val.clone();
+                }
+            }
+        }
+        let enriched_str =
+            serde_json::to_string(&response).context("failed to serialize hierarchy")?;
+        parse_hierarchy(&enriched_str)
     }
 
     async fn tap(&self, x: i32, y: i32) -> Result<()> {

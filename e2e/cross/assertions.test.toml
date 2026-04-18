@@ -37,7 +37,7 @@ steps = [
 
   # assert_visible with enabled: verify elements are enabled
   { action = "assert_visible", on_text = "Submit", on_enabled = true },
-  { action = "assert_visible", on_accessibility_label = "Increment", on_enabled = true },
+  { action = "assert_visible", on_accessibility_label = "Increment", on_enabled = true, auto_scroll = true },
   { action = "assert_visible", on_text = "Enter email", on_enabled = true },
   { action = "assert_visible", on_text = "Dark Mode", on_enabled = true, auto_scroll = true },
 

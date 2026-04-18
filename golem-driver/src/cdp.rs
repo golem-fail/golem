@@ -21,12 +21,21 @@ fn find_free_port() -> std::io::Result<u16> {
     Ok(listener.local_addr()?.port())
 }
 
-/// JavaScript that traverses the DOM and returns a tree matching the Android
-/// companion's JSON format (class, text, contentDescription, bounds, children).
+/// JavaScript that traverses the DOM and returns a tree matching the companion
+/// JSON format (class, text, contentDescription, bounds, children).
 /// - Excludes `display: none` and `visibility: hidden` (matches accessibility)
 /// - Includes dynamically added elements (fixes the `{#if}` bug)
-/// - Uses `getBoundingClientRect()` for viewport-relative coordinates
+/// - Uses `getBoundingClientRect()` for viewport-relative coordinates (CSS pixels)
+/// - Uses `IntersectionObserver` for accurate `visible_bounds` (handles overflow:hidden)
 /// Returns JSON: `{ tree: {...}, meta: { elapsed_ms, node_count, dpr, url } }`
+///
+/// Coordinates are in **CSS pixels** (not device pixels). The caller is
+/// responsible for scaling by `meta.dpr` when the platform's coordinate
+/// system uses device pixels (Android). iOS uses points = CSS pixels, so
+/// no scaling is needed.
+///
+/// The function is async (returns a Promise) because IntersectionObserver
+/// delivers results asynchronously after one animation frame (~16ms).
 ///
 /// Text = what the user SEES. accessibility_label = aria-label (for screen readers).
 ///
@@ -35,7 +44,7 @@ fn find_free_port() -> std::io::Result<u16> {
 ///   Others: text content → aria-label
 ///
 /// contentDescription (→ accessibility_label): always aria-label || id
-const DOM_TRAVERSAL_JS: &str = r#"(function(){var dpr=window.devicePixelRatio||1;var nc=0;var t0=performance.now();function t(el){nc++;var r=el.getBoundingClientRect();var al=el.getAttribute('aria-label')||'';var ph=el.placeholder||'';var tx='';for(var c of el.childNodes){if(c.nodeType===3&&c.textContent.trim()){tx=c.textContent.trim();break;}}var isInput=el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT';var val=(isInput&&el.type!=='checkbox'&&el.type!=='radio')?el.value||'':'';var text=val?val:ph?ph:tx?tx:al;var n={class:el.tagName.toLowerCase(),text:text,contentDescription:al||el.id||'',bounds:{left:Math.round(r.left*dpr),top:Math.round(r.top*dpr),right:Math.round((r.left+r.width)*dpr),bottom:Math.round((r.top+r.height)*dpr)},clickable:el.tagName==='BUTTON'||el.tagName==='A'||el.getAttribute('role')==='button',enabled:!el.disabled,checked:!!el.checked,focused:document.activeElement===el,scrollable:false,selected:false,children:[]};for(var c of el.children){if(c.tagName!=='SCRIPT'&&c.tagName!=='STYLE'){var s=window.getComputedStyle(c);if(s.display!=='none'&&s.visibility!=='hidden'){n.children.push(t(c));}}}return n;}var tree=t(document.body);return JSON.stringify({tree:tree,meta:{elapsed_ms:Math.round(performance.now()-t0),node_count:nc,dpr:dpr,url:location.href}});})()
+pub(crate) const DOM_TRAVERSAL_JS: &str = r#"(async function(){var dpr=window.devicePixelRatio||1;var nc=0;var t0=performance.now();var elMap=new Map();function t(el){nc++;var r=el.getBoundingClientRect();var al=el.getAttribute('aria-label')||'';var ph=el.placeholder||'';var tx='';for(var c of el.childNodes){if(c.nodeType===3&&c.textContent.trim()){tx=c.textContent.trim();break;}}var isInput=el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT';var val=(isInput&&el.type!=='checkbox'&&el.type!=='radio')?el.value||'':'';var text=val?val:ph?ph:tx?tx:al;var n={class:el.tagName.toLowerCase(),text:text,contentDescription:al||el.id||'',bounds:{left:Math.round(r.left),top:Math.round(r.top),right:Math.round(r.left+r.width),bottom:Math.round(r.top+r.height)},clickable:el.tagName==='BUTTON'||el.tagName==='A'||el.getAttribute('role')==='button',enabled:!el.disabled,checked:!!el.checked,focused:document.activeElement===el,scrollable:false,selected:false,children:[]};elMap.set(el,n);for(var c of el.children){if(c.tagName!=='SCRIPT'&&c.tagName!=='STYLE'){var s=window.getComputedStyle(c);if(s.display!=='none'&&s.visibility!=='hidden'){n.children.push(t(c));}}}return n;}var tree=t(document.body);var visRects=await new Promise(function(resolve){var results=new Map();var observer=new IntersectionObserver(function(entries){for(var e of entries){results.set(e.target,e.intersectionRect);}observer.disconnect();resolve(results);});elMap.forEach(function(_,el){observer.observe(el);});});visRects.forEach(function(rect,el){var n=elMap.get(el);if(n){n.visible_bounds={left:Math.round(rect.left),top:Math.round(rect.top),right:Math.round(rect.left+rect.width),bottom:Math.round(rect.top+rect.height)};}});var vv=window.visualViewport;var vvd=vv?{scale:vv.scale,offsetLeft:vv.offsetLeft,offsetTop:vv.offsetTop}:null;return JSON.stringify({tree:tree,meta:{elapsed_ms:Math.round(performance.now()-t0),node_count:nc,dpr:dpr,url:location.href,visualViewport:vvd}});})()
 "#;
 
 /// Discover the WebView debug socket name for a device.
@@ -158,13 +167,14 @@ pub async fn evaluate_dom_js_cached(port: u16, page_id: &str) -> Result<String> 
 
     let (mut write, mut read) = ws_stream.split();
 
-    // Send Runtime.evaluate command
+    // Send Runtime.evaluate command (awaitPromise: true for async JS)
     let cmd = serde_json::json!({
         "id": 1,
         "method": "Runtime.evaluate",
         "params": {
             "expression": DOM_TRAVERSAL_JS.trim(),
-            "returnByValue": true
+            "returnByValue": true,
+            "awaitPromise": true
         }
     });
 
@@ -205,57 +215,45 @@ pub async fn evaluate_dom_js_cached(port: u16, page_id: &str) -> Result<String> 
     bail!("CDP WebSocket closed without response")
 }
 
-/// Fetch the live DOM tree from an Android WebView via CDP.
-///
-/// Returns a JSON tree in the Android companion format (class, text,
-/// contentDescription, bounds with left/top/right/bottom, children),
-/// with bounds offset by the WebView's screen position.
-///
-/// Returns None if:
-/// - No WebView debug socket found (debugging not enabled)
-/// - CDP connection fails
-/// - JS evaluation fails
-pub async fn fetch_webview_dom(
-    device_serial: &str,
-    webview_bounds_left: i32,
-    webview_bounds_top: i32,
-) -> Option<serde_json::Value> {
-    let socket_name = find_webview_socket(device_serial).await?;
-    let port = setup_forward(device_serial, &socket_name).await.ok()?;
-
-    let result = async {
-        let page_id = get_page_id(port).await?;
-        let dom_json = evaluate_dom_js_cached(port, &page_id).await?;
-        let mut dom: serde_json::Value =
-            serde_json::from_str(&dom_json).context("failed to parse CDP DOM JSON")?;
-
-        // Offset bounds by WebView's screen position
-        offset_bounds(&mut dom, webview_bounds_left, webview_bounds_top);
-
-        Ok::<_, anyhow::Error>(dom)
+/// Recursively scale all coordinate values in bounds/visible_bounds by a factor.
+/// Converts from CSS pixels (as reported by JS) to device pixels (Android coordinate system).
+pub fn scale_bounds_by_dpr(node: &mut serde_json::Value, dpr: f64) {
+    for key in &["bounds", "visible_bounds"] {
+        if let Some(bounds) = node.get_mut(*key).and_then(|b| b.as_object_mut()) {
+            for field in &["left", "top", "right", "bottom"] {
+                if let Some(v) = bounds.get(*field).and_then(|v| v.as_i64()) {
+                    bounds.insert(
+                        field.to_string(),
+                        serde_json::json!((v as f64 * dpr).round() as i32),
+                    );
+                }
+            }
+        }
     }
-    .await;
-
-    // Clean up forward (best-effort)
-    let _ = remove_forward(device_serial, port).await;
-
-    result.ok()
+    if let Some(children) = node.get_mut("children").and_then(|c| c.as_array_mut()) {
+        for child in children {
+            scale_bounds_by_dpr(child, dpr);
+        }
+    }
 }
 
 /// Recursively offset bounds in a CDP DOM tree by the WebView's screen position.
 pub fn offset_bounds(node: &mut serde_json::Value, dx: i32, dy: i32) {
-    if let Some(bounds) = node.get_mut("bounds").and_then(|b| b.as_object_mut()) {
-        if let Some(v) = bounds.get("left").and_then(|v| v.as_i64()) {
-            bounds.insert("left".to_string(), serde_json::json!(v as i32 + dx));
-        }
-        if let Some(v) = bounds.get("top").and_then(|v| v.as_i64()) {
-            bounds.insert("top".to_string(), serde_json::json!(v as i32 + dy));
-        }
-        if let Some(v) = bounds.get("right").and_then(|v| v.as_i64()) {
-            bounds.insert("right".to_string(), serde_json::json!(v as i32 + dx));
-        }
-        if let Some(v) = bounds.get("bottom").and_then(|v| v.as_i64()) {
-            bounds.insert("bottom".to_string(), serde_json::json!(v as i32 + dy));
+    // Offset both `bounds` and `visible_bounds`
+    for key in &["bounds", "visible_bounds"] {
+        if let Some(bounds) = node.get_mut(*key).and_then(|b| b.as_object_mut()) {
+            if let Some(v) = bounds.get("left").and_then(|v| v.as_i64()) {
+                bounds.insert("left".to_string(), serde_json::json!(v as i32 + dx));
+            }
+            if let Some(v) = bounds.get("top").and_then(|v| v.as_i64()) {
+                bounds.insert("top".to_string(), serde_json::json!(v as i32 + dy));
+            }
+            if let Some(v) = bounds.get("right").and_then(|v| v.as_i64()) {
+                bounds.insert("right".to_string(), serde_json::json!(v as i32 + dx));
+            }
+            if let Some(v) = bounds.get("bottom").and_then(|v| v.as_i64()) {
+                bounds.insert("bottom".to_string(), serde_json::json!(v as i32 + dy));
+            }
         }
     }
     if let Some(children) = node.get_mut("children").and_then(|c| c.as_array_mut()) {

@@ -361,6 +361,15 @@ public class CompanionServer {
         boundsJson.put("bottom", bounds.bottom);
         json.put("bounds", boundsJson);
 
+        // Compute visible bounds by intersecting with all ancestor bounds
+        android.graphics.Rect visibleBounds = getVisibleBounds(node);
+        JSONObject visibleBoundsJson = new JSONObject();
+        visibleBoundsJson.put("left", visibleBounds.left);
+        visibleBoundsJson.put("top", visibleBounds.top);
+        visibleBoundsJson.put("right", visibleBounds.right);
+        visibleBoundsJson.put("bottom", visibleBounds.bottom);
+        json.put("visible_bounds", visibleBoundsJson);
+
         JSONArray children = new JSONArray();
         for (int i = 0; i < node.getChildCount(); i++) {
             AccessibilityNodeInfo child = node.getChild(i);
@@ -374,6 +383,29 @@ public class CompanionServer {
         }
         json.put("children", children);
         return json;
+    }
+
+    /**
+     * Compute the visible bounds of a node by walking up the parent chain
+     * and intersecting bounds at each level. Handles overflow:hidden clipping.
+     */
+    private android.graphics.Rect getVisibleBounds(AccessibilityNodeInfo node) {
+        android.graphics.Rect bounds = new android.graphics.Rect();
+        node.getBoundsInScreen(bounds);
+        AccessibilityNodeInfo parent = node.getParent();
+        while (parent != null) {
+            android.graphics.Rect parentBounds = new android.graphics.Rect();
+            parent.getBoundsInScreen(parentBounds);
+            if (!bounds.intersect(parentBounds)) {
+                // Fully clipped — return zero-area rect
+                parent.recycle();
+                return new android.graphics.Rect();
+            }
+            AccessibilityNodeInfo next = parent.getParent();
+            parent.recycle();
+            parent = next;
+        }
+        return bounds;
     }
 
     /**

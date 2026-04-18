@@ -375,7 +375,7 @@ pub(crate) async fn handle_accept_alert(_step: &Step, driver: &dyn PlatformDrive
     }
     // Last button is the positive action (OK, Yes)
     let btn = &buttons[buttons.len() - 1];
-    driver.tap(btn.bounds.center_x(), btn.bounds.center_y()).await
+    driver.tap(btn.effective_bounds().center_x(), btn.effective_bounds().center_y()).await
 }
 
 /// Dismiss (negative): tap the first button in the alert (Cancel, No).
@@ -391,7 +391,7 @@ pub(crate) async fn handle_dismiss_alert(_step: &Step, driver: &dyn PlatformDriv
     }
     // First button is the negative action (Cancel, No)
     let btn = &buttons[0];
-    driver.tap(btn.bounds.center_x(), btn.bounds.center_y()).await
+    driver.tap(btn.effective_bounds().center_x(), btn.effective_bounds().center_y()).await
 }
 
 #[cfg(test)]

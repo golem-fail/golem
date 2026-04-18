@@ -407,6 +407,7 @@ mod tests {
             clickable: true,
             focused: false,
             bounds,
+            visible_bounds: None,
             children: Vec::new(),
         }
     }

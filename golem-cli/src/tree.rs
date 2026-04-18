@@ -87,9 +87,11 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
             }
         };
 
-        // If Android, wait for CDP setup and fetch again with enrichment.
-        let root = if platform == "android" {
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        // If the tree contains a WebView, wait for background inspector setup
+        // (CDP on Android, WebKit Inspector on iOS) and fetch again with enrichment.
+        let has_webview = has_webview_element(&root);
+        let root = if has_webview {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             driver.get_hierarchy().await.map(|(r, _)| r).unwrap_or(root)
         } else {
             root
@@ -152,6 +154,8 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
             if let Ok(json) = serde_json::to_string_pretty(&display) {
                 println!("{json}");
             }
+        } else if args.debug {
+            print_tree_debug(&display, 0);
         } else {
             print_tree(&display, 0);
         }
@@ -209,6 +213,14 @@ fn has_webview_element(root: &Element) -> bool {
 }
 
 fn print_tree(element: &Element, depth: usize) {
+    print_tree_inner(element, depth, false);
+}
+
+fn print_tree_debug(element: &Element, depth: usize) {
+    print_tree_inner(element, depth, true);
+}
+
+fn print_tree_inner(element: &Element, depth: usize, debug: bool) {
     let indent = "  ".repeat(depth);
     let text = element.text.as_deref().unwrap_or("");
     let label = element
@@ -218,7 +230,7 @@ fn print_tree(element: &Element, depth: usize) {
         .map(|s| format!(" label={s}"))
         .unwrap_or_default();
     let et = &element.element_type;
-    let b = &element.bounds;
+    let b = element.effective_bounds();
 
     let mut state_parts = Vec::new();
     if !element.enabled {
@@ -236,19 +248,35 @@ fn print_tree(element: &Element, depth: usize) {
         format!(" [{}]", state_parts.join(", "))
     };
 
+    // In debug mode, show both bounds when they differ
+    let bounds_extra = if debug {
+        if let Some(ref vb) = element.visible_bounds {
+            if *vb != element.bounds {
+                let fb = &element.bounds;
+                format!(" (full: {},{} {}x{})", fb.x, fb.y, fb.width, fb.height)
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
     if !text.is_empty() || !label.is_empty() {
         println!(
-            "{indent}{et} \"{text}\"{label} ({},{} {}x{}){state}",
+            "{indent}{et} \"{text}\"{label} ({},{} {}x{}){bounds_extra}{state}",
             b.x, b.y, b.width, b.height
         );
     } else {
         println!(
-            "{indent}{et} ({},{} {}x{}){state}",
+            "{indent}{et} ({},{} {}x{}){bounds_extra}{state}",
             b.x, b.y, b.width, b.height
         );
     }
 
     for child in &element.children {
-        print_tree(child, depth + 1);
+        print_tree_inner(child, depth + 1, debug);
     }
 }

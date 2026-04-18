@@ -11,6 +11,7 @@ import Permissions from "./lib/Permissions.svelte";
 import DeviceState from "./lib/DeviceState.svelte";
 import DelayedElement from "./lib/DelayedElement.svelte";
 import DialogOverlay from "./lib/DialogOverlay.svelte";
+import PositionTest from "./lib/PositionTest.svelte";
 import TouchVisualizer from "./lib/TouchVisualizer.svelte";
 </script>
 
@@ -28,5 +29,6 @@ import TouchVisualizer from "./lib/TouchVisualizer.svelte";
   <Permissions />
   <DeviceState />
   <DelayedElement />
+  <PositionTest />
   <DialogOverlay />
 </main>

@@ -180,52 +180,23 @@ async fn try_enrich(raw: &mut serde_json::Value, port: u16, page_id: &str, wv_le
     }
 
     if let Some(mut tree) = wrapper.get("tree").cloned() {
+        // JS reports CSS pixels; Android accessibility tree uses device pixels.
+        // Scale by dpr to match.
+        let dpr = wrapper
+            .get("meta")
+            .and_then(|m| m.get("dpr"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        if dpr > 1.0 {
+            crate::cdp::scale_bounds_by_dpr(&mut tree, dpr);
+        }
         crate::cdp::offset_bounds(&mut tree, wv_left, wv_top);
         replace_webview_children(raw, tree);
     }
     true
 }
 
-/// Find the first android.webkit.WebView in the hierarchy and return its bounds (left, top).
-fn find_webview_bounds(val: &serde_json::Value) -> Option<(i32, i32)> {
-    if let Some(cls) = val.get("class").and_then(|v| v.as_str()) {
-        if cls == "android.webkit.WebView" {
-            let bounds = val.get("bounds")?;
-            let left = bounds.get("left").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            let top = bounds.get("top").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            return Some((left, top));
-        }
-    }
-    if let Some(children) = val.get("children").and_then(|c| c.as_array()) {
-        for child in children {
-            if let Some(bounds) = find_webview_bounds(child) {
-                return Some(bounds);
-            }
-        }
-    }
-    None
-}
-
-/// Replace the first android.webkit.WebView's children with CDP DOM data.
-fn replace_webview_children(val: &mut serde_json::Value, cdp_dom: serde_json::Value) -> bool {
-    if let Some(cls) = val.get("class").and_then(|v| v.as_str()) {
-        if cls == "android.webkit.WebView" {
-            if let Some(children) = val.get_mut("children").and_then(|c| c.as_array_mut()) {
-                children.clear();
-                children.push(cdp_dom);
-            }
-            return true;
-        }
-    }
-    if let Some(children) = val.get_mut("children").and_then(|c| c.as_array_mut()) {
-        for child in children {
-            if replace_webview_children(child, cdp_dom.clone()) {
-                return true;
-            }
-        }
-    }
-    false
-}
+use crate::common::{find_webview_bounds, replace_webview_children};
 
 #[async_trait]
 impl PlatformDriver for AndroidDriver {

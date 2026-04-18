@@ -19,9 +19,9 @@ name = "tap_interactions"
 steps = [
   { action = "tap", on_text = "Submit", timeout = 30000 },
   { action = "tap", on_text = "Action", on_index = 0 },
-  { action = "tap", on_text = "Increment" },
-  { action = "tap", on_text = "Increment" },
-  { action = "tap", on_text = "Decrement" },
+  { action = "tap", on_text = "+" },
+  { action = "tap", on_text = "+" },
+  { action = "tap", on_text = "-" },
 ]
 
 # Verification differs by platform

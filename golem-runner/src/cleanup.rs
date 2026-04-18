@@ -132,6 +132,7 @@ mod tests {
                 clickable: false,
                 focused: false,
                 bounds: Bounds::new(0, 0, 375, 812),
+                visible_bounds: None,
                 children: vec![],
             }, golem_driver::common::HierarchyMeta::default()))
         }

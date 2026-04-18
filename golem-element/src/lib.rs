@@ -18,6 +18,9 @@ pub struct Element {
     #[serde(default)]
     pub focused: bool,
     pub bounds: Bounds,
+    /// Visible bounds clipped to ancestor containers. Falls back to bounds.
+    #[serde(default)]
+    pub visible_bounds: Option<Bounds>,
     #[serde(default)]
     pub children: Vec<Element>,
 }
@@ -50,6 +53,32 @@ impl Bounds {
     }
     pub fn right(&self) -> i32 {
         self.x + self.width
+    }
+
+    /// Intersect this bounds with another, returning the overlapping region.
+    /// Returns a zero-area Bounds if there is no overlap.
+    pub fn intersect(&self, other: &Bounds) -> Bounds {
+        let left = self.x.max(other.x);
+        let top = self.y.max(other.y);
+        let right = self.right().min(other.right());
+        let bottom = self.bottom().min(other.bottom());
+        if right > left && bottom > top {
+            Bounds::new(left, top, right - left, bottom - top)
+        } else {
+            Bounds::new(left, top, 0, 0)
+        }
+    }
+
+    /// Area of this bounds in square pixels.
+    pub fn area(&self) -> i64 {
+        self.width as i64 * self.height as i64
+    }
+}
+
+impl Element {
+    /// Return visible bounds if available, otherwise fall back to full bounds.
+    pub fn effective_bounds(&self) -> &Bounds {
+        self.visible_bounds.as_ref().unwrap_or(&self.bounds)
     }
 }
 
@@ -119,12 +148,13 @@ pub fn filter_viewport(root: &Element, viewport: &Viewport) -> Element {
         clickable: root.clickable,
         focused: root.focused,
         bounds: root.bounds.clone(),
+        visible_bounds: root.visible_bounds.clone(),
         children: visible,
     }
 }
 
 fn collect_visible(element: &Element, viewport: &Viewport, out: &mut Vec<Element>) {
-    if viewport.contains(&element.bounds) {
+    if viewport.contains(element.effective_bounds()) {
         let mut leaf = element.clone();
         leaf.children = Vec::new();
         out.push(leaf);
@@ -136,8 +166,8 @@ fn collect_visible(element: &Element, viewport: &Viewport, out: &mut Vec<Element
 
 impl FindResult {
     pub fn new(element: Element) -> Self {
-        let tap_x = element.bounds.center_x();
-        let tap_y = element.bounds.center_y();
+        let tap_x = element.effective_bounds().center_x();
+        let tap_y = element.effective_bounds().center_y();
         Self {
             element,
             tap_x,
@@ -165,6 +195,7 @@ mod tests {
             clickable: true,
             focused: false,
             bounds,
+            visible_bounds: None,
             children: Vec::new(),
         }
     }
@@ -203,6 +234,7 @@ mod tests {
             clickable: true,
             focused: true,
             bounds: make_bounds(5, 10, 300, 44),
+            visible_bounds: None,
             children: Vec::new(),
         };
 
@@ -296,5 +328,75 @@ mod tests {
         let vp = Viewport::from_root(&root);
         assert_eq!(vp.width, 390);
         assert_eq!(vp.height, 844);
+    }
+
+    // ── Bounds::intersect tests ──────────────────────────────────────
+
+    #[test]
+    fn bounds_intersect_overlapping() {
+        let a = make_bounds(0, 0, 100, 100);
+        let b = make_bounds(50, 50, 100, 100);
+        let i = a.intersect(&b);
+        assert_eq!(i, make_bounds(50, 50, 50, 50));
+    }
+
+    #[test]
+    fn bounds_intersect_no_overlap() {
+        let a = make_bounds(0, 0, 50, 50);
+        let b = make_bounds(100, 100, 50, 50);
+        let i = a.intersect(&b);
+        assert_eq!(i.area(), 0, "SHALL have zero area when no overlap");
+    }
+
+    #[test]
+    fn bounds_intersect_contained() {
+        let outer = make_bounds(0, 0, 200, 200);
+        let inner = make_bounds(10, 10, 50, 50);
+        let i = outer.intersect(&inner);
+        assert_eq!(i, make_bounds(10, 10, 50, 50));
+    }
+
+    #[test]
+    fn bounds_area() {
+        assert_eq!(make_bounds(0, 0, 100, 50).area(), 5000);
+        assert_eq!(make_bounds(0, 0, 0, 50).area(), 0);
+    }
+
+    // ── effective_bounds tests ────────────────────────────────────────
+
+    #[test]
+    fn effective_bounds_falls_back_to_bounds() {
+        let elem = make_element("Button", make_bounds(10, 20, 100, 40));
+        assert_eq!(elem.effective_bounds(), &make_bounds(10, 20, 100, 40));
+    }
+
+    #[test]
+    fn effective_bounds_returns_visible_bounds_when_set() {
+        let mut elem = make_element("Button", make_bounds(10, 20, 100, 40));
+        elem.visible_bounds = Some(make_bounds(10, 20, 50, 40));
+        assert_eq!(elem.effective_bounds(), &make_bounds(10, 20, 50, 40));
+    }
+
+    // ── filter_viewport uses effective_bounds ─────────────────────────
+
+    #[test]
+    fn filter_viewport_uses_effective_bounds() {
+        let vp = Viewport::new(375, 812);
+        let mut root = make_element("View", make_bounds(0, 0, 375, 2000));
+        // Element with bounds off-screen but visible_bounds on-screen
+        let mut elem = make_element("Button", make_bounds(10, 900, 100, 44));
+        elem.visible_bounds = Some(make_bounds(10, 100, 100, 44));
+        root.children.push(elem);
+        // Element with bounds on-screen but visible_bounds off-screen (fully clipped)
+        let mut elem2 = make_element("Button", make_bounds(10, 100, 100, 44));
+        elem2.visible_bounds = Some(make_bounds(10, 900, 100, 44));
+        root.children.push(elem2);
+
+        let filtered = filter_viewport(&root, &vp);
+        assert_eq!(
+            filtered.children.len(),
+            1,
+            "SHALL use effective_bounds (visible_bounds) for viewport filtering"
+        );
     }
 }

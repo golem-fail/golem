@@ -96,8 +96,8 @@ fn apply_relational_filters(
 ) -> Vec<FindResult> {
     if let Some(ref anchor) = selector.below {
         if let Some(found) = resolve_anchor(root, anchor) {
-            let anchor_bottom = found.element.bounds.bottom();
-            results.retain(|r| r.element.bounds.y > anchor_bottom);
+            let anchor_bottom = found.element.effective_bounds().bottom();
+            results.retain(|r| r.element.effective_bounds().y > anchor_bottom);
         } else {
             return Vec::new();
         }
@@ -105,8 +105,8 @@ fn apply_relational_filters(
 
     if let Some(ref anchor) = selector.above {
         if let Some(found) = resolve_anchor(root, anchor) {
-            let anchor_y = found.element.bounds.y;
-            results.retain(|r| r.element.bounds.bottom() < anchor_y);
+            let anchor_y = found.element.effective_bounds().y;
+            results.retain(|r| r.element.effective_bounds().bottom() < anchor_y);
         } else {
             return Vec::new();
         }
@@ -114,8 +114,8 @@ fn apply_relational_filters(
 
     if let Some(ref anchor) = selector.right_of {
         if let Some(found) = resolve_anchor(root, anchor) {
-            let anchor_right = found.element.bounds.right();
-            results.retain(|r| r.element.bounds.x > anchor_right);
+            let anchor_right = found.element.effective_bounds().right();
+            results.retain(|r| r.element.effective_bounds().x > anchor_right);
         } else {
             return Vec::new();
         }
@@ -123,8 +123,8 @@ fn apply_relational_filters(
 
     if let Some(ref anchor) = selector.left_of {
         if let Some(found) = resolve_anchor(root, anchor) {
-            let anchor_x = found.element.bounds.x;
-            results.retain(|r| r.element.bounds.right() < anchor_x);
+            let anchor_x = found.element.effective_bounds().x;
+            results.retain(|r| r.element.effective_bounds().right() < anchor_x);
         } else {
             return Vec::new();
         }
@@ -263,6 +263,7 @@ mod tests {
             clickable: true,
             focused: false,
             bounds: bounds(0, 0, 100, 40),
+            visible_bounds: None,
             children: Vec::new(),
         }
     }

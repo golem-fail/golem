@@ -311,6 +311,7 @@ pub async fn resolve_element(
                 clickable: true,
                 focused: false,
                 bounds: golem_element::Bounds::new(x, y, 1, 1),
+                visible_bounds: None,
                 children: vec![],
             };
             return Ok((dummy, (x, y)));
@@ -337,9 +338,9 @@ pub async fn resolve_element(
 
         if !results.is_empty() {
             let first = &results[0];
-            let base = safe_tap_coords(&first.element.bounds, &viewport, meta.safe_area_top, meta.safe_area_bottom.max(meta.keyboard_height))
+            let base = safe_tap_coords(first.element.effective_bounds(), &viewport, meta.safe_area_top, meta.safe_area_bottom.max(meta.keyboard_height))
                 .unwrap_or((first.tap_x, first.tap_y));
-            let coords = apply_coord_adjustments(step, base.0, base.1, &viewport, Some(&first.element.bounds));
+            let coords = apply_coord_adjustments(step, base.0, base.1, &viewport, Some(first.element.effective_bounds()));
             return Ok((first.element.clone(), coords));
         }
 
@@ -429,7 +430,7 @@ pub async fn resolve_element(
                 step.scroll_timeout, container_bounds,
             ).await {
                 Ok(found) => {
-                    let coords = safe_tap_coords(&found.element.bounds, &viewport, meta.safe_area_top, meta.safe_area_bottom.max(meta.keyboard_height))
+                    let coords = safe_tap_coords(found.element.effective_bounds(), &viewport, meta.safe_area_top, meta.safe_area_bottom.max(meta.keyboard_height))
                         .unwrap_or((found.tap_x, found.tap_y));
                     return Ok((found.element.clone(), coords));
                 }
@@ -588,6 +589,7 @@ mod tests {
             clickable: true,
             focused: false,
             bounds,
+            visible_bounds: None,
             children: Vec::new(),
         }
     }

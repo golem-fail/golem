@@ -44,6 +44,7 @@ pub fn make_element(element_type: &str, bounds: Bounds) -> Element {
         clickable: true,
         focused: false,
         bounds,
+        visible_bounds: None,
         children: Vec::new(),
     }
 }

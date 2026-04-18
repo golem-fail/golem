@@ -17,6 +17,8 @@ const DOUBLE_TAP_INTERVAL: Duration = Duration::from_millis(40);
 
 /// If an element is partially off-screen, do a small swipe to bring more of
 /// it into view. Useful for `within` containers that are just peeking in.
+///
+/// Callers should pass effective_bounds (visible_bounds when available).
 pub(crate) async fn nudge_into_view(
     driver: &dyn PlatformDriver,
     bounds: &golem_element::Bounds,

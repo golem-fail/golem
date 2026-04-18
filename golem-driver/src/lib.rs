@@ -4,6 +4,7 @@ pub mod common;
 pub mod commands;
 pub mod ios;
 pub mod ios_display;
+pub mod webkit;
 
 pub use common::CompanionHealth;
 
@@ -320,6 +321,7 @@ mod tests {
             clickable: true,
             focused: false,
             bounds,
+            visible_bounds: None,
             children: Vec::new(),
         }
     }

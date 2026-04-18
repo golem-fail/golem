@@ -548,6 +548,7 @@ mod tests {
             clickable: true,
             focused: false,
             bounds: Bounds::new(0, 0, 375, 812),
+            visible_bounds: None,
             children: Vec::new(),
         }
     }
@@ -566,6 +567,7 @@ mod tests {
                 clickable: true,
                 focused: false,
                 bounds: Bounds::new(10, (i as i32) * 50, 200, 40),
+                visible_bounds: None,
                 children: Vec::new(),
             })
             .collect();
@@ -579,6 +581,7 @@ mod tests {
             clickable: true,
             focused: false,
             bounds: Bounds::new(0, 0, 375, 812),
+            visible_bounds: None,
             children,
         }
     }
