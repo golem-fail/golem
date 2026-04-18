@@ -29,6 +29,7 @@ pub fn make_step(action: &str) -> Step {
         max_scrolls: None,
         scroll_timeout: None,
             within: None, start: None, end: None, points: vec![], duration: None,
+        scale: None, rotation: None, velocity: None, fingers: vec![],
         params: HashMap::new(),
     }
 }

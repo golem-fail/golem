@@ -12,6 +12,7 @@ import DeviceState from "./lib/DeviceState.svelte";
 import DelayedElement from "./lib/DelayedElement.svelte";
 import DialogOverlay from "./lib/DialogOverlay.svelte";
 import PositionTest from "./lib/PositionTest.svelte";
+import GestureTarget from "./lib/GestureTarget.svelte";
 import TouchVisualizer from "./lib/TouchVisualizer.svelte";
 </script>
 
@@ -25,6 +26,7 @@ import TouchVisualizer from "./lib/TouchVisualizer.svelte";
   <ScrollList />
   <Carousel />
   <NestedLayout />
+  <GestureTarget />
   <AlertTriggers />
   <Permissions />
   <DeviceState />

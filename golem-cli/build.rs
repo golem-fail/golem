@@ -13,6 +13,10 @@ fn main() {
 }
 
 fn build_ios_companion(workspace_root: &Path, out_dir: &Path) {
+    println!("cargo:rerun-if-changed=../companions/ios/GolemRunnerUITests");
+    println!("cargo:rerun-if-changed=../companions/ios/GolemRunnerApp");
+    println!("cargo:rerun-if-changed=../companions/ios/GolemRunner.xcodeproj");
+
     let project = workspace_root.join("companions/ios/GolemRunner.xcodeproj");
     let archive = out_dir.join("companion-ios.tar.gz");
 
@@ -29,14 +33,26 @@ fn build_ios_companion(workspace_root: &Path, out_dir: &Path) {
         return;
     }
 
-    // Check if source changed (hash of Swift files)
-    let source_hash = hash_directory(&workspace_root.join("companions/ios"));
-    let hash_file = out_dir.join("companion-ios.hash");
-    if archive.exists() && hash_file.exists() {
+    // Check if source changed (hash of Swift/project files only, not build artifacts).
+    // Store hash in stable location (cargo assigns fresh out_dir on recompile).
+    let ios_dir = workspace_root.join("companions/ios");
+    let source_hash = hash_directories(&[
+        ios_dir.join("GolemRunnerUITests"),
+        ios_dir.join("GolemRunnerApp"),
+        ios_dir.join("GolemRunner.xcodeproj"),
+    ]);
+    let stable_hash_dir = workspace_root.join("target").join("companion-cache");
+    let _ = fs::create_dir_all(&stable_hash_dir);
+    let hash_file = stable_hash_dir.join("ios.hash");
+    if hash_file.exists() {
         if let Ok(prev_hash) = fs::read_to_string(&hash_file) {
             if prev_hash.trim() == source_hash {
-                println!("cargo:warning=iOS companion unchanged, skipping rebuild");
-                return;
+                let cached_archive = stable_hash_dir.join("companion-ios.tar.gz");
+                if cached_archive.exists() {
+                    let _ = fs::copy(&cached_archive, &archive);
+                    println!("cargo:warning=iOS companion unchanged, skipping rebuild");
+                    return;
+                }
             }
         }
     }
@@ -66,6 +82,7 @@ fn build_ios_companion(workspace_root: &Path, out_dir: &Path) {
             let products_dir = out_dir.join("ios-derived/Build/Products");
             if package_ios_products(&products_dir, &archive) {
                 let _ = fs::write(&hash_file, &source_hash);
+                let _ = fs::copy(&archive, stable_hash_dir.join("companion-ios.tar.gz"));
                 println!("cargo:warning=iOS companion built and packaged: {}", archive.display());
             } else {
                 println!("cargo:warning=Failed to package iOS companion products");
@@ -83,11 +100,11 @@ fn build_ios_companion(workspace_root: &Path, out_dir: &Path) {
         }
     }
 
-    // Rerun if companion source changes
-    println!("cargo:rerun-if-changed=../companions/ios");
 }
 
 fn build_android_companion(workspace_root: &Path, out_dir: &Path) {
+    println!("cargo:rerun-if-changed=../companions/android/app/src");
+
     let android_dir = workspace_root.join("companions/android");
     let target_test_apk = out_dir.join("companion-android-test.apk");
     let target_main_apk = out_dir.join("companion-android-main.apk");
@@ -99,33 +116,31 @@ fn build_android_companion(workspace_root: &Path, out_dir: &Path) {
         return;
     }
 
-    // Check if source changed
+    // Check if source changed. Store hash in workspace target dir (stable across
+    // build script recompilations — cargo assigns fresh out_dir each time).
     let source_hash = hash_directory(&android_dir.join("app/src"));
-    let hash_file = out_dir.join("companion-android.hash");
-    if target_test_apk.exists() && target_main_apk.exists() && hash_file.exists() {
+    let stable_hash_dir = workspace_root.join("target").join("companion-cache");
+    let _ = fs::create_dir_all(&stable_hash_dir);
+    let hash_file = stable_hash_dir.join("android.hash");
+    // Copy cached APKs into current out_dir if source unchanged
+    if hash_file.exists() {
         if let Ok(prev_hash) = fs::read_to_string(&hash_file) {
             if prev_hash.trim() == source_hash {
-                println!("cargo:warning=Android companion unchanged, skipping rebuild");
-                return;
+                let cached_test = stable_hash_dir.join("android-test.apk");
+                let cached_main = stable_hash_dir.join("android-main.apk");
+                if cached_test.exists() && cached_main.exists() {
+                    let _ = fs::copy(&cached_test, &target_test_apk);
+                    let _ = fs::copy(&cached_main, &target_main_apk);
+                    println!("cargo:warning=Android companion unchanged, skipping rebuild");
+                    return;
+                }
             }
         }
     }
 
-    // Pre-built APK paths
+    // Pre-built APK output paths (used after gradle build)
     let prebuilt_test = android_dir.join("app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk");
     let prebuilt_main = android_dir.join("app/build/outputs/apk/debug/app-debug.apk");
-
-    // Try to use pre-built APKs first
-    if prebuilt_test.exists() && prebuilt_main.exists() {
-        if fs::copy(&prebuilt_test, &target_test_apk).is_ok()
-            && fs::copy(&prebuilt_main, &target_main_apk).is_ok()
-        {
-            let _ = fs::write(&hash_file, &source_hash);
-            println!("cargo:warning=Android companion: using pre-built APKs");
-            println!("cargo:rerun-if-changed=../companions/android/app/src");
-            return;
-        }
-    }
 
     // Try building with gradlew
     let gradlew = android_dir.join("gradlew");
@@ -156,6 +171,8 @@ fn build_android_companion(workspace_root: &Path, out_dir: &Path) {
 
             if ok {
                 let _ = fs::write(&hash_file, &source_hash);
+                let _ = fs::copy(&target_test_apk, stable_hash_dir.join("android-test.apk"));
+                let _ = fs::copy(&target_main_apk, stable_hash_dir.join("android-main.apk"));
                 println!("cargo:warning=Android companion built (both APKs)");
             } else {
                 println!("cargo:warning=Android companion build succeeded but APKs not found");
@@ -176,7 +193,6 @@ fn build_android_companion(workspace_root: &Path, out_dir: &Path) {
         }
     }
 
-    println!("cargo:rerun-if-changed=../companions/android/app/src");
 }
 
 /// Package iOS build products into a tar.gz archive.
@@ -221,6 +237,25 @@ fn write_empty_marker(out_dir: &Path, name: &str) {
 
 /// Compute a hash of all files in a directory plus the golem version.
 /// Version is included so that version bumps trigger companion rebuilds.
+fn hash_directories(dirs: &[PathBuf]) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    env::var("CARGO_PKG_VERSION").unwrap_or_default().hash(&mut hasher);
+    for dir in dirs {
+        if let Ok(entries) = walkdir(dir) {
+            for path in entries {
+                if let Ok(contents) = fs::read(&path) {
+                    path.to_string_lossy().hash(&mut hasher);
+                    contents.hash(&mut hasher);
+                }
+            }
+        }
+    }
+    format!("{:016x}", hasher.finish())
+}
+
 fn hash_directory(dir: &Path) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};

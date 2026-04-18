@@ -41,6 +41,10 @@ final class RequestRouter {
             return handleBackspace(body: body, query: query)
         case ("POST", "/swipe"):
             return handleSwipe(body: body, query: query)
+        case ("POST", "/pinch"):
+            return handlePinch(body: body, query: query)
+        case ("POST", "/gesture"):
+            return handleGesture(body: body)
         case ("GET", "/screenshot"):
             return handleScreenshot()
         case ("POST", "/hide-keyboard"):
@@ -90,7 +94,7 @@ final class RequestRouter {
         return .json([
             "status": "ok",
             "platform": "ios",
-            "version": "0.4.3",
+            "version": "0.5.0",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
@@ -227,6 +231,65 @@ final class RequestRouter {
             start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .default, thenHoldForDuration: duration)
         }
         return .json(["status": "ok"])
+    }
+
+    /// Pinch gesture at specific coordinates via GestureSynthesizer.
+    /// Request: { "x": N, "y": N, "scale": 2.0, "velocity": 5.0 }
+    private func handlePinch(body: Data?, query: [String: String]) -> HTTPResponse {
+        guard let params = parseBody(body),
+              let cx = params["x"] as? Double,
+              let cy = params["y"] as? Double,
+              let scale = params["scale"] as? Double else {
+            return .error("Missing x/y/scale", status: 400)
+        }
+        let velocity = params["velocity"] as? Double ?? 5.0
+        let duration = max(0.1, abs(scale - 1.0) / velocity)
+        // Fingers start close together and spread apart for zoom-in (scale > 1),
+        // or start apart and come together for zoom-out (scale < 1).
+        let startDist = 50.0
+        let endDist = startDist * scale
+
+        let fingers: [[String: Any]] = [
+            ["points": [[cx, cy - startDist], [cx, cy - endDist]] as [[Double]], "duration": NSNumber(value: duration)],
+            ["points": [[cx, cy + startDist], [cx, cy + endDist]] as [[Double]], "duration": NSNumber(value: duration)],
+        ]
+
+        do {
+            try GestureSynthesizer.synthesizeFingers(fingers)
+            return .json(["status": "ok"])
+        } catch {
+            return .error("Pinch failed: \(error.localizedDescription)", status: 500)
+        }
+    }
+
+    /// Execute a multi-touch gesture via GestureSynthesizer.
+    /// Request: { "fingers": [{ "points": [[x,y], ...], "duration_ms": N }, ...] }
+    private func handleGesture(body: Data?) -> HTTPResponse {
+        guard let params = parseBody(body),
+              let rawFingers = params["fingers"] as? [[String: Any]] else {
+            return .error("Missing 'fingers' array", status: 400)
+        }
+
+        var fingers: [[String: Any]] = []
+        for raw in rawFingers {
+            guard let points = raw["points"] as? [[Any]],
+                  points.count >= 2 else {
+                return .error("Each finger needs at least 2 points", status: 400)
+            }
+            let durationMs = raw["duration_ms"] as? Double ?? 300.0
+            let duration = durationMs / 1000.0
+            let pts: [[Double]] = points.map { pt in
+                [(pt[0] as? Double) ?? 0.0, (pt[1] as? Double) ?? 0.0]
+            }
+            fingers.append(["points": pts, "duration": NSNumber(value: duration)])
+        }
+
+        do {
+            try GestureSynthesizer.synthesizeFingers(fingers)
+            return .json(["status": "ok"])
+        } catch {
+            return .error("Gesture failed: \(error.localizedDescription)", status: 500)
+        }
     }
 
     private func handleScreenshot() -> HTTPResponse {

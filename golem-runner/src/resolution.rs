@@ -102,7 +102,7 @@ fn resolve_coord(
     viewport_size: i32,
     element_pos: Option<i32>,   // element center position
     element_size: Option<i32>,  // element width or height
-    element_origin: Option<i32>, // element x or y
+    _element_origin: Option<i32>, // element x or y
 ) -> i32 {
     match val {
         golem_parser::CoordValue::Pixels(px) => {
@@ -115,10 +115,11 @@ fn resolve_coord(
             }
         }
         golem_parser::CoordValue::Percent(pct_str) => {
-            let pct: f32 = pct_str.trim_end_matches('%').parse().unwrap_or(50.0) / 100.0;
-            if let (Some(origin), Some(size)) = (element_origin, element_size) {
-                // Percentage of element dimensions from element origin
-                origin + (size as f32 * pct) as i32
+            let pct: f32 = pct_str.trim_end_matches('%').parse().unwrap_or(0.0) / 100.0;
+            if let (Some(center), Some(size)) = (element_pos, element_size) {
+                // Percentage of element dimensions from element center
+                // 0% = center, 50% = right/bottom edge, -50% = left/top edge
+                center + (size as f32 * pct) as i32
             } else {
                 // Percentage of viewport
                 (viewport_size as f32 * pct) as i32
@@ -574,7 +575,8 @@ mod tests {
             max_scrolls: None,
             scroll_timeout: None,
             within: None, start: None, end: None, points: vec![], duration: None,
-            params: HashMap::new(),
+            scale: None, rotation: None, velocity: None, fingers: vec![],
+        params: HashMap::new(),
         }
     }
 

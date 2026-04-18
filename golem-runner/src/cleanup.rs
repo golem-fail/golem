@@ -262,6 +262,14 @@ mod tests {
 
 
 
+        async fn pinch(&self, _x: i32, _y: i32, _scale: f64, _velocity: f64) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn gesture(&self, _fingers: Vec<golem_driver::GestureFinger>) -> anyhow::Result<()> {
+            Ok(())
+        }
+
         async fn remove_port_forwards(&self) -> anyhow::Result<()> {
             self.record("remove_port_forwards");
             if self.fail_remove_port_forwards {

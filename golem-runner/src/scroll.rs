@@ -648,6 +648,15 @@ mod tests {
             self.record_call("remove_port_forwards", vec![]);
             Ok(())
         }
+
+        async fn pinch(&self, _x: i32, _y: i32, _scale: f64, _velocity: f64) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn gesture(&self, fingers: Vec<golem_driver::GestureFinger>) -> anyhow::Result<()> {
+            self.record_call("gesture", vec![format!("{} fingers", fingers.len())]);
+            Ok(())
+        }
     }
 
     // ── 1. Element found in initial hierarchy (no scroll needed) ─────

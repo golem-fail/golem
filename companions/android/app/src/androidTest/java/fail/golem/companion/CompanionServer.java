@@ -139,7 +139,7 @@ public class CompanionServer {
                     sendJson(out, 200, new JSONObject()
                         .put("status", "ok")
                         .put("platform", "android")
-                        .put("version", "0.4.3")
+                        .put("version", "0.5.0")
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
@@ -162,6 +162,12 @@ public class CompanionServer {
                     break;
                 case "/swipe":
                     handleSwipe(out, body);
+                    break;
+                case "/pinch":
+                    handlePinch(out, body);
+                    break;
+                case "/gesture":
+                    handleGesture(out, body);
                     break;
                 case "/screenshot":
                     handleScreenshot(out);
@@ -284,6 +290,206 @@ public class CompanionServer {
         long duration = req.optLong("duration_ms", 300);
         executeShell("input swipe " + fromX + " " + fromY + " " + toX + " " + toY + " " + duration);
         sendJson(out, 200, new JSONObject().put("status", "ok"));
+    }
+
+    /**
+     * Pinch gesture at coordinates.
+     * Request: { "x": N, "y": N, "scale": 2.0, "velocity": 5.0 }
+     */
+    private void handlePinch(OutputStream out, String body) throws Exception {
+        JSONObject req = new JSONObject(body);
+        int cx = req.getInt("x");
+        int cy = req.getInt("y");
+        double scale = req.getDouble("scale");
+        double velocity = req.optDouble("velocity", 5.0);
+        long durationMs = Math.max(100, (long) (Math.abs(scale - 1.0) / velocity * 1000));
+
+        // Fingers start close together and spread apart for zoom-in (scale > 1),
+        // or start apart and come together for zoom-out (scale < 1).
+        int startDist = 50; // 50px from center
+        int endDist = (int) (startDist * scale);
+
+        int[][] allX = { {cx, cx}, {cx, cx} };
+        int[][] allY = { {cy - startDist, cy - endDist}, {cy + startDist, cy + endDist} };
+        long[] durations = { durationMs, durationMs };
+
+        injectMultiTouchGesture(allX, allY, durations);
+        sendJson(out, 200, new JSONObject().put("status", "ok"));
+    }
+
+    /**
+     * Execute a multi-touch gesture by injecting MotionEvents via shell input commands.
+     * Request: { "fingers": [{ "points": [[x,y], ...], "duration_ms": N }, ...] }
+     *
+     * For single-finger gestures: uses "input swipe" through intermediate points.
+     * For multi-finger gestures: uses "input motionevent" to inject raw touch events.
+     */
+    private void handleGesture(OutputStream out, String body) throws Exception {
+        JSONObject req = new JSONObject(body);
+        JSONArray fingers = req.getJSONArray("fingers");
+
+        if (fingers.length() == 0) {
+            sendJson(out, 400, new JSONObject().put("error", "need at least one finger"));
+            return;
+        }
+
+        // Parse all finger paths
+        int[][] allX = new int[fingers.length()][];
+        int[][] allY = new int[fingers.length()][];
+        long[] durations = new long[fingers.length()];
+
+        for (int f = 0; f < fingers.length(); f++) {
+            JSONObject finger = fingers.getJSONObject(f);
+            JSONArray points = finger.getJSONArray("points");
+            durations[f] = finger.optLong("duration_ms", 300);
+
+            if (points.length() < 2) {
+                sendJson(out, 400, new JSONObject().put("error", "each finger needs at least 2 points"));
+                return;
+            }
+
+            allX[f] = new int[points.length()];
+            allY[f] = new int[points.length()];
+            for (int i = 0; i < points.length(); i++) {
+                JSONArray pt = points.getJSONArray(i);
+                allX[f][i] = pt.getInt(0);
+                allY[f][i] = pt.getInt(1);
+            }
+        }
+
+        if (fingers.length() == 1) {
+            // Single finger: chain input swipe through segments for continuous path
+            int[] xs = allX[0];
+            int[] ys = allY[0];
+            long segDuration = durations[0] / (xs.length - 1);
+            for (int i = 0; i < xs.length - 1; i++) {
+                executeShell("input swipe " + xs[i] + " " + ys[i] + " " +
+                    xs[i + 1] + " " + ys[i + 1] + " " + segDuration);
+            }
+        } else {
+            // Multi-finger: inject MotionEvents via Instrumentation
+            injectMultiTouchGesture(allX, allY, durations);
+        }
+
+        sendJson(out, 200, new JSONObject().put("status", "ok"));
+    }
+
+    /**
+     * Inject a multi-finger gesture using Instrumentation.sendPointerSync().
+     * Creates MotionEvents with multiple pointer IDs for simultaneous touches.
+     */
+    private void injectMultiTouchGesture(int[][] allX, int[][] allY, long[] durations) throws Exception {
+        int fingerCount = allX.length;
+        // Use the max number of points across all fingers for interpolation steps
+        int maxPoints = 0;
+        for (int[] xs : allX) maxPoints = Math.max(maxPoints, xs.length);
+        long maxDuration = 0;
+        for (long d : durations) maxDuration = Math.max(maxDuration, d);
+
+        int steps = Math.max(maxPoints, 20); // at least 20 steps for smooth gesture
+        long stepDelay = maxDuration / steps;
+
+        // Build PointerProperties and PointerCoords for each finger
+        android.view.MotionEvent.PointerProperties[] props =
+            new android.view.MotionEvent.PointerProperties[fingerCount];
+        for (int f = 0; f < fingerCount; f++) {
+            props[f] = new android.view.MotionEvent.PointerProperties();
+            props[f].id = f;
+            props[f].toolType = android.view.MotionEvent.TOOL_TYPE_FINGER;
+        }
+
+        long downTime = android.os.SystemClock.uptimeMillis();
+
+        // ACTION_DOWN for first finger
+        android.view.MotionEvent.PointerCoords[] coords =
+            new android.view.MotionEvent.PointerCoords[fingerCount];
+        for (int f = 0; f < fingerCount; f++) {
+            coords[f] = new android.view.MotionEvent.PointerCoords();
+            coords[f].x = allX[f][0];
+            coords[f].y = allY[f][0];
+            coords[f].pressure = 1.0f;
+            coords[f].size = 1.0f;
+        }
+
+        // First finger down
+        android.view.MotionEvent downEvent = android.view.MotionEvent.obtain(
+            downTime, downTime, android.view.MotionEvent.ACTION_DOWN,
+            1, new android.view.MotionEvent.PointerProperties[]{props[0]},
+            new android.view.MotionEvent.PointerCoords[]{coords[0]},
+            0, 0, 1.0f, 1.0f, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, 0);
+        uiAutomation.injectInputEvent(downEvent, true);
+        downEvent.recycle();
+
+        // Additional fingers down (ACTION_POINTER_DOWN)
+        for (int f = 1; f < fingerCount; f++) {
+            android.view.MotionEvent.PointerProperties[] activeProps =
+                new android.view.MotionEvent.PointerProperties[f + 1];
+            android.view.MotionEvent.PointerCoords[] activeCoords =
+                new android.view.MotionEvent.PointerCoords[f + 1];
+            System.arraycopy(props, 0, activeProps, 0, f + 1);
+            System.arraycopy(coords, 0, activeCoords, 0, f + 1);
+
+            int action = android.view.MotionEvent.ACTION_POINTER_DOWN |
+                (f << android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT);
+            long eventTime = android.os.SystemClock.uptimeMillis();
+            android.view.MotionEvent ptrDown = android.view.MotionEvent.obtain(
+                downTime, eventTime, action, f + 1, activeProps, activeCoords,
+                0, 0, 1.0f, 1.0f, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, 0);
+            uiAutomation.injectInputEvent(ptrDown, true);
+            ptrDown.recycle();
+        }
+
+        // Move all fingers through interpolated positions
+        for (int s = 1; s <= steps; s++) {
+            float t = (float) s / steps;
+            for (int f = 0; f < fingerCount; f++) {
+                // Interpolate position along this finger's path
+                float pathPos = t * (allX[f].length - 1);
+                int segIdx = Math.min((int) pathPos, allX[f].length - 2);
+                float segT = pathPos - segIdx;
+                coords[f].x = allX[f][segIdx] + (allX[f][segIdx + 1] - allX[f][segIdx]) * segT;
+                coords[f].y = allY[f][segIdx] + (allY[f][segIdx + 1] - allY[f][segIdx]) * segT;
+            }
+
+            long eventTime = android.os.SystemClock.uptimeMillis();
+            android.view.MotionEvent moveEvent = android.view.MotionEvent.obtain(
+                downTime, eventTime, android.view.MotionEvent.ACTION_MOVE,
+                fingerCount, props, coords,
+                0, 0, 1.0f, 1.0f, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, 0);
+            uiAutomation.injectInputEvent(moveEvent, true);
+            moveEvent.recycle();
+
+            Thread.sleep(stepDelay);
+        }
+
+        // Lift fingers in reverse order
+        for (int f = fingerCount - 1; f >= 1; f--) {
+            android.view.MotionEvent.PointerProperties[] activeProps =
+                new android.view.MotionEvent.PointerProperties[f + 1];
+            android.view.MotionEvent.PointerCoords[] activeCoords =
+                new android.view.MotionEvent.PointerCoords[f + 1];
+            System.arraycopy(props, 0, activeProps, 0, f + 1);
+            System.arraycopy(coords, 0, activeCoords, 0, f + 1);
+
+            int action = android.view.MotionEvent.ACTION_POINTER_UP |
+                (f << android.view.MotionEvent.ACTION_POINTER_INDEX_SHIFT);
+            long eventTime = android.os.SystemClock.uptimeMillis();
+            android.view.MotionEvent ptrUp = android.view.MotionEvent.obtain(
+                downTime, eventTime, action, f + 1, activeProps, activeCoords,
+                0, 0, 1.0f, 1.0f, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, 0);
+            uiAutomation.injectInputEvent(ptrUp, true);
+            ptrUp.recycle();
+        }
+
+        // Last finger up
+        long eventTime = android.os.SystemClock.uptimeMillis();
+        android.view.MotionEvent upEvent = android.view.MotionEvent.obtain(
+            downTime, eventTime, android.view.MotionEvent.ACTION_UP,
+            1, new android.view.MotionEvent.PointerProperties[]{props[0]},
+            new android.view.MotionEvent.PointerCoords[]{coords[0]},
+            0, 0, 1.0f, 1.0f, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, 0);
+        uiAutomation.injectInputEvent(upEvent, true);
+        upEvent.recycle();
     }
 
     private void handleType(OutputStream out, String body) throws Exception {

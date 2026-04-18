@@ -388,6 +388,22 @@ pub(crate) fn build_swipe_body(
     .context("failed to serialize swipe request")
 }
 
+/// Build the JSON body for a gesture request.
+pub(crate) fn build_gesture_body(fingers: &[crate::GestureFinger]) -> Result<String> {
+    let fingers_json: Vec<serde_json::Value> = fingers
+        .iter()
+        .map(|f| {
+            let points: Vec<Vec<i32>> = f.points.iter().map(|(x, y)| vec![*x, *y]).collect();
+            serde_json::json!({
+                "points": points,
+                "duration_ms": f.duration_ms,
+            })
+        })
+        .collect();
+    serde_json::to_string(&serde_json::json!({ "fingers": fingers_json }))
+        .context("failed to serialize gesture request")
+}
+
 
 // ---------------------------------------------------------------------------
 // Cutout / corner JSON parsing helpers

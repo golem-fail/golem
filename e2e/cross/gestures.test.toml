@@ -1,0 +1,74 @@
+[flow]
+name = "Gesture test"
+tags = ["cross-platform", "interaction", "gesture"]
+
+[[flow.apps]]
+name = "app"
+bundle = "fail.golem.test"
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+# Scroll to gesture target and verify initial state
+[[block]]
+name = "find_gesture_target"
+steps = [
+  { action = "tap", on_text = "Reset Gesture", auto_scroll = true, timeout = 60000 },
+  { action = "assert_visible", on_text = "Not zoomed" },
+  { action = "assert_visible", on_text = "Grid: 000-000-000" },
+  { action = "assert_visible", on_text = "*Max: 0" },
+]
+
+# Pinch centered on the gesture area
+[[block]]
+name = "pinch_zoom"
+steps = [
+  { action = "pinch", on = { accessibility_label = "gesture-area" }, scale = 2.0 },
+  { action = "assert_visible", on_text = "Zoomed" },
+  { action = "assert_not_visible", on_text = "Grid: 000-000-000" },
+  { action = "assert_visible", on_text = "*Max: 2" },
+]
+
+# L-shaped continuous path through the gesture area
+[[block]]
+name = "continuous_path"
+steps = [
+  { action = "tap", on_text = "Reset Gesture" },
+  { action = "assert_visible", on_text = "Grid: 000-000-000" },
+  { action = "swipe", points = [
+    { accessibility_label = "gesture-area", x = "-33%", y = "0" },
+    { accessibility_label = "gesture-area", x = "0", y = "0" },
+    { accessibility_label = "gesture-area", x = "33%", y = "0" },
+    { accessibility_label = "gesture-area", x = "33%", y = "33%" },
+  ], duration = 800 },
+  # L-shape: horizontal across middle row, then down right column
+  { action = "assert_visible", on_text = "Grid: 000-111-001" },
+  { action = "assert_visible", on_text = "*Max: 1" },
+]
+
+# Rotate 90° clockwise
+[[block]]
+name = "rotate_cw"
+steps = [
+  { action = "tap", on_text = "Reset Gesture" },
+  { action = "assert_visible", on_text = "Rot: 0" },
+  { action = "rotate", on = { accessibility_label = "gesture-area" }, rotation = 90.0 },
+  { action = "assert_visible", on_text = "Rot: 90 CW" },
+  { action = "assert_visible", on_text = "*Max: 2" },
+]
+
+# Rotate 270° counter-clockwise
+[[block]]
+name = "rotate_ccw"
+steps = [
+  { action = "tap", on_text = "Reset Gesture" },
+  { action = "assert_visible", on_text = "Rot: 0" },
+  { action = "rotate", on = { accessibility_label = "gesture-area" }, rotation = -270.0 },
+  { action = "assert_visible", on_text = "Rot: -270 CCW" },
+  { action = "assert_visible", on_text = "*Max: 2" },
+]

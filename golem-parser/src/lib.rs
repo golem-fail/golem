@@ -207,8 +207,24 @@ pub struct Step {
     pub points: Vec<SelectorGroup>,
     /// Swipe/gesture duration in milliseconds (total or per-segment).
     pub duration: Option<u64>,
+    /// Pinch scale factor (>1.0 = zoom in, <1.0 = zoom out).
+    pub scale: Option<f64>,
+    /// Rotation in degrees (positive = clockwise, negative = counter-clockwise).
+    pub rotation: Option<f64>,
+    /// Gesture velocity (scale/sec for pinch, degrees/sec for rotate).
+    pub velocity: Option<f64>,
+    /// Multi-touch gesture: array of finger paths.
+    #[serde(default)]
+    pub fingers: Vec<Finger>,
     #[serde(flatten)]
     pub params: HashMap<String, toml::Value>,
+}
+
+/// A single finger path in a multi-touch gesture.
+#[derive(Deserialize, Debug, Clone)]
+pub struct Finger {
+    /// Points the finger travels through (each is a full selector).
+    pub points: Vec<SelectorGroup>,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]

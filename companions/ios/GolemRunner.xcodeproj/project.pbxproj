@@ -14,6 +14,7 @@
 		A1000005 /* RequestRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000005 /* RequestRouter.swift */; };
 		A1000006 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000008 /* Assets.xcassets */; };
 		A1000007 /* SnapshotHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* SnapshotHelper.m */; };
+		A1000008 /* GestureSynthesizer.m in Sources */ = {isa = PBXBuildFile; fileRef = A2000016 /* GestureSynthesizer.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -39,6 +40,8 @@
 		A2000008 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A2000012 /* SnapshotHelper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SnapshotHelper.h; sourceTree = "<group>"; };
 		A2000013 /* SnapshotHelper.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SnapshotHelper.m; sourceTree = "<group>"; };
+		A2000015 /* GestureSynthesizer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GestureSynthesizer.h; sourceTree = "<group>"; };
+		A2000016 /* GestureSynthesizer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GestureSynthesizer.m; sourceTree = "<group>"; };
 		A2000014 /* GolemRunnerUITests-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "GolemRunnerUITests-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -99,6 +102,8 @@
 				A2000005 /* RequestRouter.swift */,
 				A2000012 /* SnapshotHelper.h */,
 				A2000013 /* SnapshotHelper.m */,
+				A2000015 /* GestureSynthesizer.h */,
+				A2000016 /* GestureSynthesizer.m */,
 				A2000014 /* GolemRunnerUITests-Bridging-Header.h */,
 				A2000007 /* Info.plist */,
 			);
@@ -207,6 +212,7 @@
 				A1000004 /* HierarchySerializer.swift in Sources */,
 				A1000005 /* RequestRouter.swift in Sources */,
 				A1000007 /* SnapshotHelper.m in Sources */,
+				A1000008 /* GestureSynthesizer.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

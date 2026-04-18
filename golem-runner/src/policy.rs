@@ -176,7 +176,8 @@ mod tests {
             max_scrolls: None,
             scroll_timeout: None,
             within: None, start: None, end: None, points: vec![], duration: None,
-            params: HashMap::new(),
+            scale: None, rotation: None, velocity: None, fingers: vec![],
+        params: HashMap::new(),
         }
     }
 

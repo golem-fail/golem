@@ -21,6 +21,13 @@ pub enum Direction {
     Right,
 }
 
+/// A single finger path in a multi-touch gesture.
+#[derive(Debug, Clone)]
+pub struct GestureFinger {
+    pub points: Vec<(i32, i32)>,
+    pub duration_ms: u64,
+}
+
 /// Result of a screenshot capture
 #[derive(Debug, Clone)]
 pub struct ScreenshotResult {
@@ -55,6 +62,13 @@ pub trait PlatformDriver: Send + Sync {
         to_x: i32,
         to_y: i32,
     ) -> anyhow::Result<()>;
+
+    /// Pinch gesture at coordinates.
+    async fn pinch(&self, x: i32, y: i32, scale: f64, velocity: f64) -> anyhow::Result<()>;
+
+    /// Perform a multi-touch gesture (continuous paths, arbitrary multi-touch).
+    /// Each finger has its own path of points and duration.
+    async fn gesture(&self, fingers: Vec<GestureFinger>) -> anyhow::Result<()>;
 
     /// Take a screenshot
     async fn screenshot(&self) -> anyhow::Result<ScreenshotResult>;
@@ -198,6 +212,20 @@ impl PlatformDriver for MockPlatformDriver {
                 to_y.to_string(),
             ],
         );
+        Ok(())
+    }
+
+    async fn pinch(&self, x: i32, y: i32, scale: f64, velocity: f64) -> anyhow::Result<()> {
+        self.record_call("pinch", vec![x.to_string(), y.to_string(), format!("{scale}"), format!("{velocity}")]);
+        Ok(())
+    }
+
+    async fn gesture(&self, fingers: Vec<GestureFinger>) -> anyhow::Result<()> {
+        let args: Vec<String> = fingers
+            .iter()
+            .map(|f| format!("{}pts@{}ms", f.points.len(), f.duration_ms))
+            .collect();
+        self.record_call("gesture", args);
         Ok(())
     }
 

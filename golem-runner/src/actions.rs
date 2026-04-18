@@ -29,8 +29,8 @@ use external::{
     handle_http, handle_load_fixture, handle_open_link, handle_push_notification, handle_run,
 };
 use interaction::{
-    handle_backspace, handle_double_tap, handle_hide_keyboard, handle_long_press, handle_scroll,
-    handle_swipe, handle_tap, handle_type,
+    handle_backspace, handle_double_tap, handle_gesture, handle_hide_keyboard, handle_long_press,
+    handle_pinch, handle_rotate_gesture, handle_scroll, handle_swipe, handle_tap, handle_type,
 };
 use media::{handle_add_media, handle_screenshot, handle_start_recording, handle_stop_recording};
 use wait::{handle_wait, handle_wait_not};
@@ -53,6 +53,8 @@ pub async fn execute_action(
         "backspace" => handle_backspace(step, driver).await,
         "long_press" => handle_long_press(step, driver).await,
         "swipe" => handle_swipe(step, driver).await,
+        "pinch" => handle_pinch(step, driver).await,
+        "gesture" => handle_gesture(step, driver).await,
         "scroll" => handle_scroll(step, driver).await,
         "read" => handle_read(step, driver, vars).await,
         "hide_keyboard" => handle_hide_keyboard(driver).await,
@@ -68,6 +70,7 @@ pub async fn execute_action(
         "launch" => handle_launch(step, driver, apps, ctx).await,
         "stop" => handle_stop(step, driver, apps, ctx).await,
         "clear_data" => handle_clear_data(step, driver, apps).await,
+        "rotate" if step.rotation.is_some() => handle_rotate_gesture(step, driver).await,
         "rotate" => handle_rotate(step, driver).await,
         "dark_mode" => handle_dark_mode(step, driver).await,
         "set_location" => handle_set_location(step, driver).await,

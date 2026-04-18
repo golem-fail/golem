@@ -1,5 +1,5 @@
 use crate::common::{
-    build_backspace_body, build_long_press_body, build_swipe_body,
+    build_backspace_body, build_gesture_body, build_long_press_body, build_swipe_body,
     build_tap_body, build_type_body, parse_hierarchy, CompanionClient,
 };
 use crate::{PlatformDriver, ScreenshotResult};
@@ -323,6 +323,18 @@ impl PlatformDriver for AndroidDriver {
     async fn swipe_coords(&self, from_x: i32, from_y: i32, to_x: i32, to_y: i32) -> Result<()> {
         let body = build_swipe_body(from_x, from_y, to_x, to_y, 300)?;
         self.client.post_json("/swipe", &body).await?;
+        Ok(())
+    }
+
+    async fn pinch(&self, x: i32, y: i32, scale: f64, velocity: f64) -> Result<()> {
+        let body = serde_json::json!({ "x": x, "y": y, "scale": scale, "velocity": velocity }).to_string();
+        self.client.post_json("/pinch", &body).await?;
+        Ok(())
+    }
+
+    async fn gesture(&self, fingers: Vec<crate::GestureFinger>) -> Result<()> {
+        let body = build_gesture_body(&fingers)?;
+        self.client.post_json("/gesture", &body).await?;
         Ok(())
     }
 
