@@ -139,14 +139,16 @@ fn probe_starts(viewport: &Viewport, direction: Direction) -> Vec<(i32, i32)> {
         Direction::Down => vec![
             // Finger starts low and swipes up. Try positions outside common
             // inner scrollable ranges (typically 30%-80% of screen).
-            (cx, viewport.height * 15 / 100),     // near top — above inner scrollables
+            // Avoid starting too near the top — on Android, swiping up from
+            // near the status bar pulls down the notification shade.
+            (cx, viewport.height * 25 / 100),     // near top — above inner scrollables
             (cx, viewport.height * 90 / 100),     // near bottom — below inner scrollables
             (viewport.width * 85 / 100, viewport.height * 80 / 100), // right edge, low
             (viewport.width * 15 / 100, viewport.height * 80 / 100), // left edge, low
         ],
         Direction::Up => vec![
             (cx, viewport.height * 85 / 100),     // near bottom — below inner scrollables
-            (cx, viewport.height * 10 / 100),     // near top — above inner scrollables
+            (cx, viewport.height * 15 / 100),     // near top — above inner scrollables
             (viewport.width * 85 / 100, viewport.height * 20 / 100), // right edge, high
             (viewport.width * 15 / 100, viewport.height * 20 / 100), // left edge, high
         ],
