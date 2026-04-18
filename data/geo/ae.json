@@ -4,7 +4,10 @@
     "name_en": "United Arab Emirates",
     "iso_code": "AE",
     "phone_prefix": "+971",
-    "phone_formats": ["+971-5#-###-####", "+971-#-###-####"],
+    "phone_formats": [
+      "+971-5#-###-####",
+      "+971-#-###-####"
+    ],
     "postcode_format": "#####",
     "name_order": "given_first"
   },
@@ -12,7 +15,10 @@
     {
       "name": "أبوظبي",
       "name_en": "Abu Dhabi",
-      "region_tags": [],
+      "region_tags": [
+        "Capital Emirate",
+        "Al Dhafra"
+      ],
       "cities": [
         {
           "name": "أبوظبي",
@@ -183,6 +189,58 @@
               "street": "شارع المسعودي",
               "street_en": "Al Masaudi Street",
               "pattern": "n{1,60} شارع المسعودي"
+            }
+          ]
+        },
+        {
+          "name": "الرويس",
+          "name_en": "Ruwais",
+          "lat": 24.1114,
+          "lon": 52.73,
+          "postcodes": [
+            {
+              "code": "16001",
+              "street": "شارع المصفح",
+              "street_en": "Al Musaffah Road",
+              "pattern": "n{1,80} شارع المصفح"
+            },
+            {
+              "code": "16002",
+              "street": "شارع الرويس الرئيسي",
+              "street_en": "Ruwais Main Street",
+              "pattern": "n{1,70} شارع الرويس الرئيسي"
+            },
+            {
+              "code": "16003",
+              "street": "شارع المنطقة الصناعية",
+              "street_en": "Industrial Area Road",
+              "pattern": "n{1,60} شارع المنطقة الصناعية"
+            }
+          ]
+        },
+        {
+          "name": "مدينة زايد",
+          "name_en": "Madinat Zayed",
+          "lat": 23.6528,
+          "lon": 53.7088,
+          "postcodes": [
+            {
+              "code": "16101",
+              "street": "شارع زايد",
+              "street_en": "Zayed Street",
+              "pattern": "n{1,75} شارع زايد"
+            },
+            {
+              "code": "16102",
+              "street": "شارع الظفرة",
+              "street_en": "Al Dhafra Street",
+              "pattern": "n{1,65} شارع الظفرة"
+            },
+            {
+              "code": "16103",
+              "street": "شارع ليوا",
+              "street_en": "Liwa Street",
+              "pattern": "n{1,70} شارع ليوا"
             }
           ]
         }
@@ -368,13 +426,41 @@
               "pattern": "n{1,95} شارع الخوانيج"
             }
           ]
+        },
+        {
+          "name": "حتا",
+          "name_en": "Hatta",
+          "lat": 24.7957,
+          "lon": 56.1147,
+          "postcodes": [
+            {
+              "code": "51001",
+              "street": "شارع حتا الرئيسي",
+              "street_en": "Hatta Main Road",
+              "pattern": "n{1,80} شارع حتا الرئيسي"
+            },
+            {
+              "code": "51002",
+              "street": "شارع الحصن",
+              "street_en": "Al Hisn Street",
+              "pattern": "n{1,65} شارع الحصن"
+            },
+            {
+              "code": "51003",
+              "street": "شارع الحديقة التراثية",
+              "street_en": "Heritage Village Road",
+              "pattern": "n{1,60} شارع الحديقة التراثية"
+            }
+          ]
         }
       ]
     },
     {
       "name": "الشارقة",
       "name_en": "Sharjah",
-      "region_tags": ["Northern Emirates"],
+      "region_tags": [
+        "Northern Emirates"
+      ],
       "cities": [
         {
           "name": "الشارقة",
@@ -443,13 +529,93 @@
               "pattern": "n{1,85} شارع التعاون"
             }
           ]
+        },
+        {
+          "name": "خورفكان",
+          "name_en": "Khor Fakkan",
+          "lat": 25.3397,
+          "lon": 56.3498,
+          "postcodes": [
+            {
+              "code": "61001",
+              "street": "شارع الكورنيش",
+              "street_en": "Corniche Road",
+              "pattern": "n{1,90} شارع الكورنيش"
+            },
+            {
+              "code": "61002",
+              "street": "شارع خورفكان الرئيسي",
+              "street_en": "Khor Fakkan Main Road",
+              "pattern": "n{1,80} شارع خورفكان الرئيسي"
+            },
+            {
+              "code": "61003",
+              "street": "شارع الشاطئ",
+              "street_en": "Beach Road",
+              "pattern": "n{1,70} شارع الشاطئ"
+            }
+          ]
+        },
+        {
+          "name": "كلباء",
+          "name_en": "Kalba",
+          "lat": 25.0667,
+          "lon": 56.35,
+          "postcodes": [
+            {
+              "code": "62001",
+              "street": "شارع كلباء الرئيسي",
+              "street_en": "Kalba Main Road",
+              "pattern": "n{1,75} شارع كلباء الرئيسي"
+            },
+            {
+              "code": "62002",
+              "street": "شارع المنغروف",
+              "street_en": "Mangrove Road",
+              "pattern": "n{1,65} شارع المنغروف"
+            },
+            {
+              "code": "62003",
+              "street": "شارع الكورنيش",
+              "street_en": "Corniche Road",
+              "pattern": "n{1,70} شارع الكورنيش"
+            }
+          ]
+        },
+        {
+          "name": "دبا الحصن",
+          "name_en": "Dibba Al-Hisn",
+          "lat": 25.6222,
+          "lon": 56.2628,
+          "postcodes": [
+            {
+              "code": "63001",
+              "street": "شارع دبا الرئيسي",
+              "street_en": "Dibba Main Road",
+              "pattern": "n{1,75} شارع دبا الرئيسي"
+            },
+            {
+              "code": "63002",
+              "street": "شارع الميناء",
+              "street_en": "Port Road",
+              "pattern": "n{1,65} شارع الميناء"
+            },
+            {
+              "code": "63003",
+              "street": "شارع الحصن",
+              "street_en": "Al Hisn Street",
+              "pattern": "n{1,60} شارع الحصن"
+            }
+          ]
         }
       ]
     },
     {
       "name": "عجمان",
       "name_en": "Ajman",
-      "region_tags": ["Northern Emirates"],
+      "region_tags": [
+        "Northern Emirates"
+      ],
       "cities": [
         {
           "name": "عجمان",
@@ -518,13 +684,41 @@
               "pattern": "n{1,70} شارع المويهات"
             }
           ]
+        },
+        {
+          "name": "مصفوت",
+          "name_en": "Masfout",
+          "lat": 24.8333,
+          "lon": 56.0167,
+          "postcodes": [
+            {
+              "code": "21001",
+              "street": "شارع مصفوت الرئيسي",
+              "street_en": "Masfout Main Road",
+              "pattern": "n{1,70} شارع مصفوت الرئيسي"
+            },
+            {
+              "code": "21002",
+              "street": "شارع الجبل",
+              "street_en": "Al Jabal Street",
+              "pattern": "n{1,65} شارع الجبل"
+            },
+            {
+              "code": "21003",
+              "street": "شارع الوادي",
+              "street_en": "Al Wadi Street",
+              "pattern": "n{1,70} شارع الوادي"
+            }
+          ]
         }
       ]
     },
     {
       "name": "أم القيوين",
       "name_en": "Umm Al Quwain",
-      "region_tags": ["Northern Emirates"],
+      "region_tags": [
+        "Northern Emirates"
+      ],
       "cities": [
         {
           "name": "أم القيوين",
@@ -581,13 +775,41 @@
               "pattern": "n{1,65} شارع الرميلة"
             }
           ]
+        },
+        {
+          "name": "فلج المعلا",
+          "name_en": "Falaj Al Mualla",
+          "lat": 25.35,
+          "lon": 55.8833,
+          "postcodes": [
+            {
+              "code": "31001",
+              "street": "شارع فلج المعلا الرئيسي",
+              "street_en": "Falaj Al Mualla Main Road",
+              "pattern": "n{1,85} شارع فلج المعلا الرئيسي"
+            },
+            {
+              "code": "31002",
+              "street": "شارع المزارع",
+              "street_en": "Al Mazare Street",
+              "pattern": "n{1,60} شارع المزارع"
+            },
+            {
+              "code": "31003",
+              "street": "شارع الواحة",
+              "street_en": "Al Waha Street",
+              "pattern": "n{1,55} شارع الواحة"
+            }
+          ]
         }
       ]
     },
     {
       "name": "رأس الخيمة",
       "name_en": "Ras Al Khaimah",
-      "region_tags": ["Northern Emirates"],
+      "region_tags": [
+        "Northern Emirates"
+      ],
       "cities": [
         {
           "name": "رأس الخيمة",
@@ -656,13 +878,68 @@
               "pattern": "n{1,60} شارع الخران"
             }
           ]
+        },
+        {
+          "name": "دقداقة",
+          "name_en": "Digdaga",
+          "lat": 25.6708,
+          "lon": 55.9847,
+          "postcodes": [
+            {
+              "code": "71001",
+              "street": "شارع دقداقة الرئيسي",
+              "street_en": "Digdaga Main Road",
+              "pattern": "n{1,85} شارع دقداقة الرئيسي"
+            },
+            {
+              "code": "71002",
+              "street": "شارع المزارع",
+              "street_en": "Al Mazare Street",
+              "pattern": "n{1,60} شارع المزارع"
+            },
+            {
+              "code": "71003",
+              "street": "شارع النخيل",
+              "street_en": "Al Nakheel Street",
+              "pattern": "n{1,55} شارع النخيل"
+            }
+          ]
+        },
+        {
+          "name": "خت",
+          "name_en": "Khatt",
+          "lat": 25.6556,
+          "lon": 56.05,
+          "postcodes": [
+            {
+              "code": "72001",
+              "street": "شارع خت الرئيسي",
+              "street_en": "Khatt Main Road",
+              "pattern": "n{1,75} شارع خت الرئيسي"
+            },
+            {
+              "code": "72002",
+              "street": "شارع العيون الحارة",
+              "street_en": "Hot Springs Road",
+              "pattern": "n{1,65} شارع العيون الحارة"
+            },
+            {
+              "code": "72003",
+              "street": "شارع الجبل",
+              "street_en": "Al Jabal Street",
+              "pattern": "n{1,60} شارع الجبل"
+            }
+          ]
         }
       ]
     },
     {
       "name": "الفجيرة",
       "name_en": "Fujairah",
-      "region_tags": ["Northern Emirates"],
+      "region_tags": [
+        "Northern Emirates",
+        "East Coast"
+      ],
       "cities": [
         {
           "name": "الفجيرة",
@@ -717,6 +994,58 @@
               "street": "شارع دبا",
               "street_en": "Dibba Road",
               "pattern": "n{1,80} شارع دبا"
+            }
+          ]
+        },
+        {
+          "name": "دبا الفجيرة",
+          "name_en": "Dibba Al-Fujairah",
+          "lat": 25.5917,
+          "lon": 56.2625,
+          "postcodes": [
+            {
+              "code": "81001",
+              "street": "شارع دبا الرئيسي",
+              "street_en": "Dibba Main Road",
+              "pattern": "n{1,75} شارع دبا الرئيسي"
+            },
+            {
+              "code": "81002",
+              "street": "شارع الشاطئ",
+              "street_en": "Beach Road",
+              "pattern": "n{1,70} شارع الشاطئ"
+            },
+            {
+              "code": "81003",
+              "street": "شارع الميناء",
+              "street_en": "Port Road",
+              "pattern": "n{1,65} شارع الميناء"
+            }
+          ]
+        },
+        {
+          "name": "مسافي",
+          "name_en": "Masafi",
+          "lat": 25.3,
+          "lon": 56.1667,
+          "postcodes": [
+            {
+              "code": "82001",
+              "street": "شارع مسافي الرئيسي",
+              "street_en": "Masafi Main Road",
+              "pattern": "n{1,75} شارع مسافي الرئيسي"
+            },
+            {
+              "code": "82002",
+              "street": "شارع السوق",
+              "street_en": "Souq Street",
+              "pattern": "n{1,65} شارع السوق"
+            },
+            {
+              "code": "82003",
+              "street": "شارع الجبل",
+              "street_en": "Al Jabal Street",
+              "pattern": "n{1,60} شارع الجبل"
             }
           ]
         }
