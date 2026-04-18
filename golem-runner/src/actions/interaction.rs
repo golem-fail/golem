@@ -6,7 +6,7 @@ use golem_parser::Step;
 use tokio::time::{sleep, Instant};
 
 use crate::resolution::{build_selector, resolve_element, wait_for_settle};
-use crate::scroll::{scroll_to_element_with_hint, DEFAULT_MAX_SCROLLS};
+use crate::scroll::{scroll_to_element, DEFAULT_MAX_SCROLLS};
 
 
 /// Minimum delay after a tap to prevent the OS interpreting sequential taps
@@ -357,7 +357,7 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver) -> R
             // Container not visible — scroll to bring it into view
             let _ = crate::scroll::scroll_to_element(
                 &within_sel, driver, golem_driver::Direction::Down,
-                crate::scroll::DEFAULT_MAX_SCROLLS,
+                crate::scroll::DEFAULT_MAX_SCROLLS, None, None,
             ).await;
             // Nudge to get more of the container visible
             let (fresh, fresh_meta) = driver.get_hierarchy().await?;
@@ -386,8 +386,8 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver) -> R
         None
     };
 
-    scroll_to_element_with_hint(
-        &selector, driver, direction, max_scrolls, 0.0,
+    scroll_to_element(
+        &selector, driver, direction, max_scrolls,
         step.scroll_timeout, container_bounds,
     ).await?;
     Ok(())

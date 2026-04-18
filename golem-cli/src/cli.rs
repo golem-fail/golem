@@ -44,9 +44,9 @@ pub struct TreeArgs {
     #[arg(long)]
     pub bundle: Option<String>,
 
-    /// Show debug metadata (CDP status, enrichment source, etc.)
+    /// Show verbose metadata (CDP status, enrichment source, etc.)
     #[arg(long)]
-    pub debug: bool,
+    pub verbose: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -101,6 +101,10 @@ pub struct RunArgs {
     /// Disable automatic performance capture
     #[arg(long)]
     pub no_perf: bool,
+
+    /// Verbose output: show swipe coordinates, scroll strategy, fingerprints
+    #[arg(long)]
+    pub verbose: bool,
 }
 
 #[derive(clap::Args, Debug)]

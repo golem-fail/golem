@@ -371,7 +371,7 @@ pub async fn resolve_element(
                     // Container not visible — scroll the page to bring it into view
                     let max_s = step.max_scrolls.unwrap_or(crate::scroll::DEFAULT_MAX_SCROLLS);
                     let _ = crate::scroll::scroll_to_element(
-                        &within_sel, driver, golem_driver::Direction::Down, max_s,
+                        &within_sel, driver, golem_driver::Direction::Down, max_s, None, None,
                     ).await;
                     let (fresh_root, fresh_meta) = driver.get_hierarchy().await?;
                     let mut fresh_vp = Viewport::from_root(&fresh_root);
@@ -400,34 +400,27 @@ pub async fn resolve_element(
                 None
             };
 
-            // Use position hints from the full tree if available.
+            // Use position hints from the full tree to determine direction.
             // If the element isn't in the tree at all (e.g. Android WebView
-            // accessibility gap), scroll with defaults (down, normal speed).
+            // accessibility gap), default to scrolling down.
             let full_results = find_elements(&root, &selector);
-            let (direction, distance) = if let Some(found) = full_results.first() {
+            let direction = if let Some(found) = full_results.first() {
                 let elem_y = found.element.bounds.center_y();
                 let ref_center = container_bounds.as_ref()
                     .map(|b| b.center_y())
                     .unwrap_or(viewport.height / 2);
-                let ref_height = container_bounds.as_ref()
-                    .map(|b| b.height)
-                    .unwrap_or(viewport.height);
-                let dir = if elem_y > ref_center {
+                if elem_y > ref_center {
                     golem_driver::Direction::Down
                 } else {
                     golem_driver::Direction::Up
-                };
-                let dist = (elem_y - ref_center).unsigned_abs() as f32
-                    / ref_height as f32;
-                (dir, dist)
+                }
             } else {
-                // No hints — scroll down with default speed
-                (golem_driver::Direction::Down, 0.0)
+                golem_driver::Direction::Down
             };
 
             let max_scrolls = step.max_scrolls.unwrap_or(crate::scroll::DEFAULT_MAX_SCROLLS);
-            match crate::scroll::scroll_to_element_with_hint(
-                &selector, driver, direction, max_scrolls, distance,
+            match crate::scroll::scroll_to_element(
+                &selector, driver, direction, max_scrolls,
                 step.scroll_timeout, container_bounds,
             ).await {
                 Ok(found) => {

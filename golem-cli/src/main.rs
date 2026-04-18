@@ -60,6 +60,10 @@ async fn main() -> anyhow::Result<()> {
                 }
             });
 
+            if args.verbose {
+                golem_runner::set_verbose(true);
+            }
+
             let config = SuiteConfig {
                 no_clean: args.no_clean,
                 no_teardown: args.no_teardown,

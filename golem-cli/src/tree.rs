@@ -99,7 +99,7 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
 
         println!("── {name} ({platform}, port {port}) ──");
 
-        if args.debug {
+        if args.verbose {
             println!("  device_id: {device_id}");
             println!("  bundle: {bundle}");
             if meta.keyboard_height > 0 {
@@ -154,7 +154,7 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
             if let Ok(json) = serde_json::to_string_pretty(&display) {
                 println!("{json}");
             }
-        } else if args.debug {
+        } else if args.verbose {
             print_tree_debug(&display, 0);
         } else {
             print_tree(&display, 0);

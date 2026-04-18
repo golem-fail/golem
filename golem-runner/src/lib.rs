@@ -1,5 +1,19 @@
 // golem-runner: test execution orchestrator
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static VERBOSE: AtomicBool = AtomicBool::new(false);
+
+/// Enable verbose logging for scroll, swipe, and other low-level operations.
+pub fn set_verbose(enabled: bool) {
+    VERBOSE.store(enabled, Ordering::Relaxed);
+}
+
+/// Check if verbose logging is enabled.
+pub fn is_verbose() -> bool {
+    VERBOSE.load(Ordering::Relaxed)
+}
+
 pub mod actions;
 pub mod barrier;
 pub mod capture;
