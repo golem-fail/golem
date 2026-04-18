@@ -30,9 +30,9 @@ type = "phone"
 name = "switch_between_apps"
 steps = [
   # Interact with the primary app
-  { action = "tap", on_text = "Increment" },
-  { action = "tap", on_text = "Increment" },
-  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "+" },
+  { action = "tap", on_text = "+" },
+  { action = "tap", on_text = "+" },
   { action = "assert_visible", on_text = "3", on_below = "Counter" },
 
   # Switch to the companion app

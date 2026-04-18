@@ -70,7 +70,7 @@ steps = [
   { action = "screenshot", path = "/tmp/golem-cross-dark-mode.png" },
 
   # Verify elements are still functional in dark mode
-  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "+" },
   { action = "assert_visible", on_text = "1", on_below = "Counter" },
 
   # Disable dark mode and verify return to light theme

@@ -30,11 +30,11 @@ type = "phone"
 name = "set_state_in_primary_app"
 steps = [
   # Set state by incrementing the counter
-  { action = "tap", on_text = "Increment" },
-  { action = "tap", on_text = "Increment" },
-  { action = "tap", on_text = "Increment" },
-  { action = "tap", on_text = "Increment" },
-  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "+" },
+  { action = "tap", on_text = "+" },
+  { action = "tap", on_text = "+" },
+  { action = "tap", on_text = "+" },
+  { action = "tap", on_text = "+" },
   { action = "assert_visible", on_text = "5", on_below = "Counter" },
 
   # Type into a form field to set additional state
@@ -77,12 +77,12 @@ steps = [
   { action = "assert_visible", on_text = "cross-test@example.com" },
 
   # Verify UI elements are still enabled and functional
-  { action = "assert_visible", on_text = "Increment", on_enabled = true },
-  { action = "assert_visible", on_text = "Decrement", on_enabled = true },
+  { action = "assert_visible", on_text = "+", on_enabled = true },
+  { action = "assert_visible", on_text = "-", on_enabled = true },
   { action = "assert_visible", on_text = "Submit", on_enabled = true },
 
   # Perform one more interaction to confirm app is responsive
-  { action = "tap", on_text = "Decrement" },
+  { action = "tap", on_text = "-" },
   { action = "assert_visible", on_text = "4", on_below = "Counter" },
 
   # Stop the companion app

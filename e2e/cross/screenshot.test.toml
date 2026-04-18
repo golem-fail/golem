@@ -23,9 +23,9 @@ steps = [
   { action = "screenshot", path = "/tmp/golem-screenshot-initial.png" },
 
   # Interact with the app to change state
-  { action = "tap", on_text = "Increment" },
-  { action = "tap", on_text = "Increment" },
-  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "+" },
+  { action = "tap", on_text = "+" },
+  { action = "tap", on_text = "+" },
   { action = "type", on_text = "Enter email", input = "screenshot@test.com" },
   { action = "hide_keyboard" },
 

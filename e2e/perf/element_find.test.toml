@@ -27,13 +27,13 @@ name = "find_by_id_buttons"
 steps = [
   # Rapidly assert visibility of button elements by ID (fast path)
   { action = "assert_visible", on_text = "Submit" },
-  { action = "assert_visible", on_text = "Increment" },
-  { action = "assert_visible", on_text = "Decrement" },
+  { action = "assert_visible", on_text = "+" },
+  { action = "assert_visible", on_text = "-" },
 
   # Tight-timeout waits to enforce speed
   { action = "wait", on_text = "Submit", timeout = 2000 },
-  { action = "wait", on_text = "Increment", timeout = 2000 },
-  { action = "wait", on_text = "Decrement", timeout = 2000 },
+  { action = "wait", on_text = "+", timeout = 2000 },
+  { action = "wait", on_text = "-", timeout = 2000 },
 ]
 
 [[block]]

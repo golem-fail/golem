@@ -45,20 +45,20 @@ steps = [
 name = "rapid_counter_burst"
 steps = [
   # Rapidly tap increment button 5 times without waiting between taps
-  { action = "tap", on_text = "Increment" },
-  { action = "tap", on_text = "Increment" },
-  { action = "tap", on_text = "Increment" },
-  { action = "tap", on_text = "Increment" },
-  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "+" },
+  { action = "tap", on_text = "+" },
+  { action = "tap", on_text = "+" },
+  { action = "tap", on_text = "+" },
+  { action = "tap", on_text = "+" },
 
   # Now verify the counter reached the expected value
   { action = "wait", on_text = "Counter", timeout = 2000 },
   { action = "assert_visible", on_text = "5", on_below = "Counter" },
 
   # Rapidly decrement 3 times
-  { action = "tap", on_text = "Decrement" },
-  { action = "tap", on_text = "Decrement" },
-  { action = "tap", on_text = "Decrement" },
+  { action = "tap", on_text = "-" },
+  { action = "tap", on_text = "-" },
+  { action = "tap", on_text = "-" },
 
   # Verify counter after burst decrement
   { action = "wait", on_text = "Counter", timeout = 2000 },
@@ -69,16 +69,16 @@ steps = [
 name = "rapid_mixed_actions"
 steps = [
   # Mix taps, reads, and asserts in rapid succession
-  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "+" },
   { action = "read", on_below = "Counter", on_index = 0, save_to = "mid_count_1" },
   { action = "assert_visible", on_text = "Submit" },
-  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "+" },
   { action = "read", on_below = "Counter", on_index = 0, save_to = "mid_count_2" },
   { action = "assert_visible", on_text = "Enter email" },
-  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "+" },
   { action = "read", on_below = "Counter", on_index = 0, save_to = "mid_count_3" },
   { action = "assert_visible", on_text = "scroll-list" },
-  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "+" },
   { action = "read", on_below = "Counter", on_index = 0, save_to = "mid_count_4" },
   { action = "assert_visible", on_text = "carousel" },
 ]
@@ -96,7 +96,7 @@ steps = [
   { action = "read", on_text = "carousel-item-0", save_to = "r7" },
   { action = "read", on_text = "carousel-item-1", save_to = "r8" },
   { action = "read", on_text = "Submit", save_to = "r9" },
-  { action = "read", on_text = "Increment", save_to = "r10" },
+  { action = "read", on_text = "+", save_to = "r10" },
 ]
 
 [[block]]
@@ -104,8 +104,8 @@ name = "rapid_visibility_burst"
 steps = [
   # Burst assert_visible on many elements in rapid succession
   { action = "assert_visible", on_text = "Submit" },
-  { action = "assert_visible", on_text = "Increment" },
-  { action = "assert_visible", on_text = "Decrement" },
+  { action = "assert_visible", on_text = "+" },
+  { action = "assert_visible", on_text = "-" },
   { action = "assert_visible", on_text = "Counter" },
   { action = "assert_visible", on_text = "Enter email" },
   { action = "assert_visible", on_text = "Password" },

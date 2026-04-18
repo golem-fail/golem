@@ -44,10 +44,10 @@ steps = [
   # Read button elements — exercises finding interactive elements in the tree
   { action = "read", on_text = "Submit", save_to = "submit_val" },
   { action = "wait", on_text = "Submit", timeout = 2000 },
-  { action = "read", on_text = "Increment", save_to = "inc_val" },
-  { action = "wait", on_text = "Increment", timeout = 2000 },
-  { action = "read", on_text = "Decrement", save_to = "dec_val" },
-  { action = "wait", on_text = "Decrement", timeout = 2000 },
+  { action = "read", on_text = "+", save_to = "inc_val" },
+  { action = "wait", on_text = "+", timeout = 2000 },
+  { action = "read", on_text = "-", save_to = "dec_val" },
+  { action = "wait", on_text = "-", timeout = 2000 },
 ]
 
 [[block]]

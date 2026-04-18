@@ -29,7 +29,7 @@ steps = [
 name = "interact_and_relaunch"
 steps = [
   # Interact with the app
-  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "+" },
   { action = "assert_visible", on_text = "1", on_below = "Counter" },
 
   # Stop and re-launch using the same mixin

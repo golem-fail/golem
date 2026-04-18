@@ -22,9 +22,9 @@ steps = [
   { action = "wait", on_text = "Counter", timeout = 10000 },
 
   # Set some state by incrementing the counter
-  { action = "tap", on_text = "Increment" },
-  { action = "tap", on_text = "Increment" },
-  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "+" },
+  { action = "tap", on_text = "+" },
+  { action = "tap", on_text = "+" },
   { action = "assert_visible", on_text = "3", on_below = "Counter" },
 
   # Verify deep link display is empty before receiving a link
@@ -47,6 +47,6 @@ steps = [
   { action = "assert_visible", on_text = "3", on_below = "Counter" },
 
   # Verify the app is still functional after receiving the deep link
-  { action = "tap", on_text = "Increment" },
+  { action = "tap", on_text = "+" },
   { action = "assert_visible", on_text = "4", on_below = "Counter" },
 ]
