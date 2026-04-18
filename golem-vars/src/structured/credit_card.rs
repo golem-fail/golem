@@ -110,7 +110,7 @@ fn generate_random_card(
             let last = chars.len() - 1;
             let orig = chars[last] - b'0';
             chars[last] = b'0' + ((orig + 1) % 10);
-            String::from_utf8(chars).unwrap()
+            String::from_utf8(chars).unwrap_or_default()
         }
         _ => generate_luhn_number(brand.prefix, brand.length, rng),
     };
@@ -281,7 +281,7 @@ fn build_output(card: &ResolvedCard, provider: &str, status: &str) -> Result<Var
         map.push(("name", VarValue::string(name)));
     }
     if let Some(amount) = card.amount {
-        map.push(("amount", VarValue::string(&format!("{amount}"))));
+        map.push(("amount", VarValue::string(format!("{amount}"))));
     }
     if let Some(ref currency) = card.amount_currency {
         map.push(("amount_currency", VarValue::string(currency)));

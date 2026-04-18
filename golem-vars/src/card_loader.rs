@@ -183,9 +183,9 @@ pub(crate) fn find_cards<'a>(
     let candidates: Vec<&CardConfig> = if let Some(cards) = provider.statuses.get(status) {
         // Exact match
         cards.iter().collect()
-    } else if status.contains(':') {
+    } else if let Some(colon_pos) = status.find(':') {
         // Try parent: "declined:insufficient_funds" -> "declined"
-        let parent = &status[..status.find(':').unwrap()];
+        let parent = &status[..colon_pos];
         provider
             .statuses
             .get(parent)
