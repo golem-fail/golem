@@ -14,7 +14,7 @@ let agreed = $state(false);
     <button role="switch" aria-checked={notifications} onclick={() => notifications = !notifications}>{notifications ? "On" : "Off"}</button>
   </label>
   <label>
-    <input type="checkbox" bind:checked={agreed} />
+    <input type="checkbox" bind:checked={agreed} aria-label="agree-checkbox" />
     <span>I agree</span>
   </label>
 </div>

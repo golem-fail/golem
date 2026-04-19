@@ -47,6 +47,7 @@ pub fn build_selector_from_group(g: &golem_parser::SelectorGroup) -> Selector {
         accessibility_label: g.accessibility_label.clone(),
         index: g.index,
         enabled: g.enabled,
+        checked: g.checked,
         clickable: g.clickable,
         below: g.below.as_ref().map(convert_anchor),
         above: g.above.as_ref().map(convert_anchor),
@@ -67,6 +68,7 @@ pub fn build_selector(step: &Step) -> Selector {
         accessibility_label: g.and_then(|g| g.accessibility_label.clone()).or(step.on_accessibility_label.clone()),
         index: g.and_then(|g| g.index).or(step.on_index),
         enabled: g.and_then(|g| g.enabled).or(step.on_enabled),
+        checked: g.and_then(|g| g.checked).or(step.on_checked),
         clickable: g.and_then(|g| g.clickable).or(step.on_clickable),
         below: g.and_then(|g| g.below.as_ref().map(convert_anchor))
             .or(step.on_below.as_ref().map(|s| AnchorSelector::Text(s.clone()))),
@@ -551,6 +553,7 @@ mod tests {
             on_accessibility_label: None,
             on_index: None,
             on_enabled: None,
+            on_checked: None,
             on_clickable: None,
             on_below: None,
             on_above: None,

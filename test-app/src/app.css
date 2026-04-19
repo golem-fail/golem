@@ -32,7 +32,7 @@ body {
   color: #111;
 }
 
-input,
+input:not([type="checkbox"]),
 textarea {
   display: block;
   width: 100%;

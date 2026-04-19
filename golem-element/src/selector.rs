@@ -20,6 +20,7 @@ pub struct Selector {
     pub accessibility_label: Option<String>,
     pub index: Option<usize>,
     pub enabled: Option<bool>,
+    pub checked: Option<bool>,
     pub clickable: Option<bool>,
     /// Keep only elements whose bounds.y > anchor.bottom()
     pub below: Option<AnchorSelector>,
@@ -169,6 +170,12 @@ fn matches_selector(element: &Element, selector: &Selector) -> bool {
 
     if let Some(expected) = selector.enabled {
         if element.enabled != expected {
+            return false;
+        }
+    }
+
+    if let Some(expected) = selector.checked {
+        if element.checked != expected {
             return false;
         }
     }
