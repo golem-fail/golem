@@ -13,6 +13,24 @@ use crate::context::ExecutionContext;
 use crate::perf::RawPerfData;
 use crate::policy::{execute_step_with_policy, StepOutcome};
 
+/// Build a human-readable label for a step, e.g. `tap on_text="Submit"` or `launch app="app"`.
+fn step_label(step: &golem_parser::Step) -> String {
+    let mut parts = vec![step.action.clone()];
+    if let Some(ref t) = step.on_text { parts.push(format!("on_text=\"{t}\"")); }
+    if let Some(ref a) = step.on_accessibility_label { parts.push(format!("on_accessibility_label=\"{a}\"")); }
+    if let Some(ref g) = step.on {
+        if let Some(ref t) = g.text { parts.push(format!("text=\"{t}\"")); }
+        if let Some(ref a) = g.accessibility_label { parts.push(format!("accessibility_label=\"{a}\"")); }
+    }
+    if let Some(ref b) = step.on_below { parts.push(format!("on_below=\"{b}\"")); }
+    if let Some(ref r) = step.on_right_of { parts.push(format!("on_right_of=\"{r}\"")); }
+    if let Some(ref a) = step.app { parts.push(format!("app=\"{a}\"")); }
+    if let Some(ref i) = step.input { parts.push(format!("input=\"{}\"", if i.len() > 20 { &i[..20] } else { i })); }
+    if step.auto_scroll == Some(true) { parts.push("auto_scroll".to_string()); }
+    if let Some(t) = step.timeout { parts.push(format!("timeout={t}")); }
+    parts.join(" ")
+}
+
 /// The result of executing a complete flow.
 #[derive(Debug)]
 pub struct FlowResult {
@@ -244,11 +262,32 @@ pub async fn execute_flow<'a>(
                 }
             }
 
+            let verbose = crate::is_verbose();
+            if verbose {
+                eprintln!("  [step {step_idx}] {}", step_label(step));
+            }
+            let step_start = Instant::now();
             match execute_step_with_policy(step, driver, vars, default_timeout_ms, ctx, &flow.flow.apps).await {
-                Ok(StepOutcome::Success) => {}
-                Ok(StepOutcome::Warning(msg)) => warnings.push(msg),
-                Ok(StepOutcome::Ignored) => {}
+                Ok(StepOutcome::Success) => {
+                    if verbose {
+                        eprintln!("  [step {step_idx}] ok ({}ms)", step_start.elapsed().as_millis());
+                    }
+                }
+                Ok(StepOutcome::Warning(msg)) => {
+                    if verbose {
+                        eprintln!("  [step {step_idx}] warn: {msg} ({}ms)", step_start.elapsed().as_millis());
+                    }
+                    warnings.push(msg);
+                }
+                Ok(StepOutcome::Ignored) => {
+                    if verbose {
+                        eprintln!("  [step {step_idx}] ignored");
+                    }
+                }
                 Err(e) => {
+                    if verbose {
+                        eprintln!("  [step {step_idx}] FAIL ({}ms): {e:#}", step_start.elapsed().as_millis());
+                    }
                     // Report failure to barrier so other devices stop at this point
                     if let Some(b) = barrier {
                         b.report_failure(step_count);
