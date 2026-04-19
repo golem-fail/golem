@@ -57,7 +57,9 @@ pub(crate) async fn handle_stop(
 ) -> Result<()> {
     let bundle_id = resolve_app_bundle(step, apps)?;
     driver.stop_app(bundle_id).await?;
-    let _ = wait_for_settle(driver).await;
+    // Brief pause for the OS to finish terminating the app — no hierarchy
+    // fetch needed since the app is gone.
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     if let Some(collector) = ctx.perf_collector {
         collector.clear_active(bundle_id);
     }

@@ -308,14 +308,20 @@ impl PlatformDriver for IosDriver {
     async fn launch_app(&self, bundle_id: &str) -> Result<()> {
         let body = serde_json::json!({ "bundle_id": bundle_id }).to_string();
         self.client.post_json("/launch", &body).await?;
-        // Switch hierarchy target so subsequent /hierarchy calls see the new app.
         self.client.set_default_query(&format!("bundle_id={bundle_id}"));
+        // New app process means new WebKit Inspector session. Reset to Idle
+        // so the next get_hierarchy() reconnects for the new PID.
+        let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
+        *wk = WebKitLifecycle::Idle;
         Ok(())
     }
 
     async fn stop_app(&self, bundle_id: &str) -> Result<()> {
         let body = serde_json::json!({ "bundle_id": bundle_id }).to_string();
         self.client.post_json("/stop", &body).await?;
+        // App process is gone — the old inspector connection is dead.
+        let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
+        *wk = WebKitLifecycle::Idle;
         Ok(())
     }
 

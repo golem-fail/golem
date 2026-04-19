@@ -789,10 +789,15 @@ async fn run_flow_on_device(
                     eprintln!("  [{device_label}] Aborted: another device failed at this point");
                 } else {
                     if let Some(ref block) = result.failed_block {
-                        eprintln!("  [{device_label}] Failed in block: {block}");
+                        let step_info = match (result.failed_step, &result.failed_action) {
+                            (Some(s), Some(a)) => format!(" step {s} ({a})"),
+                            (Some(s), None) => format!(" step {s}"),
+                            _ => String::new(),
+                        };
+                        eprintln!("  [{device_label}] Failed in {block}{step_info}");
                     }
-                    if let Some(step) = result.failed_step {
-                        eprintln!("  [{device_label}] Failed at step: {}", step + 1);
+                    if let Some(ref reason) = result.failed_reason {
+                        eprintln!("  [{device_label}] Error: {reason}");
                     }
                 }
             }

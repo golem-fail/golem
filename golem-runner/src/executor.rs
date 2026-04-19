@@ -24,6 +24,10 @@ pub struct FlowResult {
     pub failed_step: Option<usize>,
     /// The name of the block containing the failed step, if any.
     pub failed_block: Option<String>,
+    /// The action that failed (e.g. "tap", "launch", "assert_visible").
+    pub failed_action: Option<String>,
+    /// The error message from the failed step.
+    pub failed_reason: Option<String>,
     /// True if this flow was aborted because another device failed (barrier).
     pub barrier_aborted: bool,
     /// Performance snapshots captured at block boundaries.
@@ -186,6 +190,8 @@ pub async fn execute_flow<'a>(
                     warnings,
                     failed_step: child_result.failed_step,
                     failed_block: block.name.clone(),
+                    failed_action: child_result.failed_action,
+                    failed_reason: child_result.failed_reason,
                     barrier_aborted: child_result.barrier_aborted,
                     perf_snapshots: vec![],
                 });
@@ -230,6 +236,8 @@ pub async fn execute_flow<'a>(
                         warnings,
                         failed_step: Some(step_idx),
                         failed_block: block.name.clone(),
+                        failed_action: Some(step.action.clone()),
+                        failed_reason: Some("aborted: another device failed".to_string()),
                         barrier_aborted: true,
                         perf_snapshots: vec![],
                     });
@@ -240,7 +248,7 @@ pub async fn execute_flow<'a>(
                 Ok(StepOutcome::Success) => {}
                 Ok(StepOutcome::Warning(msg)) => warnings.push(msg),
                 Ok(StepOutcome::Ignored) => {}
-                Err(_e) => {
+                Err(e) => {
                     // Report failure to barrier so other devices stop at this point
                     if let Some(b) = barrier {
                         b.report_failure(step_count);
@@ -250,6 +258,8 @@ pub async fn execute_flow<'a>(
                         warnings,
                         failed_step: Some(step_idx),
                         failed_block: block.name.clone(),
+                        failed_action: Some(step.action.clone()),
+                        failed_reason: Some(format!("{e:#}")),
                         barrier_aborted: false,
                         perf_snapshots: vec![],
                     });
@@ -277,12 +287,15 @@ pub async fn execute_flow<'a>(
                     ThresholdResult::Ok => {}
                     ThresholdResult::Warn(msg) => warnings.push(msg),
                     ThresholdResult::Error(msg) => {
+                        let reason = msg.clone();
                         warnings.push(msg);
                         return Ok(FlowResult {
                             success: false,
                             warnings,
                             failed_step: None,
                             failed_block: block.name.clone(),
+                            failed_action: None,
+                            failed_reason: Some(reason),
                             barrier_aborted: false,
                             perf_snapshots,
                         });
@@ -314,6 +327,8 @@ pub async fn execute_flow<'a>(
         warnings,
         failed_step: None,
         failed_block: None,
+        failed_action: None,
+        failed_reason: None,
         barrier_aborted: false,
         perf_snapshots,
     })
@@ -508,6 +523,8 @@ pub async fn execute_flow_with_data<'a>(
         warnings: Vec::new(),
         failed_step: None,
         failed_block: None,
+        failed_action: None,
+        failed_reason: None,
         barrier_aborted: false,
         perf_snapshots: vec![],
     }))
