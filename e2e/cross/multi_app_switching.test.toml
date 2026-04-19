@@ -57,6 +57,11 @@ steps = [
   { action = "assert_visible", on_text = "Refresh" },
   { action = "assert_visible", on_text = "Ready" },
 
+  # Verify native toggle checked state
+  { action = "assert_checked", on_accessibility_label = "toggle-b", on_checked = false },
+  { action = "tap", on_accessibility_label = "toggle-b" },
+  { action = "assert_checked", on_accessibility_label = "toggle-b", on_checked = true },
+
   # Interact with the companion app
   { action = "tap", on_text = "Refresh" },
 
