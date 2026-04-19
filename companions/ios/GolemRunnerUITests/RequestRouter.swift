@@ -79,9 +79,16 @@ final class RequestRouter {
         return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
 
-    /// Get an XCUIApplication, optionally targeting a specific bundle ID.
+    /// Last launched bundle ID — used as default for hierarchy/tap/etc.
+    private var lastLaunchedBundle: String?
+
+    /// Get an XCUIApplication, targeting a specific bundle ID if provided,
+    /// otherwise falling back to the last launched bundle.
     private func app(query: [String: String]) -> XCUIApplication {
         if let bundleId = query["bundle_id"], !bundleId.isEmpty {
+            return XCUIApplication(bundleIdentifier: bundleId)
+        }
+        if let bundleId = lastLaunchedBundle {
             return XCUIApplication(bundleIdentifier: bundleId)
         }
         return XCUIApplication()
@@ -94,7 +101,7 @@ final class RequestRouter {
         return .json([
             "status": "ok",
             "platform": "ios",
-            "version": "0.5.0",
+            "version": "0.5.1",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
@@ -323,6 +330,7 @@ final class RequestRouter {
         DispatchQueue.main.sync {
             application.launch()
         }
+        lastLaunchedBundle = bundleId
         return .json(["status": "ok"])
     }
 

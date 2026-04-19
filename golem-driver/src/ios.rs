@@ -44,7 +44,6 @@ impl IosDriver {
     /// Create a new iOS driver targeting the companion server at the given port.
     pub fn new(device_id: String, bundle_id: String, port: u16) -> Self {
         let client = CompanionClient::new(port);
-        client.set_default_query(&format!("bundle_id={bundle_id}"));
         Self {
             client,
             device_id,
@@ -308,7 +307,6 @@ impl PlatformDriver for IosDriver {
     async fn launch_app(&self, bundle_id: &str) -> Result<()> {
         let body = serde_json::json!({ "bundle_id": bundle_id }).to_string();
         self.client.post_json("/launch", &body).await?;
-        self.client.set_default_query(&format!("bundle_id={bundle_id}"));
         // New app process means new WebKit Inspector session. Reset to Idle
         // so the next get_hierarchy() reconnects for the new PID.
         let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
