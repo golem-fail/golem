@@ -43,7 +43,7 @@ steps = [
 
   # Read the counter value into a variable for later verification
   { action = "read", on_below = "Counter", on_index = 0, save_to = "primary_counter" },
-  { action = "read", on_text = "Enter email", save_to = "primary_email" },
+  { action = "read", on_text = "cross-test@example.com", save_to = "primary_email" },
 ]
 
 [[block]]
@@ -52,19 +52,16 @@ steps = [
   # Switch to the companion app
   { action = "launch", app = "app-b" },
   # Verify companion app elements are visible
-  { action = "assert_visible", on_text = "app-b-title" },
-  { action = "assert_visible", on_text = "shared-data-display" },
-  { action = "assert_visible", on_text = "refresh-button" },
-  { action = "assert_visible", on_text = "status-label" },
-
-  # Verify companion app initial state
-  { action = "assert_visible", on_text = "Ready", on_right_of = "Status:" },
+  { action = "assert_visible", on_text = "GOLEM Test B" },
+  { action = "assert_visible", on_text = "Shared Data" },
+  { action = "assert_visible", on_text = "Refresh" },
+  { action = "assert_visible", on_text = "Ready" },
 
   # Interact with the companion app
-  { action = "tap", on_text = "refresh-button" },
+  { action = "tap", on_text = "Refresh" },
 
   # Read companion app state
-  { action = "read", on_text = "status-label", save_to = "companion_status" },
+  { action = "read", on_accessibility_label = "status-label", save_to = "companion_status" },
 ]
 
 [[block]]

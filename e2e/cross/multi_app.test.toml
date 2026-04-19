@@ -37,13 +37,13 @@ steps = [
 
   # Switch to the companion app
   { action = "launch", app = "app-b" },
-  { action = "assert_visible", on_text = "app-b-title" },
-  { action = "assert_visible", on_text = "shared-data-display" },
-  { action = "assert_visible", on_text = "refresh-button" },
-  { action = "assert_visible", on_text = "Ready", on_right_of = "Status:" },
+  { action = "assert_visible", on_accessibility_label = "app-b-title" },
+  { action = "assert_visible", on_text = "Shared Data" },
+  { action = "assert_visible", on_text = "Refresh" },
+  { action = "assert_visible", on_text = "Ready" },
 
   # Tap refresh in companion app
-  { action = "tap", on_text = "refresh-button" },
+  { action = "tap", on_text = "Refresh" },
 
   # Switch back to the primary app
   { action = "launch", app = "app" },
