@@ -145,7 +145,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
 
@@ -156,30 +155,7 @@ mod tests {
         Step {
             action: "tap".to_string(),
             on_text: Some("OK".to_string()),
-            on_accessibility_label: None,
-            on_index: None,
-            on_enabled: None,
-            on_checked: None,
-            on_clickable: None,
-            on_below: None,
-            on_above: None,
-            on_right_of: None,
-            on_left_of: None,
-            on: None,
-            input: None,
-            if_fail: None,
-            save_to: None,
-            timeout: None,
-            retry: None,
-            retry_delay: None,
-            app: None,
-            restart: None,
-            auto_scroll: None,
-            max_scrolls: None,
-            scroll_timeout: None,
-            within: None, start: None, end: None, points: vec![], duration: None,
-            scale: None, rotation: None, velocity: None, fingers: vec![],
-        params: HashMap::new(),
+            ..Default::default()
         }
     }
 

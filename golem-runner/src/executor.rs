@@ -742,31 +742,7 @@ mod tests {
     fn make_success_step() -> Step {
         Step {
             action: "screenshot".to_string(),
-            on_text: None,
-            on_accessibility_label: None,
-            on_index: None,
-            on_enabled: None,
-            on_checked: None,
-            on_clickable: None,
-            on_below: None,
-            on_above: None,
-            on_right_of: None,
-            on_left_of: None,
-            on: None,
-            input: None,
-            if_fail: None,
-            save_to: None,
-            timeout: None,
-            retry: None,
-            retry_delay: None,
-            app: None,
-            restart: None,
-            auto_scroll: None,
-            max_scrolls: None,
-            scroll_timeout: None,
-            within: None, start: None, end: None, points: vec![], duration: None,
-            scale: None, rotation: None, velocity: None, fingers: vec![],
-        params: HashMap::new(),
+            ..Default::default()
         }
     }
 
@@ -775,30 +751,7 @@ mod tests {
         Step {
             action: "tap".to_string(),
             on_text: Some("NONEXISTENT_ELEMENT_xyz_12345".to_string()),
-            on_accessibility_label: None,
-            on_index: None,
-            on_enabled: None,
-            on_checked: None,
-            on_clickable: None,
-            on_below: None,
-            on_above: None,
-            on_right_of: None,
-            on_left_of: None,
-            on: None,
-            input: None,
-            if_fail: None,
-            save_to: None,
-            timeout: None,
-            retry: None,
-            retry_delay: None,
-            app: None,
-            restart: None,
-            auto_scroll: None,
-            max_scrolls: None,
-            scroll_timeout: None,
-            within: None, start: None, end: None, points: vec![], duration: None,
-            scale: None, rotation: None, velocity: None, fingers: vec![],
-        params: HashMap::new(),
+            ..Default::default()
         }
     }
 
@@ -2091,35 +2044,7 @@ action = "screenshot"
     fn empty_step(action: &str) -> golem_parser::Step {
         golem_parser::Step {
             action: action.into(),
-            on_text: None,
-            on_accessibility_label: None,
-            on_index: None,
-            on_enabled: None,
-            on_checked: None,
-            on_clickable: None,
-            on_below: None,
-            on_above: None,
-            on_right_of: None,
-            on_left_of: None,
-            on: None,
-            input: None,
-            if_fail: None,
-            save_to: None,
-            timeout: None,
-            retry: None,
-            retry_delay: None,
-            app: None,
-            restart: None,
-            auto_scroll: None,
-            max_scrolls: None,
-            scroll_timeout: None,
-            within: None,
-            start: None,
-            end: None,
-            points: vec![],
-            duration: None,
-            scale: None, rotation: None, velocity: None, fingers: vec![],
-        params: HashMap::new(),
+            ..Default::default()
         }
     }
 

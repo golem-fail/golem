@@ -167,8 +167,9 @@ pub struct SelectorGroup {
     pub y: Option<CoordValue>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Default)]
 pub struct Step {
+    #[serde(default)]
     pub action: String,
     // Flat selectors (on_* prefix)
     pub on_text: Option<String>,
