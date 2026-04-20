@@ -76,12 +76,17 @@ pub async fn execute_flow<'a>(
     let blocks = &flow.block;
 
     // App lifecycle management. Defaults to Reset for all flows.
-    let lifecycle = flow
-        .flow
-        .options
-        .as_ref()
-        .and_then(|o| o.app_lifecycle)
-        .unwrap_or(golem_parser::AppLifecycle::Reset);
+    // When --start is used, skip app lifecycle — caller assumes app is
+    // already running and in the correct state for the target block.
+    let lifecycle = if start_block.is_some() {
+        golem_parser::AppLifecycle::Manual
+    } else {
+        flow.flow
+            .options
+            .as_ref()
+            .and_then(|o| o.app_lifecycle)
+            .unwrap_or(golem_parser::AppLifecycle::Reset)
+    };
 
     let apps = &flow.flow.apps;
     match lifecycle {

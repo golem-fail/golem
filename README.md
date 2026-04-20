@@ -49,7 +49,7 @@ golem run [FILES...] [OPTIONS]
 | `--var <KEY=VALUE>` | Set a variable. Repeatable. (not yet wired) |
 | `--output <FORMAT[:FILE]>` | Output format. Repeatable. Default: `human`. See [Output Formats](#output-formats). |
 | `--seed <N>` | Deterministic seed for fake data generation (not yet wired) |
-| `--start <BLOCK>` | Start execution at a named block (not yet wired) |
+| `--start <BLOCK>` | Start execution at a named block (skips app lifecycle, assumes app in correct state) |
 | `--max-concurrency <N>` | Max parallel devices (not yet implemented) |
 | `--record` | Enable auto screen recording (not yet implemented) |
 | `--no-clean` | Skip app data clear between flows (not yet implemented) |
@@ -179,6 +179,7 @@ A flow is a complete test scenario: metadata, app configuration, device targets,
 [flow]
 name = "Login test"
 tags = ["auth", "smoke"]
+# start = "block_name"  # Optional: skip to this block (assumes app in correct state)
 
 [[flow.apps]]
 name = "app"

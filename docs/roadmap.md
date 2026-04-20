@@ -28,10 +28,6 @@ Several CLI flags are defined but not yet wired through to execution.
 
 `SeedManager` in golem-vars is fully implemented with `ChaCha8Rng` seeded RNG, child derivation, and tests. But the suite creates `VariableStore` without passing the seed through. The seed value appears in reports but doesn't control generation.
 
-### `--start <BLOCK>` — Start at named block
-
-`execute_flow()` accepts a `start_block` parameter, but the suite hardcodes `None`. Wiring the CLI arg through would enable this.
-
 ### `--no-teardown` — Skip teardown blocks
 
 Teardown blocks are parsed but never executed. The executor ignores the `teardown` field — no teardown logic runs after flows. The `no_teardown` config field is stored but there is nothing to skip.

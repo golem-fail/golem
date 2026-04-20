@@ -75,6 +75,7 @@ async fn main() -> anyhow::Result<()> {
                 verbose: args.verbose,
                 debug: args.debug,
                 stream_human: has_human_output,
+                start: args.start,
             };
 
             // Check if an orchestrator is already running

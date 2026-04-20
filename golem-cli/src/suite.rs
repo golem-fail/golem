@@ -36,6 +36,9 @@ pub struct SuiteConfig {
     pub debug: bool,
     /// Whether to stream human-readable output to stderr.
     pub stream_human: bool,
+    /// Start execution at this named block (skip earlier blocks).
+    /// Assumes app is already in the correct state for that block.
+    pub start: Option<String>,
 }
 
 /// Orchestrates the execution of a suite of test flows.
@@ -92,6 +95,7 @@ impl SuiteRunner {
             let path = path.clone();
             let platform_override = self.config.platform;
             let seed = self.config.seed;
+            let start = self.config.start.clone();
             let rm = resource_mgr.clone();
 
             handles.push(tokio::spawn(async move {
@@ -99,6 +103,7 @@ impl SuiteRunner {
                     SuiteConfig {
                         platform: platform_override,
                         seed,
+                        start,
                         ..SuiteConfig::default()
                     },
                     rm,
@@ -332,10 +337,11 @@ impl SuiteRunner {
             let seed = self.config.seed;
             let barrier = barrier.clone();
             let no_perf = self.config.no_perf;
+            let start_block = self.config.start.clone();
             let tx = event_tx.clone();
 
             handles.push(tokio::spawn(async move {
-                run_flow_on_device(flow, flow_name, flow_dir, device, platform, port, seed, barrier, no_perf, Some(tx)).await
+                run_flow_on_device(flow, flow_name, flow_dir, device, platform, port, seed, start_block, barrier, no_perf, Some(tx)).await
             }));
         }
 
@@ -817,6 +823,7 @@ async fn run_flow_on_device(
     platform: Platform,
     port: u16,
     seed: Option<u64>,
+    start_block: Option<String>,
     barrier: golem_runner::barrier::FailureBarrier,
     no_perf: bool,
     event_sender: Option<golem_events::channel::EventSender>,
@@ -882,7 +889,9 @@ async fn run_flow_on_device(
     };
 
     ctx.emit(golem_events::EventKind::FlowStarted { flow_name: flow_name.clone() });
-    match execute_flow(&flow, driver.as_ref(), &mut vars, None, 10_000, &mut ctx, Some(&barrier)).await {
+    // CLI --start takes precedence over flow-level start field.
+    let effective_start = start_block.as_deref().or(flow.flow.start.as_deref());
+    match execute_flow(&flow, driver.as_ref(), &mut vars, effective_start, 10_000, &mut ctx, Some(&barrier)).await {
         Ok(result) => {
             if !result.success {
                 if result.barrier_aborted {
