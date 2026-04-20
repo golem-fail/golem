@@ -248,30 +248,41 @@ fn expand_street_from_entry(entry: &GeoPostcode, rng: &mut impl Rng) -> String {
     }
 }
 
-/// Expand a street pattern like `"n{1,221} Baker Street"` or `"北一条西n{1,20}"`.
-/// The `n{min,max}` token is replaced with a random number in that range.
-fn expand_street_pattern(pattern: &str, street_en: &str, rng: &mut impl Rng) -> String {
-    if let Some(start) = pattern.find("n{") {
-        if let Some(end) = pattern[start..].find('}') {
-            let range_str = &pattern[start + 2..start + end];
-            if let Some((min_s, max_s)) = range_str.split_once(',') {
-                if let (Ok(min), Ok(max)) = (min_s.parse::<u32>(), max_s.parse::<u32>()) {
-                    let num = rng.gen_range(min..=max);
-                    let prefix = &pattern[..start];
-                    let suffix = &pattern[start + end + 1..];
-                    let expanded = format!("{prefix}{num}{suffix}");
-                    // If the expanded already contains the English street name, return as-is.
-                    if expanded.contains(street_en) || street_en.is_empty() {
-                        return expanded;
-                    }
-                    return format!("{num} {street_en}");
-                }
-            }
+/// Expand a street pattern containing one or more `n{min,max}` tokens.
+///
+/// Each `n{min,max}` is replaced with a random integer in `[min, max]`.
+/// Supports multiple tokens per pattern, e.g. `"清田一条n{1,4}-n{1,15}"`.
+///
+/// If `street_en` is non-empty and the expanded result doesn't contain it,
+/// falls back to `"NUM street_en"` format using the first generated number.
+pub(crate) fn expand_street_pattern(pattern: &str, street_en: &str, rng: &mut impl Rng) -> String {
+    let mut result = pattern.to_string();
+    let mut first_num: Option<u32> = None;
+
+    // Replace all n{min,max} tokens left-to-right.
+    while let Some(start) = result.find("n{") {
+        let Some(close) = result[start..].find('}') else { break };
+        let range_str = &result[start + 2..start + close];
+        let Some((min_s, max_s)) = range_str.split_once(',') else { break };
+        let (Ok(min), Ok(max)) = (min_s.trim().parse::<u32>(), max_s.trim().parse::<u32>()) else { break };
+
+        let num = rng.gen_range(min..=max);
+        if first_num.is_none() {
+            first_num = Some(num);
         }
+
+        let prefix = &result[..start];
+        let suffix = &result[start + close + 1..];
+        result = format!("{prefix}{num}{suffix}");
     }
 
-    // Fallback: random number + street name.
-    let num: u32 = rng.gen_range(1..200);
+    // If expanded text contains the English street name (or no English name), return as-is.
+    if result.contains(street_en) || street_en.is_empty() {
+        return result;
+    }
+
+    // Fallback: "NUM street_en" using the first number we generated.
+    let num = first_num.unwrap_or_else(|| rng.gen_range(1..200));
     format!("{num} {street_en}")
 }
 
@@ -706,5 +717,67 @@ mod tests {
             scotland.contains(&city.to_string()),
             "city '{city}' should be in Scotland region"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // 18. expand_street_pattern: single token
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_street_pattern_single_token() {
+        let mut rng = seeded_rng();
+        let result = expand_street_pattern("n{1,100} Baker Street", "Baker Street", &mut rng);
+        assert!(
+            result.ends_with("Baker Street"),
+            "SHALL contain street name, got: {result}"
+        );
+        let num: u32 = result.split_whitespace().next().unwrap().parse().unwrap();
+        assert!((1..=100).contains(&num), "number SHALL be in range, got: {num}");
+    }
+
+    // -----------------------------------------------------------------------
+    // 19. expand_street_pattern: multiple tokens (JP style)
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_street_pattern_multiple_tokens() {
+        let mut rng = seeded_rng();
+        let result = expand_street_pattern("清田一条n{1,4}-n{1,15}", "", &mut rng);
+        assert!(
+            result.starts_with("清田一条"),
+            "SHALL keep prefix, got: {result}"
+        );
+        assert!(
+            !result.contains("n{"),
+            "SHALL replace all tokens, got: {result}"
+        );
+        // Should match pattern like "清田一条2-7"
+        let suffix = &result["清田一条".len()..];
+        let parts: Vec<&str> = suffix.split('-').collect();
+        assert_eq!(parts.len(), 2, "SHALL have two numeric parts, got: {result}");
+        let n1: u32 = parts[0].parse().expect("first part SHALL be numeric");
+        let n2: u32 = parts[1].parse().expect("second part SHALL be numeric");
+        assert!((1..=4).contains(&n1), "first num SHALL be 1-4, got: {n1}");
+        assert!((1..=15).contains(&n2), "second num SHALL be 1-15, got: {n2}");
+    }
+
+    // -----------------------------------------------------------------------
+    // 20. expand_street_pattern: deterministic with seed
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_street_pattern_deterministic() {
+        let mut rng1 = seeded_rng();
+        let mut rng2 = seeded_rng();
+        let a = expand_street_pattern("新町n{1,2}-n{1,50}", "", &mut rng1);
+        let b = expand_street_pattern("新町n{1,2}-n{1,50}", "", &mut rng2);
+        assert_eq!(a, b, "same seed SHALL produce same result");
+    }
+
+    // -----------------------------------------------------------------------
+    // 21. expand_street_pattern: no tokens falls back
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_street_pattern_no_tokens_returns_as_is() {
+        let mut rng = seeded_rng();
+        let result = expand_street_pattern("Fixed Street Name", "Fixed Street Name", &mut rng);
+        assert_eq!(result, "Fixed Street Name", "no tokens SHALL return pattern unchanged");
     }
 }

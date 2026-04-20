@@ -128,40 +128,8 @@ fn generate_address_from_state(
     Ok(VarValue::object(map))
 }
 
-/// Expand a street pattern like "n{1,221} Baker Street" or "north-one-west n{1,20}".
-/// The `n{min,max}` is replaced with a random number in that range.
-/// If expansion fails, we fall back to a simple format.
-pub(crate) fn expand_street_pattern(
-    pattern: &str,
-    street_en: &str,
-    rng: &mut impl Rng,
-) -> String {
-    // Look for the n{min,max} pattern.
-    if let Some(start) = pattern.find("n{") {
-        if let Some(end) = pattern[start..].find('}') {
-            let range_str = &pattern[start + 2..start + end];
-            if let Some((min_s, max_s)) = range_str.split_once(',') {
-                if let (Ok(min), Ok(max)) = (min_s.parse::<u32>(), max_s.parse::<u32>()) {
-                    let num = rng.gen_range(min..=max);
-                    // Replace the pattern portion with the number.
-                    let prefix = &pattern[..start];
-                    let suffix = &pattern[start + end + 1..];
-                    let expanded = format!("{prefix}{num}{suffix}");
-                    // If the expanded text still has the original street_en, return as-is.
-                    // Otherwise return "num street_en" style.
-                    if expanded.contains(street_en) || street_en.is_empty() {
-                        return expanded;
-                    }
-                    return format!("{num} {street_en}");
-                }
-            }
-        }
-    }
-
-    // Fallback: random number + street name.
-    let num: u32 = rng.gen_range(1..200);
-    format!("{num} {street_en}")
-}
+// Re-export from geo module — single implementation for both simple and structured generators.
+pub(crate) use crate::geo::expand_street_pattern;
 
 /// Generate an address by picking a random country from the geo database.
 pub(crate) fn generate_default_address(rng: &mut impl Rng) -> Result<VarValue> {

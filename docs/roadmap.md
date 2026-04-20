@@ -77,6 +77,17 @@ Possible approaches:
 - Cache element positions across consecutive steps when the viewport hasn't changed
 - Longer default multiplier for WebView-context actions (requires detecting WebView context)
 
+## Geo Data: Full-Width Number Support for Japanese Addresses
+
+`expand_street_pattern()` generates ASCII digits (e.g. `清田一条2-7`), but real Japanese addresses often use full-width numbers (e.g. `清田一条２丁目７番`) or kanji numerals (e.g. `二丁目七番`). The current output looks unnatural for JP addresses.
+
+Possible approaches:
+- A `numeric_style` field per pattern or per country: `ascii` (default), `fullwidth`, `kanji`
+- Post-processing step that converts ASCII digits to full-width (`0`→`０`, `1`→`１`, etc.) for JP patterns
+- Update `jp.json` patterns to use full-width delimiters where appropriate (e.g. `丁目`, `番`, `号` instead of `-`)
+
+May require updating both `expand_street_pattern()` and the JP geo data in `data/geo/jp.json`.
+
 ## Orchestrator: Error Detail Not Forwarded to Client
 
 When tests run via the orchestrator (multiple flows submitted to a running `golem.sock`), detailed error messages (step failures, timeout reasons, stack traces) go to the orchestrator's stderr — not the submitting client's output. The client only sees pass/fail summary lines.
@@ -85,8 +96,3 @@ The orchestrator protocol (`submit_and_wait`) streams pass/fail status but does 
 
 Fix: include error detail (failed block, step, reason) in the orchestrator's response stream alongside the pass/fail status.
 
-## Geo Data: Multi-Segment Street Numbers
-
-The street pattern system (`n{min,max}`) only supports a single numeric token per pattern. This works for simple addresses like `n{1,221} Baker Street` → `42 Baker Street`, but Japanese addresses often need multiple numeric segments — e.g. `北一条西15丁目3-7` requires expanding `chome`, `ban`, and `go` independently.
-
-Currently JP geo data is limited to patterns with one number (e.g. `北一条西n{1,20}番地`). To produce realistic multi-segment Japanese addresses, `expand_street_pattern()` in `golem-vars/src/geo.rs` (and the duplicate in `structured/address.rs`) needs to support multiple `n{min,max}` tokens in a single pattern string.
