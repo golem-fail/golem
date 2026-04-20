@@ -139,7 +139,7 @@ public class CompanionServer {
                     sendJson(out, 200, new JSONObject()
                         .put("status", "ok")
                         .put("platform", "android")
-                        .put("version", "0.5.1")
+                        .put("version", "0.5.2")
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
@@ -785,8 +785,9 @@ public class CompanionServer {
             sendJson(out, 400, new JSONObject().put("error", "missing bundle_id"));
             return;
         }
-        // Use monkey to launch — more reliable than am start via executeShellCommand
-        String cmd = "monkey -p " + packageName + " -c android.intent.category.LAUNCHER 1";
+        // Use am start with LAUNCHER category to bring app to foreground.
+        // If already running, this activates it without restart. If not running, launches it.
+        String cmd = "am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p " + packageName;
         ParcelFileDescriptor pfd = uiAutomation.executeShellCommand(cmd);
         try (InputStream is = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
             byte[] buf = new byte[4096];

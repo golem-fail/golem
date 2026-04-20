@@ -241,6 +241,20 @@ fn build_bounds_fingerprint(element: &Element, buf: &mut String) {
 ///
 /// When the UI is already stable, this completes in a single extra hierarchy
 /// fetch (~250ms). During animations it waits up to `SETTLE_TIMEOUT` (1.5s).
+/// Maximum time to wait for WebView enrichment after settle (10 seconds).
+/// Only applies when the tree contains a web_view with no children,
+/// indicating WebKit Inspector hasn't connected yet.
+const ENRICHMENT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Check if the tree contains a web_view element with no children
+/// (unenriched — WebKit Inspector hasn't connected yet).
+fn has_empty_webview(element: &Element) -> bool {
+    if element.element_type == "web_view" && element.children.is_empty() {
+        return true;
+    }
+    element.children.iter().any(has_empty_webview)
+}
+
 pub(crate) async fn wait_for_settle(driver: &dyn PlatformDriver) -> Result<(Element, golem_driver::common::HierarchyMeta, golem_events::TreeStats)> {
     let deadline = Instant::now() + SETTLE_TIMEOUT;
     let mut stats = golem_events::TreeStats::default();
@@ -254,6 +268,33 @@ pub(crate) async fn wait_for_settle(driver: &dyn PlatformDriver) -> Result<(Elem
 
     loop {
         if Instant::now() >= deadline {
+            // Tree settled but check for unenriched WebView — keep polling
+            // until enrichment arrives or enrichment timeout.
+            if has_empty_webview(&prev_root) {
+                let enrich_deadline = Instant::now() + ENRICHMENT_TIMEOUT;
+                while Instant::now() < enrich_deadline {
+                    tokio::time::sleep(SETTLE_INTERVAL).await;
+                    let (root, meta) = match driver.get_hierarchy().await {
+                        Ok(r) => r,
+                        Err(_) => break,
+                    };
+                    stats.record(meta.node_count);
+                    crate::record_tree_fetch(meta.node_count);
+                    if !has_empty_webview(&root) {
+                        // Enrichment arrived — re-settle with enriched tree
+                        prev_root = root;
+                        prev_meta = meta;
+                        // Quick settle check on enriched tree
+                        tokio::time::sleep(SETTLE_INTERVAL).await;
+                        if let Ok((r2, m2)) = driver.get_hierarchy().await {
+                            stats.record(m2.node_count);
+                            crate::record_tree_fetch(m2.node_count);
+                            return Ok((r2, m2, stats));
+                        }
+                        return Ok((prev_root, prev_meta, stats));
+                    }
+                }
+            }
             return Ok((prev_root, prev_meta, stats));
         }
 
@@ -268,6 +309,13 @@ pub(crate) async fn wait_for_settle(driver: &dyn PlatformDriver) -> Result<(Elem
         let fp = bounds_fingerprint(&root);
 
         if fp == prev_fp {
+            // Settled — but if web_view is empty, keep polling for enrichment
+            if has_empty_webview(&root) {
+                prev_root = root;
+                prev_meta = meta;
+                prev_fp = fp;
+                continue; // don't return yet, wait for enrichment
+            }
             return Ok((root, meta, stats));
         }
 
@@ -600,6 +648,7 @@ mod tests {
             retry: None,
             retry_delay: None,
             app: None,
+            restart: None,
             auto_scroll: None,
             max_scrolls: None,
             scroll_timeout: None,

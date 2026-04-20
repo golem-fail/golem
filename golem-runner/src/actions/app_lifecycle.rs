@@ -38,8 +38,15 @@ pub(crate) async fn handle_launch(
     ctx: &ExecutionContext<'_>,
 ) -> Result<()> {
     let bundle_id = resolve_app_bundle(step, apps)?;
+    // restart = true: stop first (ignore errors if not running), then launch fresh.
+    if step.restart == Some(true) {
+        let _ = driver.stop_app(bundle_id).await;
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
     let start = Instant::now();
     driver.launch_app(bundle_id).await?;
+    // Brief pause for OS to complete app transition before polling hierarchy.
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     let _ = wait_for_settle(driver).await;
     let launch_ms = start.elapsed().as_millis() as u64;
     ctx.substep(golem_events::SubstepEvent::AppLaunch {

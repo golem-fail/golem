@@ -307,8 +307,8 @@ impl PlatformDriver for IosDriver {
     async fn launch_app(&self, bundle_id: &str) -> Result<()> {
         let body = serde_json::json!({ "bundle_id": bundle_id }).to_string();
         self.client.post_json("/launch", &body).await?;
-        // New app process means new WebKit Inspector session. Reset to Idle
-        // so the next get_hierarchy() reconnects for the new PID.
+        // Reset WebKit Inspector — the target app may have changed, or
+        // the inspector session may be stale after an app switch.
         let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
         *wk = WebKitLifecycle::Idle;
         Ok(())

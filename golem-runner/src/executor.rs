@@ -760,6 +760,7 @@ mod tests {
             retry: None,
             retry_delay: None,
             app: None,
+            restart: None,
             auto_scroll: None,
             max_scrolls: None,
             scroll_timeout: None,
@@ -791,6 +792,7 @@ mod tests {
             retry: None,
             retry_delay: None,
             app: None,
+            restart: None,
             auto_scroll: None,
             max_scrolls: None,
             scroll_timeout: None,
@@ -1918,6 +1920,7 @@ action = "screenshot"
             perf_collector: None,
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),
             emitter: None,
+            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -1979,6 +1982,7 @@ action = "screenshot"
             perf_collector: None,
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),
             emitter: None,
+            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -2049,6 +2053,7 @@ action = "screenshot"
             perf_collector: None,
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),
             emitter: None,
+            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -2104,6 +2109,7 @@ action = "screenshot"
             retry: None,
             retry_delay: None,
             app: None,
+            restart: None,
             auto_scroll: None,
             max_scrolls: None,
             scroll_timeout: None,

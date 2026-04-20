@@ -101,7 +101,7 @@ final class RequestRouter {
         return .json([
             "status": "ok",
             "platform": "ios",
-            "version": "0.5.1",
+            "version": "0.5.2",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
@@ -328,7 +328,9 @@ final class RequestRouter {
         }
         let application = XCUIApplication(bundleIdentifier: bundleId)
         DispatchQueue.main.sync {
-            application.launch()
+            // activate() brings to foreground without restarting.
+            // If not running, it launches it fresh.
+            application.activate()
         }
         lastLaunchedBundle = bundleId
         return .json(["status": "ok"])

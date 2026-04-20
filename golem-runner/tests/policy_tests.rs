@@ -31,6 +31,7 @@ fn test_ctx() -> ExecutionContext<'static> {
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
     }
 }
 
@@ -942,6 +943,7 @@ steps = [
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -996,6 +998,7 @@ steps = [
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -1050,6 +1053,7 @@ steps = [
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -1104,6 +1108,7 @@ steps = [
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -1158,6 +1163,7 @@ steps = [
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
     };
 
     let _result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -1228,6 +1234,7 @@ steps = [
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)

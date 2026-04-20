@@ -47,8 +47,8 @@ steps = [
 
   # Switch back to the primary app
   { action = "launch", app = "app" },
-  # Verify primary app is running (state may reset on relaunch)
-  { action = "assert_visible", on_text = "Counter", timeout = 30000 },
+  # Verify primary app state preserved (enriched DOM takes time after app switch)
+  { action = "assert_visible", on_text = "3", on_below = "Counter", timeout = 30000 },
 
   # Stop the companion app
   { action = "stop", app = "app-b" },
