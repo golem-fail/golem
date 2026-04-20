@@ -181,19 +181,19 @@ pub async fn stream_human(
             EventKind::Substep(sub) if verbose => {
                 print_substep(&dp, sub, use_color);
             }
-            EventKind::FlowFinished { flow_name, success, duration_ms } => {
+            EventKind::FlowFinished { flow_name, success, duration_ms, seed } => {
                 let secs = *duration_ms as f64 / 1000.0;
                 eprintln!();
                 if use_color {
                     if *success {
-                        eprintln!("  {dp}{GREEN}{SYM_SUCCESS} PASSED{RESET}  {flow_name}  {DIM}[{secs:.1}s]{RESET}");
+                        eprintln!("  {dp}{GREEN}{SYM_SUCCESS} PASSED{RESET}  {flow_name}  {DIM}[{secs:.1}s]  seed:{seed}{RESET}");
                     } else {
-                        eprintln!("  {dp}{BRIGHT_RED}{SYM_FAILED} FAILED{RESET}  {flow_name}  {DIM}[{secs:.1}s]{RESET}");
+                        eprintln!("  {dp}{BRIGHT_RED}{SYM_FAILED} FAILED{RESET}  {flow_name}  {DIM}[{secs:.1}s]  seed:{seed}{RESET}");
                     }
                 } else {
                     let sym = if *success { SYM_SUCCESS } else { SYM_FAILED };
                     let label = if *success { "PASSED" } else { "FAILED" };
-                    eprintln!("  {dp}{sym} {label}  {flow_name}  [{secs:.1}s]");
+                    eprintln!("  {dp}{sym} {label}  {flow_name}  [{secs:.1}s]  seed:{seed}");
                 }
             }
             EventKind::SuiteFinished { duration_ms, passed, failed } => {

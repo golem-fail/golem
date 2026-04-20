@@ -6,8 +6,6 @@ use golem_element::glob::glob_match;
 use golem_email::ImapPoller;
 use golem_parser::Step;
 use golem_vars::{ScopeLevel, VarValue, VariableStore};
-use rand::SeedableRng;
-use rand_chacha::ChaCha8Rng;
 use regex::Regex;
 
 use crate::context::ExecutionContext;
@@ -280,7 +278,7 @@ pub(crate) async fn handle_load_fixture(
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("load_fixture action requires 'as' param"))?;
 
-    let mut rng = ChaCha8Rng::from_entropy();
+    let mut rng = ctx.rng.lock().map_err(|e| anyhow::anyhow!("rng lock: {e}"))?;
 
     crate::fixture_loader::load_fixture_into_store(
         fixture_name,
@@ -288,7 +286,7 @@ pub(crate) async fn handle_load_fixture(
         ctx.flow_dir,
         ctx.project_root,
         vars,
-        &mut rng,
+        &mut *rng,
     )
 }
 

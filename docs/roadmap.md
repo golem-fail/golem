@@ -20,14 +20,6 @@ Requires access to a physical iOS device for development and testing.
 
 Several CLI flags are defined but not yet wired through to execution.
 
-### `--var <KEY=VALUE>` — CLI variable injection
-
-`parse_var_args()` exists in golem-cli but is never called. `VariableStore::new()` is created empty — CLI vars never injected. Flow-level `[flow.vars]` and fixture-loaded variables work.
-
-### `--seed <N>` — Deterministic fake data
-
-`SeedManager` in golem-vars is fully implemented with `ChaCha8Rng` seeded RNG, child derivation, and tests. But the suite creates `VariableStore` without passing the seed through. The seed value appears in reports but doesn't control generation.
-
 ### `--no-teardown` — Skip teardown blocks
 
 Teardown blocks are parsed but never executed. The executor ignores the `teardown` field — no teardown logic runs after flows. The `no_teardown` config field is stored but there is nothing to skip.

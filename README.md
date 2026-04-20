@@ -46,9 +46,9 @@ golem run [FILES...] [OPTIONS]
 |------|-------------|
 | `--platform <ios\|android>` | Force a single platform (overrides flow device config) |
 | `--tag <TAG>` | Filter flows by tag. Repeatable. Use `\|` within a value for OR. |
-| `--var <KEY=VALUE>` | Set a variable. Repeatable. (not yet wired) |
+| `--var <KEY=VALUE>` | Set a variable (highest priority, overrides flow vars). Repeatable. |
 | `--output <FORMAT[:FILE]>` | Output format. Repeatable. Default: `human`. See [Output Formats](#output-formats). |
-| `--seed <N>` | Deterministic seed for fake data generation (not yet wired) |
+| `--seed <N>` | Deterministic seed for fake data generation. Seed shown in all output formats for reproducibility. |
 | `--start <BLOCK>` | Start execution at a named block (skips app lifecycle, assumes app in correct state) |
 | `--max-concurrency <N>` | Max parallel devices (not yet implemented) |
 | `--record` | Enable auto screen recording (not yet implemented) |

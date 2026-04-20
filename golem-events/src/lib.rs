@@ -86,7 +86,7 @@ pub enum EventKind {
 
     // Flow level
     FlowStarted { flow_name: String },
-    FlowFinished { flow_name: String, success: bool, duration_ms: u64 },
+    FlowFinished { flow_name: String, success: bool, duration_ms: u64, seed: u64 },
 
     // Block level
     BlockStarted { block_name: String, block_index: usize, iteration: u32 },

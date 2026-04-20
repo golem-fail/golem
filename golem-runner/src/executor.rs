@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use anyhow::{bail, Context, Result};
 use golem_driver::PlatformDriver;
 use golem_parser::{Block, FlowFile, FlowOptions};
+use rand::SeedableRng;
 use golem_report::PerfSnapshot;
 use golem_vars::{ScopeLevel, VarValue, VariableStore};
 
@@ -183,6 +184,13 @@ pub async fn execute_flow<'a>(
             let child_flow_dir = child_path
                 .parent()
                 .unwrap_or(ctx.flow_dir);
+            // Derive child RNG from parent for deterministic sub-flow generation.
+            let child_rng = {
+                use rand::Rng;
+                let mut parent_rng = ctx.rng.lock().unwrap();
+                let child_seed: u64 = parent_rng.gen();
+                rand_chacha::ChaCha8Rng::seed_from_u64(child_seed)
+            };
             let mut child_ctx = ExecutionContext {
                 flow_dir: child_flow_dir,
                 project_root: ctx.project_root,
@@ -195,6 +203,7 @@ pub async fn execute_flow<'a>(
                 last_launch_ms: std::sync::atomic::AtomicU64::new(0),
                 emitter: ctx.emitter,
                 step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+                rng: std::sync::Mutex::new(child_rng),
             };
 
             let child_result = Box::pin(execute_flow(
@@ -1879,6 +1888,7 @@ action = "screenshot"
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),
             emitter: None,
             step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+            rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::from_entropy()),
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -1941,6 +1951,7 @@ action = "screenshot"
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),
             emitter: None,
             step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+            rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::from_entropy()),
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -2012,6 +2023,7 @@ action = "screenshot"
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),
             emitter: None,
             step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+            rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::from_entropy()),
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)

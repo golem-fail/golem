@@ -39,6 +39,8 @@ pub struct SuiteConfig {
     /// Start execution at this named block (skip earlier blocks).
     /// Assumes app is already in the correct state for that block.
     pub start: Option<String>,
+    /// CLI-injected variables (--var KEY=VALUE).
+    pub vars: Vec<(String, String)>,
 }
 
 /// Orchestrates the execution of a suite of test flows.
@@ -96,6 +98,7 @@ impl SuiteRunner {
             let platform_override = self.config.platform;
             let seed = self.config.seed;
             let start = self.config.start.clone();
+            let cli_vars = self.config.vars.clone();
             let rm = resource_mgr.clone();
 
             handles.push(tokio::spawn(async move {
@@ -104,6 +107,7 @@ impl SuiteRunner {
                         platform: platform_override,
                         seed,
                         start,
+                        vars: cli_vars,
                         ..SuiteConfig::default()
                     },
                     rm,
@@ -338,10 +342,11 @@ impl SuiteRunner {
             let barrier = barrier.clone();
             let no_perf = self.config.no_perf;
             let start_block = self.config.start.clone();
+            let cli_vars = self.config.vars.clone();
             let tx = event_tx.clone();
 
             handles.push(tokio::spawn(async move {
-                run_flow_on_device(flow, flow_name, flow_dir, device, platform, port, seed, start_block, barrier, no_perf, Some(tx)).await
+                run_flow_on_device(flow, flow_name, flow_dir, device, platform, port, seed, start_block, cli_vars, barrier, no_perf, Some(tx)).await
             }));
         }
 
@@ -824,6 +829,7 @@ async fn run_flow_on_device(
     port: u16,
     seed: Option<u64>,
     start_block: Option<String>,
+    cli_vars: Vec<(String, String)>,
     barrier: golem_runner::barrier::FailureBarrier,
     no_perf: bool,
     event_sender: Option<golem_events::channel::EventSender>,
@@ -867,6 +873,31 @@ async fn run_flow_on_device(
     };
 
     let mut vars = VariableStore::new();
+
+    // Inject flow-level variables ([flow.vars]).
+    if !flow.flow.vars.is_empty() {
+        let mut flow_scope = golem_vars::Scope::new(golem_vars::ScopeLevel::Flow);
+        for (k, v) in &flow.flow.vars {
+            flow_scope.set(k.clone(), golem_vars::VarValue::String(v.clone()));
+        }
+        vars.push_scope(flow_scope);
+    }
+
+    // Inject CLI --var overrides (higher priority than flow vars).
+    if !cli_vars.is_empty() {
+        let mut cli_scope = golem_vars::Scope::new(golem_vars::ScopeLevel::Cli);
+        for (k, v) in &cli_vars {
+            cli_scope.set(k.clone(), golem_vars::VarValue::String(v.clone()));
+        }
+        vars.push_scope(cli_scope);
+    }
+
+    // Create seeded RNG: --seed for deterministic, random otherwise.
+    // Always capture the actual seed for reproducibility in reports.
+    use rand::SeedableRng;
+    let actual_seed: u64 = seed.unwrap_or_else(rand::random);
+    let rng = rand_chacha::ChaCha8Rng::seed_from_u64(actual_seed);
+
     let capture_config = CaptureConfig::default();
     let device_emitter = event_sender.map(|sender| {
         golem_events::emitter::DeviceEmitter::new(
@@ -886,6 +917,7 @@ async fn run_flow_on_device(
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: device_emitter.as_ref(),
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+        rng: std::sync::Mutex::new(rng),
     };
 
     ctx.emit(golem_events::EventKind::FlowStarted { flow_name: flow_name.clone() });
@@ -918,6 +950,7 @@ async fn run_flow_on_device(
                 flow_name: flow_name.clone(),
                 success: result.success,
                 duration_ms,
+                seed: actual_seed,
             });
             FlowReport {
                 flow_name,
@@ -925,7 +958,7 @@ async fn run_flow_on_device(
                 step_results: Vec::new(),
                 warnings: result.warnings,
                 duration_ms,
-                seed,
+                seed: Some(actual_seed),
                 screenshot_path: None,
                 device_name: Some(device_label),
                 perf_snapshots: result.perf_snapshots,
@@ -938,6 +971,7 @@ async fn run_flow_on_device(
                 flow_name: flow_name.clone(),
                 success: false,
                 duration_ms,
+                seed: actual_seed,
             });
             FlowReport {
                 flow_name,
@@ -945,7 +979,7 @@ async fn run_flow_on_device(
                 step_results: Vec::new(),
                 warnings: vec![format!("Execution error: {e}")],
                 duration_ms,
-                seed,
+                seed: Some(actual_seed),
                 screenshot_path: None,
                 device_name: Some(device_label),
                 perf_snapshots: vec![],

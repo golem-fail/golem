@@ -21,6 +21,8 @@ clap = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true }
+rand = { workspace = true }
+rand_chacha = "0.3"
 dirs = "6"
 
 [dev-dependencies]

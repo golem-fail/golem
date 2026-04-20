@@ -13,6 +13,7 @@ use golem_element::{Bounds, Element};
 use golem_parser::parse_flow;
 use golem_runner::capture::{build_screenshot_path, CaptureConfig};
 use golem_runner::context::ExecutionContext;
+use rand::SeedableRng;
 use golem_runner::executor::{execute_flow, FlowResult};
 
 const DEFAULT_TIMEOUT: u64 = 10_000;
@@ -32,6 +33,7 @@ fn test_ctx() -> ExecutionContext<'static> {
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+        rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
     }
 }
 
@@ -944,6 +946,7 @@ steps = [
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+        rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -999,6 +1002,7 @@ steps = [
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+        rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -1054,6 +1058,7 @@ steps = [
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+        rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -1109,6 +1114,7 @@ steps = [
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+        rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -1164,6 +1170,7 @@ steps = [
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+        rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
     };
 
     let _result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -1235,6 +1242,7 @@ steps = [
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+        rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)

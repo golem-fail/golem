@@ -15,6 +15,7 @@ use golem_runner::context::ExecutionContext;
 use golem_runner::executor::{execute_flow, FlowResult};
 use golem_runner::teardown::execute_teardown;
 use golem_vars::{Scope, ScopeLevel, VarValue, VariableStore};
+use rand::SeedableRng;
 
 const DEFAULT_TIMEOUT: u64 = 10_000;
 
@@ -36,6 +37,7 @@ fn test_ctx() -> ExecutionContext<'static> {
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+        rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
     }
 }
 

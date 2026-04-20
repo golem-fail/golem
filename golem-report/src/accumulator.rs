@@ -318,6 +318,7 @@ mod tests {
             flow_name: "f".into(),
             success: false,
             duration_ms: 5000,
+            seed: 0,
         }));
 
         let report = acc.into_suite_report();
@@ -369,6 +370,7 @@ mod tests {
             flow_name: "checkout".into(),
             success: false,
             duration_ms: 10020,
+            seed: 0,
         }));
         acc.process(&make_event(6, dev, EventKind::SuiteFinished {
             duration_ms: 10020,
@@ -444,10 +446,10 @@ mod tests {
         }));
 
         acc.process(&make_event(6, "ios", EventKind::FlowFinished {
-            flow_name: "login_ios".into(), success: true, duration_ms: 30,
+            flow_name: "login_ios".into(), success: true, duration_ms: 30, seed: 0,
         }));
         acc.process(&make_event(7, "android", EventKind::FlowFinished {
-            flow_name: "login_android".into(), success: true, duration_ms: 200,
+            flow_name: "login_android".into(), success: true, duration_ms: 200, seed: 0,
         }));
 
         let suite = acc.into_suite_report();

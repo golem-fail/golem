@@ -65,6 +65,8 @@ async fn main() -> anyhow::Result<()> {
             let has_human_output = args.outputs.is_empty()
                 || args.outputs.iter().any(|s| s == "human" || s.starts_with("human:"));
 
+            let cli_vars = cli::parse_var_args(&args.vars)?;
+
             let config = SuiteConfig {
                 no_clean: args.no_clean,
                 no_teardown: args.no_teardown,
@@ -76,6 +78,7 @@ async fn main() -> anyhow::Result<()> {
                 debug: args.debug,
                 stream_human: has_human_output,
                 start: args.start,
+                vars: cli_vars,
             };
 
             // Check if an orchestrator is already running

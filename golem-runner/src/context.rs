@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use golem_devices::DeviceInfo;
 use golem_events::emitter::DeviceEmitter;
 use golem_events::{EventKind, SubstepEvent, TreeStats};
+use rand_chacha::ChaCha8Rng;
 
 use crate::capture::CaptureConfig;
 use crate::perf::PerfCollectorSet;
@@ -27,6 +28,8 @@ pub struct ExecutionContext<'a> {
     pub emitter: Option<&'a DeviceEmitter>,
     /// Tree fetch statistics for the current step (reset between steps).
     pub step_tree_stats: Mutex<TreeStats>,
+    /// Seeded RNG for deterministic fake data generation.
+    pub rng: Mutex<ChaCha8Rng>,
 }
 
 impl ExecutionContext<'_> {
@@ -74,6 +77,7 @@ impl ExecutionContext<'_> {
 
 #[cfg(test)]
 pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
+    use rand::SeedableRng;
     use std::sync::LazyLock;
     static DEFAULT_CAPTURE: LazyLock<CaptureConfig> = LazyLock::new(|| CaptureConfig {
         screenshot_on_failure: false,
@@ -91,5 +95,6 @@ pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
         last_launch_ms: AtomicU64::new(0),
         emitter: None,
         step_tree_stats: Mutex::new(TreeStats::default()),
+        rng: Mutex::new(ChaCha8Rng::from_entropy()),
     }
 }
