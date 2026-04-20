@@ -73,6 +73,7 @@ async fn main() -> anyhow::Result<()> {
                 platform: platform_override,
                 no_perf: args.no_perf,
                 verbose: args.verbose,
+                debug: args.debug,
                 stream_human: has_human_output,
             };
 

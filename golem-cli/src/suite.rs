@@ -32,6 +32,8 @@ pub struct SuiteConfig {
     pub no_perf: bool,
     /// Show substep detail in human output.
     pub verbose: bool,
+    /// Show driver-level diagnostics (WebKit/CDP).
+    pub debug: bool,
     /// Whether to stream human-readable output to stderr.
     pub stream_human: bool,
 }
@@ -292,6 +294,9 @@ impl SuiteRunner {
         let (event_tx, event_rx) = golem_events::channel::event_channel();
         let multi_device = device_setups.len() > 1;
         let verbose = self.config.verbose;
+        if self.config.debug {
+            golem_driver::set_debug(true);
+        }
 
         // Spawn real-time human renderer (only when human output requested).
         let human_handle = if self.config.stream_human {

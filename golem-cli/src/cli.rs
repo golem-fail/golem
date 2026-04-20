@@ -105,6 +105,10 @@ pub struct RunArgs {
     /// Verbose output: show swipe coordinates, scroll strategy, fingerprints
     #[arg(long)]
     pub verbose: bool,
+
+    /// Debug output: show driver-level diagnostics (WebKit/CDP connection, errors)
+    #[arg(long)]
+    pub debug: bool,
 }
 
 #[derive(clap::Args, Debug)]

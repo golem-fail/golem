@@ -106,7 +106,7 @@ async fn setup_webkit() -> Option<WebKitState> {
     match crate::webkit::WebKitInspector::connect().await {
         Ok(inspector) => Some(WebKitState { inspector }),
         Err(e) => {
-            eprintln!("  [webkit] setup failed: {e}");
+            if crate::is_debug() { eprintln!("  [webkit] setup failed: {e}"); }
             None
         }
     }

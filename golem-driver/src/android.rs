@@ -141,7 +141,7 @@ async fn setup_cdp(device_serial: &str) -> Option<CdpState> {
     let page_id = match crate::cdp::get_page_id(port).await {
         Ok(id) => id,
         Err(e) => {
-            eprintln!("  [cdp] setup failed at get_page_id: {e}");
+            if crate::is_debug() { eprintln!("  [cdp] setup failed at get_page_id: {e}"); }
             let _ = crate::cdp::remove_forward(device_serial, port).await;
             return None;
         }

@@ -81,9 +81,7 @@ impl PerfCollector {
                     data.net_rx_kb = perf.net_rx_bytes.map(|b| b as f64 / 1024.0);
                     data.net_tx_kb = perf.net_tx_bytes.map(|b| b as f64 / 1024.0);
                 }
-                Err(e) => {
-                    eprintln!("  [perf] companion /perf failed: {e}");
-                }
+                Err(_) => {}
             }
         }
 

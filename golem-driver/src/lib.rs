@@ -3,6 +3,19 @@ pub mod cdp;
 pub mod common;
 pub mod commands;
 pub mod ios;
+
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static DEBUG: AtomicBool = AtomicBool::new(false);
+
+/// Enable debug logging for driver-level diagnostics (WebKit/CDP).
+pub fn set_debug(enabled: bool) {
+    DEBUG.store(enabled, Ordering::Relaxed);
+}
+
+fn is_debug() -> bool {
+    DEBUG.load(Ordering::Relaxed)
+}
 pub mod ios_display;
 pub mod webkit;
 
