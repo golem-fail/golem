@@ -25,6 +25,132 @@ pub enum StepOutcome {
 /// Default retry delay in milliseconds
 const DEFAULT_RETRY_DELAY_MS: u64 = 1_000;
 
+/// Default base timeout in milliseconds (5 seconds).
+pub const DEFAULT_BASE_TIMEOUT_MS: u64 = 5_000;
+
+/// Compute the effective timeout for a step.
+///
+/// Priority:
+/// 1. `step.timeout` (explicit per-step override) — always wins.
+/// 2. `base_timeout_ms * action_multiplier`, raised to cover any intrinsic
+///    gesture duration (+ 2s settle buffer).
+///
+/// The `base_timeout_ms` comes from `[flow.options] step_timeout` or the
+/// default 5000ms.
+pub fn effective_timeout(step: &Step, base_timeout_ms: u64) -> u64 {
+    if let Some(t) = step.timeout {
+        return t;
+    }
+
+    let multiplied = base_timeout_ms * action_multiplier(step);
+
+    // If the step has an intrinsic duration (gesture, long_press, rotate),
+    // ensure timeout covers it plus 2s for settle.
+    let intrinsic = intrinsic_duration_ms(step);
+    if intrinsic > 0 {
+        multiplied.max(intrinsic + 2_000)
+    } else {
+        multiplied
+    }
+}
+
+/// Per-action timeout multiplier applied to the base timeout.
+fn action_multiplier(step: &Step) -> u64 {
+    // auto_scroll forces 6x minimum regardless of action.
+    if step.auto_scroll == Some(true) {
+        return 6;
+    }
+
+    match step.action.as_str() {
+        // 1x — simple interactions, capture, instant actions
+        "tap" | "doubleTap" | "backspace" | "long_press" | "swipe"
+        | "pinch" | "gesture" | "press" | "rotate" | "dark_mode" | "set_location"
+        | "grant_permission" | "revoke_permission" | "hide_keyboard"
+        | "screenshot" | "start_recording" | "stop_recording" | "add_media"
+        | "fail" | "load_fixture" | "push_notification" | "set_variable"
+        | "log" | "clear_data" => 1,
+
+        // 2x — assertions, waits, type (element resolve + keystroke delivery)
+        "type" | "assert_visible" | "assert_checked" | "assert_not_visible"
+        | "assert_alert" | "accept_alert" | "dismiss_alert"
+        | "wait" | "wait_not" | "read" => 2,
+
+        // 3x — app lifecycle (cold start)
+        "launch" | "stop" => 3,
+
+        // 4x — external scripts (unknown duration)
+        "bash" | "run" => 4,
+
+        // 6x — scroll, network I/O
+        "scroll" | "http_get" | "http_post" | "http_put" | "http_patch"
+        | "http_delete" | "open_link" => 6,
+
+        // 48x — email polling (240s at 5s base)
+        "await_email" => 48,
+
+        // Unknown actions get 2x as safe default
+        _ => 2,
+    }
+}
+
+/// Intrinsic duration of a gesture step (ms).
+///
+/// Returns 0 for non-gesture actions. Used to ensure the timeout
+/// covers the gesture itself plus settle time.
+fn intrinsic_duration_ms(step: &Step) -> u64 {
+    match step.action.as_str() {
+        "long_press" => {
+            step.params.get("duration")
+                .and_then(|v| v.as_integer())
+                .map(|d| d.max(0) as u64)
+                .unwrap_or(1_000)
+        }
+        "swipe" => {
+            // 3+ point swipe uses duration param; 2-point is instant
+            let point_count = step.points.len()
+                + step.start.as_ref().map_or(0, |_| 1)
+                + step.end.as_ref().map_or(0, |_| 1);
+            if point_count >= 3 {
+                step.duration.unwrap_or(300)
+            } else {
+                0
+            }
+        }
+        "gesture" => {
+            let duration_per_segment = step.duration.unwrap_or(300);
+            let max_points = step.fingers.iter()
+                .map(|f| f.points.len())
+                .max()
+                .unwrap_or(2);
+            duration_per_segment * max_points.saturating_sub(1) as u64
+        }
+        "rotate" => {
+            if let Some(degrees) = step.rotation {
+                let velocity = step.velocity.unwrap_or(180.0);
+                ((degrees.abs() / velocity) * 1000.0) as u64
+            } else {
+                0
+            }
+        }
+        "type" => {
+            // ~200ms per character (iOS WebView is slow through JS bridge)
+            let char_count = step.input.as_deref()
+                .or(step.on_text.as_deref())
+                .map(|s| s.len())
+                .unwrap_or(0);
+            (char_count as u64) * 200
+        }
+        "backspace" => {
+            let count = step.params.get("count")
+                .and_then(|v| v.as_integer())
+                .map(|n| n.max(0) as u64)
+                .unwrap_or(1);
+            count * 200
+        }
+        _ => 0,
+    }
+}
+
 /// Execute a step with if_fail, timeout, and retry policies applied.
 ///
 /// This wraps [`execute_action`] with:
@@ -35,11 +161,11 @@ pub async fn execute_step_with_policy(
     step: &Step,
     driver: &dyn PlatformDriver,
     vars: &mut VariableStore,
-    default_timeout_ms: u64,
+    base_timeout_ms: u64,
     ctx: &ExecutionContext<'_>,
     apps: &[golem_parser::AppConfig],
 ) -> Result<StepOutcome> {
-    let timeout_ms = step.timeout.unwrap_or(default_timeout_ms);
+    let timeout_ms = effective_timeout(step, base_timeout_ms);
     let max_retries = step.retry.unwrap_or(0);
     let retry_delay_ms = step.retry_delay.unwrap_or(DEFAULT_RETRY_DELAY_MS);
     let if_fail = step.if_fail.as_deref().unwrap_or("error");
@@ -100,14 +226,14 @@ pub async fn execute_step_with_policy(
 #[cfg(test)]
 async fn apply_policy<F, Fut>(
     step: &Step,
-    default_timeout_ms: u64,
+    base_timeout_ms: u64,
     executor: F,
 ) -> Result<StepOutcome>
 where
     F: Fn(&Step) -> Fut,
     Fut: Future<Output = Result<()>>,
 {
-    let timeout_ms = step.timeout.unwrap_or(default_timeout_ms);
+    let timeout_ms = effective_timeout(step, base_timeout_ms);
     let max_retries = step.retry.unwrap_or(0);
     let retry_delay_ms = step.retry_delay.unwrap_or(DEFAULT_RETRY_DELAY_MS);
     let if_fail = step.if_fail.as_deref().unwrap_or("error");
@@ -419,5 +545,103 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(result.expect("should be ok"), StepOutcome::Success);
+    }
+
+    // -----------------------------------------------------------------
+    // 12. Action multiplier: tap = 1x, assert_visible = 2x, scroll = 6x
+    // -----------------------------------------------------------------
+    #[test]
+    fn action_multiplier_values() {
+        let tap = Step { action: "tap".into(), ..Default::default() };
+        assert_eq!(effective_timeout(&tap, 5_000), 5_000);
+
+        let assert_vis = Step { action: "assert_visible".into(), ..Default::default() };
+        assert_eq!(effective_timeout(&assert_vis, 5_000), 10_000);
+
+        let scroll = Step { action: "scroll".into(), ..Default::default() };
+        assert_eq!(effective_timeout(&scroll, 5_000), 30_000);
+
+        let launch = Step { action: "launch".into(), ..Default::default() };
+        assert_eq!(effective_timeout(&launch, 5_000), 15_000);
+
+        let bash = Step { action: "bash".into(), ..Default::default() };
+        assert_eq!(effective_timeout(&bash, 5_000), 20_000);
+
+        let email = Step { action: "await_email".into(), ..Default::default() };
+        assert_eq!(effective_timeout(&email, 5_000), 240_000);
+    }
+
+    // -----------------------------------------------------------------
+    // 13. auto_scroll forces 6x minimum
+    // -----------------------------------------------------------------
+    #[test]
+    fn auto_scroll_forces_6x() {
+        let mut step = Step { action: "tap".into(), ..Default::default() };
+        step.auto_scroll = Some(true);
+        // tap is normally 1x (5s), but auto_scroll forces 6x (30s)
+        assert_eq!(effective_timeout(&step, 5_000), 30_000);
+    }
+
+    // -----------------------------------------------------------------
+    // 14. Intrinsic duration: long_press extends timeout
+    // -----------------------------------------------------------------
+    #[test]
+    fn long_press_duration_extends_timeout() {
+        let mut step = Step { action: "long_press".into(), ..Default::default() };
+        // Default long_press duration=1000, so intrinsic=1000, floor=3000
+        // Multiplied=5000 (1x). max(5000, 3000) = 5000
+        assert_eq!(effective_timeout(&step, 5_000), 5_000);
+
+        // long_press with duration=8000: floor=10000, multiplied=5000
+        step.params.insert("duration".to_string(), toml::Value::Integer(8_000));
+        assert_eq!(effective_timeout(&step, 5_000), 10_000);
+    }
+
+    // -----------------------------------------------------------------
+    // 15. Intrinsic duration: slow rotate extends timeout
+    // -----------------------------------------------------------------
+    #[test]
+    fn slow_rotate_extends_timeout() {
+        let mut step = Step { action: "rotate".into(), ..Default::default() };
+        step.rotation = Some(720.0);
+        step.velocity = Some(45.0);
+        // 720/45 * 1000 = 16000ms intrinsic. floor = 18000
+        // Multiplied = 5000 (1x). max(5000, 18000) = 18000
+        assert_eq!(effective_timeout(&step, 5_000), 18_000);
+    }
+
+    // -----------------------------------------------------------------
+    // 16. Per-step timeout always wins over multiplier
+    // -----------------------------------------------------------------
+    #[test]
+    fn step_timeout_overrides_multiplier() {
+        let mut step = Step { action: "await_email".into(), ..Default::default() };
+        step.timeout = Some(500);
+        // await_email is 48x but step.timeout=500 wins
+        assert_eq!(effective_timeout(&step, 5_000), 500);
+    }
+
+    // -----------------------------------------------------------------
+    // 17. Unknown action gets 2x default
+    // -----------------------------------------------------------------
+    #[test]
+    fn unknown_action_gets_2x() {
+        let step = Step { action: "future_action".into(), ..Default::default() };
+        assert_eq!(effective_timeout(&step, 5_000), 10_000);
+    }
+
+    // -----------------------------------------------------------------
+    // 18. Type scales with input length
+    // -----------------------------------------------------------------
+    #[test]
+    fn type_scales_with_input_length() {
+        // Short input: 5 chars * 200ms = 1000ms intrinsic, under 2x (10000), no effect
+        let mut step = Step { action: "type".into(), ..Default::default() };
+        step.input = Some("hello".to_string());
+        assert_eq!(effective_timeout(&step, 5_000), 10_000); // 2x base
+
+        // Long input: 80 chars * 200ms = 16000ms intrinsic + 2s = 18000, exceeds 2x (10000)
+        step.input = Some("ab".repeat(40));
+        assert_eq!(effective_timeout(&step, 5_000), 18_000);
     }
 }

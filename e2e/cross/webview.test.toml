@@ -33,7 +33,7 @@ steps = [
   { action = "hide_keyboard" },
 
   # Interact with buttons inside the web view (may need scrolling after typing)
-  { action = "tap", on_accessibility_label = "Increment", auto_scroll = true, timeout = 60000 },
+  { action = "tap", on_accessibility_label = "Increment", auto_scroll = true },
   { action = "tap", on_accessibility_label = "Increment" },
   { action = "assert_visible", on_text = "2", on_below = "Counter" },
 
@@ -47,10 +47,10 @@ steps = [
   { action = "assert_visible", on_text = "Light", on_right_of = "Theme:" },
 
   # Scroll to find list elements
-  { action = "assert_visible", on_text = "Item 0", auto_scroll = true, timeout = 60000 },
+  { action = "assert_visible", on_text = "Item 0", auto_scroll = true },
 
   # Scroll back to the top
-  { action = "assert_visible", on_text = "Submit", auto_scroll = true, timeout = 60000 },
+  { action = "assert_visible", on_text = "Submit", auto_scroll = true },
 
   # Take a screenshot to capture final web view state
   { action = "screenshot", path = "/tmp/golem-cross-webview.png" },

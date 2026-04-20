@@ -18,7 +18,7 @@ type = "phone"
 name = "long_press_tests"
 steps = [
   # Long press on list item with default duration (1000ms)
-  { action = "long_press", on_text = "Item 0", auto_scroll = true, timeout = 60000 },
+  { action = "long_press", on_text = "Item 0", auto_scroll = true },
 
   # Long press on submit button with custom duration
   { action = "long_press", on_text = "Submit", duration = 2000 },

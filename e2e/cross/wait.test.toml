@@ -26,7 +26,7 @@ steps = [
 name = "scroll_and_tap"
 steps = [
   # "Show Delayed" is at the bottom, needs scrolling past inner scroll lists
-  { action = "tap", on_text = "Show Delayed", auto_scroll = true, timeout = 60000 },
+  { action = "tap", on_text = "Show Delayed", auto_scroll = true },
 
   # After tapping, wait for delayed text to appear (~3s)
   { action = "wait", on_text = "Delayed Text", auto_scroll = true },

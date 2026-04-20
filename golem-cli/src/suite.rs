@@ -923,7 +923,10 @@ async fn run_flow_on_device(
     ctx.emit(golem_events::EventKind::FlowStarted { flow_name: flow_name.clone() });
     // CLI --start takes precedence over flow-level start field.
     let effective_start = start_block.as_deref().or(flow.flow.start.as_deref());
-    match execute_flow(&flow, driver.as_ref(), &mut vars, effective_start, 10_000, &mut ctx, Some(&barrier)).await {
+    let base_timeout = flow.flow.options.as_ref()
+        .and_then(|o| o.step_timeout)
+        .unwrap_or(golem_runner::policy::DEFAULT_BASE_TIMEOUT_MS);
+    match execute_flow(&flow, driver.as_ref(), &mut vars, effective_start, base_timeout, &mut ctx, Some(&barrier)).await {
         Ok(result) => {
             if !result.success {
                 if result.barrier_aborted {

@@ -19,7 +19,7 @@ name = "grant_permission_and_verify"
 steps = [
   # Launch the app
   { action = "launch", app = "fail.golem.test" },
-  { action = "wait", on_text = "camera-permission-button", timeout = 10000 },
+  { action = "wait", on_text = "camera-permission-button" },
 
   # Grant camera permission
   { action = "grant_permission", permission = "camera" },

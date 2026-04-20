@@ -18,7 +18,7 @@ type = "phone"
 [[block]]
 name = "find_gesture_target"
 steps = [
-  { action = "tap", on_text = "Reset Gesture", auto_scroll = true, timeout = 60000 },
+  { action = "tap", on_text = "Reset Gesture", auto_scroll = true },
   { action = "assert_visible", on_text = "Not zoomed" },
   { action = "assert_visible", on_text = "Grid: 000-000-000" },
   { action = "assert_visible", on_text = "*Max: 0" },

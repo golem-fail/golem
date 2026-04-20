@@ -31,12 +31,12 @@ name = "deep_link_app_a"
 steps = [
   # Launch app A and verify deep link display is empty
   { action = "launch", app = "fail.golem.test" },
-  { action = "wait", on_text = "Deep Link:", timeout = 10000 },
+  { action = "wait", on_text = "Deep Link:" },
   { action = "assert_visible", on_text = "Deep Link:" },
 
   # Open a deep link for app A and verify it is received
   { action = "open_link", url = "golem-test://home" },
-  { action = "wait", on_text = "Deep Link:", timeout = 5000 },
+  { action = "wait", on_text = "Deep Link:" },
   { action = "assert_visible", on_text = "golem-test://home", on_right_of = "Deep Link:" },
 ]
 
@@ -45,11 +45,11 @@ name = "deep_link_app_b"
 steps = [
   # Launch app B
   { action = "launch", app = "fail.golem.testb" },
-  { action = "wait", on_text = "deeplink-display-b", timeout = 10000 },
+  { action = "wait", on_text = "deeplink-display-b" },
 
   # Open a deep link for app B and verify it is received
   { action = "open_link", url = "golem-test-b://dashboard" },
-  { action = "wait", on_text = "deeplink-display-b", timeout = 5000 },
+  { action = "wait", on_text = "deeplink-display-b" },
   { action = "assert_visible", on_text = "golem-test-b://dashboard", on_right_of = "deeplink-display-b" },
 ]
 
@@ -58,7 +58,7 @@ name = "verify_app_a_state_preserved"
 steps = [
   # Switch back to app A
   { action = "launch", app = "fail.golem.test" },
-  { action = "wait", on_text = "Deep Link:", timeout = 10000 },
+  { action = "wait", on_text = "Deep Link:" },
 
   # Verify app A's deep link display still shows the previously received link
   { action = "assert_visible", on_text = "golem-test://home", on_right_of = "Deep Link:" },

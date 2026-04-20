@@ -17,14 +17,14 @@ type = "phone"
 [[block]]
 name = "initial_state"
 steps = [
-  { action = "assert_visible", on_text = "Portrait", on_right_of = "Orientation:", auto_scroll = true, timeout = 60000 },
+  { action = "assert_visible", on_text = "Portrait", on_right_of = "Orientation:", auto_scroll = true },
   { action = "assert_visible", on_text = "Light", on_right_of = "Theme:", auto_scroll = true },
   { action = "assert_visible", on_text = "0.0, 0.0", on_right_of = "Location:", auto_scroll = true },
 
   # Press the home button and re-launch
   { action = "press", button = "home" },
   { action = "launch", app = "app" },
-  { action = "assert_visible", on_text = "Orientation:", auto_scroll = true, timeout = 60000 },
+  { action = "assert_visible", on_text = "Orientation:", auto_scroll = true },
 ]
 
 # Android-only: test back button navigation
@@ -34,14 +34,14 @@ where = { os = "android" }
 steps = [
   { action = "press", button = "back" },
   { action = "launch", app = "app" },
-  { action = "assert_visible", on_text = "Orientation:", auto_scroll = true, timeout = 60000 },
+  { action = "assert_visible", on_text = "Orientation:", auto_scroll = true },
 ]
 
 [[block]]
 name = "orientation_controls"
 steps = [
   # Verify initial portrait orientation (using nested anchor syntax)
-  { action = "assert_visible", on = { text = "Portrait", right_of = { text = "Orientation:" } }, auto_scroll = true, timeout = 60000 },
+  { action = "assert_visible", on = { text = "Portrait", right_of = { text = "Orientation:" } }, auto_scroll = true },
 
   # Rotate to landscape and verify
   { action = "rotate", orientation = "landscape" },
@@ -60,7 +60,7 @@ steps = [
 name = "dark_mode_controls"
 steps = [
   # Verify initial light theme
-  { action = "assert_visible", on_text = "Light", on_right_of = "Theme:", auto_scroll = true, timeout = 60000 },
+  { action = "assert_visible", on_text = "Light", on_right_of = "Theme:", auto_scroll = true },
 
   # Enable dark mode and verify
   { action = "dark_mode", enabled = true },
@@ -82,7 +82,7 @@ steps = [
 name = "location_controls"
 steps = [
   # Verify initial location
-  { action = "assert_visible", on_text = "0.0, 0.0", on_right_of = "Location:", auto_scroll = true, timeout = 60000 },
+  { action = "assert_visible", on_text = "0.0, 0.0", on_right_of = "Location:", auto_scroll = true },
 
   # Set GPS location to San Francisco
   { action = "set_location", latitude = 37.7749, longitude = -122.4194 },

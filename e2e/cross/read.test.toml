@@ -28,14 +28,14 @@ steps = [
   { action = "read", on_below = "Counter", on_index = 0, save_to = "updated_count" },
 
   # Read the orientation label (off-screen, needs scroll)
-  { action = "read", on_right_of = "Orientation:", save_to = "device_orientation", auto_scroll = true, timeout = 60000 },
+  { action = "read", on_right_of = "Orientation:", save_to = "device_orientation", auto_scroll = true },
 
   # Read the theme label
-  { action = "read", on_right_of = "Theme:", save_to = "current_theme", auto_scroll = true, timeout = 60000 },
+  { action = "read", on_right_of = "Theme:", save_to = "current_theme", auto_scroll = true },
 
   # Read text from a list item (need to scroll back up)
-  { action = "read", on_text = "Item 0", save_to = "first_item_text", auto_scroll = true, timeout = 60000 },
+  { action = "read", on_text = "Item 0", save_to = "first_item_text", auto_scroll = true },
 
   # Verify the counter was updated correctly (back at top)
-  { action = "assert_visible", on_text = "2", on_below = "Counter", auto_scroll = true, timeout = 60000 },
+  { action = "assert_visible", on_text = "2", on_below = "Counter", auto_scroll = true },
 ]

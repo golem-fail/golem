@@ -19,7 +19,7 @@ name = "launch_and_wait"
 steps = [
   # Launch the app and wait for initial load
   { action = "launch", app = "fail.golem.test" },
-  { action = "wait", on_text = "scroll-list", timeout = 10000 },
+  { action = "wait", on_text = "scroll-list" },
   { action = "assert_visible", on_text = "list-item-0" },
   { action = "screenshot" },
 ]

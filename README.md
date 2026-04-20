@@ -209,7 +209,7 @@ The flow runs on every device listed. Golem launches the first app automatically
 
 ```toml
 [flow.options]
-step_timeout = 30000                # Default timeout per step (ms) — not yet wired
+step_timeout = 5000                 # Base timeout (ms), default: 5000. See timeout multipliers below.
 max_steps = 10000                   # Safety limit
 max_runtime = "30m"                 # "5m", "2h", "500ms"
 app_lifecycle = "reset"             # "reset" (default), "launch", "manual"
@@ -371,7 +371,7 @@ For complex queries, use `on = {}` instead of flat `on_*` fields:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `timeout` | `step_timeout` | Max wait in ms |
+| `timeout` | per-action | Max wait in ms. Overrides computed default. |
 | `auto_scroll` | `false` | Scroll page to find element |
 | `max_scrolls` | — | Limit scroll attempts |
 | `if_fail` | `"error"` | `"error"` (fail flow), `"warn"` (log + continue), `"ignore"` (silent continue) |
@@ -379,6 +379,21 @@ For complex queries, use `on = {}` instead of flat `on_*` fields:
 | `retry_delay` | `1000` | Delay between retries (ms) |
 | `save_to` | — | Save result to a variable |
 | `app` | — | Target a specific app (for multi-app flows) |
+
+#### Timeout Multipliers
+
+Each action has a built-in multiplier applied to the base timeout (`step_timeout`, default 5000ms). Per-step `timeout` always overrides. `auto_scroll = true` forces 6x minimum.
+
+| Multiplier | Timeout (at 5s base) | Actions |
+|------------|---------------------|---------|
+| 1x | 5s | `tap`, `doubleTap`, `backspace`, `long_press`, `swipe`, `pinch`, `gesture`, `press`, `rotate`, `screenshot`, `hide_keyboard`, device controls |
+| 2x | 10s | `type`, `assert_visible`, `assert_checked`, `assert_not_visible`, `wait`, `wait_not`, `read`, alerts |
+| 3x | 15s | `launch`, `stop` |
+| 4x | 20s | `bash`, `run` |
+| 6x | 30s | `scroll`, `auto_scroll`, `http_*`, `open_link` |
+| 48x | 240s | `await_email` |
+
+Actions with intrinsic duration (`long_press`, `type`, `rotate`, `gesture`) auto-extend: `max(multiplied, duration + 2s)`. For `type`, duration is ~200ms per character.
 
 ### Subflow
 

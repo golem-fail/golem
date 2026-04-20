@@ -32,17 +32,17 @@ steps = [
 
   # assert_visible: verify exact text content using relational selectors
   { action = "assert_visible", on_text = "0", on_below = "Counter" },
-  { action = "assert_visible", on_text = "Item 0", auto_scroll = true, timeout = 60000 },
+  { action = "assert_visible", on_text = "Item 0", auto_scroll = true },
   { action = "assert_visible", on_text = "Item 3" },
 
   # assert_visible with enabled: verify elements are enabled
-  { action = "assert_visible", on_text = "Submit", on_enabled = true, auto_scroll = true, timeout = 60000 },
-  { action = "assert_visible", on_accessibility_label = "Increment", on_enabled = true, auto_scroll = true, timeout = 60000 },
+  { action = "assert_visible", on_text = "Submit", on_enabled = true, auto_scroll = true },
+  { action = "assert_visible", on_accessibility_label = "Increment", on_enabled = true, auto_scroll = true },
   { action = "assert_visible", on_text = "Enter email", on_enabled = true },
-  { action = "assert_visible", on_text = "Dark Mode", on_enabled = true, auto_scroll = true, timeout = 60000 },
+  { action = "assert_visible", on_text = "Dark Mode", on_enabled = true, auto_scroll = true },
 
   # Verify checkbox is unchecked, tap it, verify it's checked
-  { action = "assert_checked", on_accessibility_label = "agree-checkbox", on_checked = false, auto_scroll = true, timeout = 60000 },
+  { action = "assert_checked", on_accessibility_label = "agree-checkbox", on_checked = false, auto_scroll = true },
   { action = "tap", on_text = "I agree" },
   { action = "assert_checked", on_accessibility_label = "agree-checkbox", on_checked = true },
 ]

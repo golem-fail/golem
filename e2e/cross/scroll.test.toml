@@ -19,13 +19,13 @@ type = "phone"
 name = "page_scroll_to_list"
 steps = [
   { action = "assert_visible", on_text = "Submit" },
-  { action = "tap", on_text = "Item 0", auto_scroll = true, timeout = 60000 },
+  { action = "tap", on_text = "Item 0", auto_scroll = true },
 ]
 
 [[block]]
 name = "scroll_within_list"
 steps = [
   # Now the list is in view — scroll within it to find Item 45
-  { action = "scroll", to = { text = "Item 45" }, within = { below = "Scroll List" }, timeout = 60000 },
+  { action = "scroll", to = { text = "Item 45" }, within = { below = "Scroll List" } },
   { action = "assert_visible", on_text = "Item 45", timeout = 15000 },
 ]

@@ -62,7 +62,7 @@ steps = [
   { action = "screenshot", path = "/tmp/golem-cross-form-filled.png" },
 
   # Verify the submit button is enabled (may need scrolling after typing)
-  { action = "assert_visible", on_text = "Submit", on_enabled = true, auto_scroll = true, timeout = 60000 },
+  { action = "assert_visible", on_text = "Submit", on_enabled = true, auto_scroll = true },
 
   # Submit the form
   { action = "tap", on_text = "Submit" },

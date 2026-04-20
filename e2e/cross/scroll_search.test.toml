@@ -20,15 +20,15 @@ steps = [
   { action = "assert_visible", on_text = "Submit" },
 
   # Smart within: auto-scrolls to the list container, then scrolls inside it
-  { action = "scroll", to = { text = "Item 25" }, within = { below = "Scroll List" }, timeout = 60000 },
+  { action = "scroll", to = { text = "Item 25" }, within = { below = "Scroll List" } },
   { action = "assert_visible", on_text = "Item 25" },
 
   # Scroll within the list to the last item
-  { action = "scroll", to = { text = "Item 49" }, within = { below = "Scroll List" }, timeout = 60000 },
+  { action = "scroll", to = { text = "Item 49" }, within = { below = "Scroll List" } },
   { action = "assert_visible", on_text = "Item 49" },
 
   # Scroll back to the top of the list
-  { action = "scroll", to = { text = "Item 0" }, within = { below = "Scroll List" }, direction = "up", timeout = 60000 },
+  { action = "scroll", to = { text = "Item 0" }, within = { below = "Scroll List" }, direction = "up" },
   { action = "assert_visible", on_text = "Item 0" },
 ]
 
@@ -36,13 +36,13 @@ steps = [
 name = "horizontal_carousel_scroll"
 steps = [
   # Smart within auto-scrolls to the carousel from wherever the page is
-  { action = "scroll", to = { text = "Card 5" }, within = { below = "Carousel" }, direction = "left", timeout = 60000 },
+  { action = "scroll", to = { text = "Card 5" }, within = { below = "Carousel" }, direction = "left" },
   { action = "assert_visible", on_text = "Card 5" },
 
-  { action = "scroll", to = { text = "Card 9" }, within = { below = "Carousel" }, direction = "left", timeout = 60000 },
+  { action = "scroll", to = { text = "Card 9" }, within = { below = "Carousel" }, direction = "left" },
   { action = "assert_visible", on_text = "Card 9" },
 
   # Scroll back to the start
-  { action = "scroll", to = { text = "Card 0" }, within = { below = "Carousel" }, direction = "right", timeout = 60000 },
+  { action = "scroll", to = { text = "Card 0" }, within = { below = "Carousel" }, direction = "right" },
   { action = "assert_visible", on_text = "Card 0" },
 ]

@@ -44,10 +44,6 @@ Flag is defined but never read. `ResourceManager` uses default concurrency confi
 
 These `[flow.options]` fields are parsed into `FlowOptions` but never read during execution.
 
-### `step_timeout` — Default step timeout
-
-Stored but ignored. The executor hardcodes a 10,000ms default timeout. Per-step `timeout` fields work, but the global default cannot be configured.
-
 ### `screenshot_on_failure` — Auto-screenshot on failure
 
 Parsed but `CaptureConfig` is created with `default()` which hardcodes `screenshot_on_failure: true`. The flow option value is never used.
@@ -69,6 +65,25 @@ Intended usage: a `fake:email(ethereal=true)` parameter or a dedicated `fake:eth
 This needs design work before implementation. The full email verification flow spans multiple concerns: creating the inbox, sending the email (via the app under test), polling for arrival, extracting content (verification URLs, OTP codes), and feeding extracted values back into the flow as variables. The `await_email` action already has `extract` (regex patterns) and `save_to`, but the end-to-end ergonomics — how a test author wires up `fake:email` → app signup → `await_email` → `open_link` — need to be planned as a cohesive feature.
 
 Files: `golem-email/src/ethereal.rs`, `golem-email/src/imap_poller.rs`.
+
+## iOS WebView: Slow Element Resolution Between Consecutive Actions
+
+Consecutive `type` actions on iOS WebView elements are slow — resolving the second input field after typing in the first takes >10s. The DOM tree changes after each keystroke (WebKit enrichment re-fetches), and finding the next element requires waiting for the tree to settle.
+
+Example: `e2e/cross/webview.test.toml` step 7 (`type on_text="Search"`) times out at 10s even though the previous `type` (step 5) completes in ~3.6s. The bottleneck is element resolution, not keystroke delivery.
+
+Possible approaches:
+- Smarter settle detection that recognizes when WebView content is still updating
+- Cache element positions across consecutive steps when the viewport hasn't changed
+- Longer default multiplier for WebView-context actions (requires detecting WebView context)
+
+## Orchestrator: Error Detail Not Forwarded to Client
+
+When tests run via the orchestrator (multiple flows submitted to a running `golem.sock`), detailed error messages (step failures, timeout reasons, stack traces) go to the orchestrator's stderr — not the submitting client's output. The client only sees pass/fail summary lines.
+
+The orchestrator protocol (`submit_and_wait`) streams pass/fail status but does not forward the per-device error context. This makes debugging failures in orchestrator mode harder than direct mode.
+
+Fix: include error detail (failed block, step, reason) in the orchestrator's response stream alongside the pass/fail status.
 
 ## Geo Data: Multi-Segment Street Numbers
 

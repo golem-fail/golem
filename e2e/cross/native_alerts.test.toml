@@ -19,7 +19,7 @@ type = "phone"
 name = "alert_accept"
 steps = [
   { action = "assert_visible", on_text = "Submit" },
-  { action = "tap", on_text = "Show Alert", auto_scroll = true, timeout = 60000 },
+  { action = "tap", on_text = "Show Alert", auto_scroll = true },
   { action = "assert_alert" },
   { action = "assert_alert", on_text = "This is a test alert" },
   { action = "accept_alert" },
