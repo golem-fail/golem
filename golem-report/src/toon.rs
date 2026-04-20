@@ -34,10 +34,15 @@ pub fn format_step_toon(step: &StepReport) -> String {
     };
 
     let substep_suffix = format_substeps_toon(&step.substeps);
+    let tree_suffix = if step.tree_stats.fetches > 0 {
+        format!(" t:{}/{}", step.tree_stats.fetches, step.tree_stats.max_nodes)
+    } else {
+        String::new()
+    };
 
     match &step.outcome {
         StepOutcome::Success => {
-            format!(" +{label} {}{substep_suffix}", step.duration_ms)
+            format!(" +{label} {}{substep_suffix}{tree_suffix}", step.duration_ms)
         }
         StepOutcome::Warning(msg) => {
             format!(" ~{label} {} {msg}{substep_suffix}", step.duration_ms)
@@ -183,7 +188,7 @@ pub fn format_suite_toon(report: &SuiteReport) -> String {
 
     // Schema header for LLM comprehension
     out.push_str("# S=suite R=result(passed/warned/failed) T=total(passed/failed/skipped) d:N=duration_ms\n");
-    out.push_str("# step: +=pass !=fail ~=warn -=skip @x,y=position b=bounds(x,y,w,h) s:N=scroll_attempts\n");
+    out.push_str("# step: +=pass !=fail ~=warn -=skip @x,y=position b=bounds(x,y,w,h) s:N=scroll_attempts t:N/M=trees/nodes\n");
     out.push_str("# perf: P block:app:device:iteration mem=MB cpu=% thr=threads fd=file_descriptors disk=MB net_rx/tx=KB launch=ms\n");
 
     for flow in &report.flows {
@@ -234,6 +239,7 @@ mod tests {
             retry_count: 0,
             screenshot_path: None,
             substeps: vec![],
+            tree_stats: golem_events::TreeStats::default(),
         }
     }
 
@@ -249,6 +255,7 @@ mod tests {
             retry_count: 0,
             screenshot_path: None,
             substeps: vec![],
+            tree_stats: golem_events::TreeStats::default(),
         }
     }
 
@@ -264,6 +271,7 @@ mod tests {
             retry_count: 0,
             screenshot_path: None,
             substeps: vec![],
+            tree_stats: golem_events::TreeStats::default(),
         }
     }
 
@@ -279,6 +287,7 @@ mod tests {
             retry_count: 0,
             screenshot_path: None,
             substeps: vec![],
+            tree_stats: golem_events::TreeStats::default(),
         }
     }
 

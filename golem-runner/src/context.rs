@@ -1,9 +1,10 @@
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 
 use golem_devices::DeviceInfo;
 use golem_events::emitter::DeviceEmitter;
-use golem_events::{EventKind, SubstepEvent};
+use golem_events::{EventKind, SubstepEvent, TreeStats};
 
 use crate::capture::CaptureConfig;
 use crate::perf::PerfCollectorSet;
@@ -24,6 +25,8 @@ pub struct ExecutionContext<'a> {
     pub last_launch_ms: AtomicU64,
     /// Event emitter for structured test output.
     pub emitter: Option<&'a DeviceEmitter>,
+    /// Tree fetch statistics for the current step (reset between steps).
+    pub step_tree_stats: Mutex<TreeStats>,
 }
 
 impl ExecutionContext<'_> {
@@ -51,6 +54,22 @@ impl ExecutionContext<'_> {
             e.substep(event);
         }
     }
+
+    /// Record a tree fetch (called by wait_for_settle).
+    pub fn record_tree_fetch(&self, node_count: u32) {
+        if let Ok(mut stats) = self.step_tree_stats.lock() {
+            stats.record(node_count);
+        }
+    }
+
+    /// Take and reset the step-level tree stats.
+    pub fn take_tree_stats(&self) -> TreeStats {
+        if let Ok(mut stats) = self.step_tree_stats.lock() {
+            std::mem::take(&mut *stats)
+        } else {
+            TreeStats::default()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -71,5 +90,6 @@ pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
         perf_collector: None,
         last_launch_ms: AtomicU64::new(0),
         emitter: None,
+        step_tree_stats: Mutex::new(TreeStats::default()),
     }
 }

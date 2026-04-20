@@ -106,6 +106,7 @@ pub enum EventKind {
         duration_ms: u64,
         retry_count: u32,
         screenshot_path: Option<String>,
+        tree_stats: TreeStats,
     },
 
     // Substep detail
@@ -169,6 +170,7 @@ pub enum SubstepEvent {
         from: Point,
         to: Point,
         result: ScrollAttemptResult,
+        tree_stats: TreeStats,
     },
     ScrollFound {
         selector: String,
@@ -242,6 +244,36 @@ pub enum SubstepEvent {
     BarrierAborted {
         step_count: u64,
     },
+}
+
+/// Tree fetch statistics for a single operation (step or scroll iteration).
+#[derive(Debug, Clone, Copy, Default, Serialize)]
+pub struct TreeStats {
+    pub fetches: u32,
+    pub min_nodes: u32,
+    pub max_nodes: u32,
+}
+
+impl TreeStats {
+    pub fn record(&mut self, node_count: u32) {
+        self.fetches += 1;
+        if self.fetches == 1 {
+            self.min_nodes = node_count;
+            self.max_nodes = node_count;
+        } else {
+            self.min_nodes = self.min_nodes.min(node_count);
+            self.max_nodes = self.max_nodes.max(node_count);
+        }
+    }
+
+    pub fn merge(&mut self, other: &TreeStats) {
+        if other.fetches == 0 { return; }
+        self.fetches += other.fetches;
+        if self.min_nodes == 0 || other.min_nodes < self.min_nodes {
+            self.min_nodes = other.min_nodes;
+        }
+        self.max_nodes = self.max_nodes.max(other.max_nodes);
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

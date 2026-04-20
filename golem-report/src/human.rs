@@ -227,6 +227,7 @@ mod tests {
             retry_count: 0,
             screenshot_path: None,
             substeps: vec![],
+            tree_stats: golem_events::TreeStats::default(),
         }
     }
 
@@ -242,6 +243,7 @@ mod tests {
             retry_count: 0,
             screenshot_path: None,
             substeps: vec![],
+            tree_stats: golem_events::TreeStats::default(),
         }
     }
 
@@ -257,6 +259,7 @@ mod tests {
             retry_count: 0,
             screenshot_path: None,
             substeps: vec![],
+            tree_stats: golem_events::TreeStats::default(),
         }
     }
 
@@ -272,6 +275,7 @@ mod tests {
             retry_count: 0,
             screenshot_path: None,
             substeps: vec![],
+            tree_stats: golem_events::TreeStats::default(),
         }
     }
 

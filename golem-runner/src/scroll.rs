@@ -273,7 +273,7 @@ pub async fn scroll_to_element(
     emitter: Option<&golem_events::emitter::DeviceEmitter>,
 ) -> Result<FindResult> {
     // Step 1: Check current viewport before any scrolling.
-    let (mut root, meta) = wait_for_settle(driver).await?;
+    let (mut root, meta, _initial_stats) = wait_for_settle(driver).await?;
     let mut viewport = Viewport::from_root(&root);
     if meta.keyboard_height > 0 {
         viewport.height -= meta.keyboard_height;
@@ -378,7 +378,8 @@ pub async fn scroll_to_element(
 
         // Check result
         let settle_meta;
-        (root, settle_meta) = wait_for_settle(driver).await?;
+        let iter_stats;
+        (root, settle_meta, iter_stats) = wait_for_settle(driver).await?;
         let mut vp = Viewport::from_root(&root);
         if settle_meta.keyboard_height > 0 { vp.height -= settle_meta.keyboard_height; }
         let safe_vp = make_safe_viewport(&vp, &settle_meta);
@@ -408,6 +409,7 @@ pub async fn scroll_to_element(
                     from: golem_events::Point { x: fx, y: fy },
                     to: golem_events::Point { x: tx, y: ty },
                     result: golem_events::ScrollAttemptResult::PageScrolled,
+                    tree_stats: iter_stats.clone(),
                 });
             }
             prev_full_fp = new_full_fp;
@@ -436,6 +438,7 @@ pub async fn scroll_to_element(
                     from: golem_events::Point { x: fx, y: fy },
                     to: golem_events::Point { x: tx, y: ty },
                     result: golem_events::ScrollAttemptResult::InnerScrollableDetected,
+                    tree_stats: iter_stats.clone(),
                 });
             }
         }
@@ -451,6 +454,7 @@ pub async fn scroll_to_element(
                     from: golem_events::Point { x: fx, y: fy },
                     to: golem_events::Point { x: tx, y: ty },
                     result: golem_events::ScrollAttemptResult::Stall { count: stall_count, max: max_stalls },
+                    tree_stats: iter_stats.clone(),
                 });
             }
             continue;

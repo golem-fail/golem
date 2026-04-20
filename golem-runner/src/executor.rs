@@ -189,6 +189,7 @@ pub async fn execute_flow<'a>(
                 perf_collector: ctx.perf_collector,
                 last_launch_ms: std::sync::atomic::AtomicU64::new(0),
                 emitter: ctx.emitter,
+                step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
             };
 
             let child_result = Box::pin(execute_flow(
@@ -282,6 +283,7 @@ pub async fn execute_flow<'a>(
                 selector_label: step_target(step),
             });
             let step_start = Instant::now();
+            crate::reset_step_tree_stats();
             match execute_step_with_policy(step, driver, vars, default_timeout_ms, ctx, &flow.flow.apps).await {
                 Ok(StepOutcome::Success) => {
                     ctx.emit(golem_events::EventKind::StepFinished {
@@ -290,6 +292,7 @@ pub async fn execute_flow<'a>(
                         duration_ms: step_start.elapsed().as_millis() as u64,
                         retry_count: 0,
                         screenshot_path: None,
+                        tree_stats: crate::take_step_tree_stats(),
                     });
                 }
                 Ok(StepOutcome::Warning(msg)) => {
@@ -299,6 +302,7 @@ pub async fn execute_flow<'a>(
                         duration_ms: step_start.elapsed().as_millis() as u64,
                         retry_count: 0,
                         screenshot_path: None,
+                        tree_stats: crate::take_step_tree_stats(),
                     });
                     warnings.push(msg);
                 }
@@ -309,6 +313,7 @@ pub async fn execute_flow<'a>(
                         duration_ms: step_start.elapsed().as_millis() as u64,
                         retry_count: 0,
                         screenshot_path: None,
+                        tree_stats: crate::take_step_tree_stats(),
                     });
                 }
                 Err(e) => {
@@ -318,6 +323,7 @@ pub async fn execute_flow<'a>(
                         duration_ms: step_start.elapsed().as_millis() as u64,
                         retry_count: 0,
                         screenshot_path: None,
+                        tree_stats: crate::take_step_tree_stats(),
                     });
                     // Report failure to barrier so other devices stop at this point
                     if let Some(b) = barrier {

@@ -241,29 +241,34 @@ fn build_bounds_fingerprint(element: &Element, buf: &mut String) {
 ///
 /// When the UI is already stable, this completes in a single extra hierarchy
 /// fetch (~250ms). During animations it waits up to `SETTLE_TIMEOUT` (1.5s).
-pub(crate) async fn wait_for_settle(driver: &dyn PlatformDriver) -> Result<(Element, golem_driver::common::HierarchyMeta)> {
+pub(crate) async fn wait_for_settle(driver: &dyn PlatformDriver) -> Result<(Element, golem_driver::common::HierarchyMeta, golem_events::TreeStats)> {
     let deadline = Instant::now() + SETTLE_TIMEOUT;
+    let mut stats = golem_events::TreeStats::default();
 
     let (root, meta) = driver.get_hierarchy().await?;
+    stats.record(meta.node_count);
+    crate::record_tree_fetch(meta.node_count);
     let mut prev_fp = bounds_fingerprint(&root);
     let mut prev_root = root;
     let mut prev_meta = meta;
 
     loop {
         if Instant::now() >= deadline {
-            return Ok((prev_root, prev_meta));
+            return Ok((prev_root, prev_meta, stats));
         }
 
         tokio::time::sleep(SETTLE_INTERVAL).await;
 
         let (root, meta) = match driver.get_hierarchy().await {
             Ok(r) => r,
-            Err(_) => return Ok((prev_root, prev_meta)),
+            Err(_) => return Ok((prev_root, prev_meta, stats)),
         };
+        stats.record(meta.node_count);
+        crate::record_tree_fetch(meta.node_count);
         let fp = bounds_fingerprint(&root);
 
         if fp == prev_fp {
-            return Ok((root, meta));
+            return Ok((root, meta, stats));
         }
 
         prev_fp = fp;
@@ -309,6 +314,7 @@ pub async fn resolve_element(
         let has_coords = group.is_some_and(|g| g.x.is_some() || g.y.is_some());
         if has_coords {
             let (root, meta) = driver.get_hierarchy().await?;
+            crate::record_tree_fetch(meta.node_count);
             let mut vp = Viewport::from_root(&root);
             if meta.keyboard_height > 0 { vp.height -= meta.keyboard_height; }
             let (x, y) = apply_coord_adjustments(step, vp.width / 2, vp.height / 2, &vp, None);
@@ -331,7 +337,7 @@ pub async fn resolve_element(
 
     let (last_root, last_viewport) = loop {
         let (root, meta) = match driver.get_hierarchy().await {
-            Ok(r) => r,
+            Ok((root, meta)) => { crate::record_tree_fetch(meta.node_count); (root, meta) },
             Err(_) if Instant::now() < deadline => {
                 tokio::time::sleep(POLL_INTERVAL).await;
                 continue;
@@ -378,6 +384,7 @@ pub async fn resolve_element(
                     // Container visible — nudge to get more of it on screen
                     crate::actions::interaction::nudge_into_view(driver, b, &viewport).await;
                     let (r, m) = driver.get_hierarchy().await?;
+                    crate::record_tree_fetch(m.node_count);
                     let mut v = Viewport::from_root(&r);
                     if m.keyboard_height > 0 { v.height -= m.keyboard_height; }
                     let vis = filter_viewport(&r, &v);
@@ -392,6 +399,7 @@ pub async fn resolve_element(
                         &within_sel, driver, golem_driver::Direction::Down, max_s, None, None, emitter,
                     ).await;
                     let (fresh_root, fresh_meta) = driver.get_hierarchy().await?;
+                    crate::record_tree_fetch(fresh_meta.node_count);
                     let mut fresh_vp = Viewport::from_root(&fresh_root);
                     if fresh_meta.keyboard_height > 0 {
                         fresh_vp.height -= fresh_meta.keyboard_height;
@@ -403,6 +411,7 @@ pub async fn resolve_element(
                     if let Some(ref b) = bounds {
                         crate::actions::interaction::nudge_into_view(driver, b, &fresh_vp).await;
                         let (r2, m2) = driver.get_hierarchy().await?;
+                        crate::record_tree_fetch(m2.node_count);
                         let mut v2 = Viewport::from_root(&r2);
                         if m2.keyboard_height > 0 { v2.height -= m2.keyboard_height; }
                         let vis2 = filter_viewport(&r2, &v2);
@@ -500,6 +509,7 @@ pub async fn resolve_element_full_tree(
 ) -> Result<(Element, (i32, i32))> {
     let selector = build_selector(step);
     let (root, _meta) = driver.get_hierarchy().await?;
+    crate::record_tree_fetch(_meta.node_count);
     let results = find_elements(&root, &selector);
 
     if results.is_empty() {
@@ -532,7 +542,7 @@ pub async fn poll_for_absence(
 
     loop {
         let (root, _meta) = match driver.get_hierarchy().await {
-            Ok(r) => r,
+            Ok((root, meta)) => { crate::record_tree_fetch(meta.node_count); (root, meta) },
             Err(_) if Instant::now() < deadline => {
                 tokio::time::sleep(POLL_INTERVAL).await;
                 continue;

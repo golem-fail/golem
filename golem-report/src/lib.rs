@@ -61,6 +61,7 @@ pub enum SubstepDetail {
         from: golem_events::Point,
         to: golem_events::Point,
         result: String,
+        tree_stats: golem_events::TreeStats,
     },
     ScrollFound {
         selector: String,
@@ -145,10 +146,11 @@ impl From<&golem_events::SubstepEvent> for SubstepDetail {
                 SubstepDetail::Swipe { from: *from, to: *to },
             golem_events::SubstepEvent::ScrollStarted { selector, direction } =>
                 SubstepDetail::ScrollStarted { selector: selector.clone(), direction: direction.clone() },
-            golem_events::SubstepEvent::ScrollAttempt { attempt, direction, strategy_index, from, to, result } =>
+            golem_events::SubstepEvent::ScrollAttempt { attempt, direction, strategy_index, from, to, result, tree_stats } =>
                 SubstepDetail::ScrollAttempt {
                     attempt: *attempt, direction: direction.clone(), strategy_index: *strategy_index,
                     from: *from, to: *to, result: format!("{result:?}"),
+                    tree_stats: *tree_stats,
                 },
             golem_events::SubstepEvent::ScrollFound { selector, position, total_attempts } =>
                 SubstepDetail::ScrollFound { selector: selector.clone(), position: *position, total_attempts: *total_attempts },
@@ -208,6 +210,8 @@ pub struct StepReport {
     pub screenshot_path: Option<String>,
     /// Detailed substep events.
     pub substeps: Vec<SubstepDetail>,
+    /// Tree fetch statistics for this step.
+    pub tree_stats: golem_events::TreeStats,
 }
 
 /// Possible outcomes for a single step.

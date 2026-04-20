@@ -16,6 +16,7 @@ struct AccumulatedStep {
     retry_count: u32,
     screenshot_path: Option<String>,
     substeps: Vec<SubstepDetail>,
+    tree_stats: golem_events::TreeStats,
 }
 
 struct AccumulatedFlow {
@@ -78,14 +79,16 @@ impl ReportAccumulator {
                     retry_count: 0,
                     screenshot_path: None,
                     substeps: Vec::new(),
+                    tree_stats: golem_events::TreeStats::default(),
                 });
             }
-            EventKind::StepFinished { outcome, duration_ms, retry_count, screenshot_path, .. } => {
+            EventKind::StepFinished { outcome, duration_ms, retry_count, screenshot_path, tree_stats, .. } => {
                 if let Some(step) = self.current_step.get_mut(&dev_key) {
                     step.outcome = Some(outcome.clone());
                     step.duration_ms = *duration_ms;
                     step.retry_count = *retry_count;
                     step.screenshot_path = screenshot_path.clone();
+                    step.tree_stats = *tree_stats;
 
                     // Collect warnings
                     if let golem_events::StepOutcome::Warning(msg) = outcome {
@@ -139,6 +142,7 @@ impl ReportAccumulator {
                     retry_count: s.retry_count,
                     screenshot_path: s.screenshot_path,
                     substeps: s.substeps,
+                    tree_stats: s.tree_stats,
                 }
             }).collect();
 
@@ -232,6 +236,7 @@ mod tests {
             duration_ms: 45,
             retry_count: 0,
             screenshot_path: None,
+            tree_stats: golem_events::TreeStats::default(),
         }));
 
         let report = acc.into_suite_report();
@@ -282,6 +287,7 @@ mod tests {
             duration_ms: 30,
             retry_count: 0,
             screenshot_path: None,
+            tree_stats: golem_events::TreeStats::default(),
         }));
 
         let report = acc.into_suite_report();
@@ -342,6 +348,7 @@ mod tests {
             duration_ms: 20,
             retry_count: 0,
             screenshot_path: None,
+            tree_stats: golem_events::TreeStats::default(),
         }));
         acc.process(&make_event(3, dev, EventKind::StepStarted {
             global_step_index: 1,
@@ -356,6 +363,7 @@ mod tests {
             duration_ms: 10000,
             retry_count: 3,
             screenshot_path: Some("/tmp/fail.png".into()),
+            tree_stats: golem_events::TreeStats::default(),
         }));
         acc.process(&make_event(5, dev, EventKind::FlowFinished {
             flow_name: "checkout".into(),
@@ -415,6 +423,7 @@ mod tests {
             duration_ms: 30,
             retry_count: 0,
             screenshot_path: None,
+            tree_stats: golem_events::TreeStats::default(),
         }));
 
         // Android step
@@ -431,6 +440,7 @@ mod tests {
             duration_ms: 200,
             retry_count: 1,
             screenshot_path: None,
+            tree_stats: golem_events::TreeStats::default(),
         }));
 
         acc.process(&make_event(6, "ios", EventKind::FlowFinished {
@@ -478,6 +488,7 @@ mod tests {
             duration_ms: 50,
             retry_count: 0,
             screenshot_path: None,
+            tree_stats: golem_events::TreeStats::default(),
         }));
 
         let suite = acc.into_suite_report();
@@ -502,6 +513,7 @@ mod tests {
         acc.process(&make_event(2, dev, EventKind::StepFinished {
             global_step_index: 0, outcome: golem_events::StepOutcome::Skipped,
             duration_ms: 0, retry_count: 0, screenshot_path: None,
+            tree_stats: golem_events::TreeStats::default(),
         }));
 
         // Ignored step
@@ -512,6 +524,7 @@ mod tests {
         acc.process(&make_event(4, dev, EventKind::StepFinished {
             global_step_index: 1, outcome: golem_events::StepOutcome::Ignored,
             duration_ms: 0, retry_count: 0, screenshot_path: None,
+            tree_stats: golem_events::TreeStats::default(),
         }));
 
         let suite = acc.into_suite_report();

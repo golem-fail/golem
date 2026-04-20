@@ -23,6 +23,8 @@ struct JsonStep {
     warning: Option<String>,
     duration_ms: u64,
     retries: u32,
+    tree_fetches: u32,
+    tree_nodes: u32,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     substeps: Vec<crate::SubstepDetail>,
 }
@@ -101,6 +103,8 @@ fn step_to_json(step: &StepReport) -> JsonStep {
         warning,
         duration_ms: step.duration_ms,
         retries: step.retry_count,
+        tree_fetches: step.tree_stats.fetches,
+        tree_nodes: step.tree_stats.max_nodes,
         substeps: step.substeps.clone(),
     }
 }
@@ -192,6 +196,7 @@ mod tests {
             retry_count: 0,
             screenshot_path: None,
             substeps: Vec::new(),
+            tree_stats: golem_events::TreeStats::default(),
         }
     }
 
@@ -207,6 +212,7 @@ mod tests {
             retry_count: 0,
             screenshot_path: None,
             substeps: Vec::new(),
+            tree_stats: golem_events::TreeStats::default(),
         }
     }
 
@@ -222,6 +228,7 @@ mod tests {
             retry_count: 0,
             screenshot_path: None,
             substeps: Vec::new(),
+            tree_stats: golem_events::TreeStats::default(),
         }
     }
 
@@ -237,6 +244,7 @@ mod tests {
             retry_count: 0,
             screenshot_path: None,
             substeps: Vec::new(),
+            tree_stats: golem_events::TreeStats::default(),
         }
     }
 

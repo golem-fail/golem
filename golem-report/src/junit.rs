@@ -64,9 +64,10 @@ fn format_substeps_text(substeps: &[SubstepDetail]) -> String {
                 lines.push(format!("swipe ({},{})→({},{})", from.x, from.y, to.x, to.y)),
             SubstepDetail::ScrollStarted { selector, direction } =>
                 lines.push(format!("scroll_started \"{}\" direction={}", selector, direction)),
-            SubstepDetail::ScrollAttempt { attempt, direction, strategy_index, from, to, result } =>
-                lines.push(format!("scroll_attempt #{} strategy={} {} ({},{})→({},{}) {}",
-                    attempt, strategy_index + 1, direction, from.x, from.y, to.x, to.y, result)),
+            SubstepDetail::ScrollAttempt { attempt, direction, strategy_index, from, to, result, tree_stats } =>
+                lines.push(format!("scroll_attempt #{} strategy={} {} ({},{})→({},{}) {} {{{} trees, {} nodes}}",
+                    attempt, strategy_index + 1, direction, from.x, from.y, to.x, to.y, result,
+                    tree_stats.fetches, tree_stats.max_nodes)),
             SubstepDetail::ScrollFound { selector, position, total_attempts } =>
                 lines.push(format!("scroll_found \"{}\" at ({},{}) after {} attempts",
                     selector, position.x, position.y, total_attempts)),
@@ -285,6 +286,7 @@ mod tests {
             retry_count: 0,
             screenshot_path: None,
             substeps: vec![],
+            tree_stats: golem_events::TreeStats::default(),
         }
     }
 
@@ -300,6 +302,7 @@ mod tests {
             retry_count: 0,
             screenshot_path: None,
             substeps: vec![],
+            tree_stats: golem_events::TreeStats::default(),
         }
     }
 
@@ -315,6 +318,7 @@ mod tests {
             retry_count: 0,
             screenshot_path: None,
             substeps: vec![],
+            tree_stats: golem_events::TreeStats::default(),
         }
     }
 
@@ -330,6 +334,7 @@ mod tests {
             retry_count: 0,
             screenshot_path: None,
             substeps: vec![],
+            tree_stats: golem_events::TreeStats::default(),
         }
     }
 
@@ -742,12 +747,13 @@ mod tests {
             from: golem_events::Point { x: 200, y: 800 },
             to: golem_events::Point { x: 200, y: 400 },
             result: "PageScrolled".into(),
+            tree_stats: golem_events::TreeStats::default(),
         }];
         let out = format_substeps_text(&substeps);
         assert_eq!(
             out,
-            "scroll_attempt #2 strategy=1 down (200,800)\u{2192}(200,400) PageScrolled",
-            "SHALL format ScrollAttempt with strategy (1-indexed), direction, coords, and result"
+            "scroll_attempt #2 strategy=1 down (200,800)\u{2192}(200,400) PageScrolled {0 trees, 0 nodes}",
+            "SHALL format ScrollAttempt with strategy (1-indexed), direction, coords, result, and tree stats"
         );
     }
 

@@ -229,8 +229,6 @@ impl WebKitInspector {
                 Ok(t) => t,
                 Err(_) => continue, // Stale socket — try next
             };
-            eprintln!("  [webkit] connected to {}", socket_path.display());
-
             let connection_id = uuid::Uuid::new_v4().to_string().to_uppercase();
             let sender_id = uuid::Uuid::new_v4().to_string().to_uppercase();
 
@@ -342,7 +340,7 @@ impl WebKitInspector {
                                     if page_type == "WIRTypeServiceWorker" {
                                         continue;
                                     }
-                                    let url = page_dict
+                                    let _url = page_dict
                                         .get("WIRURLKey")
                                         .and_then(|v| v.as_string())
                                         .unwrap_or("");
@@ -353,7 +351,6 @@ impl WebKitInspector {
                                         .and_then(|v| v.as_unsigned_integer())
                                         .or_else(|| page_key.parse::<u64>().ok());
                                     if let Some(pid) = pid {
-                                        eprintln!("  [webkit] page {pid}: {url}");
                                         self.page_id = pid;
                                         self.app_id = listing_app.to_string();
                                         pages_received = true;
@@ -414,11 +411,6 @@ impl WebKitInspector {
             .send_plist(&build_rpc("_rpc_forwardSocketSetup:", setup_args))
             .await?;
 
-        eprintln!(
-            "  [webkit] channel open: app={}, page={}",
-            self.app_id, self.page_id
-        );
-
         // Step 4: Wait for Target.targetCreated event (iOS 12.2+ protocol).
         // After forwardSocketSetup, the server sends _rpc_applicationSentData:
         // messages containing Target.targetCreated with the targetId we need.
@@ -445,7 +437,7 @@ impl WebKitInspector {
                             .and_then(|v| v.as_str())
                         {
                             self.target_id = Some(target_id.to_string());
-                            eprintln!("  [webkit] target: {target_id}");
+                            let _ = target_id; // used for matching
                             break;
                         }
                     }
@@ -685,14 +677,6 @@ pub(crate) async fn fetch_webview_dom(
 
     if let Some(meta) = wrapper.get("meta") {
         let url = meta.get("url").and_then(|v| v.as_str()).unwrap_or("");
-        eprintln!(
-            "  [webkit] DOM traversal: {}ms, {} nodes, dpr={}, url={}",
-            meta.get("elapsed_ms").and_then(|v| v.as_i64()).unwrap_or(-1),
-            meta.get("node_count").and_then(|v| v.as_i64()).unwrap_or(-1),
-            meta.get("dpr").and_then(|v| v.as_f64()).unwrap_or(-1.0),
-            url,
-        );
-
         // Skip if page hasn't loaded yet
         if url == "about:blank" || url.is_empty() {
             return None;

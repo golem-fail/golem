@@ -60,6 +60,8 @@ pub struct HierarchyMeta {
     pub cutouts: Vec<CutoutRect>,
     /// Rounded display corners where physical pixels don't exist.
     pub rounded_corners: Vec<RoundedCorner>,
+    /// Number of nodes in the hierarchy tree (for verbose stats).
+    pub node_count: u32,
 }
 
 /// A rectangular region of the display with no physical pixels (notch, Dynamic Island, etc.).
@@ -164,6 +166,7 @@ pub fn parse_hierarchy(json: &str) -> Result<(Element, HierarchyMeta)> {
     }
 
     let element: Element = serde_json::from_value(val).context("failed to deserialize hierarchy into Element")?;
+    meta.node_count = count_nodes(&element);
 
     // iOS: look up display data from device model using screen dimensions from the parsed tree
     if let Some(model) = device_model {
@@ -182,6 +185,11 @@ pub fn parse_hierarchy(json: &str) -> Result<(Element, HierarchyMeta)> {
     }
 
     Ok((element, meta))
+}
+
+/// Count total nodes in an element tree.
+fn count_nodes(el: &Element) -> u32 {
+    1 + el.children.iter().map(count_nodes).sum::<u32>()
 }
 
 /// Recursively normalize a JSON hierarchy node to match the `Element` schema.

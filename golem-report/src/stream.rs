@@ -77,11 +77,23 @@ pub async fn stream_human(
                     eprintln!("  [{global_step_index}][{block_tag}][{step_index_in_block}]{dev_prefix} {action}{target_str}");
                 }
             }
-            EventKind::StepFinished { outcome, duration_ms, .. } => {
+            EventKind::StepFinished { outcome, duration_ms, tree_stats, .. } => {
+                let stats_text = if verbose && tree_stats.fetches > 0 {
+                    format_tree_stats(&tree_stats)
+                } else {
+                    String::new()
+                };
+                let stats_str = if !stats_text.is_empty() && use_color {
+                    format!(" \x1b[2;90m{stats_text}{RESET}")
+                } else if !stats_text.is_empty() {
+                    format!(" {stats_text}")
+                } else {
+                    String::new()
+                };
                 if use_color {
                     match outcome {
                         golem_events::StepOutcome::Success => {
-                            eprintln!("      {GREEN}{SYM_SUCCESS}{RESET}  {DIM}[{duration_ms}ms]{RESET}");
+                            eprintln!("      {GREEN}{SYM_SUCCESS}{RESET}  {DIM}[{duration_ms}ms]{RESET}{stats_str}");
                         }
                         golem_events::StepOutcome::Failed(msg) => {
                             eprintln!("      {BRIGHT_RED}{SYM_FAILED} FAIL  [{duration_ms}ms]{RESET}");
@@ -98,7 +110,7 @@ pub async fn stream_human(
                 } else {
                     match outcome {
                         golem_events::StepOutcome::Success => {
-                            eprintln!("      {SYM_SUCCESS}  [{duration_ms}ms]");
+                            eprintln!("      {SYM_SUCCESS}  [{duration_ms}ms]{stats_str}");
                         }
                         golem_events::StepOutcome::Failed(msg) => {
                             eprintln!("      {SYM_FAILED} FAIL  [{duration_ms}ms]");
@@ -131,6 +143,16 @@ pub async fn stream_human(
                     let label = if *success { "PASSED" } else { "FAILED" };
                     eprintln!("  {sym} {label}  {flow_name}  [{secs:.1}s]");
                 }
+            }
+            EventKind::SuiteFinished { duration_ms, passed, failed } => {
+                let secs = *duration_ms as f64 / 1000.0;
+                eprintln!();
+                if use_color {
+                    eprintln!("{DIM}──────────────────────────────────────{RESET}");
+                } else {
+                    eprintln!("──────────────────────────────────────");
+                }
+                eprintln!("Suite: {passed} passed, {failed} failed  [{secs:.1}s]");
             }
             _ => {}
         }
@@ -168,18 +190,18 @@ fn print_substep(dev_prefix: &str, sub: &SubstepEvent, use_color: bool) {
         SubstepEvent::ScrollStarted { selector, direction } => {
             eprintln!("      {d}{b}{dev_prefix} scroll_started \"{selector}\" direction={direction}{r}");
         }
-        SubstepEvent::ScrollAttempt { attempt, direction, strategy_index, from, to, result } => {
-            let result_str = match result {
-                ScrollAttemptResult::PageScrolled => "page_scrolled",
-                ScrollAttemptResult::InnerScrollableDetected => "inner_scrollable",
-                ScrollAttemptResult::Stall { count, max } => {
-                    eprintln!("      {d}{b}{dev_prefix} scroll_attempt #{attempt} strategy={} {direction} ({},{})→({},{}) stall {count}/{max}{r}",
-                        strategy_index + 1, from.x, from.y, to.x, to.y);
-                    return;
-                }
-                ScrollAttemptResult::BoundaryReached => "boundary",
+        SubstepEvent::ScrollAttempt { attempt: _, direction, strategy_index, from, to, result, tree_stats } => {
+            let dir_arrow = match direction.as_str() {
+                "Down" => "↓", "Up" => "↑", "Left" => "←", "Right" => "→", _ => "?",
             };
-            eprintln!("      {d}{b}{dev_prefix} scroll_attempt #{attempt} strategy={} {direction} ({},{})→({},{}) {result_str}{r}",
+            let result_str = match result {
+                ScrollAttemptResult::PageScrolled => "page scrolled".to_string(),
+                ScrollAttemptResult::InnerScrollableDetected => format!("inner scrollable → strategy {}", strategy_index + 2),
+                ScrollAttemptResult::Stall { count, max } => format!("stall {count}/{max}"),
+                ScrollAttemptResult::BoundaryReached => "boundary reached".to_string(),
+            };
+            let stats = format_tree_stats(&tree_stats);
+            eprintln!("        {d}[scroll] {dir_arrow} strategy {} ({},{})→({},{}) → {result_str} {stats}{r}",
                 strategy_index + 1, from.x, from.y, to.x, to.y);
         }
         SubstepEvent::ScrollFound { selector, position, total_attempts } => {
@@ -218,4 +240,17 @@ fn print_substep(dev_prefix: &str, sub: &SubstepEvent, use_color: bool) {
         }
         _ => {}
     }
+}
+
+/// Format tree stats as dim summary: `{3 trees, 181 nodes}` or `{3 trees, 181~190 nodes}`.
+fn format_tree_stats(stats: &golem_events::TreeStats) -> String {
+    if stats.fetches == 0 {
+        return String::new();
+    }
+    let nodes = if stats.min_nodes == stats.max_nodes {
+        format!("{}", stats.max_nodes)
+    } else {
+        format!("{}~{}", stats.min_nodes, stats.max_nodes)
+    };
+    format!("{{{} trees, {} nodes}}", stats.fetches, nodes)
 }

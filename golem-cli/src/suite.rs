@@ -355,7 +355,17 @@ impl SuiteRunner {
             }
         }
 
-        // Close channel and wait for consumers to finish.
+        // Emit suite summary before closing channel.
+        let passed = reports.iter().filter(|r| r.success).count();
+        let failed = reports.iter().filter(|r| !r.success).count();
+        event_tx.emit(
+            golem_events::DeviceId("suite".into()),
+            golem_events::EventKind::SuiteFinished {
+                duration_ms: start.elapsed().as_millis() as u64,
+                passed,
+                failed,
+            },
+        );
         drop(event_tx);
         if let Some(h) = human_handle { let _ = h.await; }
         let _ = acc_handle.await;
@@ -391,6 +401,7 @@ impl SuiteRunner {
                             retry_count: s.retry_count,
                             screenshot_path: s.screenshot_path.clone(),
                             substeps: s.substeps.clone(),
+                            tree_stats: s.tree_stats,
                         }
                     }).collect();
                 }
@@ -862,6 +873,7 @@ async fn run_flow_on_device(
         perf_collector: collector.as_ref(),
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: device_emitter.as_ref(),
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
     };
 
     ctx.emit(golem_events::EventKind::FlowStarted { flow_name: flow_name.clone() });
