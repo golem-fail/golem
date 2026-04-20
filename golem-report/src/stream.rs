@@ -1,4 +1,5 @@
-use golem_events::{Event, EventKind, SubstepEvent, ScrollAttemptResult};
+use std::collections::HashMap;
+use golem_events::{DeviceId, Event, EventKind, SubstepEvent, ScrollAttemptResult};
 use tokio::sync::broadcast;
 
 const SYM_SUCCESS: &str = "\u{2713}";  // ✓
@@ -19,6 +20,46 @@ const CYAN: &str = "\x1b[36m";         // block headers
 const BLUE: &str = "\x1b[34m";         // flow name
 const BOLD: &str = "\x1b[1m";         // action names — bold pops against dim indices
 
+/// Circled number symbols ① through ㊿ for device identification.
+const CIRCLED_NUMBERS: &[&str] = &[
+    "①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩",
+    "⑪", "⑫", "⑬", "⑭", "⑮", "⑯", "⑰", "⑱", "⑲", "⑳",
+    "㉑", "㉒", "㉓", "㉔", "㉕", "㉖", "㉗", "㉘", "㉙", "㉚",
+    "㉛", "㉜", "㉝", "㉞", "㉟", "㊱", "㊲", "㊳", "㊴", "㊵",
+    "㊶", "㊷", "㊸", "㊹", "㊺", "㊻", "㊼", "㊽", "㊾", "㊿",
+];
+
+/// Dim ANSI colors for device prefixes — subtle, won't clash with status colors.
+const DEVICE_COLORS: &[&str] = &[
+    "\x1b[36m",  // cyan
+    "\x1b[35m",  // magenta
+    "\x1b[33m",  // yellow (dim)
+    "\x1b[34m",  // blue
+    "\x1b[32m",  // green (dim)
+    "\x1b[91m",  // bright red (for device ID only)
+];
+
+/// Get or assign a circled number for a device.
+fn device_prefix(
+    device_id: &DeviceId,
+    device_map: &mut HashMap<String, usize>,
+    multi_device: bool,
+    use_color: bool,
+) -> String {
+    if !multi_device {
+        return String::new();
+    }
+    let next_idx = device_map.len();
+    let idx = *device_map.entry(device_id.0.clone()).or_insert(next_idx);
+    let num = CIRCLED_NUMBERS.get(idx).unwrap_or(&"?");
+    if use_color {
+        let color = DEVICE_COLORS.get(idx % DEVICE_COLORS.len()).unwrap_or(&"");
+        format!("{DIM}{color}{num}{RESET} ")
+    } else {
+        format!("{num} ")
+    }
+}
+
 /// Stream events to stderr in human-readable format.
 pub async fn stream_human(
     mut rx: broadcast::Receiver<Event>,
@@ -27,37 +68,44 @@ pub async fn stream_human(
 ) {
     let use_color = std::io::IsTerminal::is_terminal(&std::io::stderr());
 
-    // Track current block for step prefix
-    let mut current_block = String::new();
-    let mut current_iteration: u32 = 0;
+    // Device ID → index mapping for circled numbers
+    let mut device_map: HashMap<String, usize> = HashMap::new();
+    // Track current block per device
+    let mut current_blocks: HashMap<String, (String, u32)> = HashMap::new();
 
     while let Ok(event) = rx.recv().await {
-        let dev_prefix = if multi_device {
-            format!(" [{}]", event.device_id)
-        } else {
-            String::new()
-        };
+        let dp = device_prefix(&event.device_id, &mut device_map, multi_device, use_color);
 
         match &event.kind {
             EventKind::FlowStarted { flow_name } => {
                 if use_color {
-                    eprintln!("{BLUE}{SYM_FLOW} {flow_name}{dev_prefix}{RESET}");
+                    eprintln!("{dp}{BLUE}{SYM_FLOW} {flow_name}{RESET}");
                 } else {
-                    eprintln!("{SYM_FLOW} {flow_name}{dev_prefix}");
+                    eprintln!("{dp}{SYM_FLOW} {flow_name}");
+                }
+                // Print device legend on first flow start in multi-device mode
+                if multi_device && device_map.len() <= 2 {
+                    let idx = device_map.get(&event.device_id.0).copied().unwrap_or(0);
+                    let num = CIRCLED_NUMBERS.get(idx).unwrap_or(&"?");
+                    if use_color {
+                        let color = DEVICE_COLORS.get(idx % DEVICE_COLORS.len()).unwrap_or(&"");
+                        eprintln!("  {DIM}{color}{num} {}{RESET}", event.device_id);
+                    } else {
+                        eprintln!("  {num} {}", event.device_id);
+                    }
                 }
             }
             EventKind::BlockStarted { block_name, iteration, .. } => {
-                current_block = block_name.clone();
-                current_iteration = *iteration;
+                current_blocks.insert(event.device_id.0.clone(), (block_name.clone(), *iteration));
                 let iter_suffix = if *iteration > 0 {
                     format!(" (iteration {iteration})")
                 } else {
                     String::new()
                 };
                 if use_color {
-                    eprintln!("  {CYAN}\u{2500}\u{2500} {block_name}{iter_suffix} \u{2500}\u{2500}{RESET}");
+                    eprintln!("  {dp}{CYAN}\u{2500}\u{2500} {block_name}{iter_suffix} \u{2500}\u{2500}{RESET}");
                 } else {
-                    eprintln!("  \u{2500}\u{2500} {block_name}{iter_suffix} \u{2500}\u{2500}");
+                    eprintln!("  {dp}\u{2500}\u{2500} {block_name}{iter_suffix} \u{2500}\u{2500}");
                 }
             }
             EventKind::StepStarted { global_step_index, step_index_in_block, action, selector_label, .. } => {
@@ -66,20 +114,24 @@ pub async fn stream_human(
                 } else {
                     format!(" {selector_label}")
                 };
-                let block_tag = if current_iteration > 0 {
-                    format!("{current_block}:{current_iteration}")
+                let (block_name, iteration) = current_blocks
+                    .get(&event.device_id.0)
+                    .cloned()
+                    .unwrap_or_default();
+                let block_tag = if iteration > 0 {
+                    format!("{block_name}:{iteration}")
                 } else {
-                    current_block.clone()
+                    block_name
                 };
                 if use_color {
-                    eprintln!("  {DIM}[{global_step_index}][{block_tag}][{step_index_in_block}]{RESET}{dev_prefix} {BOLD}{action}{RESET}{target_str}");
+                    eprintln!("  {dp}{DIM}[{global_step_index}][{block_tag}][{step_index_in_block}]{RESET} {BOLD}{action}{RESET}{target_str}");
                 } else {
-                    eprintln!("  [{global_step_index}][{block_tag}][{step_index_in_block}]{dev_prefix} {action}{target_str}");
+                    eprintln!("  {dp}[{global_step_index}][{block_tag}][{step_index_in_block}] {action}{target_str}");
                 }
             }
             EventKind::StepFinished { outcome, duration_ms, tree_stats, .. } => {
                 let stats_text = if verbose && tree_stats.fetches > 0 {
-                    format_tree_stats(&tree_stats)
+                    format_tree_stats(tree_stats)
                 } else {
                     String::new()
                 };
@@ -93,55 +145,55 @@ pub async fn stream_human(
                 if use_color {
                     match outcome {
                         golem_events::StepOutcome::Success => {
-                            eprintln!("      {GREEN}{SYM_SUCCESS}{RESET}  {DIM}[{duration_ms}ms]{RESET}{stats_str}");
+                            eprintln!("  {dp}    {GREEN}{SYM_SUCCESS}{RESET}  {DIM}[{duration_ms}ms]{RESET}{stats_str}");
                         }
                         golem_events::StepOutcome::Failed(msg) => {
-                            eprintln!("      {BRIGHT_RED}{SYM_FAILED} FAIL  [{duration_ms}ms]{RESET}");
-                            eprintln!("      {BRIGHT_RED}{msg}{RESET}");
+                            eprintln!("  {dp}    {BRIGHT_RED}{SYM_FAILED} FAIL  [{duration_ms}ms]{RESET}");
+                            eprintln!("  {dp}    {BRIGHT_RED}{msg}{RESET}");
                         }
                         golem_events::StepOutcome::Warning(msg) => {
-                            eprintln!("      {BRIGHT_YELLOW}{SYM_WARNING}{RESET}  {DIM}[{duration_ms}ms]{RESET}");
-                            eprintln!("      {YELLOW}{msg}{RESET}");
+                            eprintln!("  {dp}    {BRIGHT_YELLOW}{SYM_WARNING}{RESET}  {DIM}[{duration_ms}ms]{RESET}");
+                            eprintln!("  {dp}    {YELLOW}{msg}{RESET}");
                         }
                         golem_events::StepOutcome::Skipped | golem_events::StepOutcome::Ignored => {
-                            eprintln!("      {DIM}{SYM_SKIPPED}  [{duration_ms}ms]{RESET}");
+                            eprintln!("  {dp}    {DIM}{SYM_SKIPPED}  [{duration_ms}ms]{RESET}");
                         }
                     }
                 } else {
                     match outcome {
                         golem_events::StepOutcome::Success => {
-                            eprintln!("      {SYM_SUCCESS}  [{duration_ms}ms]{stats_str}");
+                            eprintln!("  {dp}    {SYM_SUCCESS}  [{duration_ms}ms]{stats_str}");
                         }
                         golem_events::StepOutcome::Failed(msg) => {
-                            eprintln!("      {SYM_FAILED} FAIL  [{duration_ms}ms]");
-                            eprintln!("      {msg}");
+                            eprintln!("  {dp}    {SYM_FAILED} FAIL  [{duration_ms}ms]");
+                            eprintln!("  {dp}    {msg}");
                         }
                         golem_events::StepOutcome::Warning(msg) => {
-                            eprintln!("      {SYM_WARNING}  [{duration_ms}ms]");
-                            eprintln!("      {msg}");
+                            eprintln!("  {dp}    {SYM_WARNING}  [{duration_ms}ms]");
+                            eprintln!("  {dp}    {msg}");
                         }
                         golem_events::StepOutcome::Skipped | golem_events::StepOutcome::Ignored => {
-                            eprintln!("      {SYM_SKIPPED}  [{duration_ms}ms]");
+                            eprintln!("  {dp}    {SYM_SKIPPED}  [{duration_ms}ms]");
                         }
                     }
                 }
             }
             EventKind::Substep(sub) if verbose => {
-                print_substep(&dev_prefix, sub, use_color);
+                print_substep(&dp, sub, use_color);
             }
             EventKind::FlowFinished { flow_name, success, duration_ms } => {
                 let secs = *duration_ms as f64 / 1000.0;
                 eprintln!();
                 if use_color {
                     if *success {
-                        eprintln!("  {GREEN}{SYM_SUCCESS} PASSED{RESET}  {flow_name}  {DIM}[{secs:.1}s]{RESET}");
+                        eprintln!("  {dp}{GREEN}{SYM_SUCCESS} PASSED{RESET}  {flow_name}  {DIM}[{secs:.1}s]{RESET}");
                     } else {
-                        eprintln!("  {BRIGHT_RED}{SYM_FAILED} FAILED{RESET}  {flow_name}  {DIM}[{secs:.1}s]{RESET}");
+                        eprintln!("  {dp}{BRIGHT_RED}{SYM_FAILED} FAILED{RESET}  {flow_name}  {DIM}[{secs:.1}s]{RESET}");
                     }
                 } else {
                     let sym = if *success { SYM_SUCCESS } else { SYM_FAILED };
                     let label = if *success { "PASSED" } else { "FAILED" };
-                    eprintln!("  {sym} {label}  {flow_name}  [{secs:.1}s]");
+                    eprintln!("  {dp}{sym} {label}  {flow_name}  [{secs:.1}s]");
                 }
             }
             EventKind::SuiteFinished { duration_ms, passed, failed } => {
@@ -159,36 +211,38 @@ pub async fn stream_human(
     }
 }
 
-fn print_substep(dev_prefix: &str, sub: &SubstepEvent, use_color: bool) {
+fn print_substep(dp: &str, sub: &SubstepEvent, use_color: bool) {
     let b = SYM_BULLET;
     let (d, r) = if use_color { (DIM, RESET) } else { ("", "") };
 
     match sub {
         SubstepEvent::ElementResolved { selector, bounds, tap_point } => {
-            eprintln!("      {d}{b}{dev_prefix} element_resolved \"{selector}\" bounds=({},{},{},{}) tap=({},{}){r}",
+            eprintln!("  {dp}    {d}{b} element_resolved \"{selector}\" bounds=({},{},{},{}) tap=({},{}){r}",
                 bounds.x, bounds.y, bounds.width, bounds.height, tap_point.x, tap_point.y);
         }
         SubstepEvent::ElementNotFound { selector, timeout_ms } => {
-            if use_color {
-                eprintln!("      {BRIGHT_RED}{b}{dev_prefix} element_not_found \"{selector}\" after {timeout_ms}ms{RESET}");
-            } else {
-                eprintln!("      {b}{dev_prefix} element_not_found \"{selector}\" after {timeout_ms}ms");
-            }
+            eprintln!("  {dp}    {d}{b} element_not_found \"{selector}\" after {timeout_ms}ms{r}");
         }
         SubstepEvent::Tap { point, .. } => {
-            eprintln!("      {d}{b}{dev_prefix} tap ({},{}){r}", point.x, point.y);
+            eprintln!("  {dp}    {d}{b} tap ({},{}){r}", point.x, point.y);
         }
         SubstepEvent::DoubleTap { point, .. } => {
-            eprintln!("      {d}{b}{dev_prefix} double_tap ({},{}){r}", point.x, point.y);
+            eprintln!("  {dp}    {d}{b} double_tap ({},{}){r}", point.x, point.y);
+        }
+        SubstepEvent::LongPress { point, duration_ms, .. } => {
+            eprintln!("  {dp}    {d}{b} long_press ({},{}) {}ms{r}", point.x, point.y, duration_ms);
         }
         SubstepEvent::TextInput { text, .. } => {
-            eprintln!("      {d}{b}{dev_prefix} text_input \"{text}\"{r}");
+            eprintln!("  {dp}    {d}{b} text_input \"{text}\"{r}");
+        }
+        SubstepEvent::Backspace { count } => {
+            eprintln!("  {dp}    {d}{b} backspace ×{count}{r}");
         }
         SubstepEvent::Swipe { from, to, .. } => {
-            eprintln!("      {d}{b}{dev_prefix} swipe ({},{})→({},{}){r}", from.x, from.y, to.x, to.y);
+            eprintln!("  {dp}    {d}{b} swipe ({},{})→({},{}){r}", from.x, from.y, to.x, to.y);
         }
         SubstepEvent::ScrollStarted { selector, direction } => {
-            eprintln!("      {d}{b}{dev_prefix} scroll_started \"{selector}\" direction={direction}{r}");
+            eprintln!("  {dp}    {d}{b} scroll_started \"{selector}\" direction={direction}{r}");
         }
         SubstepEvent::ScrollAttempt { attempt: _, direction, strategy_index, from, to, result, tree_stats } => {
             let dir_arrow = match direction.as_str() {
@@ -200,43 +254,39 @@ fn print_substep(dev_prefix: &str, sub: &SubstepEvent, use_color: bool) {
                 ScrollAttemptResult::Stall { count, max } => format!("stall {count}/{max}"),
                 ScrollAttemptResult::BoundaryReached => "boundary reached".to_string(),
             };
-            let stats = format_tree_stats(&tree_stats);
-            eprintln!("        {d}[scroll] {dir_arrow} strategy {} ({},{})→({},{}) → {result_str} {stats}{r}",
+            let stats = format_tree_stats(tree_stats);
+            eprintln!("  {dp}      {d}[scroll] {dir_arrow} strategy {} ({},{})→({},{}) → {result_str} {stats}{r}",
                 strategy_index + 1, from.x, from.y, to.x, to.y);
         }
         SubstepEvent::ScrollFound { selector, position, total_attempts } => {
-            eprintln!("      {d}{b}{dev_prefix} scroll_found \"{selector}\" at ({},{}) after {total_attempts} attempts{r}",
+            eprintln!("  {dp}    {d}{b} scroll_found \"{selector}\" at ({},{}) after {total_attempts} attempts{r}",
                 position.x, position.y);
         }
         SubstepEvent::ScrollDirectionReversed { to_direction, reason } => {
-            eprintln!("      {d}{b}{dev_prefix} scroll_reversed →{to_direction} {reason}{r}");
+            eprintln!("  {dp}    {d}{b} scroll_reversed →{to_direction} {reason}{r}");
         }
         SubstepEvent::ScrollStrategySwitch { to_index, reason } => {
-            eprintln!("      {d}{b}{dev_prefix} scroll_strategy_switch →{} {reason}{r}", to_index + 1);
+            eprintln!("  {dp}    {d}{b} scroll_strategy_switch →{} {reason}{r}", to_index + 1);
         }
         SubstepEvent::AppLaunch { bundle, duration_ms } => {
-            eprintln!("      {d}{b}{dev_prefix} app_launch bundle={bundle} {duration_ms}ms{r}");
+            eprintln!("  {dp}    {d}{b} app_launch bundle={bundle} {duration_ms}ms{r}");
         }
         SubstepEvent::AppStop { bundle } => {
-            eprintln!("      {d}{b}{dev_prefix} app_stop bundle={bundle}{r}");
+            eprintln!("  {dp}    {d}{b} app_stop bundle={bundle}{r}");
         }
         SubstepEvent::RetryAttempt { attempt, max, delay_ms, error } => {
-            if use_color {
-                eprintln!("      {YELLOW}{b}{dev_prefix} retry {attempt}/{max} delay={delay_ms}ms: {error}{RESET}");
-            } else {
-                eprintln!("      {b}{dev_prefix} retry {attempt}/{max} delay={delay_ms}ms: {error}");
-            }
+            eprintln!("  {dp}    {d}{b} retry {attempt}/{max} delay={delay_ms}ms: {error}{r}");
         }
         SubstepEvent::HttpRequest { method, url, status, duration_ms } => {
-            let status_str = status.map(|s| s.to_string()).unwrap_or_else(|| "?".to_string());
-            eprintln!("      {d}{b}{dev_prefix} http {method} {url} → {status_str} [{duration_ms}ms]{r}");
+            let s = status.map(|s| s.to_string()).unwrap_or_else(|| "?".to_string());
+            eprintln!("  {dp}    {d}{b} http {method} {url} → {s} [{duration_ms}ms]{r}");
         }
         SubstepEvent::BashCommand { command, exit_code, duration_ms } => {
             let code = exit_code.map(|c| c.to_string()).unwrap_or_else(|| "?".to_string());
-            eprintln!("      {d}{b}{dev_prefix} bash \"{command}\" exit={code} [{duration_ms}ms]{r}");
+            eprintln!("  {dp}    {d}{b} bash \"{command}\" exit={code} [{duration_ms}ms]{r}");
         }
         SubstepEvent::Screenshot { path } => {
-            eprintln!("      {d}{b}{dev_prefix} screenshot {path}{r}");
+            eprintln!("  {dp}    {d}{b} screenshot {path}{r}");
         }
         _ => {}
     }
