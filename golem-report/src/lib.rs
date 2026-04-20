@@ -1,14 +1,199 @@
 // golem-report: test reporting
 #![deny(clippy::unwrap_used)]
 
+pub mod accumulator;
 pub mod human;
 pub mod json;
 pub mod junit;
 pub mod output;
+pub mod stream;
 pub mod toon;
+
+use serde::Serialize;
+
+/// Serializable substep detail for report output.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SubstepDetail {
+    ElementResolved {
+        selector: String,
+        bounds: golem_events::Rect,
+        tap_point: golem_events::Point,
+    },
+    ElementNotFound {
+        selector: String,
+        timeout_ms: u64,
+    },
+    Tap {
+        point: golem_events::Point,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        element_bounds: Option<golem_events::Rect>,
+    },
+    DoubleTap {
+        point: golem_events::Point,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        element_bounds: Option<golem_events::Rect>,
+    },
+    LongPress {
+        point: golem_events::Point,
+        duration_ms: u64,
+    },
+    TextInput {
+        text: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        field_bounds: Option<golem_events::Rect>,
+    },
+    Backspace {
+        count: u32,
+    },
+    Swipe {
+        from: golem_events::Point,
+        to: golem_events::Point,
+    },
+    ScrollStarted {
+        selector: String,
+        direction: String,
+    },
+    ScrollAttempt {
+        attempt: u32,
+        direction: String,
+        strategy_index: usize,
+        from: golem_events::Point,
+        to: golem_events::Point,
+        result: String,
+    },
+    ScrollFound {
+        selector: String,
+        position: golem_events::Point,
+        total_attempts: u32,
+    },
+    ScrollDirectionReversed {
+        to_direction: String,
+        reason: String,
+    },
+    ScrollStrategySwitch {
+        to_index: usize,
+        reason: String,
+    },
+    AssertionMatch {
+        expected: String,
+        actual: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        element_bounds: Option<golem_events::Rect>,
+    },
+    AssertionMismatch {
+        expected: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        actual: Option<String>,
+    },
+    RetryAttempt {
+        attempt: u32,
+        max: u32,
+        delay_ms: u64,
+        error: String,
+    },
+    HttpRequest {
+        method: String,
+        url: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<u16>,
+        duration_ms: u64,
+    },
+    BashCommand {
+        command: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        exit_code: Option<i32>,
+        duration_ms: u64,
+    },
+    AppLaunch {
+        bundle: String,
+        duration_ms: u64,
+    },
+    AppStop {
+        bundle: String,
+    },
+    Screenshot {
+        path: String,
+    },
+    DeviceRotation {
+        orientation: String,
+    },
+    BarrierAborted {
+        step_count: u64,
+    },
+}
+
+/// Convert a SubstepEvent from the event stream to a serializable SubstepDetail.
+impl From<&golem_events::SubstepEvent> for SubstepDetail {
+    fn from(event: &golem_events::SubstepEvent) -> Self {
+        match event {
+            golem_events::SubstepEvent::ElementResolved { selector, bounds, tap_point } =>
+                SubstepDetail::ElementResolved { selector: selector.clone(), bounds: *bounds, tap_point: *tap_point },
+            golem_events::SubstepEvent::ElementNotFound { selector, timeout_ms } =>
+                SubstepDetail::ElementNotFound { selector: selector.clone(), timeout_ms: *timeout_ms },
+            golem_events::SubstepEvent::Tap { point, element_bounds } =>
+                SubstepDetail::Tap { point: *point, element_bounds: *element_bounds },
+            golem_events::SubstepEvent::DoubleTap { point, element_bounds } =>
+                SubstepDetail::DoubleTap { point: *point, element_bounds: *element_bounds },
+            golem_events::SubstepEvent::LongPress { point, duration_ms, element_bounds: _ } =>
+                SubstepDetail::LongPress { point: *point, duration_ms: *duration_ms },
+            golem_events::SubstepEvent::TextInput { text, field_bounds } =>
+                SubstepDetail::TextInput { text: text.clone(), field_bounds: *field_bounds },
+            golem_events::SubstepEvent::Backspace { count } =>
+                SubstepDetail::Backspace { count: *count },
+            golem_events::SubstepEvent::Swipe { from, to, duration_ms: _ } =>
+                SubstepDetail::Swipe { from: *from, to: *to },
+            golem_events::SubstepEvent::ScrollStarted { selector, direction } =>
+                SubstepDetail::ScrollStarted { selector: selector.clone(), direction: direction.clone() },
+            golem_events::SubstepEvent::ScrollAttempt { attempt, direction, strategy_index, from, to, result } =>
+                SubstepDetail::ScrollAttempt {
+                    attempt: *attempt, direction: direction.clone(), strategy_index: *strategy_index,
+                    from: *from, to: *to, result: format!("{result:?}"),
+                },
+            golem_events::SubstepEvent::ScrollFound { selector, position, total_attempts } =>
+                SubstepDetail::ScrollFound { selector: selector.clone(), position: *position, total_attempts: *total_attempts },
+            golem_events::SubstepEvent::ScrollDirectionReversed { to_direction, reason } =>
+                SubstepDetail::ScrollDirectionReversed { to_direction: to_direction.clone(), reason: reason.clone() },
+            golem_events::SubstepEvent::ScrollStrategySwitch { to_index, reason } =>
+                SubstepDetail::ScrollStrategySwitch { to_index: *to_index, reason: reason.clone() },
+            golem_events::SubstepEvent::AssertionMatch { expected, actual, element_bounds } =>
+                SubstepDetail::AssertionMatch { expected: expected.clone(), actual: actual.clone(), element_bounds: *element_bounds },
+            golem_events::SubstepEvent::AssertionMismatch { expected, actual } =>
+                SubstepDetail::AssertionMismatch { expected: expected.clone(), actual: actual.clone() },
+            golem_events::SubstepEvent::RetryAttempt { attempt, max, delay_ms, error } =>
+                SubstepDetail::RetryAttempt { attempt: *attempt, max: *max, delay_ms: *delay_ms, error: error.clone() },
+            golem_events::SubstepEvent::HttpRequest { method, url, status, duration_ms } =>
+                SubstepDetail::HttpRequest { method: method.clone(), url: url.clone(), status: *status, duration_ms: *duration_ms },
+            golem_events::SubstepEvent::BashCommand { command, exit_code, duration_ms } =>
+                SubstepDetail::BashCommand { command: command.clone(), exit_code: *exit_code, duration_ms: *duration_ms },
+            golem_events::SubstepEvent::AppLaunch { bundle, duration_ms } =>
+                SubstepDetail::AppLaunch { bundle: bundle.clone(), duration_ms: *duration_ms },
+            golem_events::SubstepEvent::AppStop { bundle } =>
+                SubstepDetail::AppStop { bundle: bundle.clone() },
+            golem_events::SubstepEvent::Screenshot { path } =>
+                SubstepDetail::Screenshot { path: path.clone() },
+            golem_events::SubstepEvent::DeviceRotation { orientation } =>
+                SubstepDetail::DeviceRotation { orientation: orientation.clone() },
+            golem_events::SubstepEvent::BarrierAborted { step_count } =>
+                SubstepDetail::BarrierAborted { step_count: *step_count },
+            golem_events::SubstepEvent::AlertFound { text } =>
+                SubstepDetail::AssertionMatch {
+                    expected: "alert".to_string(),
+                    actual: text.clone().unwrap_or_else(|| "alert present".to_string()),
+                    element_bounds: None,
+                },
+        }
+    }
+}
 
 /// Result of a single step within a flow.
 pub struct StepReport {
+    /// Global step index across all blocks.
+    pub global_step_index: u64,
+    /// Name of the block containing this step.
+    pub block_name: String,
+    /// Index within the block.
+    pub step_index_in_block: usize,
     /// The action performed (e.g. "tap", "type", "assert_visible").
     pub action: String,
     /// The target element text or identifier.
@@ -17,6 +202,12 @@ pub struct StepReport {
     pub outcome: StepOutcome,
     /// How long this step took, in milliseconds.
     pub duration_ms: u64,
+    /// Number of retry attempts.
+    pub retry_count: u32,
+    /// Path to screenshot if captured.
+    pub screenshot_path: Option<String>,
+    /// Detailed substep events.
+    pub substeps: Vec<SubstepDetail>,
 }
 
 /// Possible outcomes for a single step.
@@ -84,4 +275,166 @@ pub struct SuiteReport {
     pub flows: Vec<FlowReport>,
     /// Total wall-clock duration in milliseconds.
     pub total_duration_ms: u64,
+}
+
+// ── Tests ────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use golem_events::{Point, Rect, SubstepEvent};
+
+    #[test]
+    fn tap_with_element_bounds_converts_correctly() {
+        let event = SubstepEvent::Tap {
+            point: Point { x: 150, y: 300 },
+            element_bounds: Some(Rect { x: 100, y: 280, width: 100, height: 44 }),
+        };
+        let detail = SubstepDetail::from(&event);
+        match detail {
+            SubstepDetail::Tap { point, element_bounds } => {
+                assert_eq!(point.x, 150, "SHALL preserve tap point x");
+                assert_eq!(point.y, 300, "SHALL preserve tap point y");
+                let bounds = element_bounds.expect("SHALL preserve element_bounds");
+                assert_eq!(bounds.x, 100);
+                assert_eq!(bounds.y, 280);
+                assert_eq!(bounds.width, 100);
+                assert_eq!(bounds.height, 44);
+            }
+            other => panic!("SHALL produce Tap variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn element_resolved_preserves_bounds_and_tap_point() {
+        let event = SubstepEvent::ElementResolved {
+            selector: "text=Submit".into(),
+            bounds: Rect { x: 20, y: 400, width: 200, height: 50 },
+            tap_point: Point { x: 120, y: 425 },
+        };
+        let detail = SubstepDetail::from(&event);
+        match detail {
+            SubstepDetail::ElementResolved { selector, bounds, tap_point } => {
+                assert_eq!(selector, "text=Submit", "SHALL preserve selector");
+                assert_eq!(bounds.x, 20, "SHALL preserve bounds.x");
+                assert_eq!(bounds.width, 200, "SHALL preserve bounds.width");
+                assert_eq!(tap_point.x, 120, "SHALL preserve tap_point.x");
+                assert_eq!(tap_point.y, 425, "SHALL preserve tap_point.y");
+            }
+            other => panic!("SHALL produce ElementResolved variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn scroll_found_preserves_position_and_attempts() {
+        let event = SubstepEvent::ScrollFound {
+            selector: "text=Price".into(),
+            position: Point { x: 200, y: 800 },
+            total_attempts: 5,
+        };
+        let detail = SubstepDetail::from(&event);
+        match detail {
+            SubstepDetail::ScrollFound { selector, position, total_attempts } => {
+                assert_eq!(selector, "text=Price", "SHALL preserve selector");
+                assert_eq!(position.x, 200, "SHALL preserve position.x");
+                assert_eq!(position.y, 800, "SHALL preserve position.y");
+                assert_eq!(total_attempts, 5, "SHALL preserve total_attempts");
+            }
+            other => panic!("SHALL produce ScrollFound variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn text_input_preserves_text() {
+        let event = SubstepEvent::TextInput {
+            text: "hello@example.com".into(),
+            field_bounds: Some(Rect { x: 10, y: 100, width: 300, height: 40 }),
+        };
+        let detail = SubstepDetail::from(&event);
+        match detail {
+            SubstepDetail::TextInput { text, field_bounds } => {
+                assert_eq!(text, "hello@example.com", "SHALL preserve text");
+                assert!(field_bounds.is_some(), "SHALL preserve field_bounds");
+            }
+            other => panic!("SHALL produce TextInput variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn app_launch_preserves_bundle_and_duration() {
+        let event = SubstepEvent::AppLaunch {
+            bundle: "com.example.app".into(),
+            duration_ms: 1234,
+        };
+        let detail = SubstepDetail::from(&event);
+        match detail {
+            SubstepDetail::AppLaunch { bundle, duration_ms } => {
+                assert_eq!(bundle, "com.example.app", "SHALL preserve bundle");
+                assert_eq!(duration_ms, 1234, "SHALL preserve duration_ms");
+            }
+            other => panic!("SHALL produce AppLaunch variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn element_not_found_preserves_timeout() {
+        let event = SubstepEvent::ElementNotFound {
+            selector: "text=Ghost".into(),
+            timeout_ms: 10000,
+        };
+        let detail = SubstepDetail::from(&event);
+        match detail {
+            SubstepDetail::ElementNotFound { selector, timeout_ms } => {
+                assert_eq!(selector, "text=Ghost", "SHALL preserve selector");
+                assert_eq!(timeout_ms, 10000, "SHALL preserve timeout_ms");
+            }
+            other => panic!("SHALL produce ElementNotFound variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn alert_found_with_text_maps_to_assertion_match() {
+        let event = SubstepEvent::AlertFound {
+            text: Some("Delete this item?".into()),
+        };
+        let detail = SubstepDetail::from(&event);
+        match detail {
+            SubstepDetail::AssertionMatch { expected, actual, element_bounds } => {
+                assert_eq!(expected, "alert", "SHALL set expected to 'alert'");
+                assert_eq!(actual, "Delete this item?", "SHALL pass alert text as actual");
+                assert!(element_bounds.is_none(), "SHALL set element_bounds to None");
+            }
+            other => panic!("SHALL produce AssertionMatch variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn alert_found_without_text_uses_default() {
+        let event = SubstepEvent::AlertFound { text: None };
+        let detail = SubstepDetail::from(&event);
+        match detail {
+            SubstepDetail::AssertionMatch { actual, .. } => {
+                assert_eq!(actual, "alert present",
+                    "SHALL use 'alert present' as default when text is None");
+            }
+            other => panic!("SHALL produce AssertionMatch variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn tap_without_bounds_converts_with_none() {
+        let event = SubstepEvent::Tap {
+            point: Point { x: 50, y: 60 },
+            element_bounds: None,
+        };
+        let detail = SubstepDetail::from(&event);
+        match detail {
+            SubstepDetail::Tap { point, element_bounds } => {
+                assert_eq!(point.x, 50);
+                assert_eq!(point.y, 60);
+                assert!(element_bounds.is_none(), "SHALL preserve None bounds");
+            }
+            other => panic!("SHALL produce Tap variant, got {other:?}"),
+        }
+    }
 }

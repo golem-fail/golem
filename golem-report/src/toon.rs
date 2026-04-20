@@ -33,19 +33,77 @@ pub fn format_step_toon(step: &StepReport) -> String {
         format!("{}:{}", step.action, step.target)
     };
 
+    let substep_suffix = format_substeps_toon(&step.substeps);
+
     match &step.outcome {
         StepOutcome::Success => {
-            format!(" +{label} {}", step.duration_ms)
+            format!(" +{label} {}{substep_suffix}", step.duration_ms)
         }
         StepOutcome::Warning(msg) => {
-            format!(" ~{label} {} {msg}", step.duration_ms)
+            format!(" ~{label} {} {msg}{substep_suffix}", step.duration_ms)
         }
         StepOutcome::Failed(msg) => {
-            format!(" !{label} {} {msg}", step.duration_ms)
+            format!(" !{label} {} {msg}{substep_suffix}", step.duration_ms)
         }
         StepOutcome::Skipped => {
-            format!(" -{label}")
+            format!(" -{label}{substep_suffix}")
         }
+    }
+}
+
+/// Compact substep notation for TOON: @x,y for tap/found position, s:N for scroll attempts, b:x,y,w,h for bounds.
+fn format_substeps_toon(substeps: &[crate::SubstepDetail]) -> String {
+    use crate::SubstepDetail;
+    if substeps.is_empty() {
+        return String::new();
+    }
+    let mut parts = Vec::new();
+    for sub in substeps {
+        match sub {
+            SubstepDetail::Tap { point, element_bounds: Some(b), .. } =>
+                parts.push(format!("@{},{} b{},{},{},{}", point.x, point.y, b.x, b.y, b.width, b.height)),
+            SubstepDetail::Tap { point, .. } =>
+                parts.push(format!("@{},{}", point.x, point.y)),
+            SubstepDetail::ElementResolved { bounds, tap_point, .. } =>
+                parts.push(format!("@{},{} b{},{},{},{}", tap_point.x, tap_point.y, bounds.x, bounds.y, bounds.width, bounds.height)),
+            SubstepDetail::ScrollFound { position, total_attempts, .. } =>
+                parts.push(format!("s:{total_attempts} @{},{}", position.x, position.y)),
+            SubstepDetail::AppLaunch { bundle, duration_ms } =>
+                parts.push(format!("launch:{bundle} {duration_ms}ms")),
+            SubstepDetail::AppStop { bundle } =>
+                parts.push(format!("stop:{bundle}")),
+            SubstepDetail::TextInput { text, .. } =>
+                parts.push(format!("t:\"{text}\"")),
+            SubstepDetail::Swipe { from, to } =>
+                parts.push(format!("({},{})→({},{})", from.x, from.y, to.x, to.y)),
+            SubstepDetail::ElementNotFound { timeout_ms, .. } =>
+                parts.push(format!("!found {timeout_ms}ms")),
+            SubstepDetail::ScrollStarted { direction, .. } =>
+                parts.push(format!("dir:{direction}")),
+            SubstepDetail::ScrollAttempt { attempt, direction, from, to, result, .. } =>
+                parts.push(format!("#{attempt} {direction} ({},{})→({},{}) {result}",
+                    from.x, from.y, to.x, to.y)),
+            SubstepDetail::ScrollDirectionReversed { to_direction, reason } =>
+                parts.push(format!("rev→{to_direction} {reason}")),
+            SubstepDetail::ScrollStrategySwitch { to_index, reason } =>
+                parts.push(format!("strat→{} {reason}", to_index + 1)),
+            SubstepDetail::RetryAttempt { attempt, max, error, .. } =>
+                parts.push(format!("retry {attempt}/{max}: {error}")),
+            SubstepDetail::HttpRequest { method, status, duration_ms, .. } => {
+                let s = status.map(|s| s.to_string()).unwrap_or_else(|| "?".to_string());
+                parts.push(format!("{method}→{s} {duration_ms}ms"));
+            }
+            SubstepDetail::BashCommand { command, exit_code, duration_ms } => {
+                let c = exit_code.map(|c| c.to_string()).unwrap_or_else(|| "?".to_string());
+                parts.push(format!("bash:\"{command}\" exit={c} {duration_ms}ms"));
+            }
+            _ => {}
+        }
+    }
+    if parts.is_empty() {
+        String::new()
+    } else {
+        format!(" {}", parts.join(" "))
     }
 }
 
@@ -84,28 +142,28 @@ pub fn format_flow_toon(report: &FlowReport) -> String {
     for snap in &report.perf_snapshots {
         let _ = write!(out, "P {}", snap.label);
         if let Some(v) = snap.memory_mb {
-            let _ = write!(out, " m:{v:.1}");
+            let _ = write!(out, " mem:{v:.1}");
         }
         if let Some(v) = snap.cpu_percent {
-            let _ = write!(out, " c:{v:.1}");
+            let _ = write!(out, " cpu:{v:.1}");
         }
         if let Some(v) = snap.threads {
-            let _ = write!(out, " t:{v}");
+            let _ = write!(out, " thr:{v}");
         }
         if let Some(v) = snap.file_descriptors {
-            let _ = write!(out, " f:{v}");
+            let _ = write!(out, " fd:{v}");
         }
         if let Some(v) = snap.disk_mb {
-            let _ = write!(out, " d:{v:.1}");
+            let _ = write!(out, " disk:{v:.1}");
         }
         if let Some(v) = snap.net_rx_kb {
-            let _ = write!(out, " nr:{v:.0}");
+            let _ = write!(out, " net_rx:{v:.0}");
         }
         if let Some(v) = snap.net_tx_kb {
-            let _ = write!(out, " nt:{v:.0}");
+            let _ = write!(out, " net_tx:{v:.0}");
         }
         if let Some(v) = snap.launch_ms {
-            let _ = write!(out, " l:{v}");
+            let _ = write!(out, " launch:{v}");
         }
         out.push('\n');
     }
@@ -122,6 +180,11 @@ pub fn format_flow_toon(report: &FlowReport) -> String {
 /// Includes all flows followed by a total summary line.
 pub fn format_suite_toon(report: &SuiteReport) -> String {
     let mut out = String::new();
+
+    // Schema header for LLM comprehension
+    out.push_str("# S=suite R=result(passed/warned/failed) T=total(passed/failed/skipped) d:N=duration_ms\n");
+    out.push_str("# step: +=pass !=fail ~=warn -=skip @x,y=position b=bounds(x,y,w,h) s:N=scroll_attempts\n");
+    out.push_str("# perf: P block:app:device:iteration mem=MB cpu=% thr=threads fd=file_descriptors disk=MB net_rx/tx=KB launch=ms\n");
 
     for flow in &report.flows {
         let _ = write!(out, "{}", format_flow_toon(flow));
@@ -161,37 +224,61 @@ mod tests {
 
     fn success_step(action: &str, target: &str, ms: u64) -> StepReport {
         StepReport {
+            global_step_index: 0,
+            block_name: String::new(),
+            step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
             outcome: StepOutcome::Success,
             duration_ms: ms,
+            retry_count: 0,
+            screenshot_path: None,
+            substeps: vec![],
         }
     }
 
     fn failed_step(action: &str, target: &str, ms: u64, msg: &str) -> StepReport {
         StepReport {
+            global_step_index: 0,
+            block_name: String::new(),
+            step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
             outcome: StepOutcome::Failed(msg.to_string()),
             duration_ms: ms,
+            retry_count: 0,
+            screenshot_path: None,
+            substeps: vec![],
         }
     }
 
     fn warning_step(action: &str, target: &str, ms: u64, msg: &str) -> StepReport {
         StepReport {
+            global_step_index: 0,
+            block_name: String::new(),
+            step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
             outcome: StepOutcome::Warning(msg.to_string()),
             duration_ms: ms,
+            retry_count: 0,
+            screenshot_path: None,
+            substeps: vec![],
         }
     }
 
     fn skipped_step(action: &str, target: &str) -> StepReport {
         StepReport {
+            global_step_index: 0,
+            block_name: String::new(),
+            step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
             outcome: StepOutcome::Skipped,
             duration_ms: 0,
+            retry_count: 0,
+            screenshot_path: None,
+            substeps: vec![],
         }
     }
 
@@ -438,6 +525,89 @@ mod tests {
         assert_eq!(out, " +launch 120");
     }
 
+    // ── format_substeps_toon tests ─────────────────────────────────
+
+    #[test]
+    fn substeps_toon_tap_with_bounds_produces_at_xy_bxywh() {
+        let substeps = vec![crate::SubstepDetail::Tap {
+            point: golem_events::Point { x: 150, y: 300 },
+            element_bounds: Some(golem_events::Rect { x: 100, y: 280, width: 100, height: 44 }),
+        }];
+        let out = format_substeps_toon(&substeps);
+        assert_eq!(out, " @150,300 b100,280,100,44",
+            "SHALL produce @x,y bx,y,w,h notation for Tap with bounds");
+    }
+
+    #[test]
+    fn substeps_toon_scroll_found_produces_s_n_at_xy() {
+        let substeps = vec![crate::SubstepDetail::ScrollFound {
+            selector: "text=Price".into(),
+            position: golem_events::Point { x: 200, y: 800 },
+            total_attempts: 3,
+        }];
+        let out = format_substeps_toon(&substeps);
+        assert_eq!(out, " s:3 @200,800",
+            "SHALL produce s:N @x,y notation for ScrollFound");
+    }
+
+    #[test]
+    fn substeps_toon_empty_produces_empty_string() {
+        let out = format_substeps_toon(&[]);
+        assert_eq!(out, "", "SHALL produce empty string for empty substeps");
+    }
+
+    #[test]
+    fn substeps_toon_app_launch_produces_launch_bundle_nms() {
+        let substeps = vec![crate::SubstepDetail::AppLaunch {
+            bundle: "com.example.app".into(),
+            duration_ms: 1500,
+        }];
+        let out = format_substeps_toon(&substeps);
+        assert_eq!(out, " launch:com.example.app 1500ms",
+            "SHALL produce launch:bundle Nms notation for AppLaunch");
+    }
+
+    #[test]
+    fn substeps_toon_tap_without_bounds_produces_at_xy_only() {
+        let substeps = vec![crate::SubstepDetail::Tap {
+            point: golem_events::Point { x: 50, y: 60 },
+            element_bounds: None,
+        }];
+        let out = format_substeps_toon(&substeps);
+        assert_eq!(out, " @50,60",
+            "SHALL produce @x,y without bounds for Tap without element_bounds");
+    }
+
+    #[test]
+    fn substeps_toon_element_resolved_produces_at_and_bounds() {
+        let substeps = vec![crate::SubstepDetail::ElementResolved {
+            selector: "text=OK".into(),
+            bounds: golem_events::Rect { x: 10, y: 20, width: 80, height: 40 },
+            tap_point: golem_events::Point { x: 50, y: 40 },
+        }];
+        let out = format_substeps_toon(&substeps);
+        assert_eq!(out, " @50,40 b10,20,80,40",
+            "SHALL produce @tap_x,tap_y bx,y,w,h for ElementResolved");
+    }
+
+    #[test]
+    fn substeps_toon_multiple_substeps_joined_with_space() {
+        let substeps = vec![
+            crate::SubstepDetail::ElementResolved {
+                selector: "text=OK".into(),
+                bounds: golem_events::Rect { x: 10, y: 20, width: 80, height: 40 },
+                tap_point: golem_events::Point { x: 50, y: 40 },
+            },
+            crate::SubstepDetail::Tap {
+                point: golem_events::Point { x: 50, y: 40 },
+                element_bounds: Some(golem_events::Rect { x: 10, y: 20, width: 80, height: 40 }),
+            },
+        ];
+        let out = format_substeps_toon(&substeps);
+        assert_eq!(out, " @50,40 b10,20,80,40 @50,40 b10,20,80,40",
+            "SHALL join multiple substep notations with spaces");
+    }
+
     // ── Perf rendering tests ────────────────────────────────────────
 
     fn sample_perf_snapshot() -> crate::PerfSnapshot {
@@ -472,9 +642,9 @@ mod tests {
         let out = format_flow_toon(&report);
         let perf_line = out.lines().find(|l| l.starts_with("P ")).expect("SHALL contain a P line");
         assert!(perf_line.contains("login:iPhone_16:0"), "SHALL contain snapshot label");
-        assert!(perf_line.contains("m:142.5"), "SHALL contain memory value");
-        assert!(perf_line.contains("c:23.1"), "SHALL contain cpu value");
-        assert!(perf_line.contains("l:1240"), "SHALL contain launch value");
+        assert!(perf_line.contains("mem:142.5"), "SHALL contain memory value");
+        assert!(perf_line.contains("cpu:23.1"), "SHALL contain cpu value");
+        assert!(perf_line.contains("launch:1240"), "SHALL contain launch value");
     }
 
     #[test]

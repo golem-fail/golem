@@ -2,6 +2,8 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use golem_devices::DeviceInfo;
+use golem_events::emitter::DeviceEmitter;
+use golem_events::{EventKind, SubstepEvent};
 
 use crate::capture::CaptureConfig;
 use crate::perf::PerfCollectorSet;
@@ -20,6 +22,8 @@ pub struct ExecutionContext<'a> {
     pub perf_collector: Option<&'a PerfCollectorSet>,
     /// Last launch duration in ms, shared between action handlers and executor.
     pub last_launch_ms: AtomicU64,
+    /// Event emitter for structured test output.
+    pub emitter: Option<&'a DeviceEmitter>,
 }
 
 impl ExecutionContext<'_> {
@@ -32,6 +36,20 @@ impl ExecutionContext<'_> {
     pub fn take_launch_ms(&self) -> Option<u64> {
         let val = self.last_launch_ms.swap(0, Ordering::Relaxed);
         if val > 0 { Some(val) } else { None }
+    }
+
+    /// Emit a top-level event (step started, flow finished, etc.).
+    pub fn emit(&self, kind: EventKind) {
+        if let Some(e) = self.emitter {
+            e.emit(kind);
+        }
+    }
+
+    /// Emit a substep detail event.
+    pub fn substep(&self, event: SubstepEvent) {
+        if let Some(e) = self.emitter {
+            e.substep(event);
+        }
     }
 }
 
@@ -52,5 +70,6 @@ pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
         device: None,
         perf_collector: None,
         last_launch_ms: AtomicU64::new(0),
+        emitter: None,
     }
 }

@@ -60,9 +60,10 @@ async fn main() -> anyhow::Result<()> {
                 }
             });
 
-            if args.verbose {
-                golem_runner::set_verbose(true);
-            }
+            // Stream human output unless user explicitly chose non-human format.
+            // Default (no --output) = human, so stream is on.
+            let has_human_output = args.outputs.is_empty()
+                || args.outputs.iter().any(|s| s == "human" || s.starts_with("human:"));
 
             let config = SuiteConfig {
                 no_clean: args.no_clean,
@@ -71,6 +72,8 @@ async fn main() -> anyhow::Result<()> {
                 seed: args.seed,
                 platform: platform_override,
                 no_perf: args.no_perf,
+                verbose: args.verbose,
+                stream_human: has_human_output,
             };
 
             // Check if an orchestrator is already running
@@ -96,16 +99,21 @@ async fn main() -> anyhow::Result<()> {
             // Wait for any active client connections to finish before exiting
             server.wait_for_clients().await;
 
-            // Parse output targets
+            // Parse output targets. Skip human-to-stdout since the event
+            // stream already renders real-time human output to stderr.
             let targets: Vec<OutputTarget> = args
                 .outputs
                 .iter()
                 .map(|s| OutputTarget::parse(s))
                 .collect::<Result<Vec<_>, _>>()?;
+            let non_human_targets: Vec<_> = targets
+                .into_iter()
+                .filter(|t| t.file_path.is_some() || !matches!(t.format, golem_report::output::OutputFormat::Human))
+                .collect();
 
-            // Write outputs
+            // Write outputs (file targets + non-human stdout)
             let (_written_files, stdout_contents) =
-                golem_report::output::write_outputs(&report, &targets)?;
+                golem_report::output::write_outputs(&report, &non_human_targets)?;
 
             for content in &stdout_contents {
                 println!("{content}");

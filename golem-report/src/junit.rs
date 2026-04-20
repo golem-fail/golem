@@ -3,7 +3,7 @@
 //! Produces JUnit-compatible XML from [`FlowReport`] and [`SuiteReport`]
 //! for CI integration (Jenkins, GitHub Actions, etc.).
 
-use crate::{FlowReport, StepOutcome, SuiteReport};
+use crate::{FlowReport, StepOutcome, SubstepDetail, SuiteReport};
 use std::fmt::Write;
 
 // ── XML escaping ────────────────────────────────────────────────────
@@ -41,6 +41,61 @@ fn step_name(action: &str, target: &str) -> String {
 
 // ── Public API ──────────────────────────────────────────────────────
 
+/// Format substeps as plain text for JUnit system-out.
+fn format_substeps_text(substeps: &[SubstepDetail]) -> String {
+    if substeps.is_empty() {
+        return String::new();
+    }
+    let mut lines = Vec::new();
+    for sub in substeps {
+        match sub {
+            SubstepDetail::ElementResolved { selector, bounds, tap_point } =>
+                lines.push(format!("element_resolved \"{}\" bounds=({},{},{},{}) tap=({},{})",
+                    selector, bounds.x, bounds.y, bounds.width, bounds.height, tap_point.x, tap_point.y)),
+            SubstepDetail::ElementNotFound { selector, timeout_ms } =>
+                lines.push(format!("element_not_found \"{}\" after {}ms", selector, timeout_ms)),
+            SubstepDetail::Tap { point, .. } =>
+                lines.push(format!("tap ({},{})", point.x, point.y)),
+            SubstepDetail::DoubleTap { point, .. } =>
+                lines.push(format!("double_tap ({},{})", point.x, point.y)),
+            SubstepDetail::TextInput { text, .. } =>
+                lines.push(format!("text_input \"{}\"", text)),
+            SubstepDetail::Swipe { from, to } =>
+                lines.push(format!("swipe ({},{})→({},{})", from.x, from.y, to.x, to.y)),
+            SubstepDetail::ScrollStarted { selector, direction } =>
+                lines.push(format!("scroll_started \"{}\" direction={}", selector, direction)),
+            SubstepDetail::ScrollAttempt { attempt, direction, strategy_index, from, to, result } =>
+                lines.push(format!("scroll_attempt #{} strategy={} {} ({},{})→({},{}) {}",
+                    attempt, strategy_index + 1, direction, from.x, from.y, to.x, to.y, result)),
+            SubstepDetail::ScrollFound { selector, position, total_attempts } =>
+                lines.push(format!("scroll_found \"{}\" at ({},{}) after {} attempts",
+                    selector, position.x, position.y, total_attempts)),
+            SubstepDetail::ScrollDirectionReversed { to_direction, reason } =>
+                lines.push(format!("scroll_reversed →{} {}", to_direction, reason)),
+            SubstepDetail::ScrollStrategySwitch { to_index, reason } =>
+                lines.push(format!("scroll_strategy_switch →{} {}", to_index + 1, reason)),
+            SubstepDetail::AppLaunch { bundle, duration_ms } =>
+                lines.push(format!("app_launch bundle={} {}ms", bundle, duration_ms)),
+            SubstepDetail::AppStop { bundle } =>
+                lines.push(format!("app_stop bundle={}", bundle)),
+            SubstepDetail::RetryAttempt { attempt, max, delay_ms, error } =>
+                lines.push(format!("retry {}/{} delay={}ms: {}", attempt, max, delay_ms, error)),
+            SubstepDetail::HttpRequest { method, url, status, duration_ms } => {
+                let s = status.map(|s| s.to_string()).unwrap_or_else(|| "?".to_string());
+                lines.push(format!("http {} {} → {} [{}ms]", method, url, s, duration_ms));
+            }
+            SubstepDetail::BashCommand { command, exit_code, duration_ms } => {
+                let c = exit_code.map(|c| c.to_string()).unwrap_or_else(|| "?".to_string());
+                lines.push(format!("bash \"{}\" exit={} [{}ms]", command, c, duration_ms));
+            }
+            SubstepDetail::Screenshot { path } =>
+                lines.push(format!("screenshot {}", path)),
+            _ => {}
+        }
+    }
+    lines.join("\n")
+}
+
 /// Format a single flow as a JUnit `<testsuite>` XML element.
 pub fn format_flow_junit(report: &FlowReport) -> String {
     let mut out = String::new();
@@ -64,13 +119,23 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
     for step in &report.step_results {
         let name = xml_escape(&step_name(&step.action, &step.target));
         let step_time = ms_to_secs(step.duration_ms);
+        let substep_text = format_substeps_text(&step.substeps);
 
         match &step.outcome {
             StepOutcome::Success => {
-                let _ = writeln!(
-                    out,
-                    "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\"/>"
-                );
+                if substep_text.is_empty() {
+                    let _ = writeln!(
+                        out,
+                        "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\"/>"
+                    );
+                } else {
+                    let _ = writeln!(
+                        out,
+                        "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\">"
+                    );
+                    let _ = writeln!(out, "      <system-out>{}</system-out>", xml_escape(&substep_text));
+                    let _ = writeln!(out, "    </testcase>");
+                }
             }
             StepOutcome::Warning(msg) => {
                 let escaped_msg = xml_escape(msg);
@@ -78,7 +143,12 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
                     out,
                     "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\">"
                 );
-                let _ = writeln!(out, "      <system-out>{escaped_msg}</system-out>");
+                let combined = if substep_text.is_empty() {
+                    escaped_msg.clone()
+                } else {
+                    format!("{}\n{}", xml_escape(&substep_text), escaped_msg)
+                };
+                let _ = writeln!(out, "      <system-out>{combined}</system-out>");
                 let _ = writeln!(out, "    </testcase>");
             }
             StepOutcome::Failed(msg) => {
@@ -87,14 +157,16 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
                     out,
                     "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\">"
                 );
+                let failure_detail = if substep_text.is_empty() {
+                    format!("Step failed: {name} - {escaped_msg}")
+                } else {
+                    format!("{}\nStep failed: {name} - {escaped_msg}", xml_escape(&substep_text))
+                };
                 let _ = writeln!(
                     out,
                     "      <failure message=\"{escaped_msg}\" type=\"AssertionError\">"
                 );
-                let _ = writeln!(
-                    out,
-                    "Step failed: {name} - {escaped_msg}"
-                );
+                let _ = writeln!(out, "{failure_detail}");
                 let _ = writeln!(out, "      </failure>");
                 let _ = writeln!(out, "    </testcase>");
             }
@@ -203,37 +275,61 @@ mod tests {
 
     fn success_step(action: &str, target: &str, ms: u64) -> StepReport {
         StepReport {
+            global_step_index: 0,
+            block_name: String::new(),
+            step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
             outcome: StepOutcome::Success,
             duration_ms: ms,
+            retry_count: 0,
+            screenshot_path: None,
+            substeps: vec![],
         }
     }
 
     fn failed_step(action: &str, target: &str, ms: u64, msg: &str) -> StepReport {
         StepReport {
+            global_step_index: 0,
+            block_name: String::new(),
+            step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
             outcome: StepOutcome::Failed(msg.to_string()),
             duration_ms: ms,
+            retry_count: 0,
+            screenshot_path: None,
+            substeps: vec![],
         }
     }
 
     fn warning_step(action: &str, target: &str, ms: u64, msg: &str) -> StepReport {
         StepReport {
+            global_step_index: 0,
+            block_name: String::new(),
+            step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
             outcome: StepOutcome::Warning(msg.to_string()),
             duration_ms: ms,
+            retry_count: 0,
+            screenshot_path: None,
+            substeps: vec![],
         }
     }
 
     fn skipped_step(action: &str, target: &str) -> StepReport {
         StepReport {
+            global_step_index: 0,
+            block_name: String::new(),
+            step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
             outcome: StepOutcome::Skipped,
             duration_ms: 0,
+            retry_count: 0,
+            screenshot_path: None,
+            substeps: vec![],
         }
     }
 
@@ -612,6 +708,89 @@ mod tests {
             !xml.contains("<properties>"),
             "SHALL NOT contain <properties> when no perf snapshots"
         );
+    }
+
+    // ── format_substeps_text tests ─────────────────────────────────
+
+    #[test]
+    fn substeps_text_empty_returns_empty_string() {
+        let out = format_substeps_text(&[]);
+        assert_eq!(out, "", "SHALL return empty string for empty substeps");
+    }
+
+    #[test]
+    fn substeps_text_element_resolved_formats_bounds_and_tap_point() {
+        let substeps = vec![SubstepDetail::ElementResolved {
+            selector: "text=Submit".into(),
+            bounds: golem_events::Rect { x: 20, y: 400, width: 200, height: 50 },
+            tap_point: golem_events::Point { x: 120, y: 425 },
+        }];
+        let out = format_substeps_text(&substeps);
+        assert_eq!(
+            out,
+            "element_resolved \"text=Submit\" bounds=(20,400,200,50) tap=(120,425)",
+            "SHALL format ElementResolved with bounds and tap_point"
+        );
+    }
+
+    #[test]
+    fn substeps_text_scroll_attempt_formats_strategy_and_coords() {
+        let substeps = vec![SubstepDetail::ScrollAttempt {
+            attempt: 2,
+            direction: "down".into(),
+            strategy_index: 0,
+            from: golem_events::Point { x: 200, y: 800 },
+            to: golem_events::Point { x: 200, y: 400 },
+            result: "PageScrolled".into(),
+        }];
+        let out = format_substeps_text(&substeps);
+        assert_eq!(
+            out,
+            "scroll_attempt #2 strategy=1 down (200,800)\u{2192}(200,400) PageScrolled",
+            "SHALL format ScrollAttempt with strategy (1-indexed), direction, coords, and result"
+        );
+    }
+
+    #[test]
+    fn substeps_text_multiple_substeps_joined_with_newlines() {
+        let substeps = vec![
+            SubstepDetail::Tap {
+                point: golem_events::Point { x: 100, y: 200 },
+                element_bounds: None,
+            },
+            SubstepDetail::TextInput {
+                text: "hello".into(),
+                field_bounds: None,
+            },
+        ];
+        let out = format_substeps_text(&substeps);
+        assert_eq!(
+            out,
+            "tap (100,200)\ntext_input \"hello\"",
+            "SHALL join multiple substep lines with newlines"
+        );
+    }
+
+    #[test]
+    fn substeps_text_app_launch_formats_bundle_and_duration() {
+        let substeps = vec![SubstepDetail::AppLaunch {
+            bundle: "com.example.app".into(),
+            duration_ms: 2000,
+        }];
+        let out = format_substeps_text(&substeps);
+        assert_eq!(out, "app_launch bundle=com.example.app 2000ms",
+            "SHALL format AppLaunch with bundle and duration");
+    }
+
+    #[test]
+    fn substeps_text_element_not_found_formats_selector_and_timeout() {
+        let substeps = vec![SubstepDetail::ElementNotFound {
+            selector: "text=Ghost".into(),
+            timeout_ms: 10000,
+        }];
+        let out = format_substeps_text(&substeps);
+        assert_eq!(out, "element_not_found \"text=Ghost\" after 10000ms",
+            "SHALL format ElementNotFound with selector and timeout");
     }
 
     // 12. Empty suite produces valid XML ------------------------------

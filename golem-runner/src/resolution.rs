@@ -82,6 +82,13 @@ pub fn build_selector(step: &Step) -> Selector {
     }
 }
 
+/// Build a human-readable label for a selector (for event output).
+fn selector_label(sel: &Selector) -> String {
+    if let Some(ref t) = sel.text { return t.clone(); }
+    if let Some(ref a) = sel.accessibility_label { return a.clone(); }
+    "?".to_string()
+}
+
 /// Minimum visible area (px) for an element to be tappable.
 const TAP_MARGIN: i32 = 5;
 
@@ -280,6 +287,7 @@ pub(crate) async fn wait_for_settle(driver: &dyn PlatformDriver) -> Result<(Elem
 pub async fn resolve_element(
     step: &Step,
     driver: &dyn PlatformDriver,
+    emitter: Option<&golem_events::emitter::DeviceEmitter>,
 ) -> Result<(Element, (i32, i32))> {
     let selector = build_selector(step);
     let timeout_ms = step.timeout.unwrap_or(DEFAULT_POLL_TIMEOUT_MS);
@@ -344,6 +352,14 @@ pub async fn resolve_element(
             let base = safe_tap_coords(first.element.effective_bounds(), &viewport, meta.safe_area_top, meta.safe_area_bottom.max(meta.keyboard_height))
                 .unwrap_or((first.tap_x, first.tap_y));
             let coords = apply_coord_adjustments(step, base.0, base.1, &viewport, Some(first.element.effective_bounds()));
+            if let Some(e) = emitter {
+                let eb = first.element.effective_bounds();
+                e.substep(golem_events::SubstepEvent::ElementResolved {
+                    selector: selector_label(&selector),
+                    bounds: golem_events::Rect { x: eb.x, y: eb.y, width: eb.width, height: eb.height },
+                    tap_point: golem_events::Point { x: coords.0, y: coords.1 },
+                });
+            }
             return Ok((first.element.clone(), coords));
         }
 
@@ -373,7 +389,7 @@ pub async fn resolve_element(
                     // Container not visible — scroll the page to bring it into view
                     let max_s = step.max_scrolls.unwrap_or(crate::scroll::DEFAULT_MAX_SCROLLS);
                     let _ = crate::scroll::scroll_to_element(
-                        &within_sel, driver, golem_driver::Direction::Down, max_s, None, None,
+                        &within_sel, driver, golem_driver::Direction::Down, max_s, None, None, emitter,
                     ).await;
                     let (fresh_root, fresh_meta) = driver.get_hierarchy().await?;
                     let mut fresh_vp = Viewport::from_root(&fresh_root);
@@ -423,7 +439,7 @@ pub async fn resolve_element(
             let max_scrolls = step.max_scrolls.unwrap_or(crate::scroll::DEFAULT_MAX_SCROLLS);
             match crate::scroll::scroll_to_element(
                 &selector, driver, direction, max_scrolls,
-                step.scroll_timeout, container_bounds,
+                step.scroll_timeout, container_bounds, emitter,
             ).await {
                 Ok(found) => {
                     let coords = safe_tap_coords(found.element.effective_bounds(), &viewport, meta.safe_area_top, meta.safe_area_bottom.max(meta.keyboard_height))
@@ -442,6 +458,13 @@ pub async fn resolve_element(
     };
 
     let elapsed_secs = timeout_ms as f64 / 1000.0;
+
+    if let Some(e) = emitter {
+        e.substep(golem_events::SubstepEvent::ElementNotFound {
+            selector: selector_label(&selector),
+            timeout_ms,
+        });
+    }
 
     // Check full tree for a better error message.
     let full_results = find_elements(&last_root, &selector);
@@ -618,7 +641,7 @@ mod tests {
         let mut step = make_step("tap");
         step.on_text = Some("Submit".to_string());
 
-        let (elem, (tap_x, tap_y)) = resolve_element(&step, &driver)
+        let (elem, (tap_x, tap_y)) = resolve_element(&step, &driver, None)
             .await
             .expect("should find element");
         assert_eq!(elem.text.as_deref(), Some("Submit"));
@@ -640,7 +663,7 @@ mod tests {
         let mut step = make_step("tap");
         step.on_accessibility_label = Some("btn-login".to_string());
 
-        let (elem, _coords) = resolve_element(&step, &driver)
+        let (elem, _coords) = resolve_element(&step, &driver, None)
             .await
             .expect("should find element by id");
         assert_eq!(elem.accessibility_label.as_deref(), Some("btn-login"));
@@ -672,7 +695,7 @@ mod tests {
         step.on_text = Some("Save".to_string());
         step.on_accessibility_label = Some("btn-save".to_string());
 
-        let (elem, _coords) = resolve_element(&step, &driver)
+        let (elem, _coords) = resolve_element(&step, &driver, None)
             .await
             .expect("should find button with text Save and id btn-save");
         assert_eq!(elem.accessibility_label.as_deref(), Some("btn-save"));
@@ -688,7 +711,7 @@ mod tests {
         let mut step = make_step("tap");
         step.on_text = Some("Nonexistent".to_string());
 
-        let result = resolve_element(&step, &driver).await;
+        let result = resolve_element(&step, &driver, None).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -722,7 +745,7 @@ mod tests {
         let mut step = make_step("tap");
         step.on_text = Some("OK".to_string());
 
-        let (elem, (tap_x, tap_y)) = resolve_element(&step, &driver)
+        let (elem, (tap_x, tap_y)) = resolve_element(&step, &driver, None)
             .await
             .expect("should find first match");
         assert_eq!(elem.text.as_deref(), Some("OK"));
@@ -757,7 +780,7 @@ mod tests {
         step.on_text = Some("Item *".to_string());
         step.on_index = Some(1);
 
-        let (elem, _coords) = resolve_element(&step, &driver)
+        let (elem, _coords) = resolve_element(&step, &driver, None)
             .await
             .expect("should find element at index 1");
         assert_eq!(elem.text.as_deref(), Some("Item B"));
@@ -792,7 +815,7 @@ mod tests {
         step.on_text = Some("*".to_string());
         step.on_below = Some("Header".to_string());
 
-        let (elem, _coords) = resolve_element(&step, &driver)
+        let (elem, _coords) = resolve_element(&step, &driver, None)
             .await
             .expect("should find element below Header");
         assert_eq!(elem.text.as_deref(), Some("Below"));
@@ -851,7 +874,7 @@ mod tests {
         step.on_text = Some("Item *".to_string());
 
         // Should return the first of the two "Item *" matches
-        let (elem, _coords) = resolve_element(&step, &driver)
+        let (elem, _coords) = resolve_element(&step, &driver, None)
             .await
             .expect("should find element with glob");
         assert_eq!(elem.text.as_deref(), Some("Item 1"));
@@ -888,7 +911,7 @@ mod tests {
         step.on_enabled = Some(true);
         step.on_clickable = Some(true);
 
-        let (elem, _coords) = resolve_element(&step, &driver)
+        let (elem, _coords) = resolve_element(&step, &driver, None)
             .await
             .expect("should find enabled, clickable button");
         assert_eq!(elem.text.as_deref(), Some("Option A"));

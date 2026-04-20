@@ -41,8 +41,13 @@ pub(crate) async fn handle_launch(
     let start = Instant::now();
     driver.launch_app(bundle_id).await?;
     let _ = wait_for_settle(driver).await;
+    let launch_ms = start.elapsed().as_millis() as u64;
+    ctx.substep(golem_events::SubstepEvent::AppLaunch {
+        bundle: bundle_id.to_string(),
+        duration_ms: launch_ms,
+    });
     if let Some(collector) = ctx.perf_collector {
-        ctx.set_launch_ms(start.elapsed().as_millis() as u64);
+        ctx.set_launch_ms(launch_ms);
         collector.set_active(bundle_id);
     }
     Ok(())
@@ -57,6 +62,9 @@ pub(crate) async fn handle_stop(
 ) -> Result<()> {
     let bundle_id = resolve_app_bundle(step, apps)?;
     driver.stop_app(bundle_id).await?;
+    ctx.substep(golem_events::SubstepEvent::AppStop {
+        bundle: bundle_id.to_string(),
+    });
     // Brief pause for the OS to finish terminating the app — no hierarchy
     // fetch needed since the app is gone.
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;

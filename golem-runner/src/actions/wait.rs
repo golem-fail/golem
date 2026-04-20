@@ -2,13 +2,14 @@ use anyhow::Result;
 use golem_driver::PlatformDriver;
 use golem_parser::Step;
 
+use crate::context::ExecutionContext;
 use crate::resolution::{poll_for_absence, resolve_element};
 
 /// Wait for an element to appear, polling the hierarchy until found or timeout.
 ///
 /// Default timeout is 10s. Delegates to `resolve_element` which polls internally.
-pub(crate) async fn handle_wait(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    resolve_element(step, driver).await?;
+pub(crate) async fn handle_wait(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
+    resolve_element(step, driver, ctx.emitter).await?;
     Ok(())
 }
 
@@ -37,7 +38,8 @@ mod tests {
         step.on_text = Some("Welcome".to_string());
         step.timeout = Some(1000);
 
-        handle_wait(&step, &driver)
+        let ctx = crate::context::test_ctx(std::path::Path::new("."));
+        handle_wait(&step, &driver, &ctx)
             .await
             .expect("wait should succeed immediately when element is present");
     }

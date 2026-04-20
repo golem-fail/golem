@@ -11,6 +11,9 @@ use serde::Serialize;
 
 #[derive(Serialize)]
 struct JsonStep {
+    index: u64,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    block: String,
     action: String,
     target: String,
     outcome: String,
@@ -19,6 +22,9 @@ struct JsonStep {
     #[serde(skip_serializing_if = "Option::is_none")]
     warning: Option<String>,
     duration_ms: u64,
+    retries: u32,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    substeps: Vec<crate::SubstepDetail>,
 }
 
 #[derive(Serialize)]
@@ -86,12 +92,16 @@ fn step_to_json(step: &StepReport) -> JsonStep {
     };
 
     JsonStep {
+        index: step.global_step_index,
+        block: step.block_name.clone(),
         action: step.action.clone(),
         target: step.target.clone(),
         outcome,
         error,
         warning,
         duration_ms: step.duration_ms,
+        retries: step.retry_count,
+        substeps: step.substeps.clone(),
     }
 }
 
@@ -172,37 +182,61 @@ mod tests {
 
     fn success_step(action: &str, target: &str, ms: u64) -> StepReport {
         StepReport {
+            global_step_index: 0,
+            block_name: String::new(),
+            step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
             outcome: StepOutcome::Success,
             duration_ms: ms,
+            retry_count: 0,
+            screenshot_path: None,
+            substeps: Vec::new(),
         }
     }
 
     fn failed_step(action: &str, target: &str, ms: u64, msg: &str) -> StepReport {
         StepReport {
+            global_step_index: 0,
+            block_name: String::new(),
+            step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
             outcome: StepOutcome::Failed(msg.to_string()),
             duration_ms: ms,
+            retry_count: 0,
+            screenshot_path: None,
+            substeps: Vec::new(),
         }
     }
 
     fn warning_step(action: &str, target: &str, ms: u64, msg: &str) -> StepReport {
         StepReport {
+            global_step_index: 0,
+            block_name: String::new(),
+            step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
             outcome: StepOutcome::Warning(msg.to_string()),
             duration_ms: ms,
+            retry_count: 0,
+            screenshot_path: None,
+            substeps: Vec::new(),
         }
     }
 
     fn skipped_step(action: &str, target: &str) -> StepReport {
         StepReport {
+            global_step_index: 0,
+            block_name: String::new(),
+            step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
             outcome: StepOutcome::Skipped,
             duration_ms: 0,
+            retry_count: 0,
+            screenshot_path: None,
+            substeps: Vec::new(),
         }
     }
 

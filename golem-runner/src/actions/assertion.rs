@@ -3,11 +3,12 @@ use golem_driver::PlatformDriver;
 use golem_element::glob::glob_match;
 use golem_parser::Step;
 
+use crate::context::ExecutionContext;
 use crate::resolution::{poll_for_absence, resolve_element};
 
 /// Assert that an element matching the step's selectors exists in the hierarchy.
-pub(crate) async fn handle_assert_visible(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    resolve_element(step, driver).await?;
+pub(crate) async fn handle_assert_visible(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
+    resolve_element(step, driver, ctx.emitter).await?;
     Ok(())
 }
 
@@ -47,8 +48,10 @@ pub(crate) async fn handle_assert_alert(step: &Step, driver: &dyn PlatformDriver
 mod tests {
     use super::*;
     use crate::actions::test_helpers::*;
+    use crate::context::test_ctx;
     use golem_driver::MockPlatformDriver;
     use golem_element::Bounds;
+    use std::path::Path;
 
     // ── assert_visible succeeds when element exists ─────────────────
 
@@ -60,7 +63,8 @@ mod tests {
         let mut step = make_step("assert_visible");
         step.on_text = Some("Welcome".to_string());
 
-        handle_assert_visible(&step, &driver)
+        let ctx = test_ctx(Path::new("."));
+        handle_assert_visible(&step, &driver, &ctx)
             .await
             .expect("assert_visible should succeed when element exists");
     }
@@ -75,7 +79,8 @@ mod tests {
         let mut step = make_step("assert_visible");
         step.on_text = Some("Nonexistent".to_string());
 
-        let result = handle_assert_visible(&step, &driver).await;
+        let ctx = test_ctx(Path::new("."));
+        let result = handle_assert_visible(&step, &driver, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -133,7 +138,8 @@ mod tests {
         let mut step = make_step("assert_visible");
         step.on_text = Some("$42.00".to_string());
 
-        handle_assert_visible(&step, &driver)
+        let ctx = test_ctx(Path::new("."));
+        handle_assert_visible(&step, &driver, &ctx)
             .await
             .expect("assert_visible SHALL succeed when text matches");
     }
@@ -153,7 +159,8 @@ mod tests {
         let mut step = make_step("assert_visible");
         step.on_text = Some("$42.00".to_string());
 
-        let result = handle_assert_visible(&step, &driver).await;
+        let ctx = test_ctx(Path::new("."));
+        let result = handle_assert_visible(&step, &driver, &ctx).await;
         assert!(result.is_err(), "assert_visible SHALL fail when text does not match");
     }
 
@@ -171,7 +178,8 @@ mod tests {
         step.on_text = Some("Submit".to_string());
         step.on_enabled = Some(true);
 
-        handle_assert_visible(&step, &driver)
+        let ctx = test_ctx(Path::new("."));
+        handle_assert_visible(&step, &driver, &ctx)
             .await
             .expect("assert_visible SHALL succeed when element is enabled");
     }
@@ -190,7 +198,8 @@ mod tests {
         step.on_text = Some("Submit".to_string());
         step.on_enabled = Some(true);
 
-        let result = handle_assert_visible(&step, &driver).await;
+        let ctx = test_ctx(Path::new("."));
+        let result = handle_assert_visible(&step, &driver, &ctx).await;
         assert!(result.is_err(), "assert_visible SHALL fail when element is disabled");
     }
 

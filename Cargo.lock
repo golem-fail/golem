@@ -491,6 +491,7 @@ dependencies = [
  "golem-driver",
  "golem-element",
  "golem-email",
+ "golem-events",
  "golem-parser",
  "golem-report",
  "golem-runner",
@@ -556,6 +557,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "golem-events"
+version = "0.5.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "golem-parser"
 version = "0.5.1"
 dependencies = [
@@ -572,9 +582,11 @@ version = "0.5.1"
 dependencies = [
  "anyhow",
  "chrono",
+ "golem-events",
  "serde",
  "serde_json",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -587,6 +599,7 @@ dependencies = [
  "golem-driver",
  "golem-element",
  "golem-email",
+ "golem-events",
  "golem-parser",
  "golem-report",
  "golem-vars",

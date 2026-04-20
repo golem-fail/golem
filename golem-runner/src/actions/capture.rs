@@ -3,6 +3,7 @@ use golem_driver::PlatformDriver;
 use golem_parser::Step;
 use golem_vars::{ScopeLevel, VarValue, VariableStore};
 
+use crate::context::ExecutionContext;
 use crate::resolution::resolve_element;
 
 /// Find the target element, read its text content, and optionally save it
@@ -11,8 +12,9 @@ pub(crate) async fn handle_read(
     step: &Step,
     driver: &dyn PlatformDriver,
     vars: &mut VariableStore,
+    ctx: &ExecutionContext<'_>,
 ) -> Result<()> {
-    let (elem, _coords) = resolve_element(step, driver).await?;
+    let (elem, _coords) = resolve_element(step, driver, ctx.emitter).await?;
 
     let text = elem.text.unwrap_or_default();
 
@@ -48,7 +50,8 @@ mod tests {
         step.on_accessibility_label = Some("otp-code".to_string());
         step.save_to = Some("otp".to_string());
 
-        handle_read(&step, &driver, &mut vars)
+        let ctx = crate::context::test_ctx(std::path::Path::new("."));
+        handle_read(&step, &driver, &mut vars, &ctx)
             .await
             .expect("read should succeed");
 
@@ -74,7 +77,8 @@ mod tests {
         step.on_accessibility_label = Some("info".to_string());
         // No save_to set
 
-        handle_read(&step, &driver, &mut vars)
+        let ctx = crate::context::test_ctx(std::path::Path::new("."));
+        handle_read(&step, &driver, &mut vars, &ctx)
             .await
             .expect("read without save_to should succeed");
     }

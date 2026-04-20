@@ -30,6 +30,7 @@ fn test_ctx() -> ExecutionContext<'static> {
         device: None,
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
+        emitter: None,
     }
 }
 
@@ -940,6 +941,7 @@ steps = [
         device: None,
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
+        emitter: None,
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -993,6 +995,7 @@ steps = [
         device: None,
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
+        emitter: None,
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -1046,6 +1049,7 @@ steps = [
         device: None,
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
+        emitter: None,
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -1099,6 +1103,7 @@ steps = [
         device: None,
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
+        emitter: None,
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -1152,6 +1157,7 @@ steps = [
         device: None,
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
+        emitter: None,
     };
 
     let _result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
@@ -1221,6 +1227,7 @@ steps = [
         device: None,
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
+        emitter: None,
     };
 
     let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)

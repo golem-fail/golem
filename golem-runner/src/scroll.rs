@@ -270,6 +270,7 @@ pub async fn scroll_to_element(
     max_scrolls: u32,
     timeout_ms: Option<u64>,
     container: Option<golem_element::Bounds>,
+    emitter: Option<&golem_events::emitter::DeviceEmitter>,
 ) -> Result<FindResult> {
     // Step 1: Check current viewport before any scrolling.
     let (mut root, meta) = wait_for_settle(driver).await?;
@@ -284,21 +285,23 @@ pub async fn scroll_to_element(
         return Ok(found);
     }
 
-    let verbose = crate::is_verbose();
     let sel_label = selector.text.as_deref()
         .or(selector.accessibility_label.as_deref())
         .map(|s| s.to_string())
         .unwrap_or_else(|| {
-            // For relational selectors (right_of, below, etc.), show the anchor
             if let Some(ref a) = selector.right_of { return format!("right_of:{a:?}"); }
             if let Some(ref a) = selector.below { return format!("below:{a:?}"); }
             if let Some(ref a) = selector.above { return format!("above:{a:?}"); }
             if let Some(ref a) = selector.left_of { return format!("left_of:{a:?}"); }
             "?".to_string()
         });
-    if verbose {
-        eprintln!("    [scroll] searching for \"{sel_label}\" direction={initial_direction:?}");
+    if let Some(e) = emitter {
+        e.substep(golem_events::SubstepEvent::ScrollStarted {
+            selector: sel_label.clone(),
+            direction: format!("{initial_direction:?}"),
+        });
     }
+    let mut scroll_attempt: u32 = 0;
 
     let mut direction = initial_direction;
     let mut reversed = false;
@@ -370,10 +373,7 @@ pub async fn scroll_to_element(
             )
         };
 
-        if verbose {
-            let src = if container.is_some() { "container" } else { &format!("strategy {}", strategy_idx + 1) };
-            eprintln!("    [scroll] {src} {direction:?}: swipe ({fx},{fy})→({tx},{ty})");
-        }
+        scroll_attempt += 1;
         driver.swipe_coords(fx, fy, tx, ty).await?;
 
         // Check result
@@ -385,8 +385,12 @@ pub async fn scroll_to_element(
         let visible = filter_viewport(&root, &safe_vp);
         let results = find_elements(&visible, selector);
         if let Some(found) = results.into_iter().next() {
-            if verbose {
-                eprintln!("    [scroll] found \"{sel_label}\" at ({},{})", found.tap_x, found.tap_y);
+            if let Some(e) = emitter {
+                e.substep(golem_events::SubstepEvent::ScrollFound {
+                    selector: sel_label.clone(),
+                    position: golem_events::Point { x: found.tap_x, y: found.tap_y },
+                    total_attempts: scroll_attempt,
+                });
             }
             return Ok(found);
         }
@@ -396,9 +400,15 @@ pub async fn scroll_to_element(
         let new_horizon_fp = horizon_fingerprint(&root, &vp);
 
         if new_horizon_fp != prev_horizon_fp {
-            // Page scrolled — this strategy works. Reset stall counter.
-            if verbose {
-                eprintln!("    [scroll] horizon changed → page scrolled");
+            if let Some(e) = emitter {
+                e.substep(golem_events::SubstepEvent::ScrollAttempt {
+                    attempt: scroll_attempt,
+                    direction: format!("{direction:?}"),
+                    strategy_index: strategy_idx,
+                    from: golem_events::Point { x: fx, y: fy },
+                    to: golem_events::Point { x: tx, y: ty },
+                    result: golem_events::ScrollAttemptResult::PageScrolled,
+                });
             }
             prev_full_fp = new_full_fp;
             prev_horizon_fp = new_horizon_fp;
@@ -407,40 +417,52 @@ pub async fn scroll_to_element(
         }
 
         if new_full_fp != prev_full_fp {
-            // Horizon unchanged but full changed: inner scrollable consumed
-            // the gesture. Try next strategy.
             prev_full_fp = new_full_fp;
-            // Don't update prev_horizon_fp — it didn't change.
             if container.is_none() && strategy_idx + 1 < strategies.len() {
                 strategy_idx += 1;
-                if verbose {
-                    eprintln!("    [scroll] inner scrollable detected → switching to strategy {}", strategy_idx + 1);
+                if let Some(e) = emitter {
+                    e.substep(golem_events::SubstepEvent::ScrollStrategySwitch {
+                        to_index: strategy_idx,
+                        reason: "inner scrollable consumed gesture".to_string(),
+                    });
                 }
                 continue;
             }
-            if verbose {
-                eprintln!("    [scroll] inner scrollable detected, no more strategies");
+            if let Some(e) = emitter {
+                e.substep(golem_events::SubstepEvent::ScrollAttempt {
+                    attempt: scroll_attempt,
+                    direction: format!("{direction:?}"),
+                    strategy_index: strategy_idx,
+                    from: golem_events::Point { x: fx, y: fy },
+                    to: golem_events::Point { x: tx, y: ty },
+                    result: golem_events::ScrollAttemptResult::InnerScrollableDetected,
+                });
             }
-            // No more strategies (or container mode) — count as stall
         }
 
-        // Both unchanged (or strategies exhausted): possible boundary.
-        // Allow stall retries for dynamic content loading.
         stall_count += 1;
         let max_stalls = stall_retries_for(direction);
         if stall_count <= max_stalls {
-            if verbose {
-                eprintln!("    [scroll] stall {stall_count}/{max_stalls} — retrying for dynamic content");
+            if let Some(e) = emitter {
+                e.substep(golem_events::SubstepEvent::ScrollAttempt {
+                    attempt: scroll_attempt,
+                    direction: format!("{direction:?}"),
+                    strategy_index: strategy_idx,
+                    from: golem_events::Point { x: fx, y: fy },
+                    to: golem_events::Point { x: tx, y: ty },
+                    result: golem_events::ScrollAttemptResult::Stall { count: stall_count, max: max_stalls },
+                });
             }
             continue;
         }
 
         // Stall limit reached. Reverse direction.
         if reversed {
-            // Already reversed once. Reset strategy and stall state, keep going.
-            // Don't bail — let timeout or max_scrolls be the termination condition.
-            if verbose {
-                eprintln!("    [scroll] boundary hit again → cycling direction");
+            if let Some(e) = emitter {
+                e.substep(golem_events::SubstepEvent::ScrollDirectionReversed {
+                    to_direction: format!("{:?}", reverse_direction(direction)),
+                    reason: "boundary hit again, cycling".to_string(),
+                });
             }
             strategy_idx = 0;
             stall_count = 0;
@@ -473,8 +495,11 @@ pub async fn scroll_to_element(
         reversed = true;
         stall_count = 0;
         strategy_idx = 0;
-        if verbose {
-            eprintln!("    [scroll] boundary reached → reversing to {direction:?}");
+        if let Some(e) = emitter {
+            e.substep(golem_events::SubstepEvent::ScrollDirectionReversed {
+                to_direction: format!("{direction:?}"),
+                reason: "boundary reached".to_string(),
+            });
         }
         strategies = swipe_strategies(&viewport, direction);
         if let Some(ref cb) = container {
@@ -698,7 +723,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
         let selector = sel_with_text("Target");
 
-        let result = scroll_to_element(&selector, &driver, Direction::Down, 20, None, None)
+        let result = scroll_to_element(&selector, &driver, Direction::Down, 20, None, None, None)
             .await
             .expect("should find element without scrolling");
 
@@ -725,7 +750,7 @@ mod tests {
         let driver = SequenceMockDriver::new(vec![hierarchy_1, hierarchy_2]);
         let selector = sel_with_text("Target");
 
-        let result = scroll_to_element(&selector, &driver, Direction::Down, 20, None, None)
+        let result = scroll_to_element(&selector, &driver, Direction::Down, 20, None, None, None)
             .await
             .expect("should find element after one scroll");
 
@@ -750,7 +775,7 @@ mod tests {
         let driver = SequenceMockDriver::new(hierarchies);
         let selector = sel_with_text("Nonexistent");
 
-        let result = scroll_to_element(&selector, &driver, Direction::Down, 5, None, None).await;
+        let result = scroll_to_element(&selector, &driver, Direction::Down, 5, None, None, None).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -783,7 +808,7 @@ mod tests {
         let driver = SequenceMockDriver::new(seq);
         let selector = sel_with_text("Nonexistent");
 
-        let _ = scroll_to_element(&selector, &driver, Direction::Down, 30, None, None).await;
+        let _ = scroll_to_element(&selector, &driver, Direction::Down, 30, None, None, None).await;
 
         let swipe_calls: Vec<_> = driver.get_calls().into_iter().filter(|(m, _)| m == "swipe_coords").collect();
         let directions: Vec<&str> = swipe_calls.iter().map(|c| scroll_intent(&c.1)).collect();
@@ -820,7 +845,7 @@ mod tests {
         let driver = SequenceMockDriver::new(seq);
         let selector = sel_with_text("Target");
 
-        let result = scroll_to_element(&selector, &driver, Direction::Down, 30, None, None)
+        let result = scroll_to_element(&selector, &driver, Direction::Down, 30, None, None, None)
             .await
             .expect("should find element after direction reversal");
 
@@ -849,7 +874,7 @@ mod tests {
         let driver = SequenceMockDriver::new(hierarchies);
         let selector = sel_with_text("Missing");
 
-        let result = scroll_to_element(&selector, &driver, Direction::Down, 3, None, None).await;
+        let result = scroll_to_element(&selector, &driver, Direction::Down, 3, None, None, None).await;
         assert!(result.is_err());
         let err = result.expect_err("should error");
         let msg = format!("{err}");
@@ -867,7 +892,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
         let selector = sel_with_text("Anything");
 
-        let result = scroll_to_element(&selector, &driver, Direction::Down, 3, None, None).await;
+        let result = scroll_to_element(&selector, &driver, Direction::Down, 3, None, None, None).await;
         assert!(result.is_err());
     }
 
@@ -888,7 +913,7 @@ mod tests {
         let driver = SequenceMockDriver::new(vec![hierarchy_1, hierarchy_2]);
         let selector = sel_with_text("Found");
 
-        scroll_to_element(&selector, &driver, direction, 20, None, None)
+        scroll_to_element(&selector, &driver, direction, 20, None, None, None)
             .await
             .expect("should find element");
 
@@ -926,7 +951,7 @@ mod tests {
         let driver = SequenceMockDriver::new(hierarchies);
         let selector = sel_with_text("Nonexistent");
 
-        let result = scroll_to_element(&selector, &driver, Direction::Down, DEFAULT_MAX_SCROLLS, None, None).await;
+        let result = scroll_to_element(&selector, &driver, Direction::Down, DEFAULT_MAX_SCROLLS, None, None, None).await;
         assert!(result.is_err());
 
         let swipe_calls: Vec<_> = driver.get_calls().into_iter().filter(|(m, _)| m == "swipe_coords").collect();
@@ -953,7 +978,7 @@ mod tests {
         let driver = SequenceMockDriver::new(hierarchies);
         let selector = sel_with_text("Target");
 
-        let result = scroll_to_element(&selector, &driver, Direction::Down, max_scrolls, None, None)
+        let result = scroll_to_element(&selector, &driver, Direction::Down, max_scrolls, None, None, None)
             .await
             .expect("should find element on last scroll");
 

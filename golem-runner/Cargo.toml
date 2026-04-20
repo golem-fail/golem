@@ -11,6 +11,7 @@ golem-vars = { path = "../golem-vars" }
 golem-devices = { path = "../golem-devices" }
 golem-report = { path = "../golem-report" }
 golem-email = { path = "../golem-email" }
+golem-events = { path = "../golem-events" }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 toml = { workspace = true }

@@ -34,6 +34,7 @@ fn test_ctx() -> ExecutionContext<'static> {
         device: None,
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
+        emitter: None,
     }
 }
 

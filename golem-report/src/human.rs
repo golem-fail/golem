@@ -217,37 +217,61 @@ mod tests {
 
     fn success_step(action: &str, target: &str, ms: u64) -> StepReport {
         StepReport {
+            global_step_index: 0,
+            block_name: String::new(),
+            step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
             outcome: StepOutcome::Success,
             duration_ms: ms,
+            retry_count: 0,
+            screenshot_path: None,
+            substeps: vec![],
         }
     }
 
     fn failed_step(action: &str, target: &str, ms: u64, msg: &str) -> StepReport {
         StepReport {
+            global_step_index: 0,
+            block_name: String::new(),
+            step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
             outcome: StepOutcome::Failed(msg.to_string()),
             duration_ms: ms,
+            retry_count: 0,
+            screenshot_path: None,
+            substeps: vec![],
         }
     }
 
     fn warning_step(action: &str, target: &str, ms: u64, msg: &str) -> StepReport {
         StepReport {
+            global_step_index: 0,
+            block_name: String::new(),
+            step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
             outcome: StepOutcome::Warning(msg.to_string()),
             duration_ms: ms,
+            retry_count: 0,
+            screenshot_path: None,
+            substeps: vec![],
         }
     }
 
     fn skipped_step(action: &str, target: &str) -> StepReport {
         StepReport {
+            global_step_index: 0,
+            block_name: String::new(),
+            step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
             outcome: StepOutcome::Skipped,
             duration_ms: 0,
+            retry_count: 0,
+            screenshot_path: None,
+            substeps: vec![],
         }
     }
 

@@ -30,6 +30,10 @@ pub struct SuiteConfig {
     pub platform: Option<Platform>,
     /// Disable automatic performance capture.
     pub no_perf: bool,
+    /// Show substep detail in human output.
+    pub verbose: bool,
+    /// Whether to stream human-readable output to stderr.
+    pub stream_human: bool,
 }
 
 /// Orchestrates the execution of a suite of test flows.
@@ -284,6 +288,34 @@ impl SuiteRunner {
         // Track allocated device UDIDs for release after execution.
         let allocated_udids: Vec<String> = device_setups.iter().map(|(d, _, _)| d.udid.clone()).collect();
 
+        // Create event channel for structured output.
+        let (event_tx, event_rx) = golem_events::channel::event_channel();
+        let multi_device = device_setups.len() > 1;
+        let verbose = self.config.verbose;
+
+        // Spawn real-time human renderer (only when human output requested).
+        let human_handle = if self.config.stream_human {
+            let human_rx = event_rx.subscribe();
+            Some(tokio::spawn(async move {
+                golem_report::stream::stream_human(human_rx, verbose, multi_device).await;
+            }))
+        } else {
+            None
+        };
+
+        // Spawn accumulator for structured report collection.
+        let accumulator = std::sync::Arc::new(tokio::sync::Mutex::new(
+            golem_report::accumulator::ReportAccumulator::new(),
+        ));
+        let acc_clone = accumulator.clone();
+        let acc_rx = event_rx.subscribe();
+        let acc_handle = tokio::spawn(async move {
+            golem_report::accumulator::accumulate_events(acc_rx, &acc_clone).await;
+        });
+
+        // Drop the receiver factory — its internal Sender keeps the channel alive.
+        drop(event_rx);
+
         // Spawn parallel execution tasks — one per device.
         // Shared failure barrier: when one device fails, others stop at the same step.
         let barrier = golem_runner::barrier::FailureBarrier::new();
@@ -295,9 +327,10 @@ impl SuiteRunner {
             let seed = self.config.seed;
             let barrier = barrier.clone();
             let no_perf = self.config.no_perf;
+            let tx = event_tx.clone();
 
             handles.push(tokio::spawn(async move {
-                run_flow_on_device(flow, flow_name, flow_dir, device, platform, port, seed, barrier, no_perf).await
+                run_flow_on_device(flow, flow_name, flow_dir, device, platform, port, seed, barrier, no_perf, Some(tx)).await
             }));
         }
 
@@ -318,6 +351,48 @@ impl SuiteRunner {
                         device_name: None,
                         perf_snapshots: vec![],
                     });
+                }
+            }
+        }
+
+        // Close channel and wait for consumers to finish.
+        drop(event_tx);
+        if let Some(h) = human_handle { let _ = h.await; }
+        let _ = acc_handle.await;
+
+        // Merge step data from accumulator into flow reports.
+        let acc_report = {
+            let taken = std::mem::replace(
+                &mut *accumulator.lock().await,
+                golem_report::accumulator::ReportAccumulator::new(),
+            );
+            taken.into_suite_report()
+        };
+        for report in &mut reports {
+            if let Some(acc_flow) = acc_report.flows.iter().find(|f| {
+                f.device_name.as_deref() == report.device_name.as_deref()
+                    && f.flow_name == report.flow_name
+            }) {
+                if report.step_results.is_empty() && !acc_flow.step_results.is_empty() {
+                    report.step_results = acc_flow.step_results.iter().map(|s| {
+                        golem_report::StepReport {
+                            global_step_index: s.global_step_index,
+                            block_name: s.block_name.clone(),
+                            step_index_in_block: s.step_index_in_block,
+                            action: s.action.clone(),
+                            target: s.target.clone(),
+                            outcome: match &s.outcome {
+                                golem_report::StepOutcome::Success => golem_report::StepOutcome::Success,
+                                golem_report::StepOutcome::Warning(m) => golem_report::StepOutcome::Warning(m.clone()),
+                                golem_report::StepOutcome::Failed(m) => golem_report::StepOutcome::Failed(m.clone()),
+                                golem_report::StepOutcome::Skipped => golem_report::StepOutcome::Skipped,
+                            },
+                            duration_ms: s.duration_ms,
+                            retry_count: s.retry_count,
+                            screenshot_path: s.screenshot_path.clone(),
+                            substeps: s.substeps.clone(),
+                        }
+                    }).collect();
                 }
             }
         }
@@ -728,6 +803,7 @@ async fn run_flow_on_device(
     seed: Option<u64>,
     barrier: golem_runner::barrier::FailureBarrier,
     no_perf: bool,
+    event_sender: Option<golem_events::channel::EventSender>,
 ) -> FlowReport {
     let start = Instant::now();
     let device_name = device.name.clone();
@@ -769,6 +845,12 @@ async fn run_flow_on_device(
 
     let mut vars = VariableStore::new();
     let capture_config = CaptureConfig::default();
+    let device_emitter = event_sender.map(|sender| {
+        golem_events::emitter::DeviceEmitter::new(
+            sender,
+            golem_events::DeviceId(device_label.clone()),
+        )
+    });
     let mut ctx = ExecutionContext {
         flow_dir: &flow_dir,
         project_root: &flow_dir,
@@ -779,9 +861,10 @@ async fn run_flow_on_device(
         device: Some(&device),
         perf_collector: collector.as_ref(),
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
+        emitter: device_emitter.as_ref(),
     };
 
-    eprintln!("  Executing on {device_label}");
+    ctx.emit(golem_events::EventKind::FlowStarted { flow_name: flow_name.clone() });
     match execute_flow(&flow, driver.as_ref(), &mut vars, None, 10_000, &mut ctx, Some(&barrier)).await {
         Ok(result) => {
             if !result.success {
@@ -804,12 +887,18 @@ async fn run_flow_on_device(
             for w in &result.warnings {
                 eprintln!("  [{device_label}] Warning: {w}");
             }
+            let duration_ms = start.elapsed().as_millis() as u64;
+            ctx.emit(golem_events::EventKind::FlowFinished {
+                flow_name: flow_name.clone(),
+                success: result.success,
+                duration_ms,
+            });
             FlowReport {
                 flow_name,
                 success: result.success,
                 step_results: Vec::new(),
                 warnings: result.warnings,
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms,
                 seed,
                 screenshot_path: None,
                 device_name: Some(device_label),
@@ -818,12 +907,18 @@ async fn run_flow_on_device(
         }
         Err(e) => {
             eprintln!("  [{device_label}] Error: {e:#}");
+            let duration_ms = start.elapsed().as_millis() as u64;
+            ctx.emit(golem_events::EventKind::FlowFinished {
+                flow_name: flow_name.clone(),
+                success: false,
+                duration_ms,
+            });
             FlowReport {
                 flow_name,
                 success: false,
                 step_results: Vec::new(),
                 warnings: vec![format!("Execution error: {e}")],
-                duration_ms: start.elapsed().as_millis() as u64,
+                duration_ms,
                 seed,
                 screenshot_path: None,
                 device_name: Some(device_label),

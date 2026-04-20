@@ -5,8 +5,9 @@ use golem_driver::{Direction, PlatformDriver};
 use golem_parser::Step;
 use tokio::time::{sleep, Instant};
 
+use crate::context::ExecutionContext;
 use crate::resolution::{build_selector, resolve_element, wait_for_settle};
-use crate::scroll::{scroll_to_element, DEFAULT_MAX_SCROLLS};
+use crate::scroll::DEFAULT_MAX_SCROLLS;
 
 
 /// Minimum delay after a tap to prevent the OS interpreting sequential taps
@@ -94,8 +95,8 @@ fn collect_toggles(element: &golem_element::Element, out: &mut Vec<golem_element
 ///
 /// After tapping, waits for the UI to settle so the next step sees
 /// a stable hierarchy.
-pub(crate) async fn handle_tap(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let (elem, coords) = resolve_element(step, driver).await?;
+pub(crate) async fn handle_tap(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
+    let (elem, coords) = resolve_element(step, driver, ctx.emitter).await?;
 
     // Workaround: iOS SwiftUI Toggles render as a full-width row with the
     // tappable switch control on the right. Tapping the row center hits the
@@ -116,6 +117,13 @@ pub(crate) async fn handle_tap(step: &Step, driver: &dyn PlatformDriver) -> Resu
         }
     };
 
+    ctx.substep(golem_events::SubstepEvent::Tap {
+        point: golem_events::Point { x, y },
+        element_bounds: Some(golem_events::Rect {
+            x: elem.bounds.x, y: elem.bounds.y,
+            width: elem.bounds.width, height: elem.bounds.height,
+        }),
+    });
     tap_at(driver, x, y).await?;
     sleep(TAP_COOLDOWN).await;
     let _ = wait_for_settle(driver).await;
@@ -124,8 +132,12 @@ pub(crate) async fn handle_tap(step: &Step, driver: &dyn PlatformDriver) -> Resu
 
 /// Find the target element and double-tap at its center coordinates.
 /// Two taps are fired with 40ms between the start of each.
-pub(crate) async fn handle_double_tap(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let (_elem, (x, y)) = resolve_element(step, driver).await?;
+pub(crate) async fn handle_double_tap(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
+    let (_elem, (x, y)) = resolve_element(step, driver, ctx.emitter).await?;
+    ctx.substep(golem_events::SubstepEvent::DoubleTap {
+        point: golem_events::Point { x, y },
+        element_bounds: None,
+    });
     let start = Instant::now();
     tap_at(driver, x, y).await?;
     let elapsed = start.elapsed();
@@ -142,8 +154,8 @@ pub(crate) async fn handle_double_tap(step: &Step, driver: &dyn PlatformDriver) 
 ///
 /// The `input` field holds the string to type. The `text` field (and other
 /// selectors) identify which element to type into.
-pub(crate) async fn handle_type(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let (_elem, (x, y)) = resolve_element(step, driver).await?;
+pub(crate) async fn handle_type(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
+    let (_elem, (x, y)) = resolve_element(step, driver, ctx.emitter).await?;
     driver.tap(x, y).await?;
 
     let value = step
@@ -151,6 +163,10 @@ pub(crate) async fn handle_type(step: &Step, driver: &dyn PlatformDriver) -> Res
         .as_deref()
         .or(step.on_text.as_deref())
         .unwrap_or("");
+    ctx.substep(golem_events::SubstepEvent::TextInput {
+        text: value.to_string(),
+        field_bounds: None,
+    });
     driver.type_text(value).await?;
     let _ = wait_for_settle(driver).await;
     Ok(())
@@ -158,8 +174,8 @@ pub(crate) async fn handle_type(step: &Step, driver: &dyn PlatformDriver) -> Res
 
 /// Find the target element, tap it to focus, then send backspace key presses.
 /// `count` defaults to 1 if not specified in `step.params`.
-pub(crate) async fn handle_backspace(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let (_elem, (x, y)) = resolve_element(step, driver).await?;
+pub(crate) async fn handle_backspace(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
+    let (_elem, (x, y)) = resolve_element(step, driver, ctx.emitter).await?;
     driver.tap(x, y).await?;
 
     let count = step
@@ -176,8 +192,8 @@ pub(crate) async fn handle_backspace(step: &Step, driver: &dyn PlatformDriver) -
 
 /// Find the target element and long press at its center coordinates.
 /// `duration` in ms, defaults to 1000 if not specified in `step.params`.
-pub(crate) async fn handle_long_press(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let (_elem, (x, y)) = resolve_element(step, driver).await?;
+pub(crate) async fn handle_long_press(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
+    let (_elem, (x, y)) = resolve_element(step, driver, ctx.emitter).await?;
 
     let duration = step
         .params
@@ -193,7 +209,7 @@ pub(crate) async fn handle_long_press(step: &Step, driver: &dyn PlatformDriver) 
 
 /// Swipe in a direction. May optionally target a specific element (ignored for
 /// the swipe call itself, but element resolution validates the element exists).
-pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
     let (root, meta) = driver.get_hierarchy().await?;
     let mut vp = golem_element::Viewport::from_root(&root);
     if meta.keyboard_height > 0 { vp.height -= meta.keyboard_height; }
@@ -288,6 +304,11 @@ pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver) -> Re
     }
 
     // Execute the swipe
+    ctx.substep(golem_events::SubstepEvent::Swipe {
+        from: golem_events::Point { x: points[0].0, y: points[0].1 },
+        to: golem_events::Point { x: points.last().map_or(0, |p| p.0), y: points.last().map_or(0, |p| p.1) },
+        duration_ms: None,
+    });
     if points.len() == 2 {
         driver.swipe_coords(points[0].0, points[0].1, points[1].0, points[1].1).await?;
     } else {
@@ -308,7 +329,7 @@ pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver) -> Re
 /// Params:
 /// - `direction`: up/down/left/right (default "down")
 /// - `max_scrolls`: optional, defaults to `DEFAULT_MAX_SCROLLS`
-pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
     let direction_str = step
         .params
         .get("direction")
@@ -357,7 +378,7 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver) -> R
             // Container not visible — scroll to bring it into view
             let _ = crate::scroll::scroll_to_element(
                 &within_sel, driver, golem_driver::Direction::Down,
-                crate::scroll::DEFAULT_MAX_SCROLLS, None, None,
+                crate::scroll::DEFAULT_MAX_SCROLLS, None, None, ctx.emitter,
             ).await;
             // Nudge to get more of the container visible
             let (fresh, fresh_meta) = driver.get_hierarchy().await?;
@@ -386,9 +407,9 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver) -> R
         None
     };
 
-    scroll_to_element(
+    crate::scroll::scroll_to_element(
         &selector, driver, direction, max_scrolls,
-        step.scroll_timeout, container_bounds,
+        step.scroll_timeout, container_bounds, ctx.emitter,
     ).await?;
     Ok(())
 }
@@ -590,7 +611,8 @@ mod tests {
         let mut step = make_step("tap");
         step.on_text = Some("Submit".to_string());
 
-        handle_tap(&step, &driver)
+        let ctx = test_ctx(Path::new("."));
+        handle_tap(&step, &driver, &ctx)
             .await
             .expect("tap should succeed");
 
@@ -612,7 +634,8 @@ mod tests {
         let mut step = make_step("doubleTap");
         step.on_text = Some("Submit".to_string());
 
-        handle_double_tap(&step, &driver)
+        let ctx = test_ctx(Path::new("."));
+        handle_double_tap(&step, &driver, &ctx)
             .await
             .expect("doubleTap SHALL succeed");
 
@@ -635,7 +658,8 @@ mod tests {
         step.on_accessibility_label = Some("email".to_string());
         step.input = Some("user@example.com".to_string());
 
-        handle_type(&step, &driver)
+        let ctx = test_ctx(Path::new("."));
+        handle_type(&step, &driver, &ctx)
             .await
             .expect("type should succeed");
 
@@ -663,7 +687,8 @@ mod tests {
         step.params
             .insert("count".to_string(), toml::Value::Integer(5));
 
-        handle_backspace(&step, &driver)
+        let ctx = test_ctx(Path::new("."));
+        handle_backspace(&step, &driver, &ctx)
             .await
             .expect("backspace should succeed");
 
@@ -685,7 +710,8 @@ mod tests {
         step.params
             .insert("duration".to_string(), toml::Value::Integer(2000));
 
-        handle_long_press(&step, &driver)
+        let ctx = test_ctx(Path::new("."));
+        handle_long_press(&step, &driver, &ctx)
             .await
             .expect("long_press should succeed");
 
@@ -707,7 +733,8 @@ mod tests {
         step.params
             .insert("direction".to_string(), toml::Value::String("up".to_string()));
 
-        handle_swipe(&step, &driver)
+        let ctx = test_ctx(Path::new("."));
+        handle_swipe(&step, &driver, &ctx)
             .await
             .expect("swipe should succeed");
 
@@ -747,7 +774,8 @@ mod tests {
         step.on_accessibility_label = Some("field".to_string());
         // No count param set
 
-        handle_backspace(&step, &driver)
+        let ctx = test_ctx(Path::new("."));
+        handle_backspace(&step, &driver, &ctx)
             .await
             .expect("backspace should succeed");
 
@@ -768,7 +796,8 @@ mod tests {
         step.on_text = Some("Hold me".to_string());
         // No duration param set
 
-        handle_long_press(&step, &driver)
+        let ctx = test_ctx(Path::new("."));
+        handle_long_press(&step, &driver, &ctx)
             .await
             .expect("long_press should succeed");
 
@@ -793,7 +822,8 @@ mod tests {
                 toml::Value::String(dir_str.to_string()),
             );
 
-            handle_swipe(&step, &driver)
+            let ctx = test_ctx(Path::new("."));
+        handle_swipe(&step, &driver, &ctx)
                 .await
                 .unwrap_or_else(|_| panic!("swipe {dir_str} should succeed"));
 
@@ -816,7 +846,8 @@ mod tests {
             toml::Value::String("diagonal".to_string()),
         );
 
-        let result = handle_swipe(&step, &driver).await;
+        let ctx = test_ctx(Path::new("."));
+        let result = handle_swipe(&step, &driver, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -835,7 +866,8 @@ mod tests {
         let mut step = make_step("tap");
         step.on_text = Some("Does Not Exist".to_string());
 
-        let result = handle_tap(&step, &driver).await;
+        let ctx = test_ctx(Path::new("."));
+        let result = handle_tap(&step, &driver, &ctx).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
@@ -859,7 +891,8 @@ mod tests {
             toml::Value::String("up".to_string()),
         );
 
-        handle_scroll(&step, &driver)
+        let ctx = test_ctx(Path::new("."));
+        handle_scroll(&step, &driver, &ctx)
             .await
             .expect("scroll SHALL succeed when element is already visible");
 
@@ -881,7 +914,8 @@ mod tests {
         step.on_text = Some("Target".to_string());
         // No direction param -- should default to "down"
 
-        handle_scroll(&step, &driver)
+        let ctx = test_ctx(Path::new("."));
+        handle_scroll(&step, &driver, &ctx)
             .await
             .expect("scroll SHALL succeed with default direction");
     }
@@ -899,7 +933,8 @@ mod tests {
             toml::Value::Integer(2),
         );
 
-        let result = handle_scroll(&step, &driver).await;
+        let ctx = test_ctx(Path::new("."));
+        let result = handle_scroll(&step, &driver, &ctx).await;
         assert!(result.is_err(), "scroll SHALL fail when element not found");
     }
 

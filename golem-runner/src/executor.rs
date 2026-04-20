@@ -13,9 +13,10 @@ use crate::context::ExecutionContext;
 use crate::perf::RawPerfData;
 use crate::policy::{execute_step_with_policy, StepOutcome};
 
-/// Build a human-readable label for a step, e.g. `tap on_text="Submit"` or `launch app="app"`.
-fn step_label(step: &golem_parser::Step) -> String {
-    let mut parts = vec![step.action.clone()];
+/// Build a target label for a step (excludes action name).
+/// E.g. `on_text="Submit"` or `app="app"`.
+fn step_target(step: &golem_parser::Step) -> String {
+    let mut parts = Vec::new();
     if let Some(ref t) = step.on_text { parts.push(format!("on_text=\"{t}\"")); }
     if let Some(ref a) = step.on_accessibility_label { parts.push(format!("on_accessibility_label=\"{a}\"")); }
     if let Some(ref g) = step.on {
@@ -126,6 +127,7 @@ pub async fn execute_flow<'a>(
 
     let mut warnings = Vec::new();
     let mut perf_snapshots: Vec<PerfSnapshot> = Vec::new();
+    let mut block_iterations: HashMap<usize, u32> = HashMap::new();
     let perf_enabled = flow
         .flow
         .options
@@ -186,6 +188,7 @@ pub async fn execute_flow<'a>(
                 device: ctx.device,
                 perf_collector: ctx.perf_collector,
                 last_launch_ms: std::sync::atomic::AtomicU64::new(0),
+                emitter: ctx.emitter,
             };
 
             let child_result = Box::pin(execute_flow(
@@ -236,6 +239,14 @@ pub async fn execute_flow<'a>(
 
         // Execute steps in current block
         ctx.block_name = block.name.as_deref();
+        let iteration = block_iterations.entry(current_idx).or_insert(0);
+        let block_label = block.name.clone().unwrap_or_else(|| format!("block_{current_idx}"));
+        ctx.emit(golem_events::EventKind::BlockStarted {
+            block_name: block_label.clone(),
+            block_index: current_idx,
+            iteration: *iteration,
+        });
+        *iteration += 1;
         for (step_idx, step) in block.steps.iter().enumerate() {
             ctx.step_index = step_idx;
 
@@ -262,32 +273,52 @@ pub async fn execute_flow<'a>(
                 }
             }
 
-            let verbose = crate::is_verbose();
-            if verbose {
-                eprintln!("  [step {step_idx}] {}", step_label(step));
-            }
+            let block_name_str = block.name.clone().unwrap_or_default();
+            ctx.emit(golem_events::EventKind::StepStarted {
+                global_step_index: step_count,
+                block_name: block_name_str.clone(),
+                step_index_in_block: step_idx,
+                action: step.action.clone(),
+                selector_label: step_target(step),
+            });
             let step_start = Instant::now();
             match execute_step_with_policy(step, driver, vars, default_timeout_ms, ctx, &flow.flow.apps).await {
                 Ok(StepOutcome::Success) => {
-                    if verbose {
-                        eprintln!("  [step {step_idx}] ok ({}ms)", step_start.elapsed().as_millis());
-                    }
+                    ctx.emit(golem_events::EventKind::StepFinished {
+                        global_step_index: step_count,
+                        outcome: golem_events::StepOutcome::Success,
+                        duration_ms: step_start.elapsed().as_millis() as u64,
+                        retry_count: 0,
+                        screenshot_path: None,
+                    });
                 }
                 Ok(StepOutcome::Warning(msg)) => {
-                    if verbose {
-                        eprintln!("  [step {step_idx}] warn: {msg} ({}ms)", step_start.elapsed().as_millis());
-                    }
+                    ctx.emit(golem_events::EventKind::StepFinished {
+                        global_step_index: step_count,
+                        outcome: golem_events::StepOutcome::Warning(msg.clone()),
+                        duration_ms: step_start.elapsed().as_millis() as u64,
+                        retry_count: 0,
+                        screenshot_path: None,
+                    });
                     warnings.push(msg);
                 }
                 Ok(StepOutcome::Ignored) => {
-                    if verbose {
-                        eprintln!("  [step {step_idx}] ignored");
-                    }
+                    ctx.emit(golem_events::EventKind::StepFinished {
+                        global_step_index: step_count,
+                        outcome: golem_events::StepOutcome::Ignored,
+                        duration_ms: step_start.elapsed().as_millis() as u64,
+                        retry_count: 0,
+                        screenshot_path: None,
+                    });
                 }
                 Err(e) => {
-                    if verbose {
-                        eprintln!("  [step {step_idx}] FAIL ({}ms): {e:#}", step_start.elapsed().as_millis());
-                    }
+                    ctx.emit(golem_events::EventKind::StepFinished {
+                        global_step_index: step_count,
+                        outcome: golem_events::StepOutcome::Failed(format!("{e:#}")),
+                        duration_ms: step_start.elapsed().as_millis() as u64,
+                        retry_count: 0,
+                        screenshot_path: None,
+                    });
                     // Report failure to barrier so other devices stop at this point
                     if let Some(b) = barrier {
                         b.report_failure(step_count);
@@ -305,6 +336,11 @@ pub async fn execute_flow<'a>(
                 }
             }
         }
+
+        ctx.emit(golem_events::EventKind::BlockFinished {
+            block_name: block_label.clone(),
+            block_index: current_idx,
+        });
 
         // Capture perf snapshot after block completes
         if perf_enabled {
@@ -1875,6 +1911,7 @@ action = "screenshot"
             device: Some(&ios_device),
             perf_collector: None,
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),
+            emitter: None,
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -1935,6 +1972,7 @@ action = "screenshot"
             device: Some(&android_device),
             perf_collector: None,
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),
+            emitter: None,
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -2004,6 +2042,7 @@ action = "screenshot"
             device: Some(&ios_device),
             perf_collector: None,
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),
+            emitter: None,
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
