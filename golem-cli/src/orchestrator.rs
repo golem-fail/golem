@@ -80,12 +80,16 @@ impl OrchestratorServer {
     /// Wait for all active client handlers to complete, then clean up.
     pub async fn wait_for_clients(&self) {
         use std::sync::atomic::Ordering;
+        let mut last_count = 0u32;
         loop {
             let count = self.active_clients.load(Ordering::Acquire);
             if count == 0 {
                 break;
             }
-            eprintln!("  Orchestrator: waiting for {count} active client(s)...");
+            if count != last_count {
+                eprintln!("  Orchestrator: waiting for {count} active client(s)...");
+                last_count = count;
+            }
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
     }
@@ -158,8 +162,9 @@ async fn handle_client(
     stream: UnixStream,
     resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
 ) {
-    let (reader, mut writer) = stream.into_split();
+    let (reader, writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
+    let writer = std::sync::Arc::new(tokio::sync::Mutex::new(writer));
     let mut line = String::new();
 
     loop {
@@ -167,10 +172,43 @@ async fn handle_client(
         match reader.read_line(&mut line).await {
             Ok(0) => break, // client disconnected
             Ok(_) => {
-                let response = process_message(&line, &resource_mgr).await;
-                if let Err(e) = writer.write_all(format!("{}\n", response).as_bytes()).await {
-                    eprintln!("  Orchestrator: write error: {e}");
-                    break;
+                let json: serde_json::Value = match serde_json::from_str(line.trim()) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        let resp = serde_json::json!({"type": "error", "message": format!("invalid JSON: {e}")});
+                        let mut w = writer.lock().await;
+                        let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
+                        continue;
+                    }
+                };
+
+                match json["type"].as_str() {
+                    Some("ping") => {
+                        let mut w = writer.lock().await;
+                        let _ = w.write_all(b"{\"type\":\"pong\"}\n").await;
+                    }
+                    Some("status") => {
+                        let resp = serde_json::json!({
+                            "type": "status",
+                            "version": env!("CARGO_PKG_VERSION"),
+                            "pid": std::process::id(),
+                        });
+                        let mut w = writer.lock().await;
+                        let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
+                    }
+                    Some("submit") => {
+                        handle_submit(&json, &resource_mgr, &writer).await;
+                    }
+                    Some(other) => {
+                        let resp = serde_json::json!({"type": "error", "message": format!("unknown message type: {other}")});
+                        let mut w = writer.lock().await;
+                        let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
+                    }
+                    None => {
+                        let resp = serde_json::json!({"type": "error", "message": "missing 'type' field"});
+                        let mut w = writer.lock().await;
+                        let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
+                    }
                 }
             }
             Err(e) => {
@@ -181,107 +219,112 @@ async fn handle_client(
     }
 }
 
-/// Process a single message from a client and return a response.
-async fn process_message(
-    msg: &str,
+/// Handle a "submit" message: run the suite and stream events to the client.
+async fn handle_submit(
+    json: &serde_json::Value,
     resource_mgr: &std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
-) -> String {
-    let json: serde_json::Value = match serde_json::from_str(msg.trim()) {
-        Ok(v) => v,
-        Err(e) => {
-            return serde_json::json!({"type": "error", "message": format!("invalid JSON: {e}")})
-                .to_string();
+    writer: &std::sync::Arc<tokio::sync::Mutex<tokio::net::unix::OwnedWriteHalf>>,
+) {
+    let paths: Vec<PathBuf> = json["flow_paths"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(PathBuf::from))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if paths.is_empty() {
+        let resp = serde_json::json!({"type": "error", "message": "no flow_paths provided"});
+        let mut w = writer.lock().await;
+        let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
+        return;
+    }
+
+    let platform_override = json["config"]["platform"]
+        .as_str()
+        .and_then(|p| match p {
+            "ios" => Some(golem_devices::Platform::Ios),
+            "android" => Some(golem_devices::Platform::Android),
+            _ => None,
+        });
+
+    let seed = json["config"]["seed"].as_u64();
+
+    // Create an event channel for streaming to the client.
+    let (fwd_tx, fwd_rx) = golem_events::channel::event_channel();
+
+    // Spawn a task that serializes events and writes them to the socket.
+    let event_writer = writer.clone();
+    let mut event_rx = fwd_rx.subscribe();
+    drop(fwd_rx); // don't need the subscription factory after this
+    let stream_handle = tokio::spawn(async move {
+        while let Ok(event) = event_rx.recv().await {
+            let wire: golem_events::WireEvent = (&event).into();
+            if let Ok(json_str) = serde_json::to_string(&wire) {
+                let line = format!("{{\"type\":\"event\",\"event\":{json_str}}}\n");
+                let mut w = event_writer.lock().await;
+                if w.write_all(line.as_bytes()).await.is_err() {
+                    break; // client disconnected
+                }
+            }
         }
+    });
+
+    let config = SuiteConfig {
+        platform: platform_override,
+        seed,
+        // Server doesn't do its own human streaming — client handles output.
+        stream_human: false,
+        ..SuiteConfig::default()
     };
 
-    match json["type"].as_str() {
-        Some("ping") => serde_json::json!({"type": "pong"}).to_string(),
-        Some("status") => {
+    let mut runner = SuiteRunner::with_resource_manager(config, resource_mgr.clone());
+    runner.event_forwarder = Some(fwd_tx);
+
+    let result = runner.run_suite(&paths).await;
+    // Drop the runner (and its forwarder sender) to close the event stream.
+    drop(runner);
+    let _ = stream_handle.await;
+
+    // Send final result.
+    let resp = match result {
+        Ok(report) => {
             serde_json::json!({
-                "type": "status",
-                "version": env!("CARGO_PKG_VERSION"),
-                "pid": std::process::id(),
+                "type": "done",
+                "report": {
+                    "total_duration_ms": report.total_duration_ms,
+                    "flows": report.flows.iter().map(|f| {
+                        serde_json::json!({
+                            "flow_name": f.flow_name,
+                            "success": f.success,
+                            "warnings": f.warnings,
+                            "duration_ms": f.duration_ms,
+                            "device_name": f.device_name,
+                            "seed": f.seed,
+                        })
+                    }).collect::<Vec<_>>(),
+                }
             })
-            .to_string()
         }
-        Some("submit") => {
-            // Extract flow paths and config from the message
-            let paths: Vec<PathBuf> = json["flow_paths"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(PathBuf::from))
-                        .collect()
-                })
-                .unwrap_or_default();
-
-            if paths.is_empty() {
-                return serde_json::json!({"type": "error", "message": "no flow_paths provided"})
-                    .to_string();
-            }
-
-            let platform_override = json["config"]["platform"]
-                .as_str()
-                .and_then(|p| match p {
-                    "ios" => Some(golem_devices::Platform::Ios),
-                    "android" => Some(golem_devices::Platform::Android),
-                    _ => None,
-                });
-
-            let seed = json["config"]["seed"].as_u64();
-
-            let config = SuiteConfig {
-                platform: platform_override,
-                seed,
-                ..SuiteConfig::default()
-            };
-
-            // Run the suite with the shared ResourceManager
-            let runner = SuiteRunner::with_resource_manager(config, resource_mgr.clone());
-            match runner.run_suite(&paths).await {
-                Ok(report) => {
-                    serde_json::json!({
-                        "type": "result",
-                        "report": {
-                            "total_duration_ms": report.total_duration_ms,
-                            "flows": report.flows.iter().map(|f| {
-                                serde_json::json!({
-                                    "flow_name": f.flow_name,
-                                    "success": f.success,
-                                    "warnings": f.warnings,
-                                    "duration_ms": f.duration_ms,
-                                    "device_name": f.device_name,
-                                })
-                            }).collect::<Vec<_>>(),
-                        }
-                    })
-                    .to_string()
-                }
-                Err(e) => {
-                    serde_json::json!({"type": "error", "message": format!("suite failed: {e}")})
-                        .to_string()
-                }
-            }
+        Err(e) => {
+            serde_json::json!({"type": "error", "message": format!("suite failed: {e}")})
         }
-        Some(other) => {
-            serde_json::json!({"type": "error", "message": format!("unknown message type: {other}")})
-                .to_string()
-        }
-        None => {
-            serde_json::json!({"type": "error", "message": "missing 'type' field"})
-                .to_string()
-        }
-    }
+    };
+    let mut w = writer.lock().await;
+    let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
 }
 
 /// Submit work to a running orchestrator and wait for results.
 ///
-/// Sends the flow paths and config to the server, waits for the result,
-/// prints the report, and returns the exit code.
+/// Sends the flow paths and config, then reads a stream of events
+/// followed by a final "done" message. Events are fed to a local
+/// human renderer so the client controls its own output format.
 pub async fn submit_and_wait(
     mut stream: UnixStream,
     flow_paths: &[PathBuf],
     config: &serde_json::Value,
+    verbose: bool,
 ) -> Result<bool> {
     eprintln!(
         "  Connected to orchestrator. Submitting {} flow(s)...",
@@ -300,57 +343,80 @@ pub async fn submit_and_wait(
         .await
         .context("failed to send submit message")?;
 
-    // Read response (may take a long time for suite execution)
+    // Create local event channel for rendering.
+    let (local_tx, local_rx) = golem_events::channel::event_channel();
+
+    // Spawn local human renderer.
+    let human_rx = local_rx.subscribe();
+    let human_handle = tokio::spawn(async move {
+        golem_report::stream::stream_human(human_rx, verbose, true).await;
+    });
+
+    // Spawn local accumulator.
+    let accumulator = std::sync::Arc::new(tokio::sync::Mutex::new(
+        golem_report::accumulator::ReportAccumulator::new(),
+    ));
+    let acc_clone = accumulator.clone();
+    let acc_rx = local_rx.subscribe();
+    let acc_handle = tokio::spawn(async move {
+        golem_report::accumulator::accumulate_events(acc_rx, &acc_clone).await;
+    });
+    drop(local_rx);
+
+    // Read streamed events and final result.
     let mut reader = BufReader::new(&mut stream);
     let mut line = String::new();
-    reader
-        .read_line(&mut line)
-        .await
-        .context("failed to read result from orchestrator")?;
+    let mut all_passed = true;
 
-    let response: serde_json::Value = serde_json::from_str(line.trim())
-        .context("invalid JSON response from orchestrator")?;
+    loop {
+        line.clear();
+        reader
+            .read_line(&mut line)
+            .await
+            .context("lost connection to orchestrator")?;
 
-    match response["type"].as_str() {
-        Some("result") => {
-            let report = &response["report"];
-            let mut all_passed = true;
+        if line.is_empty() {
+            anyhow::bail!("orchestrator disconnected unexpectedly");
+        }
 
-            if let Some(flows) = report["flows"].as_array() {
-                for flow in flows {
-                    let name = flow["flow_name"].as_str().unwrap_or("unknown");
-                    let success = flow["success"].as_bool().unwrap_or(false);
-                    let duration = flow["duration_ms"].as_u64().unwrap_or(0);
-                    let device = flow["device_name"].as_str().unwrap_or("");
+        let response: serde_json::Value = serde_json::from_str(line.trim())
+            .context("invalid JSON from orchestrator")?;
 
-                    let icon = if success { "✓" } else { "✗" };
-                    let status = if success { "PASSED" } else { "FAILED" };
-                    let duration_s = duration as f64 / 1000.0;
-
-                    if !device.is_empty() {
-                        eprintln!("{icon} {status}  {name} [{device}]  [{duration_s:.1}s]");
-                    } else {
-                        eprintln!("{icon} {status}  {name}  [{duration_s:.1}s]");
-                    }
-
-                    if !success {
-                        all_passed = false;
-                    }
+        match response["type"].as_str() {
+            Some("event") => {
+                // Deserialize and re-emit locally.
+                if let Ok(wire) = serde_json::from_value::<golem_events::WireEvent>(
+                    response["event"].clone(),
+                ) {
+                    let event = wire.into_event();
+                    local_tx.emit(event.device_id, event.kind);
                 }
             }
-
-            let total_ms = report["total_duration_ms"].as_u64().unwrap_or(0);
-            let total_s = total_ms as f64 / 1000.0;
-            eprintln!("\nTotal: [{total_s:.1}s]");
-
-            Ok(all_passed)
-        }
-        Some("error") => {
-            let msg = response["message"].as_str().unwrap_or("unknown error");
-            anyhow::bail!("Orchestrator error: {msg}");
-        }
-        _ => {
-            anyhow::bail!("Unexpected response from orchestrator: {line}");
+            Some("done") => {
+                // Final result — check pass/fail.
+                if let Some(flows) = response["report"]["flows"].as_array() {
+                    for flow in flows {
+                        if flow["success"].as_bool() != Some(true) {
+                            all_passed = false;
+                        }
+                    }
+                }
+                break;
+            }
+            Some("error") => {
+                let msg = response["message"].as_str().unwrap_or("unknown error");
+                anyhow::bail!("Orchestrator error: {msg}");
+            }
+            _ => {
+                // Ignore unknown message types for forward compatibility.
+            }
         }
     }
+
+    // Close event channel and wait for renderers.
+    drop(local_tx);
+    let _ = human_handle.await;
+    let _ = acc_handle.await;
+
+    Ok(all_passed)
 }

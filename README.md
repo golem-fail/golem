@@ -214,9 +214,9 @@ max_steps = 10000                   # Safety limit
 max_runtime = "30m"                 # "5m", "2h", "500ms"
 app_lifecycle = "reset"             # "reset" (default), "launch", "manual"
 screenshot_on_failure = true        # Auto-capture screenshot on step failure (default: true)
-screenshot_dir = "/tmp/shots"       # Not yet wired (hardcoded .golem/screenshots)
+screenshot_dir = ".golem/screenshots" # Planned: unified --output-dir (see roadmap)
 record = true                       # Not yet wired
-recording_dir = "/tmp/videos"       # Not yet wired (hardcoded .golem/recordings)
+recording_dir = ".golem/recordings" # Planned: unified --output-dir (see roadmap)
 perf = true                         # Performance monitoring (default: true)
 perf_memory_warn_mb = 200.0
 perf_memory_error_mb = 500.0
@@ -484,7 +484,7 @@ steps = [
 
 ### Fake Data Generators
 
-Generate realistic test data with the `fake:` prefix in variable declarations. Generators produce random but valid values. Deterministic replay via `--seed` is not yet wired.
+Generate realistic test data with the `fake:` prefix in variable declarations. Generators produce random but valid values. Use `--seed <N>` for deterministic replay.
 
 ```toml
 [flow.vars]

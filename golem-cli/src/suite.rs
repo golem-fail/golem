@@ -48,6 +48,8 @@ pub struct SuiteRunner {
     pub config: SuiteConfig,
     /// Shared resource manager for device allocation across flows.
     pub resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
+    /// Optional external event sender for forwarding events (e.g. to orchestrator client).
+    pub event_forwarder: Option<golem_events::channel::EventSender>,
 }
 
 impl SuiteRunner {
@@ -59,6 +61,7 @@ impl SuiteRunner {
                     golem_devices::concurrency::ConcurrencyConfig::default(),
                 ),
             ),
+            event_forwarder: None,
         }
     }
 
@@ -67,7 +70,7 @@ impl SuiteRunner {
         config: SuiteConfig,
         resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
     ) -> Self {
-        Self { config, resource_mgr }
+        Self { config, resource_mgr, event_forwarder: None }
     }
 
     /// Run a suite of flow files and return aggregated results.
@@ -327,6 +330,20 @@ impl SuiteRunner {
             golem_report::accumulator::accumulate_events(acc_rx, &acc_clone).await;
         });
 
+        // Forward events to external sender (orchestrator → client).
+        let fwd_handle = if let Some(ref fwd) = self.event_forwarder {
+            let fwd_rx = event_rx.subscribe();
+            let fwd_tx = fwd.clone();
+            Some(tokio::spawn(async move {
+                let mut rx = fwd_rx;
+                while let Ok(event) = rx.recv().await {
+                    fwd_tx.emit(event.device_id.clone(), event.kind.clone());
+                }
+            }))
+        } else {
+            None
+        };
+
         // Drop the receiver factory — its internal Sender keeps the channel alive.
         drop(event_rx);
 
@@ -385,6 +402,7 @@ impl SuiteRunner {
         drop(event_tx);
         if let Some(h) = human_handle { let _ = h.await; }
         let _ = acc_handle.await;
+        if let Some(h) = fwd_handle { let _ = h.await; }
 
         // Merge step data from accumulator into flow reports.
         let acc_report = {

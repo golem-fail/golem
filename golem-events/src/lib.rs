@@ -6,19 +6,19 @@ pub mod emitter;
 
 use std::time::Instant;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 // ── Geometry ──
 
 /// A point in 2D screen space.
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Point {
     pub x: i32,
     pub y: i32,
 }
 
 /// A rectangle in screen space.
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Rect {
     pub x: i32,
     pub y: i32,
@@ -29,7 +29,7 @@ pub struct Rect {
 // ── Identity ──
 
 /// Unique identifier for a device execution (e.g. "ios/iPhone 15 Pro").
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DeviceId(pub String);
 
 impl std::fmt::Display for DeviceId {
@@ -49,9 +49,40 @@ pub struct Event {
     pub kind: EventKind,
 }
 
+/// Wire-format event for serialization over sockets/IPC.
+/// Same as `Event` but without `Instant` (not serializable).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WireEvent {
+    pub seq: u64,
+    pub device_id: DeviceId,
+    pub kind: EventKind,
+}
+
+impl From<&Event> for WireEvent {
+    fn from(e: &Event) -> Self {
+        Self {
+            seq: e.seq,
+            device_id: e.device_id.clone(),
+            kind: e.kind.clone(),
+        }
+    }
+}
+
+impl WireEvent {
+    /// Convert back to a full `Event` with `Instant::now()` as timestamp.
+    pub fn into_event(self) -> Event {
+        Event {
+            seq: self.seq,
+            device_id: self.device_id,
+            timestamp: Instant::now(),
+            kind: self.kind,
+        }
+    }
+}
+
 // ── Step outcome (shared between events and reports) ──
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StepOutcome {
     Success,
     Warning(String),
@@ -62,7 +93,7 @@ pub enum StepOutcome {
 
 // ── Performance snapshot data ──
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerfSnapshotData {
     pub label: String,
     pub memory_mb: Option<f64>,
@@ -78,7 +109,7 @@ pub struct PerfSnapshotData {
 
 // ── Event hierarchy ──
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EventKind {
     // Suite level
     SuiteStarted { flow_count: usize },
@@ -118,7 +149,7 @@ pub enum EventKind {
 
 // ── Substep events ──
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SubstepEvent {
     // Element resolution
     ElementResolved {
@@ -247,7 +278,7 @@ pub enum SubstepEvent {
 }
 
 /// Tree fetch statistics for a single operation (step or scroll iteration).
-#[derive(Debug, Clone, Copy, Default, Serialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct TreeStats {
     pub fetches: u32,
     pub min_nodes: u32,
@@ -276,7 +307,7 @@ impl TreeStats {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ScrollAttemptResult {
     PageScrolled,
     InnerScrollableDetected,

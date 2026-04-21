@@ -108,11 +108,4 @@ Device name (sanitized for filesystem) as subdir. Handles multiple devices of sa
 
 Replaces the unwired `screenshot_dir` and `recording_dir` flow options.
 
-## Orchestrator: Error Detail Not Forwarded to Client
-
-When tests run via the orchestrator (multiple flows submitted to a running `golem.sock`), detailed error messages (step failures, timeout reasons, stack traces) go to the orchestrator's stderr — not the submitting client's output. The client only sees pass/fail summary lines.
-
-The orchestrator protocol (`submit_and_wait`) streams pass/fail status but does not forward the per-device error context. This makes debugging failures in orchestrator mode harder than direct mode.
-
-Fix: include error detail (failed block, step, reason) in the orchestrator's response stream alongside the pass/fail status.
 

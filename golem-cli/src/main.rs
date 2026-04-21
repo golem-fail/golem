@@ -88,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
                     "platform": args.platform,
                     "seed": args.seed,
                 });
-                let all_passed = orchestrator::submit_and_wait(stream, &flow_paths, &config_json).await?;
+                let all_passed = orchestrator::submit_and_wait(stream, &flow_paths, &config_json, config.verbose).await?;
                 if !all_passed {
                     std::process::exit(1);
                 }
