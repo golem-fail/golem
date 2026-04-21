@@ -898,7 +898,15 @@ async fn run_flow_on_device(
     let actual_seed: u64 = seed.unwrap_or_else(rand::random);
     let rng = rand_chacha::ChaCha8Rng::seed_from_u64(actual_seed);
 
-    let capture_config = CaptureConfig::default();
+    let capture_config = {
+        let mut cfg = CaptureConfig::default();
+        if let Some(ref opts) = flow.flow.options {
+            if let Some(v) = opts.screenshot_on_failure {
+                cfg.screenshot_on_failure = v;
+            }
+        }
+        cfg
+    };
     let device_emitter = event_sender.map(|sender| {
         golem_events::emitter::DeviceEmitter::new(
             sender,

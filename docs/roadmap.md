@@ -44,17 +44,11 @@ Flag is defined but never read. `ResourceManager` uses default concurrency confi
 
 These `[flow.options]` fields are parsed into `FlowOptions` but never read during execution.
 
-### `screenshot_on_failure` — Auto-screenshot on failure
-
-Parsed but `CaptureConfig` is created with `default()` which hardcodes `screenshot_on_failure: true`. The flow option value is never used.
-
-### `screenshot_dir` — Screenshot output directory
-
-Parsed but ignored. Hardcoded to `.golem/screenshots`.
-
 ### `record` / `recording_dir` — Auto recording
 
 Both parsed but ignored. `CaptureConfig` hardcodes `record: false` and `recording_dir: .golem/recordings`. Recording only works via explicit `start_recording`/`stop_recording` steps.
+
+`screenshot_dir` and `recording_dir` are superseded by the unified output directory design (see below).
 
 ## Ethereal Email Integration
 
@@ -87,6 +81,32 @@ Possible approaches:
 - Update `jp.json` patterns to use full-width delimiters where appropriate (e.g. `丁目`, `番`, `号` instead of `-`)
 
 May require updating both `expand_street_pattern()` and the JP geo data in `data/geo/jp.json`.
+
+## Unified Output Directory
+
+Replace separate `screenshot_dir` / `recording_dir` with a single `--output-dir` (default `.golem/results/`). Structure per-flow and per-device:
+
+```
+.golem/results/
+  results.json
+  results.xml
+  login_test/
+    iPhone_16e/
+      screenshots/
+        3_auth_block_0_1_error.png    # [3][auth_block:0][1] → global_block_iter_step_error
+      recordings/
+        recording.mp4
+    Pixel_8/
+      screenshots/
+  checkout_test/
+    ...
+```
+
+Screenshot filenames follow the `[global][block:iter][step]` output pattern: `3_auth_block_0_1_error.png`.
+
+Device name (sanitized for filesystem) as subdir. Handles multiple devices of same platform. Reports at root — one per run. Each run overwrites same-named files; old orphans are harmless. A `golem clean` command or `--clean` flag can wipe the results dir.
+
+Replaces the unwired `screenshot_dir` and `recording_dir` flow options.
 
 ## Orchestrator: Error Detail Not Forwarded to Client
 
