@@ -24,16 +24,6 @@ Requires access to a physical iOS device for development and testing.
 
 **Files:** `golem-devices/src/resolver.rs` (min-coverage loop tie-break logic, lines ~281-410), `golem-devices/src/version.rs` (latest resolution).
 
-## Multi-Flow Output Broken in Direct Suite Mode
-
-Running `golem run a.toml b.toml` (2+ flows without a running orchestrator) shows device discovery messages twice ("Platform: ios", "Companion: ios"), then floods "Waiting for resources (ios)..." repeatedly. No flow/step events render. Tests **do** run — just no streaming output to stderr. Single-flow runs work fine.
-
-**Cause:** `run_suite()` spawns each flow as a tokio task calling `run_single_flow_with_resources()`. Each flow creates its own `event_channel` and its own `stream_human` subscriber (`golem-cli/src/suite.rs:339-354`). Two concurrent human renderers write to stderr and collide. The `multi_device` prefix logic handles one flow's multiple devices but doesn't know about flow-level prefixing.
-
-**Fix:** One event channel per suite (not per flow). Single `stream_human` subscriber for all flows. Prefix events with flow name when `flow_count > 1` (same pattern as `multi_device` prefix). Mirror the orchestrator client-side streaming which already uses a single local renderer.
-
-**Files:** `golem-cli/src/suite.rs` (run_suite, run_single_flow_with_resources), `golem-report/src/stream.rs` (flow prefix logic).
-
 ## FailureBarrier Across Multi-Flow Concurrency
 
 `FailureBarrier` (`golem-runner/src/barrier.rs`) coordinates devices within a single flow — device A fails at step 7, devices B/C abort at step ≥7.

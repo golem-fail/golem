@@ -116,7 +116,51 @@ impl SuiteRunner {
         }
 
         // Multiple flows — run in parallel with shared ResourceManager.
+        // Create a suite-level event channel so all flows stream through one
+        // stream_human + accumulator, avoiding racing stderr writes.
         let resource_mgr = self.resource_mgr.clone();
+        let (suite_tx, suite_rx) = golem_events::channel::event_channel();
+        let verbose = self.config.verbose;
+        let stream_human_enabled = self.config.stream_human;
+        if self.config.debug {
+            golem_driver::set_debug(true);
+        }
+
+        // Suite-level stream_human (multi_device=true to get device prefixes).
+        let human_handle = if stream_human_enabled {
+            let human_rx = suite_rx.subscribe();
+            Some(tokio::spawn(async move {
+                golem_report::stream::stream_human(human_rx, verbose, true).await;
+            }))
+        } else {
+            None
+        };
+
+        // Suite-level accumulator.
+        let accumulator = std::sync::Arc::new(tokio::sync::Mutex::new(
+            golem_report::accumulator::ReportAccumulator::new(),
+        ));
+        let acc_clone = accumulator.clone();
+        let acc_rx = suite_rx.subscribe();
+        let acc_handle = tokio::spawn(async move {
+            golem_report::accumulator::accumulate_events(acc_rx, &acc_clone).await;
+        });
+
+        // Forward events to external sender (orchestrator client) if present.
+        let fwd_handle = if let Some(ref fwd) = self.event_forwarder {
+            let fwd_rx = suite_rx.subscribe();
+            let fwd_tx = fwd.clone();
+            Some(tokio::spawn(async move {
+                let mut rx = fwd_rx;
+                while let Ok(event) = rx.recv().await {
+                    fwd_tx.emit(event.device_id.clone(), event.kind.clone());
+                }
+            }))
+        } else {
+            None
+        };
+
+        drop(suite_rx);
 
         let mut handles = Vec::new();
         for path in flow_paths {
@@ -125,19 +169,27 @@ impl SuiteRunner {
             let seed = self.config.seed;
             let start = self.config.start.clone();
             let cli_vars = self.config.vars.clone();
+            let output_dir = self.config.output_dir.clone();
+            let no_results = self.config.no_results;
             let rm = resource_mgr.clone();
+            let suite_tx_clone = suite_tx.clone();
 
             handles.push(tokio::spawn(async move {
-                let runner = SuiteRunner::with_resource_manager(
+                let mut runner = SuiteRunner::with_resource_manager(
                     SuiteConfig {
                         platform: platform_override,
                         seed,
                         start,
                         vars: cli_vars,
+                        output_dir,
+                        no_results,
+                        // Disable per-flow stream_human — suite-level handles it.
+                        stream_human: false,
                         ..SuiteConfig::default()
                     },
                     rm,
                 );
+                runner.event_forwarder = Some(suite_tx_clone);
                 runner.run_single_flow(&path).await
             }));
         }
@@ -158,6 +210,60 @@ impl SuiteRunner {
                         device_name: None,
                         perf_snapshots: vec![],
                     });
+                }
+            }
+        }
+
+        // Emit suite summary and close suite channel.
+        let passed = flow_reports.iter().filter(|r| r.success).count();
+        let failed = flow_reports.iter().filter(|r| !r.success).count();
+        suite_tx.emit(
+            golem_events::DeviceId("suite".into()),
+            golem_events::EventKind::SuiteFinished {
+                duration_ms: start.elapsed().as_millis() as u64,
+                passed,
+                failed,
+            },
+        );
+        drop(suite_tx);
+        if let Some(h) = human_handle { let _ = h.await; }
+        let _ = acc_handle.await;
+        if let Some(h) = fwd_handle { let _ = h.await; }
+
+        // Merge step data from suite-level accumulator into flow reports.
+        let acc_report = {
+            let taken = std::mem::replace(
+                &mut *accumulator.lock().await,
+                golem_report::accumulator::ReportAccumulator::new(),
+            );
+            taken.into_suite_report()
+        };
+        for report in &mut flow_reports {
+            if let Some(acc_flow) = acc_report.flows.iter().find(|f| {
+                f.device_name.as_deref() == report.device_name.as_deref()
+                    && f.flow_name == report.flow_name
+            }) {
+                if report.step_results.is_empty() && !acc_flow.step_results.is_empty() {
+                    report.step_results = acc_flow.step_results.iter().map(|s| {
+                        golem_report::StepReport {
+                            global_step_index: s.global_step_index,
+                            block_name: s.block_name.clone(),
+                            step_index_in_block: s.step_index_in_block,
+                            action: s.action.clone(),
+                            target: s.target.clone(),
+                            outcome: match &s.outcome {
+                                golem_report::StepOutcome::Success => golem_report::StepOutcome::Success,
+                                golem_report::StepOutcome::Warning(m) => golem_report::StepOutcome::Warning(m.clone()),
+                                golem_report::StepOutcome::Failed(m) => golem_report::StepOutcome::Failed(m.clone()),
+                                golem_report::StepOutcome::Skipped => golem_report::StepOutcome::Skipped,
+                            },
+                            duration_ms: s.duration_ms,
+                            retry_count: s.retry_count,
+                            screenshot_path: s.screenshot_path.clone(),
+                            substeps: s.substeps.clone(),
+                            tree_stats: s.tree_stats,
+                        }
+                    }).collect();
                 }
             }
         }
@@ -271,6 +377,7 @@ impl SuiteRunner {
                     // Wait for resource allocation (RAM + concurrency limit)
                     let alloc_deadline = tokio::time::Instant::now()
                         + std::time::Duration::from_secs(1200);
+                    let mut printed_waiting = false;
                     loop {
                         match resource_mgr.try_allocate(&device, port) {
                             Ok(()) => break,
@@ -279,7 +386,10 @@ impl SuiteRunner {
                                     eprintln!("  Timed out waiting for resources ({platform}): {e:#}");
                                     continue; // skip this platform
                                 }
-                                eprintln!("  Waiting for resources ({platform})...");
+                                if !printed_waiting {
+                                    eprintln!("  Waiting for resources ({platform})...");
+                                    printed_waiting = true;
+                                }
                                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                             }
                         }
@@ -413,17 +523,21 @@ impl SuiteRunner {
             }
         }
 
-        // Emit suite summary before closing channel.
-        let passed = reports.iter().filter(|r| r.success).count();
-        let failed = reports.iter().filter(|r| !r.success).count();
-        event_tx.emit(
-            golem_events::DeviceId("suite".into()),
-            golem_events::EventKind::SuiteFinished {
-                duration_ms: start.elapsed().as_millis() as u64,
-                passed,
-                failed,
-            },
-        );
+        // Emit suite summary before closing channel — but only when this is
+        // the top-level runner. When an event_forwarder is present, a parent
+        // (multi-flow suite or orchestrator client) will emit SuiteFinished.
+        if self.event_forwarder.is_none() {
+            let passed = reports.iter().filter(|r| r.success).count();
+            let failed = reports.iter().filter(|r| !r.success).count();
+            event_tx.emit(
+                golem_events::DeviceId("suite".into()),
+                golem_events::EventKind::SuiteFinished {
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    passed,
+                    failed,
+                },
+            );
+        }
         drop(event_tx);
         if let Some(h) = human_handle { let _ = h.await; }
         let _ = acc_handle.await;
