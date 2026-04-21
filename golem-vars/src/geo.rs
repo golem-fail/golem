@@ -251,29 +251,43 @@ fn expand_street_from_entry(entry: &GeoPostcode, rng: &mut impl Rng) -> String {
 /// Expand a street pattern containing one or more `n{min,max}` tokens.
 ///
 /// Each `n{min,max}` is replaced with a random integer in `[min, max]`.
-/// Supports multiple tokens per pattern, e.g. `"清田一条n{1,4}-n{1,15}"`.
+/// Supports multiple tokens per pattern, e.g. `"清田一条n{１,４}丁目n{１,１５}番"`.
+///
+/// The numeral system is detected from the min value's digits:
+/// - ASCII `0-9` → ASCII output (default)
+/// - Full-width `０-９` → full-width output (Japanese addresses)
+/// - Arabic-Indic `٠-٩` → Arabic-Indic output
+/// - Hebrew numerals not yet supported (Hebrew addresses use ASCII)
 ///
 /// If `street_en` is non-empty and the expanded result doesn't contain it,
 /// falls back to `"NUM street_en"` format using the first generated number.
 pub(crate) fn expand_street_pattern(pattern: &str, street_en: &str, rng: &mut impl Rng) -> String {
     let mut result = pattern.to_string();
-    let mut first_num: Option<u32> = None;
+    let mut first_num: Option<String> = None;
 
     // Replace all n{min,max} tokens left-to-right.
     while let Some(start) = result.find("n{") {
         let Some(close) = result[start..].find('}') else { break };
         let range_str = &result[start + 2..start + close];
         let Some((min_s, max_s)) = range_str.split_once(',') else { break };
-        let (Ok(min), Ok(max)) = (min_s.trim().parse::<u32>(), max_s.trim().parse::<u32>()) else { break };
+        let min_s = min_s.trim();
+        let max_s = max_s.trim();
+
+        // Detect numeral system from min value.
+        let style = detect_numeral_style(min_s);
+
+        let Some(min) = parse_numerals(min_s) else { break };
+        let Some(max) = parse_numerals(max_s) else { break };
 
         let num = rng.gen_range(min..=max);
+        let num_str = format_numerals(num, style);
         if first_num.is_none() {
-            first_num = Some(num);
+            first_num = Some(num_str.clone());
         }
 
         let prefix = &result[..start];
         let suffix = &result[start + close + 1..];
-        result = format!("{prefix}{num}{suffix}");
+        result = format!("{prefix}{num_str}{suffix}");
     }
 
     // If expanded text contains the English street name (or no English name), return as-is.
@@ -282,8 +296,68 @@ pub(crate) fn expand_street_pattern(pattern: &str, street_en: &str, rng: &mut im
     }
 
     // Fallback: "NUM street_en" using the first number we generated.
-    let num = first_num.unwrap_or_else(|| rng.gen_range(1..200));
-    format!("{num} {street_en}")
+    let num_str = first_num.unwrap_or_else(|| rng.gen_range(1..200u32).to_string());
+    format!("{num_str} {street_en}")
+}
+
+/// Numeral systems supported in street patterns.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum NumeralStyle {
+    Ascii,
+    FullWidth,
+    ArabicIndic,
+}
+
+/// Detect numeral style from the first digit character in a string.
+fn detect_numeral_style(s: &str) -> NumeralStyle {
+    for ch in s.chars() {
+        if ch.is_ascii_digit() {
+            return NumeralStyle::Ascii;
+        }
+        if ('０'..='９').contains(&ch) {
+            return NumeralStyle::FullWidth;
+        }
+        if ('٠'..='٩').contains(&ch) {
+            return NumeralStyle::ArabicIndic;
+        }
+    }
+    NumeralStyle::Ascii
+}
+
+/// Parse a numeral string (any supported style) to u32.
+fn parse_numerals(s: &str) -> Option<u32> {
+    let ascii: String = s.chars().map(|ch| {
+        if ('０'..='９').contains(&ch) {
+            (b'0' + (ch as u32 - '０' as u32) as u8) as char
+        } else if ('٠'..='٩').contains(&ch) {
+            (b'0' + (ch as u32 - '٠' as u32) as u8) as char
+        } else {
+            ch
+        }
+    }).collect();
+    ascii.parse().ok()
+}
+
+/// Format a u32 in the given numeral style.
+fn format_numerals(n: u32, style: NumeralStyle) -> String {
+    let ascii = n.to_string();
+    match style {
+        NumeralStyle::Ascii => ascii,
+        NumeralStyle::FullWidth => ascii.chars().map(|ch| {
+            if ch.is_ascii_digit() {
+                char::from_u32('０' as u32 + (ch as u32 - '0' as u32)).unwrap_or(ch)
+            } else {
+                ch
+            }
+        }).collect(),
+        NumeralStyle::ArabicIndic => ascii.chars().map(|ch| {
+            if ch.is_ascii_digit() {
+                char::from_u32('٠' as u32 + (ch as u32 - '0' as u32)).unwrap_or(ch)
+            } else {
+                ch
+            }
+        }).collect(),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -779,5 +853,66 @@ mod tests {
         let mut rng = seeded_rng();
         let result = expand_street_pattern("Fixed Street Name", "Fixed Street Name", &mut rng);
         assert_eq!(result, "Fixed Street Name", "no tokens SHALL return pattern unchanged");
+    }
+
+    // -----------------------------------------------------------------------
+    // 22. expand_street_pattern: full-width numerals (JP)
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_street_pattern_fullwidth_numerals() {
+        let mut rng = seeded_rng();
+        let result = expand_street_pattern("清田一条n{１,４}丁目n{１,１５}番", "", &mut rng);
+        assert!(
+            result.starts_with("清田一条"),
+            "SHALL keep prefix, got: {result}"
+        );
+        assert!(
+            !result.contains("n{"),
+            "SHALL replace all tokens, got: {result}"
+        );
+        // Should contain full-width digits, not ASCII
+        assert!(
+            !result.chars().any(|c| c.is_ascii_digit()),
+            "SHALL use full-width digits not ASCII, got: {result}"
+        );
+        // Should contain 丁目 and 番
+        assert!(result.contains("丁目"), "SHALL keep 丁目 delimiter, got: {result}");
+        assert!(result.contains("番"), "SHALL keep 番 delimiter, got: {result}");
+    }
+
+    // -----------------------------------------------------------------------
+    // 23. expand_street_pattern: mixed styles use min's style
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_street_pattern_mixed_uses_min_style() {
+        let mut rng = seeded_rng();
+        // Full-width min, ASCII max — should output full-width
+        let result = expand_street_pattern("町n{１,20}", "", &mut rng);
+        assert!(
+            !result.chars().any(|c| c.is_ascii_digit()),
+            "SHALL use full-width (from min), got: {result}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // 24. parse_numerals: full-width and Arabic-Indic
+    // -----------------------------------------------------------------------
+    #[test]
+    fn parse_numerals_all_styles() {
+        assert_eq!(parse_numerals("42"), Some(42));
+        assert_eq!(parse_numerals("４２"), Some(42));
+        assert_eq!(parse_numerals("٤٢"), Some(42));
+        assert_eq!(parse_numerals(""), None);
+        assert_eq!(parse_numerals("abc"), None);
+    }
+
+    // -----------------------------------------------------------------------
+    // 25. format_numerals round-trips
+    // -----------------------------------------------------------------------
+    #[test]
+    fn format_numerals_round_trip() {
+        assert_eq!(format_numerals(123, NumeralStyle::Ascii), "123");
+        assert_eq!(format_numerals(123, NumeralStyle::FullWidth), "１２３");
+        assert_eq!(format_numerals(7, NumeralStyle::ArabicIndic), "٧");
     }
 }

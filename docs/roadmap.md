@@ -71,17 +71,6 @@ Possible approaches:
 - Cache element positions across consecutive steps when the viewport hasn't changed
 - Longer default multiplier for WebView-context actions (requires detecting WebView context)
 
-## Geo Data: Full-Width Number Support for Japanese Addresses
-
-`expand_street_pattern()` generates ASCII digits (e.g. `清田一条2-7`), but real Japanese addresses often use full-width numbers (e.g. `清田一条２丁目７番`) or kanji numerals (e.g. `二丁目七番`). The current output looks unnatural for JP addresses.
-
-Possible approaches:
-- A `numeric_style` field per pattern or per country: `ascii` (default), `fullwidth`, `kanji`
-- Post-processing step that converts ASCII digits to full-width (`0`→`０`, `1`→`１`, etc.) for JP patterns
-- Update `jp.json` patterns to use full-width delimiters where appropriate (e.g. `丁目`, `番`, `号` instead of `-`)
-
-May require updating both `expand_street_pattern()` and the JP geo data in `data/geo/jp.json`.
-
 ## Unified Output Directory
 
 Replace separate `screenshot_dir` / `recording_dir` with a single `--output-dir` (default `.golem/results/`). Structure per-flow and per-device:

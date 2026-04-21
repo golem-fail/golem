@@ -29,37 +29,37 @@
               "code": "060-0001",
               "street": "北一条西",
               "street_en": "Kita 1-jo Nishi",
-              "pattern": "北一条西n{1,20}"
+              "pattern": "北一条西n{１,２０}"
             },
             {
               "code": "060-0042",
               "street": "大通西",
               "street_en": "Odori Nishi",
-              "pattern": "大通西n{1,125}"
+              "pattern": "大通西n{１,１２５}"
             },
             {
               "code": "064-0801",
               "street": "南一条西",
               "street_en": "Minami 1-jo Nishi",
-              "pattern": "南一条西n{1,27}"
+              "pattern": "南一条西n{１,２７}"
             },
             {
               "code": "004-0041",
               "street": "清田一条",
               "street_en": "Kiyota 1-jo",
-              "pattern": "清田一条n{1,4}-n{1,15}"
+              "pattern": "清田一条n{１,４}丁目n{１,１５}番"
             },
             {
               "code": "001-0010",
               "street": "北十条西",
               "street_en": "Kita 10-jo Nishi",
-              "pattern": "北十条西n{1,4}-n{1,15}"
+              "pattern": "北十条西n{１,４}丁目n{１,１５}番"
             },
             {
               "code": "003-0021",
               "street": "北二十一条東",
               "street_en": "Kita 21-jo Higashi",
-              "pattern": "北二十一条東n{1,20}"
+              "pattern": "北二十一条東n{１,２０}"
             }
           ]
         },
@@ -73,25 +73,25 @@
               "code": "070-0031",
               "street": "一条通",
               "street_en": "Ichijo-dori",
-              "pattern": "一条通n{1,125}"
+              "pattern": "一条通n{１,１２５}"
             },
             {
               "code": "070-0033",
               "street": "三条通",
               "street_en": "Sanjo-dori",
-              "pattern": "三条通n{1,25}"
+              "pattern": "三条通n{１,２５}"
             },
             {
               "code": "070-0036",
               "street": "六条通",
               "street_en": "Rokujo-dori",
-              "pattern": "六条通n{1,25}"
+              "pattern": "六条通n{１,２５}"
             },
             {
               "code": "070-8525",
               "street": "宮下通",
               "street_en": "Miyashita-dori",
-              "pattern": "宮下通n{1,25}"
+              "pattern": "宮下通n{１,２５}"
             }
           ]
         },
@@ -105,19 +105,19 @@
               "code": "040-0001",
               "street": "五稜郭町",
               "street_en": "Goryokaku-cho",
-              "pattern": "五稜郭町n{1,130}"
+              "pattern": "五稜郭町n{１,１３０}"
             },
             {
               "code": "040-0011",
               "street": "本町",
               "street_en": "Honcho",
-              "pattern": "本町n{1,40}"
+              "pattern": "本町n{１,４０}"
             },
             {
               "code": "040-0034",
               "street": "大手町",
               "street_en": "Otemachi",
-              "pattern": "大手町n{1,30}"
+              "pattern": "大手町n{１,３０}"
             }
           ]
         },
@@ -131,19 +131,19 @@
               "code": "085-0016",
               "street": "錦町",
               "street_en": "Nishiki-cho",
-              "pattern": "錦町n{1,100}"
+              "pattern": "錦町n{１,１００}"
             },
             {
               "code": "085-0017",
               "street": "幸町",
               "street_en": "Saiwai-cho",
-              "pattern": "幸町n{1,50}"
+              "pattern": "幸町n{１,５０}"
             },
             {
               "code": "085-0014",
               "street": "末広町",
               "street_en": "Suehiro-cho",
-              "pattern": "末広町n{1,50}"
+              "pattern": "末広町n{１,５０}"
             }
           ]
         },
@@ -157,19 +157,19 @@
               "code": "080-0012",
               "street": "西二条南",
               "street_en": "Nishi 2-jo Minami",
-              "pattern": "西二条南n{1,130}"
+              "pattern": "西二条南n{１,１３０}"
             },
             {
               "code": "080-0013",
               "street": "西三条南",
               "street_en": "Nishi 3-jo Minami",
-              "pattern": "西三条南n{1,40}"
+              "pattern": "西三条南n{１,４０}"
             },
             {
               "code": "080-0801",
               "street": "東一条南",
               "street_en": "Higashi 1-jo Minami",
-              "pattern": "東一条南n{1,30}"
+              "pattern": "東一条南n{１,３０}"
             }
           ]
         }
@@ -192,19 +192,19 @@
               "code": "030-0801",
               "street": "新町",
               "street_en": "Shinmachi",
-              "pattern": "新町n{1,2}-n{1,50}"
+              "pattern": "新町n{１,２}丁目n{１,５０}番"
             },
             {
               "code": "030-0861",
               "street": "長島",
               "street_en": "Nagashima",
-              "pattern": "長島n{1,196}-n{1,30}"
+              "pattern": "長島n{１,１９６}丁目n{１,３０}番"
             },
             {
               "code": "030-0812",
               "street": "堤町",
               "street_en": "Tsutsumi-cho",
-              "pattern": "堤町n{1,2}-n{1,50}"
+              "pattern": "堤町n{１,２}丁目n{１,５０}番"
             }
           ]
         },
@@ -218,19 +218,19 @@
               "code": "036-8001",
               "street": "大字北瓦ヶ町",
               "street_en": "Kitakawarakemachi",
-              "pattern": "大字北瓦ヶ町n{1,50}"
+              "pattern": "大字北瓦ヶ町n{１,５０}"
             },
             {
               "code": "036-8182",
               "street": "土手町",
               "street_en": "Dote-machi",
-              "pattern": "土手町n{1,100}"
+              "pattern": "土手町n{１,１００}"
             },
             {
               "code": "036-8003",
               "street": "駅前町",
               "street_en": "Ekimae-cho",
-              "pattern": "駅前町n{1,50}"
+              "pattern": "駅前町n{１,５０}"
             }
           ]
         },
@@ -244,19 +244,19 @@
               "code": "031-0042",
               "street": "十三日町",
               "street_en": "Jusannichi-machi",
-              "pattern": "十三日町n{1,189}"
+              "pattern": "十三日町n{１,１８９}"
             },
             {
               "code": "031-0075",
               "street": "内丸",
               "street_en": "Uchimaru",
-              "pattern": "内丸n{1,3}-n{1,30}"
+              "pattern": "内丸n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "031-0802",
               "street": "小中野",
               "street_en": "Konakano",
-              "pattern": "小中野n{1,8}-n{1,30}"
+              "pattern": "小中野n{１,８}丁目n{１,３０}番"
             }
           ]
         }
@@ -279,25 +279,25 @@
               "code": "020-0022",
               "street": "大通",
               "street_en": "Odori",
-              "pattern": "大通n{1,193}-n{1,40}"
+              "pattern": "大通n{１,１９３}丁目n{１,４０}番"
             },
             {
               "code": "020-0024",
               "street": "菜園",
               "street_en": "Saien",
-              "pattern": "菜園n{1,2}-n{1,50}"
+              "pattern": "菜園n{１,２}丁目n{１,５０}番"
             },
             {
               "code": "020-0871",
               "street": "中ノ橋通",
               "street_en": "Nakanohashi-dori",
-              "pattern": "中ノ橋通n{1,2}-n{1,30}"
+              "pattern": "中ノ橋通n{１,２}丁目n{１,３０}番"
             },
             {
               "code": "020-0015",
               "street": "本町通",
               "street_en": "Honcho-dori",
-              "pattern": "本町通n{1,3}-n{1,30}"
+              "pattern": "本町通n{１,３}丁目n{１,３０}番"
             }
           ]
         },
@@ -311,19 +311,19 @@
               "code": "021-0881",
               "street": "大町",
               "street_en": "Omachi",
-              "pattern": "大町n{1,80}"
+              "pattern": "大町n{１,８０}"
             },
             {
               "code": "021-0882",
               "street": "上大槻街",
               "street_en": "Kamiozuki-machi",
-              "pattern": "上大槻街n{1,70}"
+              "pattern": "上大槻街n{１,７０}"
             },
             {
               "code": "021-0884",
               "street": "田村町",
               "street_en": "Tamura-cho",
-              "pattern": "田村町n{1,60}"
+              "pattern": "田村町n{１,６０}"
             }
           ]
         }
@@ -346,31 +346,31 @@
               "code": "980-0021",
               "street": "中央",
               "street_en": "Chuo",
-              "pattern": "中央n{1,4}-n{1,30}"
+              "pattern": "中央n{１,４}丁目n{１,３０}番"
             },
             {
               "code": "980-0811",
               "street": "一番町",
               "street_en": "Ichibancho",
-              "pattern": "一番町n{1,4}-n{1,30}"
+              "pattern": "一番町n{１,４}丁目n{１,３０}番"
             },
             {
               "code": "980-0014",
               "street": "本町",
               "street_en": "Honcho",
-              "pattern": "本町n{1,3}-n{1,30}"
+              "pattern": "本町n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "981-3133",
               "street": "泉中央",
               "street_en": "Izumi-Chuo",
-              "pattern": "泉中央n{1,4}-n{1,30}"
+              "pattern": "泉中央n{１,４}丁目n{１,３０}番"
             },
             {
               "code": "983-0852",
               "street": "榴ヶ岡",
               "street_en": "Tsutsujigaoka",
-              "pattern": "榴ヶ岡n{1,185}"
+              "pattern": "榴ヶ岡n{１,１８５}"
             }
           ]
         },
@@ -384,19 +384,19 @@
               "code": "986-0824",
               "street": "立町",
               "street_en": "Tachi-machi",
-              "pattern": "立町n{1,2}-n{1,50}"
+              "pattern": "立町n{１,２}丁目n{１,５０}番"
             },
             {
               "code": "986-0861",
               "street": "蛇田",
               "street_en": "Hebita",
-              "pattern": "蛇田n{1,128}"
+              "pattern": "蛇田n{１,１２８}"
             },
             {
               "code": "986-0825",
               "street": "穀町",
               "street_en": "Koku-machi",
-              "pattern": "穀町n{1,70}"
+              "pattern": "穀町n{１,７０}"
             }
           ]
         },
@@ -410,19 +410,19 @@
               "code": "981-1224",
               "street": "増田",
               "street_en": "Masuda",
-              "pattern": "増田n{1,8}-n{1,30}"
+              "pattern": "増田n{１,８}丁目n{１,３０}番"
             },
             {
               "code": "981-1231",
               "street": "手倉田",
               "street_en": "Tekurada",
-              "pattern": "手倉田n{1,122}"
+              "pattern": "手倉田n{１,１２２}"
             },
             {
               "code": "981-1225",
               "street": "飯野坂",
               "street_en": "Iinozaka",
-              "pattern": "飯野坂n{1,70}"
+              "pattern": "飯野坂n{１,７０}"
             }
           ]
         }
@@ -445,19 +445,19 @@
               "code": "010-0001",
               "street": "中通",
               "street_en": "Nakadori",
-              "pattern": "中通n{1,187}-n{1,30}"
+              "pattern": "中通n{１,１８７}丁目n{１,３０}番"
             },
             {
               "code": "010-0921",
               "street": "大町",
               "street_en": "Omachi",
-              "pattern": "大町n{1,6}-n{1,30}"
+              "pattern": "大町n{１,６}丁目n{１,３０}番"
             },
             {
               "code": "010-0951",
               "street": "山王",
               "street_en": "Sanno",
-              "pattern": "山王n{1,7}-n{1,30}"
+              "pattern": "山王n{１,７}丁目n{１,３０}番"
             }
           ]
         },
@@ -471,19 +471,19 @@
               "code": "013-0023",
               "street": "中央町",
               "street_en": "Chuo-cho",
-              "pattern": "中央町n{1,80}"
+              "pattern": "中央町n{１,８０}"
             },
             {
               "code": "013-0036",
               "street": "駅前町",
               "street_en": "Ekimae-cho",
-              "pattern": "駅前町n{1,70}"
+              "pattern": "駅前町n{１,７０}"
             },
             {
               "code": "013-0046",
               "street": "神明町",
               "street_en": "Shinmei-cho",
-              "pattern": "神明町n{1,60}"
+              "pattern": "神明町n{１,６０}"
             }
           ]
         }
@@ -506,19 +506,19 @@
               "code": "990-0039",
               "street": "香澄町",
               "street_en": "Kasumi-cho",
-              "pattern": "香澄町n{1,3}-n{1,30}"
+              "pattern": "香澄町n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "990-0042",
               "street": "七日町",
               "street_en": "Nanokamachi",
-              "pattern": "七日町n{1,194}-n{1,30}"
+              "pattern": "七日町n{１,１９４}丁目n{１,３０}番"
             },
             {
               "code": "990-0047",
               "street": "旅篭町",
               "street_en": "Hatago-machi",
-              "pattern": "旅篭町n{1,3}-n{1,30}"
+              "pattern": "旅篭町n{１,３}丁目n{１,３０}番"
             }
           ]
         },
@@ -532,19 +532,19 @@
               "code": "997-0015",
               "street": "末広町",
               "street_en": "Suehiro-cho",
-              "pattern": "末広町n{1,127}"
+              "pattern": "末広町n{１,１２７}"
             },
             {
               "code": "997-0028",
               "street": "山王町",
               "street_en": "Sanno-machi",
-              "pattern": "山王町n{1,70}"
+              "pattern": "山王町n{１,７０}"
             },
             {
               "code": "997-0034",
               "street": "本町",
               "street_en": "Honcho",
-              "pattern": "本町n{1,3}-n{1,30}"
+              "pattern": "本町n{１,３}丁目n{１,３０}番"
             }
           ]
         },
@@ -558,19 +558,19 @@
               "code": "998-0044",
               "street": "中町",
               "street_en": "Naka-machi",
-              "pattern": "中町n{1,196}-n{1,30}"
+              "pattern": "中町n{１,１９６}丁目n{１,３０}番"
             },
             {
               "code": "998-0037",
               "street": "日吉町",
               "street_en": "Hiyoshi-cho",
-              "pattern": "日吉町n{1,2}-n{1,40}"
+              "pattern": "日吉町n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "998-0023",
               "street": "幸町",
               "street_en": "Saiwai-cho",
-              "pattern": "幸町n{1,2}-n{1,50}"
+              "pattern": "幸町n{１,２}丁目n{１,５０}番"
             }
           ]
         }
@@ -593,19 +593,19 @@
               "code": "960-8031",
               "street": "栄町",
               "street_en": "Sakae-machi",
-              "pattern": "栄町n{1,80}"
+              "pattern": "栄町n{１,８０}"
             },
             {
               "code": "960-8035",
               "street": "本町",
               "street_en": "Honcho",
-              "pattern": "本町n{1,80}"
+              "pattern": "本町n{１,８０}"
             },
             {
               "code": "960-8041",
               "street": "大町",
               "street_en": "Omachi",
-              "pattern": "大町n{1,70}"
+              "pattern": "大町n{１,７０}"
             }
           ]
         },
@@ -619,19 +619,19 @@
               "code": "963-8001",
               "street": "大町",
               "street_en": "Omachi",
-              "pattern": "大町n{1,2}-n{1,50}"
+              "pattern": "大町n{１,２}丁目n{１,５０}番"
             },
             {
               "code": "963-8004",
               "street": "中町",
               "street_en": "Naka-machi",
-              "pattern": "中町n{1,196}"
+              "pattern": "中町n{１,１９６}"
             },
             {
               "code": "963-8811",
               "street": "方八町",
               "street_en": "Hohaccho",
-              "pattern": "方八町n{1,2}-n{1,50}"
+              "pattern": "方八町n{１,２}丁目n{１,５０}番"
             }
           ]
         },
@@ -645,19 +645,19 @@
               "code": "970-8026",
               "street": "平字田町",
               "street_en": "Taira-Tamachi",
-              "pattern": "平字田町n{1,80}"
+              "pattern": "平字田町n{１,８０}"
             },
             {
               "code": "970-8036",
               "street": "平字新川町",
               "street_en": "Taira-Shinkawa",
-              "pattern": "平字新川町n{1,70}"
+              "pattern": "平字新川町n{１,７０}"
             },
             {
               "code": "970-8025",
               "street": "平字研町",
               "street_en": "Taira-Togimachi",
-              "pattern": "平字研町n{1,60}"
+              "pattern": "平字研町n{１,６０}"
             }
           ]
         },
@@ -671,19 +671,19 @@
               "code": "965-0042",
               "street": "大町",
               "street_en": "Omachi",
-              "pattern": "大町n{1,2}-n{1,50}"
+              "pattern": "大町n{１,２}丁目n{１,５０}番"
             },
             {
               "code": "965-0871",
               "street": "栄町",
               "street_en": "Sakae-machi",
-              "pattern": "栄町n{1,128}"
+              "pattern": "栄町n{１,１２８}"
             },
             {
               "code": "965-0878",
               "street": "中町",
               "street_en": "Naka-machi",
-              "pattern": "中町n{1,70}"
+              "pattern": "中町n{１,７０}"
             }
           ]
         }
@@ -706,19 +706,19 @@
               "code": "310-0015",
               "street": "宮町",
               "street_en": "Miya-machi",
-              "pattern": "宮町n{1,194}-n{1,30}"
+              "pattern": "宮町n{１,１９４}丁目n{１,３０}番"
             },
             {
               "code": "310-0011",
               "street": "三の丸",
               "street_en": "Sannomaru",
-              "pattern": "三の丸n{1,3}-n{1,30}"
+              "pattern": "三の丸n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "310-0062",
               "street": "大町",
               "street_en": "Omachi",
-              "pattern": "大町n{1,3}-n{1,30}"
+              "pattern": "大町n{１,３}丁目n{１,３０}番"
             }
           ]
         },
@@ -732,19 +732,19 @@
               "code": "305-0031",
               "street": "吾妻",
               "street_en": "Azuma",
-              "pattern": "吾妻n{1,4}-n{1,30}"
+              "pattern": "吾妻n{１,４}丁目n{１,３０}番"
             },
             {
               "code": "305-0032",
               "street": "竹園",
               "street_en": "Takezono",
-              "pattern": "竹園n{1,3}-n{1,30}"
+              "pattern": "竹園n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "305-0817",
               "street": "研究学園",
               "street_en": "Kenkyu-Gakuen",
-              "pattern": "研究学園n{1,193}-n{1,20}"
+              "pattern": "研究学園n{１,１９３}丁目n{１,２０}番"
             }
           ]
         },
@@ -758,19 +758,19 @@
               "code": "317-0073",
               "street": "幸町",
               "street_en": "Saiwai-cho",
-              "pattern": "幸町n{1,194}-n{1,30}"
+              "pattern": "幸町n{１,１９４}丁目n{１,３０}番"
             },
             {
               "code": "317-0071",
               "street": "鹿島町",
               "street_en": "Kashima-cho",
-              "pattern": "鹿島町n{1,3}-n{1,30}"
+              "pattern": "鹿島町n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "317-0076",
               "street": "会瀬町",
               "street_en": "Ose-cho",
-              "pattern": "会瀬町n{1,3}-n{1,30}"
+              "pattern": "会瀬町n{１,３}丁目n{１,３０}番"
             }
           ]
         }
@@ -793,19 +793,19 @@
               "code": "320-0026",
               "street": "馬場通り",
               "street_en": "Baba-dori",
-              "pattern": "馬場通りn{1,4}-n{1,25}"
+              "pattern": "馬場通りn{１,４}丁目n{１,２５}番"
             },
             {
               "code": "320-0033",
               "street": "本町",
               "street_en": "Honcho",
-              "pattern": "本町n{1,126}"
+              "pattern": "本町n{１,１２６}"
             },
             {
               "code": "320-0802",
               "street": "江野町",
               "street_en": "Eno-machi",
-              "pattern": "江野町n{1,70}"
+              "pattern": "江野町n{１,７０}"
             }
           ]
         },
@@ -819,19 +819,19 @@
               "code": "323-0022",
               "street": "駅東通り",
               "street_en": "Ekihigashi-dori",
-              "pattern": "駅東通りn{1,194}-n{1,30}"
+              "pattern": "駅東通りn{１,１９４}丁目n{１,３０}番"
             },
             {
               "code": "323-0023",
               "street": "中央町",
               "street_en": "Chuo-cho",
-              "pattern": "中央町n{1,3}-n{1,30}"
+              "pattern": "中央町n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "323-0025",
               "street": "城山町",
               "street_en": "Shiroyama-cho",
-              "pattern": "城山町n{1,3}-n{1,30}"
+              "pattern": "城山町n{１,３}丁目n{１,３０}番"
             }
           ]
         },
@@ -845,19 +845,19 @@
               "code": "321-1261",
               "street": "今市",
               "street_en": "Imaichi",
-              "pattern": "今市n{1,80}"
+              "pattern": "今市n{１,８０}"
             },
             {
               "code": "321-1434",
               "street": "安川町",
               "street_en": "Yasukawa-cho",
-              "pattern": "安川町n{1,60}"
+              "pattern": "安川町n{１,６０}"
             },
             {
               "code": "321-1406",
               "street": "日光",
               "street_en": "Nikko",
-              "pattern": "日光n{1,70}"
+              "pattern": "日光n{１,７０}"
             }
           ]
         }
@@ -880,19 +880,19 @@
               "code": "371-0024",
               "street": "表町",
               "street_en": "Omote-machi",
-              "pattern": "表町n{1,2}-n{1,50}"
+              "pattern": "表町n{１,２}丁目n{１,５０}番"
             },
             {
               "code": "371-0022",
               "street": "千代田町",
               "street_en": "Chiyoda-machi",
-              "pattern": "千代田町n{1,195}-n{1,25}"
+              "pattern": "千代田町n{１,１９５}丁目n{１,２５}番"
             },
             {
               "code": "371-0023",
               "street": "本町",
               "street_en": "Honcho",
-              "pattern": "本町n{1,3}-n{1,30}"
+              "pattern": "本町n{１,３}丁目n{１,３０}番"
             }
           ]
         },
@@ -906,19 +906,19 @@
               "code": "370-0849",
               "street": "八島町",
               "street_en": "Yashima-cho",
-              "pattern": "八島町n{1,80}"
+              "pattern": "八島町n{１,８０}"
             },
             {
               "code": "370-0841",
               "street": "栄町",
               "street_en": "Sakae-cho",
-              "pattern": "栄町n{1,70}"
+              "pattern": "栄町n{１,７０}"
             },
             {
               "code": "370-0828",
               "street": "宮元町",
               "street_en": "Miyamoto-cho",
-              "pattern": "宮元町n{1,70}"
+              "pattern": "宮元町n{１,７０}"
             }
           ]
         },
@@ -932,19 +932,19 @@
               "code": "376-0011",
               "street": "相生町",
               "street_en": "Aioi-cho",
-              "pattern": "相生町n{1,5}-n{1,20}"
+              "pattern": "相生町n{１,５}丁目n{１,２０}番"
             },
             {
               "code": "376-0023",
               "street": "錦町",
               "street_en": "Nishiki-cho",
-              "pattern": "錦町n{1,3}-n{1,30}"
+              "pattern": "錦町n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "376-0031",
               "street": "本町",
               "street_en": "Honcho",
-              "pattern": "本町n{1,192}-n{1,20}"
+              "pattern": "本町n{１,１９２}丁目n{１,２０}番"
             }
           ]
         }
@@ -967,25 +967,25 @@
               "code": "330-0802",
               "street": "宮町",
               "street_en": "Miya-cho",
-              "pattern": "宮町n{1,5}-n{1,25}"
+              "pattern": "宮町n{１,５}丁目n{１,２５}番"
             },
             {
               "code": "330-0846",
               "street": "大門町",
               "street_en": "Daimon-cho",
-              "pattern": "大門町n{1,3}-n{1,30}"
+              "pattern": "大門町n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "330-0063",
               "street": "浦和駅前",
               "street_en": "Urawa-Ekimae",
-              "pattern": "浦和駅前n{1,190}"
+              "pattern": "浦和駅前n{１,１９０}"
             },
             {
               "code": "336-0018",
               "street": "南本町",
               "street_en": "Minamihoncho",
-              "pattern": "南本町n{1,2}-n{1,40}"
+              "pattern": "南本町n{１,２}丁目n{１,４０}番"
             }
           ]
         },
@@ -999,19 +999,19 @@
               "code": "332-0017",
               "street": "栄町",
               "street_en": "Sakae-cho",
-              "pattern": "栄町n{1,3}-n{1,30}"
+              "pattern": "栄町n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "332-0012",
               "street": "本町",
               "street_en": "Honcho",
-              "pattern": "本町n{1,193}-n{1,25}"
+              "pattern": "本町n{１,１９３}丁目n{１,２５}番"
             },
             {
               "code": "332-0034",
               "street": "並木",
               "street_en": "Namiki",
-              "pattern": "並木n{1,4}-n{1,25}"
+              "pattern": "並木n{１,４}丁目n{１,２５}番"
             }
           ]
         },
@@ -1025,19 +1025,19 @@
               "code": "350-0043",
               "street": "新富町",
               "street_en": "Shintomi-cho",
-              "pattern": "新富町n{1,2}-n{1,50}"
+              "pattern": "新富町n{１,２}丁目n{１,５０}番"
             },
             {
               "code": "350-0062",
               "street": "元町",
               "street_en": "Motomachi",
-              "pattern": "元町n{1,2}-n{1,50}"
+              "pattern": "元町n{１,２}丁目n{１,５０}番"
             },
             {
               "code": "350-0065",
               "street": "仲町",
               "street_en": "Naka-machi",
-              "pattern": "仲町n{1,196}"
+              "pattern": "仲町n{１,１９６}"
             }
           ]
         },
@@ -1051,19 +1051,19 @@
               "code": "359-0037",
               "street": "くすのき台",
               "street_en": "Kusunoki-dai",
-              "pattern": "くすのき台n{1,3}-n{1,30}"
+              "pattern": "くすのき台n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "359-1123",
               "street": "日吉町",
               "street_en": "Hiyoshi-cho",
-              "pattern": "日吉町n{1,127}"
+              "pattern": "日吉町n{１,１２７}"
             },
             {
               "code": "359-0038",
               "street": "北秋津",
               "street_en": "Kita-Akitsu",
-              "pattern": "北秋津n{1,70}"
+              "pattern": "北秋津n{１,７０}"
             }
           ]
         },
@@ -1077,19 +1077,19 @@
               "code": "343-0813",
               "street": "越ヶ谷",
               "street_en": "Koshigaya",
-              "pattern": "越ヶ谷n{1,4}-n{1,25}"
+              "pattern": "越ヶ谷n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "343-0845",
               "street": "南越谷",
               "street_en": "Minami-Koshigaya",
-              "pattern": "南越谷n{1,4}-n{1,25}"
+              "pattern": "南越谷n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "343-0816",
               "street": "弥生町",
               "street_en": "Yayoi-cho",
-              "pattern": "弥生町n{1,192}"
+              "pattern": "弥生町n{１,１９２}"
             }
           ]
         }
@@ -1112,25 +1112,25 @@
               "code": "260-0013",
               "street": "中央",
               "street_en": "Chuo",
-              "pattern": "中央n{1,4}-n{1,25}"
+              "pattern": "中央n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "260-0028",
               "street": "新町",
               "street_en": "Shinmachi",
-              "pattern": "新町n{1,190}"
+              "pattern": "新町n{１,１９０}"
             },
             {
               "code": "260-0015",
               "street": "富士見",
               "street_en": "Fujimi",
-              "pattern": "富士見n{1,2}-n{1,40}"
+              "pattern": "富士見n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "263-0043",
               "street": "都賀の台",
               "street_en": "Tsuga-no-dai",
-              "pattern": "都賀の台n{1,4}-n{1,25}"
+              "pattern": "都賀の台n{１,４}丁目n{１,２５}番"
             }
           ]
         },
@@ -1144,19 +1144,19 @@
               "code": "273-0005",
               "street": "本町",
               "street_en": "Honcho",
-              "pattern": "本町n{1,191}-n{1,20}"
+              "pattern": "本町n{１,１９１}丁目n{１,２０}番"
             },
             {
               "code": "273-0011",
               "street": "湊町",
               "street_en": "Minato-cho",
-              "pattern": "湊町n{1,3}-n{1,30}"
+              "pattern": "湊町n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "274-0824",
               "street": "前原東",
               "street_en": "Maebara-Higashi",
-              "pattern": "前原東n{1,6}-n{1,20}"
+              "pattern": "前原東n{１,６}丁目n{１,２０}番"
             }
           ]
         },
@@ -1170,19 +1170,19 @@
               "code": "277-0005",
               "street": "柏",
               "street_en": "Kashiwa",
-              "pattern": "柏n{1,7}-n{1,25}"
+              "pattern": "柏n{１,７}丁目n{１,２５}番"
             },
             {
               "code": "277-0842",
               "street": "末広町",
               "street_en": "Suehiro-cho",
-              "pattern": "末広町n{1,185}"
+              "pattern": "末広町n{１,１８５}"
             },
             {
               "code": "277-0852",
               "street": "旭町",
               "street_en": "Asahi-cho",
-              "pattern": "旭町n{1,8}-n{1,20}"
+              "pattern": "旭町n{１,８}丁目n{１,２０}番"
             }
           ]
         },
@@ -1196,19 +1196,19 @@
               "code": "272-0034",
               "street": "市川",
               "street_en": "Ichikawa",
-              "pattern": "市川n{1,4}-n{1,25}"
+              "pattern": "市川n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "272-0023",
               "street": "南八幡",
               "street_en": "Minami-Yawata",
-              "pattern": "南八幡n{1,5}-n{1,20}"
+              "pattern": "南八幡n{１,５}丁目n{１,２０}番"
             },
             {
               "code": "272-0021",
               "street": "八幡",
               "street_en": "Yawata",
-              "pattern": "八幡n{1,191}-n{1,20}"
+              "pattern": "八幡n{１,１９１}丁目n{１,２０}番"
             }
           ]
         },
@@ -1222,19 +1222,19 @@
               "code": "271-0091",
               "street": "本町",
               "street_en": "Honcho",
-              "pattern": "本町n{1,80}"
+              "pattern": "本町n{１,８０}"
             },
             {
               "code": "271-0077",
               "street": "根本",
               "street_en": "Nemoto",
-              "pattern": "根本n{1,80}"
+              "pattern": "根本n{１,８０}"
             },
             {
               "code": "271-0092",
               "street": "松戸",
               "street_en": "Matsudo",
-              "pattern": "松戸n{1,70}"
+              "pattern": "松戸n{１,７０}"
             }
           ]
         }
@@ -1257,31 +1257,31 @@
               "code": "100-0005",
               "street": "丸の内",
               "street_en": "Marunouchi",
-              "pattern": "丸の内n{1,3}-n{1,15}"
+              "pattern": "丸の内n{１,３}丁目n{１,１５}番"
             },
             {
               "code": "100-0006",
               "street": "有楽町",
               "street_en": "Yurakucho",
-              "pattern": "有楽町n{1,2}-n{1,15}"
+              "pattern": "有楽町n{１,２}丁目n{１,１５}番"
             },
             {
               "code": "101-0021",
               "street": "外神田",
               "street_en": "Sotokanda",
-              "pattern": "外神田n{1,187}-n{1,20}"
+              "pattern": "外神田n{１,１８７}丁目n{１,２０}番"
             },
             {
               "code": "101-0041",
               "street": "神田須田町",
               "street_en": "Kanda-Sudacho",
-              "pattern": "神田須田町n{1,2}-n{1,30}"
+              "pattern": "神田須田町n{１,２}丁目n{１,３０}番"
             },
             {
               "code": "102-0083",
               "street": "麹町",
               "street_en": "Kojimachi",
-              "pattern": "麹町n{1,6}-n{1,15}"
+              "pattern": "麹町n{１,６}丁目n{１,１５}番"
             }
           ]
         },
@@ -1295,25 +1295,25 @@
               "code": "104-0061",
               "street": "銀座",
               "street_en": "Ginza",
-              "pattern": "銀座n{1,191}-n{1,20}"
+              "pattern": "銀座n{１,１９１}丁目n{１,２０}番"
             },
             {
               "code": "103-0027",
               "street": "日本橋",
               "street_en": "Nihonbashi",
-              "pattern": "日本橋n{1,3}-n{1,20}"
+              "pattern": "日本橋n{１,３}丁目n{１,２０}番"
             },
             {
               "code": "104-0031",
               "street": "京橋",
               "street_en": "Kyobashi",
-              "pattern": "京橋n{1,3}-n{1,20}"
+              "pattern": "京橋n{１,３}丁目n{１,２０}番"
             },
             {
               "code": "103-0013",
               "street": "日本橋人形町",
               "street_en": "Nihonbashi-Ningyo-cho",
-              "pattern": "日本橋人形町n{1,3}-n{1,20}"
+              "pattern": "日本橋人形町n{１,３}丁目n{１,２０}番"
             }
           ]
         },
@@ -1327,31 +1327,31 @@
               "code": "105-0001",
               "street": "虎ノ門",
               "street_en": "Toranomon",
-              "pattern": "虎ノ門n{1,5}-n{1,20}"
+              "pattern": "虎ノ門n{１,５}丁目n{１,２０}番"
             },
             {
               "code": "106-0032",
               "street": "六本木",
               "street_en": "Roppongi",
-              "pattern": "六本木n{1,7}-n{1,20}"
+              "pattern": "六本木n{１,７}丁目n{１,２０}番"
             },
             {
               "code": "107-0052",
               "street": "赤坂",
               "street_en": "Akasaka",
-              "pattern": "赤坂n{1,180}-n{1,20}"
+              "pattern": "赤坂n{１,１８０}丁目n{１,２０}番"
             },
             {
               "code": "108-0073",
               "street": "三田",
               "street_en": "Mita",
-              "pattern": "三田n{1,5}-n{1,20}"
+              "pattern": "三田n{１,５}丁目n{１,２０}番"
             },
             {
               "code": "106-0046",
               "street": "元麻布",
               "street_en": "Moto-Azabu",
-              "pattern": "元麻布n{1,3}-n{1,20}"
+              "pattern": "元麻布n{１,３}丁目n{１,２０}番"
             }
           ]
         },
@@ -1365,31 +1365,31 @@
               "code": "160-0022",
               "street": "新宿",
               "street_en": "Shinjuku",
-              "pattern": "新宿n{1,7}-n{1,30}"
+              "pattern": "新宿n{１,７}丁目n{１,３０}番"
             },
             {
               "code": "160-0023",
               "street": "西新宿",
               "street_en": "Nishi-Shinjuku",
-              "pattern": "西新宿n{1,8}-n{1,25}"
+              "pattern": "西新宿n{１,８}丁目n{１,２５}番"
             },
             {
               "code": "162-0065",
               "street": "住吉町",
               "street_en": "Sumiyoshi-cho",
-              "pattern": "住吉町n{1,101}"
+              "pattern": "住吉町n{１,１０１}"
             },
             {
               "code": "169-0073",
               "street": "百人町",
               "street_en": "Hyakunin-cho",
-              "pattern": "百人町n{1,4}-n{1,20}"
+              "pattern": "百人町n{１,４}丁目n{１,２０}番"
             },
             {
               "code": "162-0067",
               "street": "富久町",
               "street_en": "Tomihisa-cho",
-              "pattern": "富久町n{1,80}"
+              "pattern": "富久町n{１,８０}"
             }
           ]
         },
@@ -1403,25 +1403,25 @@
               "code": "150-0002",
               "street": "渋谷",
               "street_en": "Shibuya",
-              "pattern": "渋谷n{1,4}-n{1,25}"
+              "pattern": "渋谷n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "150-0001",
               "street": "神宮前",
               "street_en": "Jingumae",
-              "pattern": "神宮前n{1,192}-n{1,30}"
+              "pattern": "神宮前n{１,１９２}丁目n{１,３０}番"
             },
             {
               "code": "150-0043",
               "street": "道玄坂",
               "street_en": "Dogenzaka",
-              "pattern": "道玄坂n{1,2}-n{1,40}"
+              "pattern": "道玄坂n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "151-0063",
               "street": "富ヶ谷",
               "street_en": "Tomigaya",
-              "pattern": "富ヶ谷n{1,2}-n{1,40}"
+              "pattern": "富ヶ谷n{１,２}丁目n{１,４０}番"
             }
           ]
         },
@@ -1435,25 +1435,25 @@
               "code": "170-0013",
               "street": "東池袋",
               "street_en": "Higashi-Ikebukuro",
-              "pattern": "東池袋n{1,186}-n{1,25}"
+              "pattern": "東池袋n{１,１８６}丁目n{１,２５}番"
             },
             {
               "code": "171-0014",
               "street": "池袋",
               "street_en": "Ikebukuro",
-              "pattern": "池袋n{1,4}-n{1,25}"
+              "pattern": "池袋n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "171-0021",
               "street": "西池袋",
               "street_en": "Nishi-Ikebukuro",
-              "pattern": "西池袋n{1,5}-n{1,25}"
+              "pattern": "西池袋n{１,５}丁目n{１,２５}番"
             },
             {
               "code": "170-0002",
               "street": "巣鴨",
               "street_en": "Sugamo",
-              "pattern": "巣鴨n{1,5}-n{1,20}"
+              "pattern": "巣鴨n{１,５}丁目n{１,２０}番"
             }
           ]
         },
@@ -1467,25 +1467,25 @@
               "code": "113-0033",
               "street": "本郷",
               "street_en": "Hongo",
-              "pattern": "本郷n{1,184}-n{1,20}"
+              "pattern": "本郷n{１,１８４}丁目n{１,２０}番"
             },
             {
               "code": "112-0002",
               "street": "小石川",
               "street_en": "Koishikawa",
-              "pattern": "小石川n{1,5}-n{1,20}"
+              "pattern": "小石川n{１,５}丁目n{１,２０}番"
             },
             {
               "code": "112-0012",
               "street": "大塚",
               "street_en": "Otsuka",
-              "pattern": "大塚n{1,6}-n{1,20}"
+              "pattern": "大塚n{１,６}丁目n{１,２０}番"
             },
             {
               "code": "113-0022",
               "street": "千駄木",
               "street_en": "Sendagi",
-              "pattern": "千駄木n{1,5}-n{1,25}"
+              "pattern": "千駄木n{１,５}丁目n{１,２５}番"
             }
           ]
         },
@@ -1499,19 +1499,19 @@
               "code": "110-0005",
               "street": "上野",
               "street_en": "Ueno",
-              "pattern": "上野n{1,187}-n{1,25}"
+              "pattern": "上野n{１,１８７}丁目n{１,２５}番"
             },
             {
               "code": "111-0032",
               "street": "浅草",
               "street_en": "Asakusa",
-              "pattern": "浅草n{1,7}-n{1,20}"
+              "pattern": "浅草n{１,７}丁目n{１,２０}番"
             },
             {
               "code": "110-0015",
               "street": "東上野",
               "street_en": "Higashi-Ueno",
-              "pattern": "東上野n{1,6}-n{1,20}"
+              "pattern": "東上野n{１,６}丁目n{１,２０}番"
             }
           ]
         },
@@ -1525,19 +1525,19 @@
               "code": "135-0061",
               "street": "豊洲",
               "street_en": "Toyosu",
-              "pattern": "豊洲n{1,6}-n{1,20}"
+              "pattern": "豊洲n{１,６}丁目n{１,２０}番"
             },
             {
               "code": "136-0071",
               "street": "亀戸",
               "street_en": "Kameido",
-              "pattern": "亀戸n{1,187}-n{1,20}"
+              "pattern": "亀戸n{１,１８７}丁目n{１,２０}番"
             },
             {
               "code": "135-0016",
               "street": "東陽",
               "street_en": "Toyo",
-              "pattern": "東陽n{1,7}-n{1,20}"
+              "pattern": "東陽n{１,７}丁目n{１,２０}番"
             }
           ]
         },
@@ -1551,19 +1551,19 @@
               "code": "108-0075",
               "street": "港南",
               "street_en": "Konan",
-              "pattern": "港南n{1,4}-n{1,25}"
+              "pattern": "港南n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "141-0032",
               "street": "大崎",
               "street_en": "Osaki",
-              "pattern": "大崎n{1,192}-n{1,25}"
+              "pattern": "大崎n{１,１９２}丁目n{１,２５}番"
             },
             {
               "code": "142-0043",
               "street": "二葉",
               "street_en": "Futaba",
-              "pattern": "二葉n{1,4}-n{1,25}"
+              "pattern": "二葉n{１,４}丁目n{１,２５}番"
             }
           ]
         },
@@ -1577,19 +1577,19 @@
               "code": "153-0064",
               "street": "下目黒",
               "street_en": "Shimo-Meguro",
-              "pattern": "下目黒n{1,193}-n{1,20}"
+              "pattern": "下目黒n{１,１９３}丁目n{１,２０}番"
             },
             {
               "code": "153-0042",
               "street": "青葉台",
               "street_en": "Aobadai",
-              "pattern": "青葉台n{1,4}-n{1,20}"
+              "pattern": "青葉台n{１,４}丁目n{１,２０}番"
             },
             {
               "code": "152-0004",
               "street": "鷹番",
               "street_en": "Takaban",
-              "pattern": "鷹番n{1,3}-n{1,25}"
+              "pattern": "鷹番n{１,３}丁目n{１,２５}番"
             }
           ]
         },
@@ -1603,25 +1603,25 @@
               "code": "154-0024",
               "street": "三軒茶屋",
               "street_en": "Sangenjaya",
-              "pattern": "三軒茶屋n{1,2}-n{1,40}"
+              "pattern": "三軒茶屋n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "155-0031",
               "street": "北沢",
               "street_en": "Kitazawa",
-              "pattern": "北沢n{1,5}-n{1,25}"
+              "pattern": "北沢n{１,５}丁目n{１,２５}番"
             },
             {
               "code": "158-0083",
               "street": "奥沢",
               "street_en": "Okusawa",
-              "pattern": "奥沢n{1,188}-n{1,20}"
+              "pattern": "奥沢n{１,１８８}丁目n{１,２０}番"
             },
             {
               "code": "156-0044",
               "street": "赤堤",
               "street_en": "Akatsutsumi",
-              "pattern": "赤堤n{1,5}-n{1,20}"
+              "pattern": "赤堤n{１,５}丁目n{１,２０}番"
             }
           ]
         },
@@ -1635,19 +1635,19 @@
               "code": "192-0083",
               "street": "旭町",
               "street_en": "Asahi-cho",
-              "pattern": "旭町n{1,116}"
+              "pattern": "旭町n{１,１１６}"
             },
             {
               "code": "192-0046",
               "street": "明神町",
               "street_en": "Myojin-cho",
-              "pattern": "明神町n{1,4}-n{1,20}"
+              "pattern": "明神町n{１,４}丁目n{１,２０}番"
             },
             {
               "code": "192-0082",
               "street": "東町",
               "street_en": "Higashi-cho",
-              "pattern": "東町n{1,80}"
+              "pattern": "東町n{１,８０}"
             }
           ]
         },
@@ -1661,19 +1661,19 @@
               "code": "194-0013",
               "street": "原町田",
               "street_en": "Haramachida",
-              "pattern": "原町田n{1,6}-n{1,30}"
+              "pattern": "原町田n{１,６}丁目n{１,３０}番"
             },
             {
               "code": "194-0021",
               "street": "中町",
               "street_en": "Naka-machi",
-              "pattern": "中町n{1,4}-n{1,25}"
+              "pattern": "中町n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "195-0053",
               "street": "能ヶ谷",
               "street_en": "Nogaya",
-              "pattern": "能ヶ谷n{1,190}-n{1,20}"
+              "pattern": "能ヶ谷n{１,１９０}丁目n{１,２０}番"
             }
           ]
         },
@@ -1687,19 +1687,19 @@
               "code": "190-0012",
               "street": "曙町",
               "street_en": "Akebono-cho",
-              "pattern": "曙町n{1,3}-n{1,30}"
+              "pattern": "曙町n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "190-0023",
               "street": "柴崎町",
               "street_en": "Shibasaki-cho",
-              "pattern": "柴崎町n{1,194}-n{1,20}"
+              "pattern": "柴崎町n{１,１９４}丁目n{１,２０}番"
             },
             {
               "code": "190-0013",
               "street": "高松町",
               "street_en": "Takamatsu-cho",
-              "pattern": "高松町n{1,3}-n{1,30}"
+              "pattern": "高松町n{１,３}丁目n{１,３０}番"
             }
           ]
         }
@@ -1722,31 +1722,31 @@
               "code": "220-0004",
               "street": "西区北幸",
               "street_en": "Nishi-ku Kitasaiwai",
-              "pattern": "西区北幸n{1,2}-n{1,15}"
+              "pattern": "西区北幸n{１,２}丁目n{１,１５}番"
             },
             {
               "code": "231-0023",
               "street": "中区山下町",
               "street_en": "Naka-ku Yamashita-cho",
-              "pattern": "中区山下町n{1,129}"
+              "pattern": "中区山下町n{１,１２９}"
             },
             {
               "code": "231-0005",
               "street": "中区本町",
               "street_en": "Naka-ku Honcho",
-              "pattern": "中区本町n{1,6}-n{1,20}"
+              "pattern": "中区本町n{１,６}丁目n{１,２０}番"
             },
             {
               "code": "222-0033",
               "street": "港北区新横浜",
               "street_en": "Kohoku-ku Shin-Yokohama",
-              "pattern": "港北区新横浜n{1,3}-n{1,20}"
+              "pattern": "港北区新横浜n{１,３}丁目n{１,２０}番"
             },
             {
               "code": "224-0032",
               "street": "都筑区茅ケ崎中央",
               "street_en": "Tsuzuki-ku Chigasaki-Chuo",
-              "pattern": "都筑区茅ケ崎中央n{1,60}"
+              "pattern": "都筑区茅ケ崎中央n{１,６０}"
             }
           ]
         },
@@ -1760,19 +1760,19 @@
               "code": "210-0007",
               "street": "川崎区駅前本町",
               "street_en": "Kawasaki-ku Ekimae-Honcho",
-              "pattern": "川崎区駅前本町n{1,191}"
+              "pattern": "川崎区駅前本町n{１,１９１}"
             },
             {
               "code": "211-0063",
               "street": "中原区小杉町",
               "street_en": "Nakahara-ku Kosugi-cho",
-              "pattern": "中原区小杉町n{1,3}-n{1,25}"
+              "pattern": "中原区小杉町n{１,３}丁目n{１,２５}番"
             },
             {
               "code": "213-0001",
               "street": "高津区溝口",
               "street_en": "Takatsu-ku Mizonokuchi",
-              "pattern": "高津区溝口n{1,6}-n{1,20}"
+              "pattern": "高津区溝口n{１,６}丁目n{１,２０}番"
             }
           ]
         },
@@ -1786,19 +1786,19 @@
               "code": "252-0231",
               "street": "中央区相模原",
               "street_en": "Chuo-ku Sagamihara",
-              "pattern": "中央区相模原n{1,184}-n{1,20}"
+              "pattern": "中央区相模原n{１,１８４}丁目n{１,２０}番"
             },
             {
               "code": "252-0143",
               "street": "緑区橋本",
               "street_en": "Midori-ku Hashimoto",
-              "pattern": "緑区橋本n{1,8}-n{1,20}"
+              "pattern": "緑区橋本n{１,８}丁目n{１,２０}番"
             },
             {
               "code": "252-0303",
               "street": "南区相模大野",
               "street_en": "Minami-ku Sagami-Ono",
-              "pattern": "南区相模大野n{1,8}-n{1,20}"
+              "pattern": "南区相模大野n{１,８}丁目n{１,２０}番"
             }
           ]
         },
@@ -1812,19 +1812,19 @@
               "code": "248-0006",
               "street": "小町",
               "street_en": "Komachi",
-              "pattern": "小町n{1,3}-n{1,30}"
+              "pattern": "小町n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "248-0012",
               "street": "御成町",
               "street_en": "Onari-machi",
-              "pattern": "御成町n{1,193}"
+              "pattern": "御成町n{１,１９３}"
             },
             {
               "code": "248-0014",
               "street": "由比ガ浜",
               "street_en": "Yuigahama",
-              "pattern": "由比ガ浜n{1,4}-n{1,25}"
+              "pattern": "由比ガ浜n{１,４}丁目n{１,２５}番"
             }
           ]
         },
@@ -1838,19 +1838,19 @@
               "code": "251-0052",
               "street": "藤沢",
               "street_en": "Fujisawa",
-              "pattern": "藤沢n{1,117}"
+              "pattern": "藤沢n{１,１１７}"
             },
             {
               "code": "251-0025",
               "street": "鵠沼石上",
               "street_en": "Kugenuma-Ishigami",
-              "pattern": "鵠沼石上n{1,3}-n{1,30}"
+              "pattern": "鵠沼石上n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "251-0055",
               "street": "南藤沢",
               "street_en": "Minami-Fujisawa",
-              "pattern": "南藤沢n{1,80}"
+              "pattern": "南藤沢n{１,８０}"
             }
           ]
         }
@@ -1873,25 +1873,25 @@
               "code": "950-0088",
               "street": "万代",
               "street_en": "Bandai",
-              "pattern": "万代n{1,6}-n{1,20}"
+              "pattern": "万代n{１,６}丁目n{１,２０}番"
             },
             {
               "code": "951-8063",
               "street": "古町通",
               "street_en": "Furumachi-dori",
-              "pattern": "古町通n{1,189}"
+              "pattern": "古町通n{１,１８９}"
             },
             {
               "code": "950-0087",
               "street": "東大通",
               "street_en": "Higashi-Odori",
-              "pattern": "東大通n{1,2}-n{1,30}"
+              "pattern": "東大通n{１,２}丁目n{１,３０}番"
             },
             {
               "code": "950-0911",
               "street": "笹口",
               "street_en": "Sasaguchi",
-              "pattern": "笹口n{1,3}-n{1,25}"
+              "pattern": "笹口n{１,３}丁目n{１,２５}番"
             }
           ]
         },
@@ -1905,19 +1905,19 @@
               "code": "940-0062",
               "street": "大手通",
               "street_en": "Ote-dori",
-              "pattern": "大手通n{1,2}-n{1,40}"
+              "pattern": "大手通n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "940-0048",
               "street": "台町",
               "street_en": "Dai-machi",
-              "pattern": "台町n{1,2}-n{1,40}"
+              "pattern": "台町n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "940-0066",
               "street": "東坂之上町",
               "street_en": "Higashi-Sakanoue-machi",
-              "pattern": "東坂之上町n{1,196}-n{1,30}"
+              "pattern": "東坂之上町n{１,１９６}丁目n{１,３０}番"
             }
           ]
         },
@@ -1931,19 +1931,19 @@
               "code": "943-0831",
               "street": "仲町",
               "street_en": "Naka-machi",
-              "pattern": "仲町n{1,4}-n{1,25}"
+              "pattern": "仲町n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "943-0832",
               "street": "本町",
               "street_en": "Honcho",
-              "pattern": "本町n{1,191}-n{1,20}"
+              "pattern": "本町n{１,１９１}丁目n{１,２０}番"
             },
             {
               "code": "943-0835",
               "street": "大町",
               "street_en": "Omachi",
-              "pattern": "大町n{1,5}-n{1,20}"
+              "pattern": "大町n{１,５}丁目n{１,２０}番"
             }
           ]
         }
@@ -1966,19 +1966,19 @@
               "code": "930-0003",
               "street": "桜町",
               "street_en": "Sakura-machi",
-              "pattern": "桜町n{1,2}-n{1,40}"
+              "pattern": "桜町n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "930-0083",
               "street": "総曲輪",
               "street_en": "Sogawa",
-              "pattern": "総曲輪n{1,4}-n{1,30}"
+              "pattern": "総曲輪n{１,４}丁目n{１,３０}番"
             },
             {
               "code": "930-0005",
               "street": "新桜町",
               "street_en": "Shin-Sakura-machi",
-              "pattern": "新桜町n{1,194}"
+              "pattern": "新桜町n{１,１９４}"
             }
           ]
         },
@@ -1992,19 +1992,19 @@
               "code": "933-0023",
               "street": "末広町",
               "street_en": "Suehiro-cho",
-              "pattern": "末広町n{1,127}"
+              "pattern": "末広町n{１,１２７}"
             },
             {
               "code": "933-0029",
               "street": "御旅屋町",
               "street_en": "Otaya-machi",
-              "pattern": "御旅屋町n{1,70}"
+              "pattern": "御旅屋町n{１,７０}"
             },
             {
               "code": "933-0039",
               "street": "大手町",
               "street_en": "Otemachi",
-              "pattern": "大手町n{1,3}-n{1,25}"
+              "pattern": "大手町n{１,３}丁目n{１,２５}番"
             }
           ]
         }
@@ -2028,25 +2028,25 @@
               "code": "920-0853",
               "street": "本町",
               "street_en": "Honcho",
-              "pattern": "本町n{1,2}-n{1,40}"
+              "pattern": "本町n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "920-0981",
               "street": "片町",
               "street_en": "Katamachi",
-              "pattern": "片町n{1,2}-n{1,40}"
+              "pattern": "片町n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "920-0919",
               "street": "南町",
               "street_en": "Minami-cho",
-              "pattern": "南町n{1,191}"
+              "pattern": "南町n{１,１９１}"
             },
             {
               "code": "920-0025",
               "street": "駅西本町",
               "street_en": "Ekinishi-Honmachi",
-              "pattern": "駅西本町n{1,5}-n{1,20}"
+              "pattern": "駅西本町n{１,５}丁目n{１,２０}番"
             }
           ]
         },
@@ -2060,19 +2060,19 @@
               "code": "923-0921",
               "street": "土居原町",
               "street_en": "Doihara-machi",
-              "pattern": "土居原町n{1,80}"
+              "pattern": "土居原町n{１,８０}"
             },
             {
               "code": "923-0801",
               "street": "園町",
               "street_en": "Sono-machi",
-              "pattern": "園町n{1,70}"
+              "pattern": "園町n{１,７０}"
             },
             {
               "code": "923-0864",
               "street": "有明町",
               "street_en": "Ariake-cho",
-              "pattern": "有明町n{1,60}"
+              "pattern": "有明町n{１,６０}"
             }
           ]
         }
@@ -2096,19 +2096,19 @@
               "code": "910-0006",
               "street": "中央",
               "street_en": "Chuo",
-              "pattern": "中央n{1,195}-n{1,30}"
+              "pattern": "中央n{１,１９５}丁目n{１,３０}番"
             },
             {
               "code": "910-0005",
               "street": "大手",
               "street_en": "Ote",
-              "pattern": "大手n{1,3}-n{1,30}"
+              "pattern": "大手n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "910-0858",
               "street": "手寄",
               "street_en": "Teyose",
-              "pattern": "手寄n{1,2}-n{1,40}"
+              "pattern": "手寄n{１,２}丁目n{１,４０}番"
             }
           ]
         },
@@ -2122,19 +2122,19 @@
               "code": "914-0052",
               "street": "清水町",
               "street_en": "Shimizu-cho",
-              "pattern": "清水町n{1,2}-n{1,50}"
+              "pattern": "清水町n{１,２}丁目n{１,５０}番"
             },
             {
               "code": "914-0062",
               "street": "相生町",
               "street_en": "Aioi-cho",
-              "pattern": "相生町n{1,128}"
+              "pattern": "相生町n{１,１２８}"
             },
             {
               "code": "914-0054",
               "street": "白銀町",
               "street_en": "Shirogane-cho",
-              "pattern": "白銀町n{1,70}"
+              "pattern": "白銀町n{１,７０}"
             }
           ]
         }
@@ -2157,19 +2157,19 @@
               "code": "400-0031",
               "street": "丸の内",
               "street_en": "Marunouchi",
-              "pattern": "丸の内n{1,3}-n{1,30}"
+              "pattern": "丸の内n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "400-0032",
               "street": "中央",
               "street_en": "Chuo",
-              "pattern": "中央n{1,194}-n{1,25}"
+              "pattern": "中央n{１,１９４}丁目n{１,２５}番"
             },
             {
               "code": "400-0024",
               "street": "北口",
               "street_en": "Kitaguchi",
-              "pattern": "北口n{1,3}-n{1,30}"
+              "pattern": "北口n{１,３}丁目n{１,３０}番"
             }
           ]
         },
@@ -2183,19 +2183,19 @@
               "code": "403-0004",
               "street": "下吉田",
               "street_en": "Shimo-Yoshida",
-              "pattern": "下吉田n{1,190}-n{1,30}"
+              "pattern": "下吉田n{１,１９０}丁目n{１,３０}番"
             },
             {
               "code": "403-0005",
               "street": "上吉田",
               "street_en": "Kami-Yoshida",
-              "pattern": "上吉田n{1,8}-n{1,30}"
+              "pattern": "上吉田n{１,８}丁目n{１,３０}番"
             },
             {
               "code": "403-0013",
               "street": "緑ケ丘",
               "street_en": "Midorigaoka",
-              "pattern": "緑ケ丘n{1,2}-n{1,50}"
+              "pattern": "緑ケ丘n{１,２}丁目n{１,５０}番"
             }
           ]
         }
@@ -2218,19 +2218,19 @@
               "code": "380-0833",
               "street": "権堂町",
               "street_en": "Gondo-cho",
-              "pattern": "権堂町n{1,80}"
+              "pattern": "権堂町n{１,８０}"
             },
             {
               "code": "380-0824",
               "street": "南石堂町",
               "street_en": "Minami-Ishido-cho",
-              "pattern": "南石堂町n{1,80}"
+              "pattern": "南石堂町n{１,８０}"
             },
             {
               "code": "380-0838",
               "street": "県町",
               "street_en": "Agata-machi",
-              "pattern": "県町n{1,80}"
+              "pattern": "県町n{１,８０}"
             }
           ]
         },
@@ -2244,19 +2244,19 @@
               "code": "390-0811",
               "street": "中央",
               "street_en": "Chuo",
-              "pattern": "中央n{1,4}-n{1,30}"
+              "pattern": "中央n{１,４}丁目n{１,３０}番"
             },
             {
               "code": "390-0815",
               "street": "深志",
               "street_en": "Fukashi",
-              "pattern": "深志n{1,3}-n{1,30}"
+              "pattern": "深志n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "390-0874",
               "street": "大手",
               "street_en": "Ote",
-              "pattern": "大手n{1,193}-n{1,20}"
+              "pattern": "大手n{１,１９３}丁目n{１,２０}番"
             }
           ]
         },
@@ -2270,19 +2270,19 @@
               "code": "386-0012",
               "street": "中央",
               "street_en": "Chuo",
-              "pattern": "中央n{1,6}-n{1,20}"
+              "pattern": "中央n{１,６}丁目n{１,２０}番"
             },
             {
               "code": "386-0025",
               "street": "天神",
               "street_en": "Tenjin",
-              "pattern": "天神n{1,4}-n{1,25}"
+              "pattern": "天神n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "386-0032",
               "street": "諏訪形",
               "street_en": "Suwakata",
-              "pattern": "諏訪形n{1,190}"
+              "pattern": "諏訪形n{１,１９０}"
             }
           ]
         }
@@ -2305,19 +2305,19 @@
               "code": "500-8833",
               "street": "神田町",
               "street_en": "Kanda-machi",
-              "pattern": "神田町n{1,9}-n{1,20}"
+              "pattern": "神田町n{１,９}丁目n{１,２０}番"
             },
             {
               "code": "500-8175",
               "street": "長住町",
               "street_en": "Nagasumi-cho",
-              "pattern": "長住町n{1,111}"
+              "pattern": "長住町n{１,１１１}"
             },
             {
               "code": "500-8076",
               "street": "司町",
               "street_en": "Tsukasa-machi",
-              "pattern": "司町n{1,80}"
+              "pattern": "司町n{１,８０}"
             }
           ]
         },
@@ -2331,19 +2331,19 @@
               "code": "503-0901",
               "street": "高屋町",
               "street_en": "Takaya-cho",
-              "pattern": "高屋町n{1,128}"
+              "pattern": "高屋町n{１,１２８}"
             },
             {
               "code": "503-0905",
               "street": "宮町",
               "street_en": "Miya-cho",
-              "pattern": "宮町n{1,70}"
+              "pattern": "宮町n{１,７０}"
             },
             {
               "code": "503-0903",
               "street": "丸の内",
               "street_en": "Marunouchi",
-              "pattern": "丸の内n{1,2}-n{1,40}"
+              "pattern": "丸の内n{１,２}丁目n{１,４０}番"
             }
           ]
         },
@@ -2357,19 +2357,19 @@
               "code": "506-0009",
               "street": "花岡町",
               "street_en": "Hanaoka-cho",
-              "pattern": "花岡町n{1,2}-n{1,40}"
+              "pattern": "花岡町n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "506-0017",
               "street": "朝日町",
               "street_en": "Asahi-machi",
-              "pattern": "朝日町n{1,128}"
+              "pattern": "朝日町n{１,１２８}"
             },
             {
               "code": "506-0838",
               "street": "上三之町",
               "street_en": "Kami-Sannomachi",
-              "pattern": "上三之町n{1,70}"
+              "pattern": "上三之町n{１,７０}"
             }
           ]
         }
@@ -2392,25 +2392,25 @@
               "code": "420-0857",
               "street": "御幸町",
               "street_en": "Miyuki-cho",
-              "pattern": "御幸町n{1,115}"
+              "pattern": "御幸町n{１,１１５}"
             },
             {
               "code": "420-0031",
               "street": "呉服町",
               "street_en": "Gofuku-cho",
-              "pattern": "呉服町n{1,2}-n{1,40}"
+              "pattern": "呉服町n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "420-0858",
               "street": "伝馬町",
               "street_en": "Tenma-cho",
-              "pattern": "伝馬町n{1,80}"
+              "pattern": "伝馬町n{１,８０}"
             },
             {
               "code": "424-0816",
               "street": "清水区入江",
               "street_en": "Shimizu-ku Irie",
-              "pattern": "清水区入江n{1,3}-n{1,30}"
+              "pattern": "清水区入江n{１,３}丁目n{１,３０}番"
             }
           ]
         },
@@ -2424,19 +2424,19 @@
               "code": "430-0933",
               "street": "鍛冶町",
               "street_en": "Kaji-machi",
-              "pattern": "鍛冶町n{1,80}"
+              "pattern": "鍛冶町n{１,８０}"
             },
             {
               "code": "430-0926",
               "street": "砂山町",
               "street_en": "Sunayama-cho",
-              "pattern": "砂山町n{1,80}"
+              "pattern": "砂山町n{１,８０}"
             },
             {
               "code": "430-0946",
               "street": "元城町",
               "street_en": "Motoshiro-cho",
-              "pattern": "元城町n{1,80}"
+              "pattern": "元城町n{１,８０}"
             }
           ]
         },
@@ -2450,19 +2450,19 @@
               "code": "410-0801",
               "street": "大手町",
               "street_en": "Otemachi",
-              "pattern": "大手町n{1,5}-n{1,20}"
+              "pattern": "大手町n{１,５}丁目n{１,２０}番"
             },
             {
               "code": "410-0053",
               "street": "寿町",
               "street_en": "Kotobuki-cho",
-              "pattern": "寿町n{1,115}"
+              "pattern": "寿町n{１,１１５}"
             },
             {
               "code": "410-0022",
               "street": "大岡",
               "street_en": "Ooka",
-              "pattern": "大岡n{1,80}"
+              "pattern": "大岡n{１,８０}"
             }
           ]
         },
@@ -2476,19 +2476,19 @@
               "code": "417-0055",
               "street": "永田町",
               "street_en": "Nagata-cho",
-              "pattern": "永田町n{1,2}-n{1,40}"
+              "pattern": "永田町n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "417-0045",
               "street": "錦町",
               "street_en": "Nishiki-cho",
-              "pattern": "錦町n{1,2}-n{1,40}"
+              "pattern": "錦町n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "417-0057",
               "street": "瓜島町",
               "street_en": "Urishima-cho",
-              "pattern": "瓜島町n{1,196}"
+              "pattern": "瓜島町n{１,１９６}"
             }
           ]
         }
@@ -2511,37 +2511,37 @@
               "code": "460-0003",
               "street": "中区錦",
               "street_en": "Naka-ku Nishiki",
-              "pattern": "中区錦n{1,3}-n{1,25}"
+              "pattern": "中区錦n{１,３}丁目n{１,２５}番"
             },
             {
               "code": "460-0008",
               "street": "中区栄",
               "street_en": "Naka-ku Sakae",
-              "pattern": "中区栄n{1,184}-n{1,25}"
+              "pattern": "中区栄n{１,１８４}丁目n{１,２５}番"
             },
             {
               "code": "450-0002",
               "street": "中村区名駅",
               "street_en": "Nakamura-ku Meieki",
-              "pattern": "中村区名駅n{1,5}-n{1,20}"
+              "pattern": "中村区名駅n{１,５}丁目n{１,２０}番"
             },
             {
               "code": "464-0075",
               "street": "千種区内山",
               "street_en": "Chikusa-ku Uchiyama",
-              "pattern": "千種区内山n{1,3}-n{1,25}"
+              "pattern": "千種区内山n{１,３}丁目n{１,２５}番"
             },
             {
               "code": "456-0002",
               "street": "熱田区金山町",
               "street_en": "Atsuta-ku Kanayama-cho",
-              "pattern": "熱田区金山町n{1,2}-n{1,30}"
+              "pattern": "熱田区金山町n{１,２}丁目n{１,３０}番"
             },
             {
               "code": "462-0825",
               "street": "北区大曽根",
               "street_en": "Kita-ku Ozone",
-              "pattern": "北区大曽根n{1,3}-n{1,25}"
+              "pattern": "北区大曽根n{１,３}丁目n{１,２５}番"
             }
           ]
         },
@@ -2555,19 +2555,19 @@
               "code": "440-0075",
               "street": "花田町",
               "street_en": "Hanada-cho",
-              "pattern": "花田町n{1,192}"
+              "pattern": "花田町n{１,１９２}"
             },
             {
               "code": "440-0897",
               "street": "松葉町",
               "street_en": "Matsuba-cho",
-              "pattern": "松葉町n{1,3}-n{1,30}"
+              "pattern": "松葉町n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "440-0881",
               "street": "広小路",
               "street_en": "Hirokoji",
-              "pattern": "広小路n{1,5}-n{1,20}"
+              "pattern": "広小路n{１,５}丁目n{１,２０}番"
             }
           ]
         },
@@ -2581,19 +2581,19 @@
               "code": "444-0038",
               "street": "伝馬通",
               "street_en": "Tenma-dori",
-              "pattern": "伝馬通n{1,192}-n{1,20}"
+              "pattern": "伝馬通n{１,１９２}丁目n{１,２０}番"
             },
             {
               "code": "444-0059",
               "street": "康生通西",
               "street_en": "Kosei-dori-Nishi",
-              "pattern": "康生通西n{1,4}-n{1,25}"
+              "pattern": "康生通西n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "444-0860",
               "street": "明大寺本町",
               "street_en": "Myodaiji-Honmachi",
-              "pattern": "明大寺本町n{1,4}-n{1,25}"
+              "pattern": "明大寺本町n{１,４}丁目n{１,２５}番"
             }
           ]
         },
@@ -2607,19 +2607,19 @@
               "code": "471-0026",
               "street": "若宮町",
               "street_en": "Wakamiya-cho",
-              "pattern": "若宮町n{1,184}-n{1,20}"
+              "pattern": "若宮町n{１,１８４}丁目n{１,２０}番"
             },
             {
               "code": "471-0034",
               "street": "小坂本町",
               "street_en": "Kozakahon-machi",
-              "pattern": "小坂本町n{1,8}-n{1,20}"
+              "pattern": "小坂本町n{１,８}丁目n{１,２０}番"
             },
             {
               "code": "471-0027",
               "street": "喜多町",
               "street_en": "Kita-machi",
-              "pattern": "喜多町n{1,8}-n{1,20}"
+              "pattern": "喜多町n{１,８}丁目n{１,２０}番"
             }
           ]
         },
@@ -2633,19 +2633,19 @@
               "code": "486-0844",
               "street": "鳥居松町",
               "street_en": "Torimatsu-cho",
-              "pattern": "鳥居松町n{1,184}-n{1,20}"
+              "pattern": "鳥居松町n{１,１８４}丁目n{１,２０}番"
             },
             {
               "code": "486-0825",
               "street": "中央台",
               "street_en": "Chuodai",
-              "pattern": "中央台n{1,8}-n{1,20}"
+              "pattern": "中央台n{１,８}丁目n{１,２０}番"
             },
             {
               "code": "486-0928",
               "street": "松新町",
               "street_en": "Matsushin-cho",
-              "pattern": "松新町n{1,8}-n{1,20}"
+              "pattern": "松新町n{１,８}丁目n{１,２０}番"
             }
           ]
         }
@@ -2669,19 +2669,19 @@
               "code": "514-0009",
               "street": "羽所町",
               "street_en": "Hadokoro-cho",
-              "pattern": "羽所町n{1,117}"
+              "pattern": "羽所町n{１,１１７}"
             },
             {
               "code": "514-0003",
               "street": "桜橋",
               "street_en": "Sakurabashi",
-              "pattern": "桜橋n{1,3}-n{1,30}"
+              "pattern": "桜橋n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "514-0008",
               "street": "上浜町",
               "street_en": "Kamihama-cho",
-              "pattern": "上浜町n{1,80}"
+              "pattern": "上浜町n{１,８０}"
             }
           ]
         },
@@ -2695,19 +2695,19 @@
               "code": "510-0075",
               "street": "安島",
               "street_en": "Yasujima",
-              "pattern": "安島n{1,2}-n{1,50}"
+              "pattern": "安島n{１,２}丁目n{１,５０}番"
             },
             {
               "code": "510-0067",
               "street": "浜田町",
               "street_en": "Hamada-cho",
-              "pattern": "浜田町n{1,118}"
+              "pattern": "浜田町n{１,１１８}"
             },
             {
               "code": "510-0061",
               "street": "朝日町",
               "street_en": "Asahi-cho",
-              "pattern": "朝日町n{1,80}"
+              "pattern": "朝日町n{１,８０}"
             }
           ]
         },
@@ -2721,19 +2721,19 @@
               "code": "516-0037",
               "street": "岩渕",
               "street_en": "Iwabuchi",
-              "pattern": "岩渕n{1,3}-n{1,30}"
+              "pattern": "岩渕n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "516-0072",
               "street": "宮後",
               "street_en": "Miyago",
-              "pattern": "宮後n{1,3}-n{1,30}"
+              "pattern": "宮後n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "516-0074",
               "street": "本町",
               "street_en": "Honmachi",
-              "pattern": "本町n{1,194}"
+              "pattern": "本町n{１,１９４}"
             }
           ]
         }
@@ -2757,19 +2757,19 @@
               "code": "520-0043",
               "street": "中央",
               "street_en": "Chuo",
-              "pattern": "中央n{1,192}-n{1,25}"
+              "pattern": "中央n{１,１９２}丁目n{１,２５}番"
             },
             {
               "code": "520-0047",
               "street": "浜大津",
               "street_en": "Hama-Otsu",
-              "pattern": "浜大津n{1,4}-n{1,25}"
+              "pattern": "浜大津n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "520-0044",
               "street": "京町",
               "street_en": "Kyo-machi",
-              "pattern": "京町n{1,4}-n{1,25}"
+              "pattern": "京町n{１,４}丁目n{１,２５}番"
             }
           ]
         },
@@ -2783,19 +2783,19 @@
               "code": "525-0037",
               "street": "西大路町",
               "street_en": "Nishi-Oji-cho",
-              "pattern": "西大路町n{1,196}"
+              "pattern": "西大路町n{１,１９６}"
             },
             {
               "code": "525-0032",
               "street": "大路",
               "street_en": "Oji",
-              "pattern": "大路n{1,2}-n{1,40}"
+              "pattern": "大路n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "525-0026",
               "street": "渋川",
               "street_en": "Shibukawa",
-              "pattern": "渋川n{1,2}-n{1,40}"
+              "pattern": "渋川n{１,２}丁目n{１,４０}番"
             }
           ]
         }
@@ -2819,37 +2819,37 @@
               "code": "600-8216",
               "street": "下京区烏丸通",
               "street_en": "Shimogyo-ku Karasuma-dori",
-              "pattern": "下京区烏丸通n{1,80}"
+              "pattern": "下京区烏丸通n{１,８０}"
             },
             {
               "code": "604-8006",
               "street": "中京区河原町通",
               "street_en": "Nakagyo-ku Kawaramachi-dori",
-              "pattern": "中京区河原町通n{1,80}"
+              "pattern": "中京区河原町通n{１,８０}"
             },
             {
               "code": "605-0073",
               "street": "東山区祇園町",
               "street_en": "Higashiyama-ku Gion-machi",
-              "pattern": "東山区祇園町n{1,80}"
+              "pattern": "東山区祇園町n{１,８０}"
             },
             {
               "code": "606-8301",
               "street": "左京区吉田本町",
               "street_en": "Sakyo-ku Yoshida-Honmachi",
-              "pattern": "左京区吉田本町n{1,70}"
+              "pattern": "左京区吉田本町n{１,７０}"
             },
             {
               "code": "602-0898",
               "street": "上京区今出川通",
               "street_en": "Kamigyo-ku Imadegawa-dori",
-              "pattern": "上京区今出川通n{1,70}"
+              "pattern": "上京区今出川通n{１,７０}"
             },
             {
               "code": "615-0021",
               "street": "右京区西院三蔵町",
               "street_en": "Ukyo-ku Saiin-Sanzo-cho",
-              "pattern": "右京区西院三蔵町n{1,60}"
+              "pattern": "右京区西院三蔵町n{１,６０}"
             }
           ]
         },
@@ -2863,19 +2863,19 @@
               "code": "611-0021",
               "street": "宇治",
               "street_en": "Uji",
-              "pattern": "宇治n{1,80}"
+              "pattern": "宇治n{１,８０}"
             },
             {
               "code": "611-0033",
               "street": "大久保町",
               "street_en": "Okubo-cho",
-              "pattern": "大久保町n{1,80}"
+              "pattern": "大久保町n{１,８０}"
             },
             {
               "code": "611-0042",
               "street": "小倉町",
               "street_en": "Ogura-cho",
-              "pattern": "小倉町n{1,70}"
+              "pattern": "小倉町n{１,７０}"
             }
           ]
         },
@@ -2889,19 +2889,19 @@
               "code": "624-0841",
               "street": "引土",
               "street_en": "Hikitsuchi",
-              "pattern": "引土n{1,80}"
+              "pattern": "引土n{１,８０}"
             },
             {
               "code": "625-0036",
               "street": "浜",
               "street_en": "Hama",
-              "pattern": "浜n{1,80}"
+              "pattern": "浜n{１,８０}"
             },
             {
               "code": "624-0906",
               "street": "倉谷",
               "street_en": "Kuratani",
-              "pattern": "倉谷n{1,70}"
+              "pattern": "倉谷n{１,７０}"
             }
           ]
         }
@@ -2925,37 +2925,37 @@
               "code": "530-0001",
               "street": "北区梅田",
               "street_en": "Kita-ku Umeda",
-              "pattern": "北区梅田n{1,3}-n{1,20}"
+              "pattern": "北区梅田n{１,３}丁目n{１,２０}番"
             },
             {
               "code": "541-0047",
               "street": "中央区淡路町",
               "street_en": "Chuo-ku Awaji-machi",
-              "pattern": "中央区淡路町n{1,4}-n{1,20}"
+              "pattern": "中央区淡路町n{１,４}丁目n{１,２０}番"
             },
             {
               "code": "542-0076",
               "street": "中央区難波",
               "street_en": "Chuo-ku Namba",
-              "pattern": "中央区難波n{1,5}-n{1,20}"
+              "pattern": "中央区難波n{１,５}丁目n{１,２０}番"
             },
             {
               "code": "556-0011",
               "street": "浪速区難波中",
               "street_en": "Naniwa-ku Namba-Naka",
-              "pattern": "浪速区難波中n{1,3}-n{1,20}"
+              "pattern": "浪速区難波中n{１,３}丁目n{１,２０}番"
             },
             {
               "code": "532-0011",
               "street": "淀川区西中島",
               "street_en": "Yodogawa-ku Nishi-Nakajima",
-              "pattern": "淀川区西中島n{1,7}-n{1,20}"
+              "pattern": "淀川区西中島n{１,７}丁目n{１,２０}番"
             },
             {
               "code": "543-0001",
               "street": "天王寺区上本町",
               "street_en": "Tennoji-ku Uehonmachi",
-              "pattern": "天王寺区上本町n{1,178}-n{1,15}"
+              "pattern": "天王寺区上本町n{１,１７８}丁目n{１,１５}番"
             }
           ]
         },
@@ -2969,19 +2969,19 @@
               "code": "590-0028",
               "street": "堺区三国ヶ丘御幸通",
               "street_en": "Sakai-ku Mikunigaoka-Miyuki-dori",
-              "pattern": "堺区三国ヶ丘御幸通n{1,116}"
+              "pattern": "堺区三国ヶ丘御幸通n{１,１１６}"
             },
             {
               "code": "590-0013",
               "street": "堺区東雲西町",
               "street_en": "Sakai-ku Shinonomonishi-cho",
-              "pattern": "堺区東雲西町n{1,4}-n{1,20}"
+              "pattern": "堺区東雲西町n{１,４}丁目n{１,２０}番"
             },
             {
               "code": "591-8025",
               "street": "北区長曽根町",
               "street_en": "Kita-ku Nagasone-cho",
-              "pattern": "北区長曽根町n{1,80}"
+              "pattern": "北区長曽根町n{１,８０}"
             }
           ]
         },
@@ -2995,19 +2995,19 @@
               "code": "577-0056",
               "street": "長堂",
               "street_en": "Nagado",
-              "pattern": "長堂n{1,3}-n{1,30}"
+              "pattern": "長堂n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "578-0941",
               "street": "岩田町",
               "street_en": "Iwata-cho",
-              "pattern": "岩田町n{1,194}-n{1,20}"
+              "pattern": "岩田町n{１,１９４}丁目n{１,２０}番"
             },
             {
               "code": "577-0801",
               "street": "小阪",
               "street_en": "Kosaka",
-              "pattern": "小阪n{1,3}-n{1,30}"
+              "pattern": "小阪n{１,３}丁目n{１,３０}番"
             }
           ]
         },
@@ -3021,19 +3021,19 @@
               "code": "560-0021",
               "street": "本町",
               "street_en": "Honcho",
-              "pattern": "本町n{1,190}-n{1,15}"
+              "pattern": "本町n{１,１９０}丁目n{１,１５}番"
             },
             {
               "code": "560-0026",
               "street": "玉井町",
               "street_en": "Tamai-cho",
-              "pattern": "玉井町n{1,4}-n{1,25}"
+              "pattern": "玉井町n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "561-0802",
               "street": "曽根東町",
               "street_en": "Sone-Higashi-cho",
-              "pattern": "曽根東町n{1,6}-n{1,20}"
+              "pattern": "曽根東町n{１,６}丁目n{１,２０}番"
             }
           ]
         },
@@ -3047,19 +3047,19 @@
               "code": "564-0082",
               "street": "片山町",
               "street_en": "Katayama-cho",
-              "pattern": "片山町n{1,4}-n{1,25}"
+              "pattern": "片山町n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "565-0826",
               "street": "千里万博公園",
               "street_en": "Senri-Banpaku-Koen",
-              "pattern": "千里万博公園n{1,116}"
+              "pattern": "千里万博公園n{１,１１６}"
             },
             {
               "code": "564-0051",
               "street": "豊津町",
               "street_en": "Toyotsu-cho",
-              "pattern": "豊津町n{1,80}"
+              "pattern": "豊津町n{１,８０}"
             }
           ]
         },
@@ -3073,19 +3073,19 @@
               "code": "569-0802",
               "street": "北園町",
               "street_en": "Kitazono-cho",
-              "pattern": "北園町n{1,118}"
+              "pattern": "北園町n{１,１１８}"
             },
             {
               "code": "569-0071",
               "street": "城北町",
               "street_en": "Johoku-cho",
-              "pattern": "城北町n{1,2}-n{1,40}"
+              "pattern": "城北町n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "569-0804",
               "street": "紺屋町",
               "street_en": "Konya-cho",
-              "pattern": "紺屋町n{1,80}"
+              "pattern": "紺屋町n{１,８０}"
             }
           ]
         }
@@ -3109,31 +3109,31 @@
               "code": "650-0021",
               "street": "中央区三宮町",
               "street_en": "Chuo-ku Sannomiya-cho",
-              "pattern": "中央区三宮町n{1,3}-n{1,20}"
+              "pattern": "中央区三宮町n{１,３}丁目n{１,２０}番"
             },
             {
               "code": "650-0044",
               "street": "中央区東川崎町",
               "street_en": "Chuo-ku Higashi-Kawasaki-cho",
-              "pattern": "中央区東川崎町n{1,180}"
+              "pattern": "中央区東川崎町n{１,１８０}"
             },
             {
               "code": "651-0084",
               "street": "中央区磯辺通",
               "street_en": "Chuo-ku Isobe-dori",
-              "pattern": "中央区磯辺通n{1,4}-n{1,20}"
+              "pattern": "中央区磯辺通n{１,４}丁目n{１,２０}番"
             },
             {
               "code": "657-0836",
               "street": "灘区城の下通",
               "street_en": "Nada-ku Shironoshita-dori",
-              "pattern": "灘区城の下通n{1,3}-n{1,25}"
+              "pattern": "灘区城の下通n{１,３}丁目n{１,２５}番"
             },
             {
               "code": "652-0803",
               "street": "兵庫区大開通",
               "street_en": "Hyogo-ku Obiraki-dori",
-              "pattern": "兵庫区大開通n{1,10}-n{1,15}"
+              "pattern": "兵庫区大開通n{１,１０}丁目n{１,１５}番"
             }
           ]
         },
@@ -3147,19 +3147,19 @@
               "code": "670-0927",
               "street": "駅前町",
               "street_en": "Ekimae-cho",
-              "pattern": "駅前町n{1,80}"
+              "pattern": "駅前町n{１,８０}"
             },
             {
               "code": "670-0012",
               "street": "本町",
               "street_en": "Honmachi",
-              "pattern": "本町n{1,80}"
+              "pattern": "本町n{１,８０}"
             },
             {
               "code": "670-0925",
               "street": "亀井町",
               "street_en": "Kamei-cho",
-              "pattern": "亀井町n{1,70}"
+              "pattern": "亀井町n{１,７０}"
             }
           ]
         },
@@ -3173,19 +3173,19 @@
               "code": "662-0911",
               "street": "池田町",
               "street_en": "Ikeda-cho",
-              "pattern": "池田町n{1,80}"
+              "pattern": "池田町n{１,８０}"
             },
             {
               "code": "663-8035",
               "street": "北口町",
               "street_en": "Kitaguchi-cho",
-              "pattern": "北口町n{1,80}"
+              "pattern": "北口町n{１,８０}"
             },
             {
               "code": "663-8204",
               "street": "高松町",
               "street_en": "Takamatsu-cho",
-              "pattern": "高松町n{1,80}"
+              "pattern": "高松町n{１,８０}"
             }
           ]
         },
@@ -3199,19 +3199,19 @@
               "code": "660-0861",
               "street": "御園町",
               "street_en": "Misono-cho",
-              "pattern": "御園町n{1,188}"
+              "pattern": "御園町n{１,１８８}"
             },
             {
               "code": "660-0881",
               "street": "昭和通",
               "street_en": "Showa-dori",
-              "pattern": "昭和通n{1,9}-n{1,15}"
+              "pattern": "昭和通n{１,９}丁目n{１,１５}番"
             },
             {
               "code": "660-0876",
               "street": "竹谷町",
               "street_en": "Taketani-cho",
-              "pattern": "竹谷町n{1,3}-n{1,25}"
+              "pattern": "竹谷町n{１,３}丁目n{１,２５}番"
             }
           ]
         },
@@ -3225,19 +3225,19 @@
               "code": "673-0891",
               "street": "大明石町",
               "street_en": "Oakashi-cho",
-              "pattern": "大明石町n{1,2}-n{1,40}"
+              "pattern": "大明石町n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "673-0016",
               "street": "松の内",
               "street_en": "Matsunouchi",
-              "pattern": "松の内n{1,2}-n{1,40}"
+              "pattern": "松の内n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "673-0886",
               "street": "東仲ノ町",
               "street_en": "Higashi-Nakanocho",
-              "pattern": "東仲ノ町n{1,196}"
+              "pattern": "東仲ノ町n{１,１９６}"
             }
           ]
         }
@@ -3261,19 +3261,19 @@
               "code": "630-8122",
               "street": "三条本町",
               "street_en": "Sanjo-Honmachi",
-              "pattern": "三条本町n{1,80}"
+              "pattern": "三条本町n{１,８０}"
             },
             {
               "code": "630-8226",
               "street": "小西町",
               "street_en": "Konishi-machi",
-              "pattern": "小西町n{1,80}"
+              "pattern": "小西町n{１,８０}"
             },
             {
               "code": "630-8241",
               "street": "高天町",
               "street_en": "Takama-cho",
-              "pattern": "高天町n{1,80}"
+              "pattern": "高天町n{１,８０}"
             }
           ]
         },
@@ -3287,19 +3287,19 @@
               "code": "634-0078",
               "street": "八木町",
               "street_en": "Yagi-cho",
-              "pattern": "八木町n{1,3}-n{1,30}"
+              "pattern": "八木町n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "634-0804",
               "street": "内膳町",
               "street_en": "Naizen-cho",
-              "pattern": "内膳町n{1,5}-n{1,20}"
+              "pattern": "内膳町n{１,５}丁目n{１,２０}番"
             },
             {
               "code": "634-0063",
               "street": "久米町",
               "street_en": "Kume-cho",
-              "pattern": "久米町n{1,192}"
+              "pattern": "久米町n{１,１９２}"
             }
           ]
         }
@@ -3323,19 +3323,19 @@
               "code": "640-8033",
               "street": "本町",
               "street_en": "Honmachi",
-              "pattern": "本町n{1,115}"
+              "pattern": "本町n{１,１１５}"
             },
             {
               "code": "640-8154",
               "street": "友田町",
               "street_en": "Tomoda-cho",
-              "pattern": "友田町n{1,5}-n{1,20}"
+              "pattern": "友田町n{１,５}丁目n{１,２０}番"
             },
             {
               "code": "640-8108",
               "street": "雑賀町",
               "street_en": "Saika-cho",
-              "pattern": "雑賀町n{1,80}"
+              "pattern": "雑賀町n{１,８０}"
             }
           ]
         },
@@ -3349,19 +3349,19 @@
               "code": "646-0031",
               "street": "湊",
               "street_en": "Minato",
-              "pattern": "湊n{1,80}"
+              "pattern": "湊n{１,８０}"
             },
             {
               "code": "646-0050",
               "street": "北新町",
               "street_en": "Kita-Shinmachi",
-              "pattern": "北新町n{1,80}"
+              "pattern": "北新町n{１,８０}"
             },
             {
               "code": "646-0029",
               "street": "東陽",
               "street_en": "Toyo",
-              "pattern": "東陽n{1,70}"
+              "pattern": "東陽n{１,７０}"
             }
           ]
         }
@@ -3384,19 +3384,19 @@
               "code": "680-0022",
               "street": "西町",
               "street_en": "Nishi-machi",
-              "pattern": "西町n{1,80}"
+              "pattern": "西町n{１,８０}"
             },
             {
               "code": "680-0031",
               "street": "本町",
               "street_en": "Honcho",
-              "pattern": "本町n{1,80}"
+              "pattern": "本町n{１,８０}"
             },
             {
               "code": "680-0055",
               "street": "戎町",
               "street_en": "Ebisu-cho",
-              "pattern": "戎町n{1,70}"
+              "pattern": "戎町n{１,７０}"
             }
           ]
         },
@@ -3410,19 +3410,19 @@
               "code": "683-0067",
               "street": "東町",
               "street_en": "Higashi-machi",
-              "pattern": "東町n{1,192}"
+              "pattern": "東町n{１,１９２}"
             },
             {
               "code": "683-0812",
               "street": "角盤町",
               "street_en": "Kakuban-cho",
-              "pattern": "角盤町n{1,4}-n{1,20}"
+              "pattern": "角盤町n{１,４}丁目n{１,２０}番"
             },
             {
               "code": "683-0064",
               "street": "道笑町",
               "street_en": "Dosho-cho",
-              "pattern": "道笑町n{1,4}-n{1,20}"
+              "pattern": "道笑町n{１,４}丁目n{１,２０}番"
             }
           ]
         }
@@ -3445,19 +3445,19 @@
               "code": "690-0003",
               "street": "朝日町",
               "street_en": "Asahi-machi",
-              "pattern": "朝日町n{1,115}"
+              "pattern": "朝日町n{１,１１５}"
             },
             {
               "code": "690-0846",
               "street": "末次町",
               "street_en": "Suetsugu-cho",
-              "pattern": "末次町n{1,80}"
+              "pattern": "末次町n{１,８０}"
             },
             {
               "code": "690-0842",
               "street": "東本町",
               "street_en": "Higashi-Honmachi",
-              "pattern": "東本町n{1,5}-n{1,20}"
+              "pattern": "東本町n{１,５}丁目n{１,２０}番"
             }
           ]
         },
@@ -3471,19 +3471,19 @@
               "code": "693-0001",
               "street": "今市町",
               "street_en": "Imaichi-cho",
-              "pattern": "今市町n{1,80}"
+              "pattern": "今市町n{１,８０}"
             },
             {
               "code": "693-0023",
               "street": "塩冶有原町",
               "street_en": "Enya-Arihara-cho",
-              "pattern": "塩冶有原町n{1,80}"
+              "pattern": "塩冶有原町n{１,８０}"
             },
             {
               "code": "693-0068",
               "street": "大津町",
               "street_en": "Otsu-cho",
-              "pattern": "大津町n{1,70}"
+              "pattern": "大津町n{１,７０}"
             }
           ]
         }
@@ -3506,25 +3506,25 @@
               "code": "700-0024",
               "street": "北区駅前町",
               "street_en": "Kita-ku Ekimae-cho",
-              "pattern": "北区駅前町n{1,2}-n{1,40}"
+              "pattern": "北区駅前町n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "700-0901",
               "street": "北区本町",
               "street_en": "Kita-ku Honcho",
-              "pattern": "北区本町n{1,80}"
+              "pattern": "北区本町n{１,８０}"
             },
             {
               "code": "700-0826",
               "street": "北区磨屋町",
               "street_en": "Kita-ku Togiya-cho",
-              "pattern": "北区磨屋町n{1,80}"
+              "pattern": "北区磨屋町n{１,８０}"
             },
             {
               "code": "702-8006",
               "street": "中区藤崎",
               "street_en": "Naka-ku Fujisaki",
-              "pattern": "中区藤崎n{1,80}"
+              "pattern": "中区藤崎n{１,８０}"
             }
           ]
         },
@@ -3538,19 +3538,19 @@
               "code": "710-0055",
               "street": "阿知",
               "street_en": "Achi",
-              "pattern": "阿知n{1,3}-n{1,30}"
+              "pattern": "阿知n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "710-0046",
               "street": "中央",
               "street_en": "Chuo",
-              "pattern": "中央n{1,2}-n{1,40}"
+              "pattern": "中央n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "710-0834",
               "street": "笹沖",
               "street_en": "Sasaoki",
-              "pattern": "笹沖n{1,195}"
+              "pattern": "笹沖n{１,１９５}"
             }
           ]
         },
@@ -3564,19 +3564,19 @@
               "code": "708-0022",
               "street": "山下",
               "street_en": "Yamashita",
-              "pattern": "山下n{1,80}"
+              "pattern": "山下n{１,８０}"
             },
             {
               "code": "708-0023",
               "street": "大手町",
               "street_en": "Otemachi",
-              "pattern": "大手町n{1,80}"
+              "pattern": "大手町n{１,８０}"
             },
             {
               "code": "708-0051",
               "street": "椿高下",
               "street_en": "Tsubaki-Takashita",
-              "pattern": "椿高下n{1,70}"
+              "pattern": "椿高下n{１,７０}"
             }
           ]
         }
@@ -3599,31 +3599,31 @@
               "code": "730-0035",
               "street": "中区本通",
               "street_en": "Naka-ku Hondori",
-              "pattern": "中区本通n{1,80}"
+              "pattern": "中区本通n{１,８０}"
             },
             {
               "code": "730-0051",
               "street": "中区大手町",
               "street_en": "Naka-ku Otemachi",
-              "pattern": "中区大手町n{1,5}-n{1,20}"
+              "pattern": "中区大手町n{１,５}丁目n{１,２０}番"
             },
             {
               "code": "730-0011",
               "street": "中区基町",
               "street_en": "Naka-ku Motomachi",
-              "pattern": "中区基町n{1,80}"
+              "pattern": "中区基町n{１,８０}"
             },
             {
               "code": "732-0822",
               "street": "南区松原町",
               "street_en": "Minami-ku Matsubara-cho",
-              "pattern": "南区松原町n{1,80}"
+              "pattern": "南区松原町n{１,８０}"
             },
             {
               "code": "733-0011",
               "street": "西区横川町",
               "street_en": "Nishi-ku Yokogawa-cho",
-              "pattern": "西区横川町n{1,3}-n{1,25}"
+              "pattern": "西区横川町n{１,３}丁目n{１,２５}番"
             }
           ]
         },
@@ -3637,19 +3637,19 @@
               "code": "720-0066",
               "street": "三之丸町",
               "street_en": "Sannomaru-cho",
-              "pattern": "三之丸町n{1,116}"
+              "pattern": "三之丸町n{１,１１６}"
             },
             {
               "code": "720-0812",
               "street": "霞町",
               "street_en": "Kasumi-cho",
-              "pattern": "霞町n{1,4}-n{1,25}"
+              "pattern": "霞町n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "720-0043",
               "street": "船町",
               "street_en": "Funa-machi",
-              "pattern": "船町n{1,80}"
+              "pattern": "船町n{１,８０}"
             }
           ]
         },
@@ -3663,19 +3663,19 @@
               "code": "737-0045",
               "street": "本通",
               "street_en": "Hondori",
-              "pattern": "本通n{1,190}-n{1,20}"
+              "pattern": "本通n{１,１９０}丁目n{１,２０}番"
             },
             {
               "code": "737-0051",
               "street": "中央",
               "street_en": "Chuo",
-              "pattern": "中央n{1,6}-n{1,20}"
+              "pattern": "中央n{１,６}丁目n{１,２０}番"
             },
             {
               "code": "737-0046",
               "street": "中通",
               "street_en": "Nakadori",
-              "pattern": "中通n{1,4}-n{1,20}"
+              "pattern": "中通n{１,４}丁目n{１,２０}番"
             }
           ]
         },
@@ -3689,19 +3689,19 @@
               "code": "722-0036",
               "street": "東御所町",
               "street_en": "Higashi-Gosho-cho",
-              "pattern": "東御所町n{1,195}"
+              "pattern": "東御所町n{１,１９５}"
             },
             {
               "code": "722-0035",
               "street": "土堂",
               "street_en": "Tsuchido",
-              "pattern": "土堂n{1,2}-n{1,40}"
+              "pattern": "土堂n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "722-0045",
               "street": "久保",
               "street_en": "Kubo",
-              "pattern": "久保n{1,3}-n{1,30}"
+              "pattern": "久保n{１,３}丁目n{１,３０}番"
             }
           ]
         }
@@ -3724,19 +3724,19 @@
               "code": "753-0047",
               "street": "道場門前",
               "street_en": "Dojomon-zen",
-              "pattern": "道場門前n{1,2}-n{1,40}"
+              "pattern": "道場門前n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "753-0087",
               "street": "米屋町",
               "street_en": "Komeya-cho",
-              "pattern": "米屋町n{1,196}"
+              "pattern": "米屋町n{１,１９６}"
             },
             {
               "code": "753-0048",
               "street": "駅通り",
               "street_en": "Eki-dori",
-              "pattern": "駅通りn{1,2}-n{1,40}"
+              "pattern": "駅通りn{１,２}丁目n{１,４０}番"
             }
           ]
         },
@@ -3750,19 +3750,19 @@
               "code": "750-0018",
               "street": "豊前田町",
               "street_en": "Buzen-da-cho",
-              "pattern": "豊前田町n{1,3}-n{1,30}"
+              "pattern": "豊前田町n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "750-0006",
               "street": "南部町",
               "street_en": "Nanbu-cho",
-              "pattern": "南部町n{1,193}"
+              "pattern": "南部町n{１,１９３}"
             },
             {
               "code": "750-0025",
               "street": "竹崎町",
               "street_en": "Takezaki-cho",
-              "pattern": "竹崎町n{1,4}-n{1,20}"
+              "pattern": "竹崎町n{１,４}丁目n{１,２０}番"
             }
           ]
         },
@@ -3776,19 +3776,19 @@
               "code": "740-0018",
               "street": "麻里布町",
               "street_en": "Marifu-cho",
-              "pattern": "麻里布町n{1,7}-n{1,15}"
+              "pattern": "麻里布町n{１,７}丁目n{１,１５}番"
             },
             {
               "code": "740-0022",
               "street": "山手町",
               "street_en": "Yamate-cho",
-              "pattern": "山手町n{1,4}-n{1,25}"
+              "pattern": "山手町n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "740-0016",
               "street": "三笠町",
               "street_en": "Mikasa-cho",
-              "pattern": "三笠町n{1,189}"
+              "pattern": "三笠町n{１,１８９}"
             }
           ]
         }
@@ -3811,19 +3811,19 @@
               "code": "770-0831",
               "street": "寺島本町西",
               "street_en": "Terashima-Honcho-Nishi",
-              "pattern": "寺島本町西n{1,195}-n{1,30}"
+              "pattern": "寺島本町西n{１,１９５}丁目n{１,３０}番"
             },
             {
               "code": "770-0841",
               "street": "八百屋町",
               "street_en": "Yaoya-machi",
-              "pattern": "八百屋町n{1,3}-n{1,30}"
+              "pattern": "八百屋町n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "770-0901",
               "street": "西新浜町",
               "street_en": "Nishi-Shinhama-cho",
-              "pattern": "西新浜町n{1,2}-n{1,50}"
+              "pattern": "西新浜町n{１,２}丁目n{１,５０}番"
             }
           ]
         },
@@ -3837,19 +3837,19 @@
               "code": "772-0003",
               "street": "撫養町南浜",
               "street_en": "Muya-cho Minamihama",
-              "pattern": "撫養町南浜n{1,80}"
+              "pattern": "撫養町南浜n{１,８０}"
             },
             {
               "code": "772-0002",
               "street": "撫養町斎田",
               "street_en": "Muya-cho Saida",
-              "pattern": "撫養町斎田n{1,80}"
+              "pattern": "撫養町斎田n{１,８０}"
             },
             {
               "code": "772-0012",
               "street": "撫養町小桑島",
               "street_en": "Muya-cho Kokuwajima",
-              "pattern": "撫養町小桑島n{1,70}"
+              "pattern": "撫養町小桑島n{１,７０}"
             }
           ]
         }
@@ -3872,25 +3872,25 @@
               "code": "760-0023",
               "street": "寿町",
               "street_en": "Kotobuki-cho",
-              "pattern": "寿町n{1,2}-n{1,40}"
+              "pattern": "寿町n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "760-0050",
               "street": "亀井町",
               "street_en": "Kamei-cho",
-              "pattern": "亀井町n{1,80}"
+              "pattern": "亀井町n{１,８０}"
             },
             {
               "code": "760-0029",
               "street": "丸亀町",
               "street_en": "Marugame-machi",
-              "pattern": "丸亀町n{1,80}"
+              "pattern": "丸亀町n{１,８０}"
             },
             {
               "code": "761-8071",
               "street": "伏石町",
               "street_en": "Fushiishi-cho",
-              "pattern": "伏石町n{1,80}"
+              "pattern": "伏石町n{１,８０}"
             }
           ]
         },
@@ -3904,19 +3904,19 @@
               "code": "763-0022",
               "street": "浜町",
               "street_en": "Hama-cho",
-              "pattern": "浜町n{1,127}"
+              "pattern": "浜町n{１,１２７}"
             },
             {
               "code": "763-0023",
               "street": "塩飽町",
               "street_en": "Shiwaku-cho",
-              "pattern": "塩飽町n{1,70}"
+              "pattern": "塩飽町n{１,７０}"
             },
             {
               "code": "763-0034",
               "street": "大手町",
               "street_en": "Otemachi",
-              "pattern": "大手町n{1,3}-n{1,25}"
+              "pattern": "大手町n{１,３}丁目n{１,２５}番"
             }
           ]
         }
@@ -3939,25 +3939,25 @@
               "code": "790-0004",
               "street": "大街道",
               "street_en": "Okaido",
-              "pattern": "大街道n{1,3}-n{1,30}"
+              "pattern": "大街道n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "790-0001",
               "street": "一番町",
               "street_en": "Ichibancho",
-              "pattern": "一番町n{1,4}-n{1,25}"
+              "pattern": "一番町n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "790-0012",
               "street": "湊町",
               "street_en": "Minato-machi",
-              "pattern": "湊町n{1,189}-n{1,15}"
+              "pattern": "湊町n{１,１８９}丁目n{１,１５}番"
             },
             {
               "code": "790-0005",
               "street": "二番町",
               "street_en": "Nibancho",
-              "pattern": "二番町n{1,4}-n{1,25}"
+              "pattern": "二番町n{１,４}丁目n{１,２５}番"
             }
           ]
         },
@@ -3971,19 +3971,19 @@
               "code": "794-0015",
               "street": "常盤町",
               "street_en": "Tokiwa-cho",
-              "pattern": "常盤町n{1,193}-n{1,15}"
+              "pattern": "常盤町n{１,１９３}丁目n{１,１５}番"
             },
             {
               "code": "794-0042",
               "street": "旭町",
               "street_en": "Asahi-cho",
-              "pattern": "旭町n{1,4}-n{1,25}"
+              "pattern": "旭町n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "794-0027",
               "street": "南大門町",
               "street_en": "Minami-Daimon-cho",
-              "pattern": "南大門町n{1,3}-n{1,30}"
+              "pattern": "南大門町n{１,３}丁目n{１,３０}番"
             }
           ]
         },
@@ -3997,19 +3997,19 @@
               "code": "792-0025",
               "street": "一宮町",
               "street_en": "Ichinomiya-cho",
-              "pattern": "一宮町n{1,194}-n{1,30}"
+              "pattern": "一宮町n{１,１９４}丁目n{１,３０}番"
             },
             {
               "code": "792-0812",
               "street": "坂井町",
               "street_en": "Sakai-cho",
-              "pattern": "坂井町n{1,3}-n{1,30}"
+              "pattern": "坂井町n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "792-0003",
               "street": "新田町",
               "street_en": "Shindencho",
-              "pattern": "新田町n{1,3}-n{1,30}"
+              "pattern": "新田町n{１,３}丁目n{１,３０}番"
             }
           ]
         }
@@ -4032,19 +4032,19 @@
               "code": "780-0870",
               "street": "本町",
               "street_en": "Honcho",
-              "pattern": "本町n{1,195}-n{1,25}"
+              "pattern": "本町n{１,１９５}丁目n{１,２５}番"
             },
             {
               "code": "780-0841",
               "street": "帯屋町",
               "street_en": "Obiyamachi",
-              "pattern": "帯屋町n{1,2}-n{1,40}"
+              "pattern": "帯屋町n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "780-0822",
               "street": "はりまや町",
               "street_en": "Harimaya-cho",
-              "pattern": "はりまや町n{1,3}-n{1,30}"
+              "pattern": "はりまや町n{１,３}丁目n{１,３０}番"
             }
           ]
         },
@@ -4058,19 +4058,19 @@
               "code": "783-0006",
               "street": "篠原",
               "street_en": "Shinohara",
-              "pattern": "篠原n{1,80}"
+              "pattern": "篠原n{１,８０}"
             },
             {
               "code": "783-0004",
               "street": "大そね",
               "street_en": "Osone",
-              "pattern": "大そねn{1,80}"
+              "pattern": "大そねn{１,８０}"
             },
             {
               "code": "783-0011",
               "street": "後免町",
               "street_en": "Gomen-cho",
-              "pattern": "後免町n{1,70}"
+              "pattern": "後免町n{１,７０}"
             }
           ]
         }
@@ -4093,31 +4093,31 @@
               "code": "812-0011",
               "street": "博多区博多駅前",
               "street_en": "Hakata-ku Hakata-Ekimae",
-              "pattern": "博多区博多駅前n{1,4}-n{1,20}"
+              "pattern": "博多区博多駅前n{１,４}丁目n{１,２０}番"
             },
             {
               "code": "810-0001",
               "street": "中央区天神",
               "street_en": "Chuo-ku Tenjin",
-              "pattern": "中央区天神n{1,5}-n{1,20}"
+              "pattern": "中央区天神n{１,５}丁目n{１,２０}番"
             },
             {
               "code": "810-0041",
               "street": "中央区大名",
               "street_en": "Chuo-ku Daimyo",
-              "pattern": "中央区大名n{1,2}-n{1,30}"
+              "pattern": "中央区大名n{１,２}丁目n{１,３０}番"
             },
             {
               "code": "812-0013",
               "street": "博多区博多駅東",
               "street_en": "Hakata-ku Hakata-Ekihigashi",
-              "pattern": "博多区博多駅東n{1,3}-n{1,20}"
+              "pattern": "博多区博多駅東n{１,３}丁目n{１,２０}番"
             },
             {
               "code": "814-0002",
               "street": "早良区西新",
               "street_en": "Sawara-ku Nishijin",
-              "pattern": "早良区西新n{1,186}-n{1,20}"
+              "pattern": "早良区西新n{１,１８６}丁目n{１,２０}番"
             }
           ]
         },
@@ -4131,25 +4131,25 @@
               "code": "802-0006",
               "street": "小倉北区魚町",
               "street_en": "Kokurakita-ku Uomachi",
-              "pattern": "小倉北区魚町n{1,4}-n{1,20}"
+              "pattern": "小倉北区魚町n{１,４}丁目n{１,２０}番"
             },
             {
               "code": "802-0001",
               "street": "小倉北区浅野",
               "street_en": "Kokurakita-ku Asano",
-              "pattern": "小倉北区浅野n{1,3}-n{1,25}"
+              "pattern": "小倉北区浅野n{１,３}丁目n{１,２５}番"
             },
             {
               "code": "806-0021",
               "street": "八幡西区黒崎",
               "street_en": "Yahatanishi-ku Kurosaki",
-              "pattern": "八幡西区黒崎n{1,191}-n{1,20}"
+              "pattern": "八幡西区黒崎n{１,１９１}丁目n{１,２０}番"
             },
             {
               "code": "803-0811",
               "street": "小倉北区大門",
               "street_en": "Kokurakita-ku Daimon",
-              "pattern": "小倉北区大門n{1,2}-n{1,30}"
+              "pattern": "小倉北区大門n{１,２}丁目n{１,３０}番"
             }
           ]
         },
@@ -4163,19 +4163,19 @@
               "code": "830-0032",
               "street": "東町",
               "street_en": "Higashi-machi",
-              "pattern": "東町n{1,80}"
+              "pattern": "東町n{１,８０}"
             },
             {
               "code": "830-0033",
               "street": "天神町",
               "street_en": "Tenjin-cho",
-              "pattern": "天神町n{1,80}"
+              "pattern": "天神町n{１,８０}"
             },
             {
               "code": "830-0017",
               "street": "日吉町",
               "street_en": "Hiyoshi-cho",
-              "pattern": "日吉町n{1,80}"
+              "pattern": "日吉町n{１,８０}"
             }
           ]
         },
@@ -4189,19 +4189,19 @@
               "code": "820-0040",
               "street": "吉原町",
               "street_en": "Yoshiwara-machi",
-              "pattern": "吉原町n{1,80}"
+              "pattern": "吉原町n{１,８０}"
             },
             {
               "code": "820-0041",
               "street": "菰田",
               "street_en": "Komoda",
-              "pattern": "菰田n{1,80}"
+              "pattern": "菰田n{１,８０}"
             },
             {
               "code": "820-0067",
               "street": "川津",
               "street_en": "Kawatsu",
-              "pattern": "川津n{1,70}"
+              "pattern": "川津n{１,７０}"
             }
           ]
         }
@@ -4224,19 +4224,19 @@
               "code": "840-0801",
               "street": "駅前中央",
               "street_en": "Ekimae-Chuo",
-              "pattern": "駅前中央n{1,3}-n{1,30}"
+              "pattern": "駅前中央n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "840-0831",
               "street": "松原",
               "street_en": "Matsubara",
-              "pattern": "松原n{1,4}-n{1,25}"
+              "pattern": "松原n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "840-0054",
               "street": "水ヶ江",
               "street_en": "Mizugae",
-              "pattern": "水ヶ江n{1,193}-n{1,20}"
+              "pattern": "水ヶ江n{１,１９３}丁目n{１,２０}番"
             }
           ]
         },
@@ -4250,19 +4250,19 @@
               "code": "847-0012",
               "street": "大名小路",
               "street_en": "Daimyo-Koji",
-              "pattern": "大名小路n{1,80}"
+              "pattern": "大名小路n{１,８０}"
             },
             {
               "code": "847-0013",
               "street": "南城内",
               "street_en": "Minami-Jonai",
-              "pattern": "南城内n{1,80}"
+              "pattern": "南城内n{１,８０}"
             },
             {
               "code": "847-0014",
               "street": "西城内",
               "street_en": "Nishi-Jonai",
-              "pattern": "西城内n{1,70}"
+              "pattern": "西城内n{１,７０}"
             }
           ]
         }
@@ -4285,25 +4285,25 @@
               "code": "850-0853",
               "street": "浜町",
               "street_en": "Hamamachi",
-              "pattern": "浜町n{1,80}"
+              "pattern": "浜町n{１,８０}"
             },
             {
               "code": "850-0841",
               "street": "銅座町",
               "street_en": "Doza-machi",
-              "pattern": "銅座町n{1,80}"
+              "pattern": "銅座町n{１,８０}"
             },
             {
               "code": "850-0033",
               "street": "万才町",
               "street_en": "Manzai-machi",
-              "pattern": "万才町n{1,70}"
+              "pattern": "万才町n{１,７０}"
             },
             {
               "code": "850-0877",
               "street": "築町",
               "street_en": "Tsuki-machi",
-              "pattern": "築町n{1,70}"
+              "pattern": "築町n{１,７０}"
             }
           ]
         },
@@ -4317,19 +4317,19 @@
               "code": "857-0871",
               "street": "上京町",
               "street_en": "Kamikyo-machi",
-              "pattern": "上京町n{1,80}"
+              "pattern": "上京町n{１,８０}"
             },
             {
               "code": "857-0863",
               "street": "三浦町",
               "street_en": "Miura-cho",
-              "pattern": "三浦町n{1,80}"
+              "pattern": "三浦町n{１,８０}"
             },
             {
               "code": "857-0054",
               "street": "栄町",
               "street_en": "Sakae-cho",
-              "pattern": "栄町n{1,70}"
+              "pattern": "栄町n{１,７０}"
             }
           ]
         }
@@ -4352,25 +4352,25 @@
               "code": "860-0845",
               "street": "中央区上通町",
               "street_en": "Chuo-ku Kamidori-cho",
-              "pattern": "中央区上通町n{1,80}"
+              "pattern": "中央区上通町n{１,８０}"
             },
             {
               "code": "860-0844",
               "street": "中央区水道町",
               "street_en": "Chuo-ku Suido-cho",
-              "pattern": "中央区水道町n{1,80}"
+              "pattern": "中央区水道町n{１,８０}"
             },
             {
               "code": "860-0803",
               "street": "中央区新市街",
               "street_en": "Chuo-ku Shinshigai",
-              "pattern": "中央区新市街n{1,80}"
+              "pattern": "中央区新市街n{１,８０}"
             },
             {
               "code": "860-0806",
               "street": "中央区花畑町",
               "street_en": "Chuo-ku Hanabata-cho",
-              "pattern": "中央区花畑町n{1,80}"
+              "pattern": "中央区花畑町n{１,８０}"
             }
           ]
         },
@@ -4384,19 +4384,19 @@
               "code": "866-0862",
               "street": "松江城町",
               "street_en": "Matsue-jo-machi",
-              "pattern": "松江城町n{1,80}"
+              "pattern": "松江城町n{１,８０}"
             },
             {
               "code": "866-0863",
               "street": "西松江城町",
               "street_en": "Nishi-Matsue-jo-machi",
-              "pattern": "西松江城町n{1,70}"
+              "pattern": "西松江城町n{１,７０}"
             },
             {
               "code": "866-0852",
               "street": "松江町",
               "street_en": "Matsue-machi",
-              "pattern": "松江町n{1,70}"
+              "pattern": "松江町n{１,７０}"
             }
           ]
         }
@@ -4419,19 +4419,19 @@
               "code": "870-0021",
               "street": "府内町",
               "street_en": "Funai-cho",
-              "pattern": "府内町n{1,3}-n{1,30}"
+              "pattern": "府内町n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "870-0027",
               "street": "末広町",
               "street_en": "Suehiro-cho",
-              "pattern": "末広町n{1,2}-n{1,40}"
+              "pattern": "末広町n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "870-0035",
               "street": "中央町",
               "street_en": "Chuo-machi",
-              "pattern": "中央町n{1,195}-n{1,25}"
+              "pattern": "中央町n{１,１９５}丁目n{１,２５}番"
             }
           ]
         },
@@ -4445,19 +4445,19 @@
               "code": "874-0920",
               "street": "北浜",
               "street_en": "Kitahama",
-              "pattern": "北浜n{1,3}-n{1,30}"
+              "pattern": "北浜n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "874-0937",
               "street": "秋葉町",
               "street_en": "Akiba-cho",
-              "pattern": "秋葉町n{1,117}"
+              "pattern": "秋葉町n{１,１１７}"
             },
             {
               "code": "874-0931",
               "street": "楠町",
               "street_en": "Kusunoki-cho",
-              "pattern": "楠町n{1,80}"
+              "pattern": "楠町n{１,８０}"
             }
           ]
         }
@@ -4480,19 +4480,19 @@
               "code": "880-0001",
               "street": "橘通西",
               "street_en": "Tachibana-dori-Nishi",
-              "pattern": "橘通西n{1,5}-n{1,25}"
+              "pattern": "橘通西n{１,５}丁目n{１,２５}番"
             },
             {
               "code": "880-0805",
               "street": "橘通東",
               "street_en": "Tachibana-dori-Higashi",
-              "pattern": "橘通東n{1,5}-n{1,25}"
+              "pattern": "橘通東n{１,５}丁目n{１,２５}番"
             },
             {
               "code": "880-0811",
               "street": "錦町",
               "street_en": "Nishiki-cho",
-              "pattern": "錦町n{1,190}"
+              "pattern": "錦町n{１,１９０}"
             }
           ]
         },
@@ -4506,19 +4506,19 @@
               "code": "882-0053",
               "street": "幸町",
               "street_en": "Saiwai-cho",
-              "pattern": "幸町n{1,194}-n{1,30}"
+              "pattern": "幸町n{１,１９４}丁目n{１,３０}番"
             },
             {
               "code": "882-0812",
               "street": "中央通",
               "street_en": "Chuo-dori",
-              "pattern": "中央通n{1,3}-n{1,30}"
+              "pattern": "中央通n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "882-0823",
               "street": "中町",
               "street_en": "Naka-machi",
-              "pattern": "中町n{1,3}-n{1,30}"
+              "pattern": "中町n{１,３}丁目n{１,３０}番"
             }
           ]
         }
@@ -4541,25 +4541,25 @@
               "code": "892-0842",
               "street": "東千石町",
               "street_en": "Higashi-Sengoku-cho",
-              "pattern": "東千石町n{1,80}"
+              "pattern": "東千石町n{１,８０}"
             },
             {
               "code": "892-0847",
               "street": "西千石町",
               "street_en": "Nishi-Sengoku-cho",
-              "pattern": "西千石町n{1,80}"
+              "pattern": "西千石町n{１,８０}"
             },
             {
               "code": "892-0844",
               "street": "山之口町",
               "street_en": "Yamanokuchi-cho",
-              "pattern": "山之口町n{1,80}"
+              "pattern": "山之口町n{１,８０}"
             },
             {
               "code": "890-0053",
               "street": "中央町",
               "street_en": "Chuo-cho",
-              "pattern": "中央町n{1,80}"
+              "pattern": "中央町n{１,８０}"
             }
           ]
         },
@@ -4573,19 +4573,19 @@
               "code": "899-4332",
               "street": "国分中央",
               "street_en": "Kokubu-Chuo",
-              "pattern": "国分中央n{1,6}-n{1,20}"
+              "pattern": "国分中央n{１,６}丁目n{１,２０}番"
             },
             {
               "code": "899-4301",
               "street": "国分上之段",
               "street_en": "Kokubu-Uenodan",
-              "pattern": "国分上之段n{1,114}"
+              "pattern": "国分上之段n{１,１１４}"
             },
             {
               "code": "899-4341",
               "street": "国分野口",
               "street_en": "Kokubu-Noguchi",
-              "pattern": "国分野口n{1,80}"
+              "pattern": "国分野口n{１,８０}"
             }
           ]
         }
@@ -4609,25 +4609,25 @@
               "code": "900-0013",
               "street": "牧志",
               "street_en": "Makishi",
-              "pattern": "牧志n{1,193}-n{1,30}"
+              "pattern": "牧志n{１,１９３}丁目n{１,３０}番"
             },
             {
               "code": "900-0015",
               "street": "久茂地",
               "street_en": "Kumoji",
-              "pattern": "久茂地n{1,3}-n{1,30}"
+              "pattern": "久茂地n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "900-0014",
               "street": "松尾",
               "street_en": "Matsuo",
-              "pattern": "松尾n{1,2}-n{1,40}"
+              "pattern": "松尾n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "900-0032",
               "street": "松山",
               "street_en": "Matsuyama",
-              "pattern": "松山n{1,2}-n{1,40}"
+              "pattern": "松山n{１,２}丁目n{１,４０}番"
             }
           ]
         },
@@ -4641,19 +4641,19 @@
               "code": "904-0004",
               "street": "中央",
               "street_en": "Chuo",
-              "pattern": "中央n{1,4}-n{1,25}"
+              "pattern": "中央n{１,４}丁目n{１,２５}番"
             },
             {
               "code": "904-0003",
               "street": "住吉",
               "street_en": "Sumiyoshi",
-              "pattern": "住吉n{1,2}-n{1,40}"
+              "pattern": "住吉n{１,２}丁目n{１,４０}番"
             },
             {
               "code": "904-0021",
               "street": "胡屋",
               "street_en": "Goya",
-              "pattern": "胡屋n{1,194}-n{1,20}"
+              "pattern": "胡屋n{１,１９４}丁目n{１,２０}番"
             }
           ]
         },
@@ -4667,19 +4667,19 @@
               "code": "901-2221",
               "street": "伊佐",
               "street_en": "Isa",
-              "pattern": "伊佐n{1,194}-n{1,25}"
+              "pattern": "伊佐n{１,１９４}丁目n{１,２５}番"
             },
             {
               "code": "901-2224",
               "street": "真志喜",
               "street_en": "Mashiki",
-              "pattern": "真志喜n{1,3}-n{1,30}"
+              "pattern": "真志喜n{１,３}丁目n{１,３０}番"
             },
             {
               "code": "901-2211",
               "street": "宜野湾",
               "street_en": "Ginowan",
-              "pattern": "宜野湾n{1,3}-n{1,30}"
+              "pattern": "宜野湾n{１,３}丁目n{１,３０}番"
             }
           ]
         }
