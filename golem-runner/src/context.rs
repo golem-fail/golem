@@ -18,6 +18,10 @@ pub struct ExecutionContext<'a> {
     pub flow_name: &'a str,
     pub block_name: Option<&'a str>,
     pub step_index: usize,
+    /// Global step counter across all blocks (for screenshot filenames).
+    pub global_step_index: u64,
+    /// Current block iteration (for data-driven/loop blocks).
+    pub block_iteration: u32,
     /// The device running this flow. Used for block-level `where` filtering.
     pub device: Option<&'a DeviceInfo>,
     /// Performance collector set — `None` when perf is disabled.
@@ -90,6 +94,8 @@ pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
         flow_name: "test",
         block_name: None,
         step_index: 0,
+        global_step_index: 0,
+        block_iteration: 0,
         device: None,
         perf_collector: None,
         last_launch_ms: AtomicU64::new(0),

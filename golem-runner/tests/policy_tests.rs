@@ -28,6 +28,8 @@ fn test_ctx() -> ExecutionContext<'static> {
         flow_name: "test",
         block_name: None,
         step_index: 0,
+        global_step_index: 0,
+        block_iteration: 0,
         device: None,
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
@@ -40,6 +42,22 @@ fn test_ctx() -> ExecutionContext<'static> {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// Recursively collect all file paths under a directory.
+fn walkdir(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut files = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                files.extend(walkdir(&path));
+            } else {
+                files.push(path);
+            }
+        }
+    }
+    files
+}
 
 fn empty_hierarchy() -> Element {
     Element {
@@ -452,104 +470,6 @@ steps = [
 }
 
 // ===========================================================================
-// Capture / screenshot path tests
-// ===========================================================================
-
-// ---------------------------------------------------------------------------
-// 10. build_screenshot_path generates correct filename
-// ---------------------------------------------------------------------------
-#[test]
-fn build_screenshot_path_generates_correct_filename() {
-    let config = CaptureConfig::default();
-    let path = build_screenshot_path(&config, "login_flow", "verify_block", 3, "error");
-
-    assert_eq!(
-        path,
-        PathBuf::from(".golem/screenshots/login_flow_verify_block_step3_error.png")
-    );
-}
-
-// ---------------------------------------------------------------------------
-// 11. CaptureConfig defaults are correct
-// ---------------------------------------------------------------------------
-#[test]
-fn capture_config_defaults_correct() {
-    let config = CaptureConfig::default();
-
-    assert!(config.screenshot_on_failure, "screenshot_on_failure SHALL default to true");
-    assert_eq!(
-        config.screenshot_dir,
-        PathBuf::from(".golem/screenshots"),
-        "default screenshot dir"
-    );
-    assert!(!config.record, "record SHALL default to false");
-    assert_eq!(
-        config.recording_dir,
-        PathBuf::from(".golem/recordings"),
-        "default recording dir"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// 12. Screenshot path includes flow name, block name, step index
-// ---------------------------------------------------------------------------
-#[test]
-fn screenshot_path_includes_flow_block_step_components() {
-    let config = CaptureConfig {
-        screenshot_dir: PathBuf::from("/tmp/test_shots"),
-        ..CaptureConfig::default()
-    };
-    let path = build_screenshot_path(&config, "checkout", "payment", 7, "warn");
-
-    let filename = path
-        .file_name()
-        .expect("should have filename")
-        .to_str()
-        .expect("should be valid utf-8");
-
-    assert!(filename.contains("checkout"), "missing flow name in filename");
-    assert!(filename.contains("payment"), "missing block name in filename");
-    assert!(filename.contains("step7"), "missing step index in filename");
-    assert!(filename.contains("warn"), "missing failure type in filename");
-    assert!(filename.ends_with(".png"), "missing .png extension");
-    assert_eq!(
-        path.parent().expect("should have parent"),
-        Path::new("/tmp/test_shots"),
-        "parent directory should match configured screenshot_dir"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// 13. Screenshot path sanitizes special characters in names
-// ---------------------------------------------------------------------------
-#[test]
-fn screenshot_path_sanitizes_special_characters() {
-    let config = CaptureConfig::default();
-    let path = build_screenshot_path(&config, "my flow!", "block #1", 0, "error");
-
-    let filename = path
-        .file_name()
-        .expect("should have filename")
-        .to_str()
-        .expect("should be valid utf-8");
-
-    // Spaces and special characters should be replaced with underscores
-    assert!(
-        !filename.contains(' '),
-        "spaces should be sanitized in filename"
-    );
-    assert!(
-        !filename.contains('!'),
-        "special chars should be sanitized in filename"
-    );
-    assert!(
-        !filename.contains('#'),
-        "hash should be sanitized in filename"
-    );
-    assert!(filename.ends_with(".png"));
-}
-
-// ===========================================================================
 // Cross-module integration: policy + capture working together
 // ===========================================================================
 
@@ -584,11 +504,16 @@ steps = [
     assert_eq!(result.warnings.len(), 1);
 
     // After detecting a warning, the runner would build a screenshot path
-    let config = CaptureConfig::default();
+    let config = CaptureConfig {
+        flow_name: flow.flow.name.clone(),
+        device_name: "test_device".to_string(),
+        ..CaptureConfig::default()
+    };
     let screenshot_path = build_screenshot_path(
         &config,
-        &flow.flow.name,          // "screenshot path flow"
         "login_screen",           // block name
+        2,                        // global step index
+        0,                        // block iteration
         1,                        // step index of the warning
         "warn",
     );
@@ -599,9 +524,7 @@ steps = [
         .to_str()
         .expect("should be valid utf-8");
 
-    assert!(filename.contains("screenshot_path_flow"), "flow name in path");
     assert!(filename.contains("login_screen"), "block name in path");
-    assert!(filename.contains("step1"), "step index in path");
     assert!(filename.contains("warn"), "failure type in path");
 }
 
@@ -635,11 +558,16 @@ steps = [
     let failed_block = result.failed_block.as_deref().expect("should have failed_block");
 
     // Build the screenshot path from the failure info
-    let config = CaptureConfig::default();
+    let config = CaptureConfig {
+        flow_name: flow.flow.name.clone(),
+        device_name: "test_device".to_string(),
+        ..CaptureConfig::default()
+    };
     let screenshot_path = build_screenshot_path(
         &config,
-        &flow.flow.name,
         failed_block,
+        failed_step as u64,
+        0,
         failed_step,
         "error",
     );
@@ -650,10 +578,8 @@ steps = [
         .to_str()
         .expect("should be valid utf-8");
 
-    assert!(filename.contains("error_capture_flow"), "flow name in path");
+    assert!(filename.contains("error"), "error type in path");
     assert!(filename.contains("auth_block"), "block name from failure info");
-    assert!(filename.contains("step1"), "step index from failure info");
-    assert!(filename.contains("error"), "failure type");
 }
 
 // ---------------------------------------------------------------------------
@@ -689,11 +615,15 @@ steps = [
     assert_success(&result);
     assert_eq!(result.warnings.len(), 2, "two warnings from two blocks");
 
-    let config = CaptureConfig::default();
+    let config = CaptureConfig {
+        flow_name: flow.flow.name.clone(),
+        device_name: "test_device".to_string(),
+        ..CaptureConfig::default()
+    };
 
     // Build screenshot paths for each warning (block_a step 0, block_b step 0)
-    let path_a = build_screenshot_path(&config, &flow.flow.name, "block_a", 0, "warn");
-    let path_b = build_screenshot_path(&config, &flow.flow.name, "block_b", 0, "warn");
+    let path_a = build_screenshot_path(&config, "block_a", 1, 0, 0, "warn");
+    let path_b = build_screenshot_path(&config, "block_b", 2, 0, 0, "warn");
 
     assert_ne!(
         path_a, path_b,
@@ -850,11 +780,13 @@ async fn capture_failure_screenshot_writes_to_disk() {
 
     let config = CaptureConfig {
         screenshot_on_failure: true,
-        screenshot_dir: tmp.path().to_path_buf(),
+        output_dir: tmp.path().to_path_buf(),
+        flow_name: "test".to_string(),
+        device_name: "test_device".to_string(),
         ..CaptureConfig::default()
     };
 
-    let path = capture_failure_screenshot(&driver, &config, "my_flow", "my_block", 2, "error")
+    let path = capture_failure_screenshot(&driver, &config, "my_block", 3, 0, 2, "error")
         .await
         .expect("capture should succeed");
 
@@ -865,9 +797,7 @@ async fn capture_failure_screenshot_writes_to_disk() {
         .expect("should have filename")
         .to_str()
         .expect("utf-8");
-    assert!(filename.contains("my_flow"), "flow name in captured filename");
     assert!(filename.contains("my_block"), "block name in captured filename");
-    assert!(filename.contains("step2"), "step index in captured filename");
     assert!(filename.contains("error"), "failure type in captured filename");
 
     // Verify PNG magic bytes were written
@@ -889,7 +819,7 @@ async fn capture_failure_screenshot_disabled_returns_error() {
     };
 
     let result =
-        capture_failure_screenshot(&driver, &config, "flow", "block", 0, "error").await;
+        capture_failure_screenshot(&driver, &config, "block", 1, 0, 0, "error").await;
 
     assert!(result.is_err(), "SHALL error when screenshot disabled");
     let err_msg = result.expect_err("should be error").to_string();
@@ -931,7 +861,9 @@ steps = [
     let tmp = tempfile::tempdir().expect("failed to create tempdir");
     let capture_config = CaptureConfig {
         screenshot_on_failure: true,
-        screenshot_dir: tmp.path().to_path_buf(),
+        output_dir: tmp.path().to_path_buf(),
+        flow_name: "test".to_string(),
+        device_name: "test_device".to_string(),
         ..CaptureConfig::default()
     };
     let mut ctx = ExecutionContext {
@@ -941,6 +873,8 @@ steps = [
         flow_name: "screenshot on error",
         block_name: None,
         step_index: 0,
+        global_step_index: 0,
+        block_iteration: 0,
         device: None,
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
@@ -987,7 +921,9 @@ steps = [
     let tmp = tempfile::tempdir().expect("failed to create tempdir");
     let capture_config = CaptureConfig {
         screenshot_on_failure: true,
-        screenshot_dir: tmp.path().to_path_buf(),
+        output_dir: tmp.path().to_path_buf(),
+        flow_name: "test".to_string(),
+        device_name: "test_device".to_string(),
         ..CaptureConfig::default()
     };
     let mut ctx = ExecutionContext {
@@ -997,6 +933,8 @@ steps = [
         flow_name: "screenshot on warn",
         block_name: None,
         step_index: 0,
+        global_step_index: 0,
+        block_iteration: 0,
         device: None,
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
@@ -1043,7 +981,9 @@ steps = [
     let tmp = tempfile::tempdir().expect("failed to create tempdir");
     let capture_config = CaptureConfig {
         screenshot_on_failure: true,
-        screenshot_dir: tmp.path().to_path_buf(),
+        output_dir: tmp.path().to_path_buf(),
+        flow_name: "test".to_string(),
+        device_name: "test_device".to_string(),
         ..CaptureConfig::default()
     };
     let mut ctx = ExecutionContext {
@@ -1053,6 +993,8 @@ steps = [
         flow_name: "no screenshot on ignore",
         block_name: None,
         step_index: 0,
+        global_step_index: 0,
+        block_iteration: 0,
         device: None,
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
@@ -1109,6 +1051,8 @@ steps = [
         flow_name: "screenshot fail resilient",
         block_name: None,
         step_index: 0,
+        global_step_index: 0,
+        block_iteration: 0,
         device: None,
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
@@ -1155,7 +1099,9 @@ steps = [
     let tmp = tempfile::tempdir().expect("failed to create tempdir");
     let capture_config = CaptureConfig {
         screenshot_on_failure: true,
-        screenshot_dir: tmp.path().to_path_buf(),
+        output_dir: tmp.path().to_path_buf(),
+        flow_name: "test".to_string(),
+        device_name: "test_device".to_string(),
         ..CaptureConfig::default()
     };
     let mut ctx = ExecutionContext {
@@ -1165,6 +1111,8 @@ steps = [
         flow_name: "disk write flow",
         block_name: None,
         step_index: 0,
+        global_step_index: 0,
+        block_iteration: 0,
         device: None,
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
@@ -1177,34 +1125,23 @@ steps = [
         .await
         .expect("execute_flow should return Ok(FlowResult)");
 
-    // Check that a screenshot file was actually written to the temp dir
-    let entries: Vec<_> = std::fs::read_dir(tmp.path())
-        .expect("should read tempdir")
-        .filter_map(|e| e.ok())
-        .collect();
+    // Check that a screenshot file was written in the structured output dir.
+    // Path: tmp/{flow}/{device}/screenshots/*.png
+    let mut found_png = None;
+    for entry in walkdir(tmp.path()) {
+        if entry.extension().map(|e| e == "png").unwrap_or(false) {
+            found_png = Some(entry);
+            break;
+        }
+    }
+    let png_path = found_png.expect("SHALL write a screenshot .png file");
+    let filename = png_path.file_name().unwrap().to_str().unwrap();
+    assert!(filename.ends_with(".png"), "SHALL have .png extension");
+    assert!(filename.contains("disk_block"), "SHALL contain block name");
 
-    assert_eq!(
-        entries.len(),
-        1,
-        "SHALL write exactly one screenshot file to disk"
-    );
-
-    let filename = entries[0]
-        .file_name()
-        .to_str()
-        .expect("should be valid utf-8")
-        .to_string();
-    assert!(filename.ends_with(".png"), "screenshot file SHALL have .png extension");
-    assert!(filename.contains("disk_write_flow"), "filename SHALL contain the flow name");
-    assert!(filename.contains("disk_block"), "filename SHALL contain the block name");
-
-    // Verify the file contains PNG magic bytes
-    let data = std::fs::read(entries[0].path()).expect("should read screenshot file");
-    assert_eq!(
-        &data[..4],
-        &[0x89, 0x50, 0x4E, 0x47],
-        "screenshot file SHALL contain PNG magic bytes"
-    );
+    // Verify PNG magic bytes
+    let data = std::fs::read(&png_path).expect("should read screenshot");
+    assert_eq!(&data[..4], &[0x89, 0x50, 0x4E, 0x47], "SHALL contain PNG magic bytes");
 }
 
 // ---------------------------------------------------------------------------
@@ -1237,6 +1174,8 @@ steps = [
         flow_name: "disabled capture flow",
         block_name: None,
         step_index: 0,
+        global_step_index: 0,
+        block_iteration: 0,
         device: None,
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),

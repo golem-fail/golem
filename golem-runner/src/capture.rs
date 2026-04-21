@@ -3,24 +3,33 @@ use golem_driver::PlatformDriver;
 use std::path::{Path, PathBuf};
 
 /// Configuration for automatic screenshot and recording capture.
+///
+/// Paths are structured as `{output_dir}/{flow_name}/{device_name}/screenshots/`
+/// and `{output_dir}/{flow_name}/{device_name}/recordings/`.
 pub struct CaptureConfig {
     /// When true, automatically capture a screenshot on step failure or warning.
     pub screenshot_on_failure: bool,
-    /// Directory where failure/warning screenshots are saved.
-    pub screenshot_dir: PathBuf,
     /// When true, automatically start/stop screen recording per flow.
     pub record: bool,
-    /// Directory where recordings are saved.
-    pub recording_dir: PathBuf,
+    /// When true, write results to disk. When false, skip all file output.
+    pub write_to_disk: bool,
+    /// Root output directory (default: `.golem/results`).
+    pub output_dir: PathBuf,
+    /// Flow name (sanitized for filesystem).
+    pub flow_name: String,
+    /// Device name (sanitized for filesystem).
+    pub device_name: String,
 }
 
 impl Default for CaptureConfig {
     fn default() -> Self {
         Self {
             screenshot_on_failure: true,
-            screenshot_dir: PathBuf::from(".golem/screenshots"),
             record: false,
-            recording_dir: PathBuf::from(".golem/recordings"),
+            write_to_disk: true,
+            output_dir: PathBuf::from(".golem/results"),
+            flow_name: String::new(),
+            device_name: String::new(),
         }
     }
 }
@@ -28,50 +37,65 @@ impl Default for CaptureConfig {
 /// Sanitize a string so it is safe for use as a filename component.
 ///
 /// Replaces any character that is not alphanumeric, `_`, or `-` with `_`.
-fn sanitize_filename(name: &str) -> String {
+pub fn sanitize_filename(name: &str) -> String {
     name.replace(
         |c: char| !c.is_alphanumeric() && c != '_' && c != '-',
         "_",
     )
 }
 
-/// Build the screenshot path without actually capturing it.
+/// Build the screenshot directory for this flow/device.
+fn screenshot_dir(config: &CaptureConfig) -> PathBuf {
+    config.output_dir
+        .join(sanitize_filename(&config.flow_name))
+        .join(sanitize_filename(&config.device_name))
+        .join("screenshots")
+}
+
+/// Build the screenshot path.
+///
+/// Filename follows the `[global][block:iter][step]` output pattern:
+/// `{global}_{block}_{iter}_{step}_{type}.png`
 pub fn build_screenshot_path(
     config: &CaptureConfig,
-    flow_name: &str,
     block_name: &str,
+    global_step_index: u64,
+    block_iteration: u32,
     step_index: usize,
     failure_type: &str,
 ) -> PathBuf {
     let filename = format!(
-        "{}_{}_step{}_{}.png",
-        sanitize_filename(flow_name),
+        "{}_{}_{}_{}_{}.png",
+        global_step_index,
         sanitize_filename(block_name),
+        block_iteration,
         step_index,
         failure_type,
     );
-    config.screenshot_dir.join(filename)
+    screenshot_dir(config).join(filename)
 }
+
 
 /// Capture a screenshot on failure/warning and write it to disk.
 ///
 /// Returns the path the screenshot was saved to, or an error if
-/// `screenshot_on_failure` is disabled or the capture/write fails.
+/// capture is disabled.
 pub async fn capture_failure_screenshot(
     driver: &dyn PlatformDriver,
     config: &CaptureConfig,
-    flow_name: &str,
     block_name: &str,
+    global_step_index: u64,
+    block_iteration: u32,
     step_index: usize,
     failure_type: &str,
 ) -> Result<PathBuf> {
-    if !config.screenshot_on_failure {
-        anyhow::bail!("Screenshot on failure is disabled");
+    if !config.screenshot_on_failure || !config.write_to_disk {
+        anyhow::bail!("Screenshot capture is disabled");
     }
 
     let screenshot = driver.screenshot().await?;
 
-    let path = build_screenshot_path(config, flow_name, block_name, step_index, failure_type);
+    let path = build_screenshot_path(config, block_name, global_step_index, block_iteration, step_index, failure_type);
 
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -81,18 +105,17 @@ pub async fn capture_failure_screenshot(
     Ok(path)
 }
 
-/// Build the recording path without actually stopping a recording.
-pub fn build_recording_path(
-    config: &CaptureConfig,
-    flow_name: &str,
-    device_name: &str,
-) -> PathBuf {
-    let filename = format!(
-        "{}_{}.mp4",
-        sanitize_filename(flow_name),
-        sanitize_filename(device_name),
-    );
-    config.recording_dir.join(filename)
+/// Build the recording directory for this flow/device.
+fn recording_dir(config: &CaptureConfig) -> PathBuf {
+    config.output_dir
+        .join(sanitize_filename(&config.flow_name))
+        .join(sanitize_filename(&config.device_name))
+        .join("recordings")
+}
+
+/// Build the recording path.
+pub fn build_recording_path(config: &CaptureConfig) -> PathBuf {
+    recording_dir(config).join("recording.mp4")
 }
 
 /// Start screen recording for a device.
@@ -101,36 +124,27 @@ pub fn build_recording_path(
 pub async fn start_recording(
     driver: &dyn PlatformDriver,
     config: &CaptureConfig,
-    flow_name: &str,
-    device_name: &str,
 ) -> Result<()> {
-    if !config.record {
+    if !config.record || !config.write_to_disk {
         return Ok(());
     }
     let name = format!(
         "{}_{}",
-        sanitize_filename(flow_name),
-        sanitize_filename(device_name),
+        sanitize_filename(&config.flow_name),
+        sanitize_filename(&config.device_name),
     );
     driver.start_recording(&name).await
 }
 
-/// Stop screen recording, copy the file to `recording_dir`, and return the
-/// destination path.
-///
-/// The underlying driver's `stop_recording` returns a source path string.  We
-/// copy the file from that source into the configured recording directory so
-/// all recordings live in one predictable place.
+/// Stop screen recording, copy the file to the recording directory.
 pub async fn stop_recording(
     driver: &dyn PlatformDriver,
     config: &CaptureConfig,
-    flow_name: &str,
-    device_name: &str,
 ) -> Result<PathBuf> {
     let source_path_str = driver.stop_recording().await?;
     let source = Path::new(&source_path_str);
 
-    let dest = build_recording_path(config, flow_name, device_name);
+    let dest = build_recording_path(config);
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -161,17 +175,25 @@ mod tests {
         }
     }
 
+    fn test_config() -> CaptureConfig {
+        CaptureConfig {
+            flow_name: "login_flow".to_string(),
+            device_name: "iPhone_16e".to_string(),
+            ..CaptureConfig::default()
+        }
+    }
+
     // ---------------------------------------------------------------
-    // 1. build_screenshot_path generates correct filename
+    // 1. build_screenshot_path generates correct structured path
     // ---------------------------------------------------------------
     #[test]
     fn build_screenshot_path_generates_correct_filename() {
-        let config = CaptureConfig::default();
-        let path = build_screenshot_path(&config, "login_flow", "verify_block", 3, "error");
+        let config = test_config();
+        let path = build_screenshot_path(&config, "verify_block", 3, 0, 1, "error");
 
         assert_eq!(
             path,
-            PathBuf::from(".golem/screenshots/login_flow_verify_block_step3_error.png")
+            PathBuf::from(".golem/results/login_flow/iPhone_16e/screenshots/3_verify_block_0_1_error.png")
         );
     }
 
@@ -180,12 +202,16 @@ mod tests {
     // ---------------------------------------------------------------
     #[test]
     fn build_screenshot_path_sanitizes_special_characters() {
-        let config = CaptureConfig::default();
-        let path = build_screenshot_path(&config, "my flow!", "block #1", 0, "warn");
+        let config = CaptureConfig {
+            flow_name: "my flow!".to_string(),
+            device_name: "iPhone 16 Pro".to_string(),
+            ..CaptureConfig::default()
+        };
+        let path = build_screenshot_path(&config, "block #1", 5, 2, 0, "warn");
 
         assert_eq!(
             path,
-            PathBuf::from(".golem/screenshots/my_flow__block__1_step0_warn.png")
+            PathBuf::from(".golem/results/my_flow_/iPhone_16_Pro/screenshots/5_block__1_2_0_warn.png")
         );
     }
 
@@ -196,9 +222,9 @@ mod tests {
     fn capture_config_defaults() {
         let config = CaptureConfig::default();
         assert!(config.screenshot_on_failure);
-        assert_eq!(config.screenshot_dir, PathBuf::from(".golem/screenshots"));
+        assert!(config.write_to_disk);
         assert!(!config.record);
-        assert_eq!(config.recording_dir, PathBuf::from(".golem/recordings"));
+        assert_eq!(config.output_dir, PathBuf::from(".golem/results"));
     }
 
     // ---------------------------------------------------------------
@@ -209,11 +235,11 @@ mod tests {
         let driver = MockPlatformDriver::new(default_hierarchy());
         let config = CaptureConfig {
             screenshot_on_failure: false,
-            ..CaptureConfig::default()
+            ..test_config()
         };
 
         let result =
-            capture_failure_screenshot(&driver, &config, "flow", "block", 1, "error").await;
+            capture_failure_screenshot(&driver, &config, "block", 1, 0, 0, "error").await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be an error"));
         assert!(
@@ -221,7 +247,6 @@ mod tests {
             "expected 'disabled' in error message, got: {err_msg}"
         );
 
-        // Driver should NOT have been called
         assert!(driver.get_calls().is_empty());
     }
 
@@ -238,15 +263,17 @@ mod tests {
     }
 
     // ---------------------------------------------------------------
-    // 6. Screenshot path includes flow name, block name, step index, type
+    // 6. Screenshot path includes all components
     // ---------------------------------------------------------------
     #[test]
     fn screenshot_path_components() {
         let config = CaptureConfig {
-            screenshot_dir: PathBuf::from("/tmp/shots"),
+            output_dir: PathBuf::from("/tmp/out"),
+            flow_name: "checkout".to_string(),
+            device_name: "Pixel-6".to_string(),
             ..CaptureConfig::default()
         };
-        let path = build_screenshot_path(&config, "checkout", "payment", 7, "warn");
+        let path = build_screenshot_path(&config, "payment", 7, 1, 3, "warn");
 
         let filename = path
             .file_name()
@@ -254,41 +281,27 @@ mod tests {
             .to_str()
             .expect("should be valid utf8");
 
-        assert!(filename.contains("checkout"), "missing flow name");
-        assert!(filename.contains("payment"), "missing block name");
-        assert!(filename.contains("step7"), "missing step index");
-        assert!(filename.contains("warn"), "missing failure type");
-        assert!(filename.ends_with(".png"), "missing .png extension");
+        assert_eq!(filename, "7_payment_1_3_warn.png");
         assert_eq!(
             path.parent().expect("should have parent"),
-            Path::new("/tmp/shots")
+            Path::new("/tmp/out/checkout/Pixel-6/screenshots")
         );
     }
 
     // ---------------------------------------------------------------
-    // 7. Recording path includes flow name and device name
+    // 7. Recording path uses structured directory
     // ---------------------------------------------------------------
     #[test]
     fn recording_path_components() {
         let config = CaptureConfig {
-            recording_dir: PathBuf::from("/tmp/recordings"),
+            output_dir: PathBuf::from("/tmp/out"),
+            flow_name: "signup".to_string(),
+            device_name: "Pixel-6".to_string(),
             ..CaptureConfig::default()
         };
-        let path = build_recording_path(&config, "signup", "Pixel-6");
+        let path = build_recording_path(&config);
 
-        let filename = path
-            .file_name()
-            .expect("should have filename")
-            .to_str()
-            .expect("should be valid utf8");
-
-        assert!(filename.contains("signup"), "missing flow name");
-        assert!(filename.contains("Pixel-6"), "missing device name");
-        assert!(filename.ends_with(".mp4"), "missing .mp4 extension");
-        assert_eq!(
-            path.parent().expect("should have parent"),
-            Path::new("/tmp/recordings")
-        );
+        assert_eq!(path, PathBuf::from("/tmp/out/signup/Pixel-6/recordings/recording.mp4"));
     }
 
     // ---------------------------------------------------------------
@@ -299,10 +312,10 @@ mod tests {
         let driver = MockPlatformDriver::new(default_hierarchy());
         let config = CaptureConfig {
             record: false,
-            ..CaptureConfig::default()
+            ..test_config()
         };
 
-        let result = start_recording(&driver, &config, "flow", "device").await;
+        let result = start_recording(&driver, &config).await;
         assert!(result.is_ok());
         assert!(
             driver.get_calls().is_empty(),
@@ -318,10 +331,12 @@ mod tests {
         let driver = MockPlatformDriver::new(default_hierarchy());
         let config = CaptureConfig {
             record: true,
+            flow_name: "my-flow".to_string(),
+            device_name: "iPhone14".to_string(),
             ..CaptureConfig::default()
         };
 
-        let result = start_recording(&driver, &config, "my-flow", "iPhone14").await;
+        let result = start_recording(&driver, &config).await;
         assert!(result.is_ok());
 
         let calls = driver.get_calls();
@@ -339,12 +354,14 @@ mod tests {
         let tmp = tempfile::tempdir().expect("failed to create tempdir");
         let config = CaptureConfig {
             screenshot_on_failure: true,
-            screenshot_dir: tmp.path().to_path_buf(),
+            output_dir: tmp.path().to_path_buf(),
+            flow_name: "login".to_string(),
+            device_name: "test_device".to_string(),
             ..CaptureConfig::default()
         };
 
         let path =
-            capture_failure_screenshot(&driver, &config, "login", "auth", 2, "error")
+            capture_failure_screenshot(&driver, &config, "auth", 2, 0, 1, "error")
                 .await
                 .expect("capture should succeed");
 
@@ -356,5 +373,22 @@ mod tests {
         let calls = driver.get_calls();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, "screenshot");
+    }
+
+    // ---------------------------------------------------------------
+    // 11. write_to_disk=false skips capture
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn no_results_skips_capture() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        let config = CaptureConfig {
+            write_to_disk: false,
+            ..test_config()
+        };
+
+        let result =
+            capture_failure_screenshot(&driver, &config, "block", 1, 0, 0, "error").await;
+        assert!(result.is_err());
+        assert!(driver.get_calls().is_empty());
     }
 }

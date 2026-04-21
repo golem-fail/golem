@@ -198,6 +198,8 @@ pub async fn execute_flow<'a>(
                 flow_name: &child_flow.flow.name,
                 block_name: None,
                 step_index: 0,
+                global_step_index: ctx.global_step_index,
+                block_iteration: 0,
                 device: ctx.device,
                 perf_collector: ctx.perf_collector,
                 last_launch_ms: std::sync::atomic::AtomicU64::new(0),
@@ -264,8 +266,10 @@ pub async fn execute_flow<'a>(
         *iteration += 1;
         for (step_idx, step) in block.steps.iter().enumerate() {
             ctx.step_index = step_idx;
+            ctx.block_iteration = iteration.saturating_sub(1);
 
             step_count += 1;
+            ctx.global_step_index = step_count;
             if step_count > max_steps {
                 bail!("max_steps ({max_steps}) exceeded at step {step_count}");
             }
@@ -1883,6 +1887,8 @@ action = "screenshot"
             flow_name: "test",
             block_name: None,
             step_index: 0,
+            global_step_index: 0,
+            block_iteration: 0,
             device: Some(&ios_device),
             perf_collector: None,
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),
@@ -1946,6 +1952,8 @@ action = "screenshot"
             flow_name: "test",
             block_name: None,
             step_index: 0,
+            global_step_index: 0,
+            block_iteration: 0,
             device: Some(&android_device),
             perf_collector: None,
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),
@@ -2018,6 +2026,8 @@ action = "screenshot"
             flow_name: "test",
             block_name: None,
             step_index: 0,
+            global_step_index: 0,
+            block_iteration: 0,
             device: Some(&ios_device),
             perf_collector: None,
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),

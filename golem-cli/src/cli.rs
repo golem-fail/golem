@@ -70,9 +70,17 @@ pub struct RunArgs {
     #[arg(long)]
     pub start: Option<String>,
 
-    /// Output format (repeatable): human, json:<file>, junit:<file>, toon
+    /// Output format for stdout (repeatable): human, json, junit, toon
     #[arg(long = "output", default_value = "human")]
     pub outputs: Vec<String>,
+
+    /// Results directory (default: .golem/results)
+    #[arg(long = "output-dir")]
+    pub output_dir: Option<String>,
+
+    /// Disable writing results to disk (no json/toon/screenshots/recordings)
+    #[arg(long)]
+    pub no_results: bool,
 
     /// Enable auto-recording
     #[arg(long)]

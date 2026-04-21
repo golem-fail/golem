@@ -15,7 +15,6 @@ use golem_runner::executor::execute_flow;
 use golem_vars::VariableStore;
 
 /// Configuration for a suite run.
-#[derive(Default)]
 pub struct SuiteConfig {
     /// Skip cleaning device state between flows.
     pub no_clean: bool,
@@ -41,6 +40,30 @@ pub struct SuiteConfig {
     pub start: Option<String>,
     /// CLI-injected variables (--var KEY=VALUE).
     pub vars: Vec<(String, String)>,
+    /// Root output directory for results, screenshots, recordings.
+    pub output_dir: PathBuf,
+    /// Disable all file output (screenshots, recordings, reports).
+    pub no_results: bool,
+}
+
+impl Default for SuiteConfig {
+    fn default() -> Self {
+        Self {
+            no_clean: false,
+            no_teardown: false,
+            keep_devices: false,
+            seed: None,
+            platform: None,
+            no_perf: false,
+            verbose: false,
+            debug: false,
+            stream_human: false,
+            start: None,
+            vars: Vec::new(),
+            output_dir: PathBuf::from(".golem/results"),
+            no_results: false,
+        }
+    }
 }
 
 /// Orchestrates the execution of a suite of test flows.
@@ -360,10 +383,12 @@ impl SuiteRunner {
             let no_perf = self.config.no_perf;
             let start_block = self.config.start.clone();
             let cli_vars = self.config.vars.clone();
+            let output_dir = self.config.output_dir.clone();
+            let no_results = self.config.no_results;
             let tx = event_tx.clone();
 
             handles.push(tokio::spawn(async move {
-                run_flow_on_device(flow, flow_name, flow_dir, device, platform, port, seed, start_block, cli_vars, barrier, no_perf, Some(tx)).await
+                run_flow_on_device(flow, flow_name, flow_dir, device, platform, port, seed, start_block, cli_vars, output_dir, no_results, barrier, no_perf, Some(tx)).await
             }));
         }
 
@@ -848,6 +873,8 @@ async fn run_flow_on_device(
     seed: Option<u64>,
     start_block: Option<String>,
     cli_vars: Vec<(String, String)>,
+    output_dir: PathBuf,
+    no_results: bool,
     barrier: golem_runner::barrier::FailureBarrier,
     no_perf: bool,
     event_sender: Option<golem_events::channel::EventSender>,
@@ -917,7 +944,13 @@ async fn run_flow_on_device(
     let rng = rand_chacha::ChaCha8Rng::seed_from_u64(actual_seed);
 
     let capture_config = {
-        let mut cfg = CaptureConfig::default();
+        let mut cfg = CaptureConfig {
+            output_dir: output_dir,
+            flow_name: flow_name.clone(),
+            device_name: device_name.clone(),
+            write_to_disk: !no_results,
+            ..CaptureConfig::default()
+        };
         if let Some(ref opts) = flow.flow.options {
             if let Some(v) = opts.screenshot_on_failure {
                 cfg.screenshot_on_failure = v;
@@ -938,6 +971,8 @@ async fn run_flow_on_device(
         flow_name: &flow_name,
         block_name: None,
         step_index: 0,
+        global_step_index: 0,
+        block_iteration: 0,
         device: Some(&device),
         perf_collector: collector.as_ref(),
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),

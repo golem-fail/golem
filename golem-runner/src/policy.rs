@@ -202,8 +202,9 @@ pub async fn execute_step_with_policy(
         let _ = capture_failure_screenshot(
             driver,
             ctx.capture_config,
-            ctx.flow_name,
             ctx.block_name.unwrap_or("unnamed"),
+            ctx.global_step_index,
+            ctx.block_iteration,
             ctx.step_index,
             if_fail,
         )

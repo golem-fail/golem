@@ -14,7 +14,6 @@ use clap::Parser;
 
 use cli::{Cli, Commands};
 use discovery::TagFilter;
-use golem_report::output::OutputTarget;
 use suite::{SuiteConfig, SuiteRunner};
 
 #[tokio::main]
@@ -67,6 +66,19 @@ async fn main() -> anyhow::Result<()> {
 
             let cli_vars = cli::parse_var_args(&args.vars)?;
 
+            let output_dir = args.output_dir
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| std::path::PathBuf::from(".golem/results"));
+
+            // Parse stdout output formats.
+            let stdout_formats: Vec<golem_report::output::OutputFormat> = args
+                .outputs
+                .iter()
+                .map(|s| golem_report::output::parse_output_format(s))
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let include_junit = stdout_formats.iter().any(|f| matches!(f, golem_report::output::OutputFormat::Junit));
+
             let config = SuiteConfig {
                 no_clean: args.no_clean,
                 no_teardown: args.no_teardown,
@@ -79,6 +91,8 @@ async fn main() -> anyhow::Result<()> {
                 stream_human: has_human_output,
                 start: args.start,
                 vars: cli_vars,
+                output_dir: output_dir.clone(),
+                no_results: args.no_results,
             };
 
             // Check if an orchestrator is already running
@@ -104,24 +118,17 @@ async fn main() -> anyhow::Result<()> {
             // Wait for any active client connections to finish before exiting
             server.wait_for_clients().await;
 
-            // Parse output targets. Skip human-to-stdout since the event
-            // stream already renders real-time human output to stderr.
-            let targets: Vec<OutputTarget> = args
-                .outputs
-                .iter()
-                .map(|s| OutputTarget::parse(s))
-                .collect::<Result<Vec<_>, _>>()?;
-            let non_human_targets: Vec<_> = targets
-                .into_iter()
-                .filter(|t| t.file_path.is_some() || !matches!(t.format, golem_report::output::OutputFormat::Human))
-                .collect();
+            // Write results to output dir (json + toon always, junit if requested).
+            if !args.no_results {
+                golem_report::output::write_results_to_dir(&report, &output_dir, include_junit)?;
+            }
 
-            // Write outputs (file targets + non-human stdout)
-            let (_written_files, stdout_contents) =
-                golem_report::output::write_outputs(&report, &non_human_targets)?;
-
-            for content in &stdout_contents {
-                println!("{content}");
+            // Write to stdout (non-human formats only — human streams live to stderr).
+            for fmt in &stdout_formats {
+                if !matches!(fmt, golem_report::output::OutputFormat::Human) {
+                    let content = golem_report::output::render(&report, fmt)?;
+                    println!("{content}");
+                }
             }
 
             // Exit with appropriate code

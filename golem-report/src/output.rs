@@ -1,20 +1,23 @@
-//! Output orchestration for writing results to multiple formats simultaneously.
+//! Output orchestration for writing results to multiple formats.
 //!
-//! Supports writing to stdout and/or files in any combination of formats.
+//! `--output` controls stdout format: `human`, `json`, `junit`, `toon`.
+//! Results are always written to `--output-dir` (default `.golem/results/`)
+//! unless `--no-results` is set. JSON and toon are always written; JUnit
+//! only when `--output junit` is specified.
 //!
 //! # CLI usage
 //!
 //! ```text
-//! golem run login.test.toml --output human                    # default: human to stdout
-//! golem run login.test.toml --output json:report.json         # JSON to file
-//! golem run login.test.toml --output junit:results.xml        # JUnit to file
-//! golem run login.test.toml --output human --output json:report.json  # both
-//! golem run login.test.toml --output toon                     # TOON to stdout
+//! golem run test.toml                          # human to stderr, json+toon to disk
+//! golem run test.toml --output json            # json to stdout + disk
+//! golem run test.toml --output junit           # junit to stdout + disk (adds results.xml)
+//! golem run test.toml --no-results             # stdout only, no files
+//! golem run test.toml --output-dir /tmp/out    # custom results directory
 //! ```
 
 use crate::SuiteReport;
 use anyhow::Result;
-use std::path::PathBuf;
+use std::path::Path;
 
 /// Supported output formats.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,37 +32,9 @@ pub enum OutputFormat {
     Toon,
 }
 
-/// An output destination: a format plus an optional file path.
-///
-/// When `file_path` is `None`, output goes to stdout.
-#[derive(Debug, Clone)]
-pub struct OutputTarget {
-    /// The format to render.
-    pub format: OutputFormat,
-    /// Where to write. `None` means stdout.
-    pub file_path: Option<PathBuf>,
-}
-
-impl OutputTarget {
-    /// Parse from a CLI string like `"json:report.json"` or `"human"`.
-    ///
-    /// The format portion appears before an optional `:` delimiter.
-    /// Everything after the first `:` is treated as the file path.
-    pub fn parse(spec: &str) -> Result<Self> {
-        if let Some((format_str, path)) = spec.split_once(':') {
-            let format = parse_format(format_str)?;
-            Ok(Self {
-                format,
-                file_path: Some(PathBuf::from(path)),
-            })
-        } else {
-            let format = parse_format(spec)?;
-            Ok(Self {
-                format,
-                file_path: None,
-            })
-        }
-    }
+/// Parse a `--output` CLI string into a stdout format.
+pub fn parse_output_format(spec: &str) -> Result<OutputFormat> {
+    parse_format(spec)
 }
 
 /// Parse a format name string into an [`OutputFormat`].
@@ -73,43 +48,39 @@ fn parse_format(s: &str) -> Result<OutputFormat> {
     }
 }
 
-/// Write results to all specified output targets.
+/// Write results files to the output directory.
 ///
-/// For file targets, the content is written to disk (creating parent
-/// directories as needed). For stdout targets, the rendered content is
-/// returned so the caller can print it.
-///
-/// Returns a tuple of:
-/// - `Vec<String>`: paths of files that were written
-/// - `Vec<String>`: rendered content for stdout targets
-pub fn write_outputs(
+/// Always writes `results.json` and `results.toon`. Writes `results.xml`
+/// only when `include_junit` is true (i.e. user specified `--output junit`).
+pub fn write_results_to_dir(
     report: &SuiteReport,
-    targets: &[OutputTarget],
-) -> Result<(Vec<String>, Vec<String>)> {
-    let mut written_files = Vec::new();
-    let mut stdout_contents = Vec::new();
+    output_dir: &Path,
+    include_junit: bool,
+) -> Result<Vec<String>> {
+    std::fs::create_dir_all(output_dir)?;
+    let mut written = Vec::new();
 
-    for target in targets {
-        let content = render(report, &target.format)?;
+    // Always write JSON
+    let json = render(report, &OutputFormat::Json)?;
+    let json_path = output_dir.join("results.json");
+    std::fs::write(&json_path, &json)?;
+    written.push(json_path.display().to_string());
 
-        match &target.file_path {
-            Some(path) => {
-                // Create parent directories if needed
-                if let Some(parent) = path.parent() {
-                    if !parent.as_os_str().is_empty() {
-                        std::fs::create_dir_all(parent)?;
-                    }
-                }
-                std::fs::write(path, &content)?;
-                written_files.push(path.display().to_string());
-            }
-            None => {
-                stdout_contents.push(content);
-            }
-        }
+    // Always write toon
+    let toon = render(report, &OutputFormat::Toon)?;
+    let toon_path = output_dir.join("results.toon");
+    std::fs::write(&toon_path, &toon)?;
+    written.push(toon_path.display().to_string());
+
+    // JUnit only when requested
+    if include_junit {
+        let junit = render(report, &OutputFormat::Junit)?;
+        let junit_path = output_dir.join("results.xml");
+        std::fs::write(&junit_path, &junit)?;
+        written.push(junit_path.display().to_string());
     }
 
-    Ok((written_files, stdout_contents))
+    Ok(written)
 }
 
 /// Render a report in the specified format.
@@ -124,21 +95,12 @@ pub fn render(report: &SuiteReport, format: &OutputFormat) -> Result<String> {
     }
 }
 
-/// Return the default output targets: human format to stdout.
-pub fn default_outputs() -> Vec<OutputTarget> {
-    vec![OutputTarget {
-        format: OutputFormat::Human,
-        file_path: None,
-    }]
-}
-
 // ── Tests ────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{FlowReport, StepOutcome, StepReport};
-    use std::fs;
 
     // Helpers --------------------------------------------------------
 
@@ -210,219 +172,59 @@ mod tests {
         }
     }
 
-    // 1. Parse "human" -> Human format, no file -----------------------
-
+    // 1. parse_output_format valid formats
     #[test]
-    fn parse_human_no_file() {
-        let target = OutputTarget::parse("human").expect("should parse");
-        assert_eq!(target.format, OutputFormat::Human);
-        assert!(target.file_path.is_none());
+    fn parse_valid_formats() {
+        assert_eq!(parse_output_format("human").unwrap(), OutputFormat::Human);
+        assert_eq!(parse_output_format("json").unwrap(), OutputFormat::Json);
+        assert_eq!(parse_output_format("junit").unwrap(), OutputFormat::Junit);
+        assert_eq!(parse_output_format("toon").unwrap(), OutputFormat::Toon);
     }
 
-    // 2. Parse "json:report.json" -> Json format, with file path ------
-
-    #[test]
-    fn parse_json_with_file() {
-        let target = OutputTarget::parse("json:report.json").expect("should parse");
-        assert_eq!(target.format, OutputFormat::Json);
-        assert_eq!(
-            target.file_path.as_deref(),
-            Some(std::path::Path::new("report.json"))
-        );
-    }
-
-    // 3. Parse "junit:results/test.xml" -> JUnit with nested path -----
-
-    #[test]
-    fn parse_junit_with_nested_path() {
-        let target = OutputTarget::parse("junit:results/test.xml").expect("should parse");
-        assert_eq!(target.format, OutputFormat::Junit);
-        assert_eq!(
-            target.file_path.as_deref(),
-            Some(std::path::Path::new("results/test.xml"))
-        );
-    }
-
-    // 4. Parse "toon" -> Toon format, no file -------------------------
-
-    #[test]
-    fn parse_toon_no_file() {
-        let target = OutputTarget::parse("toon").expect("should parse");
-        assert_eq!(target.format, OutputFormat::Toon);
-        assert!(target.file_path.is_none());
-    }
-
-    // 5. Parse unknown format -> error --------------------------------
-
+    // 2. parse_output_format rejects unknown
     #[test]
     fn parse_unknown_format_is_error() {
-        let result = OutputTarget::parse("csv");
+        let result = parse_output_format("csv");
         assert!(result.is_err());
-        let err_msg = format!("{}", result.expect_err("should be error"));
-        assert!(
-            err_msg.contains("Unknown output format"),
-            "error message should mention unknown format: {err_msg}"
-        );
+        assert!(result.unwrap_err().to_string().contains("Unknown output format"));
     }
 
-    // 6. render produces output for each format -----------------------
-
+    // 3. render produces output for each format
     #[test]
     fn render_produces_output_for_each_format() {
         let suite = sample_suite();
 
-        let human = render(&suite, &OutputFormat::Human).expect("human render");
-        assert!(!human.is_empty(), "human output SHALL NOT be empty");
-        assert!(human.contains("login_flow"), "human SHALL contain flow name");
-
-        let json = render(&suite, &OutputFormat::Json).expect("json render");
-        assert!(!json.is_empty(), "json output SHALL NOT be empty");
-        assert!(json.contains("login_flow"), "json SHALL contain flow name");
-
-        let junit = render(&suite, &OutputFormat::Junit).expect("junit render");
-        assert!(!junit.is_empty(), "junit output SHALL NOT be empty");
-        assert!(junit.contains("login_flow"), "junit SHALL contain flow name");
-
-        let toon = render(&suite, &OutputFormat::Toon).expect("toon render");
-        assert!(!toon.is_empty(), "toon output SHALL NOT be empty");
-        assert!(toon.contains("login_flow"), "toon SHALL contain flow name");
+        for fmt in &[OutputFormat::Human, OutputFormat::Json, OutputFormat::Junit, OutputFormat::Toon] {
+            let out = render(&suite, fmt).expect("render");
+            assert!(!out.is_empty());
+            assert!(out.contains("login_flow"));
+        }
     }
 
-    // 7. write_outputs creates files on disk (temp dir) ---------------
-
+    // 4. write_results_to_dir creates json + toon
     #[test]
-    fn write_outputs_creates_file() {
+    fn write_results_to_dir_creates_json_and_toon() {
         let suite = sample_suite();
-        let dir = tempfile::tempdir().expect("should create temp dir");
-        let json_path = dir.path().join("report.json");
+        let dir = tempfile::tempdir().expect("tempdir");
 
-        let targets = vec![OutputTarget {
-            format: OutputFormat::Json,
-            file_path: Some(json_path.clone()),
-        }];
+        let written = write_results_to_dir(&suite, dir.path(), false).expect("write");
+        assert_eq!(written.len(), 2);
 
-        let (written, stdout) = write_outputs(&suite, &targets).expect("should write");
-        assert_eq!(written.len(), 1);
-        assert!(written[0].contains("report.json"));
-        assert!(stdout.is_empty(), "no stdout targets");
-
-        // Verify the file exists and contains valid JSON
-        let content = fs::read_to_string(&json_path).expect("should read file");
-        assert!(content.contains("login_flow"));
-        let parsed: serde_json::Value =
-            serde_json::from_str(&content).expect("should be valid JSON");
-        assert!(parsed.is_object());
+        let json = std::fs::read_to_string(dir.path().join("results.json")).expect("read json");
+        assert!(json.contains("login_flow"));
+        let toon = std::fs::read_to_string(dir.path().join("results.toon")).expect("read toon");
+        assert!(toon.contains("login_flow"));
+        assert!(!dir.path().join("results.xml").exists(), "no junit without flag");
     }
 
-    // 8. write_outputs creates parent directories ---------------------
-
+    // 5. write_results_to_dir includes junit when requested
     #[test]
-    fn write_outputs_creates_parent_directories() {
+    fn write_results_to_dir_includes_junit() {
         let suite = sample_suite();
-        let dir = tempfile::tempdir().expect("should create temp dir");
-        let nested_path = dir.path().join("deep").join("nested").join("results.xml");
+        let dir = tempfile::tempdir().expect("tempdir");
 
-        let targets = vec![OutputTarget {
-            format: OutputFormat::Junit,
-            file_path: Some(nested_path.clone()),
-        }];
-
-        let (written, _) = write_outputs(&suite, &targets).expect("should write");
-        assert_eq!(written.len(), 1);
-        assert!(nested_path.exists(), "file SHALL exist at nested path");
-
-        let content = fs::read_to_string(&nested_path).expect("should read file");
-        assert!(content.contains("<?xml"), "SHALL be valid XML");
-    }
-
-    // 9. default_outputs returns human to stdout ----------------------
-
-    #[test]
-    fn default_outputs_returns_human_to_stdout() {
-        let defaults = default_outputs();
-        assert_eq!(defaults.len(), 1);
-        assert_eq!(defaults[0].format, OutputFormat::Human);
-        assert!(defaults[0].file_path.is_none());
-    }
-
-    // 10. Multiple outputs all written --------------------------------
-
-    #[test]
-    fn multiple_outputs_all_written() {
-        let suite = sample_suite();
-        let dir = tempfile::tempdir().expect("should create temp dir");
-        let json_path = dir.path().join("report.json");
-        let junit_path = dir.path().join("results.xml");
-
-        let targets = vec![
-            OutputTarget {
-                format: OutputFormat::Human,
-                file_path: None, // stdout
-            },
-            OutputTarget {
-                format: OutputFormat::Json,
-                file_path: Some(json_path.clone()),
-            },
-            OutputTarget {
-                format: OutputFormat::Junit,
-                file_path: Some(junit_path.clone()),
-            },
-        ];
-
-        let (written, stdout) = write_outputs(&suite, &targets).expect("should write");
-
-        // Two files written
-        assert_eq!(written.len(), 2, "SHALL write two files");
-        assert!(written.iter().any(|p| p.contains("report.json")));
-        assert!(written.iter().any(|p| p.contains("results.xml")));
-
-        // One stdout target
-        assert_eq!(stdout.len(), 1, "SHALL have one stdout output");
-        assert!(
-            stdout[0].contains("login_flow"),
-            "stdout should contain human output"
-        );
-
-        // Files on disk contain correct content
-        let json_content = fs::read_to_string(&json_path).expect("read json");
-        assert!(json_content.contains("\"login_flow\""));
-
-        let junit_content = fs::read_to_string(&junit_path).expect("read junit");
-        assert!(junit_content.contains("<testsuite"));
-    }
-
-    // 11. Parse with colon in file path preserves full path -----------
-
-    #[test]
-    fn parse_colon_in_path_takes_first_colon_only() {
-        // On some systems paths might not have colons, but we should handle
-        // the split correctly: only split on first colon
-        let target = OutputTarget::parse("json:C:/reports/out.json").expect("should parse");
-        assert_eq!(target.format, OutputFormat::Json);
-        assert_eq!(
-            target.file_path.as_deref(),
-            Some(std::path::Path::new("C:/reports/out.json"))
-        );
-    }
-
-    // 12. Stdout targets with no file targets returns empty files vec --
-
-    #[test]
-    fn stdout_only_returns_no_written_files() {
-        let suite = sample_suite();
-        let targets = vec![
-            OutputTarget {
-                format: OutputFormat::Human,
-                file_path: None,
-            },
-            OutputTarget {
-                format: OutputFormat::Toon,
-                file_path: None,
-            },
-        ];
-
-        let (written, stdout) = write_outputs(&suite, &targets).expect("should write");
-        assert!(written.is_empty(), "no files SHALL be written");
-        assert_eq!(stdout.len(), 2, "SHALL have two stdout outputs");
+        let written = write_results_to_dir(&suite, dir.path(), true).expect("write");
+        assert_eq!(written.len(), 3);
+        assert!(dir.path().join("results.xml").exists());
     }
 }

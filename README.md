@@ -47,7 +47,9 @@ golem run [FILES...] [OPTIONS]
 | `--platform <ios\|android>` | Force a single platform (overrides flow device config) |
 | `--tag <TAG>` | Filter flows by tag. Repeatable. Use `\|` within a value for OR. |
 | `--var <KEY=VALUE>` | Set a variable (highest priority, overrides flow vars). Repeatable. |
-| `--output <FORMAT[:FILE]>` | Output format. Repeatable. Default: `human`. See [Output Formats](#output-formats). |
+| `--output <FORMAT>` | Stdout format: `human` (default), `json`, `junit`, `toon`. Repeatable. |
+| `--output-dir <PATH>` | Results directory (default: `.golem/results`). JSON + toon always written. |
+| `--no-results` | Disable all file output (screenshots, recordings, reports) |
 | `--seed <N>` | Deterministic seed for fake data generation. Seed shown in all output formats for reproducibility. |
 | `--start <BLOCK>` | Start execution at a named block (skips app lifecycle, assumes app in correct state) |
 | `--max-concurrency <N>` | Max parallel devices (not yet implemented) |
@@ -69,7 +71,7 @@ golem run flows/ --platform android
 golem run flows/login.test.toml --var EMAIL=test@example.com --var PASSWORD=secret
 
 # Multiple output targets
-golem run flows/ --output human --output json:report.json --output junit:results.xml
+golem run flows/ --output json --output junit   # json+junit to stdout, all results to .golem/results/
 
 # Filter by tag
 golem run flows/ --tag smoke
@@ -214,9 +216,7 @@ max_steps = 10000                   # Safety limit
 max_runtime = "30m"                 # "5m", "2h", "500ms"
 app_lifecycle = "reset"             # "reset" (default), "launch", "manual"
 screenshot_on_failure = true        # Auto-capture screenshot on step failure (default: true)
-screenshot_dir = ".golem/screenshots" # Planned: unified --output-dir (see roadmap)
 record = true                       # Not yet wired
-recording_dir = ".golem/recordings" # Planned: unified --output-dir (see roadmap)
 perf = true                         # Performance monitoring (default: true)
 perf_memory_warn_mb = 200.0
 perf_memory_error_mb = 500.0

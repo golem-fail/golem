@@ -32,6 +32,8 @@ fn test_ctx() -> ExecutionContext<'static> {
         flow_name: "test",
         block_name: None,
         step_index: 0,
+        global_step_index: 0,
+        block_iteration: 0,
         device: None,
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
