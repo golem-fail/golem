@@ -3,6 +3,7 @@ use crate::{DeviceId, EventKind, SubstepEvent};
 
 /// Scoped event emitter for a single device execution.
 /// Passed through ExecutionContext so all action handlers can emit events.
+#[derive(Clone)]
 pub struct DeviceEmitter {
     sender: EventSender,
     device_id: DeviceId,

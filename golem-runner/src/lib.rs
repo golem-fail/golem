@@ -41,6 +41,7 @@ pub mod fixture_loader;
 pub mod data_driven;
 pub mod device_vars;
 pub mod executor;
+pub mod installer;
 pub mod loops;
 pub mod policy;
 pub mod resolution;

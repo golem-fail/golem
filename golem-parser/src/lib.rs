@@ -48,9 +48,83 @@ pub struct FlowMeta {
 #[derive(Deserialize, Debug, Clone)]
 pub struct AppConfig {
     pub name: String,
-    pub bundle: String,
+    /// Bundle id. Optional in source TOML — inherited from a matching
+    /// project-level `[[apps]]` entry by name, if present. After
+    /// project-merge, must be populated (validated elsewhere).
+    #[serde(default)]
+    pub bundle: Option<String>,
     #[serde(default)]
     pub devices: Vec<DeviceConstraint>,
+    /// Optional install script. Either a single path (cross-platform) or a
+    /// platform-keyed table: `{ ios = "...", android = "..." }`. When unset
+    /// AND not provided by the project `[[apps]]` registry, golem skips the
+    /// install step entirely and assumes the app is already installed.
+    pub install_script: Option<InstallScriptValue>,
+    /// Timeout in ms for the install script. Override default when this
+    /// app's build is known to take longer than the default.
+    pub install_timeout_ms: Option<u64>,
+}
+
+/// An install script path, either a single cross-platform script or a
+/// platform-keyed map (e.g. separate iOS / Android scripts).
+#[derive(Deserialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum InstallScriptValue {
+    /// One script handles all platforms (e.g. Tauri, Expo).
+    Single(String),
+    /// Separate scripts per platform. Missing keys = no script for that platform.
+    PerPlatform(InstallScriptPerPlatform),
+}
+
+#[derive(Deserialize, Debug, Clone, Default)]
+pub struct InstallScriptPerPlatform {
+    pub ios: Option<String>,
+    pub android: Option<String>,
+}
+
+impl InstallScriptValue {
+    /// Resolve to a script path for the given platform, or `None` if no
+    /// script is configured for that platform.
+    pub fn for_platform(&self, platform: &str) -> Option<&str> {
+        match self {
+            InstallScriptValue::Single(s) => Some(s.as_str()),
+            InstallScriptValue::PerPlatform(p) => match platform {
+                "ios" => p.ios.as_deref(),
+                "android" => p.android.as_deref(),
+                _ => None,
+            },
+        }
+    }
+}
+
+/// Project-level app definition (`[[apps]]` in golem.toml).
+///
+/// Lets a project declare each app once — name, bundle, install_script,
+/// optional timeout, optional device defaults — so flows can reference by
+/// name and inherit:
+///
+/// ```toml
+/// # golem.toml
+/// [[apps]]
+/// name = "app-b"
+/// bundle = "fail.golem.testb"
+/// install_script = { ios = "scripts/install-app-b-ios.sh", android = "scripts/install-app-b-android.sh" }
+/// install_timeout_ms = 900000   # 15 min
+///
+/// # flow.toml
+/// [[flow.apps]]
+/// name = "app-b"        # inherits bundle + install_script from golem.toml
+/// ```
+///
+/// Flow-level fields override matching project-level ones.
+#[derive(Deserialize, Debug, Clone)]
+pub struct ProjectAppConfig {
+    pub name: String,
+    pub bundle: Option<String>,
+    #[serde(default)]
+    pub devices: Vec<DeviceConstraint>,
+    pub install_script: Option<InstallScriptValue>,
+    pub install_timeout_ms: Option<u64>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -314,7 +388,7 @@ on_text = "OK"
         let flow = parse_flow(toml_str).expect("minimal valid flow should parse");
         assert_eq!(flow.flow.name, "minimal test");
         assert_eq!(flow.flow.apps.len(), 1);
-        assert_eq!(flow.flow.apps[0].bundle, "com.example.app");
+        assert_eq!(flow.flow.apps[0].bundle.as_deref(), Some("com.example.app"));
         assert_eq!(flow.flow.apps[0].devices.len(), 1);
         assert_eq!(flow.block.len(), 1);
         assert_eq!(flow.block[0].steps.len(), 1);
@@ -471,9 +545,9 @@ os = "ios:17"
         let flow = parse_flow(toml_str).expect("multiple apps should parse");
         assert_eq!(flow.flow.apps.len(), 2);
         assert_eq!(flow.flow.apps[0].name, "app1");
-        assert_eq!(flow.flow.apps[0].bundle, "com.example.one");
+        assert_eq!(flow.flow.apps[0].bundle.as_deref(), Some("com.example.one"));
         assert_eq!(flow.flow.apps[1].name, "app2");
-        assert_eq!(flow.flow.apps[1].bundle, "com.example.two");
+        assert_eq!(flow.flow.apps[1].bundle.as_deref(), Some("com.example.two"));
         assert_eq!(flow.flow.apps[0].devices.len(), 1);
         assert_eq!(flow.flow.apps[1].devices.len(), 1);
     }
@@ -828,16 +902,19 @@ action = "tap"
     // 15. Missing app bundle — error
     // ---------------------------------------------------------------
     #[test]
-    fn missing_app_bundle_error() {
+    fn missing_app_bundle_parses_as_none() {
+        // bundle is parse-optional; it may be supplied by a project-level
+        // [[apps]] entry in golem.toml. Missing-at-execution-time is
+        // validated elsewhere (suite runner).
         let toml_str = r#"
 [flow]
-name = "bad app"
+name = "no bundle"
 
 [[flow.apps]]
-name = "no_bundle"
+name = "needs_bundle"
 "#;
-        let result = parse_flow(toml_str);
-        assert!(result.is_err(), "missing bundle SHALL produce an error");
+        let flow = parse_flow(toml_str).expect("missing bundle SHALL parse");
+        assert_eq!(flow.flow.apps[0].bundle, None);
     }
 
     // ---------------------------------------------------------------

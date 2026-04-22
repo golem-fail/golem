@@ -11,6 +11,9 @@ golem init
 # Create a test flow
 golem create login
 
+# Scaffold an install script for your app (native-ios, native-android, tauri)
+golem install-script
+
 # Run tests
 golem run flows/login.test.toml
 
@@ -58,8 +61,8 @@ golem run [FILES...] [OPTIONS]
 | `--no-teardown` | Skip teardown blocks (not yet wired) |
 | `--keep-devices` | Keep devices running after completion (not yet wired) |
 | `--no-perf` | Disable performance capture |
-| `--verbose` | Show substeps: scroll coordinates, strategies, tree stats |
-| `--debug` | Show driver diagnostics: WebKit/CDP connection details |
+| `--verbose` | Show substeps (scroll coordinates, strategies, tree stats) + plan summary (flow runs, install matrix, device availability) |
+| `--debug` | Show driver diagnostics (WebKit/CDP) and per-line install-script stderr |
 
 **Examples:**
 
@@ -109,6 +112,12 @@ Scaffold a new project: creates `golem.toml`, `flows/`, `__fixtures__/`, `__mixi
 ### `golem create <name>`
 
 Create a new flow template at `flows/<name>.test.toml`.
+
+### `golem install-script`
+
+Interactively scaffold an install script for an app in your project. Prompts for framework (native-ios, native-android, tauri), the relevant build config (xcode project/scheme, gradle root/module, tauri CLI runner), discovers candidates automatically where possible, and writes a bash script under `scripts/`. Optionally updates `golem.toml` with a matching `[[apps]]` entry so flows inherit the script by name.
+
+See [App Install](#app-install) below for the full resolution and execution model.
 
 ---
 
@@ -585,6 +594,177 @@ steps = [
 ```
 
 `launch` brings an app to foreground without restarting it. Use `restart = true` for a cold start.
+
+---
+
+## App Install
+
+By default golem assumes the app under test is already installed on the target device. For fresh simulators, CI pipelines, or teams that want per-test builds, you can supply an install script that golem runs before each flow.
+
+### Quick start
+
+```bash
+golem install-script      # interactive: choose framework, answer prompts
+```
+
+The scaffold writes `scripts/install-<app>-<platform>.sh` (for native iOS/Android) or `scripts/install-<app>.sh` (for cross-platform frameworks like Tauri) and can auto-update `golem.toml`.
+
+### Project-level `[[apps]]` registry
+
+Declare each app once in `golem.toml`. Flows reference by `name` and inherit everything else:
+
+```toml
+# golem.toml
+[[apps]]
+name = "app"
+bundle = "com.example.app"
+install_script = { ios = "scripts/install-app-ios.sh", android = "scripts/install-app-android.sh" }
+install_timeout_ms = 900000   # optional override (default 600000 = 10 min)
+```
+
+```toml
+# flow.test.toml
+[[flow.apps]]
+name = "app"       # inherits bundle + install_script + install_timeout_ms from [[apps]]
+
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+```
+
+Flow-level fields override project-level ones when both are set.
+
+### `install_script` forms
+
+Either a single path (cross-platform):
+
+```toml
+install_script = "scripts/install.sh"
+```
+
+Or a platform-keyed table (native separate iOS + Android builds):
+
+```toml
+install_script = { ios = "scripts/install-ios.sh", android = "scripts/install-android.sh" }
+```
+
+Golem picks the right entry for the target platform at run time.
+
+### Script contract
+
+Golem invokes the script from the project root with three positional args:
+
+```
+script.sh <platform> <device_udid> <bundle_id>
+```
+
+- `platform`: `"ios"` or `"android"`
+- `device_udid`: simulator UDID / emulator serial / physical device identifier
+- `bundle_id`: from `[[apps]]` or `[[flow.apps]]`
+
+Exit 0 = success, golem launches the app. Nonzero = flow fails with the script's stderr captured; subsequent flows using the same `(device, bundle)` pair are skipped.
+
+Stdout is discarded. Stderr is streamed live via the event system and shows up in:
+
+- Human output: `[install <app>]` prefix
+- `results.json` / `results.toon` / `results.xml`: under the top-level `installs` list, with success/duration/exit_code/error
+
+Scripts also support a 4th `"install-only"` arg for manual dev-iteration (skip build, reuse previous artifact). Golem currently always passes empty; see the roadmap for the future build-once-install-many optimisation.
+
+### Install cache (current behaviour)
+
+Per-suite cache keyed on `(device_udid, bundle_id)`. The script runs at most once per combination. Cache propagates:
+
+- `Succeeded` → subsequent flows on the same device skip the script and go straight to launch
+- `FailedScript` / `FailedNoScript` → subsequent flows using that combo are **skipped** with a clear reason (no repeated retries on broken setups)
+
+### When no script is configured
+
+Golem skips the install step and assumes the app is pre-installed. If `launch` later fails, the error message nudges the user to configure an install script.
+
+### Frameworks the scaffold supports
+
+- **native-ios** — xcodebuild + `xcrun simctl install` (simulator) / `xcrun devicectl` or `ios-deploy` (physical)
+- **native-android** — `./gradlew :<module>:installDebug` (routes to any connected device via `ANDROID_SERIAL`)
+- **tauri** — `tauri ios build` / `tauri android build` then install. Detects package manager from lockfiles (`npm` / `yarn` / `pnpm` / `bun` / `cargo tauri`).
+
+Scripts are plain bash — customise freely after scaffolding. Extend to other frameworks (Expo, React Native, Flutter, Capacitor, etc.) by hand.
+
+---
+
+## Orchestration
+
+Golem orchestrates a suite run in two phases: a **Plan** phase that parses flows and computes what needs to happen, and an **Execute** phase that runs flows on devices. The Plan phase is pure and idempotent; the Execute phase is async and interacts with devices, companions, and install scripts.
+
+### How it works today
+
+```mermaid
+flowchart TD
+    Start([golem run flow1.toml flow2.toml]) --> Plan
+    subgraph Plan["Plan phase (sync, once)"]
+        P1[Parse all flows] --> P2[Merge project apps] --> P3[Expand coverage<br/>os:latest:N, os lists, type lists]
+        P3 --> P4[Build install_matrix<br/>only apps referenced by some flow]
+        P4 --> P5[Compute device availability<br/>snapshot via simctl / adb]
+    end
+    Plan --> Emit[Emit SuitePlanned event]
+    Emit --> Dispatch{flows.len&nbsp;> 1&nbsp;?}
+    Dispatch -->|yes| Spawn[Spawn per-flow tokio tasks<br/>in parallel]
+    Dispatch -->|no| Single[run_single_flow]
+    Spawn --> Single
+    Single --> Setup
+    subgraph Setup["Per-flow setup (sequential per platform)"]
+        S1[For each target platform:<br/>find free device] --> S2[Preinstall apps<br/>from install_matrix<br/>project_lock serialised]
+        S2 --> S3[Start companion<br/>health check]
+    end
+    Setup --> Exec[Spawn run_flow_on_device<br/>per device, in parallel]
+    Exec --> StopLaunch[stop_app + launch_app<br/>15s timeout each]
+    StopLaunch --> Steps[Execute flow steps]
+    Steps --> Release[Release device]
+    Release --> End([SuiteReport])
+```
+
+**Pain points today** (captured as roadmap items):
+
+- Flow execution on iOS waits for Android install + companion, even though iOS is already ready.
+- Install runs eagerly for every matching `(device, app)` in the matrix — not always needed.
+- Flow × device fan-out is hard-coded to "one device per platform per flow". No `ios:latest:2` multi-device yet.
+
+### How it should work (target)
+
+```mermaid
+flowchart TD
+    Start([golem run ...]) --> Plan
+    subgraph Plan["Plan phase (sync, once)"]
+        P1[Parse all flows] --> P2[Expand coverage<br/>across flows]
+        P2 --> P3[Emit Vec&lt;FlowRun&gt;<br/>each with DeviceSlot requirements<br/>NOT specific UDIDs]
+    end
+    Plan --> Queue[(FlowRun queue)]
+    Queue --> Scheduler
+    subgraph Scheduler["Scheduler loop — up to max_concurrency workers"]
+        W1[Pop next FlowRun] --> W2{Device matching<br/>slot requirements<br/>free?}
+        W2 -->|no| W3[Wait: either an existing<br/>device frees OR<br/>boot-on-demand if RAM headroom]
+        W3 --> W2
+        W2 -->|yes, prefer<br/>device already<br/>holding the app| W4[Acquire device]
+        W4 --> W5{install_cache<br/>hit?}
+        W5 -->|no| W6[JIT install<br/>run install_script<br/>project_lock serialised]
+        W5 -->|yes| W7[Skip install]
+        W6 --> W7
+        W7 --> W8[Ensure companion<br/>reuse if healthy]
+        W8 --> W9[Execute flow]
+        W9 --> W10[Release device]
+        W10 --> W1
+    end
+    Scheduler --> End([SuiteReport])
+```
+
+**Wins over the current model:**
+
+- iOS FlowRuns start as soon as iOS is ready — no waiting for Android setup.
+- A suite of 20 FlowRuns on 5 `ios:26` sims runs 5 in parallel, and next 15 reuse the same sims as they free — install runs at most 5 times total.
+- Multi-device flows (chat-test, `ios:latest:2`) fall out naturally: each FlowRun has one or more `DeviceSlot` entries; scheduler acquires all of them before executing.
+- Scheduler is the one place where cross-process coordination, boot-on-demand, and fair-share queueing all live — existing roadmap items plug in cleanly.
+
+See `docs/roadmap.md` → **Dynamic JIT Scheduler — Device Reuse, Lazy Install** for the implementation plan.
 
 ---
 

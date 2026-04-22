@@ -154,16 +154,19 @@ pub async fn discover_android_devices() -> anyhow::Result<Vec<DeviceInfo>> {
     }
 
     // Add any running devices not found via AVD configs (e.g. physical devices,
-    // emulators with unparseable configs)
+    // emulators with unparseable configs). Query `getprop ro.build.version.sdk`
+    // over adb so os_major is correct (was 0 in the fallback path, which
+    // leaked into displayed labels like `android/v0/phone`).
     for (serial, _) in &running {
         if !devices.iter().any(|d| d.udid == *serial) {
+            let (os_major, os_version) = fetch_adb_version(serial).await;
             devices.push(DeviceInfo {
                 name: serial.clone(),
                 udid: serial.clone(),
                 platform: Platform::Android,
                 device_type: DeviceType::Phone,
-                os_major: 0,
-                os_version: String::new(),
+                os_major,
+                os_version,
                 state: DeviceState::Booted,
                 physical: !serial.starts_with("emulator-"),
                 playstore: false,
@@ -178,6 +181,30 @@ pub async fn discover_android_devices() -> anyhow::Result<Vec<DeviceInfo>> {
     }
 
     Ok(devices)
+}
+
+/// Query `adb shell getprop` for a running device's Android API level and
+/// release string. Returns `(0, "")` if adb is unreachable — caller treats
+/// 0 as "unknown version".
+async fn fetch_adb_version(serial: &str) -> (u32, String) {
+    let sdk = tokio::process::Command::new("adb")
+        .args(["-s", serial, "shell", "getprop", "ro.build.version.sdk"])
+        .output()
+        .await
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+    let release = tokio::process::Command::new("adb")
+        .args(["-s", serial, "shell", "getprop", "ro.build.version.release"])
+        .output()
+        .await
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+    let major = sdk.parse::<u32>().unwrap_or(0);
+    (major, release)
 }
 
 /// Get running Android devices from `adb devices`, with optional AVD name.

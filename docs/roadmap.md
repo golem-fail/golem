@@ -34,26 +34,6 @@ With multi-flow parallelism the scope needs to stay per-flow: failure on `flow_a
 
 **Files:** `golem-runner/src/barrier.rs` (doc comments), new test under `golem-runner/tests/`.
 
-## App Install via User-Provided Bash Script
-
-Currently the app under test is assumed pre-installed. If golem boots a fresh simulator/emulator, `launch` will fail. Conventional install paths won't work across frameworks (Expo Go, Expo Dev Client, React Native bare, native Swift/Kotlin, Flutter, multi-app repos, dev vs release builds).
-
-**Design direction (needs discussion before implementation):**
-- Dev writes a bash script (committed to repo) that golem invokes per-device
-- Golem passes `device_id` (and platform) as arguments
-- Script does framework-specific build + install, echoes installed bundle path/id on success
-- `[flow.apps]` gains `install_script = "scripts/install.sh"` (or similar)
-- `golem create`-style CLI command to scaffold starter script per framework
-
-**Open questions:**
-- Incremental build caching — script's problem, or golem-level hash check?
-- Script interface: args vs env vars vs stdin protocol
-- Install vs launch separation — script installs only, golem launches?
-- Error reporting from script — exit codes + stderr pass-through?
-- Multi-app flows — one script per app or one unified script?
-
-**Files (likely):** `golem-cli/src/suite.rs` (flow startup invokes script), `golem-driver/src/{ios,android}.rs` (install from script-provided path), `golem-parser/src/lib.rs` (AppConfig.install_script field), `golem-cli/src/scaffold.rs` (script scaffolding).
-
 ## True Parallel Flow × Device Concurrency
 
 Running `golem run a.toml b.toml` on ios+android = 4 device-runs available but only 2 execute in parallel (one per booted device per platform). Other 2 wait for devices to free. Machines with spare RAM could run all 4 at once.
@@ -66,9 +46,182 @@ Running `golem run a.toml b.toml` on ios+android = 4 device-runs available but o
 
 **Cleanup:** Track which sims/emulators golem booted (vs user's) so they can be shut down afterwards. Respects `--keep-devices`.
 
-**Depends on:** App install script support (previous entry) — without it, fresh sims have no app.
+**Note:** Works with the existing install script support — fresh sims booted on-demand will have their install_script invoked automatically via the existing pipeline.
 
 **Files:** `golem-devices/src/resource_manager.rs` (boot-on-demand logic), `golem-devices/src/concurrency.rs` (headroom checks), `golem-devices/src/{ios,android}.rs` (boot helpers + tracking).
+
+## Install Cache: Build-Once, Install-to-Many
+
+Currently the install cache is keyed per `(device_udid, bundle_id)`: the user's install script runs once per device. For suites that run the same flow across multiple devices on the **same platform** (e.g. 2 iOS simulators), the build step is re-run every time — wasteful, since the built `.app`/APK is identical across devices of the same platform.
+
+**Script-side foundation (already in place):** install scripts accept a 4th positional arg, `$4 = "install-only"`. When set, the script skips its build step and installs the previously produced artifact. Scripts that don't support the flag ignore it and do a full rebuild — backwards-compatible.
+
+**Golem-side optimisation (this roadmap item):**
+- Split the cache into two layers:
+  - `BuildCache: (platform, bundle_id) → Succeeded | Failed` — tracks whether any device for this platform has already triggered a successful build this suite.
+  - `InstallCache: (device_udid, bundle_id) → Succeeded | Failed` — per-device install outcome (current behaviour).
+- First device for a `(platform, bundle)` pair: invoke script without the `install-only` flag. Build + install.
+- Subsequent devices for the same `(platform, bundle)`: invoke script with `install-only`. Install-only path reuses the previously produced artifact.
+- On build failure: still `FailedScript` for the `(platform, bundle)` pair; all devices on that platform skip as before.
+- Thread-safety: devices may start concurrently — need a per-`(platform, bundle)` mutex around the first invocation so parallel-starting devices wait for the one that "won" the build.
+
+**Ties in with:** [True Parallel Flow × Device Concurrency](#true-parallel-flow--device-concurrency) — the optimisation matters more once more devices can run simultaneously.
+
+**Files:** `golem-runner/src/installer.rs` (split cache types), `golem-cli/src/suite.rs` (first-build-winner coordination).
+
+## Suite Orchestration: Plan → Execute Model
+
+Today's orchestration is implicit and per-flow: each flow parses itself, resolves its own devices, runs its own install, spawns its own companion. The suite has no central view. This makes layering in other roadmap items (multiplier syntax, boot-on-demand, cross-process dedup) painful.
+
+**Plan phase (sync, once at suite start):**
+- Parse all flow files; merge with project `[[apps]]` defaults
+- Call existing `golem-devices::resolver::MinCoverage` per flow to resolve devices
+- Emit `ParsedSuite { flows, flow_runs, install_matrix }`
+- `install_matrix` is the union of apps **referenced by some flow**, keyed by `(platform, bundle)` — apps in `golem.toml [[apps]]` not referenced by any flow are dropped entirely
+
+**Execute phase (async):**
+- Iterate `flow_runs`, acquire device via `ResourceManager`
+- Pre-install only `install_matrix` entries applicable to this device + platform
+- Ensure companion (reuse if healthy), execute flow, release device
+
+**Status:** implemented as a new `golem-orchestrator` crate housing `plan.rs` + `install_matrix.rs`. `SuiteRunner` rewired to consume `ParsedSuite` instead of raw flow paths.
+
+**Files:** `golem-orchestrator/src/{plan.rs,install_matrix.rs}` (new crate), `golem-cli/src/suite.rs` (rewire `run_suite`), `golem-cli/src/main.rs` (call `plan()` before `run_suite`).
+
+## Orchestrator Hardening — Review Follow-ups
+
+Bundle of small follow-ups from the first code review of the Plan → Execute refactor. None are correctness-critical today but worth batching into one clean-up pass:
+
+- **Deduplicate `merge_project_apps` logic** — identical in `golem-cli/src/suite.rs` and `golem-orchestrator/src/plan.rs`. Pick one home (orchestrator), remove the other. Also fixes the wrong-`project_root` use in `parse_and_expand` (line ~795 falls back to `flow_dir` instead of the configured project root).
+- **Deduplicate slot-label formatting** — `describe_slot` in suite.rs and `shape_label` in plan.rs render overlapping fields; new `DeviceSlot` fields would need updating in two places. Extract one helper in `golem-orchestrator`.
+- **Bounds-check in `build_install_matrix`** — `&flows[run.flow_idx]` panics if a caller constructs `FlowRun`s independently. Replace with safe lookup (`flows.get()`) returning skip or error.
+- **Device-constraint filter in `device_matches_entry_constraints`** — today only checks `device_type`. Extend to `physical`, `name`, `accessibility_label` so the preinstall safety net matches the resolver's real filter set.
+- **`SuitePlanned` event docs** — add a comment noting the variant carries pre-formatted strings and is consumed only by `stream_human` (accumulator/JSON/TOON/JUnit fall through). When machine-readable plan info is needed, introduce a structured sibling event.
+- **`plan_event` lifecycle doc** — `take()`-once contract on `SuiteRunner.plan_event`. Currently correct but undocumented; future callers that invoke `run_single_flow` directly (e.g. test harnesses) will silently emit nothing.
+- **`project_lock` key granularity** — per `project_root` today. Unnecessarily serialises unrelated apps that happen to share a project root (monorepo). Change key to `(project_root, script_path)` for true per-build serialization.
+- **`compute_device_availability` semantics label** — current "N matches (M booted)" can mislead about parallel capacity. Clarify to "N devices (K parallel-usable)" or similar.
+- **Unify install/flow `DeviceId` scheme** — preinstall uses `{platform}/{device.name}`, so do flow events. Install uses the same now but the TOON renderer comment implies plain device name; align naming + docs.
+
+**Files:** mostly `golem-cli/src/suite.rs`, `golem-orchestrator/src/plan.rs`, `golem-orchestrator/src/install_matrix.rs`, `golem-events/src/lib.rs` (doc comments).
+
+## Dynamic JIT Scheduler — Device Reuse, Lazy Install
+
+Today's Execute phase is phased: (1) install on every platform, (2) start every companion, (3) spawn all flow tasks. iOS flows wait for Android install + Android companion even though iOS is already ready. Install happens eagerly for every (device, app) in the matrix, even if the suite only needs a few devices.
+
+**Target model — scheduler loop:**
+
+- Queue of unstarted `FlowRun`s (ordered; can be stable-sorted by priority later).
+- Worker pool gated by `max_concurrency` + RAM.
+- Each worker pops a FlowRun → finds a free device matching the slot requirements → executes.
+- **Device selection preference:** prefer a free device that already has the required app installed (zero-cost reuse) over picking a fresh one that needs an install. This matters when a suite does many FlowRuns of the same `(platform, app)` shape.
+- **JIT install:** before executing, check `install_cache[(udid, bundle)]`. Missing → run install script now. Hit → skip.
+- Flow runs → releases device → next FlowRun from queue picks it up (with the install now cached).
+
+**Why this wins:**
+- First iOS FlowRun can start while Android install is still running (installs are still serialized by `project_lock`, but flow execution is no longer gated by other platforms' setup).
+- A suite of 20 FlowRuns on 5 `ios:26` sims runs 5 in parallel, next 15 reuse the 5 as they free up — install script runs at most 5 times (once per distinct device).
+- Pairs cleanly with boot-on-demand (roadmap: True Parallel Flow × Device Concurrency) — scheduler can trigger a boot when queue has pending FlowRuns and RAM headroom permits.
+
+**Depends on:** [Suite Orchestration: Plan → Execute Model](#suite-orchestration-plan--execute-model) (done).
+
+**Files:** rewrite of the Execute half of `golem-cli/src/suite.rs::run_single_flow_with_resources` + `run_suite` to a single scheduler loop that consumes `parsed.flow_runs`. Keep existing `InstallCache` and `ResourceManager` as-is. May end up naturally living in `golem-orchestrator` once [Migrate SuiteRunner + IPC](#migrate-suiterunner--ipc-into-golem-orchestrator) lands.
+
+## Coverage Multiplier Syntax (`ios:latest:2`)
+
+Extend device constraint parser to recognize a `:N` suffix on the `os` field. `os = "ios:latest:2"` means "resolve 2 devices matching `ios:latest`". Plan generator emits N `FlowRun` entries for that coverage slot.
+
+**Example:** flow targets `ios:latest:2` on both `type = "phone"` and `type = "tablet"` → 4 coverage checkboxes (latest-ios, previous-ios if any version spec, phone, tablet). Min-cover picks the smallest device set that ticks all boxes; a single "latest-ios tablet" device ticks 2 boxes in one run.
+
+**Depends on:** [True Parallel Flow × Device Concurrency](#true-parallel-flow--device-concurrency) — without boot-on-demand, `N>1` stalls when only 1 booted device matches.
+
+**Foundation:** `FlowRun` struct already carries `multiplier: u32` (default 1) so this is a generator change only.
+
+**Files:** `golem-parser/src/lib.rs` (parse `:N` suffix on `DeviceConstraint.os`), `golem-orchestrator/src/plan.rs` (expand N-runs per coverage slot).
+
+## `os = "any"` Default Semantics
+
+Currently `detect_all_platforms()` in `golem-cli/src/suite.rs` defaults to iOS when no `os` constraint is set. Desired: unset/`any` means "run on any available platform" — pick whichever has devices.
+
+**Use case:** platform-agnostic flows (cross-platform assertions, device-agnostic utilities) shouldn't force iOS-only runs.
+
+**Semantics:**
+- `os = "any"` → pick any available platform (prefer booted)
+- `os = "any:2"` → 2 devices, any platforms, possibly different
+- No `os` field at all → behave as `any`
+
+**Foundation:** `CoverageRequirement` struct should carry an `any_platform: bool` flag; Plan generator branches on it.
+
+**Files:** `golem-parser/src/lib.rs` (parse "any" + absence), `golem-orchestrator/src/plan.rs` (handle any-platform resolution).
+
+## Partial Suite on Install Failure
+
+If pre-install fails for app `X` on device `D`, today's per-flow install check marks `FailedScript` in the cache and any flow referencing `X` on `D` is skipped. But UX could be sharper:
+
+- Dedicated `FlowSkipped` event with explicit cause (`InstallFailed(X, D)` vs other skip reasons)
+- Aggregated suite summary line distinguishing "install-dep-skip" from genuine flow failures
+- Flows that don't reference `X` proceed normally (already the case)
+
+**Foundation:** `InstallCache` already keyed on `(udid, bundle)`; per-flow skip logic already exists. This is polish.
+
+**Files:** `golem-events/src/lib.rs` (enrich `FlowSkipped` variant), `golem-report/src/stream.rs` + `accumulator.rs` (render distinct skip reasons).
+
+## Cross-Process InstallCache
+
+Orchestrator mode (`golem-cli/src/orchestrator.rs`) lets a second `golem run` offload to the first. Currently each process has its own `InstallCache`, so the second suite rebuilds apps the first already produced.
+
+**Desired:** persist install outcomes across CLI invocations. Second `golem run` queries the orchestrator for `(udid, bundle) → InstallOutcome` before running its own install script.
+
+**Implementation options:**
+- Shared-memory backing for `InstallCache` (complex, platform-specific)
+- Socket-query path in existing orchestrator IPC: `{ type: "install_cache_get", key: (udid, bundle) }` → `{ outcome: ... }`
+- Persist to `~/.golem/install_cache.toml` between runs (simpler; staleness handled by wall-clock TTL)
+
+**Foundation:** existing keying is suitable; `InstallCache` trait already abstracts storage.
+
+**Files:** `golem-runner/src/installer.rs` (trait or backend abstraction), `golem-cli/src/orchestrator.rs` (cache-query RPCs).
+
+## Migrate SuiteRunner + IPC into `golem-orchestrator`
+
+Natural follow-up to [Suite Orchestration: Plan → Execute Model](#suite-orchestration-plan--execute-model). Today `SuiteRunner` lives in `golem-cli/src/suite.rs` and IPC logic in `golem-cli/src/orchestrator.rs`. Both belong in the orchestrator crate once the Execute engine stabilises — cleanly separates glue (CLI arg parsing, output rendering) from core (suite execution, multi-process coordination).
+
+**Files:** move `golem-cli/src/suite.rs` → `golem-orchestrator/src/suite.rs`; move `golem-cli/src/orchestrator.rs` → `golem-orchestrator/src/ipc.rs`.
+
+## Force Separate Device per App (`share_device = false`)
+
+By default, `[[flow.apps]]` entries whose device constraints are jointly satisfiable pack into the same physical device to save host resources. For some flows this default is wrong — for example a deep-link test where two apps must be on different devices to exercise cross-device IPC, or an isolation test where sharing a device would contaminate state.
+
+**Proposed TOML:**
+```toml
+[[flow.apps]]
+name = "a"
+share_device = false     # opt out of packing — a gets its own device
+```
+
+**Implementation:** add `share_device: Option<bool>` (default = true) to `AppConfig` in golem-parser. The `golem-orchestrator` Plan generator honours it when building slot groupings — an app with `share_device = false` always gets its own `DeviceSlot`.
+
+**Ties in with:** [Suite Orchestration: Plan → Execute Model](#suite-orchestration-plan--execute-model) — builds on the slots-based `FlowRun`.
+
+## Multi-Device Flow Coordination (Chat Tests)
+
+Some flows use two apps on two different devices that must run together (chat client + chat server). Today's suite model spawns a separate flow task per platform; two devices never coordinate inside one flow execution. The new `FlowRun { slots: Vec<DeviceSlot> }` structure supports 2+ slots, but the initial Plan implementation only emits single-slot FlowRuns.
+
+**Implementation:**
+- Plan generator detects apps with incompatible `[[flow.apps.devices]]` constraints (e.g. different platforms) and emits one `FlowRun` with a `DeviceSlot` per incompatible group.
+- Execute phase acquires ALL slots' devices before starting the flow; runs the flow with multi-device context (flow steps can `{ action = "launch", app = "b" }` to switch focus between devices).
+- Device release happens after the whole FlowRun completes, not per-slot.
+
+**Depends on:** [Suite Orchestration: Plan → Execute Model](#suite-orchestration-plan--execute-model) (the slots struct exists) + clarification on flow-step semantics across devices (which device is "current" at each step).
+
+## Reconcile `[[flow.apps]]` Implementation with Original Spec
+
+Per design notes, some original-spec behaviour around `[[flow.apps]]` and step-level app targeting was not carried through during initial implementation. Examples:
+- Default expectation that blocks/steps target the single app when only one is declared.
+- `{ action = "launch", app = "app-b" }` switching apps on the same device.
+- Device-sharing defaults for multi-app flows.
+
+**Action:** produce a reconciliation doc mapping current implementation against original spec, flag gaps, and either (a) fix the implementation, or (b) update the spec to match current behaviour with a rationale. Low priority but important for long-term clarity.
+
+**Files:** `docs/reconciliation-flow-apps.md` (new), followed by targeted fixes in `golem-parser/src/lib.rs` or `golem-runner/src/executor.rs` depending on findings.
 
 ## CLI Flags: Not Yet Functional
 

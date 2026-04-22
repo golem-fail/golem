@@ -10,6 +10,7 @@ members = [
     "golem-report",
     "golem-email",
     "golem-events",
+    "golem-orchestrator",
 ]
 exclude = ["test-app/src-tauri"]
 resolver = "2"

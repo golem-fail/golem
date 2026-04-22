@@ -334,6 +334,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         };
 
         let out = format_flow(&report);
@@ -370,6 +371,7 @@ mod tests {
             ),
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         };
 
         let out = format_flow(&report);
@@ -402,6 +404,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         };
 
         let out = format_flow(&report);
@@ -430,6 +433,7 @@ mod tests {
                     screenshot_path: None,
                     device_name: None,
                     perf_snapshots: vec![],
+                    skipped_reason: None,
                 },
                 FlowReport {
                     flow_name: "signup_flow".to_string(),
@@ -444,8 +448,10 @@ mod tests {
                     screenshot_path: None,
                     device_name: None,
                     perf_snapshots: vec![],
+                    skipped_reason: None,
                 },
             ],
+            installs: Vec::new(),
             total_duration_ms: 45300,
         };
 
@@ -470,7 +476,9 @@ mod tests {
                 screenshot_path: None,
                 device_name: None,
                 perf_snapshots: vec![],
+                skipped_reason: None,
             }],
+            installs: Vec::new(),
             total_duration_ms: 45300,
         };
 
@@ -503,6 +511,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         };
 
         let out = format_flow(&report);
@@ -544,6 +553,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![sample_perf_snapshot()],
+            skipped_reason: None,
         };
 
         let out = format_flow(&report);
@@ -566,6 +576,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         };
 
         let out = format_flow(&report);

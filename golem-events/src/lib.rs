@@ -115,6 +115,22 @@ pub enum EventKind {
     SuiteStarted { flow_count: usize },
     SuiteFinished { duration_ms: u64, passed: usize, failed: usize },
 
+    /// Diagnostic snapshot of the Plan phase output. Emitted once per suite
+    /// when `--verbose` is on. Pre-formatted strings — human-stream plus
+    /// orchestrator-client forwarding.
+    SuitePlanned {
+        /// One line per FlowRun, e.g. `#1 tap.test: ios/v18 apps=[app]`.
+        flow_runs: Vec<String>,
+        /// One line per InstallEntry, e.g. `ios app → fail.golem.test`.
+        install_entries: Vec<String>,
+        /// Per-slot device availability against the plan-time snapshot.
+        /// Each line: `<slot-shape> — <total> matches (<booted> booted,
+        /// <shutdown> shutdown)`. De-duplicated by shape. Lets the user
+        /// see up front whether the suite's device needs can be satisfied
+        /// and how many parallel runs are feasible per requirement.
+        device_availability: Vec<String>,
+    },
+
     // Flow level
     FlowStarted { flow_name: String },
     FlowFinished { flow_name: String, success: bool, duration_ms: u64, seed: u64 },
@@ -145,6 +161,37 @@ pub enum EventKind {
 
     // Performance
     PerfSnapshot(PerfSnapshotData),
+
+    // Install script (app install before flow starts)
+    InstallStarted {
+        app_name: String,
+        bundle_id: String,
+        script_path: String,
+        /// Pre-formatted target: `iPhone 16e (ios/v18/phone)`.
+        target: String,
+    },
+    InstallOutput {
+        app_name: String,
+        /// A single line of the script's stderr.
+        line: String,
+    },
+    InstallFinished {
+        app_name: String,
+        bundle_id: String,
+        success: bool,
+        duration_ms: u64,
+        /// Exit code when nonzero, or `None` on success/timeout.
+        exit_code: Option<i32>,
+        /// Error detail when failed (timeout reason, exit code, or tail of stderr).
+        error: Option<String>,
+        /// Pre-formatted target (same as InstallStarted.target).
+        target: String,
+    },
+    /// A flow was skipped on a device because a prior install failed.
+    FlowSkipped {
+        flow_name: String,
+        reason: String,
+    },
 }
 
 // ── Substep events ──

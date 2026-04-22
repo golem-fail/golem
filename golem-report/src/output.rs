@@ -152,6 +152,7 @@ mod tests {
                     screenshot_path: None,
                     device_name: None,
                     perf_snapshots: vec![],
+                    skipped_reason: None,
                 },
                 FlowReport {
                     flow_name: "signup_flow".to_string(),
@@ -166,8 +167,10 @@ mod tests {
                     screenshot_path: None,
                     device_name: None,
                     perf_snapshots: vec![],
+                    skipped_reason: None,
                 },
             ],
+            installs: Vec::new(),
             total_duration_ms: 45300,
         }
     }

@@ -236,8 +236,11 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
 pub fn format_suite_junit(report: &SuiteReport) -> String {
     let mut out = String::new();
 
-    let total_tests: usize = report.flows.iter().map(|f| f.step_results.len()).sum();
-    let total_failures: usize = report
+    let flow_tests: usize = report.flows.iter().map(|f| f.step_results.len()).sum();
+    let install_tests = report.installs.len();
+    let total_tests = flow_tests + install_tests;
+
+    let flow_failures: usize = report
         .flows
         .iter()
         .map(|f| {
@@ -247,6 +250,8 @@ pub fn format_suite_junit(report: &SuiteReport) -> String {
                 .count()
         })
         .sum();
+    let install_failures: usize = report.installs.iter().filter(|i| !i.success).count();
+    let total_failures = flow_failures + install_failures;
     let total_errors = 0;
     let time = ms_to_secs(report.total_duration_ms);
 
@@ -256,6 +261,35 @@ pub fn format_suite_junit(report: &SuiteReport) -> String {
         "<testsuites tests=\"{total_tests}\" failures=\"{total_failures}\" \
          errors=\"{total_errors}\" time=\"{time}\">"
     );
+
+    // Install results as a separate testsuite so CI tools can surface them.
+    if !report.installs.is_empty() {
+        let install_time: u64 = report.installs.iter().map(|i| i.duration_ms).sum();
+        let _ = writeln!(
+            out,
+            "  <testsuite name=\"install\" tests=\"{}\" failures=\"{}\" errors=\"0\" time=\"{}\">",
+            install_tests, install_failures, ms_to_secs(install_time)
+        );
+        for inst in &report.installs {
+            let classname = xml_escape(&inst.device_name);
+            let name = xml_escape(&format!("{} ({})", inst.app_name, inst.bundle_id));
+            let time = ms_to_secs(inst.duration_ms);
+            let _ = writeln!(
+                out,
+                "    <testcase classname=\"{classname}\" name=\"{name}\" time=\"{time}\">"
+            );
+            if !inst.success {
+                let msg = inst.error.as_deref().unwrap_or("install failed");
+                let _ = writeln!(
+                    out,
+                    "      <failure message=\"install script failed\">{}</failure>",
+                    xml_escape(msg)
+                );
+            }
+            let _ = writeln!(out, "    </testcase>");
+        }
+        let _ = writeln!(out, "  </testsuite>");
+    }
 
     for flow in &report.flows {
         let _ = write!(out, "{}", format_flow_junit(flow));
@@ -356,6 +390,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         }
     }
 
@@ -375,6 +410,7 @@ mod tests {
                     screenshot_path: None,
                     device_name: None,
                     perf_snapshots: vec![],
+                    skipped_reason: None,
                 },
                 FlowReport {
                     flow_name: "signup_flow".to_string(),
@@ -389,8 +425,10 @@ mod tests {
                     screenshot_path: None,
                     device_name: None,
                     perf_snapshots: vec![],
+                    skipped_reason: None,
                 },
             ],
+            installs: Vec::new(),
             total_duration_ms: 45300,
         }
     }
@@ -509,6 +547,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         };
         let xml = format_flow_junit(&flow);
         assert!(
@@ -531,6 +570,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         };
         let xml = format_flow_junit(&flow);
         // Flow-level time: 120ms -> 0.120
@@ -566,6 +606,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         };
         let xml = format_flow_junit(&flow);
 
@@ -683,6 +724,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![sample_perf_snapshot()],
+            skipped_reason: None,
         };
 
         let xml = format_flow_junit(&flow);
@@ -706,6 +748,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         };
 
         let xml = format_flow_junit(&flow);
@@ -805,6 +848,7 @@ mod tests {
     fn empty_suite_produces_valid_xml() {
         let suite = SuiteReport {
             flows: vec![],
+            installs: Vec::new(),
             total_duration_ms: 0,
         };
         let xml = format_suite_junit(&suite);

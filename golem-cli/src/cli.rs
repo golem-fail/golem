@@ -20,6 +20,8 @@ pub enum Commands {
     Init,
     /// Create a new flow template
     Create(CreateArgs),
+    /// Interactively scaffold an app install script
+    InstallScript,
 }
 
 #[derive(clap::Args, Debug)]

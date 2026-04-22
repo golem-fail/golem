@@ -22,7 +22,10 @@ pub fn resolve_app_bundle<'a>(step: &'a Step, apps: &'a [AppConfig]) -> Result<&
 
     // Try to resolve as a friendly name first.
     if let Some(config) = apps.iter().find(|a| a.name == app_ref) {
-        return Ok(&config.bundle);
+        return config.bundle.as_deref()
+            .ok_or_else(|| anyhow::anyhow!(
+                "app '{}' has no bundle id — add one to [[flow.apps]] or to [[apps]] in golem.toml",
+                config.name));
     }
 
     // Fall back to treating it as a direct bundle ID.

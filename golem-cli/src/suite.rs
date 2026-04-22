@@ -1,12 +1,15 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use std::sync::Arc;
+
 use anyhow::Result;
 use golem_devices::{DeviceInfo, DeviceState, Platform};
 use golem_driver::android::AndroidDriver;
 use golem_driver::ios::IosDriver;
 use golem_driver::PlatformDriver;
-use golem_parser::{parse_flow, FlowFile, StringOrVec};
+use golem_orchestrator::{plan, InstallEntry};
+use golem_parser::{parse_flow, FlowFile};
 use golem_parser::mixin::expand_mixins;
 use golem_report::{FlowReport, SuiteReport};
 use golem_runner::capture::CaptureConfig;
@@ -44,6 +47,12 @@ pub struct SuiteConfig {
     pub output_dir: PathBuf,
     /// Disable all file output (screenshots, recordings, reports).
     pub no_results: bool,
+    /// Project root directory (where install scripts are resolved from).
+    pub project_root: PathBuf,
+    /// Project-level app definitions from golem.toml `[[apps]]`. Flows
+    /// inherit bundle/install_script/install_timeout_ms/devices from
+    /// matching entries by name.
+    pub project_apps: Vec<golem_parser::ProjectAppConfig>,
 }
 
 impl Default for SuiteConfig {
@@ -62,6 +71,8 @@ impl Default for SuiteConfig {
             vars: Vec::new(),
             output_dir: PathBuf::from(".golem/results"),
             no_results: false,
+            project_root: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            project_apps: Vec::new(),
         }
     }
 }
@@ -73,6 +84,18 @@ pub struct SuiteRunner {
     pub resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
     /// Optional external event sender for forwarding events (e.g. to orchestrator client).
     pub event_forwarder: Option<golem_events::channel::EventSender>,
+    /// Suite-level install cache, shared by all flows so a given
+    /// `(device, bundle)` install script runs at most once per suite.
+    pub install_cache: golem_runner::installer::InstallCache,
+    /// Install matrix computed at `run_suite` start by `golem_orchestrator::plan()`.
+    /// Only apps referenced by some flow appear here. Consumed by pre-install
+    /// in the per-device setup loop. Empty until `run_suite` has been called.
+    pub install_matrix: Arc<Vec<InstallEntry>>,
+    /// Pre-built `SuitePlanned` event kind, emitted once per suite when
+    /// `--verbose` is on. Populated by `run_suite` from the Plan output;
+    /// consumed (and cleared) by whichever path first sets up the event
+    /// channel (multi-flow: `suite_tx`; single-flow: per-flow `event_tx`).
+    pub plan_event: Option<golem_events::EventKind>,
 }
 
 impl SuiteRunner {
@@ -85,6 +108,9 @@ impl SuiteRunner {
                 ),
             ),
             event_forwarder: None,
+            install_cache: golem_runner::installer::InstallCache::new(),
+            install_matrix: Arc::new(Vec::new()),
+            plan_event: None,
         }
     }
 
@@ -93,7 +119,14 @@ impl SuiteRunner {
         config: SuiteConfig,
         resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
     ) -> Self {
-        Self { config, resource_mgr, event_forwarder: None }
+        Self {
+            config,
+            resource_mgr,
+            event_forwarder: None,
+            install_cache: golem_runner::installer::InstallCache::new(),
+            install_matrix: Arc::new(Vec::new()),
+            plan_event: None,
+        }
     }
 
     /// Run a suite of flow files and return aggregated results.
@@ -103,14 +136,36 @@ impl SuiteRunner {
     /// All flows are spawned as concurrent tasks. The ResourceManager
     /// controls how many run simultaneously based on RAM and concurrency
     /// limits. Flows that can't allocate devices immediately will wait.
-    pub async fn run_suite(&self, flow_paths: &[PathBuf]) -> Result<SuiteReport> {
+    pub async fn run_suite(&mut self, flow_paths: &[PathBuf]) -> Result<SuiteReport> {
         let start = Instant::now();
+
+        // Plan phase: parse + merge + expand coverage + build install matrix.
+        // Only apps referenced by some flow end up in the matrix — apps declared
+        // in `golem.toml [[apps]]` that no flow uses are dropped entirely.
+        let parsed = plan(
+            flow_paths,
+            &self.config.project_apps,
+            &self.config.project_root,
+            self.config.platform,
+        )
+        .await?;
+
+        // Build the SuitePlanned event under --verbose. Emitted via the
+        // event channel once it's set up — stream_human renders in
+        // standalone mode; the orchestrator forwarder relays to clients
+        // in server-for-client mode. Single code path, no direct eprintln.
+        if self.config.verbose {
+            self.plan_event = Some(build_suite_planned_event(&parsed));
+        }
+
+        self.install_matrix = Arc::new(parsed.install_matrix);
 
         if flow_paths.len() == 1 {
             // Single flow — no need for suite-level parallelism.
-            let reports = self.run_single_flow(&flow_paths[0]).await;
+            let (reports, installs) = self.run_single_flow(&flow_paths[0]).await;
             return Ok(SuiteReport {
                 flows: reports,
+                installs,
                 total_duration_ms: start.elapsed().as_millis() as u64,
             });
         }
@@ -121,8 +176,9 @@ impl SuiteRunner {
         let resource_mgr = self.resource_mgr.clone();
         let (suite_tx, suite_rx) = golem_events::channel::event_channel();
         let verbose = self.config.verbose;
+        let debug = self.config.debug;
         let stream_human_enabled = self.config.stream_human;
-        if self.config.debug {
+        if debug {
             golem_driver::set_debug(true);
         }
 
@@ -130,7 +186,7 @@ impl SuiteRunner {
         let human_handle = if stream_human_enabled {
             let human_rx = suite_rx.subscribe();
             Some(tokio::spawn(async move {
-                golem_report::stream::stream_human(human_rx, verbose, true).await;
+                golem_report::stream::stream_human(human_rx, verbose, true, debug).await;
             }))
         } else {
             None
@@ -160,36 +216,48 @@ impl SuiteRunner {
             None
         };
 
+        // Emit the Plan summary (if any) now that subscribers are attached.
+        if let Some(event) = self.plan_event.take() {
+            suite_tx.emit(golem_events::DeviceId("suite".into()), event);
+        }
+
         drop(suite_rx);
 
         let mut handles = Vec::new();
         for path in flow_paths {
             let path = path.clone();
-            let platform_override = self.config.platform;
-            let seed = self.config.seed;
-            let start = self.config.start.clone();
-            let cli_vars = self.config.vars.clone();
-            let output_dir = self.config.output_dir.clone();
-            let no_results = self.config.no_results;
+            // Clone the full parent config so sub-runners inherit every CLI
+            // flag (no_clean, no_teardown, keep_devices, no_perf, verbose,
+            // debug, …). Only stream_human is forced off because the
+            // suite-level stream_human already consumes from suite_tx.
+            let mut cfg = SuiteConfig {
+                no_clean: self.config.no_clean,
+                no_teardown: self.config.no_teardown,
+                keep_devices: self.config.keep_devices,
+                seed: self.config.seed,
+                platform: self.config.platform,
+                no_perf: self.config.no_perf,
+                verbose: self.config.verbose,
+                debug: self.config.debug,
+                stream_human: false,
+                start: self.config.start.clone(),
+                vars: self.config.vars.clone(),
+                output_dir: self.config.output_dir.clone(),
+                no_results: self.config.no_results,
+                project_root: self.config.project_root.clone(),
+                project_apps: self.config.project_apps.clone(),
+            };
+            let install_cache = self.install_cache.clone();
+            let install_matrix = self.install_matrix.clone();
             let rm = resource_mgr.clone();
             let suite_tx_clone = suite_tx.clone();
 
             handles.push(tokio::spawn(async move {
-                let mut runner = SuiteRunner::with_resource_manager(
-                    SuiteConfig {
-                        platform: platform_override,
-                        seed,
-                        start,
-                        vars: cli_vars,
-                        output_dir,
-                        no_results,
-                        // Disable per-flow stream_human — suite-level handles it.
-                        stream_human: false,
-                        ..SuiteConfig::default()
-                    },
-                    rm,
-                );
+                cfg.stream_human = false;
+                let mut runner = SuiteRunner::with_resource_manager(cfg, rm);
                 runner.event_forwarder = Some(suite_tx_clone);
+                runner.install_cache = install_cache;
+                runner.install_matrix = install_matrix;
                 runner.run_single_flow(&path).await
             }));
         }
@@ -197,7 +265,7 @@ impl SuiteRunner {
         let mut flow_reports = Vec::new();
         for handle in handles {
             match handle.await {
-                Ok(reports) => flow_reports.extend(reports),
+                Ok((reports, _installs)) => flow_reports.extend(reports),
                 Err(e) => {
                     flow_reports.push(FlowReport {
                         flow_name: "unknown".to_string(),
@@ -209,6 +277,7 @@ impl SuiteRunner {
                         screenshot_path: None,
                         device_name: None,
                         perf_snapshots: vec![],
+                        skipped_reason: None,
                     });
                 }
             }
@@ -270,13 +339,104 @@ impl SuiteRunner {
 
         Ok(SuiteReport {
             flows: flow_reports,
+            installs: acc_report.installs,
             total_duration_ms: start.elapsed().as_millis() as u64,
         })
     }
 
     /// Run a single flow using the shared ResourceManager.
-    async fn run_single_flow(&self, path: &Path) -> Vec<FlowReport> {
-        self.run_single_flow_with_resources(path, &self.resource_mgr).await
+    /// Returns (flow reports, install results) collected during the run.
+    async fn run_single_flow(&mut self, path: &Path) -> (Vec<FlowReport>, Vec<golem_report::InstallReport>) {
+        let rm = self.resource_mgr.clone();
+        self.run_single_flow_with_resources(path, &rm).await
+    }
+
+    /// Install every `InstallEntry` from the suite's install matrix that is
+    /// applicable to `(device, platform)`. Runs BEFORE companion registration
+    /// so that `simctl install` / `adb install` can't tear down the xctest /
+    /// instrumentation session mid-suite.
+    ///
+    /// An entry is applicable when:
+    /// - its `platform` matches
+    /// - the `(device.udid, entry.bundle_id)` pair is not already cached
+    /// - the entry's `device_constraints` (from `[[flow.apps.devices]]`) don't
+    ///   exclude this device — today only `device_type` (phone/tablet) is
+    ///   checked; the device resolver typically prevents a mismatch upstream,
+    ///   but we re-check here for safety when resolver is bypassed.
+    ///
+    /// Outcomes are written to `self.install_cache`; the per-flow install
+    /// check will see `Succeeded` / `FailedScript` and skip re-running or
+    /// skip the flow respectively.
+    async fn preinstall_for_device(
+        &self,
+        device: &DeviceInfo,
+        platform: Platform,
+        event_tx: &golem_events::channel::EventSender,
+    ) {
+        let platform_str = platform.to_string();
+        let target = format!(
+            "{} ({}/v{}/{})",
+            device.name, platform, device.os_major, device.device_type
+        );
+        // Use the same device_label format as per-flow emission so
+        // stream_human's circled-number mapping stays stable across
+        // preinstall and flow events for the same physical device.
+        let device_label = format!("{platform}/{}", device.name);
+        let emitter = golem_events::emitter::DeviceEmitter::new(
+            event_tx.clone(),
+            golem_events::DeviceId(device_label),
+        );
+        for entry in self.install_matrix.iter() {
+            if entry.platform != platform {
+                continue;
+            }
+            if !device_matches_entry_constraints(device, entry) {
+                continue;
+            }
+            let key = (device.udid.clone(), entry.bundle_id.clone());
+            // Fast-path cache check (optimisation).
+            if self.install_cache.get(&key).await.is_some() {
+                continue;
+            }
+
+            // Acquire project_lock BEFORE the authoritative cache re-check
+            // to close the check-then-install race when multiple parallel
+            // flow tasks share an install_cache (e.g. `golem run a.toml b.toml`
+            // spawns 2 per-flow tasks, both preinstalling).
+            let proj_lock = self.install_cache.project_lock(&self.config.project_root).await;
+            let _guard = proj_lock.lock().await;
+            if self.install_cache.get(&key).await.is_some() {
+                continue;
+            }
+
+            let result = golem_runner::installer::run_install_script(
+                &entry.script_path,
+                &self.config.project_root,
+                &platform_str,
+                &device.udid,
+                &entry.bundle_id,
+                &entry.app_name,
+                entry.timeout_ms,
+                &target,
+                Some(&emitter),
+            )
+            .await;
+            match result {
+                Ok(()) => {
+                    self.install_cache
+                        .set(key, golem_runner::installer::InstallOutcome::Succeeded)
+                        .await;
+                }
+                Err(e) => {
+                    self.install_cache
+                        .set(
+                            key,
+                            golem_runner::installer::InstallOutcome::FailedScript(format!("{e}")),
+                        )
+                        .await;
+                }
+            }
+        }
     }
 
     /// Run a single flow file on all applicable platforms in parallel.
@@ -284,10 +444,10 @@ impl SuiteRunner {
     /// Uses the ResourceManager to gate device allocation. If resources
     /// aren't available, waits until they are.
     async fn run_single_flow_with_resources(
-        &self,
+        &mut self,
         path: &Path,
         resource_mgr: &golem_devices::resource_manager::ResourceManager,
-    ) -> Vec<FlowReport> {
+    ) -> (Vec<FlowReport>, Vec<golem_report::InstallReport>) {
         let flow_name = path
             .file_stem()
             .and_then(|s| s.to_str())
@@ -296,11 +456,11 @@ impl SuiteRunner {
 
         let start = Instant::now();
 
-        let flow = match self.parse_and_expand(path) {
+        let mut flow = match self.parse_and_expand(path) {
             Ok(f) => f,
             Err(e) => {
                 eprintln!("  Parse error: {e:#}");
-                return vec![FlowReport {
+                return (vec![FlowReport {
                     flow_name,
                     success: false,
                     step_results: Vec::new(),
@@ -310,9 +470,14 @@ impl SuiteRunner {
                     screenshot_path: None,
                     device_name: None,
                     perf_snapshots: vec![],
-                }];
+                    skipped_reason: None,
+                }], Vec::new());
             }
         };
+
+        // Merge project-level [[apps]] registry defaults into flow apps by name.
+        // Flow-level fields override project-level ones.
+        merge_project_apps_into_flow(&mut flow, &self.config.project_apps);
 
         // Detect target platforms from CLI override or flow's device constraints.
         let platforms = if let Some(p) = self.config.platform {
@@ -320,6 +485,59 @@ impl SuiteRunner {
         } else {
             detect_all_platforms(&flow)
         };
+
+        // Create the event channel BEFORE device setup so stream_human can
+        // render the Plan summary first (and eventually any setup-phase
+        // events we migrate from eprintln). multi_device is estimated from
+        // platform count — close enough for rendering purposes if one
+        // platform later fails to resolve.
+        let (event_tx, event_rx) = golem_events::channel::event_channel();
+        let multi_device = platforms.len() > 1;
+        let verbose = self.config.verbose;
+        let debug = self.config.debug;
+        if debug {
+            golem_driver::set_debug(true);
+        }
+
+        let human_handle = if self.config.stream_human {
+            let human_rx = event_rx.subscribe();
+            Some(tokio::spawn(async move {
+                golem_report::stream::stream_human(human_rx, verbose, multi_device, debug).await;
+            }))
+        } else {
+            None
+        };
+
+        let accumulator = std::sync::Arc::new(tokio::sync::Mutex::new(
+            golem_report::accumulator::ReportAccumulator::new(),
+        ));
+        let acc_clone = accumulator.clone();
+        let acc_rx = event_rx.subscribe();
+        let acc_handle = tokio::spawn(async move {
+            golem_report::accumulator::accumulate_events(acc_rx, &acc_clone).await;
+        });
+
+        let fwd_handle = if let Some(ref fwd) = self.event_forwarder {
+            let fwd_rx = event_rx.subscribe();
+            let fwd_tx = fwd.clone();
+            Some(tokio::spawn(async move {
+                let mut rx = fwd_rx;
+                while let Ok(event) = rx.recv().await {
+                    fwd_tx.emit(event.device_id.clone(), event.kind.clone());
+                }
+            }))
+        } else {
+            None
+        };
+
+        // Emit the Plan summary (if any) now that subscribers are attached —
+        // BEFORE device discovery + install + companion setup. stream_human
+        // renders for standalone; forwarder relays to orchestrator clients.
+        if let Some(event) = self.plan_event.take() {
+            event_tx.emit(golem_events::DeviceId("suite".into()), event);
+        }
+
+        drop(event_rx);
 
         // Read create_if_missing from flow options
         let create_if_missing = flow
@@ -335,91 +553,105 @@ impl SuiteRunner {
             .await
             .unwrap_or(0);
 
-        // Discover devices and set up companions for each platform.
-        let mut device_setups = Vec::new();
+        // Two-phase setup: (1) find devices + pre-install everywhere, (2)
+        // start companions. Keeping installs first (before any companion is
+        // up) prevents `simctl install` / `adb install` from tearing down a
+        // running xctest / instrumentation session. Running ALL installs
+        // before ANY companion also keeps iOS companions from sitting idle
+        // long enough to hit xctest watchdog timeouts while other platforms
+        // are still building.
+
+        // Phase 1: discover devices + pre-install apps.
+        let mut installed: Vec<(DeviceInfo, Platform)> = Vec::new();
         for platform in &platforms {
             match find_available_device(*platform, resource_mgr, create_if_missing).await {
                 Ok(device) => {
-                    eprintln!("  Platform: {platform}");
-
-                    // Try to find an existing companion first (legacy scan)
-                    let existing_port = find_or_allocate_port(&device, *platform).await.ok();
-                    let port = if let Some(p) = existing_port {
-                        // Check if it's actually running with correct version
-                        let client = golem_driver::common::CompanionClient::new(p);
-                        if let Ok(health) = client.check_health().await {
-                            if health.version == env!("CARGO_PKG_VERSION") {
-                                // Reuse existing companion
-                                p
-                            } else {
-                                0 // Version mismatch, need to restart
-                            }
-                        } else {
-                            0 // Not running
-                        }
-                    } else {
-                        0
-                    };
-
-                    let port = if port > 0 {
-                        port
-                    } else {
-                        // Launch companion with registration
-                        match ensure_companion_with_reg(&device, *platform, reg_port, &reg_state).await {
-                            Ok(p) => p,
-                            Err(e) => {
-                                eprintln!("  Companion failed for {platform}: {e:#}");
-                                continue;
-                            }
-                        }
-                    };
-
-                    // Wait for resource allocation (RAM + concurrency limit)
-                    let alloc_deadline = tokio::time::Instant::now()
-                        + std::time::Duration::from_secs(1200);
-                    let mut printed_waiting = false;
-                    loop {
-                        match resource_mgr.try_allocate(&device, port) {
-                            Ok(()) => break,
-                            Err(e) => {
-                                if tokio::time::Instant::now() >= alloc_deadline {
-                                    eprintln!("  Timed out waiting for resources ({platform}): {e:#}");
-                                    continue; // skip this platform
-                                }
-                                if !printed_waiting {
-                                    eprintln!("  Waiting for resources ({platform})...");
-                                    printed_waiting = true;
-                                }
-                                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                            }
-                        }
+                    // Section header — minimal value, gated behind --debug.
+                    // The [install app] + Companion lines that follow already
+                    // name the platform via context.
+                    if self.config.debug {
+                        eprintln!("  Platform: {platform}");
                     }
-
-                    // Verify companion health
-                    let client = golem_driver::common::CompanionClient::new(port);
-                    match client.check_health().await {
-                        Ok(health) => {
-                            eprintln!(
-                                "  Companion: {} v{} on {} ({})",
-                                health.platform, health.version, health.device_name, health.os_version
-                            );
-                            device_setups.push((device, *platform, port));
-                        }
-                        Err(e) => {
-                            eprintln!("  Companion failed for {platform}: {e:#}");
-                            resource_mgr.release(&device.udid);
-                        }
-                    }
+                    self.preinstall_for_device(&device, *platform, &event_tx).await;
+                    installed.push((device, *platform));
                 }
                 Err(e) => {
-                    eprintln!("  No {platform} device available: {e:#}");
-                    // Skip this platform
+                    eprintln!("  [devices] no {platform} available: {e:#}");
+                }
+            }
+        }
+
+        // Phase 2: start companions + allocate + health-check.
+        let mut device_setups = Vec::new();
+        for (device, platform) in installed {
+            // Try to find an existing companion first (legacy scan)
+            let existing_port = find_or_allocate_port(&device, platform).await.ok();
+            let port = if let Some(p) = existing_port {
+                let client = golem_driver::common::CompanionClient::new(p);
+                if let Ok(health) = client.check_health().await {
+                    if health.version == env!("CARGO_PKG_VERSION") {
+                        p
+                    } else {
+                        0
+                    }
+                } else {
+                    0
+                }
+            } else {
+                0
+            };
+
+            let port = if port > 0 {
+                port
+            } else {
+                match ensure_companion_with_reg(&device, platform, reg_port, &reg_state).await {
+                    Ok(p) => p,
+                    Err(e) => {
+                        eprintln!("  [companion] failed for {platform}: {e:#}");
+                        continue;
+                    }
+                }
+            };
+
+            // Wait for resource allocation (RAM + concurrency limit)
+            let alloc_deadline = tokio::time::Instant::now()
+                + std::time::Duration::from_secs(1200);
+            let mut printed_waiting = false;
+            loop {
+                match resource_mgr.try_allocate(&device, port) {
+                    Ok(()) => break,
+                    Err(e) => {
+                        if tokio::time::Instant::now() >= alloc_deadline {
+                            eprintln!("  [resources] timed out waiting for {platform}: {e:#}");
+                            break;
+                        }
+                        if !printed_waiting {
+                            eprintln!("  [resources] waiting for {platform}...");
+                            printed_waiting = true;
+                        }
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    }
+                }
+            }
+
+            let client = golem_driver::common::CompanionClient::new(port);
+            match client.check_health().await {
+                Ok(health) => {
+                    eprintln!(
+                        "  [companion] ready — {} v{} on {} ({})",
+                        health.platform, health.version, health.device_name, health.os_version
+                    );
+                    device_setups.push((device, platform, port));
+                }
+                Err(e) => {
+                    eprintln!("  Companion failed for {platform}: {e:#}");
+                    resource_mgr.release(&device.udid);
                 }
             }
         }
 
         if device_setups.is_empty() {
-            return vec![FlowReport {
+            return (vec![FlowReport {
                 flow_name,
                 success: false,
                 step_results: Vec::new(),
@@ -429,56 +661,12 @@ impl SuiteRunner {
                 screenshot_path: None,
                 device_name: None,
                 perf_snapshots: vec![],
-            }];
+                skipped_reason: None,
+            }], Vec::new());
         }
 
         // Track allocated device UDIDs for release after execution.
         let allocated_udids: Vec<String> = device_setups.iter().map(|(d, _, _)| d.udid.clone()).collect();
-
-        // Create event channel for structured output.
-        let (event_tx, event_rx) = golem_events::channel::event_channel();
-        let multi_device = device_setups.len() > 1;
-        let verbose = self.config.verbose;
-        if self.config.debug {
-            golem_driver::set_debug(true);
-        }
-
-        // Spawn real-time human renderer (only when human output requested).
-        let human_handle = if self.config.stream_human {
-            let human_rx = event_rx.subscribe();
-            Some(tokio::spawn(async move {
-                golem_report::stream::stream_human(human_rx, verbose, multi_device).await;
-            }))
-        } else {
-            None
-        };
-
-        // Spawn accumulator for structured report collection.
-        let accumulator = std::sync::Arc::new(tokio::sync::Mutex::new(
-            golem_report::accumulator::ReportAccumulator::new(),
-        ));
-        let acc_clone = accumulator.clone();
-        let acc_rx = event_rx.subscribe();
-        let acc_handle = tokio::spawn(async move {
-            golem_report::accumulator::accumulate_events(acc_rx, &acc_clone).await;
-        });
-
-        // Forward events to external sender (orchestrator → client).
-        let fwd_handle = if let Some(ref fwd) = self.event_forwarder {
-            let fwd_rx = event_rx.subscribe();
-            let fwd_tx = fwd.clone();
-            Some(tokio::spawn(async move {
-                let mut rx = fwd_rx;
-                while let Ok(event) = rx.recv().await {
-                    fwd_tx.emit(event.device_id.clone(), event.kind.clone());
-                }
-            }))
-        } else {
-            None
-        };
-
-        // Drop the receiver factory — its internal Sender keeps the channel alive.
-        drop(event_rx);
 
         // Spawn parallel execution tasks — one per device.
         // Shared failure barrier: when one device fails, others stop at the same step.
@@ -495,10 +683,12 @@ impl SuiteRunner {
             let cli_vars = self.config.vars.clone();
             let output_dir = self.config.output_dir.clone();
             let no_results = self.config.no_results;
+            let install_cache = self.install_cache.clone();
+            let project_root = self.config.project_root.clone();
             let tx = event_tx.clone();
 
             handles.push(tokio::spawn(async move {
-                run_flow_on_device(flow, flow_name, flow_dir, device, platform, port, seed, start_block, cli_vars, output_dir, no_results, barrier, no_perf, Some(tx)).await
+                run_flow_on_device(flow, flow_name, flow_dir, device, platform, port, seed, start_block, cli_vars, output_dir, no_results, install_cache, project_root, barrier, no_perf, Some(tx)).await
             }));
         }
 
@@ -518,6 +708,7 @@ impl SuiteRunner {
                         screenshot_path: None,
                         device_name: None,
                         perf_snapshots: vec![],
+                        skipped_reason: None,
                     });
                 }
             }
@@ -586,7 +777,7 @@ impl SuiteRunner {
             resource_mgr.release(udid);
         }
 
-        reports
+        (reports, acc_report.installs)
     }
 
     /// Read, parse, and expand mixins in a flow file.
@@ -606,6 +797,116 @@ impl SuiteRunner {
         }
 
         Ok(flow)
+    }
+}
+
+/// Build a `SuitePlanned` event payload from the parsed suite. Pre-formats
+/// the per-run lines, install entries, and device availability as
+/// human-readable strings so the stream renderer can print them verbatim
+/// and the orchestrator forwarder can relay the same payload to clients.
+fn build_suite_planned_event(parsed: &golem_orchestrator::ParsedSuite) -> golem_events::EventKind {
+    let flow_runs: Vec<String> = parsed
+        .flow_runs
+        .iter()
+        .enumerate()
+        .map(|(i, run)| {
+            let flow_name = parsed
+                .flows
+                .get(run.flow_idx)
+                .map(|f| f.flow.flow.name.as_str())
+                .unwrap_or("?");
+            let slots: Vec<String> = run.slots.iter().map(describe_slot).collect();
+            format!("#{} {}: {}", i + 1, flow_name, slots.join(" + "))
+        })
+        .collect();
+
+    let install_entries: Vec<String> = parsed
+        .install_matrix
+        .iter()
+        .map(|e| format!("{} {} → {}", e.platform, e.app_name, e.bundle_id))
+        .collect();
+
+    golem_events::EventKind::SuitePlanned {
+        flow_runs,
+        install_entries,
+        device_availability: parsed.device_availability.clone(),
+    }
+}
+
+fn describe_slot(slot: &golem_orchestrator::DeviceSlot) -> String {
+    let mut parts: Vec<String> = vec![slot.platform.to_string()];
+    if let Some(spec) = &slot.os_version {
+        match spec {
+            golem_devices::OsVersionSpec::Exact { major, .. } => parts.push(format!("v{major}")),
+            golem_devices::OsVersionSpec::Minimum { major, .. } => parts.push(format!("v{major}+")),
+            golem_devices::OsVersionSpec::Latest { count, .. } => {
+                parts.push(if *count > 1 {
+                    format!("latest:{count}")
+                } else {
+                    "latest".to_string()
+                })
+            }
+        }
+    }
+    if let Some(t) = &slot.device_type {
+        parts.push(t.to_string());
+    }
+    if let Some(phys) = slot.physical {
+        parts.push(if phys { "physical".into() } else { "sim".into() });
+    }
+    if let Some(n) = &slot.name {
+        parts.push(format!("name={n}"));
+    }
+    let apps = if slot.apps.is_empty() {
+        "no apps".to_string()
+    } else {
+        format!("apps=[{}]", slot.apps.join(","))
+    };
+    format!("{} {}", parts.join("/"), apps)
+}
+
+/// Check whether an `InstallEntry`'s per-app `devices` constraints permit the
+/// given device. Today only the `device_type` (phone/tablet) field is checked.
+/// Other fields (os, physical, accessibility_label, etc.) are enforced upstream
+/// by the device resolver, so a device reaching pre-install has already passed
+/// those. If the entry has no constraints, the device is accepted.
+fn device_matches_entry_constraints(device: &DeviceInfo, entry: &InstallEntry) -> bool {
+    if entry.device_constraints.is_empty() {
+        return true;
+    }
+    // If ANY constraint's device_type matches, the device is compatible.
+    // A constraint with no device_type set means "any type is fine".
+    entry.device_constraints.iter().any(|c| match &c.device_type {
+        None => true,
+        Some(sv) => sv.to_vec().iter().any(|t| {
+            matches!(
+                (t.as_str(), device.device_type),
+                ("phone", golem_devices::DeviceType::Phone)
+                    | ("tablet", golem_devices::DeviceType::Tablet)
+            )
+        }),
+    })
+}
+
+fn merge_project_apps_into_flow(
+    flow: &mut FlowFile,
+    project_apps: &[golem_parser::ProjectAppConfig],
+) {
+    for flow_app in &mut flow.flow.apps {
+        if let Some(proj) = project_apps.iter().find(|a| a.name == flow_app.name) {
+            if flow_app.bundle.is_none() {
+                flow_app.bundle = proj.bundle.clone();
+            }
+            if flow_app.install_script.is_none() {
+                flow_app.install_script = proj.install_script.clone();
+            }
+            if flow_app.install_timeout_ms.is_none() {
+                flow_app.install_timeout_ms = proj.install_timeout_ms;
+            }
+            if flow_app.devices.is_empty() {
+                flow_app.devices = proj.devices.clone();
+            }
+        }
     }
 }
 
@@ -694,7 +995,7 @@ pub async fn start_companions_public(
                         }
                     }
                     _ = tokio::time::sleep_until(deadline) => {
-                        eprintln!("  Companion startup timed out for {platform}");
+                        eprintln!("  [companion] startup timed out for {platform}");
                         break;
                     }
                 }
@@ -792,7 +1093,7 @@ async fn ensure_companion_with_reg(
     reg_port: u16,
     reg_state: &crate::registration::RegistrationState,
 ) -> Result<u16> {
-    eprintln!("  Companion not running. Starting...");
+    eprintln!("  [companion] not running — starting...");
     let companion_path = find_companion_path(platform)?;
 
     // Install/build companion
@@ -923,30 +1224,6 @@ fn find_android_main_apk() -> Option<String> {
     None
 }
 
-/// Detect the target platform from the flow's device constraints.
-/// Looks at the first app's first device constraint `os` field.
-/// Defaults to iOS if not specified.
-#[allow(dead_code)]
-fn detect_platform(flow: &FlowFile) -> Platform {
-    for app in &flow.flow.apps {
-        for constraint in &app.devices {
-            if let Some(ref os) = constraint.os {
-                let os_str = match os {
-                    StringOrVec::Single(s) => s.as_str(),
-                    StringOrVec::Multiple(v) => v.first().map(|s| s.as_str()).unwrap_or(""),
-                };
-                if os_str.starts_with("android") {
-                    return Platform::Android;
-                }
-                if os_str.starts_with("ios") {
-                    return Platform::Ios;
-                }
-            }
-        }
-    }
-    Platform::Ios
-}
-
 /// Detect ALL platforms referenced in the flow's device constraints.
 /// Returns a deduplicated list. Defaults to `[Platform::Ios]` when no
 /// constraints are specified.
@@ -977,6 +1254,7 @@ fn detect_all_platforms(flow: &FlowFile) -> Vec<Platform> {
 /// Execute a flow on a single device. This is a free function (not a method)
 /// so it can be used with `tokio::spawn` which requires `'static` futures.
 /// All parameters are owned values.
+#[allow(clippy::too_many_arguments)]
 async fn run_flow_on_device(
     flow: FlowFile,
     flow_name: String,
@@ -989,6 +1267,8 @@ async fn run_flow_on_device(
     cli_vars: Vec<(String, String)>,
     output_dir: PathBuf,
     no_results: bool,
+    install_cache: golem_runner::installer::InstallCache,
+    project_root: PathBuf,
     barrier: golem_runner::barrier::FailureBarrier,
     no_perf: bool,
     event_sender: Option<golem_events::channel::EventSender>,
@@ -1001,7 +1281,7 @@ async fn run_flow_on_device(
         .flow
         .apps
         .first()
-        .map(|a| a.bundle.clone())
+        .and_then(|a| a.bundle.clone())
         .unwrap_or_else(|| "fail.golem.test".to_string());
 
     let driver: Box<dyn PlatformDriver> = match platform {
@@ -1018,7 +1298,7 @@ async fn run_flow_on_device(
         .flow
         .apps
         .iter()
-        .map(|a| (a.name.clone(), a.bundle.clone()))
+        .filter_map(|a| a.bundle.clone().map(|b| (a.name.clone(), b)))
         .collect();
     let collector = if perf_enabled {
         Some(golem_runner::perf::PerfCollectorSet::new(
@@ -1095,6 +1375,156 @@ async fn run_flow_on_device(
         rng: std::sync::Mutex::new(rng),
     };
 
+    // Run install scripts for all apps in this flow on this device (unless
+    // already done or previously failed). If install fails or a prior install
+    // for this (device, bundle) failed, skip the flow on this device.
+    for app in &flow.flow.apps {
+        let bundle_for_install = match app.bundle.as_ref() {
+            Some(b) => b.clone(),
+            None => {
+                let reason = format!(
+                    "app '{}' has no bundle id — add one to [[flow.apps]] or [[apps]] in golem.toml",
+                    app.name
+                );
+                ctx.emit(golem_events::EventKind::FlowSkipped {
+                    flow_name: flow_name.clone(),
+                    reason: reason.clone(),
+                });
+                return FlowReport {
+                    flow_name,
+                    success: false,
+                    step_results: Vec::new(),
+                    warnings: Vec::new(),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    seed: Some(actual_seed),
+                    screenshot_path: None,
+                    device_name: Some(device_label.clone()),
+                    perf_snapshots: vec![],
+                    skipped_reason: Some(reason),
+                };
+            }
+        };
+        let key = (device.udid.clone(), bundle_for_install.clone());
+        match install_cache.get(&key).await {
+            Some(golem_runner::installer::InstallOutcome::Succeeded) => continue,
+            Some(golem_runner::installer::InstallOutcome::FailedScript(err)) => {
+                let reason = format!(
+                    "install_script failed earlier for {} on {device_name}: {err}",
+                    bundle_for_install
+                );
+                ctx.emit(golem_events::EventKind::FlowSkipped {
+                    flow_name: flow_name.clone(),
+                    reason: reason.clone(),
+                });
+                return FlowReport {
+                    flow_name,
+                    success: false,
+                    step_results: Vec::new(),
+                    warnings: Vec::new(),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    seed: Some(actual_seed),
+                    screenshot_path: None,
+                    device_name: Some(device_label.clone()),
+                    perf_snapshots: vec![],
+                    skipped_reason: Some(reason),
+                };
+            }
+            Some(golem_runner::installer::InstallOutcome::FailedNoScript) => {
+                let reason = format!(
+                    "{} not installed on {device_name} and no install_script configured. \
+                     Add install_script to [[flow.apps]] or [install] in golem.toml.",
+                    bundle_for_install
+                );
+                ctx.emit(golem_events::EventKind::FlowSkipped {
+                    flow_name: flow_name.clone(),
+                    reason: reason.clone(),
+                });
+                return FlowReport {
+                    flow_name,
+                    success: false,
+                    step_results: Vec::new(),
+                    warnings: Vec::new(),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    seed: Some(actual_seed),
+                    screenshot_path: None,
+                    device_name: Some(device_label.clone()),
+                    perf_snapshots: vec![],
+                    skipped_reason: Some(reason),
+                };
+            }
+            None => {}
+        }
+
+        // Not cached yet — resolve the script for this platform.
+        let platform_str = match platform {
+            Platform::Ios => "ios",
+            Platform::Android => "android",
+        };
+        let script_rel = app.install_script.as_ref()
+            .and_then(|v| v.for_platform(platform_str))
+            .map(|s| s.to_string());
+        let timeout_ms = app.install_timeout_ms
+            .unwrap_or(golem_runner::installer::DEFAULT_INSTALL_TIMEOUT_MS);
+
+        if let Some(rel) = script_rel {
+            let script_path = project_root.join(&rel);
+            // Serialise install script runs that share a project root.
+            // Concurrent tauri ios + android builds in one src-tauri/
+            // collide on cargo target-dir locks and WS IPC → ECONNREFUSED.
+            let proj_lock = install_cache.project_lock(&project_root).await;
+            let _guard = proj_lock.lock().await;
+            // Re-check cache inside the lock — another parallel flow task
+            // may have installed this (device, bundle) while we waited.
+            if matches!(
+                install_cache.get(&key).await,
+                Some(golem_runner::installer::InstallOutcome::Succeeded)
+            ) {
+                continue;
+            }
+            let target = format!(
+                "{} ({}/v{}/{})",
+                device.name, platform, device.os_major, device.device_type
+            );
+            let result = golem_runner::installer::run_install_script(
+                &script_path,
+                &project_root,
+                platform_str,
+                &device.udid,
+                &bundle_for_install,
+                &app.name,
+                timeout_ms,
+                &target,
+                device_emitter.as_ref(),
+            ).await;
+            match result {
+                Ok(()) => {
+                    install_cache.set(key, golem_runner::installer::InstallOutcome::Succeeded).await;
+                }
+                Err(e) => {
+                    let err_str = format!("{e}");
+                    install_cache.set(key, golem_runner::installer::InstallOutcome::FailedScript(err_str.clone())).await;
+                    let reason = format!("install_script failed for {} on {device_name}: {err_str}", bundle_for_install);
+                    ctx.emit(golem_events::EventKind::FlowSkipped {
+                        flow_name: flow_name.clone(),
+                        reason: reason.clone(),
+                    });
+                    return FlowReport {
+                        flow_name,
+                        success: false,
+                        step_results: Vec::new(),
+                        warnings: Vec::new(),
+                        duration_ms: start.elapsed().as_millis() as u64,
+                        seed: Some(actual_seed),
+                        screenshot_path: None,
+                        device_name: Some(device_label.clone()),
+                        perf_snapshots: vec![],
+                        skipped_reason: Some(reason),
+                    };
+                }
+            }
+        }
+    }
+
     ctx.emit(golem_events::EventKind::FlowStarted { flow_name: flow_name.clone() });
     // CLI --start takes precedence over flow-level start field.
     let effective_start = start_block.as_deref().or(flow.flow.start.as_deref());
@@ -1140,6 +1570,7 @@ async fn run_flow_on_device(
                 screenshot_path: None,
                 device_name: Some(device_label),
                 perf_snapshots: result.perf_snapshots,
+                skipped_reason: None,
             }
         }
         Err(e) => {
@@ -1161,6 +1592,7 @@ async fn run_flow_on_device(
                 screenshot_path: None,
                 device_name: Some(device_label),
                 perf_snapshots: vec![],
+                skipped_reason: None,
             }
         }
     }
@@ -1182,13 +1614,35 @@ async fn discover_all_devices(platform: Platform) -> Result<Vec<DeviceInfo>> {
             for line in stdout.lines().skip(1) {
                 let parts: Vec<&str> = line.split('\t').collect();
                 if parts.len() >= 2 && parts[1] == "device" {
+                    let serial = parts[0].to_string();
+                    // Query the actual OS version via `adb shell getprop`.
+                    // Hardcoding `os_major: 0` would leak into display labels
+                    // like `android/v0/phone` and break version-based slot
+                    // matching in the Plan phase.
+                    let sdk = tokio::process::Command::new("adb")
+                        .args(["-s", &serial, "shell", "getprop", "ro.build.version.sdk"])
+                        .output()
+                        .await
+                        .ok()
+                        .filter(|o| o.status.success())
+                        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                        .unwrap_or_default();
+                    let release = tokio::process::Command::new("adb")
+                        .args(["-s", &serial, "shell", "getprop", "ro.build.version.release"])
+                        .output()
+                        .await
+                        .ok()
+                        .filter(|o| o.status.success())
+                        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                        .unwrap_or_default();
+                    let os_major = sdk.parse::<u32>().unwrap_or(0);
                     devices.push(DeviceInfo {
-                        name: parts[0].to_string(),
-                        udid: parts[0].to_string(),
+                        name: serial.clone(),
+                        udid: serial,
                         platform: Platform::Android,
                         device_type: golem_devices::DeviceType::Phone,
-                        os_major: 0,
-                        os_version: String::new(),
+                        os_major,
+                        os_version: release,
                         state: DeviceState::Booted,
                         physical: false,
                         playstore: false,
@@ -1201,7 +1655,6 @@ async fn discover_all_devices(platform: Platform) -> Result<Vec<DeviceInfo>> {
                     });
                 }
             }
-            eprintln!("  Found {} connected Android device(s)", devices.len());
             Ok(devices)
         }
     }
@@ -1247,7 +1700,7 @@ async fn find_available_device(
 
     // Step 1: Try to find a free booted device
     if !booted.is_empty() {
-        eprintln!("  Found {} booted {platform} device(s)", booted.len());
+        // Booted count already reported via SuitePlanned/device_availability.
         for device in &booted {
             if resource_mgr.port_for(&device.udid).is_none() {
                 return Ok((*device).clone());
@@ -1262,7 +1715,7 @@ async fn find_available_device(
         let best = shutdown.iter()
             .max_by_key(|d| d.os_major)
             .unwrap();
-        eprintln!("  No booted {platform} devices. Booting {}...", best.name);
+        eprintln!("  [devices] no booted {platform} — booting {}...", best.name);
         golem_devices::lifecycle::boot_device(best).await?;
         return Ok(DeviceInfo {
             state: DeviceState::Booted,
@@ -1273,7 +1726,7 @@ async fn find_available_device(
     // Step 3: No compatible devices at all — auto-create or fail
     if compatible.is_empty() {
         if create_if_missing {
-            eprintln!("  No {platform} devices found. Creating one...");
+            eprintln!("  [devices] no {platform} device found — creating one...");
             let config = golem_devices::concurrency::ConcurrencyConfig::default();
             return golem_devices::lifecycle::auto_create_device(
                 platform,
@@ -1306,7 +1759,7 @@ async fn find_available_device(
             );
         }
 
-        eprintln!("  All {platform} devices in use, waiting...");
+        eprintln!("  [devices] all {platform} devices busy, waiting...");
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     }
 }
@@ -1346,6 +1799,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         }
     }
 
@@ -1361,6 +1815,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         }
     }
 
@@ -1384,6 +1839,7 @@ mod tests {
     fn suite_stats_counts_passed() {
         let report = SuiteReport {
             flows: vec![passing_flow("a"), passing_flow("b"), passing_flow("c")],
+            installs: Vec::new(),
             total_duration_ms: 100,
         };
         let stats = suite_stats(&report);
@@ -1397,6 +1853,7 @@ mod tests {
     fn suite_stats_counts_failed() {
         let report = SuiteReport {
             flows: vec![failing_flow("a"), failing_flow("b")],
+            installs: Vec::new(),
             total_duration_ms: 100,
         };
         let stats = suite_stats(&report);
@@ -1416,6 +1873,7 @@ mod tests {
                 failing_flow("d"),
                 passing_flow("e"),
             ],
+            installs: Vec::new(),
             total_duration_ms: 500,
         };
         let stats = suite_stats(&report);
@@ -1495,6 +1953,7 @@ mod tests {
                 passing_flow("c"),
                 passing_flow("d"),
             ],
+            installs: Vec::new(),
             total_duration_ms: 200,
         };
         let stats = suite_stats(&report);
@@ -1514,6 +1973,7 @@ mod tests {
                 failing_flow("b"),
                 failing_flow("c"),
             ],
+            installs: Vec::new(),
             total_duration_ms: 300,
         };
         let stats = suite_stats(&report);
@@ -1544,6 +2004,7 @@ mod tests {
     fn suite_stats_empty_suite() {
         let report = SuiteReport {
             flows: Vec::new(),
+            installs: Vec::new(),
             total_duration_ms: 0,
         };
         let stats = suite_stats(&report);
@@ -1645,7 +2106,7 @@ steps = [
     async fn run_single_flow_fails_for_missing_file() {
         let runner = SuiteRunner::new(SuiteConfig::default());
         let path = PathBuf::from("nonexistent_flow.test.toml");
-        let reports = runner.run_single_flow(&path).await;
+        let (reports, _installs) = runner.run_single_flow(&path).await;
 
         assert_eq!(reports.len(), 1, "missing file SHALL produce exactly one report");
         assert!(!reports[0].success, "report SHALL indicate failure for missing file");
@@ -1665,7 +2126,7 @@ steps = [
         std::fs::write(&flow_path, "this is not [[[valid toml").expect("write bad flow");
 
         let runner = SuiteRunner::new(SuiteConfig::default());
-        let reports = runner.run_single_flow(&flow_path).await;
+        let (reports, _installs) = runner.run_single_flow(&flow_path).await;
 
         assert_eq!(reports.len(), 1, "invalid TOML SHALL produce exactly one report");
         assert!(!reports[0].success, "report SHALL indicate failure for invalid TOML");

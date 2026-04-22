@@ -5,14 +5,14 @@ use anyhow::{bail, Context, Result};
 
 /// Default content for golem.toml.
 const GOLEM_TOML_TEMPLATE: &str = r#"# GOLEM project configuration
-# See documentation for all available options
-
-[options]
-# step_timeout = 10000
-# screenshot_on_failure = true
-
-[vars]
-# api_token = "your-token-here"
+# See documentation for all available options.
+#
+# Optional sections:
+#   [options]              — defaults for flows (step_timeout, screenshot_on_failure, ...)
+#   [vars]                 — project-level variables (referenced in flows as ${name})
+#   [[apps]]               — app registry (bundle, install_script, install_timeout_ms, devices)
+#
+# Run `golem install-script` to add an app and install script interactively.
 "#;
 
 /// Generate the content for a new flow file template.
@@ -100,6 +100,156 @@ pub fn create_flow(name: &str, dir: &Path) -> Result<PathBuf> {
         .with_context(|| format!("failed to write flow file: {}", file_path.display()))?;
 
     Ok(file_path)
+}
+
+// ── Install-script scaffolding ─────────────────────────────────────
+
+/// Supported framework templates for `golem install-script`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InstallFramework {
+    NativeIos,
+    NativeAndroid,
+    Tauri,
+}
+
+impl InstallFramework {
+    pub fn label(self) -> &'static str {
+        match self {
+            InstallFramework::NativeIos => "native-ios",
+            InstallFramework::NativeAndroid => "native-android",
+            InstallFramework::Tauri => "tauri",
+        }
+    }
+
+    fn template(self) -> &'static str {
+        match self {
+            InstallFramework::NativeIos => include_str!("../templates/install-scripts/native-ios.sh"),
+            InstallFramework::NativeAndroid => include_str!("../templates/install-scripts/native-android.sh"),
+            InstallFramework::Tauri => include_str!("../templates/install-scripts/tauri.sh"),
+        }
+    }
+}
+
+/// Replace `{{PLACEHOLDER}}` tokens in a template with provided values.
+fn render_template(template: &str, placeholders: &[(&str, &str)]) -> String {
+    let mut out = template.to_string();
+    for (key, value) in placeholders {
+        out = out.replace(&format!("{{{{{}}}}}", key), value);
+    }
+    out
+}
+
+/// Write a rendered install-script template to `output_path`. Creates
+/// parent directories and sets the script executable on Unix.
+pub fn write_install_script(
+    output_path: &Path,
+    framework: InstallFramework,
+    placeholders: &[(&str, &str)],
+) -> Result<()> {
+    let rendered = render_template(framework.template(), placeholders);
+
+    if let Some(parent) = output_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("failed to create {}", parent.display()))?;
+        }
+    }
+
+    fs::write(output_path, rendered)
+        .with_context(|| format!("failed to write {}", output_path.display()))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(output_path)?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(output_path, perms)?;
+    }
+
+    Ok(())
+}
+
+/// Add or update an `[[apps]]` entry's `install_script` field in golem.toml,
+/// preserving existing content/comments via toml_edit.
+///
+/// - `app_name`: matches `[[apps]] name = "..."` (created if not present)
+/// - `bundle_id`: written on first creation; left alone on updates
+/// - `script_relative_path`: path to the install script, relative to project root
+/// - `platform`:
+///   - `None` for cross-platform (Tauri, Expo) — sets `install_script` to a bare string
+///   - `Some("ios")` / `Some("android")` for native — writes/merges an inline table
+///     `install_script = { ios = "...", android = "..." }`.
+pub fn update_golem_toml_install_script(
+    golem_toml_path: &Path,
+    app_name: &str,
+    bundle_id: Option<&str>,
+    script_relative_path: &str,
+    platform: Option<&str>,
+) -> Result<()> {
+    let current = fs::read_to_string(golem_toml_path)
+        .with_context(|| format!("read {}", golem_toml_path.display()))?;
+    let mut doc: toml_edit::DocumentMut = current
+        .parse()
+        .with_context(|| format!("parse {}", golem_toml_path.display()))?;
+
+    // Ensure `apps` is an array-of-tables.
+    if !doc.contains_key("apps") {
+        doc["apps"] = toml_edit::Item::ArrayOfTables(toml_edit::ArrayOfTables::new());
+    }
+    let apps = doc["apps"]
+        .as_array_of_tables_mut()
+        .ok_or_else(|| anyhow::anyhow!("`apps` in {} is not an array of tables", golem_toml_path.display()))?;
+
+    // Find existing entry by name, or append a new one.
+    let idx = (0..apps.len()).find(|i| {
+        apps.get(*i)
+            .and_then(|t| t.get("name"))
+            .and_then(|v| v.as_str())
+            == Some(app_name)
+    });
+
+    let app_table = match idx {
+        Some(i) => apps.get_mut(i).expect("existing entry"),
+        None => {
+            let mut t = toml_edit::Table::new();
+            t["name"] = toml_edit::value(app_name);
+            apps.push(t);
+            apps.get_mut(apps.len() - 1).expect("just pushed")
+        }
+    };
+
+    // Set bundle if provided and the entry doesn't already have one.
+    // (Never overwrites a user-set bundle.)
+    if let Some(b) = bundle_id {
+        if !app_table.contains_key("bundle") {
+            app_table["bundle"] = toml_edit::value(b);
+        }
+    }
+
+    // Update install_script on that entry, merging platform keys.
+    match platform {
+        None => {
+            app_table["install_script"] = toml_edit::value(script_relative_path);
+        }
+        Some(plat) => {
+            let mut inline = toml_edit::InlineTable::new();
+            if let Some(existing) = app_table.get("install_script") {
+                if let Some(t) = existing.as_inline_table() {
+                    for (k, v) in t.iter() {
+                        if k != plat {
+                            inline.insert(k, v.clone());
+                        }
+                    }
+                }
+            }
+            inline.insert(plat, script_relative_path.into());
+            app_table["install_script"] = toml_edit::value(inline);
+        }
+    }
+
+    fs::write(golem_toml_path, doc.to_string())
+        .with_context(|| format!("write {}", golem_toml_path.display()))?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -310,5 +460,160 @@ mod tests {
             path.starts_with(tmp.path().join("flows")),
             "after init, create should put files in flows/"
         );
+    }
+
+    // ── install-script tests ───────────────────────────────────────
+
+    #[test]
+    fn render_template_replaces_placeholders() {
+        let tmpl = "#!/bin/sh\necho {{BUNDLE_ID}} {{APP_NAME}}";
+        let rendered = render_template(tmpl, &[
+            ("BUNDLE_ID", "com.x"),
+            ("APP_NAME", "myapp"),
+        ]);
+        assert_eq!(rendered, "#!/bin/sh\necho com.x myapp");
+    }
+
+    #[test]
+    fn write_install_script_writes_executable_file() {
+        let tmp = TempDir::new().expect("tempdir");
+        let out = tmp.path().join("scripts").join("install.sh");
+        write_install_script(
+            &out,
+            InstallFramework::NativeAndroid,
+            &[
+                ("GRADLE_ROOT", "android"),
+                ("MODULE_NAME", "app"),
+                ("GRADLE_TASK", "installDebug"),
+            ],
+        ).expect("write");
+        assert!(out.exists());
+        let content = fs::read_to_string(&out).expect("read");
+        assert!(content.contains("MODULE_NAME=\"app\""));
+        assert!(content.contains("GRADLE_TASK=\"installDebug\""));
+        assert!(content.contains("GRADLE_ROOT=\"android\""));
+        assert!(!content.contains("{{"), "no placeholders remain");
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&out).unwrap().permissions().mode();
+            assert_eq!(mode & 0o755, 0o755, "SHALL be executable: {:o}", mode);
+        }
+    }
+
+    #[test]
+    fn update_golem_toml_adds_app_entry_cross_platform() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("golem.toml");
+        fs::write(&path, "[options]\n").unwrap();
+        update_golem_toml_install_script(
+            &path, "app-b", Some("com.example.b"), "scripts/install-b.sh", None,
+        ).expect("update");
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains("[[apps]]"));
+        assert!(content.contains(r#"name = "app-b""#));
+        assert!(content.contains(r#"bundle = "com.example.b""#));
+        assert!(content.contains(r#"install_script = "scripts/install-b.sh""#));
+    }
+
+    #[test]
+    fn update_golem_toml_updates_existing_app_entry() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("golem.toml");
+        fs::write(&path, r#"
+[[apps]]
+name = "app-b"
+bundle = "com.example.b"
+install_script = "scripts/old.sh"
+"#).unwrap();
+        update_golem_toml_install_script(
+            &path, "app-b", None, "scripts/new.sh", None,
+        ).expect("update");
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains(r#"install_script = "scripts/new.sh""#));
+        assert!(!content.contains("scripts/old.sh"));
+        // bundle preserved
+        assert!(content.contains(r#"bundle = "com.example.b""#));
+    }
+
+    #[test]
+    fn update_golem_toml_backfills_missing_bundle_on_update() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("golem.toml");
+        // Existing entry has no bundle — a second scaffold pass supplying one
+        // SHALL fill it in rather than silently discard.
+        fs::write(&path, r#"
+[[apps]]
+name = "app-b"
+install_script = { ios = "scripts/ios.sh" }
+"#).unwrap();
+        update_golem_toml_install_script(
+            &path, "app-b", Some("com.x"), "scripts/android.sh", Some("android"),
+        ).expect("update");
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains(r#"bundle = "com.x""#),
+            "SHALL backfill missing bundle, got:\n{content}");
+    }
+
+    #[test]
+    fn update_golem_toml_preserves_existing_bundle() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("golem.toml");
+        // A subsequent scaffold with a different bundle SHALL NOT overwrite.
+        fs::write(&path, r#"
+[[apps]]
+name = "app-b"
+bundle = "com.kept"
+install_script = { ios = "scripts/ios.sh" }
+"#).unwrap();
+        update_golem_toml_install_script(
+            &path, "app-b", Some("com.other"), "scripts/android.sh", Some("android"),
+        ).expect("update");
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains(r#"bundle = "com.kept""#),
+            "SHALL preserve existing bundle, got:\n{content}");
+        assert!(!content.contains("com.other"),
+            "SHALL NOT write the supplied bundle when one already exists");
+    }
+
+    #[test]
+    fn update_golem_toml_writes_per_platform_merges_keys() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("golem.toml");
+        fs::write(&path, "[options]\n").unwrap();
+        update_golem_toml_install_script(
+            &path, "app-b", Some("com.example.b"), "scripts/ios.sh", Some("ios"),
+        ).expect("update ios");
+        update_golem_toml_install_script(
+            &path, "app-b", Some("com.example.b"), "scripts/android.sh", Some("android"),
+        ).expect("update android");
+        let content = fs::read_to_string(&path).unwrap();
+        assert!(content.contains("scripts/ios.sh"));
+        assert!(content.contains("scripts/android.sh"));
+        // Should have one [[apps]] entry (not two)
+        assert_eq!(content.matches("[[apps]]").count(), 1);
+    }
+
+    #[test]
+    fn all_templates_render_without_leftover_placeholders() {
+        let tmp = TempDir::new().expect("tempdir");
+        let placeholders = [
+            ("XCODE_PROJECT", "X.xcodeproj"),
+            ("XCODE_SCHEME", "X"),
+            ("CONFIGURATION", "Debug"),
+            ("GRADLE_ROOT", "android"),
+            ("MODULE_NAME", "app"),
+            ("GRADLE_TASK", "installDebug"),
+            ("TAURI_DIR", "."),
+            ("IOS_SCHEME", "X_iOS"),
+            ("TAURI_CMD", "npx tauri"),
+        ];
+        for fw in [InstallFramework::NativeIos, InstallFramework::NativeAndroid, InstallFramework::Tauri] {
+            let out = tmp.path().join(format!("{}.sh", fw.label()));
+            write_install_script(&out, fw, &placeholders).expect("write");
+            let content = fs::read_to_string(&out).expect("read");
+            assert!(!content.contains("{{"), "{}: has leftover placeholder", fw.label());
+        }
     }
 }

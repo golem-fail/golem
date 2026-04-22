@@ -4,7 +4,7 @@
 //! Uses intermediate serialization structs so the JSON shape can evolve
 //! independently of the internal report types.
 
-use crate::{FlowReport, PerfSnapshot, StepOutcome, StepReport, SuiteReport};
+use crate::{FlowReport, InstallReport, PerfSnapshot, StepOutcome, StepReport, SuiteReport};
 use serde::Serialize;
 
 // ── JSON-specific intermediate types ────────────────────────────────
@@ -33,6 +33,8 @@ struct JsonStep {
 struct JsonFlow {
     name: String,
     success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    skipped_reason: Option<String>,
     duration_ms: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     seed: Option<u64>,
@@ -44,6 +46,19 @@ struct JsonFlow {
     warnings: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     perf_snapshots: Vec<JsonPerfSnapshot>,
+}
+
+#[derive(Serialize)]
+struct JsonInstall {
+    app_name: String,
+    bundle_id: String,
+    device: String,
+    success: bool,
+    duration_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    exit_code: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -81,6 +96,8 @@ struct JsonSuiteSummary {
 struct JsonSuite {
     suite: JsonSuiteSummary,
     flows: Vec<JsonFlow>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    installs: Vec<JsonInstall>,
 }
 
 // ── Conversion helpers ──────────────────────────────────────────────
@@ -128,6 +145,7 @@ fn flow_to_json(report: &FlowReport) -> JsonFlow {
     JsonFlow {
         name: report.flow_name.clone(),
         success: report.success,
+        skipped_reason: report.skipped_reason.clone(),
         duration_ms: report.duration_ms,
         seed: report.seed,
         device: report.device_name.clone(),
@@ -135,6 +153,18 @@ fn flow_to_json(report: &FlowReport) -> JsonFlow {
         steps: report.step_results.iter().map(step_to_json).collect(),
         warnings: report.warnings.clone(),
         perf_snapshots: report.perf_snapshots.iter().map(perf_to_json).collect(),
+    }
+}
+
+fn install_to_json(inst: &InstallReport) -> JsonInstall {
+    JsonInstall {
+        app_name: inst.app_name.clone(),
+        bundle_id: inst.bundle_id.clone(),
+        device: inst.device_name.clone(),
+        success: inst.success,
+        duration_ms: inst.duration_ms,
+        exit_code: inst.exit_code,
+        error: inst.error.clone(),
     }
 }
 
@@ -155,9 +185,10 @@ pub fn format_suite_json(report: &SuiteReport) -> Result<String, serde_json::Err
         .flows
         .iter()
         .filter(|f| {
-            f.step_results
+            f.skipped_reason.is_some() ||
+            (!f.step_results.is_empty() && f.step_results
                 .iter()
-                .all(|s| matches!(s.outcome, StepOutcome::Skipped))
+                .all(|s| matches!(s.outcome, StepOutcome::Skipped)))
         })
         .count();
 
@@ -170,6 +201,7 @@ pub fn format_suite_json(report: &SuiteReport) -> Result<String, serde_json::Err
             duration_ms: report.total_duration_ms,
         },
         flows: report.flows.iter().map(flow_to_json).collect(),
+        installs: report.installs.iter().map(install_to_json).collect(),
     };
 
     serde_json::to_string_pretty(&json_suite)
@@ -265,6 +297,7 @@ mod tests {
             ),
             device_name: Some("iPhone 15 Pro".to_string()),
             perf_snapshots: vec![],
+            skipped_reason: None,
         }
     }
 
@@ -284,6 +317,7 @@ mod tests {
                     screenshot_path: None,
                     device_name: None,
                     perf_snapshots: vec![],
+                    skipped_reason: None,
                 },
                 FlowReport {
                     flow_name: "signup_flow".to_string(),
@@ -295,6 +329,7 @@ mod tests {
                     screenshot_path: None,
                     device_name: None,
                     perf_snapshots: vec![],
+                    skipped_reason: None,
                 },
                 FlowReport {
                     flow_name: "checkout_flow".to_string(),
@@ -306,6 +341,7 @@ mod tests {
                     screenshot_path: None,
                     device_name: None,
                     perf_snapshots: vec![],
+                    skipped_reason: None,
                 },
                 FlowReport {
                     flow_name: "broken_flow".to_string(),
@@ -320,8 +356,10 @@ mod tests {
                     screenshot_path: None,
                     device_name: None,
                     perf_snapshots: vec![],
+                    skipped_reason: None,
                 },
             ],
+            installs: Vec::new(),
             total_duration_ms: 45300,
         }
     }
@@ -404,6 +442,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         };
 
         let json_str = format_flow_json(&report).expect("serialization should succeed");
@@ -487,6 +526,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         };
 
         let json_str = format_flow_json(&report).expect("serialization should succeed");
@@ -517,6 +557,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         };
 
         let json_str = format_flow_json(&report).expect("serialization should succeed");
@@ -569,6 +610,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![sample_perf_snapshot()],
+            skipped_reason: None,
         };
 
         let json_str = format_flow_json(&report).expect("serialization should succeed");
@@ -596,6 +638,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         };
 
         let json_str = format_flow_json(&report).expect("serialization should succeed");

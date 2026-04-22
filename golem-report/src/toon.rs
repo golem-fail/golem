@@ -190,6 +190,23 @@ pub fn format_suite_toon(report: &SuiteReport) -> String {
     out.push_str("# S=suite R=result(passed/warned/failed) T=total(passed/failed/skipped) d:N=duration_ms\n");
     out.push_str("# step: +=pass !=fail ~=warn -=skip @x,y=position b=bounds(x,y,w,h) s:N=scroll_attempts t:N/M=trees/nodes\n");
     out.push_str("# perf: P block:app:device:iteration mem=MB cpu=% thr=threads fd=file_descriptors disk=MB net_rx/tx=KB launch=ms\n");
+    out.push_str("# install: I app:bundle:device R=ok/fail d:ms\n");
+
+    // Install results (one line per (device, bundle) attempted)
+    for inst in &report.installs {
+        let r = if inst.success { "ok" } else { "fail" };
+        let _ = writeln!(
+            out,
+            "I {}:{}:{} R:{} d:{}",
+            inst.app_name, inst.bundle_id, inst.device_name, r, inst.duration_ms
+        );
+        if let Some(ref err) = inst.error {
+            // Indent error lines under the install entry.
+            for line in err.lines() {
+                let _ = writeln!(out, "  {line}");
+            }
+        }
+    }
 
     for flow in &report.flows {
         let _ = write!(out, "{}", format_flow_toon(flow));
@@ -309,6 +326,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         }
     }
 
@@ -385,6 +403,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         };
         let out = format_flow_toon(&report);
         let last_line = out.lines().last().expect("should have lines");
@@ -419,6 +438,7 @@ mod tests {
                     screenshot_path: None,
                     device_name: None,
                     perf_snapshots: vec![],
+                    skipped_reason: None,
                 },
                 FlowReport {
                     flow_name: "signup_flow".to_string(),
@@ -433,8 +453,10 @@ mod tests {
                     screenshot_path: None,
                     device_name: None,
                     perf_snapshots: vec![],
+                    skipped_reason: None,
                 },
             ],
+            installs: Vec::new(),
             total_duration_ms: 45300,
         };
 
@@ -459,6 +481,7 @@ mod tests {
                     screenshot_path: None,
                     device_name: None,
                     perf_snapshots: vec![],
+                    skipped_reason: None,
                 },
                 FlowReport {
                     flow_name: "flow_b".to_string(),
@@ -470,6 +493,7 @@ mod tests {
                     screenshot_path: None,
                     device_name: None,
                     perf_snapshots: vec![],
+                    skipped_reason: None,
                 },
                 FlowReport {
                     flow_name: "flow_c".to_string(),
@@ -483,8 +507,10 @@ mod tests {
                     screenshot_path: None,
                     device_name: None,
                     perf_snapshots: vec![],
+                    skipped_reason: None,
                 },
             ],
+            installs: Vec::new(),
             total_duration_ms: 600,
         };
 
@@ -646,6 +672,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![sample_perf_snapshot()],
+            skipped_reason: None,
         };
 
         let out = format_flow_toon(&report);
@@ -668,6 +695,7 @@ mod tests {
             screenshot_path: None,
             device_name: None,
             perf_snapshots: vec![],
+            skipped_reason: None,
         };
 
         let out = format_flow_toon(&report);

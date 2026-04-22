@@ -87,7 +87,7 @@ impl OrchestratorServer {
                 break;
             }
             if count != last_count {
-                eprintln!("  Orchestrator: waiting for {count} active client(s)...");
+                eprintln!("  [orchestrator] waiting for {count} active client(s)...");
                 last_count = count;
             }
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -122,7 +122,7 @@ pub async fn start_server() -> Result<OrchestratorServer> {
     let listener = UnixListener::bind(&path)
         .with_context(|| format!("failed to bind socket at {}", path.display()))?;
 
-    eprintln!("  Orchestrator: listening on {}", path.display());
+    eprintln!("  [orchestrator] server — listening on {}", path.display());
 
     let resource_mgr = std::sync::Arc::new(
         golem_devices::resource_manager::ResourceManager::new(
@@ -147,7 +147,7 @@ pub async fn start_server() -> Result<OrchestratorServer> {
                     });
                 }
                 Err(e) => {
-                    eprintln!("  Orchestrator: accept error: {e}");
+                    eprintln!("  [orchestrator] accept error: {e}");
                     break;
                 }
             }
@@ -212,7 +212,7 @@ async fn handle_client(
                 }
             }
             Err(e) => {
-                eprintln!("  Orchestrator: read error: {e}");
+                eprintln!("  [orchestrator] read error: {e}");
                 break;
             }
         }
@@ -325,9 +325,10 @@ pub async fn submit_and_wait(
     flow_paths: &[PathBuf],
     config: &serde_json::Value,
     verbose: bool,
+    debug: bool,
 ) -> Result<bool> {
     eprintln!(
-        "  Connected to orchestrator. Submitting {} flow(s)...",
+        "  [orchestrator] client — submitting {} flow(s)",
         flow_paths.len()
     );
 
@@ -349,7 +350,7 @@ pub async fn submit_and_wait(
     // Spawn local human renderer.
     let human_rx = local_rx.subscribe();
     let human_handle = tokio::spawn(async move {
-        golem_report::stream::stream_human(human_rx, verbose, true).await;
+        golem_report::stream::stream_human(human_rx, verbose, true, debug).await;
     });
 
     // Spawn local accumulator.

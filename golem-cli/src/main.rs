@@ -2,7 +2,9 @@ pub mod cli;
 pub mod companions;
 pub mod devices;
 pub mod discovery;
+pub mod install_script_cmd;
 pub mod orchestrator;
+pub mod project;
 pub mod registration;
 pub mod scaffold;
 pub mod suite;
@@ -66,6 +68,14 @@ async fn main() -> anyhow::Result<()> {
 
             let cli_vars = cli::parse_var_args(&args.vars)?;
 
+            // Load project config from golem.toml (walk up from cwd).
+            let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let (project_config, project_toml_path) = project::ProjectConfig::load_from(&cwd)?;
+            let project_root = project_toml_path
+                .as_ref()
+                .and_then(|p| p.parent().map(std::path::Path::to_path_buf))
+                .unwrap_or(cwd);
+
             let output_dir = args.output_dir
                 .map(std::path::PathBuf::from)
                 .unwrap_or_else(|| std::path::PathBuf::from(".golem/results"));
@@ -93,6 +103,8 @@ async fn main() -> anyhow::Result<()> {
                 vars: cli_vars,
                 output_dir: output_dir.clone(),
                 no_results: args.no_results,
+                project_root,
+                project_apps: project_config.apps,
             };
 
             // Check if an orchestrator is already running
@@ -102,7 +114,7 @@ async fn main() -> anyhow::Result<()> {
                     "platform": args.platform,
                     "seed": args.seed,
                 });
-                let all_passed = orchestrator::submit_and_wait(stream, &flow_paths, &config_json, config.verbose).await?;
+                let all_passed = orchestrator::submit_and_wait(stream, &flow_paths, &config_json, config.verbose, config.debug).await?;
                 if !all_passed {
                     std::process::exit(1);
                 }
@@ -112,7 +124,7 @@ async fn main() -> anyhow::Result<()> {
             // Server mode: start orchestrator + run suite with shared ResourceManager
             let server = orchestrator::start_server().await?;
 
-            let runner = SuiteRunner::with_resource_manager(config, server.resource_mgr.clone());
+            let mut runner = SuiteRunner::with_resource_manager(config, server.resource_mgr.clone());
             let report = runner.run_suite(&flow_paths).await?;
 
             // Wait for any active client connections to finish before exiting
@@ -159,6 +171,10 @@ async fn main() -> anyhow::Result<()> {
         Commands::Create(args) => {
             let path = scaffold::create_flow(&args.name, Path::new("."))?;
             println!("Created flow: {}", path.display());
+        }
+
+        Commands::InstallScript => {
+            install_script_cmd::run()?;
         }
     }
 

@@ -252,11 +252,15 @@ pub struct PerfSnapshot {
 }
 
 /// Result of a complete test flow.
+#[derive(Default)]
 pub struct FlowReport {
     /// Name of the flow (e.g. "login_flow").
     pub flow_name: String,
     /// Whether the flow passed overall.
     pub success: bool,
+    /// When true, this flow was skipped (e.g. due to prior install failure).
+    /// A skipped flow has `success = false` and `skipped_reason` set.
+    pub skipped_reason: Option<String>,
     /// Individual step results, in order.
     pub step_results: Vec<StepReport>,
     /// Any flow-level warnings.
@@ -273,10 +277,25 @@ pub struct FlowReport {
     pub perf_snapshots: Vec<PerfSnapshot>,
 }
 
+/// Install script result (per `(device, bundle)` across the whole suite).
+#[derive(Debug, Clone)]
+pub struct InstallReport {
+    pub app_name: String,
+    pub bundle_id: String,
+    pub device_name: String,
+    pub success: bool,
+    pub duration_ms: u64,
+    pub exit_code: Option<i32>,
+    pub error: Option<String>,
+}
+
 /// Result of an entire test suite (multiple flows).
+#[derive(Default)]
 pub struct SuiteReport {
     /// Individual flow results.
     pub flows: Vec<FlowReport>,
+    /// Install script results (one per `(device, bundle)` pair attempted).
+    pub installs: Vec<InstallReport>,
     /// Total wall-clock duration in milliseconds.
     pub total_duration_ms: u64,
 }

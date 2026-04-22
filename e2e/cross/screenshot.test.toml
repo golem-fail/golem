@@ -4,8 +4,6 @@ tags = ["cross-platform", "capture"]
 
 [[flow.apps]]
 name = "app"
-bundle = "fail.golem.test"
-
 [[flow.apps.devices]]
 os = "ios:latest"
 type = "phone"

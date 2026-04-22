@@ -90,20 +90,43 @@ pub async fn execute_flow<'a>(
     };
 
     let apps = &flow.flow.apps;
+    // Lifecycle stop/launch mirror the "launch"/"stop" step multiplier (3x base).
+    // Unresponsive companions would otherwise block forever here.
+    let lifecycle_timeout = std::time::Duration::from_millis(default_timeout_ms * 3);
     match lifecycle {
         golem_parser::AppLifecycle::Reset => {
             for app in apps {
-                let _ = driver.stop_app(&app.bundle).await;
+                if let Some(bundle) = app.bundle.as_deref() {
+                    let _ = tokio::time::timeout(lifecycle_timeout, driver.stop_app(bundle)).await;
+                }
             }
             if let Some(app) = apps.first() {
-                driver.launch_app(&app.bundle).await
-                    .with_context(|| format!("app_lifecycle reset: failed to launch {}", app.bundle))?;
+                let bundle = app.bundle.as_deref()
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "app '{}' has no bundle id — add one to [[flow.apps]] or to [[apps]] in golem.toml",
+                        app.name))?;
+                tokio::time::timeout(lifecycle_timeout, driver.launch_app(bundle))
+                    .await
+                    .map_err(|_| anyhow::anyhow!(
+                        "app_lifecycle reset: launch of {} timed out after {}ms \
+                         (companion unresponsive?)",
+                        bundle, lifecycle_timeout.as_millis()))?
+                    .with_context(|| format!("app_lifecycle reset: failed to launch {}", bundle))?;
             }
         }
         golem_parser::AppLifecycle::Launch => {
             if let Some(app) = apps.first() {
-                driver.launch_app(&app.bundle).await
-                    .with_context(|| format!("app_lifecycle launch: failed to launch {}", app.bundle))?;
+                let bundle = app.bundle.as_deref()
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "app '{}' has no bundle id — add one to [[flow.apps]] or to [[apps]] in golem.toml",
+                        app.name))?;
+                tokio::time::timeout(lifecycle_timeout, driver.launch_app(bundle))
+                    .await
+                    .map_err(|_| anyhow::anyhow!(
+                        "app_lifecycle launch: launch of {} timed out after {}ms \
+                         (companion unresponsive?)",
+                        bundle, lifecycle_timeout.as_millis()))?
+                    .with_context(|| format!("app_lifecycle launch: failed to launch {}", bundle))?;
             }
         }
         golem_parser::AppLifecycle::Manual => {}

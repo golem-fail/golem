@@ -17,10 +17,15 @@ golem-vars = { path = "../golem-vars" }
 golem-report = { path = "../golem-report" }
 golem-email = { path = "../golem-email" }
 golem-events = { path = "../golem-events" }
+golem-orchestrator = { path = "../golem-orchestrator" }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
+toml = { workspace = true }
+toml_edit = "0.22"
+dialoguer = { version = "0.11", default-features = false, features = ["fuzzy-select"] }
 rand = { workspace = true }
 rand_chacha = "0.3"
 dirs = "6"
@@ -28,7 +33,6 @@ dirs = "6"
 [dev-dependencies]
 tempfile = "3"
 tokio = { workspace = true }
-toml = { workspace = true }
 
 [lints]
 workspace = true

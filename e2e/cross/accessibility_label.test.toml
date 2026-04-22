@@ -5,6 +5,7 @@ tags = ["cross-platform", "accessibility-id", "native"]
 [[flow.apps]]
 name = "app-b"
 bundle = "fail.golem.testb"
+install_script = { ios = "scripts/install-app-b-ios.sh" , android = "scripts/install-app-b-android.sh" }
 
 [[flow.apps.devices]]
 os = "ios:latest"

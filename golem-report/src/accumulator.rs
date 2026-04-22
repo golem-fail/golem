@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use golem_events::{DeviceId, Event, EventKind};
 use tokio::sync::broadcast;
 
-use crate::{FlowReport, StepOutcome, StepReport, SubstepDetail, SuiteReport};
+use crate::{FlowReport, InstallReport, StepOutcome, StepReport, SubstepDetail, SuiteReport};
 
 struct AccumulatedStep {
     global_index: u64,
@@ -26,20 +26,25 @@ struct AccumulatedFlow {
     warnings: Vec<String>,
     duration_ms: u64,
     success: bool,
+    skipped_reason: Option<String>,
 }
 
 /// Accumulates events into a hierarchical SuiteReport.
 pub struct ReportAccumulator {
-    flows: HashMap<String, AccumulatedFlow>, // keyed by device_id.0
+    flows: Vec<AccumulatedFlow>,
+    current_flow_by_device: HashMap<String, usize>, // device_id.0 -> index into flows
     current_step: HashMap<String, AccumulatedStep>, // current step per device
+    pub(crate) installs: Vec<InstallReport>,
     total_duration_ms: u64,
 }
 
 impl ReportAccumulator {
     pub fn new() -> Self {
         Self {
-            flows: HashMap::new(),
+            flows: Vec::new(),
+            current_flow_by_device: HashMap::new(),
             current_step: HashMap::new(),
+            installs: Vec::new(),
             total_duration_ms: 0,
         }
     }
@@ -50,23 +55,40 @@ impl ReportAccumulator {
 
         match &event.kind {
             EventKind::FlowStarted { flow_name } => {
-                self.flows.insert(dev_key, AccumulatedFlow {
+                let idx = self.flows.len();
+                self.flows.push(AccumulatedFlow {
                     flow_name: flow_name.clone(),
                     device_id: event.device_id.clone(),
                     steps: Vec::new(),
                     warnings: Vec::new(),
                     duration_ms: 0,
                     success: true,
+                    skipped_reason: None,
                 });
+                self.current_flow_by_device.insert(dev_key, idx);
             }
             EventKind::FlowFinished { success, duration_ms, .. } => {
-                if let Some(flow) = self.flows.get_mut(&dev_key) {
-                    flow.success = *success;
-                    flow.duration_ms = *duration_ms;
+                if let Some(&idx) = self.current_flow_by_device.get(&dev_key) {
+                    if let Some(flow) = self.flows.get_mut(idx) {
+                        flow.success = *success;
+                        flow.duration_ms = *duration_ms;
+                    }
                 }
+                self.current_flow_by_device.remove(&dev_key);
+            }
+            EventKind::FlowSkipped { flow_name, reason } => {
+                // Record a synthetic flow entry so the skip shows up in reports.
+                self.flows.push(AccumulatedFlow {
+                    flow_name: flow_name.clone(),
+                    device_id: event.device_id.clone(),
+                    steps: Vec::new(),
+                    warnings: Vec::new(),
+                    duration_ms: 0,
+                    success: false,
+                    skipped_reason: Some(reason.clone()),
+                });
             }
             EventKind::StepStarted { global_step_index, block_name, step_index_in_block, action, selector_label } => {
-                // Finish any previous step (shouldn't happen, but defensive)
                 self.finish_current_step(&dev_key);
                 self.current_step.insert(dev_key, AccumulatedStep {
                     global_index: *global_step_index,
@@ -90,10 +112,11 @@ impl ReportAccumulator {
                     step.screenshot_path = screenshot_path.clone();
                     step.tree_stats = *tree_stats;
 
-                    // Collect warnings
                     if let golem_events::StepOutcome::Warning(msg) = outcome {
-                        if let Some(flow) = self.flows.get_mut(&dev_key) {
-                            flow.warnings.push(msg.clone());
+                        if let Some(&idx) = self.current_flow_by_device.get(&dev_key) {
+                            if let Some(flow) = self.flows.get_mut(idx) {
+                                flow.warnings.push(msg.clone());
+                            }
                         }
                     }
                 }
@@ -104,6 +127,17 @@ impl ReportAccumulator {
                     step.substeps.push(SubstepDetail::from(sub));
                 }
             }
+            EventKind::InstallFinished { app_name, bundle_id, success, duration_ms, exit_code, error, target: _ } => {
+                self.installs.push(InstallReport {
+                    app_name: app_name.clone(),
+                    bundle_id: bundle_id.clone(),
+                    device_name: event.device_id.0.clone(),
+                    success: *success,
+                    duration_ms: *duration_ms,
+                    exit_code: *exit_code,
+                    error: error.clone(),
+                });
+            }
             EventKind::SuiteFinished { duration_ms, .. } => {
                 self.total_duration_ms = *duration_ms;
             }
@@ -113,15 +147,17 @@ impl ReportAccumulator {
 
     fn finish_current_step(&mut self, dev_key: &str) {
         if let Some(step) = self.current_step.remove(dev_key) {
-            if let Some(flow) = self.flows.get_mut(dev_key) {
-                flow.steps.push(step);
+            if let Some(&idx) = self.current_flow_by_device.get(dev_key) {
+                if let Some(flow) = self.flows.get_mut(idx) {
+                    flow.steps.push(step);
+                }
             }
         }
     }
 
     /// Convert accumulated data into a SuiteReport.
     pub fn into_suite_report(self) -> SuiteReport {
-        let flows = self.flows.into_values().map(|flow| {
+        let flows = self.flows.into_iter().map(|flow| {
             let step_results = flow.steps.into_iter().map(|s| {
                 let outcome = match s.outcome {
                     Some(golem_events::StepOutcome::Success) => StepOutcome::Success,
@@ -149,6 +185,7 @@ impl ReportAccumulator {
             FlowReport {
                 flow_name: flow.flow_name,
                 success: flow.success,
+                skipped_reason: flow.skipped_reason,
                 step_results,
                 warnings: flow.warnings,
                 duration_ms: flow.duration_ms,
@@ -161,6 +198,7 @@ impl ReportAccumulator {
 
         SuiteReport {
             flows,
+            installs: self.installs.clone(),
             total_duration_ms: self.total_duration_ms,
         }
     }

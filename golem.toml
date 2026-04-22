@@ -1,0 +1,13 @@
+[[apps]]
+name = "app"
+bundle = "fail.golem.test"
+install_script = "scripts/install-app.sh"
+# GOLEM project configuration
+# See documentation for all available options.
+#
+# Optional sections:
+#   [options]              — defaults for flows (step_timeout, screenshot_on_failure, ...)
+#   [vars]                 — project-level variables (referenced in flows as ${name})
+#   [[apps]]               — app registry (bundle, install_script, install_timeout_ms, devices)
+#
+# Run `golem install-script` to add an app and install script interactively.

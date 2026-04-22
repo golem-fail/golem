@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use golem_events::{DeviceId, Event, EventKind, SubstepEvent, ScrollAttemptResult};
+use golem_events::{Event, EventKind, SubstepEvent, ScrollAttemptResult};
 use tokio::sync::broadcast;
 
 const SYM_SUCCESS: &str = "\u{2713}";  // ✓
@@ -40,17 +40,10 @@ const DEVICE_COLORS: &[&str] = &[
 ];
 
 /// Get or assign a circled number for a device.
-fn device_prefix(
-    device_id: &DeviceId,
-    device_map: &mut HashMap<String, usize>,
-    multi_device: bool,
-    use_color: bool,
-) -> String {
+fn format_circle(idx: usize, multi_device: bool, use_color: bool) -> String {
     if !multi_device {
         return String::new();
     }
-    let next_idx = device_map.len();
-    let idx = *device_map.entry(device_id.0.clone()).or_insert(next_idx);
     let num = CIRCLED_NUMBERS.get(idx).unwrap_or(&"?");
     if use_color {
         let color = DEVICE_COLORS.get(idx % DEVICE_COLORS.len()).unwrap_or(&"");
@@ -61,22 +54,83 @@ fn device_prefix(
 }
 
 /// Stream events to stderr in human-readable format.
+///
+/// `debug` enables per-line install script output. When false, install
+/// output is silent on success and shows only the tail on failure (from
+/// the error payload). The installer still captures stderr internally
+/// for the failure tail.
 pub async fn stream_human(
     mut rx: broadcast::Receiver<Event>,
     verbose: bool,
     multi_device: bool,
+    debug: bool,
 ) {
     let use_color = std::io::IsTerminal::is_terminal(&std::io::stderr());
 
-    // Device ID → index mapping for circled numbers
+    // Circle-slot allocation: each FlowStarted grabs a fresh slot so two
+    // sequential flows on the same device get distinct circles. Events
+    // between two FlowStarteds on the same device inherit that device's
+    // currently-assigned slot. Pre-FlowStarted events (e.g. install) get
+    // allocated on-demand per device_id.
+    let mut current_slot: HashMap<String, usize> = HashMap::new();
+    let mut next_slot: usize = 0;
+    // Legacy device_map retained for legend printing on FlowStarted.
     let mut device_map: HashMap<String, usize> = HashMap::new();
     // Track current block per device
     let mut current_blocks: HashMap<String, (String, u32)> = HashMap::new();
 
     while let Ok(event) = rx.recv().await {
-        let dp = device_prefix(&event.device_id, &mut device_map, multi_device, use_color);
+        let is_flow_started = matches!(event.kind, EventKind::FlowStarted { .. });
+        let dp = if !multi_device || event.device_id.0 == "suite" {
+            String::new()
+        } else if is_flow_started {
+            // FlowStarted always claims a fresh slot for this device —
+            // so sequential flows on the same device get distinct circles.
+            let idx = next_slot;
+            next_slot += 1;
+            current_slot.insert(event.device_id.0.clone(), idx);
+            device_map.insert(event.device_id.0.clone(), idx);
+            format_circle(idx, multi_device, use_color)
+        } else if let Some(&slot) = current_slot.get(&event.device_id.0) {
+            // Non-flow event on a device that has already entered a flow —
+            // inherit that flow's circle (step events, install output
+            // during a flow, etc.).
+            format_circle(slot, multi_device, use_color)
+        } else {
+            // Pre-flow events (installs, etc.) get no circle so they don't
+            // consume numbers that should map to flow runs.
+            String::new()
+        };
 
         match &event.kind {
+            EventKind::SuitePlanned { flow_runs, install_entries, device_availability } => {
+                // Only render under --verbose; diagnostic view of plan output.
+                if verbose {
+                    eprintln!("  [plan] {} flow run(s):", flow_runs.len());
+                    for line in flow_runs {
+                        eprintln!("  [plan]   {line}");
+                    }
+                    if !install_entries.is_empty() {
+                        eprintln!(
+                            "  [plan] install matrix ({} entr{}):",
+                            install_entries.len(),
+                            if install_entries.len() == 1 { "y" } else { "ies" }
+                        );
+                        for line in install_entries {
+                            eprintln!("  [plan]   {line}");
+                        }
+                    }
+                    if !device_availability.is_empty() {
+                        eprintln!(
+                            "  [devices] {} slot requirement(s):",
+                            device_availability.len()
+                        );
+                        for line in device_availability {
+                            eprintln!("  [devices]   · {line}");
+                        }
+                    }
+                }
+            }
             EventKind::FlowStarted { flow_name } => {
                 if use_color {
                     eprintln!("{dp}{BLUE}{SYM_FLOW} {flow_name}{RESET}");
@@ -205,6 +259,51 @@ pub async fn stream_human(
                     eprintln!("──────────────────────────────────────");
                 }
                 eprintln!("Suite: {passed} passed, {failed} failed  [{secs:.1}s]");
+            }
+            EventKind::InstallStarted { app_name, bundle_id, target, .. } => {
+                // Script may build + install, or just install (install-only mode).
+                // We can't tell which from events; "building and installing" covers both.
+                if use_color {
+                    eprintln!("  {dp}{DIM}[install {app_name}] building and installing {bundle_id} on {target}...{RESET}");
+                } else {
+                    eprintln!("  {dp}[install {app_name}] building and installing {bundle_id} on {target}...");
+                }
+            }
+            EventKind::InstallOutput { app_name, line } => {
+                // Only stream per-line script stderr under --debug.
+                // Otherwise the install is silent between "building..." and
+                // the final success/failure line.
+                if debug {
+                    if use_color {
+                        eprintln!("  {dp}{DIM}[install {app_name}]{RESET} {line}");
+                    } else {
+                        eprintln!("  {dp}[install {app_name}] {line}");
+                    }
+                }
+            }
+            EventKind::InstallFinished { app_name, bundle_id, success, duration_ms, error, target, .. } => {
+                let secs = *duration_ms as f64 / 1000.0;
+                if *success {
+                    if use_color {
+                        eprintln!("  {dp}{GREEN}{SYM_SUCCESS}{RESET} {DIM}[install {app_name}] installed {bundle_id} on {target}  [{secs:.1}s]{RESET}");
+                    } else {
+                        eprintln!("  {dp}{SYM_SUCCESS} [install {app_name}] installed {bundle_id} on {target}  [{secs:.1}s]");
+                    }
+                } else {
+                    let err = error.as_deref().unwrap_or("install failed");
+                    if use_color {
+                        eprintln!("  {dp}{BRIGHT_RED}{SYM_FAILED}{RESET} [install {app_name}] on {target} — {err}");
+                    } else {
+                        eprintln!("  {dp}{SYM_FAILED} [install {app_name}] on {target} — {err}");
+                    }
+                }
+            }
+            EventKind::FlowSkipped { flow_name, reason } => {
+                if use_color {
+                    eprintln!("  {dp}{YELLOW}{SYM_WARNING} SKIPPED{RESET}  {flow_name}  {DIM}{reason}{RESET}");
+                } else {
+                    eprintln!("  {dp}{SYM_WARNING} SKIPPED  {flow_name}  {reason}");
+                }
             }
             _ => {}
         }

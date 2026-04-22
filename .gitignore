@@ -41,3 +41,7 @@ dist/
 
 # Xcode build output
 companions/ios/build/
+
+# DerivedData produced by install scripts that build iOS apps via xcodebuild
+build/
+DerivedData/
