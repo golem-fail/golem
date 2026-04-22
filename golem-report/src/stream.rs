@@ -305,6 +305,48 @@ pub async fn stream_human(
                     eprintln!("  {dp}{SYM_WARNING} SKIPPED  {flow_name}  {reason}");
                 }
             }
+            EventKind::FlowParseFailed { path, error } => {
+                if use_color {
+                    eprintln!("  {BRIGHT_RED}Parse error{RESET} ({path}): {error}");
+                } else {
+                    eprintln!("  Parse error ({path}): {error}");
+                }
+            }
+            EventKind::DeviceAutoBoot { device_name, slot_shape } => {
+                if use_color {
+                    eprintln!("  {DIM}[devices] no booted match — booting {device_name} to satisfy {slot_shape}...{RESET}");
+                } else {
+                    eprintln!("  [devices] no booted match — booting {device_name} to satisfy {slot_shape}...");
+                }
+            }
+            EventKind::SlotSetupFailed { slot_label, reason } => {
+                if use_color {
+                    eprintln!("  {BRIGHT_RED}[slot] setup failed for {slot_label}:{RESET} {reason}");
+                } else {
+                    eprintln!("  [slot] setup failed for {slot_label}: {reason}");
+                }
+            }
+            EventKind::ResourcesWaiting { platform } => {
+                if use_color {
+                    eprintln!("  {dp}{DIM}[resources] waiting for {platform}...{RESET}");
+                } else {
+                    eprintln!("  {dp}[resources] waiting for {platform}...");
+                }
+            }
+            EventKind::CompanionStarting { platform, device_name } => {
+                if use_color {
+                    eprintln!("  {dp}{DIM}[companion] starting on {device_name} ({platform})...{RESET}");
+                } else {
+                    eprintln!("  {dp}[companion] starting on {device_name} ({platform})...");
+                }
+            }
+            EventKind::CompanionReady { platform, version, device_name, os_version } => {
+                if use_color {
+                    eprintln!("  {dp}{DIM}[companion] ready — {platform} v{version} on {device_name} ({os_version}){RESET}");
+                } else {
+                    eprintln!("  {dp}[companion] ready — {platform} v{version} on {device_name} ({os_version})");
+                }
+            }
             _ => {}
         }
     }

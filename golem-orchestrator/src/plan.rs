@@ -60,6 +60,18 @@ pub struct ParsedSuite {
     /// plan-time snapshot (total, booted, shutdown). Diagnostic; surfaces
     /// via the `SuitePlanned` event for `--verbose` display.
     pub device_availability: Vec<String>,
+    /// Flows whose file could not be read, parsed, or mixin-expanded.
+    /// Kept out of `flows` / `flow_runs` so a single bad file doesn't abort
+    /// the suite — the scheduler converts each entry into a failed
+    /// FlowReport.
+    pub parse_failures: Vec<ParseFailure>,
+}
+
+/// A flow file that failed to load before the Plan could expand it.
+#[derive(Debug, Clone)]
+pub struct ParseFailure {
+    pub path: PathBuf,
+    pub error: String,
 }
 
 /// Parse flows, merge project apps, discover a device snapshot (for
@@ -71,20 +83,15 @@ pub async fn plan(
     platform_override: Option<Platform>,
 ) -> Result<ParsedSuite> {
     let mut flows: Vec<ParsedFlow> = Vec::with_capacity(flow_paths.len());
+    let mut parse_failures: Vec<ParseFailure> = Vec::new();
     for path in flow_paths {
-        let text = std::fs::read_to_string(path)
-            .with_context(|| format!("reading flow file {}", path.display()))?;
-        let mut flow = parse_flow(&text)
-            .with_context(|| format!("parsing flow file {}", path.display()))?;
-        merge_project_apps(&mut flow, project_apps);
-
-        let flow_dir = path.parent().unwrap_or(Path::new("."));
-        for block in &mut flow.block {
-            block.steps = expand_mixins(&block.steps, flow_dir, project_root)
-                .with_context(|| format!("expanding mixins in {}", path.display()))?;
+        match parse_one(path, project_apps, project_root) {
+            Ok(flow) => flows.push(ParsedFlow { path: path.clone(), flow }),
+            Err(e) => parse_failures.push(ParseFailure {
+                path: path.clone(),
+                error: format!("{e:#}"),
+            }),
         }
-
-        flows.push(ParsedFlow { path: path.clone(), flow });
     }
 
     let snapshot = device_snapshot().await;
@@ -97,7 +104,35 @@ pub async fn plan(
     let install_matrix = build_install_matrix(&flows, &flow_runs, project_root);
     let device_availability = compute_device_availability(&flow_runs, &snapshot);
 
-    Ok(ParsedSuite { flows, flow_runs, install_matrix, device_availability })
+    Ok(ParsedSuite {
+        flows,
+        flow_runs,
+        install_matrix,
+        device_availability,
+        parse_failures,
+    })
+}
+
+/// Read + parse + merge + mixin-expand one flow file. Returns an error for
+/// any of the three steps so `plan()` can bucket the failure.
+fn parse_one(
+    path: &Path,
+    project_apps: &[ProjectAppConfig],
+    project_root: &Path,
+) -> Result<FlowFile> {
+    let text = std::fs::read_to_string(path)
+        .with_context(|| format!("reading flow file {}", path.display()))?;
+    let mut flow = parse_flow(&text)
+        .with_context(|| format!("parsing flow file {}", path.display()))?;
+    merge_project_apps(&mut flow, project_apps);
+
+    let flow_dir = path.parent().unwrap_or(Path::new("."));
+    for block in &mut flow.block {
+        block.steps = expand_mixins(&block.steps, flow_dir, project_root)
+            .with_context(|| format!("expanding mixins in {}", path.display()))?;
+    }
+
+    Ok(flow)
 }
 
 /// For each unique slot shape across all FlowRuns, count how many devices
@@ -765,6 +800,34 @@ mod tests {
             .map(|e| e.bundle_id.clone())
             .collect();
         assert_eq!(bundles, vec!["com.b".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn plan_bad_flow_moves_to_parse_failures_not_error() {
+        let tmp = TempDir::new().unwrap();
+        let good = write_flow(tmp.path(), "good.test.toml", r#"
+            [flow]
+            name = "good"
+            [[flow.apps]]
+            name = "a"
+            [[flow.apps.devices]]
+            os = "ios"
+        "#);
+        let missing = tmp.path().join("does-not-exist.test.toml");
+        let bad_syntax = write_flow(tmp.path(), "bad.test.toml", "this is not [[[valid toml");
+        let apps = vec![project_app("a", "com.a", None)];
+        let suite = plan(&[good, missing.clone(), bad_syntax.clone()], &apps, tmp.path(), None)
+            .await
+            .expect("plan SHALL succeed even when some files fail to parse");
+        assert_eq!(suite.flows.len(), 1, "only the parseable flow SHALL remain");
+        assert_eq!(
+            suite.parse_failures.len(),
+            2,
+            "both the missing file and the bad-syntax file SHALL be in parse_failures",
+        );
+        let paths: Vec<_> = suite.parse_failures.iter().map(|f| f.path.clone()).collect();
+        assert!(paths.contains(&missing));
+        assert!(paths.contains(&bad_syntax));
     }
 
     #[tokio::test]

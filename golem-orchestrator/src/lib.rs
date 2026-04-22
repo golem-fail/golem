@@ -25,5 +25,5 @@ pub mod plan;
 pub use install_matrix::{build_install_matrix, InstallEntry};
 pub use plan::{
     describe_slot, device_matches_slot, merge_project_apps, plan, shape_label, DeviceSlot,
-    FlowRun, ParsedFlow, ParsedSuite,
+    FlowRun, ParseFailure, ParsedFlow, ParsedSuite,
 };

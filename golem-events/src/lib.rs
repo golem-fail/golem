@@ -207,6 +207,58 @@ pub enum EventKind {
         flow_name: String,
         reason: String,
     },
+
+    // ── Setup narrative ──
+    //
+    // These cover the pre-flow diagnostic strings the scheduler and
+    // per-slot setup used to write directly to stderr. Emitting them
+    // as events lets the orchestrator forwarder relay them to remote
+    // clients instead of swallowing them on the server terminal.
+    //
+    // Device identity on each variant: suite-level ones (Parse, AutoBoot,
+    // SlotSetupFailed) use the sentinel `"suite"`; device-tied ones
+    // (CompanionStarting, CompanionReady, ResourcesWaiting) use the
+    // standard `{platform}/{device.name}` label so multi-device consumers
+    // attribute them correctly.
+    /// A flow file could not be read, parsed, or mixin-expanded.
+    FlowParseFailed {
+        path: String,
+        error: String,
+    },
+    /// No booted device matched a slot; scheduler is booting a shutdown
+    /// one to satisfy it.
+    DeviceAutoBoot {
+        device_name: String,
+        /// Pre-formatted slot shape, e.g. `ios/v26/phone`.
+        slot_shape: String,
+    },
+    /// A slot couldn't acquire a device, companion, or allocation and was
+    /// skipped. The worker still emits a failed FlowReport; this event
+    /// surfaces the reason to live consumers.
+    SlotSetupFailed {
+        /// Pre-formatted slot descriptor including apps.
+        slot_label: String,
+        reason: String,
+    },
+    /// Allocation backoff: RAM + max-concurrency caps are full, waiting
+    /// for another device to release.
+    ResourcesWaiting {
+        platform: String,
+    },
+    /// Companion binary has been launched and we're waiting for it to
+    /// register + health-check.
+    CompanionStarting {
+        platform: String,
+        device_name: String,
+    },
+    /// Companion finished health check and is ready to accept driver
+    /// requests.
+    CompanionReady {
+        platform: String,
+        version: String,
+        device_name: String,
+        os_version: String,
+    },
 }
 
 // ── Substep events ──

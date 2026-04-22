@@ -126,25 +126,20 @@ Bundle of small follow-ups from the first code review of the Plan → Execute re
 
 ## Dynamic JIT Scheduler — Device Reuse, Lazy Install
 
-Today's Execute phase is phased: (1) install on every platform, (2) start every companion, (3) spawn all flow tasks. iOS flows wait for Android install + Android companion even though iOS is already ready. Install happens eagerly for every (device, app) in the matrix, even if the suite only needs a few devices.
+**Status:** shipped. First pass executes every `FlowRun` as its own worker and saturates booted devices through the `ResourceManager`. Coverage fan-out (`ios:latest:N`, `os = [...]`, `type = [...]`) now drains properly — Plan emits N FlowRuns, the scheduler consumes all N. Parse failures surface as failed FlowReports (the suite no longer aborts on a single bad file). Further optimisations deferred below.
 
-**Target model — scheduler loop:**
+**What shipped:**
+- `execute_flow_run(FlowRun)` is the queue unit; `run_suite` spawns one tokio task per FlowRun.
+- Per-slot setup (`setup_slot`) runs lazily inside the worker: `find_available_device` → `preinstall_for_device_scoped` → companion reuse-or-spawn → `try_allocate` wait → health check.
+- One suite-level event channel + one registration server, shared by every worker (previously a multi-flow suite opened one registration server per flow).
+- `ParsedSuite.parse_failures` carries any flow that failed to read/parse/mixin-expand; each becomes a failed `FlowReport` without blocking unrelated runs.
 
-- Queue of unstarted `FlowRun`s (ordered; can be stable-sorted by priority later).
-- Worker pool gated by `max_concurrency` + RAM.
-- Each worker pops a FlowRun → finds a free device matching the slot requirements → executes.
-- **Device selection preference:** prefer a free device that already has the required app installed (zero-cost reuse) over picking a fresh one that needs an install. This matters when a suite does many FlowRuns of the same `(platform, app)` shape.
-- **JIT install:** before executing, check `install_cache[(udid, bundle)]`. Missing → run install script now. Hit → skip.
-- Flow runs → releases device → next FlowRun from queue picks it up (with the install now cached).
+**Still to do (separate items):**
+- **Install-cache-hit preference** when picking a free device. Today `find_available_device` picks the first free match; sorting by `install_cache[(udid, bundle)]` hits would save build-once-per-device in suites with many same-shape FlowRuns. Cheap follow-up.
+- **Build-once install cache (§ Install Cache: Build-Once, Install-to-Many)** still benefits the most once multiple devices run simultaneously on the same platform.
+- **Boot-on-demand (§ True Parallel Flow × Device Concurrency)** — when queue has pending FlowRuns, all matching devices are busy, and RAM permits, boot another sim. Not yet wired; today's setup boots the single best shutdown sim once, per slot.
 
-**Why this wins:**
-- First iOS FlowRun can start while Android install is still running (installs are still serialized by `project_lock`, but flow execution is no longer gated by other platforms' setup).
-- A suite of 20 FlowRuns on 5 `ios:26` sims runs 5 in parallel, next 15 reuse the 5 as they free up — install script runs at most 5 times (once per distinct device).
-- Pairs cleanly with boot-on-demand (roadmap: True Parallel Flow × Device Concurrency) — scheduler can trigger a boot when queue has pending FlowRuns and RAM headroom permits.
-
-**Depends on:** [Suite Orchestration: Plan → Execute Model](#suite-orchestration-plan--execute-model) (done).
-
-**Files:** rewrite of the Execute half of `golem-cli/src/suite.rs::run_single_flow_with_resources` + `run_suite` to a single scheduler loop that consumes `parsed.flow_runs`. Keep existing `InstallCache` and `ResourceManager` as-is. May end up naturally living in `golem-orchestrator` once [Migrate SuiteRunner + IPC](#migrate-suiterunner--ipc-into-golem-orchestrator) lands.
+**Files:** `golem-cli/src/suite.rs` (`execute_flow_run`, `setup_slot`, `preinstall_for_device_scoped`, rewritten `run_suite`), `golem-orchestrator/src/plan.rs` (`ParseFailure` + `parse_one`).
 
 ## Coverage Multiplier Syntax (`ios:latest:2`)
 
@@ -286,6 +281,20 @@ Intended usage: a `fake:email(ethereal=true)` parameter or a dedicated `fake:eth
 This needs design work before implementation. The full email verification flow spans multiple concerns: creating the inbox, sending the email (via the app under test), polling for arrival, extracting content (verification URLs, OTP codes), and feeding extracted values back into the flow as variables. The `await_email` action already has `extract` (regex patterns) and `save_to`, but the end-to-end ergonomics — how a test author wires up `fake:email` → app signup → `await_email` → `open_link` — need to be planned as a cohesive feature.
 
 Files: `golem-email/src/ethereal.rs`, `golem-email/src/imap_poller.rs`.
+
+## Event Timestamps in Output
+
+`Event`s already carry `timestamp: Instant` on the wire envelope (not serialized) and every `emit` stamps them monotonically. We don't surface time anywhere in rendered output.
+
+Desired surfacing per format:
+
+- **Human stream (`stream_human`)**: show time-of-day (no date) on key transitions — flow start/finish, step start/finish, install finished, setup-narrative lines. `HH:MM:SS` or `HH:MM:SS.mmm`. Helps skim live output without needing a wall clock.
+- **JSON / JUnit**: include full ISO-8601 datetime where it's meaningful — flow start, flow finish, install start/finish, suite start/finish. Consumers doing analytics want a real timestamp, not elapsed ms.
+- **TOON**: compactness matters. To be discussed — likely a single suite-level `start` unix timestamp + per-event `delta_ms` relative to suite start. A 30-minute suite is a 7-digit ms delta, versus 16+ chars per ISO-8601 string.
+
+Accumulator already stores per-step `duration_ms` in step reports; this is about **absolute** time, not intervals. Needs to thread `Instant`s into the accumulator alongside existing fields (or capture a suite-start `SystemTime` once and compute absolute times for each event at render time from the stored `Instant`).
+
+**Files:** `golem-events/src/lib.rs` (ensure envelope carries what renderers need), `golem-report/src/stream.rs` (human format), `golem-report/src/output.rs` (JSON/JUnit/TOON serializers).
 
 ## iOS WebView: Slow Element Resolution Between Consecutive Actions
 
