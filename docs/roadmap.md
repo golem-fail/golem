@@ -16,43 +16,13 @@ Without this, physical device test runs still work but WebView elements lack enr
 
 Requires access to a physical iOS device for development and testing.
 
-## Device Resolution: `ios:latest` Prefers Booted Over Newest Version
+## `create_if_missing` Honours Slot Constraints
 
-**Status:** resolver layer fixed. End-to-end still broken — see [Scheduler Ignores DeviceSlot.os_version](#scheduler-ignores-deviceslotos_version) below.
+`find_available_device` falls back to `auto_create_device(platform, DeviceType::Phone, …)` when no compatible device exists and `create_if_missing = true` is set in flow options. The hardcoded `Phone` default ignores the slot's `device_type` + `os_version`, so a flow needing an iPad or a specific iOS major will get a phone on latest.
 
-`resolver.rs` used to sort candidates by state preference (booted > shutdown) **before** filtering to `:latest`. With iOS 18 booted and iOS 26 shutdown, `os = "ios:latest"` picked iOS 18.
+**Fix:** pass `slot.device_type` and `slot.os_version` into the create path. Small, isolated.
 
-**Fix shipped:** `resolve_devices` now expands `:latest` / `:latest:N` strings into concrete `platform:major` entries using `resolve_latest()` against the available-device snapshot *before* the greedy loop runs. Version is pinned first; state preference tie-breaks only within the chosen major.
-
-**Files:** `golem-devices/src/resolver.rs` (`expand_latest_in_constraint`), tests added covering highest-version-over-booted-older, within-version state tie-break, `:latest:N`, empty-platform fallback.
-
-## Scheduler Ignores `DeviceSlot.os_version`
-
-**Status:** fixed for the single-slot-per-platform case.
-
-Plan emitted `DeviceSlot { platform: Ios, os_version: Some(Exact(26)), … }` but Execute's `find_available_device` filtered by platform only, picking iPhone 16e (v18) over a v26 match.
-
-**Fix shipped:**
-- `SuiteRunner` now stores `flow_paths: Arc<Vec<PathBuf>>` + `flow_runs: Arc<Vec<FlowRun>>` populated by `run_suite` after `plan()`. Multi-flow spawn threads both Arcs into each child runner.
-- `run_single_flow_with_resources` looks up the current path's `flow_idx`, and for each platform picks the first matching `DeviceSlot` out of that flow's FlowRuns.
-- `find_available_device` takes `Option<&DeviceSlot>`; `compatible` / `booted` / `shutdown` are all filtered via `device_matches_slot` (platform, os_version Exact/Minimum, device_type, physical, name). Shutdown auto-boot now only picks within the filtered set.
-- `device_matches_slot` promoted to `pub` so Plan and Execute agree on "matches".
-
-**Known remaining gaps (separate items):**
-- Coverage fan-out (`:latest:N`, `os = [...]`, `type = [...]`) still runs once per platform — Plan emits N FlowRuns but Execute consumes one per platform. Tracked by [Coverage Multiplier Syntax](#coverage-multiplier-syntax-ioslatest2) + [Dynamic JIT Scheduler](#dynamic-jit-scheduler--device-reuse-lazy-install).
-- `create_if_missing` synthesis path uses `DeviceType::Phone` default; should honour `slot.device_type` + `slot.os_version`.
-
-**Files:** `golem-orchestrator/src/{plan.rs,lib.rs}` (pub `device_matches_slot`), `golem-cli/src/suite.rs` (runner state, run_suite populate, slot lookup, `find_available_device` signature).
-
-## FailureBarrier Across Multi-Flow Concurrency
-
-`FailureBarrier` (`golem-runner/src/barrier.rs`) coordinates devices within a single flow — device A fails at step 7, devices B/C abort at step ≥7.
-
-With multi-flow parallelism the scope needs to stay per-flow: failure on `flow_a/ios` should abort `flow_a/android` but NOT `flow_b/ios`. Current barrier is per-flow, cloned to device tasks — should still work but needs doc clarity and a regression test.
-
-**Action:** Keep barrier per-flow. Document semantics. Add test covering 2 flows × 2 devices where one flow fails; verify other flow completes unaffected.
-
-**Files:** `golem-runner/src/barrier.rs` (doc comments), new test under `golem-runner/tests/`.
+**Files:** `golem-cli/src/suite.rs` (auto-create call site), possibly `golem-devices/src/lifecycle.rs` if the helper signature needs widening.
 
 ## True Parallel Flow × Device Concurrency
 
@@ -89,25 +59,6 @@ Currently the install cache is keyed per `(device_udid, bundle_id)`: the user's 
 
 **Files:** `golem-runner/src/installer.rs` (split cache types), `golem-cli/src/suite.rs` (first-build-winner coordination).
 
-## Suite Orchestration: Plan → Execute Model
-
-Today's orchestration is implicit and per-flow: each flow parses itself, resolves its own devices, runs its own install, spawns its own companion. The suite has no central view. This makes layering in other roadmap items (multiplier syntax, boot-on-demand, cross-process dedup) painful.
-
-**Plan phase (sync, once at suite start):**
-- Parse all flow files; merge with project `[[apps]]` defaults
-- Call existing `golem-devices::resolver::MinCoverage` per flow to resolve devices
-- Emit `ParsedSuite { flows, flow_runs, install_matrix }`
-- `install_matrix` is the union of apps **referenced by some flow**, keyed by `(platform, bundle)` — apps in `golem.toml [[apps]]` not referenced by any flow are dropped entirely
-
-**Execute phase (async):**
-- Iterate `flow_runs`, acquire device via `ResourceManager`
-- Pre-install only `install_matrix` entries applicable to this device + platform
-- Ensure companion (reuse if healthy), execute flow, release device
-
-**Status:** implemented as a new `golem-orchestrator` crate housing `plan.rs` + `install_matrix.rs`. `SuiteRunner` rewired to consume `ParsedSuite` instead of raw flow paths.
-
-**Files:** `golem-orchestrator/src/{plan.rs,install_matrix.rs}` (new crate), `golem-cli/src/suite.rs` (rewire `run_suite`), `golem-cli/src/main.rs` (call `plan()` before `run_suite`).
-
 ## Orchestrator Hardening — Review Follow-ups
 
 Bundle of small follow-ups from the first code review of the Plan → Execute refactor. None are correctness-critical today but worth batching into one clean-up pass:
@@ -124,22 +75,13 @@ Bundle of small follow-ups from the first code review of the Plan → Execute re
 
 **Files:** mostly `golem-cli/src/suite.rs`, `golem-orchestrator/src/plan.rs`, `golem-orchestrator/src/install_matrix.rs`, `golem-events/src/lib.rs` (doc comments).
 
-## Dynamic JIT Scheduler — Device Reuse, Lazy Install
+## Scheduler Prefers Install-Cache-Hit Devices
 
-**Status:** shipped. First pass executes every `FlowRun` as its own worker and saturates booted devices through the `ResourceManager`. Coverage fan-out (`ios:latest:N`, `os = [...]`, `type = [...]`) now drains properly — Plan emits N FlowRuns, the scheduler consumes all N. Parse failures surface as failed FlowReports (the suite no longer aborts on a single bad file). Further optimisations deferred below.
+When picking a free device for a new FlowRun, `find_available_device` currently returns the first free match. For suites with many same-shape FlowRuns, preferring a device whose `install_cache[(udid, bundle)]` is already `Succeeded` saves re-invoking the install script on a fresh device. Matters whenever more than one matching device is booted.
 
-**What shipped:**
-- `execute_flow_run(FlowRun)` is the queue unit; `run_suite` spawns one tokio task per FlowRun.
-- Per-slot setup (`setup_slot`) runs lazily inside the worker: `find_available_device` → `preinstall_for_device_scoped` → companion reuse-or-spawn → `try_allocate` wait → health check.
-- One suite-level event channel + one registration server, shared by every worker (previously a multi-flow suite opened one registration server per flow).
-- `ParsedSuite.parse_failures` carries any flow that failed to read/parse/mixin-expand; each becomes a failed `FlowReport` without blocking unrelated runs.
+**Fix:** sort `booted` candidates by cache-hit count across the FlowRun's slot apps before returning.
 
-**Still to do (separate items):**
-- **Install-cache-hit preference** when picking a free device. Today `find_available_device` picks the first free match; sorting by `install_cache[(udid, bundle)]` hits would save build-once-per-device in suites with many same-shape FlowRuns. Cheap follow-up.
-- **Build-once install cache (§ Install Cache: Build-Once, Install-to-Many)** still benefits the most once multiple devices run simultaneously on the same platform.
-- **Boot-on-demand (§ True Parallel Flow × Device Concurrency)** — when queue has pending FlowRuns, all matching devices are busy, and RAM permits, boot another sim. Not yet wired; today's setup boots the single best shutdown sim once, per slot.
-
-**Files:** `golem-cli/src/suite.rs` (`execute_flow_run`, `setup_slot`, `preinstall_for_device_scoped`, rewritten `run_suite`), `golem-orchestrator/src/plan.rs` (`ParseFailure` + `parse_one`).
+**Files:** `golem-cli/src/suite.rs` (`find_available_device` + caller access to `install_cache`).
 
 ## Coverage Multiplier Syntax (`ios:latest:2`)
 
@@ -197,7 +139,7 @@ Orchestrator mode (`golem-cli/src/orchestrator.rs`) lets a second `golem run` of
 
 ## Migrate SuiteRunner + IPC into `golem-orchestrator`
 
-Natural follow-up to [Suite Orchestration: Plan → Execute Model](#suite-orchestration-plan--execute-model). Today `SuiteRunner` lives in `golem-cli/src/suite.rs` and IPC logic in `golem-cli/src/orchestrator.rs`. Both belong in the orchestrator crate once the Execute engine stabilises — cleanly separates glue (CLI arg parsing, output rendering) from core (suite execution, multi-process coordination).
+`SuiteRunner` lives in `golem-cli/src/suite.rs` and IPC logic in `golem-cli/src/orchestrator.rs`. Both belong in the orchestrator crate — cleanly separates glue (CLI arg parsing, output rendering) from core (suite execution, multi-process coordination).
 
 **Files:** move `golem-cli/src/suite.rs` → `golem-orchestrator/src/suite.rs`; move `golem-cli/src/orchestrator.rs` → `golem-orchestrator/src/ipc.rs`.
 
@@ -214,7 +156,7 @@ share_device = false     # opt out of packing — a gets its own device
 
 **Implementation:** add `share_device: Option<bool>` (default = true) to `AppConfig` in golem-parser. The `golem-orchestrator` Plan generator honours it when building slot groupings — an app with `share_device = false` always gets its own `DeviceSlot`.
 
-**Ties in with:** [Suite Orchestration: Plan → Execute Model](#suite-orchestration-plan--execute-model) — builds on the slots-based `FlowRun`.
+**Where it lands:** the Plan generator already groups `[[flow.apps]]` into `DeviceSlot`s; `share_device = false` becomes an input to that grouping pass.
 
 ## Multi-Device Flow Coordination (Chat Tests)
 
@@ -225,7 +167,7 @@ Some flows use two apps on two different devices that must run together (chat cl
 - Execute phase acquires ALL slots' devices before starting the flow; runs the flow with multi-device context (flow steps can `{ action = "launch", app = "b" }` to switch focus between devices).
 - Device release happens after the whole FlowRun completes, not per-slot.
 
-**Depends on:** [Suite Orchestration: Plan → Execute Model](#suite-orchestration-plan--execute-model) (the slots struct exists) + clarification on flow-step semantics across devices (which device is "current" at each step).
+**Depends on:** clarification of flow-step semantics across devices — which device is "current" at each step, how `{ action = "launch", app = "b" }` switches focus, how assertions scope. The slot infrastructure already exists; the missing piece is step-level semantics.
 
 ## Reconcile `[[flow.apps]]` Implementation with Original Spec
 
@@ -282,19 +224,15 @@ This needs design work before implementation. The full email verification flow s
 
 Files: `golem-email/src/ethereal.rs`, `golem-email/src/imap_poller.rs`.
 
-## Event Timestamps in Output
+## TOON Timestamp Representation
 
-`Event`s already carry `timestamp: Instant` on the wire envelope (not serialized) and every `emit` stamps them monotonically. We don't surface time anywhere in rendered output.
+Human, JSON, and JUnit outputs already emit wall-clock timestamps (local `HH:MM:SS.mmm` prefix for human; ISO-8601 UTC on every report level for JSON/JUnit). TOON is intentionally left out — its compactness-first design would bloat meaningfully with full ISO-8601 strings (16+ chars) per entry.
 
-Desired surfacing per format:
+**Open proposal:** emit a single suite-level `start` unix-epoch timestamp once, then per-event `delta_ms` relative to suite start. A 30-minute suite = 7-digit delta; easy to reconstruct absolute time from `start + delta_ms`.
 
-- **Human stream (`stream_human`)**: show time-of-day (no date) on key transitions — flow start/finish, step start/finish, install finished, setup-narrative lines. `HH:MM:SS` or `HH:MM:SS.mmm`. Helps skim live output without needing a wall clock.
-- **JSON / JUnit**: include full ISO-8601 datetime where it's meaningful — flow start, flow finish, install start/finish, suite start/finish. Consumers doing analytics want a real timestamp, not elapsed ms.
-- **TOON**: compactness matters. To be discussed — likely a single suite-level `start` unix timestamp + per-event `delta_ms` relative to suite start. A 30-minute suite is a 7-digit ms delta, versus 16+ chars per ISO-8601 string.
+Needs a concrete schema decision before implementing. Today TOON emits `duration_ms` only.
 
-Accumulator already stores per-step `duration_ms` in step reports; this is about **absolute** time, not intervals. Needs to thread `Instant`s into the accumulator alongside existing fields (or capture a suite-start `SystemTime` once and compute absolute times for each event at render time from the stored `Instant`).
-
-**Files:** `golem-events/src/lib.rs` (ensure envelope carries what renderers need), `golem-report/src/stream.rs` (human format), `golem-report/src/output.rs` (JSON/JUnit/TOON serializers).
+**Files:** `golem-report/src/toon.rs` once schema is agreed.
 
 ## iOS WebView: Slow Element Resolution Between Consecutive Actions
 

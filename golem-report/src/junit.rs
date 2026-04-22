@@ -110,29 +110,41 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
     let errors = 0;
     let time = ms_to_secs(report.duration_ms);
     let flow_name = xml_escape(&report.flow_name);
+    // `timestamp` on <testsuite> is standard (surefire/ant-junit schema);
+    // on <testcase> it's a widely-accepted extension (Jenkins/GitLab).
+    let suite_ts = report
+        .started_at
+        .as_deref()
+        .map(|s| format!(" timestamp=\"{}\"", xml_escape(s)))
+        .unwrap_or_default();
 
     let _ = writeln!(
         out,
         "  <testsuite name=\"{flow_name}\" tests=\"{total_tests}\" \
-         failures=\"{failures}\" errors=\"{errors}\" time=\"{time}\">"
+         failures=\"{failures}\" errors=\"{errors}\" time=\"{time}\"{suite_ts}>"
     );
 
     for step in &report.step_results {
         let name = xml_escape(&step_name(&step.action, &step.target));
         let step_time = ms_to_secs(step.duration_ms);
         let substep_text = format_substeps_text(&step.substeps);
+        let step_ts = step
+            .started_at
+            .as_deref()
+            .map(|s| format!(" timestamp=\"{}\"", xml_escape(s)))
+            .unwrap_or_default();
 
         match &step.outcome {
             StepOutcome::Success => {
                 if substep_text.is_empty() {
                     let _ = writeln!(
                         out,
-                        "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\"/>"
+                        "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\"{step_ts}/>"
                     );
                 } else {
                     let _ = writeln!(
                         out,
-                        "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\">"
+                        "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\"{step_ts}>"
                     );
                     let _ = writeln!(out, "      <system-out>{}</system-out>", xml_escape(&substep_text));
                     let _ = writeln!(out, "    </testcase>");
@@ -142,7 +154,7 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
                 let escaped_msg = xml_escape(msg);
                 let _ = writeln!(
                     out,
-                    "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\">"
+                    "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\"{step_ts}>"
                 );
                 let combined = if substep_text.is_empty() {
                     escaped_msg.clone()
@@ -156,7 +168,7 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
                 let escaped_msg = xml_escape(msg);
                 let _ = writeln!(
                     out,
-                    "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\">"
+                    "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\"{step_ts}>"
                 );
                 let failure_detail = if substep_text.is_empty() {
                     format!("Step failed: {name} - {escaped_msg}")
@@ -174,7 +186,7 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
             StepOutcome::Skipped => {
                 let _ = writeln!(
                     out,
-                    "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\">"
+                    "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\"{step_ts}>"
                 );
                 let _ = writeln!(out, "      <skipped/>");
                 let _ = writeln!(out, "    </testcase>");
@@ -265,18 +277,32 @@ pub fn format_suite_junit(report: &SuiteReport) -> String {
     // Install results as a separate testsuite so CI tools can surface them.
     if !report.installs.is_empty() {
         let install_time: u64 = report.installs.iter().map(|i| i.duration_ms).sum();
+        // Use the earliest install's started_at as the install suite's
+        // timestamp — closest thing to a meaningful suite start.
+        let install_suite_ts = report
+            .installs
+            .iter()
+            .filter_map(|i| i.started_at.as_deref())
+            .min()
+            .map(|s| format!(" timestamp=\"{}\"", xml_escape(s)))
+            .unwrap_or_default();
         let _ = writeln!(
             out,
-            "  <testsuite name=\"install\" tests=\"{}\" failures=\"{}\" errors=\"0\" time=\"{}\">",
+            "  <testsuite name=\"install\" tests=\"{}\" failures=\"{}\" errors=\"0\" time=\"{}\"{install_suite_ts}>",
             install_tests, install_failures, ms_to_secs(install_time)
         );
         for inst in &report.installs {
             let classname = xml_escape(&inst.device_name);
             let name = xml_escape(&format!("{} ({})", inst.app_name, inst.bundle_id));
             let time = ms_to_secs(inst.duration_ms);
+            let inst_ts = inst
+                .started_at
+                .as_deref()
+                .map(|s| format!(" timestamp=\"{}\"", xml_escape(s)))
+                .unwrap_or_default();
             let _ = writeln!(
                 out,
-                "    <testcase classname=\"{classname}\" name=\"{name}\" time=\"{time}\">"
+                "    <testcase classname=\"{classname}\" name=\"{name}\" time=\"{time}\"{inst_ts}>"
             );
             if !inst.success {
                 let msg = inst.error.as_deref().unwrap_or("install failed");
@@ -321,6 +347,8 @@ mod tests {
             screenshot_path: None,
             substeps: vec![],
             tree_stats: golem_events::TreeStats::default(),
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -337,6 +365,8 @@ mod tests {
             screenshot_path: None,
             substeps: vec![],
             tree_stats: golem_events::TreeStats::default(),
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -353,6 +383,8 @@ mod tests {
             screenshot_path: None,
             substeps: vec![],
             tree_stats: golem_events::TreeStats::default(),
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -369,6 +401,8 @@ mod tests {
             screenshot_path: None,
             substeps: vec![],
             tree_stats: golem_events::TreeStats::default(),
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -391,6 +425,8 @@ mod tests {
             device_name: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -411,6 +447,8 @@ mod tests {
                     device_name: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
+                    started_at: None,
+                    finished_at: None,
                 },
                 FlowReport {
                     flow_name: "signup_flow".to_string(),
@@ -426,10 +464,14 @@ mod tests {
                     device_name: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
+                    started_at: None,
+                    finished_at: None,
                 },
             ],
             installs: Vec::new(),
             total_duration_ms: 45300,
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -548,6 +590,8 @@ mod tests {
             device_name: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         };
         let xml = format_flow_junit(&flow);
         assert!(
@@ -571,6 +615,8 @@ mod tests {
             device_name: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         };
         let xml = format_flow_junit(&flow);
         // Flow-level time: 120ms -> 0.120
@@ -607,6 +653,8 @@ mod tests {
             device_name: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         };
         let xml = format_flow_junit(&flow);
 
@@ -725,6 +773,8 @@ mod tests {
             device_name: None,
             perf_snapshots: vec![sample_perf_snapshot()],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         };
 
         let xml = format_flow_junit(&flow);
@@ -749,6 +799,8 @@ mod tests {
             device_name: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         };
 
         let xml = format_flow_junit(&flow);
@@ -850,6 +902,8 @@ mod tests {
             flows: vec![],
             installs: Vec::new(),
             total_duration_ms: 0,
+            started_at: None,
+            finished_at: None,
         };
         let xml = format_suite_junit(&suite);
         assert!(xml.contains("<?xml"));

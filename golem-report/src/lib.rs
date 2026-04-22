@@ -212,6 +212,11 @@ pub struct StepReport {
     pub substeps: Vec<SubstepDetail>,
     /// Tree fetch statistics for this step.
     pub tree_stats: golem_events::TreeStats,
+    /// ISO-8601 UTC wall-clock when the step started, if the report was
+    /// built from a live event stream (None if synthesized directly).
+    pub started_at: Option<String>,
+    /// ISO-8601 UTC wall-clock when the step finished.
+    pub finished_at: Option<String>,
 }
 
 /// Possible outcomes for a single step.
@@ -275,6 +280,10 @@ pub struct FlowReport {
     pub device_name: Option<String>,
     /// Performance snapshots captured at block boundaries.
     pub perf_snapshots: Vec<PerfSnapshot>,
+    /// ISO-8601 UTC wall-clock when the flow started.
+    pub started_at: Option<String>,
+    /// ISO-8601 UTC wall-clock when the flow finished.
+    pub finished_at: Option<String>,
 }
 
 /// Install script result (per `(device, bundle)` across the whole suite).
@@ -287,6 +296,10 @@ pub struct InstallReport {
     pub duration_ms: u64,
     pub exit_code: Option<i32>,
     pub error: Option<String>,
+    /// ISO-8601 UTC wall-clock when the install started.
+    pub started_at: Option<String>,
+    /// ISO-8601 UTC wall-clock when the install finished.
+    pub finished_at: Option<String>,
 }
 
 /// Result of an entire test suite (multiple flows).
@@ -298,6 +311,10 @@ pub struct SuiteReport {
     pub installs: Vec<InstallReport>,
     /// Total wall-clock duration in milliseconds.
     pub total_duration_ms: u64,
+    /// ISO-8601 UTC wall-clock when the suite started (first observed event).
+    pub started_at: Option<String>,
+    /// ISO-8601 UTC wall-clock when the suite finished.
+    pub finished_at: Option<String>,
 }
 
 // ── Tests ────────────────────────────────────────────────────────────

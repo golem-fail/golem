@@ -257,6 +257,8 @@ mod tests {
             screenshot_path: None,
             substeps: vec![],
             tree_stats: golem_events::TreeStats::default(),
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -273,6 +275,8 @@ mod tests {
             screenshot_path: None,
             substeps: vec![],
             tree_stats: golem_events::TreeStats::default(),
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -289,6 +293,8 @@ mod tests {
             screenshot_path: None,
             substeps: vec![],
             tree_stats: golem_events::TreeStats::default(),
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -305,6 +311,8 @@ mod tests {
             screenshot_path: None,
             substeps: vec![],
             tree_stats: golem_events::TreeStats::default(),
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -327,6 +335,8 @@ mod tests {
             device_name: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -404,6 +414,8 @@ mod tests {
             device_name: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         };
         let out = format_flow_toon(&report);
         let last_line = out.lines().last().expect("should have lines");
@@ -439,6 +451,8 @@ mod tests {
                     device_name: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
+                    started_at: None,
+                    finished_at: None,
                 },
                 FlowReport {
                     flow_name: "signup_flow".to_string(),
@@ -454,10 +468,14 @@ mod tests {
                     device_name: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
+                    started_at: None,
+                    finished_at: None,
                 },
             ],
             installs: Vec::new(),
             total_duration_ms: 45300,
+            started_at: None,
+            finished_at: None,
         };
 
         let out = format_suite_toon(&suite);
@@ -482,6 +500,8 @@ mod tests {
                     device_name: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
+                    started_at: None,
+                    finished_at: None,
                 },
                 FlowReport {
                     flow_name: "flow_b".to_string(),
@@ -494,6 +514,8 @@ mod tests {
                     device_name: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
+                    started_at: None,
+                    finished_at: None,
                 },
                 FlowReport {
                     flow_name: "flow_c".to_string(),
@@ -508,10 +530,14 @@ mod tests {
                     device_name: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
+                    started_at: None,
+                    finished_at: None,
                 },
             ],
             installs: Vec::new(),
             total_duration_ms: 600,
+            started_at: None,
+            finished_at: None,
         };
 
         let out = format_suite_toon(&suite);
@@ -673,6 +699,8 @@ mod tests {
             device_name: None,
             perf_snapshots: vec![sample_perf_snapshot()],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         };
 
         let out = format_flow_toon(&report);
@@ -696,6 +724,8 @@ mod tests {
             device_name: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         };
 
         let out = format_flow_toon(&report);

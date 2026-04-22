@@ -287,6 +287,8 @@ impl SuiteRunner {
                 device_name: None,
                 perf_snapshots: vec![],
                 skipped_reason: None,
+                started_at: None,
+                finished_at: None,
             });
         }
 
@@ -357,6 +359,8 @@ impl SuiteRunner {
                         device_name: None,
                         perf_snapshots: vec![],
                         skipped_reason: None,
+                        started_at: None,
+                        finished_at: None,
                     });
                 }
             }
@@ -391,6 +395,15 @@ impl SuiteRunner {
                 f.device_name.as_deref() == report.device_name.as_deref()
                     && f.flow_name == report.flow_name
             }) {
+                // Accumulator built its own FlowReport from live events —
+                // prefer its wall-clock timestamps since run_flow_on_device
+                // doesn't capture them directly.
+                if report.started_at.is_none() {
+                    report.started_at = acc_flow.started_at.clone();
+                }
+                if report.finished_at.is_none() {
+                    report.finished_at = acc_flow.finished_at.clone();
+                }
                 if report.step_results.is_empty() && !acc_flow.step_results.is_empty() {
                     report.step_results = acc_flow.step_results.iter().map(|s| {
                         golem_report::StepReport {
@@ -410,6 +423,8 @@ impl SuiteRunner {
                             screenshot_path: s.screenshot_path.clone(),
                             substeps: s.substeps.clone(),
                             tree_stats: s.tree_stats,
+                            started_at: s.started_at.clone(),
+                            finished_at: s.finished_at.clone(),
                         }
                     }).collect();
                 }
@@ -420,6 +435,8 @@ impl SuiteRunner {
             flows: flow_reports,
             installs: acc_report.installs,
             total_duration_ms: start.elapsed().as_millis() as u64,
+            started_at: acc_report.started_at,
+            finished_at: acc_report.finished_at,
         })
     }
 
@@ -521,6 +538,8 @@ async fn execute_flow_run(
             device_name: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         }];
     }
 
@@ -588,6 +607,8 @@ async fn execute_flow_run(
                     device_name: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
+                    started_at: None,
+                    finished_at: None,
                 });
             }
         }
@@ -1345,6 +1366,8 @@ async fn run_flow_on_device(
                     device_name: Some(device_label.clone()),
                     perf_snapshots: vec![],
                     skipped_reason: Some(reason),
+                    started_at: None,
+                    finished_at: None,
                 };
             }
         };
@@ -1371,6 +1394,8 @@ async fn run_flow_on_device(
                     device_name: Some(device_label.clone()),
                     perf_snapshots: vec![],
                     skipped_reason: Some(reason),
+                    started_at: None,
+                    finished_at: None,
                 };
             }
             Some(golem_runner::installer::InstallOutcome::FailedNoScript) => {
@@ -1394,6 +1419,8 @@ async fn run_flow_on_device(
                     device_name: Some(device_label.clone()),
                     perf_snapshots: vec![],
                     skipped_reason: Some(reason),
+                    started_at: None,
+                    finished_at: None,
                 };
             }
             None => {}
@@ -1463,6 +1490,8 @@ async fn run_flow_on_device(
                         device_name: Some(device_label.clone()),
                         perf_snapshots: vec![],
                         skipped_reason: Some(reason),
+                        started_at: None,
+                        finished_at: None,
                     };
                 }
             }
@@ -1515,6 +1544,8 @@ async fn run_flow_on_device(
                 device_name: Some(device_label),
                 perf_snapshots: result.perf_snapshots,
                 skipped_reason: None,
+                started_at: None,
+                finished_at: None,
             }
         }
         Err(e) => {
@@ -1537,6 +1568,8 @@ async fn run_flow_on_device(
                 device_name: Some(device_label),
                 perf_snapshots: vec![],
                 skipped_reason: None,
+                started_at: None,
+                finished_at: None,
             }
         }
     }
@@ -1771,6 +1804,8 @@ mod tests {
             device_name: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -1787,6 +1822,8 @@ mod tests {
             device_name: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         }
     }
 

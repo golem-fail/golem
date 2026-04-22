@@ -22,6 +22,10 @@ struct JsonStep {
     #[serde(skip_serializing_if = "Option::is_none")]
     warning: Option<String>,
     duration_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    started_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    finished_at: Option<String>,
     retries: u32,
     tree_fetches: u32,
     tree_nodes: u32,
@@ -36,6 +40,10 @@ struct JsonFlow {
     #[serde(skip_serializing_if = "Option::is_none")]
     skipped_reason: Option<String>,
     duration_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    started_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    finished_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     seed: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -55,6 +63,10 @@ struct JsonInstall {
     device: String,
     success: bool,
     duration_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    started_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    finished_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     exit_code: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -90,6 +102,10 @@ struct JsonSuiteSummary {
     failed: usize,
     skipped: usize,
     duration_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    started_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    finished_at: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -119,6 +135,8 @@ fn step_to_json(step: &StepReport) -> JsonStep {
         error,
         warning,
         duration_ms: step.duration_ms,
+        started_at: step.started_at.clone(),
+        finished_at: step.finished_at.clone(),
         retries: step.retry_count,
         tree_fetches: step.tree_stats.fetches,
         tree_nodes: step.tree_stats.max_nodes,
@@ -147,6 +165,8 @@ fn flow_to_json(report: &FlowReport) -> JsonFlow {
         success: report.success,
         skipped_reason: report.skipped_reason.clone(),
         duration_ms: report.duration_ms,
+        started_at: report.started_at.clone(),
+        finished_at: report.finished_at.clone(),
         seed: report.seed,
         device: report.device_name.clone(),
         screenshot: report.screenshot_path.clone(),
@@ -163,6 +183,8 @@ fn install_to_json(inst: &InstallReport) -> JsonInstall {
         device: inst.device_name.clone(),
         success: inst.success,
         duration_ms: inst.duration_ms,
+        started_at: inst.started_at.clone(),
+        finished_at: inst.finished_at.clone(),
         exit_code: inst.exit_code,
         error: inst.error.clone(),
     }
@@ -199,6 +221,8 @@ pub fn format_suite_json(report: &SuiteReport) -> Result<String, serde_json::Err
             failed,
             skipped,
             duration_ms: report.total_duration_ms,
+            started_at: report.started_at.clone(),
+            finished_at: report.finished_at.clone(),
         },
         flows: report.flows.iter().map(flow_to_json).collect(),
         installs: report.installs.iter().map(install_to_json).collect(),
@@ -229,6 +253,8 @@ mod tests {
             screenshot_path: None,
             substeps: Vec::new(),
             tree_stats: golem_events::TreeStats::default(),
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -245,6 +271,8 @@ mod tests {
             screenshot_path: None,
             substeps: Vec::new(),
             tree_stats: golem_events::TreeStats::default(),
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -261,6 +289,8 @@ mod tests {
             screenshot_path: None,
             substeps: Vec::new(),
             tree_stats: golem_events::TreeStats::default(),
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -277,6 +307,8 @@ mod tests {
             screenshot_path: None,
             substeps: Vec::new(),
             tree_stats: golem_events::TreeStats::default(),
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -298,6 +330,8 @@ mod tests {
             device_name: Some("iPhone 15 Pro".to_string()),
             perf_snapshots: vec![],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -318,6 +352,8 @@ mod tests {
                     device_name: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
+                    started_at: None,
+                    finished_at: None,
                 },
                 FlowReport {
                     flow_name: "signup_flow".to_string(),
@@ -330,6 +366,8 @@ mod tests {
                     device_name: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
+                    started_at: None,
+                    finished_at: None,
                 },
                 FlowReport {
                     flow_name: "checkout_flow".to_string(),
@@ -342,6 +380,8 @@ mod tests {
                     device_name: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
+                    started_at: None,
+                    finished_at: None,
                 },
                 FlowReport {
                     flow_name: "broken_flow".to_string(),
@@ -357,10 +397,14 @@ mod tests {
                     device_name: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
+                    started_at: None,
+                    finished_at: None,
                 },
             ],
             installs: Vec::new(),
             total_duration_ms: 45300,
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -443,6 +487,8 @@ mod tests {
             device_name: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         };
 
         let json_str = format_flow_json(&report).expect("serialization should succeed");
@@ -527,6 +573,8 @@ mod tests {
             device_name: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         };
 
         let json_str = format_flow_json(&report).expect("serialization should succeed");
@@ -558,6 +606,8 @@ mod tests {
             device_name: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         };
 
         let json_str = format_flow_json(&report).expect("serialization should succeed");
@@ -611,6 +661,8 @@ mod tests {
             device_name: None,
             perf_snapshots: vec![sample_perf_snapshot()],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         };
 
         let json_str = format_flow_json(&report).expect("serialization should succeed");
@@ -639,6 +691,8 @@ mod tests {
             device_name: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            started_at: None,
+            finished_at: None,
         };
 
         let json_str = format_flow_json(&report).expect("serialization should succeed");

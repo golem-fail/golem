@@ -1,9 +1,18 @@
 use std::collections::HashMap;
+use std::time::SystemTime;
 
+use chrono::{DateTime, SecondsFormat, Utc};
 use golem_events::{DeviceId, Event, EventKind};
 use tokio::sync::broadcast;
 
 use crate::{FlowReport, InstallReport, StepOutcome, StepReport, SubstepDetail, SuiteReport};
+
+/// Format a `SystemTime` as ISO-8601 UTC with millisecond precision:
+/// `2026-04-22T14:32:15.123Z`.
+fn iso8601_utc(t: SystemTime) -> String {
+    let dt: DateTime<Utc> = t.into();
+    dt.to_rfc3339_opts(SecondsFormat::Millis, true)
+}
 
 struct AccumulatedStep {
     global_index: u64,
@@ -17,6 +26,8 @@ struct AccumulatedStep {
     screenshot_path: Option<String>,
     substeps: Vec<SubstepDetail>,
     tree_stats: golem_events::TreeStats,
+    started_at: Option<SystemTime>,
+    finished_at: Option<SystemTime>,
 }
 
 struct AccumulatedFlow {
@@ -27,6 +38,8 @@ struct AccumulatedFlow {
     duration_ms: u64,
     success: bool,
     skipped_reason: Option<String>,
+    started_at: Option<SystemTime>,
+    finished_at: Option<SystemTime>,
 }
 
 /// Accumulates events into a hierarchical SuiteReport.
@@ -37,6 +50,15 @@ pub struct ReportAccumulator {
     current_step: HashMap<String, AccumulatedStep>, // current step per device
     pub(crate) installs: Vec<InstallReport>,
     total_duration_ms: u64,
+    /// Wall-clock of the first event observed. Used as suite started_at
+    /// since no `SuiteStarted` event is emitted today.
+    suite_started_at: Option<SystemTime>,
+    /// Wall-clock of the `SuiteFinished` event.
+    suite_finished_at: Option<SystemTime>,
+    /// Per-install wall-clock tracking, keyed by (device_id, bundle_id).
+    /// `InstallStarted` populates; `InstallFinished` drains into the final
+    /// `InstallReport`.
+    install_starts: HashMap<(String, String), SystemTime>,
 }
 
 impl ReportAccumulator {
@@ -47,6 +69,13 @@ impl ReportAccumulator {
     /// Process a single event.
     pub fn process(&mut self, event: &Event) {
         let dev_key = event.device_id.0.clone();
+
+        // First event observed stamps the suite start — no `SuiteStarted`
+        // event is emitted today; the plan-phase `SuitePlanned` or the
+        // first device event is effectively "t=0".
+        if self.suite_started_at.is_none() {
+            self.suite_started_at = Some(event.wall_time);
+        }
 
         match &event.kind {
             EventKind::FlowStarted { flow_name } => {
@@ -59,6 +88,8 @@ impl ReportAccumulator {
                     duration_ms: 0,
                     success: true,
                     skipped_reason: None,
+                    started_at: Some(event.wall_time),
+                    finished_at: None,
                 });
                 self.current_flow_by_device.insert(dev_key, idx);
             }
@@ -67,6 +98,7 @@ impl ReportAccumulator {
                     if let Some(flow) = self.flows.get_mut(idx) {
                         flow.success = *success;
                         flow.duration_ms = *duration_ms;
+                        flow.finished_at = Some(event.wall_time);
                     }
                 }
                 self.current_flow_by_device.remove(&dev_key);
@@ -81,6 +113,8 @@ impl ReportAccumulator {
                     duration_ms: 0,
                     success: false,
                     skipped_reason: Some(reason.clone()),
+                    started_at: Some(event.wall_time),
+                    finished_at: Some(event.wall_time),
                 });
             }
             EventKind::StepStarted { global_step_index, block_name, step_index_in_block, action, selector_label } => {
@@ -97,6 +131,8 @@ impl ReportAccumulator {
                     screenshot_path: None,
                     substeps: Vec::new(),
                     tree_stats: golem_events::TreeStats::default(),
+                    started_at: Some(event.wall_time),
+                    finished_at: None,
                 });
             }
             EventKind::StepFinished { outcome, duration_ms, retry_count, screenshot_path, tree_stats, .. } => {
@@ -106,6 +142,7 @@ impl ReportAccumulator {
                     step.retry_count = *retry_count;
                     step.screenshot_path = screenshot_path.clone();
                     step.tree_stats = *tree_stats;
+                    step.finished_at = Some(event.wall_time);
 
                     if let golem_events::StepOutcome::Warning(msg) = outcome {
                         if let Some(&idx) = self.current_flow_by_device.get(&dev_key) {
@@ -122,7 +159,15 @@ impl ReportAccumulator {
                     step.substeps.push(SubstepDetail::from(sub));
                 }
             }
+            EventKind::InstallStarted { bundle_id, .. } => {
+                self.install_starts
+                    .insert((dev_key.clone(), bundle_id.clone()), event.wall_time);
+            }
             EventKind::InstallFinished { app_name, bundle_id, success, duration_ms, exit_code, error, target: _ } => {
+                let started_at = self
+                    .install_starts
+                    .remove(&(dev_key.clone(), bundle_id.clone()))
+                    .map(iso8601_utc);
                 self.installs.push(InstallReport {
                     app_name: app_name.clone(),
                     bundle_id: bundle_id.clone(),
@@ -131,10 +176,13 @@ impl ReportAccumulator {
                     duration_ms: *duration_ms,
                     exit_code: *exit_code,
                     error: error.clone(),
+                    started_at,
+                    finished_at: Some(iso8601_utc(event.wall_time)),
                 });
             }
             EventKind::SuiteFinished { duration_ms, .. } => {
                 self.total_duration_ms = *duration_ms;
+                self.suite_finished_at = Some(event.wall_time);
             }
             _ => {}
         }
@@ -174,6 +222,8 @@ impl ReportAccumulator {
                     screenshot_path: s.screenshot_path,
                     substeps: s.substeps,
                     tree_stats: s.tree_stats,
+                    started_at: s.started_at.map(iso8601_utc),
+                    finished_at: s.finished_at.map(iso8601_utc),
                 }
             }).collect();
 
@@ -188,6 +238,8 @@ impl ReportAccumulator {
                 screenshot_path: None,
                 device_name: Some(flow.device_id.0),
                 perf_snapshots: Vec::new(),
+                started_at: flow.started_at.map(iso8601_utc),
+                finished_at: flow.finished_at.map(iso8601_utc),
             }
         }).collect();
 
@@ -195,6 +247,8 @@ impl ReportAccumulator {
             flows,
             installs: self.installs.clone(),
             total_duration_ms: self.total_duration_ms,
+            started_at: self.suite_started_at.map(iso8601_utc),
+            finished_at: self.suite_finished_at.map(iso8601_utc),
         }
     }
 }
