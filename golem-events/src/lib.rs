@@ -4,7 +4,7 @@
 pub mod channel;
 pub mod emitter;
 
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
@@ -50,20 +50,32 @@ impl std::fmt::Display for DeviceId {
 // ── Event envelope ──
 
 /// Top-level event. Every event carries device identity and timing.
+///
+/// Two clocks on purpose:
+/// - `timestamp: Instant` — monotonic, for durations between events. Not
+///   serializable; only meaningful inside the emitting process.
+/// - `wall_time: SystemTime` — wall-clock, for display (`HH:MM:SS.mmm`),
+///   JSON ISO-8601, and TOON unix epoch. Not monotonic — may jump if the
+///   system clock moves. Use `timestamp` for intervals, `wall_time` for
+///   human-readable display.
 #[derive(Debug, Clone)]
 pub struct Event {
     pub seq: u64,
     pub device_id: DeviceId,
     pub timestamp: Instant,
+    pub wall_time: SystemTime,
     pub kind: EventKind,
 }
 
 /// Wire-format event for serialization over sockets/IPC.
-/// Same as `Event` but without `Instant` (not serializable).
+/// Same as `Event` but without `Instant` (not serializable). `wall_time`
+/// crosses the wire as unix-epoch nanoseconds so the orchestrator client
+/// renders the same time the server saw.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WireEvent {
     pub seq: u64,
     pub device_id: DeviceId,
+    pub wall_time_unix_nanos: u128,
     pub kind: EventKind,
 }
 
@@ -72,21 +84,39 @@ impl From<&Event> for WireEvent {
         Self {
             seq: e.seq,
             device_id: e.device_id.clone(),
+            wall_time_unix_nanos: system_time_to_unix_nanos(e.wall_time),
             kind: e.kind.clone(),
         }
     }
 }
 
 impl WireEvent {
-    /// Convert back to a full `Event` with `Instant::now()` as timestamp.
+    /// Rehydrate into an `Event`. `timestamp` gets a fresh `Instant::now()`
+    /// since the sender's monotonic clock isn't meaningful to us; `wall_time`
+    /// is reconstructed from the unix-nanos wire value.
     pub fn into_event(self) -> Event {
         Event {
             seq: self.seq,
             device_id: self.device_id,
             timestamp: Instant::now(),
+            wall_time: unix_nanos_to_system_time(self.wall_time_unix_nanos),
             kind: self.kind,
         }
     }
+}
+
+fn system_time_to_unix_nanos(t: SystemTime) -> u128 {
+    // Pre-epoch timestamps shouldn't occur in practice; saturate to 0 so
+    // we don't propagate a panic out of a serializer.
+    t.duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0)
+}
+
+fn unix_nanos_to_system_time(nanos: u128) -> SystemTime {
+    // Split into (secs, subsec-nanos) to avoid u128→u64 truncation that
+    // `Duration::from_nanos` would cause post-2554.
+    let secs = (nanos / 1_000_000_000) as u64;
+    let subsec_nanos = (nanos % 1_000_000_000) as u32;
+    UNIX_EPOCH + std::time::Duration::new(secs, subsec_nanos)
 }
 
 // ── Step outcome (shared between events and reports) ──

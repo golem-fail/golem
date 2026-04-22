@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
 use tokio::sync::broadcast;
 
@@ -28,12 +28,17 @@ pub struct EventSender {
 
 impl EventSender {
     /// Emit an event tagged with a device ID.
+    ///
+    /// Captures both clocks: `timestamp` (monotonic, for duration math) and
+    /// `wall_time` (wall-clock, for display). Both are captured at emit,
+    /// not send — the consumer sees the moment the producer called `emit`.
     pub fn emit(&self, device_id: DeviceId, kind: EventKind) {
         let seq = self.seq.fetch_add(1, Ordering::Relaxed);
         let event = Event {
             seq,
             device_id,
             timestamp: Instant::now(),
+            wall_time: SystemTime::now(),
             kind,
         };
         // Ignore send errors (no receivers = lag).

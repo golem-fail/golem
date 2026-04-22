@@ -214,7 +214,7 @@ pub async fn accumulate_events(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Instant;
+    use std::time::{Instant, SystemTime};
     use golem_events::{DeviceId, Event, EventKind, Point, Rect, SubstepEvent};
     use crate::StepOutcome as ReportStepOutcome;
 
@@ -223,6 +223,7 @@ mod tests {
             seq,
             device_id: DeviceId(device.into()),
             timestamp: Instant::now(),
+            wall_time: SystemTime::now(),
             kind,
         }
     }

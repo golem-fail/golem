@@ -1,4 +1,7 @@
 use std::collections::HashMap;
+use std::time::SystemTime;
+
+use chrono::{DateTime, Local};
 use golem_events::{Event, EventKind, SubstepEvent, ScrollAttemptResult};
 use tokio::sync::broadcast;
 
@@ -38,6 +41,19 @@ const DEVICE_COLORS: &[&str] = &[
     "\x1b[32m",  // green (dim)
     "\x1b[91m",  // bright red (for device ID only)
 ];
+
+/// Render an event's wall-clock time as `HH:MM:SS.mmm ` (trailing space),
+/// dimmed when the terminal supports colour. One prefix per rendered line
+/// so live output has a consistent time column left of the device circle.
+fn format_timestamp(wall_time: SystemTime, use_color: bool) -> String {
+    let dt: DateTime<Local> = wall_time.into();
+    let stamp = dt.format("%H:%M:%S%.3f");
+    if use_color {
+        format!("{DIM}{stamp}{RESET} ")
+    } else {
+        format!("{stamp} ")
+    }
+}
 
 /// Get or assign a circled number for a device.
 fn format_circle(idx: usize, multi_device: bool, use_color: bool) -> String {
@@ -80,6 +96,7 @@ pub async fn stream_human(
     let mut current_blocks: HashMap<String, (String, u32)> = HashMap::new();
 
     while let Ok(event) = rx.recv().await {
+        let ts = format_timestamp(event.wall_time, use_color);
         let is_flow_started = matches!(event.kind, EventKind::FlowStarted { .. });
         let dp = if !multi_device || event.device_id.0 == "suite" {
             String::new()
@@ -106,36 +123,36 @@ pub async fn stream_human(
             EventKind::SuitePlanned { flow_runs, install_entries, device_availability } => {
                 // Only render under --verbose; diagnostic view of plan output.
                 if verbose {
-                    eprintln!("  [plan] {} flow run(s):", flow_runs.len());
+                    eprintln!("{ts}  [plan] {} flow run(s):", flow_runs.len());
                     for line in flow_runs {
-                        eprintln!("  [plan]   {line}");
+                        eprintln!("{ts}  [plan]   {line}");
                     }
                     if !install_entries.is_empty() {
                         eprintln!(
-                            "  [plan] install matrix ({} entr{}):",
+                            "{ts}  [plan] install matrix ({} entr{}):",
                             install_entries.len(),
                             if install_entries.len() == 1 { "y" } else { "ies" }
                         );
                         for line in install_entries {
-                            eprintln!("  [plan]   {line}");
+                            eprintln!("{ts}  [plan]   {line}");
                         }
                     }
                     if !device_availability.is_empty() {
                         eprintln!(
-                            "  [devices] {} slot requirement(s):",
+                            "{ts}  [devices] {} slot requirement(s):",
                             device_availability.len()
                         );
                         for line in device_availability {
-                            eprintln!("  [devices]   · {line}");
+                            eprintln!("{ts}  [devices]   · {line}");
                         }
                     }
                 }
             }
             EventKind::FlowStarted { flow_name } => {
                 if use_color {
-                    eprintln!("{dp}{BLUE}{SYM_FLOW} {flow_name}{RESET}");
+                    eprintln!("{ts}{dp}{BLUE}{SYM_FLOW} {flow_name}{RESET}");
                 } else {
-                    eprintln!("{dp}{SYM_FLOW} {flow_name}");
+                    eprintln!("{ts}{dp}{SYM_FLOW} {flow_name}");
                 }
                 // Print device legend on first flow start in multi-device mode
                 if multi_device && device_map.len() <= 2 {
@@ -143,9 +160,9 @@ pub async fn stream_human(
                     let num = CIRCLED_NUMBERS.get(idx).unwrap_or(&"?");
                     if use_color {
                         let color = DEVICE_COLORS.get(idx % DEVICE_COLORS.len()).unwrap_or(&"");
-                        eprintln!("  {DIM}{color}{num} {}{RESET}", event.device_id);
+                        eprintln!("{ts}  {DIM}{color}{num} {}{RESET}", event.device_id);
                     } else {
-                        eprintln!("  {num} {}", event.device_id);
+                        eprintln!("{ts}  {num} {}", event.device_id);
                     }
                 }
             }
@@ -157,9 +174,9 @@ pub async fn stream_human(
                     String::new()
                 };
                 if use_color {
-                    eprintln!("  {dp}{CYAN}\u{2500}\u{2500} {block_name}{iter_suffix} \u{2500}\u{2500}{RESET}");
+                    eprintln!("{ts}  {dp}{CYAN}\u{2500}\u{2500} {block_name}{iter_suffix} \u{2500}\u{2500}{RESET}");
                 } else {
-                    eprintln!("  {dp}\u{2500}\u{2500} {block_name}{iter_suffix} \u{2500}\u{2500}");
+                    eprintln!("{ts}  {dp}\u{2500}\u{2500} {block_name}{iter_suffix} \u{2500}\u{2500}");
                 }
             }
             EventKind::StepStarted { global_step_index, step_index_in_block, action, selector_label, .. } => {
@@ -178,9 +195,9 @@ pub async fn stream_human(
                     block_name
                 };
                 if use_color {
-                    eprintln!("  {dp}{DIM}[{global_step_index}][{block_tag}][{step_index_in_block}]{RESET} {BOLD}{action}{RESET}{target_str}");
+                    eprintln!("{ts}  {dp}{DIM}[{global_step_index}][{block_tag}][{step_index_in_block}]{RESET} {BOLD}{action}{RESET}{target_str}");
                 } else {
-                    eprintln!("  {dp}[{global_step_index}][{block_tag}][{step_index_in_block}] {action}{target_str}");
+                    eprintln!("{ts}  {dp}[{global_step_index}][{block_tag}][{step_index_in_block}] {action}{target_str}");
                 }
             }
             EventKind::StepFinished { outcome, duration_ms, tree_stats, .. } => {
@@ -199,74 +216,74 @@ pub async fn stream_human(
                 if use_color {
                     match outcome {
                         golem_events::StepOutcome::Success => {
-                            eprintln!("  {dp}    {GREEN}{SYM_SUCCESS}{RESET}  {DIM}[{duration_ms}ms]{RESET}{stats_str}");
+                            eprintln!("{ts}  {dp}    {GREEN}{SYM_SUCCESS}{RESET}  {DIM}[{duration_ms}ms]{RESET}{stats_str}");
                         }
                         golem_events::StepOutcome::Failed(msg) => {
-                            eprintln!("  {dp}    {BRIGHT_RED}{SYM_FAILED} FAIL  [{duration_ms}ms]{RESET}");
-                            eprintln!("  {dp}    {BRIGHT_RED}{msg}{RESET}");
+                            eprintln!("{ts}  {dp}    {BRIGHT_RED}{SYM_FAILED} FAIL  [{duration_ms}ms]{RESET}");
+                            eprintln!("{ts}  {dp}    {BRIGHT_RED}{msg}{RESET}");
                         }
                         golem_events::StepOutcome::Warning(msg) => {
-                            eprintln!("  {dp}    {BRIGHT_YELLOW}{SYM_WARNING}{RESET}  {DIM}[{duration_ms}ms]{RESET}");
-                            eprintln!("  {dp}    {YELLOW}{msg}{RESET}");
+                            eprintln!("{ts}  {dp}    {BRIGHT_YELLOW}{SYM_WARNING}{RESET}  {DIM}[{duration_ms}ms]{RESET}");
+                            eprintln!("{ts}  {dp}    {YELLOW}{msg}{RESET}");
                         }
                         golem_events::StepOutcome::Skipped | golem_events::StepOutcome::Ignored => {
-                            eprintln!("  {dp}    {DIM}{SYM_SKIPPED}  [{duration_ms}ms]{RESET}");
+                            eprintln!("{ts}  {dp}    {DIM}{SYM_SKIPPED}  [{duration_ms}ms]{RESET}");
                         }
                     }
                 } else {
                     match outcome {
                         golem_events::StepOutcome::Success => {
-                            eprintln!("  {dp}    {SYM_SUCCESS}  [{duration_ms}ms]{stats_str}");
+                            eprintln!("{ts}  {dp}    {SYM_SUCCESS}  [{duration_ms}ms]{stats_str}");
                         }
                         golem_events::StepOutcome::Failed(msg) => {
-                            eprintln!("  {dp}    {SYM_FAILED} FAIL  [{duration_ms}ms]");
-                            eprintln!("  {dp}    {msg}");
+                            eprintln!("{ts}  {dp}    {SYM_FAILED} FAIL  [{duration_ms}ms]");
+                            eprintln!("{ts}  {dp}    {msg}");
                         }
                         golem_events::StepOutcome::Warning(msg) => {
-                            eprintln!("  {dp}    {SYM_WARNING}  [{duration_ms}ms]");
-                            eprintln!("  {dp}    {msg}");
+                            eprintln!("{ts}  {dp}    {SYM_WARNING}  [{duration_ms}ms]");
+                            eprintln!("{ts}  {dp}    {msg}");
                         }
                         golem_events::StepOutcome::Skipped | golem_events::StepOutcome::Ignored => {
-                            eprintln!("  {dp}    {SYM_SKIPPED}  [{duration_ms}ms]");
+                            eprintln!("{ts}  {dp}    {SYM_SKIPPED}  [{duration_ms}ms]");
                         }
                     }
                 }
             }
             EventKind::Substep(sub) if verbose => {
-                print_substep(&dp, sub, use_color);
+                print_substep(&ts, &dp, sub, use_color);
             }
             EventKind::FlowFinished { flow_name, success, duration_ms, seed } => {
                 let secs = *duration_ms as f64 / 1000.0;
                 eprintln!();
                 if use_color {
                     if *success {
-                        eprintln!("  {dp}{GREEN}{SYM_SUCCESS} PASSED{RESET}  {flow_name}  {DIM}[{secs:.1}s]  seed:{seed}{RESET}");
+                        eprintln!("{ts}  {dp}{GREEN}{SYM_SUCCESS} PASSED{RESET}  {flow_name}  {DIM}[{secs:.1}s]  seed:{seed}{RESET}");
                     } else {
-                        eprintln!("  {dp}{BRIGHT_RED}{SYM_FAILED} FAILED{RESET}  {flow_name}  {DIM}[{secs:.1}s]  seed:{seed}{RESET}");
+                        eprintln!("{ts}  {dp}{BRIGHT_RED}{SYM_FAILED} FAILED{RESET}  {flow_name}  {DIM}[{secs:.1}s]  seed:{seed}{RESET}");
                     }
                 } else {
                     let sym = if *success { SYM_SUCCESS } else { SYM_FAILED };
                     let label = if *success { "PASSED" } else { "FAILED" };
-                    eprintln!("  {dp}{sym} {label}  {flow_name}  [{secs:.1}s]  seed:{seed}");
+                    eprintln!("{ts}  {dp}{sym} {label}  {flow_name}  [{secs:.1}s]  seed:{seed}");
                 }
             }
             EventKind::SuiteFinished { duration_ms, passed, failed } => {
                 let secs = *duration_ms as f64 / 1000.0;
                 eprintln!();
                 if use_color {
-                    eprintln!("{DIM}──────────────────────────────────────{RESET}");
+                    eprintln!("{ts}{DIM}──────────────────────────────────────{RESET}");
                 } else {
-                    eprintln!("──────────────────────────────────────");
+                    eprintln!("{ts}──────────────────────────────────────");
                 }
-                eprintln!("Suite: {passed} passed, {failed} failed  [{secs:.1}s]");
+                eprintln!("{ts}Suite: {passed} passed, {failed} failed  [{secs:.1}s]");
             }
             EventKind::InstallStarted { app_name, bundle_id, target, .. } => {
                 // Script may build + install, or just install (install-only mode).
                 // We can't tell which from events; "building and installing" covers both.
                 if use_color {
-                    eprintln!("  {dp}{DIM}[install {app_name}] building and installing {bundle_id} on {target}...{RESET}");
+                    eprintln!("{ts}  {dp}{DIM}[install {app_name}] building and installing {bundle_id} on {target}...{RESET}");
                 } else {
-                    eprintln!("  {dp}[install {app_name}] building and installing {bundle_id} on {target}...");
+                    eprintln!("{ts}  {dp}[install {app_name}] building and installing {bundle_id} on {target}...");
                 }
             }
             EventKind::InstallOutput { app_name, line } => {
@@ -275,9 +292,9 @@ pub async fn stream_human(
                 // the final success/failure line.
                 if debug {
                     if use_color {
-                        eprintln!("  {dp}{DIM}[install {app_name}]{RESET} {line}");
+                        eprintln!("{ts}  {dp}{DIM}[install {app_name}]{RESET} {line}");
                     } else {
-                        eprintln!("  {dp}[install {app_name}] {line}");
+                        eprintln!("{ts}  {dp}[install {app_name}] {line}");
                     }
                 }
             }
@@ -285,66 +302,66 @@ pub async fn stream_human(
                 let secs = *duration_ms as f64 / 1000.0;
                 if *success {
                     if use_color {
-                        eprintln!("  {dp}{GREEN}{SYM_SUCCESS}{RESET} {DIM}[install {app_name}] installed {bundle_id} on {target}  [{secs:.1}s]{RESET}");
+                        eprintln!("{ts}  {dp}{GREEN}{SYM_SUCCESS}{RESET} {DIM}[install {app_name}] installed {bundle_id} on {target}  [{secs:.1}s]{RESET}");
                     } else {
-                        eprintln!("  {dp}{SYM_SUCCESS} [install {app_name}] installed {bundle_id} on {target}  [{secs:.1}s]");
+                        eprintln!("{ts}  {dp}{SYM_SUCCESS} [install {app_name}] installed {bundle_id} on {target}  [{secs:.1}s]");
                     }
                 } else {
                     let err = error.as_deref().unwrap_or("install failed");
                     if use_color {
-                        eprintln!("  {dp}{BRIGHT_RED}{SYM_FAILED}{RESET} [install {app_name}] on {target} — {err}");
+                        eprintln!("{ts}  {dp}{BRIGHT_RED}{SYM_FAILED}{RESET} [install {app_name}] on {target} — {err}");
                     } else {
-                        eprintln!("  {dp}{SYM_FAILED} [install {app_name}] on {target} — {err}");
+                        eprintln!("{ts}  {dp}{SYM_FAILED} [install {app_name}] on {target} — {err}");
                     }
                 }
             }
             EventKind::FlowSkipped { flow_name, reason } => {
                 if use_color {
-                    eprintln!("  {dp}{YELLOW}{SYM_WARNING} SKIPPED{RESET}  {flow_name}  {DIM}{reason}{RESET}");
+                    eprintln!("{ts}  {dp}{YELLOW}{SYM_WARNING} SKIPPED{RESET}  {flow_name}  {DIM}{reason}{RESET}");
                 } else {
-                    eprintln!("  {dp}{SYM_WARNING} SKIPPED  {flow_name}  {reason}");
+                    eprintln!("{ts}  {dp}{SYM_WARNING} SKIPPED  {flow_name}  {reason}");
                 }
             }
             EventKind::FlowParseFailed { path, error } => {
                 if use_color {
-                    eprintln!("  {BRIGHT_RED}Parse error{RESET} ({path}): {error}");
+                    eprintln!("{ts}  {BRIGHT_RED}Parse error{RESET} ({path}): {error}");
                 } else {
-                    eprintln!("  Parse error ({path}): {error}");
+                    eprintln!("{ts}  Parse error ({path}): {error}");
                 }
             }
             EventKind::DeviceAutoBoot { device_name, slot_shape } => {
                 if use_color {
-                    eprintln!("  {DIM}[devices] no booted match — booting {device_name} to satisfy {slot_shape}...{RESET}");
+                    eprintln!("{ts}  {DIM}[devices] no booted match — booting {device_name} to satisfy {slot_shape}...{RESET}");
                 } else {
-                    eprintln!("  [devices] no booted match — booting {device_name} to satisfy {slot_shape}...");
+                    eprintln!("{ts}  [devices] no booted match — booting {device_name} to satisfy {slot_shape}...");
                 }
             }
             EventKind::SlotSetupFailed { slot_label, reason } => {
                 if use_color {
-                    eprintln!("  {BRIGHT_RED}[slot] setup failed for {slot_label}:{RESET} {reason}");
+                    eprintln!("{ts}  {BRIGHT_RED}[slot] setup failed for {slot_label}:{RESET} {reason}");
                 } else {
-                    eprintln!("  [slot] setup failed for {slot_label}: {reason}");
+                    eprintln!("{ts}  [slot] setup failed for {slot_label}: {reason}");
                 }
             }
             EventKind::ResourcesWaiting { platform } => {
                 if use_color {
-                    eprintln!("  {dp}{DIM}[resources] waiting for {platform}...{RESET}");
+                    eprintln!("{ts}  {dp}{DIM}[resources] waiting for {platform}...{RESET}");
                 } else {
-                    eprintln!("  {dp}[resources] waiting for {platform}...");
+                    eprintln!("{ts}  {dp}[resources] waiting for {platform}...");
                 }
             }
             EventKind::CompanionStarting { platform, device_name } => {
                 if use_color {
-                    eprintln!("  {dp}{DIM}[companion] starting on {device_name} ({platform})...{RESET}");
+                    eprintln!("{ts}  {dp}{DIM}[companion] starting on {device_name} ({platform})...{RESET}");
                 } else {
-                    eprintln!("  {dp}[companion] starting on {device_name} ({platform})...");
+                    eprintln!("{ts}  {dp}[companion] starting on {device_name} ({platform})...");
                 }
             }
             EventKind::CompanionReady { platform, version, device_name, os_version } => {
                 if use_color {
-                    eprintln!("  {dp}{DIM}[companion] ready — {platform} v{version} on {device_name} ({os_version}){RESET}");
+                    eprintln!("{ts}  {dp}{DIM}[companion] ready — {platform} v{version} on {device_name} ({os_version}){RESET}");
                 } else {
-                    eprintln!("  {dp}[companion] ready — {platform} v{version} on {device_name} ({os_version})");
+                    eprintln!("{ts}  {dp}[companion] ready — {platform} v{version} on {device_name} ({os_version})");
                 }
             }
             _ => {}
@@ -352,38 +369,38 @@ pub async fn stream_human(
     }
 }
 
-fn print_substep(dp: &str, sub: &SubstepEvent, use_color: bool) {
+fn print_substep(ts: &str, dp: &str, sub: &SubstepEvent, use_color: bool) {
     let b = SYM_BULLET;
     let (d, r) = if use_color { (DIM, RESET) } else { ("", "") };
 
     match sub {
         SubstepEvent::ElementResolved { selector, bounds, tap_point } => {
-            eprintln!("  {dp}    {d}{b} element_resolved \"{selector}\" bounds=({},{},{},{}) tap=({},{}){r}",
+            eprintln!("{ts}  {dp}    {d}{b} element_resolved \"{selector}\" bounds=({},{},{},{}) tap=({},{}){r}",
                 bounds.x, bounds.y, bounds.width, bounds.height, tap_point.x, tap_point.y);
         }
         SubstepEvent::ElementNotFound { selector, timeout_ms } => {
-            eprintln!("  {dp}    {d}{b} element_not_found \"{selector}\" after {timeout_ms}ms{r}");
+            eprintln!("{ts}  {dp}    {d}{b} element_not_found \"{selector}\" after {timeout_ms}ms{r}");
         }
         SubstepEvent::Tap { point, .. } => {
-            eprintln!("  {dp}    {d}{b} tap ({},{}){r}", point.x, point.y);
+            eprintln!("{ts}  {dp}    {d}{b} tap ({},{}){r}", point.x, point.y);
         }
         SubstepEvent::DoubleTap { point, .. } => {
-            eprintln!("  {dp}    {d}{b} double_tap ({},{}){r}", point.x, point.y);
+            eprintln!("{ts}  {dp}    {d}{b} double_tap ({},{}){r}", point.x, point.y);
         }
         SubstepEvent::LongPress { point, duration_ms, .. } => {
-            eprintln!("  {dp}    {d}{b} long_press ({},{}) {}ms{r}", point.x, point.y, duration_ms);
+            eprintln!("{ts}  {dp}    {d}{b} long_press ({},{}) {}ms{r}", point.x, point.y, duration_ms);
         }
         SubstepEvent::TextInput { text, .. } => {
-            eprintln!("  {dp}    {d}{b} text_input \"{text}\"{r}");
+            eprintln!("{ts}  {dp}    {d}{b} text_input \"{text}\"{r}");
         }
         SubstepEvent::Backspace { count } => {
-            eprintln!("  {dp}    {d}{b} backspace ×{count}{r}");
+            eprintln!("{ts}  {dp}    {d}{b} backspace ×{count}{r}");
         }
         SubstepEvent::Swipe { from, to, .. } => {
-            eprintln!("  {dp}    {d}{b} swipe ({},{})→({},{}){r}", from.x, from.y, to.x, to.y);
+            eprintln!("{ts}  {dp}    {d}{b} swipe ({},{})→({},{}){r}", from.x, from.y, to.x, to.y);
         }
         SubstepEvent::ScrollStarted { selector, direction } => {
-            eprintln!("  {dp}    {d}{b} scroll_started \"{selector}\" direction={direction}{r}");
+            eprintln!("{ts}  {dp}    {d}{b} scroll_started \"{selector}\" direction={direction}{r}");
         }
         SubstepEvent::ScrollAttempt { attempt: _, direction, strategy_index, from, to, result, tree_stats } => {
             let dir_arrow = match direction.as_str() {
@@ -396,38 +413,38 @@ fn print_substep(dp: &str, sub: &SubstepEvent, use_color: bool) {
                 ScrollAttemptResult::BoundaryReached => "boundary reached".to_string(),
             };
             let stats = format_tree_stats(tree_stats);
-            eprintln!("  {dp}      {d}[scroll] {dir_arrow} strategy {} ({},{})→({},{}) → {result_str} {stats}{r}",
+            eprintln!("{ts}  {dp}      {d}[scroll] {dir_arrow} strategy {} ({},{})→({},{}) → {result_str} {stats}{r}",
                 strategy_index + 1, from.x, from.y, to.x, to.y);
         }
         SubstepEvent::ScrollFound { selector, position, total_attempts } => {
-            eprintln!("  {dp}    {d}{b} scroll_found \"{selector}\" at ({},{}) after {total_attempts} attempts{r}",
+            eprintln!("{ts}  {dp}    {d}{b} scroll_found \"{selector}\" at ({},{}) after {total_attempts} attempts{r}",
                 position.x, position.y);
         }
         SubstepEvent::ScrollDirectionReversed { to_direction, reason } => {
-            eprintln!("  {dp}    {d}{b} scroll_reversed →{to_direction} {reason}{r}");
+            eprintln!("{ts}  {dp}    {d}{b} scroll_reversed →{to_direction} {reason}{r}");
         }
         SubstepEvent::ScrollStrategySwitch { to_index, reason } => {
-            eprintln!("  {dp}    {d}{b} scroll_strategy_switch →{} {reason}{r}", to_index + 1);
+            eprintln!("{ts}  {dp}    {d}{b} scroll_strategy_switch →{} {reason}{r}", to_index + 1);
         }
         SubstepEvent::AppLaunch { bundle, duration_ms } => {
-            eprintln!("  {dp}    {d}{b} app_launch bundle={bundle} {duration_ms}ms{r}");
+            eprintln!("{ts}  {dp}    {d}{b} app_launch bundle={bundle} {duration_ms}ms{r}");
         }
         SubstepEvent::AppStop { bundle } => {
-            eprintln!("  {dp}    {d}{b} app_stop bundle={bundle}{r}");
+            eprintln!("{ts}  {dp}    {d}{b} app_stop bundle={bundle}{r}");
         }
         SubstepEvent::RetryAttempt { attempt, max, delay_ms, error } => {
-            eprintln!("  {dp}    {d}{b} retry {attempt}/{max} delay={delay_ms}ms: {error}{r}");
+            eprintln!("{ts}  {dp}    {d}{b} retry {attempt}/{max} delay={delay_ms}ms: {error}{r}");
         }
         SubstepEvent::HttpRequest { method, url, status, duration_ms } => {
             let s = status.map(|s| s.to_string()).unwrap_or_else(|| "?".to_string());
-            eprintln!("  {dp}    {d}{b} http {method} {url} → {s} [{duration_ms}ms]{r}");
+            eprintln!("{ts}  {dp}    {d}{b} http {method} {url} → {s} [{duration_ms}ms]{r}");
         }
         SubstepEvent::BashCommand { command, exit_code, duration_ms } => {
             let code = exit_code.map(|c| c.to_string()).unwrap_or_else(|| "?".to_string());
-            eprintln!("  {dp}    {d}{b} bash \"{command}\" exit={code} [{duration_ms}ms]{r}");
+            eprintln!("{ts}  {dp}    {d}{b} bash \"{command}\" exit={code} [{duration_ms}ms]{r}");
         }
         SubstepEvent::Screenshot { path } => {
-            eprintln!("  {dp}    {d}{b} screenshot {path}{r}");
+            eprintln!("{ts}  {dp}    {d}{b} screenshot {path}{r}");
         }
         _ => {}
     }
