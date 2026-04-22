@@ -8,7 +8,7 @@ use golem_devices::{DeviceInfo, DeviceState, Platform};
 use golem_driver::android::AndroidDriver;
 use golem_driver::ios::IosDriver;
 use golem_driver::PlatformDriver;
-use golem_orchestrator::{plan, InstallEntry};
+use golem_orchestrator::{device_matches_slot, plan, DeviceSlot, FlowRun, InstallEntry};
 use golem_parser::{parse_flow, FlowFile};
 use golem_parser::mixin::expand_mixins;
 use golem_report::{FlowReport, SuiteReport};
@@ -91,6 +91,17 @@ pub struct SuiteRunner {
     /// Only apps referenced by some flow appear here. Consumed by pre-install
     /// in the per-device setup loop. Empty until `run_suite` has been called.
     pub install_matrix: Arc<Vec<InstallEntry>>,
+    /// Parsed-flow paths in the order the plan saw them — index is the
+    /// `flow_idx` used by `flow_runs`. Consumed by per-flow device
+    /// selection so execute can look up each FlowRun's slot requirements
+    /// by flow path. Empty outside of `run_suite` (direct
+    /// `run_single_flow_with_resources` test harnesses see an empty Arc
+    /// and fall back to platform-only device filtering).
+    pub flow_paths: Arc<Vec<PathBuf>>,
+    /// FlowRuns emitted by `plan()`. Each carries `DeviceSlot`
+    /// requirements the scheduler uses to pick a matching free device.
+    /// Co-populated with `flow_paths`.
+    pub flow_runs: Arc<Vec<FlowRun>>,
     /// One-shot `SuitePlanned` event cache. Populated in `run_suite` from
     /// the Plan output (only when `--verbose` is on) and `take()`-ed by
     /// whichever execute path first attaches subscribers (multi-flow:
@@ -116,6 +127,8 @@ impl SuiteRunner {
             event_forwarder: None,
             install_cache: golem_runner::installer::InstallCache::new(),
             install_matrix: Arc::new(Vec::new()),
+            flow_paths: Arc::new(Vec::new()),
+            flow_runs: Arc::new(Vec::new()),
             plan_event: None,
         }
     }
@@ -131,6 +144,8 @@ impl SuiteRunner {
             event_forwarder: None,
             install_cache: golem_runner::installer::InstallCache::new(),
             install_matrix: Arc::new(Vec::new()),
+            flow_paths: Arc::new(Vec::new()),
+            flow_runs: Arc::new(Vec::new()),
             plan_event: None,
         }
     }
@@ -165,6 +180,8 @@ impl SuiteRunner {
         }
 
         self.install_matrix = Arc::new(parsed.install_matrix);
+        self.flow_paths = Arc::new(flow_paths.to_vec());
+        self.flow_runs = Arc::new(parsed.flow_runs);
 
         if flow_paths.len() == 1 {
             // Single flow — no need for suite-level parallelism.
@@ -255,6 +272,8 @@ impl SuiteRunner {
             };
             let install_cache = self.install_cache.clone();
             let install_matrix = self.install_matrix.clone();
+            let flow_paths = self.flow_paths.clone();
+            let flow_runs = self.flow_runs.clone();
             let rm = resource_mgr.clone();
             let suite_tx_clone = suite_tx.clone();
 
@@ -264,6 +283,8 @@ impl SuiteRunner {
                 runner.event_forwarder = Some(suite_tx_clone);
                 runner.install_cache = install_cache;
                 runner.install_matrix = install_matrix;
+                runner.flow_paths = flow_paths;
+                runner.flow_runs = flow_runs;
                 runner.run_single_flow(&path).await
             }));
         }
@@ -570,10 +591,28 @@ impl SuiteRunner {
         // long enough to hit xctest watchdog timeouts while other platforms
         // are still building.
 
+        // Look up this flow's FlowRun slots once so platform picks honour
+        // `os_version` + other slot fields (device_type, physical, name).
+        // Fan-out (`:latest:N`, type lists) produces multiple FlowRuns per
+        // flow_idx; the current execute loop still treats one platform as
+        // one device — we pick the first slot matching each platform.
+        // Multi-run fan-out is handled by the Dynamic JIT Scheduler (roadmap).
+        let flow_idx = self
+            .flow_paths
+            .iter()
+            .position(|p| p == path);
+
         // Phase 1: discover devices + pre-install apps.
         let mut installed: Vec<(DeviceInfo, Platform)> = Vec::new();
         for platform in &platforms {
-            match find_available_device(*platform, resource_mgr, create_if_missing).await {
+            let slot: Option<&DeviceSlot> = flow_idx.and_then(|idx| {
+                self.flow_runs
+                    .iter()
+                    .filter(|r| r.flow_idx == idx)
+                    .flat_map(|r| r.slots.iter())
+                    .find(|s| s.platform == *platform)
+            });
+            match find_available_device(*platform, slot, resource_mgr, create_if_missing).await {
                 Ok(device) => {
                     // Section header — minimal value, gated behind --debug.
                     // The [install app] + Companion lines that follow already
@@ -1316,7 +1355,7 @@ async fn run_flow_on_device(
 
     let capture_config = {
         let mut cfg = CaptureConfig {
-            output_dir: output_dir,
+            output_dir,
             flow_name: flow_name.clone(),
             device_name: device_name.clone(),
             write_to_disk: !no_results,
@@ -1637,21 +1676,23 @@ async fn discover_all_devices(platform: Platform) -> Result<Vec<DeviceInfo>> {
     }
 }
 
-/// Find the best available device for a platform, considering the ResourceManager.
-///
-/// Returns the device immediately if one is available and not allocated.
-/// If all compatible devices are busy, waits up to 5 minutes.
-/// If no compatible devices exist at all, fails immediately.
-/// Find the best available device for a platform.
+/// Find the best available device for a platform, honouring slot
+/// requirements if provided (os_version, device_type, physical, name).
 ///
 /// Priority:
-/// 1. Free booted device → return immediately
-/// 2. No booted → auto-boot the best shutdown device
-/// 3. No devices at all → auto-create if `create_if_missing` is true
-/// 4. All booted devices busy → wait up to 20 minutes
-/// 5. No compatible devices and create_if_missing is false → fail
+/// 1. Free booted device matching slot → return immediately
+/// 2. No matching booted → auto-boot the best shutdown device that
+///    matches the slot (highest `os_major` tie-break among equally-matching
+///    candidates, which naturally honours `Exact(N)` after filter)
+/// 3. No compatible devices at all → auto-create if `create_if_missing`
+/// 4. All matching booted busy → wait up to 20 minutes
+/// 5. No compatible devices and `create_if_missing` false → fail
+///
+/// When `slot` is `None` (direct test harness, no plan phase) we fall
+/// back to the pre-slot behaviour: match by platform only.
 async fn find_available_device(
     platform: Platform,
+    slot: Option<&DeviceSlot>,
     resource_mgr: &golem_devices::resource_manager::ResourceManager,
     create_if_missing: bool,
 ) -> Result<DeviceInfo> {
@@ -1660,6 +1701,10 @@ async fn find_available_device(
     let compatible: Vec<&DeviceInfo> = all_devices
         .iter()
         .filter(|d| d.platform == platform)
+        .filter(|d| match slot {
+            Some(s) => device_matches_slot(d, s),
+            None => true,
+        })
         .collect();
 
     // Separate booted from shutdown
@@ -1686,12 +1731,14 @@ async fn find_available_device(
         // All booted are busy — fall through to wait loop below
     }
 
-    // Step 2: No booted devices — auto-boot the best shutdown one
+    // Step 2: No matching booted devices — auto-boot the best matching shutdown.
+    // `compatible` is already slot-filtered, so `max_by_key(os_major)` picks
+    // the highest version among matches; for `Exact(N)` every match has the
+    // same major so the tie-break is a no-op.
     if booted.is_empty() && !shutdown.is_empty() {
-        // Pick the one with highest OS version
         let best = shutdown.iter()
             .max_by_key(|d| d.os_major)
-            .unwrap();
+            .expect("shutdown non-empty");
         eprintln!("  [devices] no booted {platform} — booting {}...", best.name);
         golem_devices::lifecycle::boot_device(best).await?;
         return Ok(DeviceInfo {

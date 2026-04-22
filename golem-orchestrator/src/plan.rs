@@ -214,11 +214,18 @@ pub fn describe_slot(slot: &DeviceSlot) -> String {
     format!("{shape} {apps}")
 }
 
-/// Check whether a snapshot device satisfies a slot's requirements. Used
-/// to count availability at plan time. Matching on: platform, os_version
-/// (Exact = equal major; Minimum = ≥ major; Latest = any — already
-/// expanded upstream), device_type, physical.
-fn device_matches_slot(device: &DeviceInfo, slot: &DeviceSlot) -> bool {
+/// Check whether a snapshot device satisfies a slot's requirements.
+///
+/// Used at plan time for availability counts and at execute time by the
+/// scheduler's device picker (`find_available_device` in `golem-cli`) so
+/// both paths agree on what "a device matching this slot" means.
+///
+/// Matched fields: `platform`, `os_version` (Exact = equal major; Minimum
+/// = ≥ major; Latest = any — already expanded upstream), `device_type`,
+/// `physical`, `name`. `playstore` and `accessibility_label` are not on
+/// `DeviceInfo`, so we accept any device when those are set — companion
+/// or runtime checks handle them.
+pub fn device_matches_slot(device: &DeviceInfo, slot: &DeviceSlot) -> bool {
     if device.platform != slot.platform {
         return false;
     }

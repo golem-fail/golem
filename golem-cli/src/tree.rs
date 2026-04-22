@@ -209,7 +209,7 @@ fn has_webview_element(root: &Element) -> bool {
     {
         return true;
     }
-    root.children.iter().any(|c| has_webview_element(c))
+    root.children.iter().any(has_webview_element)
 }
 
 fn print_tree(element: &Element, depth: usize) {
