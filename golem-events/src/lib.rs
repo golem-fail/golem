@@ -169,10 +169,12 @@ pub enum EventKind {
         /// One line per InstallEntry, e.g. `ios app → fail.golem.test`.
         install_entries: Vec<String>,
         /// Per-slot device availability against the plan-time snapshot.
-        /// Each line: `<slot-shape> — <total> matches (<booted> booted,
-        /// <shutdown> shutdown)`. De-duplicated by shape. Lets the user
-        /// see up front whether the suite's device needs can be satisfied
-        /// and how many parallel runs are feasible per requirement.
+        /// Each line: `<slot-shape> — <n> device(s) (<booted> booted[,
+        /// <shutdown> shutdown][, <physical> physical])`. De-duplicated by
+        /// shape. The `<n>` is *eligible* devices, not parallel-usable
+        /// capacity — shutdown sims must boot first and physical devices
+        /// are single-user. See `compute_device_availability` in
+        /// `golem-orchestrator` for the semantics note.
         device_availability: Vec<String>,
     },
 

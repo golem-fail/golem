@@ -59,22 +59,6 @@ Currently the install cache is keyed per `(device_udid, bundle_id)`: the user's 
 
 **Files:** `golem-runner/src/installer.rs` (split cache types), `golem-cli/src/suite.rs` (first-build-winner coordination).
 
-## Orchestrator Hardening — Review Follow-ups
-
-Bundle of small follow-ups from the first code review of the Plan → Execute refactor. None are correctness-critical today but worth batching into one clean-up pass:
-
-- **Deduplicate `merge_project_apps` logic** — identical in `golem-cli/src/suite.rs` and `golem-orchestrator/src/plan.rs`. Pick one home (orchestrator), remove the other. Also fixes the wrong-`project_root` use in `parse_and_expand` (line ~795 falls back to `flow_dir` instead of the configured project root).
-- **Deduplicate slot-label formatting** — `describe_slot` in suite.rs and `shape_label` in plan.rs render overlapping fields; new `DeviceSlot` fields would need updating in two places. Extract one helper in `golem-orchestrator`.
-- **Bounds-check in `build_install_matrix`** — `&flows[run.flow_idx]` panics if a caller constructs `FlowRun`s independently. Replace with safe lookup (`flows.get()`) returning skip or error.
-- **Device-constraint filter in `device_matches_entry_constraints`** — today only checks `device_type`. Extend to `physical`, `name`, `accessibility_label` so the preinstall safety net matches the resolver's real filter set.
-- **`SuitePlanned` event docs** — add a comment noting the variant carries pre-formatted strings and is consumed only by `stream_human` (accumulator/JSON/TOON/JUnit fall through). When machine-readable plan info is needed, introduce a structured sibling event.
-- **`plan_event` lifecycle doc** — `take()`-once contract on `SuiteRunner.plan_event`. Currently correct but undocumented; future callers that invoke `run_single_flow` directly (e.g. test harnesses) will silently emit nothing.
-- **`project_lock` key granularity** — per `project_root` today. Unnecessarily serialises unrelated apps that happen to share a project root (monorepo). Change key to `(project_root, script_path)` for true per-build serialization.
-- **`compute_device_availability` semantics label** — current "N matches (M booted)" can mislead about parallel capacity. Clarify to "N devices (K parallel-usable)" or similar.
-- **Unify install/flow `DeviceId` scheme** — preinstall uses `{platform}/{device.name}`, so do flow events. Install uses the same now but the TOON renderer comment implies plain device name; align naming + docs.
-
-**Files:** mostly `golem-cli/src/suite.rs`, `golem-orchestrator/src/plan.rs`, `golem-orchestrator/src/install_matrix.rs`, `golem-events/src/lib.rs` (doc comments).
-
 ## Scheduler Prefers Install-Cache-Hit Devices
 
 When picking a free device for a new FlowRun, `find_available_device` currently returns the first free match. For suites with many same-shape FlowRuns, preferring a device whose `install_cache[(udid, bundle)]` is already `Succeeded` saves re-invoking the install script on a fresh device. Matters whenever more than one matching device is booted.
