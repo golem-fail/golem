@@ -91,10 +91,16 @@ pub struct SuiteRunner {
     /// Only apps referenced by some flow appear here. Consumed by pre-install
     /// in the per-device setup loop. Empty until `run_suite` has been called.
     pub install_matrix: Arc<Vec<InstallEntry>>,
-    /// Pre-built `SuitePlanned` event kind, emitted once per suite when
-    /// `--verbose` is on. Populated by `run_suite` from the Plan output;
-    /// consumed (and cleared) by whichever path first sets up the event
-    /// channel (multi-flow: `suite_tx`; single-flow: per-flow `event_tx`).
+    /// One-shot `SuitePlanned` event cache. Populated in `run_suite` from
+    /// the Plan output (only when `--verbose` is on) and `take()`-ed by
+    /// whichever execute path first attaches subscribers (multi-flow:
+    /// `suite_tx`; single-flow: per-flow `event_tx`).
+    ///
+    /// Contract: set once per `run_suite` call, consumed at most once. After
+    /// consumption subsequent emit paths see `None`. Callers that invoke
+    /// `run_single_flow_with_resources` directly (test harnesses, future
+    /// scheduler adapters) will not see the plan summary unless they
+    /// populate `plan_event` themselves before the call.
     pub plan_event: Option<golem_events::EventKind>,
 }
 
@@ -403,7 +409,10 @@ impl SuiteRunner {
             // to close the check-then-install race when multiple parallel
             // flow tasks share an install_cache (e.g. `golem run a.toml b.toml`
             // spawns 2 per-flow tasks, both preinstalling).
-            let proj_lock = self.install_cache.project_lock(&self.config.project_root).await;
+            let proj_lock = self
+                .install_cache
+                .project_lock(&self.config.project_root, &entry.script_path)
+                .await;
             let _guard = proj_lock.lock().await;
             if self.install_cache.get(&key).await.is_some() {
                 continue;
@@ -477,7 +486,7 @@ impl SuiteRunner {
 
         // Merge project-level [[apps]] registry defaults into flow apps by name.
         // Flow-level fields override project-level ones.
-        merge_project_apps_into_flow(&mut flow, &self.config.project_apps);
+        golem_orchestrator::merge_project_apps(&mut flow, &self.config.project_apps);
 
         // Detect target platforms from CLI override or flow's device constraints.
         let platforms = if let Some(p) = self.config.platform {
@@ -788,9 +797,7 @@ impl SuiteRunner {
         let mut flow = parse_flow(&content)?;
 
         let flow_dir = path.parent().unwrap_or(Path::new("."));
-        // Use the flow directory as the project root when not explicitly configured.
-        // TODO: discover the actual project root from config or directory traversal.
-        let project_root = flow_dir;
+        let project_root = self.config.project_root.as_path();
 
         for block in &mut flow.block {
             block.steps = expand_mixins(&block.steps, flow_dir, project_root)?;
@@ -815,7 +822,7 @@ fn build_suite_planned_event(parsed: &golem_orchestrator::ParsedSuite) -> golem_
                 .get(run.flow_idx)
                 .map(|f| f.flow.flow.name.as_str())
                 .unwrap_or("?");
-            let slots: Vec<String> = run.slots.iter().map(describe_slot).collect();
+            let slots: Vec<String> = run.slots.iter().map(golem_orchestrator::describe_slot).collect();
             format!("#{} {}: {}", i + 1, flow_name, slots.join(" + "))
         })
         .collect();
@@ -833,81 +840,51 @@ fn build_suite_planned_event(parsed: &golem_orchestrator::ParsedSuite) -> golem_
     }
 }
 
-fn describe_slot(slot: &golem_orchestrator::DeviceSlot) -> String {
-    let mut parts: Vec<String> = vec![slot.platform.to_string()];
-    if let Some(spec) = &slot.os_version {
-        match spec {
-            golem_devices::OsVersionSpec::Exact { major, .. } => parts.push(format!("v{major}")),
-            golem_devices::OsVersionSpec::Minimum { major, .. } => parts.push(format!("v{major}+")),
-            golem_devices::OsVersionSpec::Latest { count, .. } => {
-                parts.push(if *count > 1 {
-                    format!("latest:{count}")
-                } else {
-                    "latest".to_string()
-                })
-            }
-        }
-    }
-    if let Some(t) = &slot.device_type {
-        parts.push(t.to_string());
-    }
-    if let Some(phys) = slot.physical {
-        parts.push(if phys { "physical".into() } else { "sim".into() });
-    }
-    if let Some(n) = &slot.name {
-        parts.push(format!("name={n}"));
-    }
-    let apps = if slot.apps.is_empty() {
-        "no apps".to_string()
-    } else {
-        format!("apps=[{}]", slot.apps.join(","))
-    };
-    format!("{} {}", parts.join("/"), apps)
-}
-
 /// Check whether an `InstallEntry`'s per-app `devices` constraints permit the
-/// given device. Today only the `device_type` (phone/tablet) field is checked.
-/// Other fields (os, physical, accessibility_label, etc.) are enforced upstream
-/// by the device resolver, so a device reaching pre-install has already passed
-/// those. If the entry has no constraints, the device is accepted.
+/// given device. Safety net — the device resolver already filters upstream,
+/// but a stray call from a future code path shouldn't install onto a device
+/// the app explicitly excludes.
+///
+/// A device matches the entry if it matches ANY one of the constraints.
+/// Within one constraint, every set field (device_type, physical, name,
+/// playstore) must match — unset fields are wildcards. `os` is not rechecked
+/// here (the resolver owns version matching via `device_matches_slot`);
+/// `accessibility_label` is a UI-element field with no `DeviceInfo` counterpart.
 fn device_matches_entry_constraints(device: &DeviceInfo, entry: &InstallEntry) -> bool {
     if entry.device_constraints.is_empty() {
         return true;
     }
-    // If ANY constraint's device_type matches, the device is compatible.
-    // A constraint with no device_type set means "any type is fine".
-    entry.device_constraints.iter().any(|c| match &c.device_type {
-        None => true,
-        Some(sv) => sv.to_vec().iter().any(|t| {
-            matches!(
-                (t.as_str(), device.device_type),
-                ("phone", golem_devices::DeviceType::Phone)
-                    | ("tablet", golem_devices::DeviceType::Tablet)
-            )
-        }),
-    })
-}
-
-fn merge_project_apps_into_flow(
-    flow: &mut FlowFile,
-    project_apps: &[golem_parser::ProjectAppConfig],
-) {
-    for flow_app in &mut flow.flow.apps {
-        if let Some(proj) = project_apps.iter().find(|a| a.name == flow_app.name) {
-            if flow_app.bundle.is_none() {
-                flow_app.bundle = proj.bundle.clone();
-            }
-            if flow_app.install_script.is_none() {
-                flow_app.install_script = proj.install_script.clone();
-            }
-            if flow_app.install_timeout_ms.is_none() {
-                flow_app.install_timeout_ms = proj.install_timeout_ms;
-            }
-            if flow_app.devices.is_empty() {
-                flow_app.devices = proj.devices.clone();
+    entry.device_constraints.iter().any(|c| {
+        // device_type: if set, device's type must appear in the requested list.
+        if let Some(sv) = &c.device_type {
+            let matches_type = sv.to_vec().iter().any(|t| {
+                matches!(
+                    (t.as_str(), device.device_type),
+                    ("phone", golem_devices::DeviceType::Phone)
+                        | ("tablet", golem_devices::DeviceType::Tablet)
+                )
+            });
+            if !matches_type {
+                return false;
             }
         }
-    }
+        if let Some(phys) = c.physical {
+            if device.physical != phys {
+                return false;
+            }
+        }
+        if let Some(name) = &c.name {
+            if &device.name != name {
+                return false;
+            }
+        }
+        if let Some(ps) = c.playstore {
+            if device.playstore != ps {
+                return false;
+            }
+        }
+        true
+    })
 }
 
 // Public wrappers (used by golem tree)
@@ -1360,7 +1337,7 @@ async fn run_flow_on_device(
     });
     let mut ctx = ExecutionContext {
         flow_dir: &flow_dir,
-        project_root: &flow_dir,
+        project_root: &project_root,
         capture_config: &capture_config,
         flow_name: &flow_name,
         block_name: None,
@@ -1468,10 +1445,10 @@ async fn run_flow_on_device(
 
         if let Some(rel) = script_rel {
             let script_path = project_root.join(&rel);
-            // Serialise install script runs that share a project root.
-            // Concurrent tauri ios + android builds in one src-tauri/
-            // collide on cargo target-dir locks and WS IPC → ECONNREFUSED.
-            let proj_lock = install_cache.project_lock(&project_root).await;
+            // Serialise install script runs that share a (project_root, script).
+            // Concurrent tauri ios + android builds in one src-tauri/ collide
+            // on cargo target-dir locks and WS IPC → ECONNREFUSED.
+            let proj_lock = install_cache.project_lock(&project_root, &script_path).await;
             let _guard = proj_lock.lock().await;
             // Re-check cache inside the lock — another parallel flow task
             // may have installed this (device, bundle) while we waited.

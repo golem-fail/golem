@@ -251,14 +251,14 @@ pub async fn discover_ios_device_types() -> anyhow::Result<Vec<DeviceTypeInfo>> 
 pub fn pick_device_type(device_types: &[DeviceTypeInfo], want_phone: bool) -> Option<&DeviceTypeInfo> {
     device_types
         .iter()
-        .filter(|dt| {
+        .rfind(|dt| {
             if want_phone {
                 dt.is_phone
             } else {
                 dt.name.contains("iPad")
             }
         })
-        .last() // last = latest model (simctl lists chronologically)
+    // rfind = latest model (simctl lists chronologically)
 }
 
 #[cfg(test)]

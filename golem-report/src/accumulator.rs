@@ -30,6 +30,7 @@ struct AccumulatedFlow {
 }
 
 /// Accumulates events into a hierarchical SuiteReport.
+#[derive(Default)]
 pub struct ReportAccumulator {
     flows: Vec<AccumulatedFlow>,
     current_flow_by_device: HashMap<String, usize>, // device_id.0 -> index into flows
@@ -40,13 +41,7 @@ pub struct ReportAccumulator {
 
 impl ReportAccumulator {
     pub fn new() -> Self {
-        Self {
-            flows: Vec::new(),
-            current_flow_by_device: HashMap::new(),
-            current_step: HashMap::new(),
-            installs: Vec::new(),
-            total_duration_ms: 0,
-        }
+        Self::default()
     }
 
     /// Process a single event.

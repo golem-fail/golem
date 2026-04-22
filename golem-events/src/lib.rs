@@ -28,7 +28,16 @@ pub struct Rect {
 
 // ── Identity ──
 
-/// Unique identifier for a device execution (e.g. "ios/iPhone 15 Pro").
+/// Unique identifier for a device execution.
+///
+/// Canonical format: `{platform}/{device.name}` — e.g. `ios/iPhone 15 Pro`
+/// or `android/Pixel_7_API_34`. Suite-level events (`SuitePlanned`,
+/// `SuiteStarted`, `SuiteFinished`) use the sentinel `"suite"`.
+///
+/// Both pre-install (`InstallStarted` / `InstallFinished`) and per-flow
+/// events share this scheme so downstream renderers can slot events into
+/// the same device column without a platform/device lookup. Consumers that
+/// display a human-readable device label render the string verbatim.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DeviceId(pub String);
 
@@ -116,8 +125,14 @@ pub enum EventKind {
     SuiteFinished { duration_ms: u64, passed: usize, failed: usize },
 
     /// Diagnostic snapshot of the Plan phase output. Emitted once per suite
-    /// when `--verbose` is on. Pre-formatted strings — human-stream plus
-    /// orchestrator-client forwarding.
+    /// when `--verbose` is on. All fields are pre-formatted `String`s:
+    /// `stream_human` prints them verbatim and the orchestrator forwarder
+    /// relays them unchanged. Other sinks (accumulator, JSON, TOON, JUnit)
+    /// intentionally ignore this variant — it carries no structured data.
+    ///
+    /// If a machine-readable plan payload is ever needed (programmatic
+    /// consumers, report tooling), add a separate structured sibling event
+    /// rather than extending this one; its contract is "UI-only strings".
     SuitePlanned {
         /// One line per FlowRun, e.g. `#1 tap.test: ios/v18 apps=[app]`.
         flow_runs: Vec<String>,

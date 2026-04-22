@@ -400,13 +400,10 @@ pub async fn discover_android_device_profiles() -> anyhow::Result<Vec<DeviceProf
 /// Pick the best system image for the given API level (or latest if 0).
 /// Prefers arm64-v8a ABI and google_apis target.
 pub fn pick_system_image(images: &[SystemImageInfo], preferred_api: u32) -> Option<&SystemImageInfo> {
-    images
-        .iter()
-        .filter(|img| {
-            (preferred_api == 0 || img.api_level == preferred_api)
-                && img.abi == "arm64-v8a"
-        })
-        .next() // already sorted by api_level desc, google_apis first
+    images.iter().find(|img| {
+        (preferred_api == 0 || img.api_level == preferred_api) && img.abi == "arm64-v8a"
+    })
+    // already sorted by api_level desc, google_apis first
 }
 
 /// Pick the best device profile for a phone or tablet.
@@ -414,14 +411,14 @@ pub fn pick_system_image(images: &[SystemImageInfo], preferred_api: u32) -> Opti
 pub fn pick_device_profile(profiles: &[DeviceProfileInfo], want_phone: bool) -> Option<&DeviceProfileInfo> {
     profiles
         .iter()
-        .filter(|p| {
+        .rfind(|p| {
             if want_phone {
                 p.is_phone
             } else {
                 p.name.contains("Tablet")
             }
         })
-        .last() // last = latest model (avdmanager lists chronologically)
+    // rfind = latest model (avdmanager lists chronologically)
 }
 
 #[cfg(test)]

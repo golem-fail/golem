@@ -42,11 +42,16 @@ pub enum InstallOutcome {
 #[derive(Clone, Default)]
 pub struct InstallCache {
     inner: Arc<Mutex<HashMap<InstallKey, InstallOutcome>>>,
-    /// Per-project-root locks. Serialises concurrent install scripts that
-    /// share a project dir (e.g. iOS + Android tauri builds both using
-    /// `src-tauri/`): parallel `cargo tauri` parents fight over shared
-    /// target-dir locks and WS IPC, causing ECONNREFUSED panics.
-    project_locks: Arc<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>>,
+    /// Per-(project-root, script-path) locks. Serialises concurrent install
+    /// scripts that drive the same build tree (e.g. iOS + Android tauri
+    /// builds both using `src-tauri/`): parallel `cargo tauri` parents fight
+    /// over shared target-dir locks and WS IPC, causing ECONNREFUSED panics.
+    ///
+    /// Keying by script path too means unrelated apps under one monorepo
+    /// project root don't serialise with each other — only runs that share
+    /// both root AND script collide.
+    #[allow(clippy::type_complexity)]
+    project_locks: Arc<Mutex<HashMap<(PathBuf, PathBuf), Arc<Mutex<()>>>>>,
 }
 
 impl InstallCache {
@@ -62,12 +67,13 @@ impl InstallCache {
         self.inner.lock().await.insert(key, outcome);
     }
 
-    /// Get (or create) the serialisation lock for a given project root.
-    /// Callers hold the returned guard for the duration of the install
-    /// script run to prevent concurrent invocations in the same project.
-    pub async fn project_lock(&self, root: &Path) -> Arc<Mutex<()>> {
+    /// Get (or create) the serialisation lock for a given (project_root,
+    /// script_path) pair. Callers hold the returned guard for the duration
+    /// of the install script run to prevent concurrent invocations that
+    /// share the same build tree.
+    pub async fn project_lock(&self, root: &Path, script: &Path) -> Arc<Mutex<()>> {
         let mut map = self.project_locks.lock().await;
-        map.entry(root.to_path_buf())
+        map.entry((root.to_path_buf(), script.to_path_buf()))
             .or_insert_with(|| Arc::new(Mutex::new(())))
             .clone()
     }
@@ -80,6 +86,7 @@ impl InstallCache {
 ///
 /// Returns `Ok(())` on exit 0, `Err(...)` on nonzero exit, timeout, or spawn error.
 /// The error's `Display` contains exit info + stderr tail (last ~100 lines).
+#[allow(clippy::too_many_arguments)]
 pub async fn run_install_script(
     script_path: &Path,
     working_dir: &Path,
@@ -223,10 +230,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn project_lock_serialises_per_root() {
+    async fn project_lock_serialises_same_root_and_script() {
         use std::sync::atomic::{AtomicU32, Ordering};
         let cache = InstallCache::new();
         let root = Path::new("/tmp/p1");
+        let script = Path::new("/tmp/p1/install.sh");
         let in_flight = Arc::new(AtomicU32::new(0));
         let max_seen = Arc::new(AtomicU32::new(0));
 
@@ -236,7 +244,7 @@ mod tests {
             let in_flight = in_flight.clone();
             let max_seen = max_seen.clone();
             handles.push(tokio::spawn(async move {
-                let lock = cache.project_lock(root).await;
+                let lock = cache.project_lock(root, script).await;
                 let _g = lock.lock().await;
                 let n = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
                 max_seen.fetch_max(n, Ordering::SeqCst);
@@ -246,19 +254,33 @@ mod tests {
         }
         for h in handles { h.await.unwrap(); }
         assert_eq!(max_seen.load(Ordering::SeqCst), 1,
-            "same-root install SHALL be serialised (at most 1 in-flight)");
+            "same (root, script) install SHALL be serialised (at most 1 in-flight)");
     }
 
     #[tokio::test]
     async fn project_lock_independent_per_root() {
         let cache = InstallCache::new();
-        let a = cache.project_lock(Path::new("/tmp/a")).await;
-        let b = cache.project_lock(Path::new("/tmp/b")).await;
+        let s = Path::new("/tmp/shared.sh");
+        let a = cache.project_lock(Path::new("/tmp/a"), s).await;
+        let b = cache.project_lock(Path::new("/tmp/b"), s).await;
         let _ga = a.lock().await;
         // Different root SHALL not block.
         let _gb = tokio::time::timeout(Duration::from_millis(100), b.lock())
             .await
             .expect("different-root locks SHALL be independent");
+    }
+
+    #[tokio::test]
+    async fn project_lock_independent_per_script_within_same_root() {
+        let cache = InstallCache::new();
+        let root = Path::new("/tmp/monorepo");
+        let a = cache.project_lock(root, Path::new("/tmp/monorepo/app-a.sh")).await;
+        let b = cache.project_lock(root, Path::new("/tmp/monorepo/app-b.sh")).await;
+        let _ga = a.lock().await;
+        // Different script within same root SHALL NOT block (monorepo case).
+        let _gb = tokio::time::timeout(Duration::from_millis(100), b.lock())
+            .await
+            .expect("locks for different scripts SHALL be independent");
     }
 
     #[tokio::test]

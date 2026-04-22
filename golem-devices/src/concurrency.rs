@@ -158,7 +158,7 @@ pub fn get_available_disk_mb() -> Result<u64> {
     }
 
     let stat = unsafe { stat.assume_init() };
-    let available_bytes = stat.f_bavail as u64 * stat.f_frsize as u64;
+    let available_bytes = stat.f_bavail as u64 * stat.f_frsize;
     Ok(available_bytes / (1024 * 1024))
 }
 

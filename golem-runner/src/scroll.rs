@@ -223,7 +223,7 @@ fn make_safe_viewport(
     vp: &Viewport,
     meta: &golem_driver::common::HierarchyMeta,
 ) -> Viewport {
-    let mut safe = vp.clone();
+    let mut safe = *vp;
     if meta.safe_area_top > 0 {
         safe.y += meta.safe_area_top;
         safe.height -= meta.safe_area_top;
@@ -335,6 +335,7 @@ pub async fn scroll_to_element(
         }
     });
 
+    #[allow(clippy::explicit_counter_loop)]
     for _ in 0..max_scrolls {
         if deadline.is_some_and(|d| Instant::now() >= d) {
             bail!(
@@ -409,7 +410,7 @@ pub async fn scroll_to_element(
                     from: golem_events::Point { x: fx, y: fy },
                     to: golem_events::Point { x: tx, y: ty },
                     result: golem_events::ScrollAttemptResult::PageScrolled,
-                    tree_stats: iter_stats.clone(),
+                    tree_stats: iter_stats,
                 });
             }
             prev_full_fp = new_full_fp;
@@ -438,7 +439,7 @@ pub async fn scroll_to_element(
                     from: golem_events::Point { x: fx, y: fy },
                     to: golem_events::Point { x: tx, y: ty },
                     result: golem_events::ScrollAttemptResult::InnerScrollableDetected,
-                    tree_stats: iter_stats.clone(),
+                    tree_stats: iter_stats,
                 });
             }
         }
@@ -454,7 +455,7 @@ pub async fn scroll_to_element(
                     from: golem_events::Point { x: fx, y: fy },
                     to: golem_events::Point { x: tx, y: ty },
                     result: golem_events::ScrollAttemptResult::Stall { count: stall_count, max: max_stalls },
-                    tree_stats: iter_stats.clone(),
+                    tree_stats: iter_stats,
                 });
             }
             continue;

@@ -27,6 +27,7 @@ fn find_free_port() -> std::io::Result<u16> {
 /// - Includes dynamically added elements (fixes the `{#if}` bug)
 /// - Uses `getBoundingClientRect()` for viewport-relative coordinates (CSS pixels)
 /// - Uses `IntersectionObserver` for accurate `visible_bounds` (handles overflow:hidden)
+///
 /// Returns JSON: `{ tree: {...}, meta: { elapsed_ms, node_count, dpr, url } }`
 ///
 /// Coordinates are in **CSS pixels** (not device pixels). The caller is
@@ -59,7 +60,7 @@ pub async fn find_webview_socket(device_serial: &str) -> Option<String> {
     let text = String::from_utf8_lossy(&output.stdout);
     for line in text.lines() {
         if let Some(idx) = line.find("webview_devtools_remote") {
-            let name = line[idx..].trim().split_whitespace().next()?;
+            let name = line[idx..].split_whitespace().next()?;
             return Some(name.to_string());
         }
     }

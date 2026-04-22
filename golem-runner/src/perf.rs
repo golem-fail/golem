@@ -74,14 +74,11 @@ impl PerfCollector {
 
         // FDs, disk, network: companion endpoint (needs app UID / run-as)
         if let Some(port) = self.companion_port {
-            match fetch_companion_perf(port, &self.bundle_id).await {
-                Ok(perf) => {
-                    data.file_descriptors = perf.file_descriptors;
-                    data.disk_mb = perf.disk_kb.map(|kb| kb as f64 / 1024.0);
-                    data.net_rx_kb = perf.net_rx_bytes.map(|b| b as f64 / 1024.0);
-                    data.net_tx_kb = perf.net_tx_bytes.map(|b| b as f64 / 1024.0);
-                }
-                Err(_) => {}
+            if let Ok(perf) = fetch_companion_perf(port, &self.bundle_id).await {
+                data.file_descriptors = perf.file_descriptors;
+                data.disk_mb = perf.disk_kb.map(|kb| kb as f64 / 1024.0);
+                data.net_rx_kb = perf.net_rx_bytes.map(|b| b as f64 / 1024.0);
+                data.net_tx_kb = perf.net_tx_bytes.map(|b| b as f64 / 1024.0);
             }
         }
 
@@ -156,7 +153,7 @@ impl PerfCollector {
             .adb(&["shell", "pidof", &self.bundle_id])
             .await
             .ok()?;
-        output.trim().split_whitespace().next()?.parse().ok()
+        output.split_whitespace().next()?.parse().ok()
     }
 
     async fn ios_pid(&self) -> Option<u32> {
@@ -296,7 +293,7 @@ fn parse_android_memory(output: &str) -> Option<f64> {
         if trimmed.starts_with("TOTAL PSS:") || trimmed.starts_with("TOTAL:") {
             // "TOTAL PSS:   142536" or "TOTAL:   142536   ..."
             let after_colon = trimmed.split(':').nth(1)?;
-            let kb: f64 = after_colon.trim().split_whitespace().next()?.parse().ok()?;
+            let kb: f64 = after_colon.split_whitespace().next()?.parse().ok()?;
             return Some(kb / 1024.0);
         }
     }
@@ -377,7 +374,7 @@ fn parse_ios_fds(output: &str) -> Option<u32> {
 /// Parse disk usage from `du -sk <path>` (value in KB).
 fn parse_ios_disk(output: &str) -> Option<f64> {
     let first_line = output.lines().next()?;
-    let kb: f64 = first_line.trim().split_whitespace().next()?.parse().ok()?;
+    let kb: f64 = first_line.split_whitespace().next()?.parse().ok()?;
     Some(kb / 1024.0)
 }
 

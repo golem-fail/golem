@@ -477,12 +477,10 @@ pub fn find_alert(el: &Element) -> Option<Element> {
     }
     // Android: dialog window pattern — FrameLayout at non-zero y with
     // a Button child (native alert dialogs have this structure)
-    if el.element_type == "FrameLayout" && el.bounds.y > 0 {
-        if has_button_descendant(el) {
-            let mut alert = el.clone();
-            alert.text = extract_alert_message(&alert);
-            return Some(alert);
-        }
+    if el.element_type == "FrameLayout" && el.bounds.y > 0 && has_button_descendant(el) {
+        let mut alert = el.clone();
+        alert.text = extract_alert_message(&alert);
+        return Some(alert);
     }
     for child in &el.children {
         if let Some(alert) = find_alert(child) {
@@ -543,7 +541,7 @@ fn has_button_descendant(el: &Element) -> bool {
     if el.element_type == "Button" {
         return true;
     }
-    el.children.iter().any(|c| has_button_descendant(c))
+    el.children.iter().any(has_button_descendant)
 }
 
 // ---------------------------------------------------------------------------

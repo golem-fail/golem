@@ -102,7 +102,15 @@ pub async fn plan(
 
 /// For each unique slot shape across all FlowRuns, count how many devices
 /// in the plan-time snapshot match that shape. Emit one pre-formatted line
-/// per shape: `<shape> — <n> matches (<b> booted, <s> shutdown)`.
+/// per shape: `<shape> — <n> device(s) (<booted> booted[, <shutdown>
+/// shutdown][, <physical> physical])`.
+///
+/// **Semantics note:** the total count is *eligible* devices, not
+/// *concurrently-usable* devices. A shutdown sim counts once but only
+/// becomes usable once booted; physical devices are each single-user. The
+/// scheduler's parallel capacity is therefore bounded by booted + any
+/// boot-on-demand budget — not by this total. Read the line as "plan saw N
+/// matching devices" not "N flows can run in parallel".
 fn compute_device_availability(
     flow_runs: &[FlowRun],
     snapshot: &[DeviceInfo],
@@ -146,9 +154,8 @@ fn compute_device_availability(
                 parts.push(format!("{physical} physical"));
             }
             format!(
-                "{label} — {n} match{plural} ({details})",
+                "{label} — {n} device(s) ({details})",
                 n = matches.len(),
-                plural = if matches.len() == 1 { "" } else { "es" },
                 details = parts.join(", "),
             )
         })
@@ -168,7 +175,9 @@ fn slot_signature(slot: &DeviceSlot) -> String {
     )
 }
 
-fn shape_label(slot: &DeviceSlot) -> String {
+/// Render a slot's shape-only label: `platform/version/type/physical/name`.
+/// Excludes `apps`. Used for availability counts where apps are irrelevant.
+pub fn shape_label(slot: &DeviceSlot) -> String {
     let mut parts: Vec<String> = vec![slot.platform.to_string()];
     if let Some(spec) = &slot.os_version {
         match spec {
@@ -191,6 +200,18 @@ fn shape_label(slot: &DeviceSlot) -> String {
         parts.push(format!("name={n}"));
     }
     parts.join("/")
+}
+
+/// Render a slot's full label: shape + `apps=[...]` suffix.
+/// Used for flow-run summary lines where apps matter.
+pub fn describe_slot(slot: &DeviceSlot) -> String {
+    let shape = shape_label(slot);
+    let apps = if slot.apps.is_empty() {
+        "no apps".to_string()
+    } else {
+        format!("apps=[{}]", slot.apps.join(","))
+    };
+    format!("{shape} {apps}")
 }
 
 /// Check whether a snapshot device satisfies a slot's requirements. Used
@@ -245,7 +266,7 @@ async fn device_snapshot() -> Vec<DeviceInfo> {
 
 /// Fill in missing flow-level app fields from the matching project-level
 /// `[[apps]]` entry by name. Flow values always win; project fills gaps only.
-fn merge_project_apps(flow: &mut FlowFile, project_apps: &[ProjectAppConfig]) {
+pub fn merge_project_apps(flow: &mut FlowFile, project_apps: &[ProjectAppConfig]) {
     for flow_app in &mut flow.flow.apps {
         if let Some(proj) = project_apps.iter().find(|p| p.name == flow_app.name) {
             if flow_app.bundle.is_none() {

@@ -147,8 +147,8 @@ pub fn filter_viewport(root: &Element, viewport: &Viewport) -> Element {
         checked: root.checked,
         clickable: root.clickable,
         focused: root.focused,
-        bounds: root.bounds.clone(),
-        visible_bounds: root.visible_bounds.clone(),
+        bounds: root.bounds,
+        visible_bounds: root.visible_bounds,
         children: visible,
     }
 }

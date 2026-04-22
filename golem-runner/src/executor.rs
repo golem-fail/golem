@@ -210,7 +210,7 @@ pub async fn execute_flow<'a>(
             // Derive child RNG from parent for deterministic sub-flow generation.
             let child_rng = {
                 use rand::Rng;
-                let mut parent_rng = ctx.rng.lock().unwrap();
+                let mut parent_rng = ctx.rng.lock().expect("parent rng mutex poisoned");
                 let child_seed: u64 = parent_rng.gen();
                 rand_chacha::ChaCha8Rng::seed_from_u64(child_seed)
             };

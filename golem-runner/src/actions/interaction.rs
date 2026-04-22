@@ -81,7 +81,7 @@ async fn find_inner_toggle(
 fn collect_toggles(element: &golem_element::Element, out: &mut Vec<golem_element::Bounds>) {
     let et = element.element_type.to_lowercase();
     if et == "switch" || et == "toggle" {
-        out.push(element.bounds.clone());
+        out.push(element.bounds);
     }
     for child in &element.children {
         collect_toggles(child, out);
@@ -360,11 +360,11 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
 
         let in_viewport = find_elements(&visible, &within_sel)
             .first()
-            .map(|r| r.element.bounds.clone());
+            .map(|r| r.element.bounds);
 
-        if in_viewport.is_some() {
+        if let Some(b) = in_viewport {
             // Container is visible — but try to get more of it on screen
-            nudge_into_view(driver, &in_viewport.clone().expect("checked"), &vp).await;
+            nudge_into_view(driver, &b, &vp).await;
             // Re-fetch bounds after nudge
             let (r, m) = driver.get_hierarchy().await?;
             let mut v = golem_element::Viewport::from_root(&r);
@@ -372,7 +372,7 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
             let vis = golem_element::filter_viewport(&r, &v);
             find_elements(&vis, &within_sel)
                 .first()
-                .map(|r| r.element.bounds.clone())
+                .map(|r| r.element.bounds)
                 .or(in_viewport)
         } else {
             // Container not visible — scroll to bring it into view
@@ -387,7 +387,7 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
             let fresh_visible = golem_element::filter_viewport(&fresh, &fresh_vp);
             let bounds = find_elements(&fresh_visible, &within_sel)
                 .first()
-                .map(|r| r.element.bounds.clone());
+                .map(|r| r.element.bounds);
             if let Some(ref b) = bounds {
                 nudge_into_view(driver, b, &fresh_vp).await;
                 // Re-fetch after nudge
@@ -397,7 +397,7 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
                 let vis2 = golem_element::filter_viewport(&r2, &v2);
                 find_elements(&vis2, &within_sel)
                     .first()
-                    .map(|r| r.element.bounds.clone())
+                    .map(|r| r.element.bounds)
                     .or(bounds)
             } else {
                 bounds

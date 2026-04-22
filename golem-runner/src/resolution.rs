@@ -424,7 +424,7 @@ pub async fn resolve_element(
                 let within_sel = build_selector_from_group(within_group);
                 let in_viewport = find_elements(&visible_root, &within_sel)
                     .first()
-                    .map(|r| r.element.bounds.clone());
+                    .map(|r| r.element.bounds);
 
                 let resolve_within = |bounds: Option<golem_element::Bounds>| bounds;
 
@@ -438,7 +438,7 @@ pub async fn resolve_element(
                     let vis = filter_viewport(&r, &v);
                     resolve_within(find_elements(&vis, &within_sel)
                         .first()
-                        .map(|r| r.element.bounds.clone())
+                        .map(|r| r.element.bounds)
                         .or(in_viewport))
                 } else {
                     // Container not visible — scroll the page to bring it into view
@@ -455,7 +455,7 @@ pub async fn resolve_element(
                     let fresh_visible = filter_viewport(&fresh_root, &fresh_vp);
                     let bounds = find_elements(&fresh_visible, &within_sel)
                         .first()
-                        .map(|r| r.element.bounds.clone());
+                        .map(|r| r.element.bounds);
                     if let Some(ref b) = bounds {
                         crate::actions::interaction::nudge_into_view(driver, b, &fresh_vp).await;
                         let (r2, m2) = driver.get_hierarchy().await?;
@@ -465,7 +465,7 @@ pub async fn resolve_element(
                         let vis2 = filter_viewport(&r2, &v2);
                         resolve_within(find_elements(&vis2, &within_sel)
                             .first()
-                            .map(|r| r.element.bounds.clone())
+                            .map(|r| r.element.bounds)
                             .or(bounds))
                     } else {
                         resolve_within(bounds)

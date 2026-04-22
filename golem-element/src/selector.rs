@@ -62,7 +62,7 @@ pub fn find_elements(root: &Element, selector: &Selector) -> Vec<FindResult> {
 ///
 /// - `AnchorSelector::Text` — find first element matching the glob pattern.
 /// - `AnchorSelector::Full` — find first element matching the full selector.
-fn resolve_anchor<'a>(root: &'a Element, anchor: &AnchorSelector) -> Option<FindResult> {
+fn resolve_anchor(root: &Element, anchor: &AnchorSelector) -> Option<FindResult> {
     match anchor {
         AnchorSelector::Text(pattern) => {
             let matcher = GlobMatcher::new(pattern);

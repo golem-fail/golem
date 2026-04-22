@@ -43,7 +43,12 @@ pub fn build_install_matrix(
     let mut entries: Vec<InstallEntry> = Vec::new();
 
     for run in flow_runs {
-        let pf = &flows[run.flow_idx];
+        // Safe lookup: callers in-tree always supply matched flow_idx, but
+        // external callers may construct `FlowRun`s independently (e.g. tests,
+        // future scheduler harnesses) — a stale idx shouldn't panic the plan.
+        let Some(pf) = flows.get(run.flow_idx) else {
+            continue;
+        };
         for slot in &run.slots {
             for app_name in &slot.apps {
                 let key = (slot.platform, app_name.clone());

@@ -190,7 +190,7 @@ pub fn format_suite_toon(report: &SuiteReport) -> String {
     out.push_str("# S=suite R=result(passed/warned/failed) T=total(passed/failed/skipped) d:N=duration_ms\n");
     out.push_str("# step: +=pass !=fail ~=warn -=skip @x,y=position b=bounds(x,y,w,h) s:N=scroll_attempts t:N/M=trees/nodes\n");
     out.push_str("# perf: P block:app:device:iteration mem=MB cpu=% thr=threads fd=file_descriptors disk=MB net_rx/tx=KB launch=ms\n");
-    out.push_str("# install: I app:bundle:device R=ok/fail d:ms\n");
+    out.push_str("# install: I app:bundle:device R=ok/fail d:ms (device = `{platform}/{name}`)\n");
 
     // Install results (one line per (device, bundle) attempted)
     for inst in &report.installs {
