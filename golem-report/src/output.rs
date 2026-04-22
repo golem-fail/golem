@@ -108,6 +108,7 @@ mod tests {
         StepReport {
             global_step_index: 0,
             block_name: String::new(),
+            block_iteration: 0,
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
@@ -126,6 +127,7 @@ mod tests {
         StepReport {
             global_step_index: 0,
             block_name: String::new(),
+            block_iteration: 0,
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
@@ -155,6 +157,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     started_at: None,
@@ -172,6 +175,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     started_at: None,

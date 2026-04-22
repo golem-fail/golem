@@ -234,6 +234,21 @@ Needs a concrete schema decision before implementing. Today TOON emits `duration
 
 **Files:** `golem-report/src/toon.rs` once schema is agreed.
 
+## Skipped Step Reasons Across All Outputs
+
+Skipped steps carry no reason today: a ` -tap:Cancel` line in TOON (or `<skipped/>` in JUnit, `"outcome": "skipped"` in JSON) tells the reader *that* a step was skipped, not *why*.
+
+**Fix:** add `skip_reason: Option<String>` to `StepReport`. Populate from flow execution when a step is conditionally skipped (e.g. `if:` predicate false, barrier-aborted, start-block cursor past this step). Surface per renderer:
+
+- Human stream: `─ tap:Cancel (skipped: barrier aborted)`
+- JSON: `"skip_reason": "barrier aborted"`
+- JUnit: `<skipped message="barrier aborted"/>`
+- TOON: ` -tap:Cancel :barrier_aborted` (short reason token; long reasons truncated)
+
+Also roadmap-adjacent: consider whether `golem_events::StepOutcome::Skipped` should become `Skipped(String)` symmetrically with `Warning(String)` / `Failed(String)`, or keep `Skipped` as-is and pass the reason via a sibling event/field. Second option keeps the common case small.
+
+**Files:** `golem-events/src/lib.rs` (StepOutcome shape), `golem-runner/src/executor.rs` (populate reasons at skip decision), `golem-report/src/{accumulator,human,json,junit,toon}.rs` (surface).
+
 ## iOS WebView: Slow Element Resolution Between Consecutive Actions
 
 Consecutive `type` actions on iOS WebView elements are slow — resolving the second input field after typing in the first takes >10s. The DOM tree changes after each keystroke (WebKit enrichment re-fetches), and finding the next element requires waiting for the tree to settle.

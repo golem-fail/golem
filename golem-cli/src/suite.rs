@@ -285,6 +285,7 @@ impl SuiteRunner {
                 seed: self.config.seed,
                 screenshot_path: None,
                 device_name: None,
+                os_major: None,
                 perf_snapshots: vec![],
                 skipped_reason: None,
                 started_at: None,
@@ -357,6 +358,7 @@ impl SuiteRunner {
                         seed: self.config.seed,
                         screenshot_path: None,
                         device_name: None,
+                        os_major: None,
                         perf_snapshots: vec![],
                         skipped_reason: None,
                         started_at: None,
@@ -396,19 +398,24 @@ impl SuiteRunner {
                     && f.flow_name == report.flow_name
             }) {
                 // Accumulator built its own FlowReport from live events —
-                // prefer its wall-clock timestamps since run_flow_on_device
-                // doesn't capture them directly.
+                // prefer its wall-clock timestamps and os_major since
+                // run_flow_on_device doesn't capture them directly on the
+                // returned FlowReport.
                 if report.started_at.is_none() {
                     report.started_at = acc_flow.started_at.clone();
                 }
                 if report.finished_at.is_none() {
                     report.finished_at = acc_flow.finished_at.clone();
                 }
+                if report.os_major.is_none() {
+                    report.os_major = acc_flow.os_major;
+                }
                 if report.step_results.is_empty() && !acc_flow.step_results.is_empty() {
                     report.step_results = acc_flow.step_results.iter().map(|s| {
                         golem_report::StepReport {
                             global_step_index: s.global_step_index,
                             block_name: s.block_name.clone(),
+                            block_iteration: s.block_iteration,
                             step_index_in_block: s.step_index_in_block,
                             action: s.action.clone(),
                             target: s.target.clone(),
@@ -536,6 +543,7 @@ async fn execute_flow_run(
             seed: cfg.seed,
             screenshot_path: None,
             device_name: None,
+            os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
             started_at: None,
@@ -605,6 +613,7 @@ async fn execute_flow_run(
                     seed: cfg.seed,
                     screenshot_path: None,
                     device_name: None,
+                    os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     started_at: None,
@@ -793,6 +802,7 @@ async fn preinstall_for_device_scoped(
             &entry.app_name,
             entry.timeout_ms,
             &target,
+            device.os_major,
             Some(&emitter),
         )
         .await;
@@ -1364,6 +1374,7 @@ async fn run_flow_on_device(
                     seed: Some(actual_seed),
                     screenshot_path: None,
                     device_name: Some(device_label.clone()),
+                    os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: Some(reason),
                     started_at: None,
@@ -1392,6 +1403,7 @@ async fn run_flow_on_device(
                     seed: Some(actual_seed),
                     screenshot_path: None,
                     device_name: Some(device_label.clone()),
+                    os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: Some(reason),
                     started_at: None,
@@ -1417,6 +1429,7 @@ async fn run_flow_on_device(
                     seed: Some(actual_seed),
                     screenshot_path: None,
                     device_name: Some(device_label.clone()),
+                    os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: Some(reason),
                     started_at: None,
@@ -1465,6 +1478,7 @@ async fn run_flow_on_device(
                 &app.name,
                 timeout_ms,
                 &target,
+                device.os_major,
                 device_emitter.as_ref(),
             ).await;
             match result {
@@ -1488,6 +1502,7 @@ async fn run_flow_on_device(
                         seed: Some(actual_seed),
                         screenshot_path: None,
                         device_name: Some(device_label.clone()),
+                        os_major: None,
                         perf_snapshots: vec![],
                         skipped_reason: Some(reason),
                         started_at: None,
@@ -1498,7 +1513,10 @@ async fn run_flow_on_device(
         }
     }
 
-    ctx.emit(golem_events::EventKind::FlowStarted { flow_name: flow_name.clone() });
+    ctx.emit(golem_events::EventKind::FlowStarted {
+        flow_name: flow_name.clone(),
+        os_major: device.os_major,
+    });
     // CLI --start takes precedence over flow-level start field.
     let effective_start = start_block.as_deref().or(flow.flow.start.as_deref());
     let base_timeout = flow.flow.options.as_ref()
@@ -1532,6 +1550,7 @@ async fn run_flow_on_device(
                 success: result.success,
                 duration_ms,
                 seed: actual_seed,
+                os_major: device.os_major,
             });
             FlowReport {
                 flow_name,
@@ -1542,6 +1561,7 @@ async fn run_flow_on_device(
                 seed: Some(actual_seed),
                 screenshot_path: None,
                 device_name: Some(device_label),
+                os_major: None,
                 perf_snapshots: result.perf_snapshots,
                 skipped_reason: None,
                 started_at: None,
@@ -1556,6 +1576,7 @@ async fn run_flow_on_device(
                 success: false,
                 duration_ms,
                 seed: actual_seed,
+                os_major: device.os_major,
             });
             FlowReport {
                 flow_name,
@@ -1566,6 +1587,7 @@ async fn run_flow_on_device(
                 seed: Some(actual_seed),
                 screenshot_path: None,
                 device_name: Some(device_label),
+                os_major: None,
                 perf_snapshots: vec![],
                 skipped_reason: None,
                 started_at: None,
@@ -1802,6 +1824,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
             started_at: None,
@@ -1820,6 +1843,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
             started_at: None,

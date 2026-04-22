@@ -17,6 +17,10 @@ fn iso8601_utc(t: SystemTime) -> String {
 struct AccumulatedStep {
     global_index: u64,
     block_name: String,
+    /// Iteration of the containing block (0-based). Populated from the
+    /// most recent `BlockStarted` on this device; used by TOON to render
+    /// `B:block i:<N>` headers.
+    block_iteration: u32,
     step_index_in_block: usize,
     action: String,
     selector_label: String,
@@ -33,6 +37,7 @@ struct AccumulatedStep {
 struct AccumulatedFlow {
     flow_name: String,
     device_id: DeviceId,
+    os_major: Option<u32>,
     steps: Vec<AccumulatedStep>,
     warnings: Vec<String>,
     duration_ms: u64,
@@ -48,6 +53,10 @@ pub struct ReportAccumulator {
     flows: Vec<AccumulatedFlow>,
     current_flow_by_device: HashMap<String, usize>, // device_id.0 -> index into flows
     current_step: HashMap<String, AccumulatedStep>, // current step per device
+    /// Current block iteration per device, populated from `BlockStarted`
+    /// events. Lets step-level renderers group consecutive steps under
+    /// the correct block iteration even when blocks iterate.
+    current_block_iter: HashMap<String, u32>,
     pub(crate) installs: Vec<InstallReport>,
     total_duration_ms: u64,
     /// Wall-clock of the first event observed. Used as suite started_at
@@ -78,11 +87,12 @@ impl ReportAccumulator {
         }
 
         match &event.kind {
-            EventKind::FlowStarted { flow_name } => {
+            EventKind::FlowStarted { flow_name, os_major } => {
                 let idx = self.flows.len();
                 self.flows.push(AccumulatedFlow {
                     flow_name: flow_name.clone(),
                     device_id: event.device_id.clone(),
+                    os_major: Some(*os_major),
                     steps: Vec::new(),
                     warnings: Vec::new(),
                     duration_ms: 0,
@@ -93,12 +103,15 @@ impl ReportAccumulator {
                 });
                 self.current_flow_by_device.insert(dev_key, idx);
             }
-            EventKind::FlowFinished { success, duration_ms, .. } => {
+            EventKind::FlowFinished { success, duration_ms, os_major, .. } => {
                 if let Some(&idx) = self.current_flow_by_device.get(&dev_key) {
                     if let Some(flow) = self.flows.get_mut(idx) {
                         flow.success = *success;
                         flow.duration_ms = *duration_ms;
                         flow.finished_at = Some(event.wall_time);
+                        if flow.os_major.is_none() {
+                            flow.os_major = Some(*os_major);
+                        }
                     }
                 }
                 self.current_flow_by_device.remove(&dev_key);
@@ -108,6 +121,7 @@ impl ReportAccumulator {
                 self.flows.push(AccumulatedFlow {
                     flow_name: flow_name.clone(),
                     device_id: event.device_id.clone(),
+                    os_major: None,
                     steps: Vec::new(),
                     warnings: Vec::new(),
                     duration_ms: 0,
@@ -117,11 +131,16 @@ impl ReportAccumulator {
                     finished_at: Some(event.wall_time),
                 });
             }
+            EventKind::BlockStarted { iteration, .. } => {
+                self.current_block_iter.insert(dev_key, *iteration);
+            }
             EventKind::StepStarted { global_step_index, block_name, step_index_in_block, action, selector_label } => {
                 self.finish_current_step(&dev_key);
+                let block_iteration = self.current_block_iter.get(&dev_key).copied().unwrap_or(0);
                 self.current_step.insert(dev_key, AccumulatedStep {
                     global_index: *global_step_index,
                     block_name: block_name.clone(),
+                    block_iteration,
                     step_index_in_block: *step_index_in_block,
                     action: action.clone(),
                     selector_label: selector_label.clone(),
@@ -163,7 +182,7 @@ impl ReportAccumulator {
                 self.install_starts
                     .insert((dev_key.clone(), bundle_id.clone()), event.wall_time);
             }
-            EventKind::InstallFinished { app_name, bundle_id, success, duration_ms, exit_code, error, target: _ } => {
+            EventKind::InstallFinished { app_name, bundle_id, success, duration_ms, exit_code, error, target: _, os_major } => {
                 let started_at = self
                     .install_starts
                     .remove(&(dev_key.clone(), bundle_id.clone()))
@@ -172,6 +191,7 @@ impl ReportAccumulator {
                     app_name: app_name.clone(),
                     bundle_id: bundle_id.clone(),
                     device_name: event.device_id.0.clone(),
+                    os_major: Some(*os_major),
                     success: *success,
                     duration_ms: *duration_ms,
                     exit_code: *exit_code,
@@ -213,6 +233,7 @@ impl ReportAccumulator {
                 StepReport {
                     global_step_index: s.global_index,
                     block_name: s.block_name,
+                    block_iteration: s.block_iteration,
                     step_index_in_block: s.step_index_in_block,
                     action: s.action,
                     target: s.selector_label,
@@ -237,6 +258,7 @@ impl ReportAccumulator {
                 seed: None,
                 screenshot_path: None,
                 device_name: Some(flow.device_id.0),
+                os_major: flow.os_major,
                 perf_snapshots: Vec::new(),
                 started_at: flow.started_at.map(iso8601_utc),
                 finished_at: flow.finished_at.map(iso8601_utc),
@@ -287,9 +309,7 @@ mod tests {
     #[test]
     fn flow_started_creates_new_flow_entry() {
         let mut acc = ReportAccumulator::new();
-        acc.process(&make_event(0, "dev1", EventKind::FlowStarted {
-            flow_name: "login".into(),
-        }));
+        acc.process(&make_event(0, "dev1", EventKind::FlowStarted { flow_name: "login".into(), os_major: 0 }));
 
         let report = acc.into_suite_report();
         assert_eq!(report.flows.len(), 1, "SHALL create one flow entry");
@@ -308,9 +328,7 @@ mod tests {
         let mut acc = ReportAccumulator::new();
         let dev = "pixel";
 
-        acc.process(&make_event(0, dev, EventKind::FlowStarted {
-            flow_name: "f1".into(),
-        }));
+        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f1".into(), os_major: 0 }));
         acc.process(&make_event(1, dev, EventKind::StepStarted {
             global_step_index: 0,
             block_name: "main".into(),
@@ -350,9 +368,7 @@ mod tests {
         let mut acc = ReportAccumulator::new();
         let dev = "iphone";
 
-        acc.process(&make_event(0, dev, EventKind::FlowStarted {
-            flow_name: "f".into(),
-        }));
+        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0 }));
         acc.process(&make_event(1, dev, EventKind::StepStarted {
             global_step_index: 0,
             block_name: "b".into(),
@@ -399,15 +415,8 @@ mod tests {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
 
-        acc.process(&make_event(0, dev, EventKind::FlowStarted {
-            flow_name: "f".into(),
-        }));
-        acc.process(&make_event(1, dev, EventKind::FlowFinished {
-            flow_name: "f".into(),
-            success: false,
-            duration_ms: 5000,
-            seed: 0,
-        }));
+        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0 }));
+        acc.process(&make_event(1, dev, EventKind::FlowFinished { flow_name: "f".into(), success: false, duration_ms: 5000, seed: 0, os_major: 0 }));
 
         let report = acc.into_suite_report();
         assert!(!report.flows[0].success, "SHALL set success=false from FlowFinished");
@@ -421,9 +430,7 @@ mod tests {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
 
-        acc.process(&make_event(0, dev, EventKind::FlowStarted {
-            flow_name: "checkout".into(),
-        }));
+        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "checkout".into(), os_major: 0 }));
         acc.process(&make_event(1, dev, EventKind::StepStarted {
             global_step_index: 0,
             block_name: "main".into(),
@@ -454,12 +461,7 @@ mod tests {
             screenshot_path: Some("/tmp/fail.png".into()),
             tree_stats: golem_events::TreeStats::default(),
         }));
-        acc.process(&make_event(5, dev, EventKind::FlowFinished {
-            flow_name: "checkout".into(),
-            success: false,
-            duration_ms: 10020,
-            seed: 0,
-        }));
+        acc.process(&make_event(5, dev, EventKind::FlowFinished { flow_name: "checkout".into(), success: false, duration_ms: 10020, seed: 0, os_major: 0 }));
         acc.process(&make_event(6, dev, EventKind::SuiteFinished {
             duration_ms: 10020,
             passed: 0,
@@ -492,12 +494,8 @@ mod tests {
     fn multiple_devices_accumulate_independently() {
         let mut acc = ReportAccumulator::new();
 
-        acc.process(&make_event(0, "ios", EventKind::FlowStarted {
-            flow_name: "login_ios".into(),
-        }));
-        acc.process(&make_event(1, "android", EventKind::FlowStarted {
-            flow_name: "login_android".into(),
-        }));
+        acc.process(&make_event(0, "ios", EventKind::FlowStarted { flow_name: "login_ios".into(), os_major: 0 }));
+        acc.process(&make_event(1, "android", EventKind::FlowStarted { flow_name: "login_android".into(), os_major: 0 }));
 
         // iOS step
         acc.process(&make_event(2, "ios", EventKind::StepStarted {
@@ -533,12 +531,8 @@ mod tests {
             tree_stats: golem_events::TreeStats::default(),
         }));
 
-        acc.process(&make_event(6, "ios", EventKind::FlowFinished {
-            flow_name: "login_ios".into(), success: true, duration_ms: 30, seed: 0,
-        }));
-        acc.process(&make_event(7, "android", EventKind::FlowFinished {
-            flow_name: "login_android".into(), success: true, duration_ms: 200, seed: 0,
-        }));
+        acc.process(&make_event(6, "ios", EventKind::FlowFinished { flow_name: "login_ios".into(), success: true, duration_ms: 30, seed: 0, os_major: 0 }));
+        acc.process(&make_event(7, "android", EventKind::FlowFinished { flow_name: "login_android".into(), success: true, duration_ms: 200, seed: 0, os_major: 0 }));
 
         let suite = acc.into_suite_report();
         assert_eq!(suite.flows.len(), 2, "SHALL have two separate flows");
@@ -562,9 +556,7 @@ mod tests {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
 
-        acc.process(&make_event(0, dev, EventKind::FlowStarted {
-            flow_name: "f".into(),
-        }));
+        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0 }));
         acc.process(&make_event(1, dev, EventKind::StepStarted {
             global_step_index: 0,
             block_name: "b".into(),
@@ -593,11 +585,12 @@ mod tests {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
 
-        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into() }));
+        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0 }));
 
         // Skipped step
         acc.process(&make_event(1, dev, EventKind::StepStarted {
-            global_step_index: 0, block_name: "b".into(), step_index_in_block: 0,
+            global_step_index: 0, block_name: "b".into(),
+ step_index_in_block: 0,
             action: "a".into(), selector_label: "s".into(),
         }));
         acc.process(&make_event(2, dev, EventKind::StepFinished {
@@ -608,7 +601,8 @@ mod tests {
 
         // Ignored step
         acc.process(&make_event(3, dev, EventKind::StepStarted {
-            global_step_index: 1, block_name: "b".into(), step_index_in_block: 1,
+            global_step_index: 1, block_name: "b".into(),
+ step_index_in_block: 1,
             action: "b".into(), selector_label: "t".into(),
         }));
         acc.process(&make_event(4, dev, EventKind::StepFinished {

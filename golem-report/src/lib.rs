@@ -194,6 +194,8 @@ pub struct StepReport {
     pub global_step_index: u64,
     /// Name of the block containing this step.
     pub block_name: String,
+    /// Iteration of the containing block (0 for single-pass blocks).
+    pub block_iteration: u32,
     /// Index within the block.
     pub step_index_in_block: usize,
     /// The action performed (e.g. "tap", "type", "assert_visible").
@@ -278,6 +280,10 @@ pub struct FlowReport {
     pub screenshot_path: Option<String>,
     /// Name of the device the flow ran on.
     pub device_name: Option<String>,
+    /// OS major version of the device (e.g. 18, 26, 34). Populated from
+    /// FlowStarted/FlowFinished events; None when the report is synthesized
+    /// without a live event stream (e.g. parse-failure reports).
+    pub os_major: Option<u32>,
     /// Performance snapshots captured at block boundaries.
     pub perf_snapshots: Vec<PerfSnapshot>,
     /// ISO-8601 UTC wall-clock when the flow started.
@@ -292,6 +298,8 @@ pub struct InstallReport {
     pub app_name: String,
     pub bundle_id: String,
     pub device_name: String,
+    /// OS major version of the device (e.g. 18, 26, 34).
+    pub os_major: Option<u32>,
     pub success: bool,
     pub duration_ms: u64,
     pub exit_code: Option<i32>,

@@ -96,6 +96,7 @@ pub async fn run_install_script(
     app_name: &str,
     timeout_ms: u64,
     target: &str,
+    os_major: u32,
     emitter: Option<&DeviceEmitter>,
 ) -> Result<()> {
     let start = Instant::now();
@@ -105,6 +106,7 @@ pub async fn run_install_script(
             bundle_id: bundle_id.to_string(),
             script_path: script_path.display().to_string(),
             target: target.to_string(),
+            os_major,
         });
     }
 
@@ -130,6 +132,7 @@ pub async fn run_install_script(
                     exit_code: None,
                     error: Some(err.clone()),
                     target: target.to_string(),
+                    os_major,
                 });
             }
             return Err(anyhow!(err));
@@ -201,6 +204,7 @@ pub async fn run_install_script(
             exit_code,
             error: error_msg.clone(),
             target: target.to_string(),
+            os_major,
         });
     }
 
@@ -299,7 +303,7 @@ mod tests {
             "#!/bin/sh\necho running >&2\nexit 0\n");
         let result = run_install_script(
             &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 5_000, "test target", None,
+            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, None,
         ).await;
         assert!(result.is_ok(), "exit 0 SHALL be ok: {:?}", result);
     }
@@ -311,7 +315,7 @@ mod tests {
             "#!/bin/sh\necho 'build failed: missing signing' >&2\nexit 1\n");
         let result = run_install_script(
             &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 5_000, "test target", None,
+            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, None,
         ).await;
         assert!(result.is_err());
         let err = format!("{}", result.unwrap_err());
@@ -326,7 +330,7 @@ mod tests {
             "#!/bin/sh\nsleep 10\n");
         let result = run_install_script(
             &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 200, "test target", None,
+            "ios", "udid-1", "com.x", "app", 200, "test target", 0, None,
         ).await;
         assert!(result.is_err());
         assert!(format!("{}", result.unwrap_err()).contains("timed out"));
@@ -343,7 +347,7 @@ mod tests {
         let script = write_script(tmp.path(), &script_body);
         let result = run_install_script(
             &script, tmp.path(),
-            "android", "emulator-5554", "com.example.app", "app", 5_000, "test target", None,
+            "android", "emulator-5554", "com.example.app", "app", 5_000, "test target", 0, None,
         ).await;
         assert!(result.is_ok());
         let args = std::fs::read_to_string(&out_file).unwrap();
@@ -359,7 +363,7 @@ mod tests {
             "#!/bin/sh\ntest -f ./marker.txt || { echo missing >&2; exit 1; }\n");
         let result = run_install_script(
             &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 5_000, "test target", None,
+            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, None,
         ).await;
         assert!(result.is_ok(), "SHALL run in provided working_dir: {:?}", result);
     }

@@ -6,25 +6,46 @@
 //! # Format overview
 //!
 //! ```text
-//! S:flow_name d:duration_ms [seed:N]
-//!  +action:target duration
-//!  ~action:target duration message
-//!  !action:target duration error
+//! F:flow_name dev:platform/name os:major d:duration_ms [seed:N] [t0+:offset]
+//!  B:block_name [i:N]
+//!  +action:target d:duration
+//!  ~action:target d:duration message
+//!  !action:target d:duration error
 //!  -action:target
 //! R:PASS|FAIL passed/warned/failed
 //!
-//! T:passed/failed/skipped d:duration
+//! total:N×pass,N×fail,N×skip d:duration
 //! ```
 
 use crate::{FlowReport, StepOutcome, StepReport, SuiteReport};
 use std::fmt::Write;
 
+/// Parse an ISO-8601 UTC timestamp (as stored on `*Report.started_at` /
+/// `finished_at`) into unix-epoch milliseconds. Returns `None` on any
+/// parse failure — TOON treats absent/unparseable timestamps identically
+/// (no `T0:` / `t0+:` emitted rather than a bogus value).
+fn iso_to_unix_ms(iso: &str) -> Option<i64> {
+    chrono::DateTime::parse_from_rfc3339(iso)
+        .ok()
+        .map(|dt| dt.timestamp_millis())
+}
+
+/// Format a per-line anchor offset: ` t0+:<delta-ms>` when both the line's
+/// `started_at` and the suite anchor are present and valid, empty string
+/// otherwise. Keeps the call sites clean.
+fn format_t0_offset(line_started_at: Option<&str>, suite_t0_ms: Option<i64>) -> String {
+    match (line_started_at.and_then(iso_to_unix_ms), suite_t0_ms) {
+        (Some(line_ms), Some(t0)) => format!(" t0+:{}", line_ms - t0),
+        _ => String::new(),
+    }
+}
+
 /// Format a single step as one compact TOON line.
 ///
 /// Examples:
-/// - ` +tap:Sign Up 45`
-/// - ` !assert_visible:Welcome 10012 timed out`
-/// - ` ~assert_visible:Promo 15 element not found`
+/// - ` +tap:Sign Up d:45`
+/// - ` !assert_visible:Welcome d:10012 timed out`
+/// - ` ~assert_visible:Promo d:15 element not found`
 /// - ` -tap:Cancel`
 pub fn format_step_toon(step: &StepReport) -> String {
     let label = if step.target.is_empty() {
@@ -42,13 +63,13 @@ pub fn format_step_toon(step: &StepReport) -> String {
 
     match &step.outcome {
         StepOutcome::Success => {
-            format!(" +{label} {}{substep_suffix}{tree_suffix}", step.duration_ms)
+            format!(" +{label} d:{}{substep_suffix}{tree_suffix}", step.duration_ms)
         }
         StepOutcome::Warning(msg) => {
-            format!(" ~{label} {} {msg}{substep_suffix}", step.duration_ms)
+            format!(" ~{label} d:{} {msg}{substep_suffix}", step.duration_ms)
         }
         StepOutcome::Failed(msg) => {
-            format!(" !{label} {} {msg}{substep_suffix}", step.duration_ms)
+            format!(" !{label} d:{} {msg}{substep_suffix}", step.duration_ms)
         }
         StepOutcome::Skipped => {
             format!(" -{label}{substep_suffix}")
@@ -116,17 +137,52 @@ fn format_substeps_toon(substeps: &[crate::SubstepDetail]) -> String {
 ///
 /// Includes a header line, step lines, and a result line.
 pub fn format_flow_toon(report: &FlowReport) -> String {
+    format_flow_toon_anchored(report, None)
+}
+
+/// Internal variant that appends a ` t0+:<delta-ms>` offset to the flow
+/// header when called from a suite context that carries an anchor.
+pub(crate) fn format_flow_toon_anchored(
+    report: &FlowReport,
+    suite_t0_ms: Option<i64>,
+) -> String {
     let mut out = String::new();
 
-    // Header: S:flow_name d:duration [seed:N]
-    let _ = write!(out, "S:{} d:{}", report.flow_name, report.duration_ms);
+    // Header: F:flow_name [dev:...] [os:...] d:duration [seed:N] [t0+:offset]
+    let _ = write!(out, "F:{}", report.flow_name);
+    if let Some(dev) = report.device_name.as_deref() {
+        let _ = write!(out, " dev:{dev}");
+    }
+    if let Some(os) = report.os_major {
+        let _ = write!(out, " os:{os}");
+    }
+    let _ = write!(out, " d:{}", report.duration_ms);
     if let Some(seed) = report.seed {
         let _ = write!(out, " seed:{seed}");
     }
+    let _ = write!(
+        out,
+        "{}",
+        format_t0_offset(report.started_at.as_deref(), suite_t0_ms)
+    );
     out.push('\n');
 
-    // Steps
+    // Steps, grouped under `B:<block>` headers. A new header is emitted
+    // whenever the (block_name, block_iteration) pair changes — so
+    // iterating blocks show one header per iteration.
+    let mut current_block: Option<(String, u32)> = None;
     for step in &report.step_results {
+        let key = (step.block_name.clone(), step.block_iteration);
+        if current_block.as_ref() != Some(&key) {
+            if !step.block_name.is_empty() {
+                if step.block_iteration > 0 {
+                    let _ = writeln!(out, " B:{} i:{}", step.block_name, step.block_iteration);
+                } else {
+                    let _ = writeln!(out, " B:{}", step.block_name);
+                }
+            }
+            current_block = Some(key);
+        }
         let _ = writeln!(out, "{}", format_step_toon(step));
     }
 
@@ -186,18 +242,34 @@ pub fn format_flow_toon(report: &FlowReport) -> String {
 pub fn format_suite_toon(report: &SuiteReport) -> String {
     let mut out = String::new();
 
-    // Schema header for LLM comprehension
-    out.push_str("# S=suite R=result(passed/warned/failed) T=total(passed/failed/skipped) d:N=duration_ms\n");
+    // Schema header for LLM comprehension.
+    // `total:` line is self-describing (appears once at end); `F=`, `B=`,
+    // `R=` repeat per flow so their compact keys pay off the schema cost.
+    out.push_str("# F=flow-run B=block R=result(passed/warned/failed) d:N=duration_ms os:N=os_major\n");
     out.push_str("# step: +=pass !=fail ~=warn -=skip @x,y=position b=bounds(x,y,w,h) s:N=scroll_attempts t:N/M=trees/nodes\n");
     out.push_str("# perf: P block:app:device:iteration mem=MB cpu=% thr=threads fd=file_descriptors disk=MB net_rx/tx=KB launch=ms\n");
-    out.push_str("# install: I app:bundle:device R=ok/fail d:ms (device = `{platform}/{name}`)\n");
+    out.push_str("# install: I app:bundle:device R=ok/fail d:ms os:N (device = `{platform}/{name}`)\n");
+    out.push_str("# time: T0:<unix-ms> suite-anchor (once); t0+:<delta-ms> per-line start offset from T0\n");
+
+    // Suite-anchor timestamp. Only emitted when parseable. Offsets below
+    // are computed relative to this; if the anchor is absent, offsets are
+    // dropped too rather than rendering bogus values.
+    let suite_t0_ms = report.started_at.as_deref().and_then(iso_to_unix_ms);
+    if let Some(t0) = suite_t0_ms {
+        let _ = writeln!(out, "T0:{t0}");
+    }
 
     // Install results (one line per (device, bundle) attempted)
     for inst in &report.installs {
         let r = if inst.success { "ok" } else { "fail" };
+        let t0_offset = format_t0_offset(inst.started_at.as_deref(), suite_t0_ms);
+        let os_suffix = match inst.os_major {
+            Some(os) => format!(" os:{os}"),
+            None => String::new(),
+        };
         let _ = writeln!(
             out,
-            "I {}:{}:{} R:{} d:{}",
+            "I {}:{}:{} R:{} d:{}{os_suffix}{t0_offset}",
             inst.app_name, inst.bundle_id, inst.device_name, r, inst.duration_ms
         );
         if let Some(ref err) = inst.error {
@@ -209,7 +281,7 @@ pub fn format_suite_toon(report: &SuiteReport) -> String {
     }
 
     for flow in &report.flows {
-        let _ = write!(out, "{}", format_flow_toon(flow));
+        let _ = write!(out, "{}", format_flow_toon_anchored(flow, suite_t0_ms));
         out.push('\n');
     }
 
@@ -228,7 +300,7 @@ pub fn format_suite_toon(report: &SuiteReport) -> String {
 
     let _ = writeln!(
         out,
-        "T:{total_passed}/{total_failed}/{total_skipped} d:{}",
+        "total:{total_passed}×pass,{total_failed}×fail,{total_skipped}×skip d:{}",
         report.total_duration_ms
     );
 
@@ -248,6 +320,7 @@ mod tests {
         StepReport {
             global_step_index: 0,
             block_name: String::new(),
+            block_iteration: 0,
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
@@ -266,6 +339,7 @@ mod tests {
         StepReport {
             global_step_index: 0,
             block_name: String::new(),
+            block_iteration: 0,
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
@@ -284,6 +358,7 @@ mod tests {
         StepReport {
             global_step_index: 0,
             block_name: String::new(),
+            block_iteration: 0,
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
@@ -302,6 +377,7 @@ mod tests {
         StepReport {
             global_step_index: 0,
             block_name: String::new(),
+            block_iteration: 0,
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
@@ -333,6 +409,7 @@ mod tests {
             seed,
             screenshot_path: None,
             device_name: None,
+            os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
             started_at: None,
@@ -346,25 +423,25 @@ mod tests {
     fn step_success_format() {
         let step = success_step("tap", "Sign Up", 45);
         let out = format_step_toon(&step);
-        assert_eq!(out, " +tap:Sign Up 45");
+        assert_eq!(out, " +tap:Sign Up d:45");
     }
 
-    // 2. Step failure format: ` !action:target duration error` ---------
+    // 2. Step failure format: ` !action:target d:duration error` -------
 
     #[test]
     fn step_failure_format() {
         let step = failed_step("assert_visible", "Welcome", 10012, "timed out");
         let out = format_step_toon(&step);
-        assert_eq!(out, " !assert_visible:Welcome 10012 timed out");
+        assert_eq!(out, " !assert_visible:Welcome d:10012 timed out");
     }
 
-    // 3. Step warning format: ` ~action:target duration message` -------
+    // 3. Step warning format: ` ~action:target d:duration message` -----
 
     #[test]
     fn step_warning_format() {
         let step = warning_step("assert_visible", "Promo", 15, "element not found");
         let out = format_step_toon(&step);
-        assert_eq!(out, " ~assert_visible:Promo 15 element not found");
+        assert_eq!(out, " ~assert_visible:Promo d:15 element not found");
     }
 
     // 4. Step skipped format: ` -action:target` ------------------------
@@ -383,7 +460,7 @@ mod tests {
         let report = sample_flow(false, None);
         let out = format_flow_toon(&report);
         let first_line = out.lines().next().expect("should have at least one line");
-        assert_eq!(first_line, "S:login_flow d:10200");
+        assert_eq!(first_line, "F:login_flow d:10200");
     }
 
     // 6. Flow header includes seed when present ------------------------
@@ -393,7 +470,7 @@ mod tests {
         let report = sample_flow(false, Some(847_291_036));
         let out = format_flow_toon(&report);
         let first_line = out.lines().next().expect("should have at least one line");
-        assert_eq!(first_line, "S:login_flow d:10200 seed:847291036");
+        assert_eq!(first_line, "F:login_flow d:10200 seed:847291036");
     }
 
     // 7. Flow result line shows PASS/FAIL with counts ------------------
@@ -412,6 +489,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
             started_at: None,
@@ -449,6 +527,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     started_at: None,
@@ -466,6 +545,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     started_at: None,
@@ -480,7 +560,7 @@ mod tests {
 
         let out = format_suite_toon(&suite);
         let last_line = out.lines().last().expect("should have lines");
-        assert_eq!(last_line, "T:1/1/0 d:45300");
+        assert_eq!(last_line, "total:1×pass,1×fail,0×skip d:45300");
     }
 
     // 9. Multiple flows in suite ----------------------------------------
@@ -498,6 +578,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     started_at: None,
@@ -512,6 +593,7 @@ mod tests {
                     seed: Some(42),
                     screenshot_path: None,
                     device_name: None,
+                    os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     started_at: None,
@@ -528,6 +610,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     started_at: None,
@@ -543,14 +626,14 @@ mod tests {
         let out = format_suite_toon(&suite);
 
         // All three flow headers should appear in order
-        let flow_a_pos = out.find("S:flow_a").expect("should contain flow_a");
-        let flow_b_pos = out.find("S:flow_b").expect("should contain flow_b");
-        let flow_c_pos = out.find("S:flow_c").expect("should contain flow_c");
+        let flow_a_pos = out.find("F:flow_a").expect("should contain flow_a");
+        let flow_b_pos = out.find("F:flow_b").expect("should contain flow_b");
+        let flow_c_pos = out.find("F:flow_c").expect("should contain flow_c");
         assert!(flow_a_pos < flow_b_pos, "flow_a before flow_b");
         assert!(flow_b_pos < flow_c_pos, "flow_b before flow_c");
 
         // flow_b has seed
-        assert!(out.contains("S:flow_b d:200 seed:42"));
+        assert!(out.contains("F:flow_b d:200 seed:42"));
 
         // Result lines
         assert!(out.contains("R:PASS 1/0/0"));
@@ -558,7 +641,7 @@ mod tests {
 
         // Total line: 2 passed, 1 failed, 0 skipped
         let last_line = out.lines().last().expect("should have lines");
-        assert_eq!(last_line, "T:2/1/0 d:600");
+        assert_eq!(last_line, "total:2×pass,1×fail,0×skip d:600");
     }
 
     // 10. TOON uses fewer characters than human format (token efficiency)
@@ -583,7 +666,7 @@ mod tests {
     fn step_success_no_target_omits_colon() {
         let step = success_step("launch", "", 120);
         let out = format_step_toon(&step);
-        assert_eq!(out, " +launch 120");
+        assert_eq!(out, " +launch d:120");
     }
 
     // ── format_substeps_toon tests ─────────────────────────────────
@@ -697,6 +780,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            os_major: None,
             perf_snapshots: vec![sample_perf_snapshot()],
             skipped_reason: None,
             started_at: None,
@@ -722,6 +806,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
             started_at: None,

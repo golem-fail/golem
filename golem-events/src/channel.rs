@@ -80,12 +80,12 @@ mod tests {
 
         sender.emit(
             DeviceId("pixel_7".into()),
-            EventKind::FlowStarted { flow_name: "login".into() },
+            EventKind::FlowStarted { flow_name: "login".into(), os_major: 0 },
         );
 
         let event = rx.recv().await.expect("SHALL receive the emitted event");
         assert!(
-            matches!(event.kind, EventKind::FlowStarted { ref flow_name } if flow_name == "login"),
+            matches!(event.kind, EventKind::FlowStarted { ref flow_name, .. } if flow_name == "login"),
             "SHALL carry the correct EventKind"
         );
     }
@@ -97,7 +97,7 @@ mod tests {
         let dev = DeviceId("dev".into());
 
         sender.emit(dev.clone(), EventKind::SuiteStarted { flow_count: 1 });
-        sender.emit(dev.clone(), EventKind::FlowStarted { flow_name: "a".into() });
+        sender.emit(dev.clone(), EventKind::FlowStarted { flow_name: "a".into(), os_major: 0 });
         sender.emit(dev.clone(), EventKind::SuiteFinished { duration_ms: 100, passed: 1, failed: 0 });
 
         let e0 = rx.recv().await.expect("SHALL receive event 0");
@@ -118,11 +118,11 @@ mod tests {
 
         sender.emit(
             DeviceId("dev".into()),
-            EventKind::FlowStarted { flow_name: "f1".into() },
+            EventKind::FlowStarted { flow_name: "f1".into(), os_major: 0 },
         );
         sender.emit(
             DeviceId("dev".into()),
-            EventKind::FlowFinished { flow_name: "f1".into(), success: true, duration_ms: 50, seed: 0 },
+            EventKind::FlowFinished { flow_name: "f1".into(), success: true, duration_ms: 50, seed: 0, os_major: 0 },
         );
 
         // Both subscribers SHALL receive both events
@@ -144,11 +144,11 @@ mod tests {
 
         sender.emit(
             DeviceId("ios/iPhone 15 Pro".into()),
-            EventKind::FlowStarted { flow_name: "test".into() },
+            EventKind::FlowStarted { flow_name: "test".into(), os_major: 0 },
         );
         sender.emit(
             DeviceId("android/Pixel 7".into()),
-            EventKind::FlowStarted { flow_name: "test".into() },
+            EventKind::FlowStarted { flow_name: "test".into(), os_major: 0 },
         );
 
         let e1 = rx.recv().await.expect("SHALL receive first event");

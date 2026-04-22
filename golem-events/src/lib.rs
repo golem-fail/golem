@@ -177,8 +177,8 @@ pub enum EventKind {
     },
 
     // Flow level
-    FlowStarted { flow_name: String },
-    FlowFinished { flow_name: String, success: bool, duration_ms: u64, seed: u64 },
+    FlowStarted { flow_name: String, os_major: u32 },
+    FlowFinished { flow_name: String, success: bool, duration_ms: u64, seed: u64, os_major: u32 },
 
     // Block level
     BlockStarted { block_name: String, block_index: usize, iteration: u32 },
@@ -214,6 +214,10 @@ pub enum EventKind {
         script_path: String,
         /// Pre-formatted target: `iPhone 16e (ios/v18/phone)`.
         target: String,
+        /// OS major version of the target device (e.g. 18, 26, 34). Plumbed
+        /// to downstream reports + TOON/JSON/JUnit so consumers can
+        /// distinguish ios/v26 from ios/v18 without parsing `target`.
+        os_major: u32,
     },
     InstallOutput {
         app_name: String,
@@ -231,6 +235,8 @@ pub enum EventKind {
         error: Option<String>,
         /// Pre-formatted target (same as InstallStarted.target).
         target: String,
+        /// OS major version (same as InstallStarted.os_major).
+        os_major: u32,
     },
     /// A flow was skipped on a device because a prior install failed.
     FlowSkipped {

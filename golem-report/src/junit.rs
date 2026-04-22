@@ -194,9 +194,14 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
         }
     }
 
-    // Perf properties
-    if !report.perf_snapshots.is_empty() {
+    // Properties: os_major (when known) + perf snapshots. Emit a single
+    // <properties> block so CI renderers see os_major alongside perf.
+    let has_props = report.os_major.is_some() || !report.perf_snapshots.is_empty();
+    if has_props {
         let _ = writeln!(out, "    <properties>");
+        if let Some(os) = report.os_major {
+            let _ = writeln!(out, "      <property name=\"os_major\" value=\"{os}\"/>");
+        }
         for snap in &report.perf_snapshots {
             if let Some(v) = snap.memory_mb {
                 let _ = writeln!(
@@ -300,9 +305,13 @@ pub fn format_suite_junit(report: &SuiteReport) -> String {
                 .as_deref()
                 .map(|s| format!(" timestamp=\"{}\"", xml_escape(s)))
                 .unwrap_or_default();
+            let inst_os = inst
+                .os_major
+                .map(|os| format!(" os_major=\"{os}\""))
+                .unwrap_or_default();
             let _ = writeln!(
                 out,
-                "    <testcase classname=\"{classname}\" name=\"{name}\" time=\"{time}\"{inst_ts}>"
+                "    <testcase classname=\"{classname}\" name=\"{name}\" time=\"{time}\"{inst_ts}{inst_os}>"
             );
             if !inst.success {
                 let msg = inst.error.as_deref().unwrap_or("install failed");
@@ -338,6 +347,7 @@ mod tests {
         StepReport {
             global_step_index: 0,
             block_name: String::new(),
+            block_iteration: 0,
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
@@ -356,6 +366,7 @@ mod tests {
         StepReport {
             global_step_index: 0,
             block_name: String::new(),
+            block_iteration: 0,
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
@@ -374,6 +385,7 @@ mod tests {
         StepReport {
             global_step_index: 0,
             block_name: String::new(),
+            block_iteration: 0,
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
@@ -392,6 +404,7 @@ mod tests {
         StepReport {
             global_step_index: 0,
             block_name: String::new(),
+            block_iteration: 0,
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
@@ -423,6 +436,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
             started_at: None,
@@ -445,6 +459,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     started_at: None,
@@ -462,6 +477,7 @@ mod tests {
                     seed: None,
                     screenshot_path: None,
                     device_name: None,
+                    os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     started_at: None,
@@ -588,6 +604,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
             started_at: None,
@@ -613,6 +630,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
             started_at: None,
@@ -651,6 +669,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
             started_at: None,
@@ -771,6 +790,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            os_major: None,
             perf_snapshots: vec![sample_perf_snapshot()],
             skipped_reason: None,
             started_at: None,
@@ -797,6 +817,7 @@ mod tests {
             seed: None,
             screenshot_path: None,
             device_name: None,
+            os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
             started_at: None,

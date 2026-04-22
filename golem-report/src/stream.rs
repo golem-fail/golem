@@ -148,7 +148,7 @@ pub async fn stream_human(
                     }
                 }
             }
-            EventKind::FlowStarted { flow_name } => {
+            EventKind::FlowStarted { flow_name, .. } => {
                 if use_color {
                     eprintln!("{ts}{dp}{BLUE}{SYM_FLOW} {flow_name}{RESET}");
                 } else {
@@ -252,7 +252,7 @@ pub async fn stream_human(
             EventKind::Substep(sub) if verbose => {
                 print_substep(&ts, &dp, sub, use_color);
             }
-            EventKind::FlowFinished { flow_name, success, duration_ms, seed } => {
+            EventKind::FlowFinished { flow_name, success, duration_ms, seed, .. } => {
                 let secs = *duration_ms as f64 / 1000.0;
                 eprintln!();
                 if use_color {
