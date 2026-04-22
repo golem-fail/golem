@@ -25,23 +25,33 @@ use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 
 /// Find WebKit Inspector Unix domain socket candidates for the iOS simulator.
 ///
-/// Many stale sockets accumulate in `/private/tmp/com.apple.launchd.*/` from
-/// old simulator sessions. Returns all candidates — the caller should try
-/// connecting to each one.
+/// The simulator's launchd publishes sockets under per-session directories.
+/// Apple moved the base path across macOS releases:
+/// - macOS 14 (Sonoma) / Xcode 15 and earlier: `/private/tmp/com.apple.launchd.*/`
+/// - macOS 15 (Sequoia) / Xcode 26 and later: `/private/var/tmp/com.apple.launchd.*/`
+///
+/// Stale sockets from prior sim sessions accumulate in both paths. We search
+/// both and let the caller probe each — stale sockets fail `connect()` fast
+/// (no listener), so the extra candidates cost no meaningful time.
 pub(crate) async fn find_inspector_sockets() -> Vec<PathBuf> {
-    let base = PathBuf::from("/private/tmp");
-    let mut entries = match tokio::fs::read_dir(&base).await {
-        Ok(e) => e,
-        Err(_) => return Vec::new(),
-    };
+    let bases = [
+        PathBuf::from("/private/var/tmp"),
+        PathBuf::from("/private/tmp"),
+    ];
     let mut candidates = Vec::new();
-    while let Ok(Some(entry)) = entries.next_entry().await {
-        let name = entry.file_name();
-        let name_str = name.to_string_lossy();
-        if name_str.starts_with("com.apple.launchd.") {
-            let socket_path = entry.path().join("com.apple.webinspectord_sim.socket");
-            if tokio::fs::metadata(&socket_path).await.is_ok() {
-                candidates.push(socket_path);
+    for base in &bases {
+        let mut entries = match tokio::fs::read_dir(base).await {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            if name_str.starts_with("com.apple.launchd.") {
+                let socket_path = entry.path().join("com.apple.webinspectord_sim.socket");
+                if tokio::fs::metadata(&socket_path).await.is_ok() {
+                    candidates.push(socket_path);
+                }
             }
         }
     }
