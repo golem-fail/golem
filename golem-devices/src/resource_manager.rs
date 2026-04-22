@@ -222,8 +222,8 @@ mod tests {
         let d1 = test_device("iPhone", "uid-1", Platform::Ios);
         let d2 = test_device("Pixel", "uid-2", Platform::Android);
 
-        rm.try_allocate(&d1, 8222).unwrap();
-        rm.try_allocate(&d2, 8225).unwrap();
+        rm.try_allocate(&d1, 8222).expect("allocate d1");
+        rm.try_allocate(&d2, 8225).expect("allocate d2");
 
         assert_eq!(rm.port_for("uid-1"), Some(8222));
         assert_eq!(rm.port_for("uid-2"), Some(8225));

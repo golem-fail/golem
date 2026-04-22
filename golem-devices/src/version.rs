@@ -246,9 +246,9 @@ mod tests {
     // 11. Invalid platform -- "windows:11" -> error
     #[test]
     fn invalid_platform() {
-        let result = parse_os_version("windows:11");
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
+        let err = parse_os_version("windows:11")
+            .expect_err("windows:11 SHALL be rejected")
+            .to_string();
         assert!(
             err.contains("unsupported platform"),
             "expected 'unsupported platform' in: {err}"
@@ -258,9 +258,9 @@ mod tests {
     // 12. Missing version -- "ios:" -> error
     #[test]
     fn missing_version() {
-        let result = parse_os_version("ios:");
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
+        let err = parse_os_version("ios:")
+            .expect_err("`ios:` alone SHALL be rejected")
+            .to_string();
         assert!(
             err.contains("missing version"),
             "expected 'missing version' in: {err}"
@@ -270,9 +270,9 @@ mod tests {
     // 13. Missing colon -- "ios18" -> error
     #[test]
     fn missing_colon() {
-        let result = parse_os_version("ios18");
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
+        let err = parse_os_version("ios18")
+            .expect_err("missing colon SHALL be rejected")
+            .to_string();
         assert!(
             err.contains("missing ':'"),
             "expected \"missing ':'\" in: {err}"
@@ -289,9 +289,9 @@ mod tests {
     // 15. latest:0 -- "ios:latest:0" -> error
     #[test]
     fn latest_zero() {
-        let result = parse_os_version("ios:latest:0");
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
+        let err = parse_os_version("ios:latest:0")
+            .expect_err("`:latest:0` SHALL be rejected")
+            .to_string();
         assert!(
             err.contains("latest count must be >= 1"),
             "expected 'latest count must be >= 1' in: {err}"
@@ -315,9 +315,9 @@ mod tests {
     // 17. Plus on latest -- "ios:latest+" -> error
     #[test]
     fn plus_on_latest() {
-        let result = parse_os_version("ios:latest+");
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
+        let err = parse_os_version("ios:latest+")
+            .expect_err("`:latest+` SHALL be rejected")
+            .to_string();
         assert!(
             err.contains("invalid latest syntax"),
             "expected 'invalid latest syntax' in: {err}"

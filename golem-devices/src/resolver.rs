@@ -2,8 +2,8 @@ use std::collections::HashSet;
 
 use anyhow::{bail, Context};
 
-use crate::version::{matches_version, parse_os_version};
-use crate::{DeviceInfo, DeviceState, DeviceType, Platform, ResolvedDevice};
+use crate::version::{matches_version, parse_os_version, resolve_latest};
+use crate::{DeviceInfo, DeviceState, DeviceType, OsVersionSpec, Platform, ResolvedDevice};
 
 /// Options controlling device resolution behavior.
 #[derive(Default)]
@@ -118,6 +118,8 @@ pub fn resolve_devices(
     let mut result: Vec<ResolvedDevice> = Vec::new();
 
     for constraint in constraints {
+        let expanded = expand_latest_in_constraint(constraint, available);
+        let constraint = &expanded;
         if let Some(ref name) = constraint.name {
             resolve_named(name, available, &mut result)?;
         } else {
@@ -133,6 +135,50 @@ pub fn resolve_devices(
     }
 
     Ok(result)
+}
+
+/// Rewrite any `:latest` / `:latest:N` entries in `os_versions` to the
+/// concrete top-N `platform:major` strings picked from `available`.
+/// Non-Latest entries pass through unchanged. If nothing matches the
+/// platform, the original string is preserved so downstream error paths
+/// still report the user-facing constraint.
+///
+/// Why: `matches_version(Latest, _)` returns `true` for any device — if
+/// left in place, greedy min-coverage tie-breaks `:latest` by state
+/// preference (booted > shutdown) and picks iOS 18 booted over iOS 26
+/// shutdown. Expanding here pins the version first so state preference
+/// only tie-breaks *within* the chosen version.
+fn expand_latest_in_constraint(
+    constraint: &DeviceConstraint,
+    available: &[DeviceInfo],
+) -> DeviceConstraint {
+    let mut expanded: Vec<String> = Vec::with_capacity(constraint.os_versions.len());
+    for s in &constraint.os_versions {
+        match parse_os_version(s) {
+            Ok(OsVersionSpec::Latest { platform, count }) => {
+                let majors: Vec<u32> = available
+                    .iter()
+                    .filter(|d| d.platform == platform)
+                    .map(|d| d.os_major)
+                    .collect();
+                let tops = resolve_latest(platform, count, &majors);
+                if tops.is_empty() {
+                    expanded.push(s.clone());
+                } else {
+                    for m in tops {
+                        expanded.push(format!("{platform}:{m}"));
+                    }
+                }
+            }
+            _ => expanded.push(s.clone()),
+        }
+    }
+    DeviceConstraint {
+        name: constraint.name.clone(),
+        os_versions: expanded,
+        device_types: constraint.device_types.clone(),
+        expand: constraint.expand,
+    }
 }
 
 /// Resolve a constraint that names a specific device.
@@ -1336,5 +1382,147 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].device.state, DeviceState::NeedsCreation);
         assert!(result[0].created);
+    }
+
+    // 29. `:latest` picks highest version, not most-booted version.
+    //
+    // Regression: `matches_version(Latest, _) == true` made every iOS
+    // device a candidate, and greedy tie-break then picked booted iOS 18
+    // over shutdown iOS 26. Expected semantics: "latest = highest major",
+    // state preference tie-breaks only within the chosen major.
+    #[test]
+    fn latest_picks_highest_version_over_booted_older() {
+        let available = vec![
+            make_device_with_state(
+                "iPhone 18 Booted",
+                "uid-1",
+                Platform::Ios,
+                DeviceType::Phone,
+                18,
+                DeviceState::Booted,
+            ),
+            make_device_with_state(
+                "iPhone 26 Shutdown",
+                "uid-2",
+                Platform::Ios,
+                DeviceType::Phone,
+                26,
+                DeviceState::Shutdown,
+            ),
+        ];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["ios:latest".to_string()],
+            device_types: vec![],
+            expand: ExpandMode::MinCoverage,
+        }];
+
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result[0].device.os_major, 26,
+            "`:latest` SHALL resolve to highest version regardless of state"
+        );
+    }
+
+    // 30. Within the resolved `:latest` major, state preference still wins.
+    #[test]
+    fn latest_tiebreaks_by_state_within_same_version() {
+        let available = vec![
+            make_device_with_state(
+                "iPhone 26 Shutdown",
+                "uid-1",
+                Platform::Ios,
+                DeviceType::Phone,
+                26,
+                DeviceState::Shutdown,
+            ),
+            make_device_with_state(
+                "iPhone 26 Booted",
+                "uid-2",
+                Platform::Ios,
+                DeviceType::Phone,
+                26,
+                DeviceState::Booted,
+            ),
+            make_device_with_state(
+                "iPhone 18",
+                "uid-3",
+                Platform::Ios,
+                DeviceType::Phone,
+                18,
+                DeviceState::Booted,
+            ),
+        ];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["ios:latest".to_string()],
+            device_types: vec![],
+            expand: ExpandMode::MinCoverage,
+        }];
+
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].device.os_major, 26);
+        assert_eq!(
+            result[0].device.state,
+            DeviceState::Booted,
+            "within the `:latest` version, booted SHALL beat shutdown"
+        );
+        assert_eq!(result[0].device.name, "iPhone 26 Booted");
+    }
+
+    // 31. `:latest:N` expands to the N highest versions.
+    #[test]
+    fn latest_n_expands_to_top_n_versions() {
+        let available = vec![
+            make_device("iPhone 16", "uid-1", Platform::Ios, DeviceType::Phone, 16),
+            make_device("iPhone 18", "uid-2", Platform::Ios, DeviceType::Phone, 18),
+            make_device("iPhone 26", "uid-3", Platform::Ios, DeviceType::Phone, 26),
+        ];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["ios:latest:2".to_string()],
+            device_types: vec![],
+            expand: ExpandMode::MinCoverage,
+        }];
+
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
+        assert_eq!(result.len(), 2);
+        let majors: HashSet<u32> = result.iter().map(|r| r.device.os_major).collect();
+        assert!(majors.contains(&26));
+        assert!(majors.contains(&18));
+        assert!(
+            !majors.contains(&16),
+            "`:latest:2` SHALL exclude the oldest version"
+        );
+    }
+
+    // 32. `:latest` with no matching platform devices falls back gracefully.
+    //
+    // When the snapshot has zero devices for the spec's platform, we can't
+    // expand Latest to a concrete version — leave it as-is so the normal
+    // "no matching device" error path produces a meaningful message.
+    #[test]
+    fn latest_with_no_matching_platform_errors_cleanly() {
+        let available = vec![make_device(
+            "Pixel",
+            "uid-1",
+            Platform::Android,
+            DeviceType::Phone,
+            34,
+        )];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["ios:latest".to_string()],
+            device_types: vec![],
+            expand: ExpandMode::MinCoverage,
+        }];
+
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default());
+        assert!(result.is_err());
     }
 }

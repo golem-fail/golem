@@ -18,11 +18,29 @@ Requires access to a physical iOS device for development and testing.
 
 ## Device Resolution: `ios:latest` Prefers Booted Over Newest Version
 
-`resolver.rs` sorts candidates by state preference (booted > shutdown) **before** filtering to `:latest`. Result: if iOS 18 simulator is booted and iOS 26 simulator is shutdown, `os = "ios:latest"` picks iOS 18. The `:latest` directive is ignored in favor of "already running".
+**Status:** resolver layer fixed. End-to-end still broken — see [Scheduler Ignores DeviceSlot.os_version](#scheduler-ignores-deviceslotos_version) below.
 
-**Desired:** `:latest` means highest version. Match version requirement first, then tie-break by state only within the same version.
+`resolver.rs` used to sort candidates by state preference (booted > shutdown) **before** filtering to `:latest`. With iOS 18 booted and iOS 26 shutdown, `os = "ios:latest"` picked iOS 18.
 
-**Files:** `golem-devices/src/resolver.rs` (min-coverage loop tie-break logic, lines ~281-410), `golem-devices/src/version.rs` (latest resolution).
+**Fix shipped:** `resolve_devices` now expands `:latest` / `:latest:N` strings into concrete `platform:major` entries using `resolve_latest()` against the available-device snapshot *before* the greedy loop runs. Version is pinned first; state preference tie-breaks only within the chosen major.
+
+**Files:** `golem-devices/src/resolver.rs` (`expand_latest_in_constraint`), tests added covering highest-version-over-booted-older, within-version state tie-break, `:latest:N`, empty-platform fallback.
+
+## Scheduler Ignores `DeviceSlot.os_version`
+
+Plan phase emits `DeviceSlot { platform: Ios, os_version: Some(Exact(26)), … }` but the Execute phase (`golem-cli/src/suite.rs::find_available_device`) filters available devices **by platform only** — ignoring the slot's `os_version`, `device_type`, `physical`, `name` fields. Observed symptom for `os = "ios:latest"`: plan correctly says `ios/v26/phone`, execute picks iPhone 16e (v18) because it's the first booted iOS device.
+
+Root cause: `parsed.flow_runs` is computed by `plan()` but only `install_matrix` is stored on `SuiteRunner`. The slot data is dropped. `run_single_flow_with_resources` loops over `detect_all_platforms(&flow)` and re-derives devices from platform alone, bypassing every other slot field.
+
+**Fix outline:**
+- Store `flow_runs: Arc<Vec<FlowRun>>` + flow-path→flow_idx map on `SuiteRunner` (mirrors current `install_matrix` pattern).
+- `run_single_flow_with_resources`: look up this path's FlowRuns, pick matching slot per platform.
+- Extend `find_available_device` signature to accept an `&DeviceSlot` (or at least `os_version: Option<OsVersionSpec>`), filter `compatible` devices accordingly, and pass the same filter into the shutdown auto-boot path (step 2 currently picks highest `os_major` shutdown — should honour the slot's exact-version requirement first).
+- `device_matches_entry_constraints` (already extended for `physical`/`name`/`playstore` in the hardening pass) should be called from the find-device path too for symmetry.
+
+**Depends on / overlaps with:** [Dynamic JIT Scheduler](#dynamic-jit-scheduler--device-reuse-lazy-install) — that roadmap item is the full Execute rewrite that would subsume this fix. If the JIT Scheduler lands first, this entry collapses into it. Otherwise the minimal slot-aware `find_available_device` is a standalone bug fix.
+
+**Files:** `golem-cli/src/suite.rs` (SuiteRunner state + `run_suite` populate + `find_available_device` signature + call sites).
 
 ## FailureBarrier Across Multi-Flow Concurrency
 
