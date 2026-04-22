@@ -4,6 +4,24 @@
 //! lets them coordinate: if device A fails at step N, device B continues
 //! until it completes step N, then stops. This reveals whether a failure
 //! is platform-specific or universal.
+//!
+//! # Scope: per-flow, never per-suite
+//!
+//! A `FailureBarrier` instance is constructed fresh for each flow execution
+//! (`run_single_flow_with_resources` in `golem-cli/src/suite.rs`) and cloned
+//! to the per-device tasks spawned for that flow. Multi-flow parallelism
+//! (e.g. `golem run a.toml b.toml`) calls the runner once per flow, so each
+//! flow gets its own independent barrier and a failure in flow A cannot
+//! abort flow B.
+//!
+//! This is a hard requirement, not an implementation detail: the global
+//! step count is only meaningful within a single flow. Step 7 of flow A and
+//! step 7 of flow B are unrelated positions. Collapsing the barrier into a
+//! shared-across-flows singleton would make one flow's failure arbitrarily
+//! truncate unrelated flows.
+//!
+//! Future scheduler rewrites (see the Dynamic JIT Scheduler roadmap entry)
+//! must keep barrier allocation keyed to the flow, not the suite.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -112,5 +130,27 @@ mod tests {
 
         b1.report_failure(7);
         assert!(b2.should_stop(7)); // b2 sees b1's failure
+    }
+
+    #[test]
+    fn separate_instances_do_not_share_state() {
+        // Models the multi-flow case: `golem run a.toml b.toml` constructs
+        // a fresh barrier per flow. Failure in flow A MUST NOT abort flow B.
+        // If a future refactor ever collapses barrier scope to per-suite
+        // (e.g. reusing one barrier across flows in a scheduler loop), this
+        // test fails and forces the reviewer to reassess the semantics.
+        let flow_a = FailureBarrier::new();
+        let flow_b = FailureBarrier::new();
+
+        flow_a.report_failure(3);
+
+        assert!(flow_a.has_failure(), "flow A SHALL record its own failure");
+        assert!(
+            !flow_b.has_failure(),
+            "flow B SHALL NOT see flow A's failure across independent barrier instances",
+        );
+        assert!(!flow_b.should_stop(3));
+        assert!(!flow_b.should_stop(100));
+        assert_eq!(flow_b.failure_point(), None);
     }
 }

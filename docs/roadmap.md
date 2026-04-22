@@ -298,4 +298,30 @@ Possible approaches:
 - Cache element positions across consecutive steps when the viewport hasn't changed
 - Longer default multiplier for WebView-context actions (requires detecting WebView context)
 
+## iOS 26: `/tap` Slow Through Companion (In-Flow 17s vs Raw Curl 500ms)
+
+On iPhone 17 / iOS 26.4.1, `e2e/cross/tap.test.toml` consistently fails: first `tap on_text="Submit"` takes ~17.5s through the Rust driver; subsequent taps hit default 5s step timeout. Same flow passes on Android 34.
+
+**What is confirmed healthy:**
+- Companion `/health`, `/hierarchy`, `/launch`, `/stop`, `/tap` all respond in <2s via direct curl against the live companion.
+- Stop → launch → tap sequence via curl against the same companion completes in ~4s.
+- Element resolution returns correct `Submit` bounds `(36,312 80x36)`.
+
+**What is broken:**
+- In-flow `IosDriver::tap` → `POST /tap` takes ~17s for the FIRST tap after `/launch`, and longer for subsequent taps (hits step timeout).
+- Reproduces on clean `main` with work-in-progress stashed — not a recent regression in the Rust crates.
+- No recent changes in `companions/ios/` or `golem-driver/src/ios.rs` — environmental/iOS 26 driver issue.
+
+**Suspect:** `handleTap` in `RequestRouter.swift` uses `DispatchQueue.main.sync { application.activate(); target.tap() }`. On iOS 26, XCUITest's implicit wait-for-idle on `XCUIElement.tap()` may fight with the Tauri WKWebView's main-thread activity. Raw curl happens to get in between WebView settle phases; in-flow timing repeatedly hits a busy main thread.
+
+**Investigation steps:**
+1. Instrument `IosDriver::tap` with start/end timestamps (isolate whether the 17s is in HTTP transit or Swift-side).
+2. Instrument `handleTap` in the companion with NSLog before/after each Swift statement (narrows to `activate()` vs `target.tap()` vs DispatchQueue scheduling).
+3. Try replacing `target.tap()` with `target.press(forDuration: 0.01)` — lower-level path with fewer idle-wait semantics.
+4. Try `XCUIApplication.xctWaitForIdleTimeout = 0.0` (iOS 15+) to bypass idle waits entirely.
+
+**Workaround (documented, not fix):** raising per-step `timeout` on iOS-only flows masks the symptom but doesn't address the underlying slowness.
+
+**Files:** `companions/ios/GolemRunnerUITests/RequestRouter.swift` (primary), `golem-driver/src/ios.rs` (for timing instrumentation).
+
 

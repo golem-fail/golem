@@ -718,6 +718,8 @@ impl SuiteRunner {
 
         // Spawn parallel execution tasks — one per device.
         // Shared failure barrier: when one device fails, others stop at the same step.
+        // MUST stay per-flow: step counts only compare within a single flow.
+        // See `golem-runner/src/barrier.rs` module docs.
         let barrier = golem_runner::barrier::FailureBarrier::new();
         let mut handles = Vec::new();
         for (device, platform, port) in device_setups {
@@ -1739,7 +1741,13 @@ async fn find_available_device(
         let best = shutdown.iter()
             .max_by_key(|d| d.os_major)
             .expect("shutdown non-empty");
-        eprintln!("  [devices] no booted {platform} — booting {}...", best.name);
+        let shape = slot
+            .map(golem_orchestrator::shape_label)
+            .unwrap_or_else(|| platform.to_string());
+        eprintln!(
+            "  [devices] no booted {platform} — booting {} to satisfy {shape}...",
+            best.name
+        );
         golem_devices::lifecycle::boot_device(best).await?;
         return Ok(DeviceInfo {
             state: DeviceState::Booted,
