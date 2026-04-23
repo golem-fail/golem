@@ -655,7 +655,15 @@ async fn setup_slot(
     debug: bool,
 ) -> Result<(DeviceInfo, u16)> {
     let platform = slot.platform;
-    let device = find_available_device(platform, Some(slot), resource_mgr, create_if_missing, event_tx).await?;
+    let device = find_available_device(
+        platform,
+        Some(slot),
+        resource_mgr,
+        create_if_missing,
+        event_tx,
+        Some(install_cache),
+        install_matrix,
+    ).await?;
 
     if debug {
         eprintln!("  Platform: {platform}");
@@ -1659,11 +1667,69 @@ async fn discover_all_devices(platform: Platform) -> Result<Vec<DeviceInfo>> {
     }
 }
 
+/// Pick the free candidate with the most install-cache `Succeeded` hits
+/// for the slot's apps — saves re-running install scripts on a cold device
+/// when a warm one is free. Ties are broken by the input order (stable).
+///
+/// If `install_cache` is `None`, `slot` is `None`, or the install matrix has
+/// no entries matching this (platform, app), every candidate scores 0 and the
+/// first is returned. That preserves the pre-ranking behaviour for test
+/// harnesses and platform-only calls.
+///
+/// `Failed*` cache entries don't count — the suite still needs a device we
+/// haven't yet installed on, and the per-flow skip logic handles re-use of
+/// known-failed devices upstream.
+async fn rank_by_install_cache<'a>(
+    free: &'a [&'a DeviceInfo],
+    platform: Platform,
+    slot: Option<&DeviceSlot>,
+    install_cache: Option<&golem_runner::installer::InstallCache>,
+    install_matrix: &[InstallEntry],
+) -> &'a DeviceInfo {
+    let (Some(cache), Some(s)) = (install_cache, slot) else {
+        return free[0];
+    };
+    // Collect bundle IDs this slot will install on the chosen device.
+    let bundles: Vec<&str> = s
+        .apps
+        .iter()
+        .filter_map(|app_name| {
+            install_matrix
+                .iter()
+                .find(|e| e.platform == platform && &e.app_name == app_name)
+                .map(|e| e.bundle_id.as_str())
+        })
+        .collect();
+    if bundles.is_empty() {
+        return free[0];
+    }
+    let mut best: &DeviceInfo = free[0];
+    let mut best_score = 0usize;
+    for (i, dev) in free.iter().enumerate() {
+        let mut score = 0usize;
+        for b in &bundles {
+            if let Some(golem_runner::installer::InstallOutcome::Succeeded) = cache
+                .get(&(dev.udid.clone(), (*b).to_string()))
+                .await
+            {
+                score += 1;
+            }
+        }
+        if i == 0 || score > best_score {
+            best = dev;
+            best_score = score;
+        }
+    }
+    best
+}
+
 /// Find the best available device for a platform, honouring slot
 /// requirements if provided (os_version, device_type, physical, name).
 ///
 /// Priority:
-/// 1. Free booted device matching slot → return immediately
+/// 1. Free booted device matching slot → return one, preferring candidates
+///    with the most install-cache hits for this slot's apps (ranking only
+///    within the free set, so busy devices never block parallelism)
 /// 2. No matching booted → auto-boot the best shutdown device that
 ///    matches the slot (highest `os_major` tie-break among equally-matching
 ///    candidates, which naturally honours `Exact(N)` after filter)
@@ -1673,12 +1739,15 @@ async fn discover_all_devices(platform: Platform) -> Result<Vec<DeviceInfo>> {
 ///
 /// When `slot` is `None` (direct test harness, no plan phase) we fall
 /// back to the pre-slot behaviour: match by platform only.
+#[allow(clippy::too_many_arguments)]
 async fn find_available_device(
     platform: Platform,
     slot: Option<&DeviceSlot>,
     resource_mgr: &golem_devices::resource_manager::ResourceManager,
     create_if_missing: bool,
     event_tx: &golem_events::channel::EventSender,
+    install_cache: Option<&golem_runner::installer::InstallCache>,
+    install_matrix: &[InstallEntry],
 ) -> Result<DeviceInfo> {
     let all_devices = discover_all_devices(platform).await?;
 
@@ -1704,13 +1773,22 @@ async fn find_available_device(
         .copied()
         .collect();
 
-    // Step 1: Try to find a free booted device
+    // Step 1: Try to find a free booted device, preferring one whose install
+    // cache already has `Succeeded` entries for the slot's apps — saves
+    // re-running the install script. Ranking runs over *free* candidates only,
+    // so a busy-but-hot device can't serialise a cold-free device (parallel
+    // FlowRuns always grab a free one, picking cold over waiting).
     if !booted.is_empty() {
         // Booted count already reported via SuitePlanned/device_availability.
-        for device in &booted {
-            if resource_mgr.port_for(&device.udid).is_none() {
-                return Ok((*device).clone());
-            }
+        let free: Vec<&DeviceInfo> = booted
+            .iter()
+            .copied()
+            .filter(|d| resource_mgr.port_for(&d.udid).is_none())
+            .collect();
+        if !free.is_empty() {
+            let pick = rank_by_install_cache(&free, platform, slot, install_cache, install_matrix)
+                .await;
+            return Ok(pick.clone());
         }
         // All booted are busy — fall through to wait loop below
     }
@@ -1764,10 +1842,15 @@ async fn find_available_device(
     let mut emitted_waiting = false;
 
     loop {
-        for device in &booted {
-            if resource_mgr.port_for(&device.udid).is_none() {
-                return Ok((*device).clone());
-            }
+        let free: Vec<&DeviceInfo> = booted
+            .iter()
+            .copied()
+            .filter(|d| resource_mgr.port_for(&d.udid).is_none())
+            .collect();
+        if !free.is_empty() {
+            let pick = rank_by_install_cache(&free, platform, slot, install_cache, install_matrix)
+                .await;
+            return Ok(pick.clone());
         }
 
         if tokio::time::Instant::now() >= deadline {
@@ -1873,6 +1956,8 @@ mod tests {
             flows: vec![passing_flow("a"), passing_flow("b"), passing_flow("c")],
             installs: Vec::new(),
             total_duration_ms: 100,
+            started_at: None,
+            finished_at: None,
         };
         let stats = suite_stats(&report);
         assert_eq!(stats.passed, 3);
@@ -1887,6 +1972,8 @@ mod tests {
             flows: vec![failing_flow("a"), failing_flow("b")],
             installs: Vec::new(),
             total_duration_ms: 100,
+            started_at: None,
+            finished_at: None,
         };
         let stats = suite_stats(&report);
         assert_eq!(stats.failed, 2);
@@ -1907,6 +1994,8 @@ mod tests {
             ],
             installs: Vec::new(),
             total_duration_ms: 500,
+            started_at: None,
+            finished_at: None,
         };
         let stats = suite_stats(&report);
         assert_eq!(stats.total, 5);
@@ -1987,6 +2076,8 @@ mod tests {
             ],
             installs: Vec::new(),
             total_duration_ms: 200,
+            started_at: None,
+            finished_at: None,
         };
         let stats = suite_stats(&report);
         assert_eq!(stats.total, 4);
@@ -2007,6 +2098,8 @@ mod tests {
             ],
             installs: Vec::new(),
             total_duration_ms: 300,
+            started_at: None,
+            finished_at: None,
         };
         let stats = suite_stats(&report);
         assert_eq!(stats.total, 3);
@@ -2038,6 +2131,8 @@ mod tests {
             flows: Vec::new(),
             installs: Vec::new(),
             total_duration_ms: 0,
+            started_at: None,
+            finished_at: None,
         };
         let stats = suite_stats(&report);
         assert_eq!(stats.total, 0);
@@ -2091,6 +2186,145 @@ mod tests {
         assert!(
             !report.flows[0].warnings.is_empty(),
             "warnings SHALL contain the parse error",
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // Install-cache-hit ranking: helper picks the warm device when multiple
+    // free devices could match — saves re-running the install script.
+    // ---------------------------------------------------------------
+    fn test_device(name: &str, udid: &str) -> DeviceInfo {
+        DeviceInfo {
+            name: name.to_string(),
+            udid: udid.to_string(),
+            platform: Platform::Ios,
+            device_type: golem_devices::DeviceType::Phone,
+            os_major: 18,
+            os_version: "18.0".to_string(),
+            state: DeviceState::Booted,
+            physical: false,
+            playstore: false,
+            screen_width: None,
+            screen_height: None,
+            screen_scale: None,
+            last_booted: None,
+            runtime_id: None,
+            device_type_id: None,
+        }
+    }
+
+    fn test_slot(apps: &[&str]) -> DeviceSlot {
+        DeviceSlot {
+            platform: Platform::Ios,
+            os_version: None,
+            device_type: None,
+            physical: None,
+            name: None,
+            playstore: None,
+            accessibility_label: None,
+            apps: apps.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    fn test_matrix_entry(app: &str, bundle: &str) -> InstallEntry {
+        InstallEntry {
+            platform: Platform::Ios,
+            app_name: app.to_string(),
+            bundle_id: bundle.to_string(),
+            script_path: PathBuf::from("/tmp/noop.sh"),
+            timeout_ms: 1000,
+            device_constraints: Vec::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn rank_prefers_device_with_cache_hit_for_slot_app() {
+        use golem_runner::installer::{InstallCache, InstallOutcome};
+        let sim1 = test_device("iPhone 16", "udid-1");
+        let sim2 = test_device("iPhone 16 Pro", "udid-2");
+        let free = vec![&sim1, &sim2];
+
+        let cache = InstallCache::new();
+        cache
+            .set(("udid-2".into(), "com.app".into()), InstallOutcome::Succeeded)
+            .await;
+
+        let slot = test_slot(&["app"]);
+        let matrix = vec![test_matrix_entry("app", "com.app")];
+
+        let pick = rank_by_install_cache(&free, Platform::Ios, Some(&slot), Some(&cache), &matrix)
+            .await;
+        assert_eq!(
+            pick.udid, "udid-2",
+            "SHALL rank the sim with a Succeeded install cache entry above the cold one",
+        );
+    }
+
+    #[tokio::test]
+    async fn rank_without_cache_returns_first_candidate() {
+        let sim1 = test_device("iPhone 16", "udid-1");
+        let sim2 = test_device("iPhone 16 Pro", "udid-2");
+        let free = vec![&sim1, &sim2];
+        let slot = test_slot(&["app"]);
+        let matrix = vec![test_matrix_entry("app", "com.app")];
+
+        let pick = rank_by_install_cache(&free, Platform::Ios, Some(&slot), None, &matrix).await;
+        assert_eq!(
+            pick.udid, "udid-1",
+            "SHALL fall back to input order when no cache is available",
+        );
+    }
+
+    #[tokio::test]
+    async fn rank_failed_cache_entry_does_not_count() {
+        use golem_runner::installer::{InstallCache, InstallOutcome};
+        let sim1 = test_device("iPhone 16", "udid-1");
+        let sim2 = test_device("iPhone 16 Pro", "udid-2");
+        let free = vec![&sim1, &sim2];
+
+        let cache = InstallCache::new();
+        cache
+            .set(
+                ("udid-2".into(), "com.app".into()),
+                InstallOutcome::FailedScript("nope".into()),
+            )
+            .await;
+
+        let slot = test_slot(&["app"]);
+        let matrix = vec![test_matrix_entry("app", "com.app")];
+
+        let pick = rank_by_install_cache(&free, Platform::Ios, Some(&slot), Some(&cache), &matrix)
+            .await;
+        assert_eq!(
+            pick.udid, "udid-1",
+            "FailedScript SHALL NOT count as a cache hit — first candidate wins the tie",
+        );
+    }
+
+    #[tokio::test]
+    async fn rank_picks_device_with_more_hits_for_multi_app_slot() {
+        use golem_runner::installer::{InstallCache, InstallOutcome};
+        let sim1 = test_device("iPhone 16", "udid-1");
+        let sim2 = test_device("iPhone 16 Pro", "udid-2");
+        let free = vec![&sim1, &sim2];
+
+        let cache = InstallCache::new();
+        // sim1 has one hit (app_a), sim2 has both (app_a + app_b).
+        cache.set(("udid-1".into(), "com.a".into()), InstallOutcome::Succeeded).await;
+        cache.set(("udid-2".into(), "com.a".into()), InstallOutcome::Succeeded).await;
+        cache.set(("udid-2".into(), "com.b".into()), InstallOutcome::Succeeded).await;
+
+        let slot = test_slot(&["app_a", "app_b"]);
+        let matrix = vec![
+            test_matrix_entry("app_a", "com.a"),
+            test_matrix_entry("app_b", "com.b"),
+        ];
+
+        let pick = rank_by_install_cache(&free, Platform::Ios, Some(&slot), Some(&cache), &matrix)
+            .await;
+        assert_eq!(
+            pick.udid, "udid-2",
+            "SHALL prefer the device with the higher cache-hit count across all slot apps",
         );
     }
 

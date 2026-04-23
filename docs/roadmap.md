@@ -59,14 +59,6 @@ Currently the install cache is keyed per `(device_udid, bundle_id)`: the user's 
 
 **Files:** `golem-runner/src/installer.rs` (split cache types), `golem-cli/src/suite.rs` (first-build-winner coordination).
 
-## Scheduler Prefers Install-Cache-Hit Devices
-
-When picking a free device for a new FlowRun, `find_available_device` currently returns the first free match. For suites with many same-shape FlowRuns, preferring a device whose `install_cache[(udid, bundle)]` is already `Succeeded` saves re-invoking the install script on a fresh device. Matters whenever more than one matching device is booted.
-
-**Fix:** sort `booted` candidates by cache-hit count across the FlowRun's slot apps before returning.
-
-**Files:** `golem-cli/src/suite.rs` (`find_available_device` + caller access to `install_cache`).
-
 ## Coverage Multiplier Syntax (`ios:latest:2`)
 
 Extend device constraint parser to recognize a `:N` suffix on the `os` field. `os = "ios:latest:2"` means "resolve 2 devices matching `ios:latest`". Plan generator emits N `FlowRun` entries for that coverage slot.
@@ -106,20 +98,21 @@ If pre-install fails for app `X` on device `D`, today's per-flow install check m
 
 **Files:** `golem-events/src/lib.rs` (enrich `FlowSkipped` variant), `golem-report/src/stream.rs` + `accumulator.rs` (render distinct skip reasons).
 
-## Cross-Process InstallCache
+## Per-Orchestrator InstallCache
 
-Orchestrator mode (`golem-cli/src/orchestrator.rs`) lets a second `golem run` offload to the first. Currently each process has its own `InstallCache`, so the second suite rebuilds apps the first already produced.
+Today `handle_submit` in `golem-cli/src/orchestrator.rs` builds a **new** `SuiteRunner` per submit; each runner owns its own fresh `InstallCache`. So even back-to-back submits through the same P1 server re-run the install script on a device whose install is still current.
 
-**Desired:** persist install outcomes across CLI invocations. Second `golem run` queries the orchestrator for `(udid, bundle) → InstallOutcome` before running its own install script.
+Since the server process (P1) performs all installs — clients are thin submitters that only render events — lifting `InstallCache` ownership from per-runner to per-`OrchestratorServer` gives every submit through P1 shared memory of prior installs. Cross-process benefit is downstream: `P2 → P1 → install` uses P1's cache, so P2 sees the cache hit without any IPC.
 
-**Implementation options:**
-- Shared-memory backing for `InstallCache` (complex, platform-specific)
-- Socket-query path in existing orchestrator IPC: `{ type: "install_cache_get", key: (udid, bundle) }` → `{ outcome: ... }`
-- Persist to `~/.golem/install_cache.toml` between runs (simpler; staleness handled by wall-clock TTL)
+**Desired:** `OrchestratorServer` holds an `Arc<InstallCache>`; `handle_submit` passes it into each new `SuiteRunner` (extend `with_resource_manager` to accept an optional shared cache).
 
-**Foundation:** existing keying is suitable; `InstallCache` trait already abstracts storage.
+**Staleness:** cache lifetime = P1 lifetime. P1 terminates once `active_clients == 0` and its own suite finishes, so the cache naturally drains when work stops. Real-world pattern on a host is same-subset-of-apps + same device shapes across submits — the default behaviour is correct for the common case.
 
-**Files:** `golem-runner/src/installer.rs` (trait or backend abstraction), `golem-cli/src/orchestrator.rs` (cache-query RPCs).
+**Force-rebuild escape:** add a CLI flag (`--rebuild`) later if a submit needs to ignore cache hits. Out of scope for this item.
+
+**Foundation:** existing `(udid, bundle)` keying works unchanged; `InstallCache` is already `Arc`-friendly (`Clone` + interior mutability via tokio `Mutex`).
+
+**Files:** `golem-cli/src/orchestrator.rs` (own the cache, pass into runner), `golem-cli/src/suite.rs` (constructor variant accepting a shared cache).
 
 ## Migrate SuiteRunner + IPC into `golem-orchestrator`
 
