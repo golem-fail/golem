@@ -33,6 +33,10 @@ pub struct ResourceManager {
     ram_provider: Box<dyn RamProvider>,
     /// Active allocations: device UDID → port
     allocations: Mutex<HashMap<String, u16>>,
+    /// Devices this suite booted (vs user-booted). Only these get shut down
+    /// at suite end. UDID → DeviceInfo so shutdown has what it needs without
+    /// a second discovery pass.
+    golem_booted: Mutex<HashMap<String, DeviceInfo>>,
 }
 
 impl ResourceManager {
@@ -42,6 +46,7 @@ impl ResourceManager {
             config,
             ram_provider: Box::new(SystemRamProvider),
             allocations: Mutex::new(HashMap::new()),
+            golem_booted: Mutex::new(HashMap::new()),
         }
     }
 
@@ -51,6 +56,7 @@ impl ResourceManager {
             config,
             ram_provider,
             allocations: Mutex::new(HashMap::new()),
+            golem_booted: Mutex::new(HashMap::new()),
         }
     }
 
@@ -110,6 +116,44 @@ impl ResourceManager {
     /// Get the port for an allocated device.
     pub fn port_for(&self, device_udid: &str) -> Option<u16> {
         self.allocations.lock().expect("lock poisoned").get(device_udid).copied()
+    }
+
+    /// Record that golem booted (or created) this device. Only tracked
+    /// devices are shut down at suite end; user-booted devices are never
+    /// touched.
+    pub fn mark_golem_booted(&self, device: DeviceInfo) {
+        let mut booted = self.golem_booted.lock().expect("lock poisoned");
+        booted.insert(device.udid.clone(), device);
+    }
+
+    /// Shut down every device this suite booted. Drains the tracking map
+    /// so repeat calls are idempotent. Respects `keep_devices`: when true,
+    /// the map is drained but no shutdown commands run.
+    ///
+    /// Errors are collected as warning strings rather than propagated —
+    /// shutdown is best-effort (a sim may have died on its own already).
+    pub async fn shutdown_golem_booted(&self, keep_devices: bool) -> Vec<String> {
+        let devices: Vec<DeviceInfo> = {
+            let mut booted = self.golem_booted.lock().expect("lock poisoned");
+            booted.drain().map(|(_, d)| d).collect()
+        };
+
+        if keep_devices || devices.is_empty() {
+            return Vec::new();
+        }
+
+        let mut warnings = Vec::new();
+        for device in devices {
+            if let Err(e) = crate::lifecycle::shutdown_device(&device).await {
+                warnings.push(format!("Failed to shutdown {}: {e}", device.name));
+            }
+        }
+        warnings
+    }
+
+    /// How many devices are currently tracked as golem-booted. Testing.
+    pub fn golem_booted_count(&self) -> usize {
+        self.golem_booted.lock().expect("lock poisoned").len()
     }
 }
 
@@ -210,6 +254,59 @@ mod tests {
 
         rm.release("uid-1");
         rm.try_allocate(&d2, 8223).expect("second SHALL succeed after release");
+    }
+
+    #[tokio::test]
+    async fn mark_golem_booted_tracks_device() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        assert_eq!(rm.golem_booted_count(), 0);
+        rm.mark_golem_booted(test_device("sim", "uid-1", Platform::Ios));
+        assert_eq!(rm.golem_booted_count(), 1);
+        rm.mark_golem_booted(test_device("emu", "uid-2", Platform::Android));
+        assert_eq!(rm.golem_booted_count(), 2);
+    }
+
+    #[tokio::test]
+    async fn shutdown_golem_booted_keep_devices_drains_without_running() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        rm.mark_golem_booted(test_device("sim", "uid-1", Platform::Ios));
+        rm.mark_golem_booted(test_device("emu", "uid-2", Platform::Android));
+
+        let warnings = rm.shutdown_golem_booted(true).await;
+        assert!(warnings.is_empty(), "keep_devices=true SHALL skip shutdown calls");
+        assert_eq!(rm.golem_booted_count(), 0, "map SHALL drain even with keep_devices=true");
+    }
+
+    #[tokio::test]
+    async fn shutdown_golem_booted_empty_is_noop() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        let warnings = rm.shutdown_golem_booted(false).await;
+        assert!(warnings.is_empty(), "empty map SHALL produce no warnings");
+    }
+
+    #[tokio::test]
+    async fn mark_golem_booted_is_independent_of_allocations() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        let d = test_device("sim", "uid-1", Platform::Ios);
+        rm.mark_golem_booted(d.clone());
+        // Marking as golem-booted SHALL NOT consume an allocation slot.
+        assert_eq!(rm.active_count(), 0);
+        // Can still allocate the same device afterward.
+        rm.try_allocate(&d, 8222).expect("allocate SHALL succeed");
+        assert_eq!(rm.active_count(), 1);
+        assert_eq!(rm.golem_booted_count(), 1);
     }
 
     #[test]

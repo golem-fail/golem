@@ -161,10 +161,6 @@ Teardown blocks are parsed but never executed. The executor ignores the `teardow
 
 No app data cleaning logic exists in the execution path. The flag is accepted but there is nothing to skip.
 
-### `--keep-devices` — Keep devices after completion
-
-`auto_cleanup()` in golem-runner checks this flag, but `auto_cleanup()` is never called from the suite. Devices are released via resource manager but not shut down.
-
 ### `--record` — Auto screen recording
 
 Flag is accepted but never triggers recording. Recording only works via explicit `start_recording`/`stop_recording` steps in flows.

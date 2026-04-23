@@ -134,6 +134,17 @@ async fn main() -> anyhow::Result<()> {
             // Wait for any active client connections to finish before exiting
             server.wait_for_clients().await;
 
+            // Shut down any sims/emulators golem booted this run (unless
+            // --keep-devices). User-booted devices are not tracked, so never
+            // shut down.
+            let shutdown_warnings = server
+                .resource_mgr
+                .shutdown_golem_booted(args.keep_devices)
+                .await;
+            for w in &shutdown_warnings {
+                eprintln!("  [devices] {w}");
+            }
+
             // Write results to output dir (json + toon always, junit if requested).
             if !args.no_results {
                 golem_report::output::write_results_to_dir(&report, &output_dir, include_junit)?;

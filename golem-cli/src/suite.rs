@@ -1839,10 +1839,12 @@ async fn find_available_device(
             },
         );
         golem_devices::lifecycle::boot_device(best).await?;
-        return Ok(DeviceInfo {
+        let booted_device = DeviceInfo {
             state: DeviceState::Booted,
             ..(*best).clone()
-        });
+        };
+        resource_mgr.mark_golem_booted(booted_device.clone());
+        return Ok(booted_device);
     }
 
     // Step 3: No compatible devices at all — auto-create or fail
@@ -1850,11 +1852,13 @@ async fn find_available_device(
         if create_if_missing {
             eprintln!("  [devices] no {platform} device found — creating one...");
             let config = golem_devices::concurrency::ConcurrencyConfig::default();
-            return golem_devices::lifecycle::auto_create_device(
+            let created = golem_devices::lifecycle::auto_create_device(
                 platform,
                 golem_devices::DeviceType::Phone,
                 &config,
-            ).await;
+            ).await?;
+            resource_mgr.mark_golem_booted(created.clone());
+            return Ok(created);
         } else {
             anyhow::bail!(
                 "No {platform} devices found. Use create_if_missing = true to auto-create, \
