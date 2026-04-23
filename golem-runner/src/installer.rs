@@ -38,6 +38,52 @@ pub enum InstallOutcome {
     FailedNoScript,
 }
 
+/// Build-phase cache key: `(platform, bundle_id)`. Independent of device —
+/// the first device for a given (platform, bundle) drives the build; later
+/// devices skip straight to install-only.
+pub type BuildKey = (String, String);
+
+/// Outcome of the one-time build performed by the first device for a
+/// given `(platform, bundle)` pair.
+#[derive(Debug, Clone)]
+pub enum BuildOutcome {
+    Succeeded,
+    /// Full build failed. Every waiter for the same key short-circuits
+    /// to a skip with this error attached.
+    Failed(String),
+}
+
+/// Role handed out by [`InstallCache::acquire_build`]. The first caller
+/// for a `(platform, bundle)` becomes the Builder and runs the full
+/// script; subsequent callers wait for the outcome and then install-only.
+pub enum BuildRole {
+    /// Caller SHALL run the full install script (no `install-only` arg)
+    /// and record the outcome via [`BuildSlot::record_success`] or
+    /// [`BuildSlot::record_failure`] before dropping the slot.
+    Build(BuildSlot),
+    /// Build already finished. Caller uses the outcome: on `Succeeded`,
+    /// invoke the script with `install-only`; on `Failed`, skip.
+    Installed(BuildOutcome),
+}
+
+/// Held by the winning builder. Dropping without calling
+/// `record_success`/`record_failure` is safe — no outcome is recorded
+/// and the next waiter becomes the new builder (retry on panic).
+pub struct BuildSlot {
+    outcomes: Arc<Mutex<HashMap<BuildKey, BuildOutcome>>>,
+    key: BuildKey,
+    _guard: tokio::sync::OwnedMutexGuard<()>,
+}
+
+impl BuildSlot {
+    pub async fn record_success(self) {
+        self.outcomes.lock().await.insert(self.key.clone(), BuildOutcome::Succeeded);
+    }
+    pub async fn record_failure(self, err: String) {
+        self.outcomes.lock().await.insert(self.key.clone(), BuildOutcome::Failed(err));
+    }
+}
+
 /// Shared install cache. Safe to clone (`Arc` inside).
 #[derive(Clone, Default)]
 pub struct InstallCache {
@@ -52,6 +98,14 @@ pub struct InstallCache {
     /// both root AND script collide.
     #[allow(clippy::type_complexity)]
     project_locks: Arc<Mutex<HashMap<(PathBuf, PathBuf), Arc<Mutex<()>>>>>,
+    /// Per-(platform, bundle) build outcomes. Populated by the winning
+    /// builder; read by waiters.
+    build_outcomes: Arc<Mutex<HashMap<BuildKey, BuildOutcome>>>,
+    /// Per-(platform, bundle) mutex that serialises build-winner selection.
+    /// Held by the Builder across the full script run; waiters queue on it
+    /// and re-check `build_outcomes` once they acquire.
+    #[allow(clippy::type_complexity)]
+    build_locks: Arc<Mutex<HashMap<BuildKey, Arc<tokio::sync::Mutex<()>>>>>,
 }
 
 impl InstallCache {
@@ -77,6 +131,45 @@ impl InstallCache {
             .or_insert_with(|| Arc::new(Mutex::new(())))
             .clone()
     }
+
+    /// Determine this caller's role in the (platform, bundle) build.
+    ///
+    /// Fast-path: if the build has already finished, return
+    /// `BuildRole::Installed(outcome)` immediately.
+    ///
+    /// Otherwise acquire the per-key build mutex and re-check under the
+    /// lock. If still no outcome, hand the caller a `BuildSlot` (Builder
+    /// role). If a winner finished while we queued, return `Installed`.
+    pub async fn acquire_build(&self, platform: &str, bundle: &str) -> BuildRole {
+        let key: BuildKey = (platform.to_string(), bundle.to_string());
+
+        // Fast-path: already resolved, no need to touch the build-lock map.
+        if let Some(outcome) = self.build_outcomes.lock().await.get(&key).cloned() {
+            return BuildRole::Installed(outcome);
+        }
+
+        // Get or create the per-key build mutex.
+        let lock = {
+            let mut locks = self.build_locks.lock().await;
+            locks
+                .entry(key.clone())
+                .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+                .clone()
+        };
+        let guard = lock.lock_owned().await;
+
+        // Re-check under the per-key lock — a winner may have finished
+        // while we queued.
+        if let Some(outcome) = self.build_outcomes.lock().await.get(&key).cloned() {
+            return BuildRole::Installed(outcome);
+        }
+
+        BuildRole::Build(BuildSlot {
+            outcomes: self.build_outcomes.clone(),
+            key,
+            _guard: guard,
+        })
+    }
 }
 
 /// Run an install script. Emits `InstallStarted`, `InstallOutput` (per stderr line),
@@ -97,6 +190,7 @@ pub async fn run_install_script(
     timeout_ms: u64,
     target: &str,
     os_major: u32,
+    install_only: bool,
     emitter: Option<&DeviceEmitter>,
 ) -> Result<()> {
     let start = Instant::now();
@@ -110,10 +204,16 @@ pub async fn run_install_script(
         });
     }
 
-    let spawn_result = Command::new(script_path)
-        .arg(platform)
-        .arg(device_udid)
-        .arg(bundle_id)
+    let mut cmd = Command::new(script_path);
+    cmd.arg(platform).arg(device_udid).arg(bundle_id);
+    if install_only {
+        // Scripts that know the protocol SHALL skip their build step when
+        // `$4 == "install-only"` and install the already-built artifact.
+        // Scripts that don't check the arg fall back to a full rebuild —
+        // correct, just miss the optimisation.
+        cmd.arg("install-only");
+    }
+    let spawn_result = cmd
         .current_dir(working_dir)
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -303,7 +403,7 @@ mod tests {
             "#!/bin/sh\necho running >&2\nexit 0\n");
         let result = run_install_script(
             &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, None,
+            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, false, None,
         ).await;
         assert!(result.is_ok(), "exit 0 SHALL be ok: {:?}", result);
     }
@@ -315,7 +415,7 @@ mod tests {
             "#!/bin/sh\necho 'build failed: missing signing' >&2\nexit 1\n");
         let result = run_install_script(
             &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, None,
+            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, false, None,
         ).await;
         assert!(result.is_err());
         let err = format!("{}", result.unwrap_err());
@@ -330,7 +430,7 @@ mod tests {
             "#!/bin/sh\nsleep 10\n");
         let result = run_install_script(
             &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 200, "test target", 0, None,
+            "ios", "udid-1", "com.x", "app", 200, "test target", 0, false, None,
         ).await;
         assert!(result.is_err());
         assert!(format!("{}", result.unwrap_err()).contains("timed out"));
@@ -341,16 +441,17 @@ mod tests {
         let tmp = tempdir().unwrap();
         let out_file = tmp.path().join("args.txt");
         let script_body = format!(
-            "#!/bin/sh\necho \"$1 $2 $3\" > {}\nexit 0\n",
+            "#!/bin/sh\necho \"$1 $2 $3 $4\" > {}\nexit 0\n",
             out_file.display()
         );
         let script = write_script(tmp.path(), &script_body);
         let result = run_install_script(
             &script, tmp.path(),
-            "android", "emulator-5554", "com.example.app", "app", 5_000, "test target", 0, None,
+            "android", "emulator-5554", "com.example.app", "app", 5_000, "test target", 0, false, None,
         ).await;
         assert!(result.is_ok());
         let args = std::fs::read_to_string(&out_file).unwrap();
+        // $4 unset (install_only=false) SHALL produce empty trailing slot.
         assert_eq!(args.trim(), "android emulator-5554 com.example.app");
     }
 
@@ -363,8 +464,146 @@ mod tests {
             "#!/bin/sh\ntest -f ./marker.txt || { echo missing >&2; exit 1; }\n");
         let result = run_install_script(
             &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, None,
+            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, false, None,
         ).await;
         assert!(result.is_ok(), "SHALL run in provided working_dir: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn script_install_only_passes_fourth_arg() {
+        let tmp = tempdir().unwrap();
+        let out_file = tmp.path().join("args.txt");
+        let script_body = format!(
+            "#!/bin/sh\necho \"$1|$2|$3|$4\" > {}\nexit 0\n",
+            out_file.display()
+        );
+        let script = write_script(tmp.path(), &script_body);
+        let result = run_install_script(
+            &script, tmp.path(),
+            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, true, None,
+        ).await;
+        assert!(result.is_ok());
+        let args = std::fs::read_to_string(&out_file).unwrap();
+        assert_eq!(args.trim(), "ios|udid-1|com.x|install-only",
+            "install_only=true SHALL pass \"install-only\" as $4");
+    }
+
+    #[tokio::test]
+    async fn script_full_build_omits_fourth_arg() {
+        let tmp = tempdir().unwrap();
+        let out_file = tmp.path().join("args.txt");
+        // Use -z to check $4 is empty/unset.
+        let script_body = format!(
+            "#!/bin/sh\nif [ -z \"$4\" ]; then echo NO4 > {}; else echo \"got:$4\" > {}; fi\nexit 0\n",
+            out_file.display(), out_file.display()
+        );
+        let script = write_script(tmp.path(), &script_body);
+        let result = run_install_script(
+            &script, tmp.path(),
+            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, false, None,
+        ).await;
+        assert!(result.is_ok());
+        let marker = std::fs::read_to_string(&out_file).unwrap();
+        assert_eq!(marker.trim(), "NO4",
+            "install_only=false SHALL omit the 4th arg entirely");
+    }
+
+    #[tokio::test]
+    async fn acquire_build_winner_selected_once_under_concurrency() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        let cache = InstallCache::new();
+        let builder_count = Arc::new(AtomicU32::new(0));
+        let installed_count = Arc::new(AtomicU32::new(0));
+
+        let mut handles = Vec::new();
+        for _ in 0..5 {
+            let cache = cache.clone();
+            let bc = builder_count.clone();
+            let ic = installed_count.clone();
+            handles.push(tokio::spawn(async move {
+                match cache.acquire_build("ios", "com.x").await {
+                    BuildRole::Build(slot) => {
+                        bc.fetch_add(1, Ordering::SeqCst);
+                        // Simulate build work so waiters actually queue.
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                        slot.record_success().await;
+                    }
+                    BuildRole::Installed(_) => {
+                        ic.fetch_add(1, Ordering::SeqCst);
+                    }
+                }
+            }));
+        }
+        for h in handles { h.await.unwrap(); }
+
+        assert_eq!(builder_count.load(Ordering::SeqCst), 1,
+            "exactly one Builder SHALL be elected");
+        assert_eq!(installed_count.load(Ordering::SeqCst), 4,
+            "other 4 callers SHALL see Installed");
+    }
+
+    #[tokio::test]
+    async fn acquire_build_failure_propagates_to_waiters() {
+        let cache = InstallCache::new();
+
+        // First caller is Builder; records failure.
+        match cache.acquire_build("ios", "com.y").await {
+            BuildRole::Build(slot) => slot.record_failure("build bust".into()).await,
+            _ => panic!("first caller SHALL be Builder"),
+        }
+
+        // Second caller sees the failure.
+        match cache.acquire_build("ios", "com.y").await {
+            BuildRole::Installed(BuildOutcome::Failed(err)) => {
+                assert_eq!(err, "build bust");
+            }
+            _ => panic!("second caller SHALL see Installed(Failed)"),
+        }
+    }
+
+    #[tokio::test]
+    async fn acquire_build_builder_drop_without_record_allows_retry() {
+        let cache = InstallCache::new();
+
+        // First caller becomes Builder but drops without recording
+        // (simulates panic / early return).
+        {
+            match cache.acquire_build("ios", "com.z").await {
+                BuildRole::Build(_slot) => { /* drop without recording */ }
+                _ => panic!("first SHALL be Builder"),
+            }
+        }
+
+        // Second caller SHALL also become Builder (no outcome stored).
+        match cache.acquire_build("ios", "com.z").await {
+            BuildRole::Build(slot) => slot.record_success().await,
+            _ => panic!("second SHALL be Builder after drop without record"),
+        }
+
+        // Third sees the success.
+        match cache.acquire_build("ios", "com.z").await {
+            BuildRole::Installed(BuildOutcome::Succeeded) => {}
+            _ => panic!("third SHALL see Installed(Succeeded)"),
+        }
+    }
+
+    #[tokio::test]
+    async fn acquire_build_keys_are_per_platform_and_bundle() {
+        let cache = InstallCache::new();
+        // iOS / com.a builds successfully.
+        match cache.acquire_build("ios", "com.a").await {
+            BuildRole::Build(slot) => slot.record_success().await,
+            _ => panic!(),
+        }
+        // Android / com.a SHALL still be a fresh build (different platform).
+        match cache.acquire_build("android", "com.a").await {
+            BuildRole::Build(slot) => slot.record_success().await,
+            _ => panic!("android/com.a SHALL be its own build"),
+        }
+        // iOS / com.b SHALL still be fresh (different bundle).
+        match cache.acquire_build("ios", "com.b").await {
+            BuildRole::Build(_) => {}
+            _ => panic!("ios/com.b SHALL be its own build"),
+        }
     }
 }

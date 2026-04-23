@@ -40,25 +40,6 @@ Running `golem run a.toml b.toml` on ios+android = 4 device-runs available but o
 
 **Files:** `golem-devices/src/resource_manager.rs` (boot-on-demand logic), `golem-devices/src/concurrency.rs` (headroom checks), `golem-devices/src/{ios,android}.rs` (boot helpers + tracking).
 
-## Install Cache: Build-Once, Install-to-Many
-
-Currently the install cache is keyed per `(device_udid, bundle_id)`: the user's install script runs once per device. For suites that run the same flow across multiple devices on the **same platform** (e.g. 2 iOS simulators), the build step is re-run every time — wasteful, since the built `.app`/APK is identical across devices of the same platform.
-
-**Script-side foundation (already in place):** install scripts accept a 4th positional arg, `$4 = "install-only"`. When set, the script skips its build step and installs the previously produced artifact. Scripts that don't support the flag ignore it and do a full rebuild — backwards-compatible.
-
-**Golem-side optimisation (this roadmap item):**
-- Split the cache into two layers:
-  - `BuildCache: (platform, bundle_id) → Succeeded | Failed` — tracks whether any device for this platform has already triggered a successful build this suite.
-  - `InstallCache: (device_udid, bundle_id) → Succeeded | Failed` — per-device install outcome (current behaviour).
-- First device for a `(platform, bundle)` pair: invoke script without the `install-only` flag. Build + install.
-- Subsequent devices for the same `(platform, bundle)`: invoke script with `install-only`. Install-only path reuses the previously produced artifact.
-- On build failure: still `FailedScript` for the `(platform, bundle)` pair; all devices on that platform skip as before.
-- Thread-safety: devices may start concurrently — need a per-`(platform, bundle)` mutex around the first invocation so parallel-starting devices wait for the one that "won" the build.
-
-**Ties in with:** [True Parallel Flow × Device Concurrency](#true-parallel-flow--device-concurrency) — the optimisation matters more once more devices can run simultaneously.
-
-**Files:** `golem-runner/src/installer.rs` (split cache types), `golem-cli/src/suite.rs` (first-build-winner coordination).
-
 ## Coverage Multiplier Syntax (`ios:latest:2`)
 
 Extend device constraint parser to recognize a `:N` suffix on the `os` field. `os = "ios:latest:2"` means "resolve 2 devices matching `ios:latest`". Plan generator emits N `FlowRun` entries for that coverage slot.

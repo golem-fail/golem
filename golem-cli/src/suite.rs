@@ -771,10 +771,6 @@ async fn preinstall_for_device_scoped(
     project_root: &Path,
 ) {
     let platform_str = platform.to_string();
-    let target = format!(
-        "{} ({}/v{}/{})",
-        device.name, platform, device.os_major, device.device_type
-    );
     // Use the same device_label format as per-flow emission so
     // stream_human's circled-number mapping stays stable across
     // preinstall and flow events for the same physical device.
@@ -790,52 +786,128 @@ async fn preinstall_for_device_scoped(
         if !device_matches_entry_constraints(device, entry) {
             continue;
         }
-        let key = (device.udid.clone(), entry.bundle_id.clone());
-        // Fast-path cache check (optimisation).
-        if install_cache.get(&key).await.is_some() {
-            continue;
-        }
-
-        // Acquire project_lock BEFORE the authoritative cache re-check
-        // to close the check-then-install race when multiple parallel
-        // FlowRun workers share an install_cache.
-        let proj_lock = install_cache
-            .project_lock(project_root, &entry.script_path)
-            .await;
-        let _guard = proj_lock.lock().await;
-        if install_cache.get(&key).await.is_some() {
-            continue;
-        }
-
-        let result = golem_runner::installer::run_install_script(
+        // Helper writes the per-device install_cache outcome internally;
+        // preinstall ignores the Result — the per-flow check below will
+        // consult the cache and decide whether to skip.
+        let _ = run_install_with_build_coord(
             &entry.script_path,
             project_root,
             &platform_str,
-            &device.udid,
+            device,
             &entry.bundle_id,
             &entry.app_name,
             entry.timeout_ms,
-            &target,
-            device.os_major,
+            install_cache,
             Some(&emitter),
         )
         .await;
-        match result {
-            Ok(()) => {
-                install_cache
-                    .set(key, golem_runner::installer::InstallOutcome::Succeeded)
-                    .await;
+    }
+}
+
+/// Run the install script for one `(device, bundle)`, using a
+/// per-`(platform, bundle)` build coordinator so only the first device
+/// does a full build — subsequent devices pass `install-only` and reuse
+/// the built artifact. Updates `install_cache` with the per-device
+/// outcome. Returns `Err` when the script fails, a prior build for the
+/// same `(platform, bundle)` already failed, or when a prior per-device
+/// install is cached as failed.
+#[allow(clippy::too_many_arguments)]
+async fn run_install_with_build_coord(
+    script_path: &Path,
+    project_root: &Path,
+    platform_str: &str,
+    device: &DeviceInfo,
+    bundle_id: &str,
+    app_name: &str,
+    timeout_ms: u64,
+    install_cache: &golem_runner::installer::InstallCache,
+    emitter: Option<&golem_events::emitter::DeviceEmitter>,
+) -> anyhow::Result<()> {
+    use golem_runner::installer::{BuildOutcome, BuildRole, InstallOutcome};
+
+    let target = format!(
+        "{} ({}/v{}/{})",
+        device.name, platform_str, device.os_major, device.device_type
+    );
+    let key = (device.udid.clone(), bundle_id.to_string());
+
+    // Fast-path: per-device outcome already resolved.
+    if let Some(outcome) = install_cache.get(&key).await {
+        return match outcome {
+            InstallOutcome::Succeeded => Ok(()),
+            InstallOutcome::FailedScript(e) => Err(anyhow::anyhow!(e)),
+            InstallOutcome::FailedNoScript => {
+                Err(anyhow::anyhow!("no install_script configured"))
             }
-            Err(e) => {
-                install_cache
-                    .set(
-                        key,
-                        golem_runner::installer::InstallOutcome::FailedScript(format!("{e}")),
-                    )
-                    .await;
-            }
+        };
+    }
+
+    // Decide role. Builder runs the full script (no `install-only`) and
+    // records the outcome; waiters re-install from the already-built
+    // artifact. A prior build failure short-circuits without re-running.
+    let (install_only, slot) = match install_cache.acquire_build(platform_str, bundle_id).await {
+        BuildRole::Build(slot) => (false, Some(slot)),
+        BuildRole::Installed(BuildOutcome::Succeeded) => (true, None),
+        BuildRole::Installed(BuildOutcome::Failed(err)) => {
+            install_cache
+                .set(key, InstallOutcome::FailedScript(err.clone()))
+                .await;
+            return Err(anyhow::anyhow!(
+                "build previously failed for {platform_str}/{bundle_id}: {err}"
+            ));
+        }
+    };
+
+    // Builder holds project_lock across the full build so concurrent
+    // (platform, bundle) pairs sharing a build tree (monorepo `src-tauri/`)
+    // don't corrupt each other. Install-only skips the lock — it doesn't
+    // touch the build tree.
+    let _proj_guard = match &slot {
+        Some(_) => Some(
+            install_cache
+                .project_lock(project_root, script_path)
+                .await
+                .lock_owned()
+                .await,
+        ),
+        None => None,
+    };
+
+    let result = golem_runner::installer::run_install_script(
+        script_path,
+        project_root,
+        platform_str,
+        &device.udid,
+        bundle_id,
+        app_name,
+        timeout_ms,
+        &target,
+        device.os_major,
+        install_only,
+        emitter,
+    )
+    .await;
+
+    let err_str: Option<String> = result.as_ref().err().map(|e| format!("{e}"));
+
+    if let Some(slot) = slot {
+        match &err_str {
+            None => slot.record_success().await,
+            Some(err) => slot.record_failure(err.clone()).await,
         }
     }
+
+    install_cache
+        .set(
+            key,
+            match err_str {
+                None => InstallOutcome::Succeeded,
+                Some(err) => InstallOutcome::FailedScript(err),
+            },
+        )
+        .await;
+
+    result
 }
 
 
@@ -1466,63 +1538,43 @@ async fn run_flow_on_device(
 
         if let Some(rel) = script_rel {
             let script_path = project_root.join(&rel);
-            // Serialise install script runs that share a (project_root, script).
-            // Concurrent tauri ios + android builds in one src-tauri/ collide
-            // on cargo target-dir locks and WS IPC → ECONNREFUSED.
-            let proj_lock = install_cache.project_lock(&project_root, &script_path).await;
-            let _guard = proj_lock.lock().await;
-            // Re-check cache inside the lock — another parallel flow task
-            // may have installed this (device, bundle) while we waited.
-            if matches!(
-                install_cache.get(&key).await,
-                Some(golem_runner::installer::InstallOutcome::Succeeded)
-            ) {
-                continue;
-            }
-            let target = format!(
-                "{} ({}/v{}/{})",
-                device.name, platform, device.os_major, device.device_type
-            );
-            let result = golem_runner::installer::run_install_script(
+            let result = run_install_with_build_coord(
                 &script_path,
                 &project_root,
                 platform_str,
-                &device.udid,
+                &device,
                 &bundle_for_install,
                 &app.name,
                 timeout_ms,
-                &target,
-                device.os_major,
+                &install_cache,
                 device_emitter.as_ref(),
-            ).await;
-            match result {
-                Ok(()) => {
-                    install_cache.set(key, golem_runner::installer::InstallOutcome::Succeeded).await;
-                }
-                Err(e) => {
-                    let err_str = format!("{e}");
-                    install_cache.set(key, golem_runner::installer::InstallOutcome::FailedScript(err_str.clone())).await;
-                    let reason = format!("install_script failed for {} on {device_name}: {err_str}", bundle_for_install);
-                    ctx.emit(golem_events::EventKind::FlowSkipped {
-                        flow_name: flow_name.clone(),
-                        reason: reason.clone(),
-                    });
-                    return FlowReport {
-                        flow_name,
-                        success: false,
-                        step_results: Vec::new(),
-                        warnings: Vec::new(),
-                        duration_ms: start.elapsed().as_millis() as u64,
-                        seed: Some(actual_seed),
-                        screenshot_path: None,
-                        device_name: Some(device_label.clone()),
-                        os_major: None,
-                        perf_snapshots: vec![],
-                        skipped_reason: Some(reason),
-                        started_at: None,
-                        finished_at: None,
-                    };
-                }
+            )
+            .await;
+            if let Err(e) = result {
+                let err_str = format!("{e}");
+                let reason = format!(
+                    "install_script failed for {} on {device_name}: {err_str}",
+                    bundle_for_install
+                );
+                ctx.emit(golem_events::EventKind::FlowSkipped {
+                    flow_name: flow_name.clone(),
+                    reason: reason.clone(),
+                });
+                return FlowReport {
+                    flow_name,
+                    success: false,
+                    step_results: Vec::new(),
+                    warnings: Vec::new(),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    seed: Some(actual_seed),
+                    screenshot_path: None,
+                    device_name: Some(device_label.clone()),
+                    os_major: None,
+                    perf_snapshots: vec![],
+                    skipped_reason: Some(reason),
+                    started_at: None,
+                    finished_at: None,
+                };
             }
         }
     }
