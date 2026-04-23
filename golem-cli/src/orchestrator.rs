@@ -66,12 +66,19 @@ pub async fn try_connect() -> Result<UnixStream> {
 ///
 /// Listens on a unix socket and handles client connections.
 /// Runs in the background via `tokio::spawn`. Shares a ResourceManager
-/// with the main suite runner so client and server flows coordinate
-/// device allocation.
+/// AND an InstallCache with the main suite runner so client and server
+/// flows coordinate device allocation *and* avoid re-running install
+/// scripts on devices where a previous submit already installed. Cache
+/// lifetime = server process lifetime; the cache naturally drains when
+/// the server exits.
 pub struct OrchestratorServer {
     _handle: tokio::task::JoinHandle<()>,
     /// Shared resource manager for all flows (server + client).
     pub resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
+    /// Shared install cache. All submits — server's own run and every
+    /// client submit — see the same `(udid, bundle) → Succeeded` entries,
+    /// so a device installed by submit N skips install for submit N+1.
+    pub install_cache: golem_runner::installer::InstallCache,
     /// Count of active client handlers. Server waits for this to reach 0 before exiting.
     active_clients: std::sync::Arc<std::sync::atomic::AtomicU32>,
 }
@@ -129,20 +136,23 @@ pub async fn start_server() -> Result<OrchestratorServer> {
             golem_devices::concurrency::ConcurrencyConfig::default(),
         ),
     );
+    let install_cache = golem_runner::installer::InstallCache::new();
 
     let active_clients = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
 
     let rm = resource_mgr.clone();
+    let ic = install_cache.clone();
     let ac = active_clients.clone();
     let handle = tokio::spawn(async move {
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
                     let rm = rm.clone();
+                    let ic = ic.clone();
                     let ac = ac.clone();
                     ac.fetch_add(1, std::sync::atomic::Ordering::Release);
                     tokio::spawn(async move {
-                        handle_client(stream, rm).await;
+                        handle_client(stream, rm, ic).await;
                         ac.fetch_sub(1, std::sync::atomic::Ordering::Release);
                     });
                 }
@@ -154,13 +164,14 @@ pub async fn start_server() -> Result<OrchestratorServer> {
         }
     });
 
-    Ok(OrchestratorServer { _handle: handle, resource_mgr, active_clients })
+    Ok(OrchestratorServer { _handle: handle, resource_mgr, install_cache, active_clients })
 }
 
 /// Handle a single client connection.
 async fn handle_client(
     stream: UnixStream,
     resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
+    install_cache: golem_runner::installer::InstallCache,
 ) {
     let (reader, writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
@@ -197,7 +208,7 @@ async fn handle_client(
                         let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
                     }
                     Some("submit") => {
-                        handle_submit(&json, &resource_mgr, &writer).await;
+                        handle_submit(&json, &resource_mgr, &install_cache, &writer).await;
                     }
                     Some(other) => {
                         let resp = serde_json::json!({"type": "error", "message": format!("unknown message type: {other}")});
@@ -223,6 +234,7 @@ async fn handle_client(
 async fn handle_submit(
     json: &serde_json::Value,
     resource_mgr: &std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
+    install_cache: &golem_runner::installer::InstallCache,
     writer: &std::sync::Arc<tokio::sync::Mutex<tokio::net::unix::OwnedWriteHalf>>,
 ) {
     let paths: Vec<PathBuf> = json["flow_paths"]
@@ -279,7 +291,8 @@ async fn handle_submit(
         ..SuiteConfig::default()
     };
 
-    let mut runner = SuiteRunner::with_resource_manager(config, resource_mgr.clone());
+    let mut runner =
+        SuiteRunner::with_resource_manager(config, resource_mgr.clone(), install_cache.clone());
     runner.event_forwarder = Some(fwd_tx);
 
     let result = runner.run_suite(&paths).await;

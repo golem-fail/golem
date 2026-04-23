@@ -124,7 +124,11 @@ async fn main() -> anyhow::Result<()> {
             // Server mode: start orchestrator + run suite with shared ResourceManager
             let server = orchestrator::start_server().await?;
 
-            let mut runner = SuiteRunner::with_resource_manager(config, server.resource_mgr.clone());
+            let mut runner = SuiteRunner::with_resource_manager(
+                config,
+                server.resource_mgr.clone(),
+                server.install_cache.clone(),
+            );
             let report = runner.run_suite(&flow_paths).await?;
 
             // Wait for any active client connections to finish before exiting

@@ -132,16 +132,22 @@ impl SuiteRunner {
         }
     }
 
-    /// Create a runner with a shared ResourceManager (for orchestrator mode).
+    /// Create a runner with a shared ResourceManager and InstallCache
+    /// (for orchestrator mode). The cache survives across submits to the
+    /// same `OrchestratorServer`, so a second submit can reuse a prior
+    /// submit's install work on the same device — the actual installs all
+    /// happen in the server process, so clients pick up the hits
+    /// transparently. Cache lifetime = server process lifetime.
     pub fn with_resource_manager(
         config: SuiteConfig,
         resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
+        install_cache: golem_runner::installer::InstallCache,
     ) -> Self {
         Self {
             config,
             resource_mgr,
             event_forwarder: None,
-            install_cache: golem_runner::installer::InstallCache::new(),
+            install_cache,
             install_matrix: Arc::new(Vec::new()),
             flow_paths: Arc::new(Vec::new()),
             flow_runs: Arc::new(Vec::new()),
@@ -1667,6 +1673,31 @@ async fn discover_all_devices(platform: Platform) -> Result<Vec<DeviceInfo>> {
     }
 }
 
+/// Filter `booted` to those currently unallocated (per `ResourceManager`),
+/// then rank the survivors by install-cache hits and return the best.
+/// Returns `None` when every booted candidate is busy — caller decides
+/// whether to wait, auto-boot a shutdown device, or fail.
+#[allow(clippy::too_many_arguments)]
+async fn try_pick_free(
+    booted: &[&DeviceInfo],
+    platform: Platform,
+    slot: Option<&DeviceSlot>,
+    resource_mgr: &golem_devices::resource_manager::ResourceManager,
+    install_cache: Option<&golem_runner::installer::InstallCache>,
+    install_matrix: &[InstallEntry],
+) -> Option<DeviceInfo> {
+    let free: Vec<&DeviceInfo> = booted
+        .iter()
+        .copied()
+        .filter(|d| resource_mgr.port_for(&d.udid).is_none())
+        .collect();
+    if free.is_empty() {
+        return None;
+    }
+    let pick = rank_by_install_cache(&free, platform, slot, install_cache, install_matrix).await;
+    Some(pick.clone())
+}
+
 /// Pick the free candidate with the most install-cache `Succeeded` hits
 /// for the slot's apps — saves re-running install scripts on a cold device
 /// when a warm one is free. Ties are broken by the input order (stable).
@@ -1780,15 +1811,11 @@ async fn find_available_device(
     // FlowRuns always grab a free one, picking cold over waiting).
     if !booted.is_empty() {
         // Booted count already reported via SuitePlanned/device_availability.
-        let free: Vec<&DeviceInfo> = booted
-            .iter()
-            .copied()
-            .filter(|d| resource_mgr.port_for(&d.udid).is_none())
-            .collect();
-        if !free.is_empty() {
-            let pick = rank_by_install_cache(&free, platform, slot, install_cache, install_matrix)
-                .await;
-            return Ok(pick.clone());
+        if let Some(pick) =
+            try_pick_free(&booted, platform, slot, resource_mgr, install_cache, install_matrix)
+                .await
+        {
+            return Ok(pick);
         }
         // All booted are busy — fall through to wait loop below
     }
@@ -1842,15 +1869,11 @@ async fn find_available_device(
     let mut emitted_waiting = false;
 
     loop {
-        let free: Vec<&DeviceInfo> = booted
-            .iter()
-            .copied()
-            .filter(|d| resource_mgr.port_for(&d.udid).is_none())
-            .collect();
-        if !free.is_empty() {
-            let pick = rank_by_install_cache(&free, platform, slot, install_cache, install_matrix)
-                .await;
-            return Ok(pick.clone());
+        if let Some(pick) =
+            try_pick_free(&booted, platform, slot, resource_mgr, install_cache, install_matrix)
+                .await
+        {
+            return Ok(pick);
         }
 
         if tokio::time::Instant::now() >= deadline {
@@ -2235,6 +2258,35 @@ mod tests {
             timeout_ms: 1000,
             device_constraints: Vec::new(),
         }
+    }
+
+    #[tokio::test]
+    async fn with_resource_manager_shares_install_cache_across_runners() {
+        use golem_runner::installer::{InstallCache, InstallOutcome};
+        // Simulates how `OrchestratorServer` passes one cache into every
+        // `handle_submit` call — prior submit's Succeeded entries must be
+        // visible to the next runner's view.
+        let rm = std::sync::Arc::new(
+            golem_devices::resource_manager::ResourceManager::new(
+                golem_devices::concurrency::ConcurrencyConfig::default(),
+            ),
+        );
+        let shared = InstallCache::new();
+        let r1 = SuiteRunner::with_resource_manager(SuiteConfig::default(), rm.clone(), shared.clone());
+        let r2 = SuiteRunner::with_resource_manager(SuiteConfig::default(), rm.clone(), shared.clone());
+
+        r1.install_cache
+            .set(("udid-x".into(), "com.y".into()), InstallOutcome::Succeeded)
+            .await;
+
+        let seen = r2
+            .install_cache
+            .get(&("udid-x".into(), "com.y".into()))
+            .await;
+        assert!(
+            matches!(seen, Some(InstallOutcome::Succeeded)),
+            "an entry written via runner1 SHALL be visible on runner2 sharing the same InstallCache",
+        );
     }
 
     #[tokio::test]

@@ -98,21 +98,13 @@ If pre-install fails for app `X` on device `D`, today's per-flow install check m
 
 **Files:** `golem-events/src/lib.rs` (enrich `FlowSkipped` variant), `golem-report/src/stream.rs` + `accumulator.rs` (render distinct skip reasons).
 
-## Per-Orchestrator InstallCache
+## `--rebuild` Flag for Forced Install-Script Reruns
 
-Today `handle_submit` in `golem-cli/src/orchestrator.rs` builds a **new** `SuiteRunner` per submit; each runner owns its own fresh `InstallCache`. So even back-to-back submits through the same P1 server re-run the install script on a device whose install is still current.
+With the per-orchestrator `InstallCache`, successive submits transparently reuse prior installs on the same device. When a submit needs to ignore cache hits (e.g. the user changed the build output and wants a fresh install), there's no way to force it today.
 
-Since the server process (P1) performs all installs — clients are thin submitters that only render events — lifting `InstallCache` ownership from per-runner to per-`OrchestratorServer` gives every submit through P1 shared memory of prior installs. Cross-process benefit is downstream: `P2 → P1 → install` uses P1's cache, so P2 sees the cache hit without any IPC.
+**Fix:** add a `--rebuild` CLI flag that clears the relevant cache entries (or short-circuits the lookup) for the submit's apps before preinstall.
 
-**Desired:** `OrchestratorServer` holds an `Arc<InstallCache>`; `handle_submit` passes it into each new `SuiteRunner` (extend `with_resource_manager` to accept an optional shared cache).
-
-**Staleness:** cache lifetime = P1 lifetime. P1 terminates once `active_clients == 0` and its own suite finishes, so the cache naturally drains when work stops. Real-world pattern on a host is same-subset-of-apps + same device shapes across submits — the default behaviour is correct for the common case.
-
-**Force-rebuild escape:** add a CLI flag (`--rebuild`) later if a submit needs to ignore cache hits. Out of scope for this item.
-
-**Foundation:** existing `(udid, bundle)` keying works unchanged; `InstallCache` is already `Arc`-friendly (`Clone` + interior mutability via tokio `Mutex`).
-
-**Files:** `golem-cli/src/orchestrator.rs` (own the cache, pass into runner), `golem-cli/src/suite.rs` (constructor variant accepting a shared cache).
+**Files:** `golem-cli/src/cli.rs` (flag), `golem-cli/src/suite.rs` (consult flag during preinstall).
 
 ## Migrate SuiteRunner + IPC into `golem-orchestrator`
 
