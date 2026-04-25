@@ -292,6 +292,17 @@ Both emit two fully-pinned boxes `{ios, latest, phone}` + `{android, latest, pho
 
 **No `[[flow.apps.devices]]` block at all.** Golem runs on whatever platform is currently booted (both if both are booted). Fails fast if nothing is booted.
 
+##### Pinning a specific device by name
+
+```toml
+[[flow.apps.devices]]
+name = "iPhone 15"
+```
+
+`name` pins an exact device display name (as shown by `golem devices` / `xcrun simctl list` / `adb devices -l`). Use this when you have a customised simulator or a specific physical device the flow must target.
+
+Under `create_if_missing = true`, a slot with `name = ...` that doesn't match any connected/booted device errors with an actionable message instead of auto-creating a mis-named sim — `name` is a user assertion that the device already exists; golem won't guess its configuration.
+
 #### Performance Monitoring
 
 Golem captures app performance metrics after each block (unless `--no-perf` or `perf = false`). Metrics are collected from the device via platform tools and the companion app.

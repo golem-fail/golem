@@ -1,5 +1,56 @@
 # Roadmap
 
+## `hardware` Axis — Physical as 3-State Coverage Input
+
+The current `physical = Option<bool>` on `[[flow.apps.devices]]` conflates two ideas: "match by hardware kind" (the existing scheduler behaviour) and "cover both kinds" (what a responsive / cross-platform-style axis would do). Three actual states need expression:
+
+| TOML | Boxes emitted | Semantics |
+|---|---|---|
+| *(omitted)* | 1 virtual | Default — sim/emulator only |
+| `hardware = "virtual"` | 1 virtual | Explicit sim/emulator-only |
+| `hardware = "real"` | 1 physical | Must run on physical hardware; suite fails (no auto-create path) if none match |
+| `hardware = ["virtual", "real"]` | 2 boxes | Coverage axis — under `smart`/`one`, either ticking the goal is enough |
+
+**Why rename `physical` → `hardware`**: array-form (`physical = [true, false]`) is ugly; `hardware = ["virtual", "real"]` reads naturally alongside `type = ["phone", "tablet"]` and `os = ["ios:latest", "android:latest"]`.
+
+**Implementation:**
+- Parser: `DeviceConstraint.hardware: Option<StringOrVec>` replacing `physical: Option<bool>`. Values: `"virtual"` / `"real"`.
+- Plan generator: treat `hardware` like an expansion axis; each value becomes a partial tick box with `DeviceSlot.physical = Some(false|true)`.
+- `DeviceSlot.physical` stays `Option<bool>` internally — the axis expansion sets the concrete value per box.
+- README: flow-options table updated.
+
+**Under `coverage = "one"`**: `hardware = ["virtual", "real"]` means either success satisfies the group. The physical box naturally skips (via the coverage gate) once the sim box succeeds, so users who include both get graceful fallback when no physical device is connected — they pay zero run-time cost for the physical option being unavailable.
+
+**Files:** `golem-parser/src/lib.rs`, `golem-orchestrator/src/plan.rs` (axis expansion), `README.md`.
+
+## Failed Boxes in `one` / `smart` Groups Reclassify as Skipped
+
+When a FlowRun in a `one`/`smart` coverage group fails (no matching device, setup error, …) AND another FlowRun in the same group later succeeds, today's suite summary still shows `1 failed, 1 passed`. The group's goal — one success — was met; the failure is noise.
+
+**Fix:** post-suite pass over `FlowReport`s: for each coverage group where any member succeeded, reclassify peer failures as `Skipped` with reason `"coverage group satisfied by peer run"`. Emits cleaner `1 passed` summaries and avoids false-red CI signals.
+
+**Edge case:** if NO member succeeded, all keep their `failed` status — the group failed, the suite fails.
+
+**Files:** `golem-cli/src/suite.rs` (post-collection reclassify pass), `golem-report/src/accumulator.rs` (skip reason rendering already supports custom strings).
+
+## Playstore-Aware Auto-Create (Android)
+
+`find_available_device` today bails when a slot requires `playstore = true` and no matching emulator exists. The underlying `pick_system_image` already differentiates `google_apis` vs `google_apis_playstore` — auto-create just doesn't forward the slot's playstore preference.
+
+**Fix:** plumb `playstore: Option<bool>` into `auto_create_android` → prefer the `google_apis_playstore` target when `Some(true)`, `google_apis` when `Some(false)`, latest otherwise.
+
+**Files:** `golem-devices/src/lifecycle.rs` (`auto_create_android`), `golem-devices/src/android.rs` (`pick_system_image` target preference).
+
+## e2e Coverage for Physical Device Path
+
+No e2e flow exercises the physical-device path today. Android is the easier starter (ADB-based, no special transport). Add:
+
+- One flow under `e2e/physical/` that auto-skips when no physical device is connected (harness detects via `golem_devices::android::discover_physical_devices` — returns empty → mark as xfail).
+- CI runs it only on a self-hosted runner with a real device attached.
+- Verifies the physical path works for basic `tap`/`type` — no WebView yet (blocked by iOS WebKit work).
+
+**Files:** `e2e/physical/basic.test.toml` (new), `.github/workflows/` (physical-runner lane, gated).
+
 ## WebKit Inspector: Physical iOS Device Support
 
 Currently WebKit Inspector enrichment (visible text, checked state) only works on iOS Simulator. The simulator exposes a Unix domain socket at `/private/tmp/com.apple.launchd.*/com.apple.webinspectord_sim.socket` which golem connects to directly.
@@ -15,14 +66,6 @@ The `golem-driver/src/webkit.rs` transport layer is already designed around a `S
 Without this, physical device test runs still work but WebView elements lack enriched text — falling back to accessibility labels only.
 
 Requires access to a physical iOS device for development and testing.
-
-## `create_if_missing` Honours Slot Constraints
-
-`find_available_device` falls back to `auto_create_device(platform, DeviceType::Phone, …)` when no compatible device exists and `create_if_missing = true` is set in flow options. The hardcoded `Phone` default ignores the slot's `device_type` + `os_version`, so a flow needing an iPad or a specific iOS major will get a phone on latest.
-
-**Fix:** pass `slot.device_type` and `slot.os_version` into the create path. Small, isolated.
-
-**Files:** `golem-cli/src/suite.rs` (auto-create call site), possibly `golem-devices/src/lifecycle.rs` if the helper signature needs widening.
 
 ## True Parallel Flow × Device Concurrency
 
@@ -54,7 +97,7 @@ The tick-box model is live end-to-end: `CoverageStrategy { One, Min, Smart, Full
 
 ### Auto-create on platform-None slots
 
-A platform-None box that needs auto-creation should error with "cannot auto-create platform-agnostic slot — specify `os = ...`" (subsumes the remaining platform-axis portion of the [`create_if_missing` Honours Slot Constraints](#create_if_missing-honours-slot-constraints) entry). Depends on the cross-platform scheduler above.
+A platform-None box that needs auto-creation should error with "cannot auto-create platform-agnostic slot — specify `os = ...`". Depends on the cross-platform scheduler above.
 
 ### Responsive-design / cross-platform axis sharing
 

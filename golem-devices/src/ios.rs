@@ -243,6 +243,24 @@ pub async fn discover_ios_device_types() -> anyhow::Result<Vec<DeviceTypeInfo>> 
         .collect())
 }
 
+/// Pick an iOS runtime matching the requested OS-version spec.
+///
+/// - `None` / `Latest` / `Minimum` → latest (runtimes are sorted major
+///   descending, so `first()` is latest).
+/// - `Exact { major }` → the runtime with matching `major`, or `None` if
+///   not installed. The caller turns `None` into an actionable error.
+pub fn pick_runtime_for_spec<'a>(
+    runtimes: &'a [RuntimeInfo],
+    os_version: Option<&crate::OsVersionSpec>,
+) -> Option<&'a RuntimeInfo> {
+    match os_version {
+        Some(crate::OsVersionSpec::Exact { major, .. }) => {
+            runtimes.iter().find(|r| r.major == *major)
+        }
+        _ => runtimes.first(),
+    }
+}
+
 /// Pick the best device type for the given form factor.
 ///
 /// Prefers the latest model (last in the list from simctl, which tends
@@ -264,6 +282,65 @@ pub fn pick_device_type(device_types: &[DeviceTypeInfo], want_phone: bool) -> Op
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{OsVersionSpec, Platform};
+
+    fn rt(major: u32) -> RuntimeInfo {
+        RuntimeInfo {
+            identifier: format!("iOS-{major}"),
+            name: format!("iOS {major}.0"),
+            version: format!("{major}.0"),
+            major,
+        }
+    }
+
+    // pick_runtime_for_spec: None → latest ----------------------------
+
+    #[test]
+    fn pick_runtime_none_returns_latest() {
+        let runtimes = vec![rt(26), rt(18), rt(17)];
+        let pick = pick_runtime_for_spec(&runtimes, None)
+            .expect("SHALL return latest when spec is None");
+        assert_eq!(pick.major, 26);
+    }
+
+    // pick_runtime_for_spec: Exact(18) → runtime with major==18 -------
+
+    #[test]
+    fn pick_runtime_exact_returns_matching_major() {
+        let runtimes = vec![rt(26), rt(18), rt(17)];
+        let pick = pick_runtime_for_spec(
+            &runtimes,
+            Some(&OsVersionSpec::Exact { platform: Platform::Ios, major: 18 }),
+        )
+        .expect("SHALL return the iOS 18 runtime");
+        assert_eq!(pick.major, 18);
+    }
+
+    // pick_runtime_for_spec: Exact(99) not installed → None -----------
+
+    #[test]
+    fn pick_runtime_exact_missing_returns_none() {
+        let runtimes = vec![rt(26), rt(18)];
+        let pick = pick_runtime_for_spec(
+            &runtimes,
+            Some(&OsVersionSpec::Exact { platform: Platform::Ios, major: 99 }),
+        );
+        assert!(pick.is_none(),
+            "SHALL return None when requested major is not installed");
+    }
+
+    // pick_runtime_for_spec: Latest → latest --------------------------
+
+    #[test]
+    fn pick_runtime_latest_returns_first() {
+        let runtimes = vec![rt(26), rt(18)];
+        let pick = pick_runtime_for_spec(
+            &runtimes,
+            Some(&OsVersionSpec::Latest { platform: Platform::Ios, count: 1 }),
+        )
+        .expect("SHALL return latest");
+        assert_eq!(pick.major, 26);
+    }
 
     /// Helper: build a simctl JSON string from a list of (runtime, devices) pairs.
     fn make_simctl_json(

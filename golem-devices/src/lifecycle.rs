@@ -521,10 +521,14 @@ const ANDROID_DEVICE_SIZE_MB: u64 = 4_000;
 /// Discovers available runtimes/images, picks the best match, creates the
 /// device, and boots it. Checks disk space before creation.
 ///
+/// `os_version` narrows the runtime/image selection: `Exact(N)` picks a
+/// specific major (erroring if not installed); anything else picks latest.
+///
 /// Returns the newly created and booted DeviceInfo.
 pub async fn auto_create_device(
     platform: Platform,
     device_type: crate::DeviceType,
+    os_version: Option<crate::OsVersionSpec>,
     concurrency_config: &crate::concurrency::ConcurrencyConfig,
 ) -> Result<crate::DeviceInfo> {
     let want_phone = device_type == crate::DeviceType::Phone;
@@ -545,17 +549,36 @@ pub async fn auto_create_device(
     }
 
     match platform {
-        Platform::Ios => auto_create_ios(want_phone).await,
-        Platform::Android => auto_create_android(want_phone).await,
+        Platform::Ios => auto_create_ios(want_phone, os_version.as_ref()).await,
+        Platform::Android => auto_create_android(want_phone, os_version.as_ref()).await,
     }
 }
 
-async fn auto_create_ios(want_phone: bool) -> Result<crate::DeviceInfo> {
-    use crate::ios::{discover_ios_device_types, discover_ios_runtimes, pick_device_type};
+async fn auto_create_ios(
+    want_phone: bool,
+    os_version: Option<&crate::OsVersionSpec>,
+) -> Result<crate::DeviceInfo> {
+    use crate::ios::{
+        discover_ios_device_types, discover_ios_runtimes, pick_device_type, pick_runtime_for_spec,
+    };
 
     let runtimes = discover_ios_runtimes().await?;
-    let runtime = runtimes.first()
-        .ok_or_else(|| anyhow::anyhow!("No iOS runtimes installed. Install one via Xcode."))?;
+    if runtimes.is_empty() {
+        bail!("No iOS runtimes installed. Install one via Xcode.");
+    }
+    let runtime = pick_runtime_for_spec(&runtimes, os_version)
+        .ok_or_else(|| {
+            let requested = match os_version {
+                Some(crate::OsVersionSpec::Exact { major, .. }) => format!("iOS {major}"),
+                _ => "any iOS".to_string(),
+            };
+            let installed: Vec<String> = runtimes.iter().map(|r| format!("iOS {}", r.major)).collect();
+            anyhow::anyhow!(
+                "Requested {requested} runtime is not installed. Installed: {}. \
+                 Add via Xcode > Settings > Platforms.",
+                installed.join(", ")
+            )
+        })?;
 
     let device_types = discover_ios_device_types().await?;
     let device_type = pick_device_type(&device_types, want_phone)
@@ -607,16 +630,33 @@ async fn auto_create_ios(want_phone: bool) -> Result<crate::DeviceInfo> {
     })
 }
 
-async fn auto_create_android(want_phone: bool) -> Result<crate::DeviceInfo> {
+async fn auto_create_android(
+    want_phone: bool,
+    os_version: Option<&crate::OsVersionSpec>,
+) -> Result<crate::DeviceInfo> {
     use crate::android::{discover_android_device_profiles, discover_android_system_images,
                           pick_device_profile, pick_system_image};
 
     let images = discover_android_system_images().await?;
-    let image = pick_system_image(&images, 0) // 0 = latest
-        .ok_or_else(|| anyhow::anyhow!(
-            "No arm64 Android system images installed. \
-             Install one via: sdkmanager 'system-images;android-35;google_apis;arm64-v8a'"
-        ))?;
+    // Exact(N) → that API level; anything else → latest (preferred_api=0).
+    let preferred_api = match os_version {
+        Some(crate::OsVersionSpec::Exact { major, .. }) => *major,
+        _ => 0,
+    };
+    let image = pick_system_image(&images, preferred_api)
+        .ok_or_else(|| {
+            let requested = if preferred_api > 0 {
+                format!("API {preferred_api}")
+            } else {
+                "any arm64 Android".to_string()
+            };
+            let installed: Vec<String> = images.iter().map(|i| format!("API {}", i.api_level)).collect();
+            anyhow::anyhow!(
+                "Requested {requested} system image is not installed. Installed: {}. \
+                 Add via: sdkmanager 'system-images;android-<N>;google_apis;arm64-v8a'",
+                installed.join(", ")
+            )
+        })?;
 
     let profiles = discover_android_device_profiles().await?;
     let profile = pick_device_profile(&profiles, want_phone)

@@ -2132,14 +2132,50 @@ async fn find_available_device(
         return Ok(booted_device);
     }
 
-    // Step 3: No compatible devices at all — auto-create or fail
+    // Step 3: No compatible devices at all — auto-create or fail.
+    // Honour the slot's `device_type` (phone vs tablet) and `os_version`
+    // (specific iOS major / Android API) so a flow needing an iPad on
+    // iOS 18 doesn't get a phone on latest.
     if compatible.is_empty() {
         if create_if_missing {
+            // Guard: constraints auto-create can't satisfy. Bail fast with
+            // actionable errors rather than silently creating a sim that
+            // the scheduler will reject as non-matching.
+            if let Some(s) = slot {
+                if s.physical == Some(true) {
+                    anyhow::bail!(
+                        "slot requires physical device ({}); auto-create cannot \
+                         provision real hardware. Connect a matching device or \
+                         remove the `physical` constraint.",
+                        golem_orchestrator::describe_slot(s)
+                    );
+                }
+                if let Some(n) = &s.name {
+                    anyhow::bail!(
+                        "slot pins device name `{n}` which isn't connected/booted; \
+                         auto-create cannot guess custom device configs. Either \
+                         connect the named device or remove the `name` constraint."
+                    );
+                }
+                if s.playstore == Some(true) {
+                    anyhow::bail!(
+                        "slot requires a Play Store Android image; auto-create \
+                         doesn't select playstore builds yet (see roadmap). \
+                         Boot a matching emulator manually or remove the \
+                         `playstore` constraint."
+                    );
+                }
+            }
+            let requested_type = slot
+                .and_then(|s| s.device_type)
+                .unwrap_or(golem_devices::DeviceType::Phone);
+            let requested_os = slot.and_then(|s| s.os_version.clone());
             eprintln!("  [devices] no {platform} device found — creating one...");
             let config = golem_devices::concurrency::ConcurrencyConfig::default();
             let created = golem_devices::lifecycle::auto_create_device(
                 platform,
-                golem_devices::DeviceType::Phone,
+                requested_type,
+                requested_os,
                 &config,
             ).await?;
             resource_mgr.mark_golem_booted(created.clone());
