@@ -803,6 +803,7 @@ fn expand_app_requirements(
         let os_pairs =
             expand_os_pairs(dc, snapshot, platform_override, strategy)?;
         let type_entries = expand_type_entries(dc)?;
+        let hardware_entries = expand_hardware_entries(dc)?;
 
         // Narrow to the forced platform override, if any.
         let filtered_os: Vec<(Platform, Option<OsVersionSpec>)> = os_pairs
@@ -815,31 +816,26 @@ fn expand_app_requirements(
 
         let os_multi = filtered_os.len() > 1;
         let type_multi = type_entries.len() > 1;
+        let hw_multi = hardware_entries.len() > 1;
+        let multi_count =
+            [os_multi, type_multi, hw_multi].iter().filter(|&&x| x).count();
+        let partial_strategy = matches!(
+            strategy,
+            CoverageStrategy::Min | CoverageStrategy::Smart | CoverageStrategy::One
+        );
 
-        match (strategy, os_multi, type_multi) {
-            // Partial-axis only kicks in when ≥2 axes are multi-valued.
-            // Otherwise Min/Smart/One collapse to the same boxes as Full.
-            (CoverageStrategy::Min | CoverageStrategy::Smart | CoverageStrategy::One, true, true) => {
-                // One box per os value (type = any).
+        if partial_strategy && multi_count >= 2 {
+            // Partial-axis emission — one box per value on each multi axis,
+            // other axes left as `None` so the picked device can satisfy
+            // multiple tick boxes at once. Single-valued axes pin on every
+            // box they show up in; only pass through if multi on its axis.
+            if os_multi {
                 for (platform, os_version) in &filtered_os {
                     out.push(AppRequirement {
                         platform: Some(*platform),
                         os_version: os_version.clone(),
                         device_type: None,
-                        physical: dc.physical,
-                        name: dc.name.clone(),
-                        playstore: dc.playstore,
-                        accessibility_label: dc.accessibility_label.clone(),
-                        booted: dc.booted,
-                    });
-                }
-                // One box per type value (platform/os = any).
-                for type_e in &type_entries {
-                    out.push(AppRequirement {
-                        platform: None,
-                        os_version: None,
-                        device_type: *type_e,
-                        physical: dc.physical,
+                        physical: None,
                         name: dc.name.clone(),
                         playstore: dc.playstore,
                         accessibility_label: dc.accessibility_label.clone(),
@@ -847,15 +843,44 @@ fn expand_app_requirements(
                     });
                 }
             }
+            if type_multi {
+                for type_e in &type_entries {
+                    out.push(AppRequirement {
+                        platform: None,
+                        os_version: None,
+                        device_type: *type_e,
+                        physical: None,
+                        name: dc.name.clone(),
+                        playstore: dc.playstore,
+                        accessibility_label: dc.accessibility_label.clone(),
+                        booted: dc.booted,
+                    });
+                }
+            }
+            if hw_multi {
+                for phys in &hardware_entries {
+                    out.push(AppRequirement {
+                        platform: None,
+                        os_version: None,
+                        device_type: None,
+                        physical: *phys,
+                        name: dc.name.clone(),
+                        playstore: dc.playstore,
+                        accessibility_label: dc.accessibility_label.clone(),
+                        booted: dc.booted,
+                    });
+                }
+            }
+        } else {
             // Full, OR partial strategies with ≤1 multi-axis: Cartesian.
-            _ => {
-                for (platform, os_version) in &filtered_os {
-                    for type_e in &type_entries {
+            for (platform, os_version) in &filtered_os {
+                for type_e in &type_entries {
+                    for phys in &hardware_entries {
                         out.push(AppRequirement {
                             platform: Some(*platform),
                             os_version: os_version.clone(),
                             device_type: *type_e,
-                            physical: dc.physical,
+                            physical: *phys,
                             name: dc.name.clone(),
                             playstore: dc.playstore,
                             accessibility_label: dc.accessibility_label.clone(),
@@ -904,7 +929,7 @@ fn default_any_booted_requirements(
             platform: Some(p),
             os_version: None,
             device_type: None,
-            physical: None,
+            physical: Some(false),
             name: None,
             playstore: None,
             accessibility_label: None,
@@ -1021,6 +1046,36 @@ fn expand_type_entries(
             "tablet" => Ok(Some(DeviceType::Tablet)),
             other => anyhow::bail!(
                 "unrecognised `type` value: {other:?}. Expected \"phone\" or \"tablet\"."
+            ),
+        })
+        .collect()
+}
+
+/// Expand the `hardware` field. Absent → `[Some(false)]` (virtual-only
+/// default — physical devices require explicit opt-in). Single string
+/// → one entry. Array → N entries (partial-axis expansion candidate).
+/// Unrecognised values error out with the allowed list.
+fn expand_hardware_entries(
+    dc: &golem_parser::DeviceConstraint,
+) -> Result<Vec<Option<bool>>> {
+    let Some(hw_sv) = &dc.hardware else {
+        return Ok(vec![Some(false)]);
+    };
+    let values = hw_sv.to_vec();
+    if values.is_empty() {
+        anyhow::bail!(
+            "`hardware = []` matches no device — omit the field for the \
+             virtual-only default, or list at least one value."
+        );
+    }
+    values
+        .iter()
+        .map(|s| match s.as_str() {
+            "virtual" => Ok(Some(false)),
+            "real" => Ok(Some(true)),
+            other => anyhow::bail!(
+                "unrecognised `hardware` value: {other:?}. \
+                 Expected \"virtual\" (sim/emulator) or \"real\" (physical device)."
             ),
         })
         .collect()
@@ -1401,7 +1456,7 @@ mod tests {
             }),
             name: None,
             accessibility_label: None,
-            physical: None,
+            hardware: None,
             playstore: None,
             booted: None,
             expand: None,
@@ -1587,7 +1642,7 @@ mod tests {
             device_type: Some(StringOrVec::Single("Tablet".into())), // wrong case
             name: None,
             accessibility_label: None,
-            physical: None,
+            hardware: None,
             playstore: None,
             booted: None,
             expand: None,
@@ -1596,6 +1651,75 @@ mod tests {
         assert!(result.is_err(), "Unknown type SHALL error, not silently map to any-type");
         let msg = format!("{}", result.unwrap_err());
         assert!(msg.contains("Tablet"), "error SHALL include the offending value: {msg}");
+    }
+
+    // ── hardware axis expansion ─────────────────────────────────────
+
+    fn dc_with_hardware(hw: Option<golem_parser::StringOrVec>) -> golem_parser::DeviceConstraint {
+        golem_parser::DeviceConstraint {
+            os: None,
+            device_type: None,
+            name: None,
+            accessibility_label: None,
+            hardware: hw,
+            playstore: None,
+            booted: None,
+            expand: None,
+        }
+    }
+
+    #[test]
+    fn expand_hardware_entries_absent_defaults_to_virtual_only() {
+        let dc = dc_with_hardware(None);
+        let result = expand_hardware_entries(&dc).unwrap();
+        assert_eq!(result, vec![Some(false)],
+            "SHALL default to virtual-only when `hardware` is omitted");
+    }
+
+    #[test]
+    fn expand_hardware_entries_single_virtual_pins_false() {
+        let dc = dc_with_hardware(Some(golem_parser::StringOrVec::Single("virtual".into())));
+        let result = expand_hardware_entries(&dc).unwrap();
+        assert_eq!(result, vec![Some(false)]);
+    }
+
+    #[test]
+    fn expand_hardware_entries_single_real_pins_true() {
+        let dc = dc_with_hardware(Some(golem_parser::StringOrVec::Single("real".into())));
+        let result = expand_hardware_entries(&dc).unwrap();
+        assert_eq!(result, vec![Some(true)]);
+    }
+
+    #[test]
+    fn expand_hardware_entries_array_form_emits_two() {
+        let dc = dc_with_hardware(Some(golem_parser::StringOrVec::Multiple(
+            vec!["virtual".into(), "real".into()],
+        )));
+        let result = expand_hardware_entries(&dc).unwrap();
+        assert_eq!(result, vec![Some(false), Some(true)],
+            "SHALL emit one entry per axis value, preserving order");
+    }
+
+    #[test]
+    fn expand_hardware_entries_rejects_empty_array() {
+        let dc = dc_with_hardware(Some(golem_parser::StringOrVec::Multiple(vec![])));
+        let result = expand_hardware_entries(&dc);
+        assert!(result.is_err(),
+            "SHALL reject `hardware = []` instead of silently emitting zero boxes");
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("omit"), "error SHALL suggest omitting the field: {msg}");
+    }
+
+    #[test]
+    fn expand_hardware_entries_rejects_unknown_value() {
+        let dc = dc_with_hardware(Some(golem_parser::StringOrVec::Single("sim".into())));
+        let result = expand_hardware_entries(&dc);
+        assert!(result.is_err(),
+            "SHALL reject unknown values (e.g. \"sim\" instead of \"virtual\")");
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("sim"), "error SHALL include offending value: {msg}");
+        assert!(msg.contains("virtual"), "error SHALL name allowed \"virtual\": {msg}");
+        assert!(msg.contains("real"), "error SHALL name allowed \"real\": {msg}");
     }
 
     // JIT-one with multiple apps: SHALL produce one FlowRun carrying

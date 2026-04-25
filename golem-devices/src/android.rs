@@ -397,13 +397,37 @@ pub async fn discover_android_device_profiles() -> anyhow::Result<Vec<DeviceProf
     Ok(profiles)
 }
 
-/// Pick the best system image for the given API level (or latest if 0).
-/// Prefers arm64-v8a ABI and google_apis target.
-pub fn pick_system_image(images: &[SystemImageInfo], preferred_api: u32) -> Option<&SystemImageInfo> {
+/// Pick the best system image for the given API level (or latest if 0)
+/// and optional Play Store preference.
+///
+/// - `preferred_api == 0` → any API level
+/// - `want_playstore = Some(true)` → require `google_apis_playstore` target
+/// - `want_playstore = Some(false)` → require `google_apis` target (excludes
+///    playstore images — useful when flows need unrestricted system access)
+/// - `want_playstore = None` → prefer `google_apis` (sorted first), fall
+///   back to any matching target
+///
+/// Always requires `arm64-v8a` ABI.
+pub fn pick_system_image(
+    images: &[SystemImageInfo],
+    preferred_api: u32,
+    want_playstore: Option<bool>,
+) -> Option<&SystemImageInfo> {
     images.iter().find(|img| {
-        (preferred_api == 0 || img.api_level == preferred_api) && img.abi == "arm64-v8a"
+        if img.abi != "arm64-v8a" {
+            return false;
+        }
+        if preferred_api != 0 && img.api_level != preferred_api {
+            return false;
+        }
+        match want_playstore {
+            Some(true) => img.target.contains("playstore"),
+            Some(false) => !img.target.contains("playstore"),
+            None => true,
+        }
     })
-    // already sorted by api_level desc, google_apis first
+    // already sorted by api_level desc, google_apis first (non-playstore
+    // wins when both are installed and want_playstore is None).
 }
 
 /// Pick the best device profile for a phone or tablet.
@@ -424,6 +448,60 @@ pub fn pick_device_profile(profiles: &[DeviceProfileInfo], want_phone: bool) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn img(api: u32, target: &str, abi: &str) -> SystemImageInfo {
+        SystemImageInfo {
+            api_level: api,
+            abi: abi.into(),
+            target: target.into(),
+            path: format!("system-images/android-{api}/{target}/{abi}/"),
+        }
+    }
+
+    // pick_system_image — playstore preference ───────────────────────
+
+    #[test]
+    fn pick_system_image_want_playstore_true_picks_playstore_target() {
+        let images = vec![
+            img(34, "google_apis", "arm64-v8a"),
+            img(34, "google_apis_playstore", "arm64-v8a"),
+        ];
+        let pick = pick_system_image(&images, 34, Some(true))
+            .expect("SHALL find playstore image");
+        assert!(pick.target.contains("playstore"));
+    }
+
+    #[test]
+    fn pick_system_image_want_playstore_false_excludes_playstore() {
+        let images = vec![
+            img(34, "google_apis_playstore", "arm64-v8a"),
+            img(34, "google_apis", "arm64-v8a"),
+        ];
+        let pick = pick_system_image(&images, 34, Some(false))
+            .expect("SHALL find non-playstore image");
+        assert!(!pick.target.contains("playstore"));
+    }
+
+    #[test]
+    fn pick_system_image_none_prefers_google_apis_first() {
+        // Input order simulates sort: google_apis before google_apis_playstore.
+        let images = vec![
+            img(34, "google_apis", "arm64-v8a"),
+            img(34, "google_apis_playstore", "arm64-v8a"),
+        ];
+        let pick = pick_system_image(&images, 34, None)
+            .expect("SHALL find image");
+        assert_eq!(pick.target, "google_apis",
+            "None SHALL pick the first match (google_apis by sort order)");
+    }
+
+    #[test]
+    fn pick_system_image_want_playstore_but_only_non_playstore_installed() {
+        let images = vec![img(34, "google_apis", "arm64-v8a")];
+        let pick = pick_system_image(&images, 34, Some(true));
+        assert!(pick.is_none(),
+            "SHALL return None when playstore requested but only non-playstore installed");
+    }
 
     /// Helper: build a config.ini string from key-value pairs.
     fn make_config(pairs: &[(&str, &str)]) -> String {

@@ -210,13 +210,13 @@ pub fn format_flow_json(report: &FlowReport) -> Result<String, serde_json::Error
 /// Serialize an entire suite report to a pretty-printed JSON string.
 pub fn format_suite_json(report: &SuiteReport) -> Result<String, serde_json::Error> {
     let total = report.flows.len();
-    let passed = report.flows.iter().filter(|f| f.success).count();
-    let failed = report.flows.iter().filter(|f| !f.success).count();
+    let passed = report.flows.iter().filter(|f| f.is_passed()).count();
+    let failed = report.flows.iter().filter(|f| f.is_failed()).count();
     let skipped = report
         .flows
         .iter()
         .filter(|f| {
-            f.skipped_reason.is_some() ||
+            f.is_skipped() ||
             (!f.step_results.is_empty() && f.step_results
                 .iter()
                 .all(|s| matches!(s.outcome, StepOutcome::Skipped)))

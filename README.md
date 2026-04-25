@@ -290,7 +290,29 @@ type = "phone"
 
 Both emit two fully-pinned boxes `{ios, latest, phone}` + `{android, latest, phone}` under every strategy. Prefer the array form when it captures the same intent.
 
-**No `[[flow.apps.devices]]` block at all.** Golem runs on whatever platform is currently booted (both if both are booted). Fails fast if nothing is booted.
+**No `[[flow.apps.devices]]` block at all.** Golem runs on whatever platform is currently booted (both if both are booted). Virtual-only (sim/emulator) by default — physical devices are never picked implicitly. Fails fast if nothing is booted.
+
+##### Hardware axis (virtual / real)
+
+```toml
+[[flow.apps.devices]]
+# (hardware omitted)                # default: virtual-only (sim/emulator)
+
+[[flow.apps.devices]]
+hardware = "virtual"                # explicit: virtual-only
+
+[[flow.apps.devices]]
+hardware = "real"                   # physical device required
+
+[[flow.apps.devices]]
+hardware = ["virtual", "real"]      # coverage axis — both tick boxes emitted
+```
+
+Physical devices require **explicit opt-in** via `hardware = "real"`. The default is virtual-only so an accidentally-connected phone doesn't get swept into a flow it wasn't meant for.
+
+Under `coverage = "one"` / `"smart"`, `hardware = ["virtual", "real"]` gives graceful degradation: the sim box usually succeeds first, the physical box is skipped via the coverage gate. If you want to *insist* on physical, use `hardware = "real"` on its own.
+
+`hardware = "real"` + `create_if_missing = true` errors out — physical hardware cannot be auto-created.
 
 ##### Pinning a specific device by name
 

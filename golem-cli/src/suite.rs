@@ -446,7 +446,7 @@ impl SuiteRunner {
                 .and_then(|gi| dispatch_locks.get(&gi).cloned());
 
             handles.push(tokio::spawn(async move {
-                execute_flow_run(
+                let reports = execute_flow_run(
                     path,
                     flow,
                     slots,
@@ -474,15 +474,24 @@ impl SuiteRunner {
                         dispatch_lock,
                     },
                 )
-                .await
+                .await;
+                (reports, coverage_group_idx)
             }));
         }
 
+        // Collect per-FlowRun reports alongside their coverage-group idx so
+        // the post-pass below can reclassify failed peers in `one`-strategy
+        // groups whose goal was already met by another member.
+        let mut reports_with_group: Vec<(FlowReport, Option<usize>)> = Vec::new();
         for handle in handles {
             match handle.await {
-                Ok(reports) => flow_reports.extend(reports),
+                Ok((reports, group_idx)) => {
+                    for r in reports {
+                        reports_with_group.push((r, group_idx));
+                    }
+                }
                 Err(e) => {
-                    flow_reports.push(FlowReport {
+                    reports_with_group.push((FlowReport {
                         flow_name: "unknown".to_string(),
                         success: false,
                         step_results: Vec::new(),
@@ -497,20 +506,50 @@ impl SuiteRunner {
                         covered_axes: Vec::new(),
                         started_at: None,
                         finished_at: None,
-                    });
+                    }, None));
                 }
             }
         }
 
+        // Skip-reclassify pass: in `coverage = "one"` groups, any failed
+        // FlowRun whose peer already satisfied the group's max_runs cap is
+        // reclassified as skipped — the user explicitly asked for "stop
+        // after one success", so peer failures shouldn't pollute the
+        // summary or fail the suite. Smart groups (max_runs=None) keep
+        // failures visible since Smart's goal is *full* coverage.
+        {
+            let final_progress = coverage_progress.lock().await;
+            for (report, group_idx) in &mut reports_with_group {
+                if report.success {
+                    continue;
+                }
+                let Some(gi) = group_idx else { continue };
+                let Some(group) = coverage_groups.get(*gi) else { continue };
+                if group.max_runs.is_none() {
+                    continue;
+                }
+                let Some(p) = final_progress.get(gi) else { continue };
+                if p.runs >= 1 {
+                    report.success = true;
+                    report.skipped_reason =
+                        Some("coverage group satisfied by peer run".to_string());
+                }
+            }
+        }
+
+        flow_reports.extend(reports_with_group.into_iter().map(|(r, _)| r));
+
         // Emit suite summary and close suite channel.
-        let passed = flow_reports.iter().filter(|r| r.success).count();
-        let failed = flow_reports.iter().filter(|r| !r.success).count();
+        let passed = flow_reports.iter().filter(|r| r.is_passed()).count();
+        let failed = flow_reports.iter().filter(|r| r.is_failed()).count();
+        let skipped = flow_reports.iter().filter(|r| r.is_skipped()).count();
         suite_tx.emit(
             golem_events::DeviceId("suite".into()),
             golem_events::EventKind::SuiteFinished {
                 duration_ms: start.elapsed().as_millis() as u64,
                 passed,
                 failed,
+                skipped,
             },
         );
         drop(suite_tx);
@@ -596,6 +635,45 @@ struct FlowRunConfig {
     project_root: PathBuf,
 }
 
+/// Build a synthetic `FlowReport` for a FlowRun short-circuited by the
+/// coverage gate. No device was acquired, no steps ran. Success=true so
+/// the suite exit code isn't polluted; skipped_reason carries the cause
+/// so renderers surface it as `SKIP`. `covered_axes` is derived from the
+/// first slot's shape — the axes this FlowRun *would* have ticked had it
+/// run. Gives users visibility into which group members the scheduler
+/// spared.
+fn coverage_skip_report(
+    flow_name: String,
+    slots: &[DeviceSlot],
+    seed: Option<u64>,
+    start: Instant,
+) -> FlowReport {
+    let (device_name, covered_axes) = slots
+        .first()
+        .map(|s| {
+            let label = golem_orchestrator::shape_label(s);
+            let axes: Vec<String> = label.split('/').map(|p| p.to_string()).collect();
+            (Some(label), axes)
+        })
+        .unwrap_or((None, Vec::new()));
+    FlowReport {
+        flow_name,
+        success: true,
+        step_results: Vec::new(),
+        warnings: Vec::new(),
+        duration_ms: start.elapsed().as_millis() as u64,
+        seed,
+        screenshot_path: None,
+        device_name,
+        os_major: None,
+        perf_snapshots: Vec::new(),
+        skipped_reason: Some("coverage group satisfied by peer run".to_string()),
+        covered_axes,
+        started_at: None,
+        finished_at: None,
+    }
+}
+
 /// Coverage-group context plumbed into every FlowRun worker. `group_idx`
 /// is `None` for `Min` / `Full` (no group gating); `Some(i)` points at
 /// `groups[i]`, and `covers_boxes` lists pool indices this run will tick
@@ -661,12 +739,21 @@ async fn execute_flow_run(
 
     // Pre-setup coverage gate: if another FlowRun in this group already
     // satisfied the stop condition, skip entirely — don't acquire a
-    // device, don't preinstall, don't start a companion. Returning an
-    // empty Vec means no FlowReport is emitted for this run, which is
-    // the right behaviour for `coverage = "one"` / `"smart"`: only the
-    // runs that actually happened appear in the summary.
+    // device, don't preinstall, don't start a companion. Emit a
+    // `FlowSkipped` event (for live stream rendering) plus a synthetic
+    // `SKIP` report (for summary counts + final output), so the user
+    // sees the group member was deliberately spared — not silently
+    // vanishing — while exit code stays 0.
     if coverage_group_done(&coverage).await {
-        return Vec::new();
+        let reason = "coverage group satisfied by peer run".to_string();
+        event_tx.emit(
+            golem_events::DeviceId("suite".into()),
+            golem_events::EventKind::FlowSkipped {
+                flow_name: flow_name.clone(),
+                reason: reason.clone(),
+            },
+        );
+        return vec![coverage_skip_report(flow_name, &slots, cfg.seed, start)];
     }
 
     let create_if_missing = flow
@@ -735,14 +822,22 @@ async fn execute_flow_run(
         .collect();
 
     // Post-setup coverage gate: a concurrent group member may have
-    // succeeded while we were booting / installing. If so, release our
-    // devices and return empty — the work we did was wasted but at
-    // least the flow itself doesn't run.
+    // succeeded while we were booting / installing. Release our devices
+    // and emit a SKIP — the setup work is wasted, but the flow itself
+    // didn't run and the user sees why.
     if coverage_group_done(&coverage).await {
         for udid in &allocated_udids {
             resource_mgr.release(udid);
         }
-        return Vec::new();
+        let reason = "coverage group satisfied by peer run".to_string();
+        event_tx.emit(
+            golem_events::DeviceId("suite".into()),
+            golem_events::EventKind::FlowSkipped {
+                flow_name: flow_name.clone(),
+                reason: reason.clone(),
+            },
+        );
+        return vec![coverage_skip_report(flow_name, &slots, cfg.seed, start)];
     }
 
     // Clone the picked devices so we can compute bonus ticks after the
@@ -1199,10 +1294,21 @@ fn device_matches_entry_constraints(device: &DeviceInfo, entry: &InstallEntry) -
                 return false;
             }
         }
-        if let Some(phys) = c.physical {
-            if device.physical != phys {
+        // `hardware` values: "virtual" (sim/emulator) or "real" (physical).
+        // Array form = match any listed kind.
+        if let Some(sv) = &c.hardware {
+            let matches_hw = sv.to_vec().iter().any(|h| {
+                matches!(
+                    (h.as_str(), device.physical),
+                    ("virtual", false) | ("real", true)
+                )
+            });
+            if !matches_hw {
                 return false;
             }
+        } else if device.physical {
+            // Default (no `hardware` key) = virtual-only.
+            return false;
         }
         if let Some(name) = &c.name {
             if &device.name != name {
@@ -2157,25 +2263,19 @@ async fn find_available_device(
                          connect the named device or remove the `name` constraint."
                     );
                 }
-                if s.playstore == Some(true) {
-                    anyhow::bail!(
-                        "slot requires a Play Store Android image; auto-create \
-                         doesn't select playstore builds yet (see roadmap). \
-                         Boot a matching emulator manually or remove the \
-                         `playstore` constraint."
-                    );
-                }
             }
             let requested_type = slot
                 .and_then(|s| s.device_type)
                 .unwrap_or(golem_devices::DeviceType::Phone);
             let requested_os = slot.and_then(|s| s.os_version.clone());
+            let requested_playstore = slot.and_then(|s| s.playstore);
             eprintln!("  [devices] no {platform} device found — creating one...");
             let config = golem_devices::concurrency::ConcurrencyConfig::default();
             let created = golem_devices::lifecycle::auto_create_device(
                 platform,
                 requested_type,
                 requested_os,
+                requested_playstore,
                 &config,
             ).await?;
             resource_mgr.mark_golem_booted(created.clone());
@@ -2235,8 +2335,8 @@ pub struct SuiteStats {
 pub fn suite_stats(report: &SuiteReport) -> SuiteStats {
     SuiteStats {
         total: report.flows.len(),
-        passed: report.flows.iter().filter(|f| f.success).count(),
-        failed: report.flows.iter().filter(|f| !f.success).count(),
+        passed: report.flows.iter().filter(|f| f.is_passed()).count(),
+        failed: report.flows.iter().filter(|f| f.is_failed()).count(),
     }
 }
 

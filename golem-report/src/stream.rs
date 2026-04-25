@@ -267,7 +267,7 @@ pub async fn stream_human(
                     eprintln!("{ts}  {dp}{sym} {label}  {flow_name}  [{secs:.1}s]  seed:{seed}");
                 }
             }
-            EventKind::SuiteFinished { duration_ms, passed, failed } => {
+            EventKind::SuiteFinished { duration_ms, passed, failed, skipped } => {
                 let secs = *duration_ms as f64 / 1000.0;
                 eprintln!();
                 if use_color {
@@ -275,7 +275,12 @@ pub async fn stream_human(
                 } else {
                     eprintln!("{ts}──────────────────────────────────────");
                 }
-                eprintln!("{ts}Suite: {passed} passed, {failed} failed  [{secs:.1}s]");
+                let skip_suffix = if *skipped > 0 {
+                    format!(", {skipped} skipped")
+                } else {
+                    String::new()
+                };
+                eprintln!("{ts}Suite: {passed} passed, {failed} failed{skip_suffix}  [{secs:.1}s]");
             }
             EventKind::InstallStarted { app_name, bundle_id, target, .. } => {
                 // Script may build + install, or just install (install-only mode).

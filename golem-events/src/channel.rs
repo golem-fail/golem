@@ -98,7 +98,7 @@ mod tests {
 
         sender.emit(dev.clone(), EventKind::SuiteStarted { flow_count: 1 });
         sender.emit(dev.clone(), EventKind::FlowStarted { flow_name: "a".into(), os_major: 0 });
-        sender.emit(dev.clone(), EventKind::SuiteFinished { duration_ms: 100, passed: 1, failed: 0 });
+        sender.emit(dev.clone(), EventKind::SuiteFinished { duration_ms: 100, passed: 1, failed: 0, skipped: 0 });
 
         let e0 = rx.recv().await.expect("SHALL receive event 0");
         let e1 = rx.recv().await.expect("SHALL receive event 1");

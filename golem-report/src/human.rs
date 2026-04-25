@@ -134,8 +134,13 @@ pub fn format_flow(report: &FlowReport) -> String {
         }
     }
 
-    let status_symbol = if report.success { SYM_SUCCESS } else { SYM_FAILED };
-    let status_word = if report.success { "PASSED" } else { "FAILED" };
+    let (status_symbol, status_word) = if report.is_skipped() {
+        (SYM_SKIPPED, "SKIPPED")
+    } else if report.success {
+        (SYM_SUCCESS, "PASSED")
+    } else {
+        (SYM_FAILED, "FAILED")
+    };
 
     let mut counts = Vec::new();
     if passed > 0 {
@@ -165,6 +170,9 @@ pub fn format_flow(report: &FlowReport) -> String {
     );
 
     // Metadata
+    if let Some(ref reason) = report.skipped_reason {
+        let _ = writeln!(out, "  Skipped: {reason}");
+    }
     if let Some(seed) = report.seed {
         let _ = writeln!(out, "  Seed: {seed}");
     }
@@ -193,12 +201,16 @@ pub fn format_suite(report: &SuiteReport) -> String {
     let _ = writeln!(out, "{SEPARATOR}");
 
     // Aggregate counts at the flow level
-    let total_flows_passed = report.flows.iter().filter(|f| f.success).count();
-    let total_flows_failed = report.flows.iter().filter(|f| !f.success).count();
+    let total_flows_passed = report.flows.iter().filter(|f| f.is_passed()).count();
+    let total_flows_failed = report.flows.iter().filter(|f| f.is_failed()).count();
     let total_flows_skipped = report
         .flows
         .iter()
-        .filter(|f| f.step_results.iter().all(|s| matches!(s.outcome, StepOutcome::Skipped)))
+        .filter(|f| {
+            f.is_skipped()
+                || (!f.step_results.is_empty()
+                    && f.step_results.iter().all(|s| matches!(s.outcome, StepOutcome::Skipped)))
+        })
         .count();
     let timing = format_duration(report.total_duration_ms);
 

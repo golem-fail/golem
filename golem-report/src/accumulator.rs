@@ -117,7 +117,15 @@ impl ReportAccumulator {
                 self.current_flow_by_device.remove(&dev_key);
             }
             EventKind::FlowSkipped { flow_name, reason } => {
-                // Record a synthetic flow entry so the skip shows up in reports.
+                // Record a synthetic flow entry so the skip shows up in
+                // reports. `success` depends on the reason:
+                // - Install / bundle / setup skips should fail the suite
+                //   (exit 1) → success=false.
+                // - Coverage-group skips (a peer run met the group goal)
+                //   are deliberate and shouldn't fail the suite → success=true.
+                // Kept in one place so both local-path and IPC-path
+                // reports agree.
+                let is_coverage_skip = reason.starts_with("coverage group");
                 self.flows.push(AccumulatedFlow {
                     flow_name: flow_name.clone(),
                     device_id: event.device_id.clone(),
@@ -125,7 +133,7 @@ impl ReportAccumulator {
                     steps: Vec::new(),
                     warnings: Vec::new(),
                     duration_ms: 0,
-                    success: false,
+                    success: is_coverage_skip,
                     skipped_reason: Some(reason.clone()),
                     started_at: Some(event.wall_time),
                     finished_at: Some(event.wall_time),
@@ -467,6 +475,7 @@ mod tests {
             duration_ms: 10020,
             passed: 0,
             failed: 1,
+            skipped: 0,
         }));
 
         let suite = acc.into_suite_report();

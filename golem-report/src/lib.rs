@@ -298,6 +298,33 @@ pub struct FlowReport {
     pub covered_axes: Vec<String>,
 }
 
+impl FlowReport {
+    /// Flow was deliberately spared by a coverage-group gate — a peer
+    /// run in a `coverage = "one"` group already met the goal. These
+    /// runs carry `success = true` (no CI failure) + a skip reason.
+    ///
+    /// Install-precondition skips (missing bundle, failed install
+    /// script) are **not** `is_skipped` — they keep `success = false`
+    /// and classify as [`is_failed`], since a broken install should
+    /// still fail the suite.
+    pub fn is_skipped(&self) -> bool {
+        self.success && self.skipped_reason.is_some()
+    }
+
+    /// Flow ran and passed. Excludes coverage-group skips whose
+    /// `success = true` is bookkeeping, not a real pass.
+    pub fn is_passed(&self) -> bool {
+        self.success && self.skipped_reason.is_none()
+    }
+
+    /// Flow did not succeed. Covers both real test failures and
+    /// install-precondition failures (success=false + skipped_reason).
+    /// Drives the suite's exit code.
+    pub fn is_failed(&self) -> bool {
+        !self.success
+    }
+}
+
 /// Install script result (per `(device, bundle)` across the whole suite).
 #[derive(Debug, Clone)]
 pub struct InstallReport {
@@ -337,6 +364,64 @@ pub struct SuiteReport {
 mod tests {
     use super::*;
     use golem_events::{Point, Rect, SubstepEvent};
+
+    fn flow_with(success: bool, skipped_reason: Option<String>) -> FlowReport {
+        FlowReport {
+            flow_name: "f".into(),
+            success,
+            step_results: Vec::new(),
+            warnings: Vec::new(),
+            duration_ms: 0,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            os_major: None,
+            perf_snapshots: Vec::new(),
+            skipped_reason,
+            covered_axes: Vec::new(),
+            started_at: None,
+            finished_at: None,
+        }
+    }
+
+    #[test]
+    fn flow_status_passed_when_success_and_no_skip_reason() {
+        let f = flow_with(true, None);
+        assert!(f.is_passed());
+        assert!(!f.is_failed());
+        assert!(!f.is_skipped());
+    }
+
+    #[test]
+    fn flow_status_failed_when_not_success_and_no_skip_reason() {
+        let f = flow_with(false, None);
+        assert!(!f.is_passed());
+        assert!(f.is_failed());
+        assert!(!f.is_skipped());
+    }
+
+    #[test]
+    fn flow_status_skipped_takes_priority_over_success() {
+        // Coverage-group reclassify: success=true + skipped_reason=Some.
+        // SHALL count as skipped, NOT as passed.
+        let f = flow_with(true, Some("coverage group satisfied".into()));
+        assert!(!f.is_passed());
+        assert!(!f.is_failed());
+        assert!(f.is_skipped());
+    }
+
+    #[test]
+    fn flow_install_skip_classifies_as_failed_not_skipped() {
+        // Pre-existing FlowSkipped convention for install-precondition
+        // failures: success=false + reason=Some. These SHALL fail the
+        // suite (is_failed = true) and NOT appear as a skipped run —
+        // install failures are real problems even though the test was
+        // never attempted.
+        let f = flow_with(false, Some("install failed".into()));
+        assert!(!f.is_passed());
+        assert!(f.is_failed());
+        assert!(!f.is_skipped());
+    }
 
     #[test]
     fn tap_with_element_bounds_converts_correctly() {

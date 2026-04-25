@@ -134,7 +134,12 @@ pub struct DeviceConstraint {
     pub device_type: Option<StringOrVec>,
     pub name: Option<String>,
     pub accessibility_label: Option<String>,
-    pub physical: Option<bool>,
+    /// Hardware kind axis. Values: `"virtual"` (sim/emulator) or `"real"`
+    /// (physical device). Supports array form for coverage — `["virtual",
+    /// "real"]` emits two tick boxes, satisfiable independently. Omitted
+    /// means virtual-only (safest default — physical devices require
+    /// explicit opt-in).
+    pub hardware: Option<StringOrVec>,
     pub playstore: Option<bool>,
     /// If set, only match devices in the requested boot state. Mostly used
     /// internally when a flow has no `[[flow.apps.devices]]` block: the plan

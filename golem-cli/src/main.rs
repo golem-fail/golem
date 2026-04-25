@@ -186,9 +186,11 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
 
-            // Exit with appropriate code
-            let all_passed = report.flows.iter().all(|f| f.success);
-            if !all_passed {
+            // Exit with appropriate code. Skipped flows (coverage-group
+            // reclassify + install preconditions) don't fail the suite;
+            // only genuine failures do.
+            let any_failed = report.flows.iter().any(|f| f.is_failed());
+            if any_failed {
                 std::process::exit(1);
             }
         }

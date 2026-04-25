@@ -152,7 +152,7 @@ pub struct PerfSnapshotData {
 pub enum EventKind {
     // Suite level
     SuiteStarted { flow_count: usize },
-    SuiteFinished { duration_ms: u64, passed: usize, failed: usize },
+    SuiteFinished { duration_ms: u64, passed: usize, failed: usize, skipped: usize },
 
     /// Diagnostic snapshot of the Plan phase output. Emitted once per suite
     /// when `--verbose` is on. All fields are pre-formatted `String`s:

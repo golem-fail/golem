@@ -12,7 +12,7 @@
 //!  ~action:target d:duration message
 //!  !action:target d:duration error
 //!  -action:target
-//! R:PASS|FAIL passed/warned/failed
+//! R:PASS|FAIL|SKIP passed/warned/failed [skip_reason]
 //!
 //! total:N×pass,N×fail,N×skip d:duration
 //! ```
@@ -232,9 +232,19 @@ pub(crate) fn format_flow_toon_anchored(
         out.push('\n');
     }
 
-    // Result line: R:PASS|FAIL passed/warned/failed
-    let status = if report.success { "PASS" } else { "FAIL" };
-    let _ = writeln!(out, "R:{status} {passed}/{warned}/{failed}");
+    // Result line: R:PASS|FAIL|SKIP passed/warned/failed [skip_reason]
+    let status = if report.is_skipped() {
+        "SKIP"
+    } else if report.success {
+        "PASS"
+    } else {
+        "FAIL"
+    };
+    let _ = write!(out, "R:{status} {passed}/{warned}/{failed}");
+    if let Some(ref reason) = report.skipped_reason {
+        let _ = write!(out, " {reason}");
+    }
+    out.push('\n');
 
     out
 }
@@ -289,15 +299,17 @@ pub fn format_suite_toon(report: &SuiteReport) -> String {
     }
 
     // Aggregate counts at the flow level
-    let total_passed = report.flows.iter().filter(|f| f.success).count();
-    let total_failed = report.flows.iter().filter(|f| !f.success).count();
+    let total_passed = report.flows.iter().filter(|f| f.is_passed()).count();
+    let total_failed = report.flows.iter().filter(|f| f.is_failed()).count();
     let total_skipped = report
         .flows
         .iter()
         .filter(|f| {
-            f.step_results
-                .iter()
-                .all(|s| matches!(s.outcome, StepOutcome::Skipped))
+            f.is_skipped()
+                || (!f.step_results.is_empty()
+                    && f.step_results
+                        .iter()
+                        .all(|s| matches!(s.outcome, StepOutcome::Skipped)))
         })
         .count();
 

@@ -529,6 +529,7 @@ pub async fn auto_create_device(
     platform: Platform,
     device_type: crate::DeviceType,
     os_version: Option<crate::OsVersionSpec>,
+    playstore: Option<bool>,
     concurrency_config: &crate::concurrency::ConcurrencyConfig,
 ) -> Result<crate::DeviceInfo> {
     let want_phone = device_type == crate::DeviceType::Phone;
@@ -550,7 +551,9 @@ pub async fn auto_create_device(
 
     match platform {
         Platform::Ios => auto_create_ios(want_phone, os_version.as_ref()).await,
-        Platform::Android => auto_create_android(want_phone, os_version.as_ref()).await,
+        Platform::Android => {
+            auto_create_android(want_phone, os_version.as_ref(), playstore).await
+        }
     }
 }
 
@@ -633,6 +636,7 @@ async fn auto_create_ios(
 async fn auto_create_android(
     want_phone: bool,
     os_version: Option<&crate::OsVersionSpec>,
+    playstore: Option<bool>,
 ) -> Result<crate::DeviceInfo> {
     use crate::android::{discover_android_device_profiles, discover_android_system_images,
                           pick_device_profile, pick_system_image};
@@ -643,17 +647,26 @@ async fn auto_create_android(
         Some(crate::OsVersionSpec::Exact { major, .. }) => *major,
         _ => 0,
     };
-    let image = pick_system_image(&images, preferred_api)
+    let image = pick_system_image(&images, preferred_api, playstore)
         .ok_or_else(|| {
             let requested = if preferred_api > 0 {
                 format!("API {preferred_api}")
             } else {
                 "any arm64 Android".to_string()
             };
-            let installed: Vec<String> = images.iter().map(|i| format!("API {}", i.api_level)).collect();
+            let store_hint = match playstore {
+                Some(true) => " (playstore target required)",
+                Some(false) => " (non-playstore target required)",
+                None => "",
+            };
+            let installed: Vec<String> = images
+                .iter()
+                .map(|i| format!("API {} ({})", i.api_level, i.target))
+                .collect();
             anyhow::anyhow!(
-                "Requested {requested} system image is not installed. Installed: {}. \
-                 Add via: sdkmanager 'system-images;android-<N>;google_apis;arm64-v8a'",
+                "Requested {requested}{store_hint} system image is not installed. \
+                 Installed: {}. \
+                 Add via: sdkmanager 'system-images;android-<N>;<target>;arm64-v8a'",
                 installed.join(", ")
             )
         })?;
