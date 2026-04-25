@@ -4,13 +4,12 @@ tags = ["cross-platform", "interaction", "scroll"]
 
 [[flow.apps]]
 name = "app"
+# Scroll behaviour differs by viewport — exercise both form factors.
+# Under Smart coverage this picks the fewest devices that tick all four
+# axes (iOS + Android × phone + tablet).
 [[flow.apps.devices]]
-os = "ios:latest"
-type = "phone"
-
-[[flow.apps.devices]]
-os = "android:latest"
-type = "phone"
+os = ["ios:latest", "android:latest"]
+type = ["phone", "tablet"]
 
 # First scroll the page so the list is visible, then scroll within it
 [[block]]

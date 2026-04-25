@@ -76,7 +76,7 @@ pub struct DeviceInfo {
 }
 
 /// Specification for which OS versions to target.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum OsVersionSpec {
     Exact { platform: Platform, major: u32 },
     Minimum { platform: Platform, major: u32 },

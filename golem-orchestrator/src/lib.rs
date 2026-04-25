@@ -13,17 +13,24 @@
 //! allocates devices per `FlowRun`, runs scoped pre-install from the
 //! `install_matrix`, ensures a companion, and executes the flow.
 //!
+//! Coverage groups (`CoverageGroup`) wire execute-time adaptive
+//! strategies (`One`, `Smart`) into the JIT FlowRun scheduler. Each group
+//! holds a flat tick-box pool; `FlowRun.coverage_group` points at the
+//! group and `FlowRun.covers_boxes` pre-declares which pool indices the
+//! run will tick on success. The scheduler gates every spawn against a
+//! shared progress tracker.
+//!
 //! Roadmap items this crate accommodates without re-refactor:
-//! - `ios:latest:N` multiplier → `FlowRun.multiplier` already exists
-//! - `os = "any"` → `FlowRun.any_platform` already exists
 //! - Cross-process install cache dedup → `InstallCache` trait in
 //!   `golem-runner::installer` can grow a persistent backend
 
+pub mod coverage;
 pub mod install_matrix;
 pub mod plan;
 
+pub use coverage::{pick_best_covering, set_cover_greedy, CoverageStrategy};
 pub use install_matrix::{build_install_matrix, InstallEntry};
 pub use plan::{
-    describe_slot, device_matches_slot, merge_project_apps, plan, shape_label, DeviceSlot,
-    FlowRun, ParseFailure, ParsedFlow, ParsedSuite,
+    describe_slot, device_matches_slot, merge_project_apps, plan, shape_label, CoverageGroup,
+    DeviceSlot, FlowRun, ParseFailure, ParsedFlow, ParsedSuite,
 };

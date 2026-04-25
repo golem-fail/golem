@@ -136,6 +136,11 @@ pub struct DeviceConstraint {
     pub accessibility_label: Option<String>,
     pub physical: Option<bool>,
     pub playstore: Option<bool>,
+    /// If set, only match devices in the requested boot state. Mostly used
+    /// internally when a flow has no `[[flow.apps.devices]]` block: the plan
+    /// emits one partial tick box per currently-booted platform with
+    /// `booted = Some(true)` so the suite runs on whatever's already up.
+    pub booted: Option<bool>,
     pub expand: Option<String>,
 }
 
@@ -321,6 +326,12 @@ pub struct FlowOptions {
     pub max_runtime: Option<String>,
     pub suite_concurrency: Option<u32>,
     pub keep_devices: Option<bool>,
+    /// Coverage strategy — how to expand multi-valued device constraints
+    /// into FlowRuns. `full` = Cartesian (every combo); `min` = smallest
+    /// device set ticking every axis value; `smart` = execute-time
+    /// adaptive, uses more devices when free (default); `one` = single
+    /// run for local smoke testing.
+    pub coverage: Option<CoverageStrategy>,
     /// App lifecycle management before flow execution.
     /// - `"reset"` — stop all apps + launch first app (fresh state). Default.
     /// - `"launch"` — launch first app if not running; preserves state.
@@ -344,6 +355,29 @@ pub struct FlowOptions {
     pub perf_fd_warn: Option<u32>,
     /// File descriptor error threshold.
     pub perf_fd_error: Option<u32>,
+}
+
+/// How to expand multi-valued device constraints into FlowRuns.
+///
+/// `Smart` is the default: plan produces the same fully-pinned slot set
+/// as `Min` (via greedy set-cover) but registers a `CoverageGroup` so the
+/// scheduler terminates the group once every pool box has been ticked.
+/// `One` is the same machinery with `max_runs = Some(1)` for local smoke.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum CoverageStrategy {
+    /// FlowRuns share a group with `max_runs = 1`; first successful run
+    /// ends the group. For local smoke runs where any match satisfies.
+    One,
+    /// Plan-time greedy set-cover: fewest devices ticking every box.
+    /// No group registered — every emitted FlowRun runs unconditionally.
+    Min,
+    /// Default. Same plan output as `Min`, plus a `CoverageGroup` the
+    /// scheduler consults to stop dispatching members once every pool
+    /// box has been ticked (direct + bonus ticks from picked devices).
+    Smart,
+    /// Cartesian product — every (os, type, …) combination as its own run.
+    Full,
 }
 
 /// Controls how the runner manages the app before executing a flow.

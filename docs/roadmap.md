@@ -40,32 +40,46 @@ Running `golem run a.toml b.toml` on ios+android = 4 device-runs available but o
 
 **Files:** `golem-devices/src/resource_manager.rs` (boot-on-demand logic), `golem-devices/src/concurrency.rs` (headroom checks), `golem-devices/src/{ios,android}.rs` (boot helpers + tracking).
 
-## Coverage Multiplier Syntax (`ios:latest:2`)
+## Coverage Strategy: Residual Polish
 
-Extend device constraint parser to recognize a `:N` suffix on the `os` field. `os = "ios:latest:2"` means "resolve 2 devices matching `ios:latest`". Plan generator emits N `FlowRun` entries for that coverage slot.
+The tick-box model is live end-to-end: `CoverageStrategy { One, Min, Smart, Full }` with `Smart` default, `DeviceSlot` with `Option<Platform>` + `booted` axis, greedy set-cover in `golem-orchestrator::coverage`, partial-axis expansion with dedup + underspec errors, and execute-time adaptive JIT for `Smart` + `One` via `CoverageGroup` + shared progress tracker in the scheduler. `FlowReport.covered_axes` is populated from the chosen device and renders in human output.
 
-**Example:** flow targets `ios:latest:2` on both `type = "phone"` and `type = "tablet"` → 4 coverage checkboxes (latest-ios, previous-ios if any version spec, phone, tablet). Min-cover picks the smallest device set that ticks all boxes; a single "latest-ios tablet" device ticks 2 boxes in one run.
+**What's left:**
 
-**Depends on:** [True Parallel Flow × Device Concurrency](#true-parallel-flow--device-concurrency) — without boot-on-demand, `N>1` stalls when only 1 booted device matches.
+### `covered_axes` in JSON / JUnit / TOON renderers
 
-**Foundation:** `FlowRun` struct already carries `multiplier: u32` (default 1) so this is a generator change only.
+Field is populated on `FlowReport`. Human renderer shows it (`Covered: ios, v26, tablet`). JSON / JUnit / TOON render paths ignore it — mechanical add across the three serialisers.
 
-**Files:** `golem-parser/src/lib.rs` (parse `:N` suffix on `DeviceConstraint.os`), `golem-orchestrator/src/plan.rs` (expand N-runs per coverage slot).
+**Files:** `golem-report/src/{json,junit,toon}.rs`.
 
-## `os = "any"` Default Semantics
+### Retire the `slot_platform_or_ios` stopgap
 
-Currently `detect_all_platforms()` in `golem-cli/src/suite.rs` defaults to iOS when no `os` constraint is set. Desired: unset/`any` means "run on any available platform" — pick whichever has devices.
+`golem-cli/src/suite.rs` panics when a `None`-platform slot reaches the scheduler. Today's plan generator always pins a platform via `union_requirements`, so the panic arm is unreachable, but the helper still couples the scheduler to a single-platform-at-a-time model. Genuine cross-platform picking (a free iPad covers a platform-None `{tablet}` box just as well as a free Pixel tab) would let the scheduler wait for *any* free matching device instead of guessing a platform upfront.
 
-**Use case:** platform-agnostic flows (cross-platform assertions, device-agnostic utilities) shouldn't force iOS-only runs.
+**Files:** `golem-cli/src/suite.rs` (scheduler device picker accepts `Option<Platform>`), `discover_all_devices` → merge across platforms.
 
-**Semantics:**
-- `os = "any"` → pick any available platform (prefer booted)
-- `os = "any:2"` → 2 devices, any platforms, possibly different
-- No `os` field at all → behave as `any`
+### Auto-create on platform-None slots
 
-**Foundation:** `CoverageRequirement` struct should carry an `any_platform: bool` flag; Plan generator branches on it.
+A platform-None box that needs auto-creation should error with "cannot auto-create platform-agnostic slot — specify `os = ...`" (subsumes the remaining platform-axis portion of the [`create_if_missing` Honours Slot Constraints](#create_if_missing-honours-slot-constraints) entry). Depends on the cross-platform scheduler above.
 
-**Files:** `golem-parser/src/lib.rs` (parse "any" + absence), `golem-orchestrator/src/plan.rs` (handle any-platform resolution).
+### Responsive-design / cross-platform axis sharing
+
+Already works via array syntax on a single `[[flow.apps.devices]]` block: `os = ["ios:latest", "android:latest"]` + `type = ["phone", "tablet"]` emits 4 partial boxes that 2 devices (one per platform, different types) cover end-to-end. Documented in README flow-options.
+
+### Dispatch ordering for One/Smart groups
+
+Today the scheduler spawns every FlowRun in a group up front; the coverage gate short-circuits late arrivers after the first success. Under tight device contention, early-arriving group members can race and double-execute before the tracker updates. Acceptable today — at worst one extra run per group — but a serialised dispatch-per-group or CancellationToken would eliminate the over-run entirely.
+
+**Files:** `golem-cli/src/suite.rs` (spawn loop restructure).
+
+### Reference: strategy semantics
+
+| Strategy | Box generation | Resolution timing | Semantics |
+|---|---|---|---|
+| `full` | Cartesian — each box fully pinned | plan-time | 1 FlowRun per box |
+| `min` | Partial-axis — each axis-value = one box | plan-time: greedy set-cover | Fewest devices; waits on contested |
+| `smart` | Partial-axis | execute-time adaptive (CoverageGroup) | **Default.** Stops once every pool box is ticked |
+| `one` | Partial-axis | execute-time adaptive (CoverageGroup, `max_runs=1`) | Single successful run; local smoke / dev |
 
 ## Partial Suite on Install Failure
 
@@ -206,4 +220,19 @@ Possible approaches:
 - Cache element positions across consecutive steps when the viewport hasn't changed
 - Longer default multiplier for WebView-context actions (requires detecting WebView context)
 
+## e2e Flakiness: Tap "Submit" not found on cold-boot iOS
+
+`e2e/cross/tap.test.toml` under `coverage = "one"` on a freshly auto-booted iOS 26 simulator: the first `tap on_text="Submit"` times out after 30s. The sim boots, install succeeds, companion starts, but the app either never renders the Submit button or its identifier differs by version. Reproduces reliably on iOS 26 auto-boot; passes on Android and on already-booted iOS simulators.
+
+Possible causes: launch race between companion readiness and app first-frame; Submit accessibility label differs by iOS major; cold-boot keyboard/WebView priming issue.
+
+**Files:** investigation first — add post-launch screenshot + tree dump to `e2e/cross/tap.test.toml` to capture what's actually on screen when the timeout fires.
+
+## e2e Flakiness: Tap roundtrip iOS increment tap timeout
+
+`e2e/perf/tap_roundtrip.test.toml` under `ios:latest:2` (iOS 18 + 26) sees the first `tap on_text="+"` time out after 5s on both versions. The app launches, counter is visible at "0", then the tap step hangs. Pre-existing before the `:latest:2` change — smart fan-out just makes it repro on two iOS versions instead of one.
+
+Likely related to perf-test-specific companion/driver race or accessibility label drift on the `+` button. Android passes cleanly.
+
+**Files:** `e2e/perf/tap_roundtrip.test.toml`, possibly `golem-driver/src/ios.rs` tap path.
 

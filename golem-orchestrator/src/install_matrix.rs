@@ -50,37 +50,48 @@ pub fn build_install_matrix(
             continue;
         };
         for slot in &run.slots {
+            // Platform-None slots (responsive-design) may run on either
+            // platform — emit install entries for every platform the app
+            // actually has an install_script for. The scheduler's
+            // install-matrix intersection narrows to installable platforms
+            // at slot-pick time.
+            let target_platforms: Vec<Platform> = match slot.platform {
+                Some(p) => vec![p],
+                None => vec![Platform::Ios, Platform::Android],
+            };
             for app_name in &slot.apps {
-                let key = (slot.platform, app_name.clone());
-                if seen.contains(&key) {
-                    continue;
-                }
                 let Some(app) = pf.flow.flow.apps.iter().find(|a| &a.name == app_name) else {
                     continue;
                 };
                 let Some(bundle) = app.bundle.as_deref() else {
                     continue;
                 };
-                let platform_str = slot.platform.to_string();
-                let Some(script) = app
-                    .install_script
-                    .as_ref()
-                    .and_then(|v| v.for_platform(&platform_str))
-                else {
-                    continue;
-                };
-                let timeout_ms = app
-                    .install_timeout_ms
-                    .unwrap_or(DEFAULT_INSTALL_TIMEOUT_MS);
-                entries.push(InstallEntry {
-                    platform: slot.platform,
-                    app_name: app_name.clone(),
-                    bundle_id: bundle.to_string(),
-                    script_path: project_root.join(script),
-                    timeout_ms,
-                    device_constraints: app.devices.clone(),
-                });
-                seen.insert(key);
+                for platform in &target_platforms {
+                    let key = (*platform, app_name.clone());
+                    if seen.contains(&key) {
+                        continue;
+                    }
+                    let platform_str = platform.to_string();
+                    let Some(script) = app
+                        .install_script
+                        .as_ref()
+                        .and_then(|v| v.for_platform(&platform_str))
+                    else {
+                        continue;
+                    };
+                    let timeout_ms = app
+                        .install_timeout_ms
+                        .unwrap_or(DEFAULT_INSTALL_TIMEOUT_MS);
+                    entries.push(InstallEntry {
+                        platform: *platform,
+                        app_name: app_name.clone(),
+                        bundle_id: bundle.to_string(),
+                        script_path: project_root.join(script),
+                        timeout_ms,
+                        device_constraints: app.devices.clone(),
+                    });
+                    seen.insert(key);
+                }
             }
         }
     }
@@ -129,7 +140,7 @@ mod tests {
             install_script: Some(InstallScriptValue::Single("scripts/i.sh".into())),
             install_timeout_ms: None,
         }];
-        let suite = plan(&[a, b], &apps, tmp.path(), None).await.unwrap();
+        let suite = plan(&[a, b], &apps, tmp.path(), None, None).await.unwrap();
         assert_eq!(suite.install_matrix.len(), 1,
             "two flows on the same (platform, app) SHALL produce one entry");
     }
@@ -165,7 +176,7 @@ mod tests {
                 install_timeout_ms: None,
             },
         ];
-        let suite = plan(&[f], &apps, tmp.path(), None).await.unwrap();
+        let suite = plan(&[f], &apps, tmp.path(), None, None).await.unwrap();
         assert_eq!(suite.install_matrix.len(), 2,
             "chat-test apps on different platforms SHALL produce 2 install entries");
     }
@@ -182,7 +193,7 @@ mod tests {
             [[flow.apps.devices]]
             os = "ios"
         "#);
-        let suite = plan(&[f], &[], tmp.path(), None).await.unwrap();
+        let suite = plan(&[f], &[], tmp.path(), None, None).await.unwrap();
         assert!(suite.install_matrix.is_empty(),
             "apps without install_script SHALL NOT appear in install_matrix");
     }
@@ -201,7 +212,7 @@ mod tests {
             os = "ios"
             type = "tablet"
         "#);
-        let suite = plan(&[f], &[], tmp.path(), None).await.unwrap();
+        let suite = plan(&[f], &[], tmp.path(), None, None).await.unwrap();
         assert_eq!(suite.install_matrix.len(), 1);
         let entry = &suite.install_matrix[0];
         assert_eq!(entry.device_constraints.len(), 1);

@@ -23,6 +23,7 @@ pub struct ProjectOptions {
     pub max_runtime: Option<String>,
     pub suite_concurrency: Option<u32>,
     pub keep_devices: Option<bool>,
+    pub coverage: Option<crate::CoverageStrategy>,
     pub app_lifecycle: Option<crate::AppLifecycle>,
     pub perf: Option<bool>,
     pub perf_memory_warn_mb: Option<f64>,
@@ -159,6 +160,7 @@ pub fn merge_config(project: &ProjectConfig, flow: &FlowFile) -> FlowFile {
             .suite_concurrency
             .or(proj_opts.suite_concurrency),
         keep_devices: flow_opts.keep_devices.or(proj_opts.keep_devices),
+        coverage: flow_opts.coverage.or(proj_opts.coverage),
         app_lifecycle: flow_opts.app_lifecycle.or(proj_opts.app_lifecycle),
         perf: flow_opts.perf.or(proj_opts.perf),
         perf_memory_warn_mb: flow_opts.perf_memory_warn_mb.or(proj_opts.perf_memory_warn_mb),
@@ -185,7 +187,8 @@ pub fn merge_config(project: &ProjectConfig, flow: &FlowFile) -> FlowFile {
         || merged_opts.max_steps.is_some()
         || merged_opts.max_runtime.is_some()
         || merged_opts.suite_concurrency.is_some()
-        || merged_opts.keep_devices.is_some();
+        || merged_opts.keep_devices.is_some()
+        || merged_opts.coverage.is_some();
 
     merged.flow.options = if has_any_option {
         Some(merged_opts)

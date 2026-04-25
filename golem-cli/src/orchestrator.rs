@@ -253,15 +253,67 @@ async fn handle_submit(
         return;
     }
 
-    let platform_override = json["config"]["platform"]
+    let cfg = &json["config"];
+    let platform_override = cfg["platform"].as_str().and_then(|p| match p {
+        "ios" => Some(golem_devices::Platform::Ios),
+        "android" => Some(golem_devices::Platform::Android),
+        _ => None,
+    });
+    let seed = cfg["seed"].as_u64();
+    let verbose = cfg["verbose"].as_bool().unwrap_or(false);
+    let debug = cfg["debug"].as_bool().unwrap_or(false);
+    let no_perf = cfg["no_perf"].as_bool().unwrap_or(false);
+    let no_clean = cfg["no_clean"].as_bool().unwrap_or(false);
+    let no_teardown = cfg["no_teardown"].as_bool().unwrap_or(false);
+    let keep_devices = cfg["keep_devices"].as_bool().unwrap_or(false);
+    let no_results = cfg["no_results"].as_bool().unwrap_or(false);
+    let start = cfg["start"].as_str().map(String::from);
+    let output_dir: PathBuf = cfg["output_dir"]
         .as_str()
-        .and_then(|p| match p {
-            "ios" => Some(golem_devices::Platform::Ios),
-            "android" => Some(golem_devices::Platform::Android),
-            _ => None,
-        });
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(".golem/results"));
+    let project_root: PathBuf = cfg["project_root"]
+        .as_str()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    let vars: Vec<(String, String)> = cfg["vars"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|item| {
+                    let pair = item.as_array()?;
+                    let k = pair.first()?.as_str()?.to_string();
+                    let v = pair.get(1)?.as_str()?.to_string();
+                    Some((k, v))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let coverage_override = cfg["coverage"].as_str().and_then(|c| match c {
+        "one" => Some(golem_parser::CoverageStrategy::One),
+        "min" => Some(golem_parser::CoverageStrategy::Min),
+        "smart" => Some(golem_parser::CoverageStrategy::Smart),
+        "full" => Some(golem_parser::CoverageStrategy::Full),
+        _ => None,
+    });
 
-    let seed = json["config"]["seed"].as_u64();
+    // Re-read the project's golem.toml from the client's project_root so
+    // apps pick up bundle IDs, install scripts, and device defaults the
+    // CLI saw locally. `ProjectAppConfig` isn't `Serialize`, so
+    // round-tripping through the wire isn't practical — this is cheaper
+    // anyway (one TOML parse per submit).
+    let (project_config, _) = match crate::project::ProjectConfig::load_from(&project_root) {
+        Ok(pc) => pc,
+        Err(e) => {
+            let resp = serde_json::json!({
+                "type": "error",
+                "message": format!("failed to load golem.toml under {}: {e}", project_root.display()),
+            });
+            let mut w = writer.lock().await;
+            let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
+            return;
+        }
+    };
 
     // Create an event channel for streaming to the client.
     let (fwd_tx, fwd_rx) = golem_events::channel::event_channel();
@@ -286,9 +338,21 @@ async fn handle_submit(
     let config = SuiteConfig {
         platform: platform_override,
         seed,
+        verbose,
+        debug,
+        no_perf,
+        no_clean,
+        no_teardown,
+        keep_devices,
+        no_results,
+        start,
+        vars,
+        output_dir,
+        project_root,
+        project_apps: project_config.apps,
+        coverage_override,
         // Server doesn't do its own human streaming — client handles output.
         stream_human: false,
-        ..SuiteConfig::default()
     };
 
     let mut runner =

@@ -226,12 +226,71 @@ max_runtime = "30m"                 # "5m", "2h", "500ms"
 app_lifecycle = "reset"             # "reset" (default), "launch", "manual"
 screenshot_on_failure = true        # Auto-capture screenshot on step failure (default: true)
 record = true                       # Not yet wired
+coverage = "smart"                  # "smart" (default), "min", "full", "one" — see Coverage strategies
 perf = true                         # Performance monitoring (default: true)
 perf_memory_warn_mb = 200.0
 perf_memory_error_mb = 500.0
 perf_cpu_warn_percent = 80.0
 perf_cpu_error_percent = 95.0
 ```
+
+#### Coverage strategies
+
+`coverage` controls how multi-valued `[[flow.apps.devices]]` axes expand into FlowRuns.
+
+| Strategy | Behaviour |
+|---|---|
+| `smart` (default) | Partial-axis coverage; ticks every axis value using the fewest FlowRuns while opportunistically using spare devices in parallel. (Currently behaves as `min` — execute-time adaptive scheduling is a follow-up.) |
+| `min` | Plan-time greedy set-cover — fewest devices that tick every axis value. Waits on contested devices. |
+| `full` | Cartesian product — one FlowRun per (os × type × …) combination. Use when every combo needs independent validation. |
+| `one` | Single FlowRun covering any one box — local smoke testing. Tolerates underspec (`ios:latest:2` with only one version available). |
+
+**Two ways to write device constraints**, with different meanings:
+
+*Multi-block form — pinned tuples.* Each `[[flow.apps.devices]]` is an independent combination that must run.
+
+```toml
+[[flow.apps.devices]]
+os = "ios:26"
+type = "tablet"
+
+[[flow.apps.devices]]
+os = "android:34"
+type = "phone"
+```
+
+This guarantees **both specific combinations**: an iPad v26 AND an Android phone v34.
+
+*Single-block array form — independent axes.* Each axis value is a coverage point; Golem ticks every value but doesn't care how the combos fall out.
+
+```toml
+[[flow.apps.devices]]
+os = ["ios:26", "android:34"]
+type = ["tablet", "phone"]
+```
+
+This guarantees **every axis value runs somewhere**. Under `smart`/`min` two devices cover all four boxes — could be iPad v26 + Android phone v34, or iPhone v26 + Android tablet v34. Under `full` it emits four fully-pinned combinations.
+
+**When the forms are equivalent.** If each block has at most one multi-valued axis (typically when `type` is absent or single-valued and identical across all blocks), the two forms produce the same boxes:
+
+```toml
+# Multi-block
+[[flow.apps.devices]]
+os = "ios:latest"
+type = "phone"
+[[flow.apps.devices]]
+os = "android:latest"
+type = "phone"
+
+# Array form (equivalent — recommended for compactness)
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+```
+
+Both emit two fully-pinned boxes `{ios, latest, phone}` + `{android, latest, phone}` under every strategy. Prefer the array form when it captures the same intent.
+
+**No `[[flow.apps.devices]]` block at all.** Golem runs on whatever platform is currently booted (both if both are booted). Fails fast if nothing is booted.
 
 #### Performance Monitoring
 
@@ -727,7 +786,6 @@ flowchart TD
 
 - Flow execution on iOS waits for Android install + companion, even though iOS is already ready.
 - Install runs eagerly for every matching `(device, app)` in the matrix — not always needed.
-- Flow × device fan-out is hard-coded to "one device per platform per flow". No `ios:latest:2` multi-device yet.
 
 ### How it should work (target)
 

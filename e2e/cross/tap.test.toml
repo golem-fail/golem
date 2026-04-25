@@ -2,14 +2,15 @@
 name = "Tap test"
 tags = ["cross-platform", "interaction", "smoke"]
 
+[flow.options]
+# Smoke test — run on any one matching device; tolerates underspec
+# (useful for local dev where only one platform may be booted).
+coverage = "one"
+
 [[flow.apps]]
 name = "app"
 [[flow.apps.devices]]
-os = "ios:latest"
-type = "phone"
-
-[[flow.apps.devices]]
-os = "android:latest"
+os = ["ios:latest", "android:latest"]
 type = "phone"
 
 [[block]]

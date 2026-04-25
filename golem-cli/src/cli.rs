@@ -108,6 +108,12 @@ pub struct RunArgs {
     #[arg(long)]
     pub platform: Option<String>,
 
+    /// Override every flow's coverage strategy (one | min | smart | full).
+    /// Handy for `--coverage one` to run a suite as a quick smoke with a
+    /// single FlowRun per flow.
+    #[arg(long)]
+    pub coverage: Option<String>,
+
     /// Disable automatic performance capture
     #[arg(long)]
     pub no_perf: bool,

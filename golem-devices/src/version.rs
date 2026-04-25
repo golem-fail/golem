@@ -86,11 +86,10 @@ pub fn matches_version(spec: &OsVersionSpec, device_major: u32) -> bool {
 /// If count exceeds available versions, returns all available versions.
 pub fn resolve_latest(_platform: Platform, count: u32, available: &[u32]) -> Vec<u32> {
     let mut sorted: Vec<u32> = available.to_vec();
-    sorted.sort_unstable();
+    sorted.sort_unstable_by(|a, b| b.cmp(a)); // descending — latest first
     sorted.dedup();
-
-    let take = (count as usize).min(sorted.len());
-    sorted[sorted.len() - take..].to_vec()
+    sorted.truncate(count as usize);
+    sorted
 }
 
 #[cfg(test)]
@@ -144,7 +143,7 @@ mod tests {
         assert_eq!(resolved, vec![18]);
     }
 
-    // 4. iOS latest:N -- "ios:latest:2" from [16, 17, 18] expands to [17, 18]
+    // 4. iOS latest:N -- "ios:latest:2" from [16, 17, 18] expands to [18, 17] (latest first)
     #[test]
     fn ios_latest_n() {
         let spec = parse_os_version("ios:latest:2").expect("should parse");
@@ -156,17 +155,17 @@ mod tests {
             }
         );
         let resolved = resolve_latest(Platform::Ios, 2, &[16, 17, 18]);
-        assert_eq!(resolved, vec![17, 18]);
+        assert_eq!(resolved, vec![18, 17]);
     }
 
-    // 5. iOS latest:3 -- from [16, 17, 18] expands to [16, 17, 18]
+    // 5. iOS latest:3 -- from [16, 17, 18] expands to [18, 17, 16] (latest first)
     #[test]
     fn ios_latest_3() {
         let resolved = resolve_latest(Platform::Ios, 3, &[16, 17, 18]);
-        assert_eq!(resolved, vec![16, 17, 18]);
+        assert_eq!(resolved, vec![18, 17, 16]);
     }
 
-    // 6. iOS latest:N exceeds available -- "ios:latest:5" from [17, 18] -> [17, 18]
+    // 6. iOS latest:N exceeds available -- "ios:latest:5" from [17, 18] -> [18, 17]
     #[test]
     fn ios_latest_n_exceeds_available() {
         let spec = parse_os_version("ios:latest:5").expect("should parse");
@@ -178,7 +177,7 @@ mod tests {
             }
         );
         let resolved = resolve_latest(Platform::Ios, 5, &[17, 18]);
-        assert_eq!(resolved, vec![17, 18]);
+        assert_eq!(resolved, vec![18, 17]);
     }
 
     // 7. Android exact API level -- "android:34" matches 34
@@ -240,7 +239,7 @@ mod tests {
             }
         );
         let resolved = resolve_latest(Platform::Android, 2, &[31, 33, 34]);
-        assert_eq!(resolved, vec![33, 34]);
+        assert_eq!(resolved, vec![34, 33]);
     }
 
     // 11. Invalid platform -- "windows:11" -> error

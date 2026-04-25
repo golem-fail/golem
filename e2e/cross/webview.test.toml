@@ -4,9 +4,13 @@ tags = ["cross-platform", "webview", "interaction"]
 
 [[flow.apps]]
 name = "app"
+# Multi-block form = pinned-tuple semantics. WebView rendering differs
+# noticeably by form factor within each platform, so we deliberately
+# target an iPad on iOS and a phone on Android rather than letting the
+# scheduler pick axis-independent combos.
 [[flow.apps.devices]]
 os = "ios:latest"
-type = "phone"
+type = "tablet"
 
 [[flow.apps.devices]]
 os = "android:latest"

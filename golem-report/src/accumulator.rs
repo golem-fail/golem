@@ -260,6 +260,7 @@ impl ReportAccumulator {
                 device_name: Some(flow.device_id.0),
                 os_major: flow.os_major,
                 perf_snapshots: Vec::new(),
+                covered_axes: Vec::new(),
                 started_at: flow.started_at.map(iso8601_utc),
                 finished_at: flow.finished_at.map(iso8601_utc),
             }

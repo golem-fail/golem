@@ -290,6 +290,12 @@ pub struct FlowReport {
     pub started_at: Option<String>,
     /// ISO-8601 UTC wall-clock when the flow finished.
     pub finished_at: Option<String>,
+    /// Human-readable list of coverage axes this run ticked, derived
+    /// from the FlowRun's slot. Populated when the run came from a
+    /// non-trivial tick-box expansion. Examples: `["ios", "v26",
+    /// "tablet"]`. Renderers surface this so users see which axes a
+    /// Min/Smart run actually covered.
+    pub covered_axes: Vec<String>,
 }
 
 /// Install script result (per `(device, bundle)` across the whole suite).

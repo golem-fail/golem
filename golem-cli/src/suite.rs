@@ -8,13 +8,89 @@ use golem_devices::{DeviceInfo, DeviceState, Platform};
 use golem_driver::android::AndroidDriver;
 use golem_driver::ios::IosDriver;
 use golem_driver::PlatformDriver;
-use golem_orchestrator::{device_matches_slot, plan, DeviceSlot, FlowRun, InstallEntry};
+use golem_orchestrator::{
+    device_matches_slot, plan, CoverageGroup, DeviceSlot, FlowRun, InstallEntry,
+};
 use golem_parser::FlowFile;
 use golem_report::{FlowReport, SuiteReport};
 use golem_runner::capture::CaptureConfig;
 use golem_runner::context::ExecutionContext;
 use golem_runner::executor::execute_flow;
 use golem_vars::VariableStore;
+
+/// The scheduler picker needs a concrete `Platform` per slot. Every
+/// generator path — `Full`, `Min`, `Smart`, `One` — routes partial
+/// tick-boxes through `cover_and_union` / cross-product before emitting
+/// FlowRuns, so `DeviceSlot.platform` is always `Some(_)` by the time
+/// slots land here. This helper exists only to make the invariant loud:
+/// if a `None` slot ever leaks through (planner regression), panic so
+/// the bug surfaces instead of silently running on one platform.
+///
+/// The "retire `slot_platform_or_ios`" roadmap entry tracks widening
+/// the scheduler itself to `Option<Platform>` — the dispatcher would
+/// then look across both iOS and Android booted devices for a match,
+/// enabling genuinely cross-platform slots.
+fn slot_platform_or_ios(slot: &golem_orchestrator::DeviceSlot) -> golem_devices::Platform {
+    slot.platform.expect(
+        "planner invariant violated: a platform-None slot reached the \
+         scheduler. `cover_and_union` should always pin a platform — \
+         investigate the generator path that produced this slot.",
+    )
+}
+
+/// Render a device's coverage axes — the human-readable axis-value list
+/// that tells the user which tick boxes this run satisfied. Example:
+/// `["ios", "v26", "tablet"]`. Populated onto `FlowReport.covered_axes`
+/// so renderers can surface coverage without plumbing the slot through.
+fn device_covered_axes(device: &DeviceInfo) -> Vec<String> {
+    vec![
+        device.platform.to_string(),
+        format!("v{}", device.os_major),
+        device.device_type.to_string(),
+    ]
+}
+
+/// Execute-time coverage progress for one `CoverageGroup`.
+///
+/// - `ticked` — pool indices that at least one picked device has satisfied.
+/// - `runs` — count of successful FlowRuns in the group (used by `One` /
+///   any future JIT-N to cap runs independently of tick coverage).
+///
+/// The scheduler consults [`is_group_complete`] before each spawn; once
+/// the stop condition is met, remaining group members short-circuit with
+/// no FlowReport so they don't pollute suite results.
+#[derive(Debug, Default)]
+struct GroupProgress {
+    ticked: std::collections::HashSet<usize>,
+    runs: u32,
+}
+
+/// A group is done when either the run cap is hit or every pool box has
+/// been ticked by a successful run. `max_runs = None` + empty pool → never
+/// complete (defensive; the planner guards against empty pools).
+fn is_group_complete(group: &CoverageGroup, progress: &GroupProgress) -> bool {
+    if let Some(max) = group.max_runs {
+        if progress.runs >= max {
+            return true;
+        }
+    }
+    if !group.boxes.is_empty() && progress.ticked.len() >= group.boxes.len() {
+        return true;
+    }
+    false
+}
+
+/// Pool indices a device ticks — used to credit bonus coverage when a
+/// picked device coincidentally satisfies other pool entries beyond the
+/// ones the FlowRun pre-declared in `covers_boxes`.
+fn pool_ticks_for_device(device: &DeviceInfo, group: &CoverageGroup) -> Vec<usize> {
+    group
+        .boxes
+        .iter()
+        .enumerate()
+        .filter_map(|(i, b)| if device_matches_slot(device, b) { Some(i) } else { None })
+        .collect()
+}
 
 /// Configuration for a suite run.
 pub struct SuiteConfig {
@@ -52,6 +128,10 @@ pub struct SuiteConfig {
     /// inherit bundle/install_script/install_timeout_ms/devices from
     /// matching entries by name.
     pub project_apps: Vec<golem_parser::ProjectAppConfig>,
+    /// CLI `--coverage` override. When Some, every flow's coverage
+    /// strategy is forced to this value regardless of `[flow.options]`.
+    /// Useful for quick smoke runs: `--coverage one`.
+    pub coverage_override: Option<golem_parser::CoverageStrategy>,
 }
 
 impl Default for SuiteConfig {
@@ -72,6 +152,7 @@ impl Default for SuiteConfig {
             no_results: false,
             project_root: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             project_apps: Vec::new(),
+            coverage_override: None,
         }
     }
 }
@@ -186,6 +267,7 @@ impl SuiteRunner {
             &self.config.project_apps,
             &self.config.project_root,
             self.config.platform,
+            self.config.coverage_override,
         )
         .await?;
 
@@ -294,10 +376,26 @@ impl SuiteRunner {
                 os_major: None,
                 perf_snapshots: vec![],
                 skipped_reason: None,
+                covered_axes: Vec::new(),
                 started_at: None,
                 finished_at: None,
             });
         }
+
+        // Execute-time coverage tracker for `One` / `Smart` groups. The
+        // scheduler consults this before each spawn: once a group's stop
+        // condition is met (max_runs hit or all pool boxes ticked), every
+        // remaining member short-circuits. Built once per suite.
+        let coverage_groups = Arc::new(parsed.coverage_groups.clone());
+        let coverage_progress: Arc<
+            tokio::sync::Mutex<std::collections::HashMap<usize, GroupProgress>>,
+        > = {
+            let mut init = std::collections::HashMap::new();
+            for idx in 0..parsed.coverage_groups.len() {
+                init.insert(idx, GroupProgress::default());
+            }
+            Arc::new(tokio::sync::Mutex::new(init))
+        };
 
         // Spawn one worker per FlowRun. The ResourceManager gates how many
         // run concurrently: `try_allocate` fails when RAM/concurrency caps
@@ -324,6 +422,10 @@ impl SuiteRunner {
             let no_perf = self.config.no_perf;
             let debug = self.config.debug;
             let project_root = self.config.project_root.clone();
+            let coverage_groups_c = coverage_groups.clone();
+            let coverage_progress_c = coverage_progress.clone();
+            let coverage_group_idx = run.coverage_group;
+            let covers_boxes = run.covers_boxes.clone();
 
             handles.push(tokio::spawn(async move {
                 execute_flow_run(
@@ -346,6 +448,12 @@ impl SuiteRunner {
                         debug,
                         project_root,
                     },
+                    CoverageCtx {
+                        groups: coverage_groups_c,
+                        progress: coverage_progress_c,
+                        group_idx: coverage_group_idx,
+                        covers_boxes,
+                    },
                 )
                 .await
             }));
@@ -367,6 +475,7 @@ impl SuiteRunner {
                         os_major: None,
                         perf_snapshots: vec![],
                         skipped_reason: None,
+                        covered_axes: Vec::new(),
                         started_at: None,
                         finished_at: None,
                     });
@@ -468,6 +577,17 @@ struct FlowRunConfig {
     project_root: PathBuf,
 }
 
+/// Coverage-group context plumbed into every FlowRun worker. `group_idx`
+/// is `None` for `Min` / `Full` (no group gating); `Some(i)` points at
+/// `groups[i]`, and `covers_boxes` lists pool indices this run will tick
+/// on success. `progress` is the shared live tracker.
+struct CoverageCtx {
+    groups: Arc<Vec<CoverageGroup>>,
+    progress: Arc<tokio::sync::Mutex<std::collections::HashMap<usize, GroupProgress>>>,
+    group_idx: Option<usize>,
+    covers_boxes: Vec<usize>,
+}
+
 /// Execute a single `FlowRun`: set up each slot (device + preinstall +
 /// companion + allocation), then spawn per-slot runners sharing a
 /// `FailureBarrier`. Releases every device back to the `ResourceManager`
@@ -490,6 +610,7 @@ async fn execute_flow_run(
     reg_port: u16,
     reg_state: crate::registration::RegistrationState,
     cfg: FlowRunConfig,
+    coverage: CoverageCtx,
 ) -> Vec<FlowReport> {
     let start = Instant::now();
     let flow_name = path
@@ -498,6 +619,16 @@ async fn execute_flow_run(
         .unwrap_or("unknown")
         .to_string();
 
+    // Pre-setup coverage gate: if another FlowRun in this group already
+    // satisfied the stop condition, skip entirely — don't acquire a
+    // device, don't preinstall, don't start a companion. Returning an
+    // empty Vec means no FlowReport is emitted for this run, which is
+    // the right behaviour for `coverage = "one"` / `"smart"`: only the
+    // runs that actually happened appear in the summary.
+    if coverage_group_done(&coverage).await {
+        return Vec::new();
+    }
+
     let create_if_missing = flow
         .flow
         .options
@@ -505,11 +636,11 @@ async fn execute_flow_run(
         .and_then(|o| o.create_if_missing)
         .unwrap_or(false);
 
-    // Phase 1 per-slot: find device, preinstall apps for that slot's
-    // platform, ensure companion, allocate. Setup runs sequentially across
-    // slots — typical flow has one slot; chat-test flows have 2 slots on
-    // different platforms so sequential setup is fine (installs serialize
-    // on `project_lock` anyway).
+    // Per-slot setup: find device, preinstall apps for that slot's
+    // platform, ensure companion, allocate. Setup runs sequentially
+    // across slots — typical flow has one slot; chat-test flows have 2
+    // slots on different platforms so sequential setup is fine
+    // (installs serialize on `project_lock` anyway).
     let mut device_setups: Vec<(DeviceInfo, Platform, u16)> = Vec::new();
     for slot in &slots {
         match setup_slot(
@@ -526,7 +657,7 @@ async fn execute_flow_run(
         )
         .await
         {
-            Ok((device, port)) => device_setups.push((device, slot.platform, port)),
+            Ok((device, port)) => device_setups.push((device, slot_platform_or_ios(slot), port)),
             Err(e) => {
                 event_tx.emit(
                     golem_events::DeviceId("suite".into()),
@@ -552,6 +683,7 @@ async fn execute_flow_run(
             os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            covered_axes: Vec::new(),
             started_at: None,
             finished_at: None,
         }];
@@ -561,6 +693,22 @@ async fn execute_flow_run(
         .iter()
         .map(|(d, _, _)| d.udid.clone())
         .collect();
+
+    // Post-setup coverage gate: a concurrent group member may have
+    // succeeded while we were booting / installing. If so, release our
+    // devices and return empty — the work we did was wasted but at
+    // least the flow itself doesn't run.
+    if coverage_group_done(&coverage).await {
+        for udid in &allocated_udids {
+            resource_mgr.release(udid);
+        }
+        return Vec::new();
+    }
+
+    // Clone the picked devices so we can compute bonus ticks after the
+    // flow finishes (`device_setups` is moved into the spawn loop below).
+    let picked_devices: Vec<DeviceInfo> =
+        device_setups.iter().map(|(d, _, _)| d.clone()).collect();
 
     // Per-FlowRun barrier: a device failing at step N aborts the other
     // slot(s) at step ≥ N. MUST stay per-FlowRun — step counts only compare
@@ -622,6 +770,7 @@ async fn execute_flow_run(
                     os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
+                    covered_axes: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 });
@@ -633,7 +782,45 @@ async fn execute_flow_run(
         resource_mgr.release(udid);
     }
 
+    // If this run belongs to a coverage group and produced at least one
+    // success, update the shared tracker: record the pre-declared
+    // `covers_boxes` plus any bonus pool entries the picked devices
+    // happen to tick. The next group member will see the updated
+    // progress before it spawns.
+    if let Some(gi) = coverage.group_idx {
+        let any_success = reports.iter().any(|r| r.success);
+        if any_success {
+            let mut progress = coverage.progress.lock().await;
+            if let (Some(group), Some(p)) =
+                (coverage.groups.get(gi), progress.get_mut(&gi))
+            {
+                p.runs += 1;
+                for i in &coverage.covers_boxes {
+                    p.ticked.insert(*i);
+                }
+                for d in &picked_devices {
+                    for i in pool_ticks_for_device(d, group) {
+                        p.ticked.insert(i);
+                    }
+                }
+            }
+        }
+    }
+
     reports
+}
+
+/// Check whether the coverage group this FlowRun belongs to is already
+/// complete. Returns `false` for runs with no group (`Min`, `Full`).
+async fn coverage_group_done(coverage: &CoverageCtx) -> bool {
+    let Some(gi) = coverage.group_idx else {
+        return false;
+    };
+    let progress = coverage.progress.lock().await;
+    match (coverage.groups.get(gi), progress.get(&gi)) {
+        (Some(group), Some(p)) => is_group_complete(group, p),
+        _ => false,
+    }
 }
 
 /// Prepare one slot for flow execution:
@@ -660,7 +847,7 @@ async fn setup_slot(
     project_root: &Path,
     debug: bool,
 ) -> Result<(DeviceInfo, u16)> {
-    let platform = slot.platform;
+    let platform = slot_platform_or_ios(slot);
     let device = find_available_device(
         platform,
         Some(slot),
@@ -1463,6 +1650,7 @@ async fn run_flow_on_device(
                     os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: Some(reason),
+                    covered_axes: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 };
@@ -1492,6 +1680,7 @@ async fn run_flow_on_device(
                     os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: Some(reason),
+                    covered_axes: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 };
@@ -1518,6 +1707,7 @@ async fn run_flow_on_device(
                     os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: Some(reason),
+                    covered_axes: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 };
@@ -1572,6 +1762,7 @@ async fn run_flow_on_device(
                     os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: Some(reason),
+                    covered_axes: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 };
@@ -1630,6 +1821,7 @@ async fn run_flow_on_device(
                 os_major: None,
                 perf_snapshots: result.perf_snapshots,
                 skipped_reason: None,
+                covered_axes: device_covered_axes(&device),
                 started_at: None,
                 finished_at: None,
             }
@@ -1656,6 +1848,7 @@ async fn run_flow_on_device(
                 os_major: None,
                 perf_snapshots: vec![],
                 skipped_reason: None,
+                covered_axes: device_covered_axes(&device),
                 started_at: None,
                 finished_at: None,
             }
@@ -1989,6 +2182,7 @@ mod tests {
             os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            covered_axes: Vec::new(),
             started_at: None,
             finished_at: None,
         }
@@ -2008,6 +2202,7 @@ mod tests {
             os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            covered_axes: Vec::new(),
             started_at: None,
             finished_at: None,
         }
@@ -2294,13 +2489,14 @@ mod tests {
 
     fn test_slot(apps: &[&str]) -> DeviceSlot {
         DeviceSlot {
-            platform: Platform::Ios,
+            platform: Some(Platform::Ios),
             os_version: None,
             device_type: None,
             physical: None,
             name: None,
             playstore: None,
             accessibility_label: None,
+            booted: None,
             apps: apps.iter().map(|s| s.to_string()).collect(),
         }
     }

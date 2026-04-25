@@ -341,6 +341,7 @@ mod tests {
             os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            covered_axes: Vec::new(),
             started_at: None,
             finished_at: None,
         }
@@ -364,6 +365,7 @@ mod tests {
                     os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
+                    covered_axes: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 },
@@ -379,6 +381,7 @@ mod tests {
                     os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
+                    covered_axes: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 },
@@ -394,6 +397,7 @@ mod tests {
                     os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
+                    covered_axes: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 },
@@ -412,6 +416,7 @@ mod tests {
                     os_major: None,
                     perf_snapshots: vec![],
                     skipped_reason: None,
+                    covered_axes: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 },
@@ -503,6 +508,7 @@ mod tests {
             os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            covered_axes: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -590,6 +596,7 @@ mod tests {
             os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            covered_axes: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -624,6 +631,7 @@ mod tests {
             os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            covered_axes: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -680,6 +688,7 @@ mod tests {
             os_major: None,
             perf_snapshots: vec![sample_perf_snapshot()],
             skipped_reason: None,
+            covered_axes: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -711,6 +720,7 @@ mod tests {
             os_major: None,
             perf_snapshots: vec![],
             skipped_reason: None,
+            covered_axes: Vec::new(),
             started_at: None,
             finished_at: None,
         };

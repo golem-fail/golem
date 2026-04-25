@@ -2,14 +2,17 @@
 name = "Assertions test"
 tags = ["cross-platform", "assertions", "smoke"]
 
+[flow.options]
+# Explicit Min — fewest devices that tick every axis. Behaviour matches
+# the Smart default today, but the annotation documents that we want
+# deterministic plan-time coverage (not execute-time adaptive) for this
+# assertion sweep.
+coverage = "min"
+
 [[flow.apps]]
 name = "app"
 [[flow.apps.devices]]
-os = "ios:latest"
-type = "phone"
-
-[[flow.apps.devices]]
-os = "android:latest"
+os = ["ios:latest", "android:latest"]
 type = "phone"
 
 [[block]]

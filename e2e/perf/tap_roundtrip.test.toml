@@ -4,12 +4,10 @@ tags = ["perf", "tap", "roundtrip", "latency"]
 
 [[flow.apps]]
 name = "app"
+# `:latest:2` runs the perf comparison across the two most-recent
+# iOS majors — catches perf regressions introduced between OS versions.
 [[flow.apps.devices]]
-os = "ios:latest"
-type = "phone"
-
-[[flow.apps.devices]]
-os = "android:latest"
+os = ["ios:latest:2", "android:latest"]
 type = "phone"
 
 [[block]]

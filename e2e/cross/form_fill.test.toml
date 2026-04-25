@@ -2,15 +2,16 @@
 name = "Cross-platform complete form fill flow"
 tags = ["cross-platform", "form", "text-input", "interaction"]
 
+[flow.options]
+# Form layout is a regression matrix — every (platform × type) combo
+# needs independent validation, so force Cartesian expansion.
+coverage = "full"
+
 [[flow.apps]]
 name = "app"
 [[flow.apps.devices]]
-os = "ios:latest"
-type = "phone"
-
-[[flow.apps.devices]]
-os = "android:latest"
-type = "phone"
+os = ["ios:latest", "android:latest"]
+type = ["phone", "tablet"]
 
 [[block]]
 name = "fill_form_fields"

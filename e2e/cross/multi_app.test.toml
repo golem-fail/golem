@@ -5,11 +5,7 @@ tags = ["cross-platform", "multi-app"]
 [[flow.apps]]
 name = "app"
 [[flow.apps.devices]]
-os = "ios:latest"
-type = "phone"
-
-[[flow.apps.devices]]
-os = "android:latest"
+os = ["ios:latest", "android:latest"]
 type = "phone"
 
 [[flow.apps]]
@@ -18,11 +14,7 @@ bundle = "fail.golem.testb"
 install_script = { ios = "scripts/install-app-b-ios.sh" , android = "scripts/install-app-b-android.sh" }
 
 [[flow.apps.devices]]
-os = "ios:latest"
-type = "phone"
-
-[[flow.apps.devices]]
-os = "android:latest"
+os = ["ios:latest", "android:latest"]
 type = "phone"
 
 [[block]]

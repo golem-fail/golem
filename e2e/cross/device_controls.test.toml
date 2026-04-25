@@ -5,11 +5,7 @@ tags = ["cross-platform", "device", "controls", "rotation", "dark-mode"]
 [[flow.apps]]
 name = "app"
 [[flow.apps.devices]]
-os = "ios:latest"
-type = "phone"
-
-[[flow.apps.devices]]
-os = "android:latest"
+os = ["ios:latest", "android:latest"]
 type = "phone"
 
 [[block]]

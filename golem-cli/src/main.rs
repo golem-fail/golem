@@ -61,6 +61,17 @@ async fn main() -> anyhow::Result<()> {
                 }
             });
 
+            let coverage_override = args.coverage.as_deref().map(|c| match c {
+                "one" => golem_parser::CoverageStrategy::One,
+                "min" => golem_parser::CoverageStrategy::Min,
+                "smart" => golem_parser::CoverageStrategy::Smart,
+                "full" => golem_parser::CoverageStrategy::Full,
+                other => {
+                    eprintln!("Unknown coverage: {other}. Use 'one', 'min', 'smart', or 'full'.");
+                    std::process::exit(1);
+                }
+            });
+
             // Stream human output unless user explicitly chose non-human format.
             // Default (no --output) = human, so stream is on.
             let has_human_output = args.outputs.is_empty()
@@ -105,14 +116,31 @@ async fn main() -> anyhow::Result<()> {
                 no_results: args.no_results,
                 project_root,
                 project_apps: project_config.apps,
+                coverage_override,
             };
 
             // Check if an orchestrator is already running
             if let Ok(stream) = orchestrator::try_connect().await {
-                // Client mode: submit to existing orchestrator
+                // Client mode: submit to existing orchestrator. The
+                // server reloads golem.toml from `project_root` so app
+                // bundle IDs and device defaults match what the CLI saw
+                // locally (ProjectAppConfig isn't Serialize, so we pass
+                // the path and let the server re-parse).
                 let config_json = serde_json::json!({
                     "platform": args.platform,
                     "seed": args.seed,
+                    "verbose": config.verbose,
+                    "debug": config.debug,
+                    "no_perf": config.no_perf,
+                    "no_clean": config.no_clean,
+                    "no_teardown": config.no_teardown,
+                    "keep_devices": config.keep_devices,
+                    "no_results": config.no_results,
+                    "start": config.start,
+                    "vars": config.vars,
+                    "output_dir": config.output_dir.display().to_string(),
+                    "project_root": config.project_root.display().to_string(),
+                    "coverage": args.coverage,
                 });
                 let all_passed = orchestrator::submit_and_wait(stream, &flow_paths, &config_json, config.verbose, config.debug).await?;
                 if !all_passed {

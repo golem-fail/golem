@@ -5,11 +5,7 @@ tags = ["cross-platform", "interaction", "dialog"]
 [[flow.apps]]
 name = "app"
 [[flow.apps.devices]]
-os = "ios:latest"
-type = "phone"
-
-[[flow.apps.devices]]
-os = "android:latest"
+os = ["ios:latest", "android:latest"]
 type = "phone"
 
 # Dialog A: CSS display toggle (always in DOM, hidden via display:none)
