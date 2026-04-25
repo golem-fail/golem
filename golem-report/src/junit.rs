@@ -194,13 +194,23 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
         }
     }
 
-    // Properties: os_major (when known) + perf snapshots. Emit a single
-    // <properties> block so CI renderers see os_major alongside perf.
-    let has_props = report.os_major.is_some() || !report.perf_snapshots.is_empty();
+    // Properties: os_major (when known) + perf snapshots + covered axes.
+    // Emit a single <properties> block so CI renderers see everything
+    // together.
+    let has_props = report.os_major.is_some()
+        || !report.perf_snapshots.is_empty()
+        || !report.covered_axes.is_empty();
     if has_props {
         let _ = writeln!(out, "    <properties>");
         if let Some(os) = report.os_major {
             let _ = writeln!(out, "      <property name=\"os_major\" value=\"{os}\"/>");
+        }
+        if !report.covered_axes.is_empty() {
+            let _ = writeln!(
+                out,
+                "      <property name=\"covered_axes\" value=\"{}\"/>",
+                xml_escape(&report.covered_axes.join(","))
+            );
         }
         for snap in &report.perf_snapshots {
             if let Some(v) = snap.memory_mb {
@@ -811,6 +821,33 @@ mod tests {
             "SHALL contain perf property name with label"
         );
         assert!(xml.contains("142.5"), "SHALL contain memory_mb value");
+    }
+
+    #[test]
+    fn junit_includes_covered_axes_property() {
+        let flow = FlowReport {
+            flow_name: "cov_flow".to_string(),
+            success: true,
+            step_results: vec![success_step("launch", "", 100)],
+            warnings: vec![],
+            duration_ms: 100,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            os_major: None,
+            perf_snapshots: vec![],
+            skipped_reason: None,
+            covered_axes: vec!["ios".into(), "v26".into(), "tablet".into()],
+            started_at: None,
+            finished_at: None,
+        };
+
+        let xml = format_flow_junit(&flow);
+        assert!(xml.contains("<properties>"), "SHALL emit <properties> when covered_axes set");
+        assert!(
+            xml.contains(r#"<property name="covered_axes" value="ios,v26,tablet"/>"#),
+            "SHALL contain covered_axes property with comma-joined value; got:\n{xml}"
+        );
     }
 
     #[test]

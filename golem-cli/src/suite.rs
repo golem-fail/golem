@@ -397,6 +397,21 @@ impl SuiteRunner {
             Arc::new(tokio::sync::Mutex::new(init))
         };
 
+        // Per-group dispatch locks: groups with a `max_runs` cap (today:
+        // `one`) need sibling FlowRuns to run sequentially, otherwise
+        // parallel spawns race past the gate and every group member
+        // installs before the first success can update progress. Smart
+        // groups (`max_runs = None`) don't need this — parallel is
+        // faster since Smart wants every pool box ticked.
+        let dispatch_locks: std::collections::HashMap<usize, Arc<tokio::sync::Mutex<()>>> =
+            parsed
+                .coverage_groups
+                .iter()
+                .enumerate()
+                .filter(|(_, g)| g.max_runs.is_some())
+                .map(|(idx, _)| (idx, Arc::new(tokio::sync::Mutex::new(()))))
+                .collect();
+
         // Spawn one worker per FlowRun. The ResourceManager gates how many
         // run concurrently: `try_allocate` fails when RAM/concurrency caps
         // would be exceeded, and workers retry on a 2s backoff.
@@ -426,6 +441,9 @@ impl SuiteRunner {
             let coverage_progress_c = coverage_progress.clone();
             let coverage_group_idx = run.coverage_group;
             let covers_boxes = run.covers_boxes.clone();
+            let dispatch_lock = run
+                .coverage_group
+                .and_then(|gi| dispatch_locks.get(&gi).cloned());
 
             handles.push(tokio::spawn(async move {
                 execute_flow_run(
@@ -453,6 +471,7 @@ impl SuiteRunner {
                         progress: coverage_progress_c,
                         group_idx: coverage_group_idx,
                         covers_boxes,
+                        dispatch_lock,
                     },
                 )
                 .await
@@ -581,11 +600,22 @@ struct FlowRunConfig {
 /// is `None` for `Min` / `Full` (no group gating); `Some(i)` points at
 /// `groups[i]`, and `covers_boxes` lists pool indices this run will tick
 /// on success. `progress` is the shared live tracker.
+///
+/// `dispatch_lock` is `Some` only for groups with `max_runs = Some(_)`
+/// (today: `coverage = "one"`). Every member of such a group shares one
+/// `Mutex`; the worker acquires it before the pre-setup gate and drops it
+/// after progress is updated. Siblings block until the first run fully
+/// completes, so the second+ always sees an accurate gate state — no
+/// parallel double-install on the losing devices. Groups with
+/// `max_runs = None` (today: `smart`) get `None` here: parallel runs are
+/// useful because Smart's stop condition is "every pool box ticked", which
+/// is faster with concurrent progress.
 struct CoverageCtx {
     groups: Arc<Vec<CoverageGroup>>,
     progress: Arc<tokio::sync::Mutex<std::collections::HashMap<usize, GroupProgress>>>,
     group_idx: Option<usize>,
     covers_boxes: Vec<usize>,
+    dispatch_lock: Option<Arc<tokio::sync::Mutex<()>>>,
 }
 
 /// Execute a single `FlowRun`: set up each slot (device + preinstall +
@@ -618,6 +648,16 @@ async fn execute_flow_run(
         .and_then(|s| s.to_str())
         .unwrap_or("unknown")
         .to_string();
+
+    // Serialise within the coverage group when it has a run cap (today:
+    // `coverage = "one"`). Hold the lock for the whole body so siblings
+    // wait until this run's progress update is visible. Parallel groups
+    // (`smart`, no group) pass `None` → no blocking.
+    let _dispatch_guard = if let Some(lock) = coverage.dispatch_lock.clone() {
+        Some(lock.lock_owned().await)
+    } else {
+        None
+    };
 
     // Pre-setup coverage gate: if another FlowRun in this group already
     // satisfied the stop condition, skip entirely — don't acquire a

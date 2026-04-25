@@ -6,7 +6,7 @@
 //! # Format overview
 //!
 //! ```text
-//! F:flow_name dev:platform/name os:major d:duration_ms [seed:N] [t0+:offset]
+//! F:flow_name dev:platform/name os:major d:duration_ms [seed:N] [cov:axis1,axis2] [t0+:offset]
 //!  B:block_name [i:N]
 //!  +action:target d:duration
 //!  ~action:target d:duration message
@@ -160,6 +160,9 @@ pub(crate) fn format_flow_toon_anchored(
     if let Some(seed) = report.seed {
         let _ = write!(out, " seed:{seed}");
     }
+    if !report.covered_axes.is_empty() {
+        let _ = write!(out, " cov:{}", report.covered_axes.join(","));
+    }
     let _ = write!(
         out,
         "{}",
@@ -245,7 +248,7 @@ pub fn format_suite_toon(report: &SuiteReport) -> String {
     // Schema header for LLM comprehension.
     // `total:` line is self-describing (appears once at end); `F=`, `B=`,
     // `R=` repeat per flow so their compact keys pay off the schema cost.
-    out.push_str("# F=flow-run B=block R=result(passed/warned/failed) d:N=duration_ms os:N=os_major\n");
+    out.push_str("# F=flow-run B=block R=result(passed/warned/failed) d:N=duration_ms os:N=os_major cov:a,b,c=covered_axes\n");
     out.push_str("# step: +=pass !=fail ~=warn -=skip @x,y=position b=bounds(x,y,w,h) s:N=scroll_attempts t:N/M=trees/nodes\n");
     out.push_str("# perf: P block:app:device:iteration mem=MB cpu=% thr=threads fd=file_descriptors disk=MB net_rx/tx=KB launch=ms\n");
     out.push_str("# install: I app:bundle:device R=ok/fail d:ms os:N (device = `{platform}/{name}`)\n");
@@ -472,6 +475,28 @@ mod tests {
         let out = format_flow_toon(&report);
         let first_line = out.lines().next().expect("should have at least one line");
         assert_eq!(first_line, "F:login_flow d:10200 seed:847291036");
+    }
+
+    // Flow header includes covered_axes when populated ----------------
+
+    #[test]
+    fn flow_header_includes_covered_axes() {
+        let mut report = sample_flow(true, None);
+        report.covered_axes = vec!["ios".into(), "v26".into(), "tablet".into()];
+        let out = format_flow_toon(&report);
+        let first_line = out.lines().next().expect("header line");
+        assert_eq!(first_line, "F:login_flow d:10200 cov:ios,v26,tablet");
+    }
+
+    #[test]
+    fn flow_header_omits_covered_axes_when_empty() {
+        let report = sample_flow(true, None);
+        let out = format_flow_toon(&report);
+        let first_line = out.lines().next().expect("header line");
+        assert!(
+            !first_line.contains(" cov:"),
+            "SHALL NOT emit cov: when covered_axes empty; got: {first_line}"
+        );
     }
 
     // 7. Flow result line shows PASS/FAIL with counts ------------------

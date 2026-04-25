@@ -56,6 +56,8 @@ struct JsonFlow {
     warnings: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     perf_snapshots: Vec<JsonPerfSnapshot>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    covered_axes: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -178,6 +180,7 @@ fn flow_to_json(report: &FlowReport) -> JsonFlow {
         steps: report.step_results.iter().map(step_to_json).collect(),
         warnings: report.warnings.clone(),
         perf_snapshots: report.perf_snapshots.iter().map(perf_to_json).collect(),
+        covered_axes: report.covered_axes.clone(),
     }
 }
 
@@ -608,11 +611,31 @@ mod tests {
         assert!(v.get("seed").is_none(), "seed SHALL be absent");
         assert!(v.get("screenshot").is_none(), "screenshot SHALL be absent");
         assert!(v.get("device").is_none(), "device SHALL be absent");
+        assert!(v.get("covered_axes").is_none(), "covered_axes SHALL be absent when empty");
 
         // Step-level optional fields
         let step = &v["steps"][0];
         assert!(step.get("error").is_none(), "error SHALL be absent");
         assert!(step.get("warning").is_none(), "warning SHALL be absent");
+    }
+
+    // Coverage axes render as JSON array ------------------------------
+
+    #[test]
+    fn covered_axes_rendered_as_array() {
+        let mut report = sample_flow();
+        report.covered_axes = vec!["ios".into(), "v26".into(), "tablet".into()];
+
+        let json_str = format_flow_json(&report).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        let axes = v["covered_axes"]
+            .as_array()
+            .expect("covered_axes SHALL be an array");
+        assert_eq!(axes.len(), 3);
+        assert_eq!(axes[0], "ios");
+        assert_eq!(axes[1], "v26");
+        assert_eq!(axes[2], "tablet");
     }
 
     // 11. Skipped step has correct outcome ----------------------------
