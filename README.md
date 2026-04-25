@@ -240,10 +240,10 @@ perf_cpu_error_percent = 95.0
 
 | Strategy | Behaviour |
 |---|---|
-| `smart` (default) | Partial-axis coverage; ticks every axis value using the fewest FlowRuns while opportunistically using spare devices in parallel. (Currently behaves as `min` — execute-time adaptive scheduling is a follow-up.) |
-| `min` | Plan-time greedy set-cover — fewest devices that tick every axis value. Waits on contested devices. |
+| `smart` (default) | Plan-time set-cover picks fully-pinned slots; a shared coverage group lets the scheduler stop dispatching members once every axis value has been ticked (including bonus ticks — an iPad v26 ticks both the `tablet` and `ios:26` boxes). |
+| `min` | Plan-time greedy set-cover — fewest devices that tick every axis value. Every emitted FlowRun runs; no early-stop. |
 | `full` | Cartesian product — one FlowRun per (os × type × …) combination. Use when every combo needs independent validation. |
-| `one` | Single FlowRun covering any one box — local smoke testing. Tolerates underspec (`ios:latest:2` with only one version available). |
+| `one` | Same machinery as `smart` with `max_runs = 1`: first successful run ends the group. Local smoke testing. Tolerates underspec (`ios:latest:2` with only one version available). |
 
 **Two ways to write device constraints**, with different meanings:
 
