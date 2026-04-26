@@ -18,6 +18,17 @@ use golem_runner::context::ExecutionContext;
 use golem_runner::executor::execute_flow;
 use golem_vars::VariableStore;
 
+/// Format the human-readable target string used in install events:
+/// `iPhone 16e (ios/v18/phone)`. Single-source so events emitted from
+/// pre-install (`InstallStarted`/`Skipped`) and per-flow install paths
+/// agree on every character.
+fn format_install_target(device: &DeviceInfo, platform_str: &str) -> String {
+    format!(
+        "{} ({}/v{}/{})",
+        device.name, platform_str, device.os_major, device.device_type
+    )
+}
+
 /// Render a device's coverage axes — the human-readable axis-value list
 /// that tells the user which tick boxes this run satisfied. Example:
 /// `["ios", "v26", "tablet"]`. Populated onto `FlowReport.covered_axes`
@@ -112,6 +123,14 @@ pub struct SuiteConfig {
     /// strategy is forced to this value regardless of `[flow.options]`.
     /// Useful for quick smoke runs: `--coverage one`.
     pub coverage_override: Option<golem_parser::CoverageStrategy>,
+    /// `--rebuild`: bypass the persistent install cache for this run
+    /// (rebuild + reinstall every (device, bundle)). The cache is still
+    /// written after a successful install.
+    pub rebuild: bool,
+    /// `--no-build`: skip build+install entirely. Devices that already
+    /// have the bundle installed run flows; devices that don't fail
+    /// loudly. The cache is untouched.
+    pub no_build: bool,
 }
 
 impl Default for SuiteConfig {
@@ -133,6 +152,8 @@ impl Default for SuiteConfig {
             project_root: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             project_apps: Vec::new(),
             coverage_override: None,
+            rebuild: false,
+            no_build: false,
         }
     }
 }
@@ -260,6 +281,26 @@ impl SuiteRunner {
         self.install_matrix = Arc::new(parsed.install_matrix.clone());
         self.flow_paths = Arc::new(flow_paths.to_vec());
         self.flow_runs = Arc::new(parsed.flow_runs.clone());
+
+        // Persistent install cache: load + fingerprint compute only when
+        // there's at least one install entry to gate. Empty matrices
+        // (test harnesses, flows with no `install_script`) skip the work
+        // entirely so suite startup stays fast.
+        let needs_cache = !parsed.install_matrix.is_empty() && !self.config.no_build;
+        if needs_cache {
+            let cache_path = self.config.project_root.join(".golem/install-cache.json");
+            if let Err(e) = self.install_cache.load_persistent(cache_path).await {
+                eprintln!("  [install] cache load failed ({e}) — continuing with empty cache");
+            }
+        }
+        let fingerprint = Arc::new(if needs_cache {
+            golem_runner::fingerprint::Fingerprint::compute(&self.config.project_root)
+        } else {
+            golem_runner::fingerprint::Fingerprint::None
+        });
+        if self.config.verbose && needs_cache {
+            eprintln!("  [install] source fingerprint: {}", fingerprint.short_label());
+        }
 
         // Suite-level event channel — ONE sink for every FlowRun worker,
         // every setup-phase emitter, and the plan summary. Previously the
@@ -417,6 +458,9 @@ impl SuiteRunner {
             let no_perf = self.config.no_perf;
             let debug = self.config.debug;
             let project_root = self.config.project_root.clone();
+            let fingerprint = fingerprint.clone();
+            let rebuild = self.config.rebuild;
+            let no_build = self.config.no_build;
             let coverage_groups_c = coverage_groups.clone();
             let coverage_progress_c = coverage_progress.clone();
             let coverage_group_idx = run.coverage_group;
@@ -445,6 +489,9 @@ impl SuiteRunner {
                         no_perf,
                         debug,
                         project_root,
+                        fingerprint,
+                        rebuild,
+                        no_build,
                     },
                     CoverageCtx {
                         groups: coverage_groups_c,
@@ -613,6 +660,13 @@ struct FlowRunConfig {
     no_perf: bool,
     debug: bool,
     project_root: PathBuf,
+    /// Source-tree fingerprint computed once at suite start. Used by the
+    /// persistent install cache to decide whether to skip build+install.
+    fingerprint: Arc<golem_runner::fingerprint::Fingerprint>,
+    /// CLI `--rebuild`: bypass cache read for this run; rebuild + write.
+    rebuild: bool,
+    /// CLI `--no-build`: skip build+install if device already has the bundle.
+    no_build: bool,
 }
 
 /// Build a synthetic `FlowReport` for a FlowRun short-circuited by the
@@ -761,6 +815,9 @@ async fn execute_flow_run(
             create_if_missing,
             &cfg.project_root,
             cfg.debug,
+            &cfg.fingerprint,
+            cfg.rebuild,
+            cfg.no_build,
         )
         .await
         {
@@ -962,6 +1019,9 @@ async fn setup_slot(
     create_if_missing: bool,
     project_root: &Path,
     debug: bool,
+    fingerprint: &golem_runner::fingerprint::Fingerprint,
+    rebuild: bool,
+    no_build: bool,
 ) -> Result<(DeviceInfo, u16)> {
     let device = find_available_device(
         slot.platform,
@@ -978,7 +1038,18 @@ async fn setup_slot(
         eprintln!("  Platform: {platform}");
     }
 
-    preinstall_for_device_scoped(&device, platform, install_matrix, install_cache, event_tx, project_root).await;
+    preinstall_for_device_scoped(
+        &device,
+        platform,
+        install_matrix,
+        install_cache,
+        event_tx,
+        project_root,
+        fingerprint,
+        rebuild,
+        no_build,
+    )
+    .await;
 
     // Reuse an existing healthy companion if one's already bound to a port
     // we can detect, otherwise spawn a fresh one via the registration path.
@@ -1065,6 +1136,7 @@ async fn setup_slot(
 /// Outcomes are written to `install_cache`; a later per-flow install
 /// check sees `Succeeded` / `FailedScript` and skips re-running or skips
 /// the flow respectively.
+#[allow(clippy::too_many_arguments)]
 async fn preinstall_for_device_scoped(
     device: &DeviceInfo,
     platform: Platform,
@@ -1072,6 +1144,9 @@ async fn preinstall_for_device_scoped(
     install_cache: &golem_runner::installer::InstallCache,
     event_tx: &golem_events::channel::EventSender,
     project_root: &Path,
+    fingerprint: &golem_runner::fingerprint::Fingerprint,
+    rebuild: bool,
+    no_build: bool,
 ) {
     let platform_str = platform.to_string();
     // Use the same device_label format as per-flow emission so
@@ -1089,10 +1164,83 @@ async fn preinstall_for_device_scoped(
         if !device_matches_entry_constraints(device, entry) {
             continue;
         }
-        // Helper writes the per-device install_cache outcome internally;
-        // preinstall ignores the Result — the per-flow check below will
-        // consult the cache and decide whether to skip.
-        let _ = run_install_with_build_coord(
+
+        let target = format_install_target(device, &platform_str);
+
+        // --no-build path: trust the device. If the bundle is installed,
+        // mark Succeeded and move on. If not, mark FailedScript with an
+        // actionable message — the per-flow install check will turn that
+        // into a loud flow failure.
+        if no_build {
+            let info = golem_runner::installed_state::query(device, &entry.bundle_id).await;
+            let key = (device.udid.clone(), entry.bundle_id.clone());
+            if info.installed {
+                emitter.emit(golem_events::EventKind::InstallSkipped {
+                    app_name: entry.app_name.clone(),
+                    bundle_id: entry.bundle_id.clone(),
+                    target: target.clone(),
+                    reason: "no-build: bundle present on device".to_string(),
+                });
+                install_cache
+                    .set(key, golem_runner::installer::InstallOutcome::Succeeded)
+                    .await;
+            } else {
+                let msg = format!(
+                    "--no-build: {} not installed on {}; drop --no-build or install manually",
+                    entry.bundle_id, device.name
+                );
+                install_cache
+                    .set(
+                        key,
+                        golem_runner::installer::InstallOutcome::FailedScript(msg),
+                    )
+                    .await;
+            }
+            continue;
+        }
+
+        // Strict cache gate (default): only consult on cache reads when
+        // not --rebuild. `rebuild=true` skips the read but still writes
+        // after a successful build, so the next run benefits.
+        if !rebuild {
+            match evaluate_cache_gates(install_cache, device, &entry.bundle_id, fingerprint).await {
+                CacheVerdict::Hit { label: _ } => {
+                    // On hit, the label (e.g. `git:abc1234`) is just the
+                    // source-fingerprint identity — informational at best,
+                    // not actionable. Misses are where the user needs
+                    // detail; on a hit, just say so and move on.
+                    emitter.emit(golem_events::EventKind::InstallSkipped {
+                        app_name: entry.app_name.clone(),
+                        bundle_id: entry.bundle_id.clone(),
+                        target: target.clone(),
+                        reason: "cache hit".into(),
+                    });
+                    install_cache
+                        .set(
+                            (device.udid.clone(), entry.bundle_id.clone()),
+                            golem_runner::installer::InstallOutcome::Succeeded,
+                        )
+                        .await;
+                    continue;
+                }
+                CacheVerdict::Miss { reason } => {
+                    // Skip the noisy "no prior cache entry" message — that's
+                    // the normal first-run case, not a cache invalidation.
+                    if !reason.starts_with("no prior cache entry") {
+                        emitter.emit(golem_events::EventKind::InstallCacheMiss {
+                            app_name: entry.app_name.clone(),
+                            bundle_id: entry.bundle_id.clone(),
+                            target: target.clone(),
+                            reason,
+                        });
+                    }
+                }
+            }
+        }
+
+        // Cache miss (or --rebuild): run the install script through the
+        // build-once coordinator, then record the new persistent entry.
+        let install_result = run_install_with_build_coord(
             &entry.script_path,
             project_root,
             &platform_str,
@@ -1104,7 +1252,120 @@ async fn preinstall_for_device_scoped(
             Some(&emitter),
         )
         .await;
+
+        if install_result.is_ok() {
+            // Capture device-side install state immediately after the
+            // install — `device_install_time` lets the next run detect
+            // an external reinstall that bumps the device's mtime.
+            let info = golem_runner::installed_state::query(device, &entry.bundle_id).await;
+            let persisted = golem_runner::installer::PersistedInstall {
+                fingerprint: fingerprint.clone(),
+                device_install_time: info.install_time,
+                installed_version: info.version,
+                installed_at: chrono::Utc::now(),
+            };
+            // Only write when the fingerprint is meaningful — a `None`
+            // fingerprint matches no future read, so storing it is wasted
+            // disk + risks confusion if the fingerprint becomes
+            // computable later.
+            if fingerprint.is_some() {
+                if let Err(e) = install_cache
+                    .set_persistent(&device.udid, &entry.bundle_id, persisted)
+                    .await
+                {
+                    eprintln!("  [install] failed to write cache: {e}");
+                }
+            }
+        }
     }
+}
+
+/// Outcome of evaluating the integrity gates for a `(device, bundle)`
+/// pair. Hits are summarised optimistically; misses carry a specific
+/// reason so a verbose log can explain *why* a build was needed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum CacheVerdict {
+    /// All gates passed. `label` is the source-fingerprint identity.
+    Hit { label: String },
+    /// At least one gate failed. `reason` is human-readable.
+    Miss { reason: String },
+}
+
+/// Pure gate decision over already-fetched inputs. Returns the verdict
+/// plus a specific miss reason when applicable. Split out from
+/// [`evaluate_cache_gates`] so unit tests can exercise every gate
+/// combination without faking I/O.
+fn gate_decision(
+    entry: Option<&golem_runner::installer::PersistedInstall>,
+    current_fingerprint: &golem_runner::fingerprint::Fingerprint,
+    info: &golem_runner::installed_state::DeviceInstallInfo,
+) -> CacheVerdict {
+    if !current_fingerprint.is_some() {
+        return CacheVerdict::Miss {
+            reason: "fingerprint unavailable (no git, no readable source tree)".into(),
+        };
+    }
+    let Some(entry) = entry else {
+        return CacheVerdict::Miss {
+            reason: "no prior cache entry for this (device, bundle)".into(),
+        };
+    };
+    if &entry.fingerprint != current_fingerprint {
+        return CacheVerdict::Miss {
+            reason: format!(
+                "source fingerprint changed ({} → {})",
+                entry.fingerprint.short_label(),
+                current_fingerprint.short_label(),
+            ),
+        };
+    }
+    if !info.installed {
+        return CacheVerdict::Miss {
+            reason: "bundle no longer installed on device".into(),
+        };
+    }
+    // Install-time check: only fires when both sides recorded a
+    // timestamp. If either is `None`, the gate is skipped silently —
+    // fingerprint+presence alone are sufficient.
+    if let (Some(stored), Some(current)) = (entry.device_install_time, info.install_time) {
+        // 2s tolerance for filesystem mtime quantisation.
+        if (stored - current).num_seconds().abs() > 2 {
+            return CacheVerdict::Miss {
+                reason: format!(
+                    "device install-time differs ({} cached, {} on device — external reinstall?)",
+                    stored.format("%Y-%m-%dT%H:%M:%SZ"),
+                    current.format("%Y-%m-%dT%H:%M:%SZ"),
+                ),
+            };
+        }
+    }
+    CacheVerdict::Hit {
+        label: current_fingerprint.short_label(),
+    }
+}
+
+/// Evaluate the three integrity gates and return a [`CacheVerdict`].
+///
+/// Gates:
+/// 1. Persistent entry exists for `(udid, bundle)` with a non-`None`
+///    fingerprint
+/// 2. Stored fingerprint equals the current source fingerprint
+/// 3. Device reports the bundle present AND its current install time
+///    matches the stored `device_install_time` (when available) — catches
+///    external reinstalls
+///
+/// Any gate failing → `CacheVerdict::Miss { reason }` with a specific
+/// human-readable cause. The caller emits the reason on a verbose log
+/// line and falls through to the build path.
+async fn evaluate_cache_gates(
+    cache: &golem_runner::installer::InstallCache,
+    device: &DeviceInfo,
+    bundle_id: &str,
+    current_fingerprint: &golem_runner::fingerprint::Fingerprint,
+) -> CacheVerdict {
+    let entry = cache.get_persistent(&device.udid, bundle_id).await;
+    let info = golem_runner::installed_state::query(device, bundle_id).await;
+    gate_decision(entry.as_ref(), current_fingerprint, &info)
 }
 
 /// Run the install script for one `(device, bundle)`, using a
@@ -1128,10 +1389,7 @@ async fn run_install_with_build_coord(
 ) -> anyhow::Result<()> {
     use golem_runner::installer::{BuildOutcome, BuildRole, InstallOutcome};
 
-    let target = format!(
-        "{} ({}/v{}/{})",
-        device.name, platform_str, device.os_major, device.device_type
-    );
+    let target = format_install_target(device, platform_str);
     let key = (device.udid.clone(), bundle_id.to_string());
 
     // Fast-path: per-device outcome already resolved.
@@ -2001,7 +2259,12 @@ async fn discover_all_devices(platform: Option<Platform>) -> Result<Vec<DeviceIn
     }
 
     if want_android {
-        match discover_android_devices_via_adb().await {
+        // `discover_android_devices` enumerates AVDs from
+        // `~/.android/avd` (so shutdown emulators are visible for
+        // auto-boot) and merges in any running devices not backed by an
+        // AVD (physical devices, unparseable configs). Symmetric with
+        // iOS where `discover_ios_devices` returns booted + shutdown.
+        match golem_devices::android::discover_android_devices().await {
             Ok(android) => out.extend(android),
             Err(e) if platform == Some(Platform::Android) => return Err(e),
             Err(_) => {}
@@ -2009,60 +2272,6 @@ async fn discover_all_devices(platform: Option<Platform>) -> Result<Vec<DeviceIn
     }
 
     Ok(out)
-}
-
-async fn discover_android_devices_via_adb() -> Result<Vec<DeviceInfo>> {
-    let output = tokio::process::Command::new("adb")
-        .args(["devices"])
-        .output()
-        .await?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut devices = Vec::new();
-    for line in stdout.lines().skip(1) {
-        let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() >= 2 && parts[1] == "device" {
-            let serial = parts[0].to_string();
-            // Query the actual OS version via `adb shell getprop`.
-            // Hardcoding `os_major: 0` would leak into display labels
-            // like `android/v0/phone` and break version-based slot
-            // matching in the Plan phase.
-            let sdk = tokio::process::Command::new("adb")
-                .args(["-s", &serial, "shell", "getprop", "ro.build.version.sdk"])
-                .output()
-                .await
-                .ok()
-                .filter(|o| o.status.success())
-                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-                .unwrap_or_default();
-            let release = tokio::process::Command::new("adb")
-                .args(["-s", &serial, "shell", "getprop", "ro.build.version.release"])
-                .output()
-                .await
-                .ok()
-                .filter(|o| o.status.success())
-                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-                .unwrap_or_default();
-            let os_major = sdk.parse::<u32>().unwrap_or(0);
-            devices.push(DeviceInfo {
-                name: serial.clone(),
-                udid: serial,
-                platform: Platform::Android,
-                device_type: golem_devices::DeviceType::Phone,
-                os_major,
-                os_version: release,
-                state: DeviceState::Booted,
-                physical: false,
-                playstore: false,
-                screen_width: None,
-                screen_height: None,
-                screen_scale: None,
-                last_booted: None,
-                runtime_id: None,
-                device_type_id: None,
-            });
-        }
-    }
-    Ok(devices)
 }
 
 /// Filter `booted` to those currently unallocated (per `ResourceManager`),
@@ -2231,14 +2440,22 @@ async fn find_available_device(
             golem_events::DeviceId("suite".into()),
             golem_events::EventKind::DeviceAutoBoot {
                 device_name: best.name.clone(),
-                slot_shape: shape,
+                slot_shape: shape.clone(),
             },
         );
-        golem_devices::lifecycle::boot_device(best).await?;
-        let booted_device = DeviceInfo {
-            state: DeviceState::Booted,
-            ..(*best).clone()
-        };
+        let boot_start = Instant::now();
+        // Returned DeviceInfo carries the post-boot udid (Android: real
+        // emulator-NNNN serial, not the AVD identifier). Subsequent
+        // adb-based operations need that to address the device.
+        let booted_device = golem_devices::lifecycle::boot_device(best).await?;
+        event_tx.emit(
+            golem_events::DeviceId("suite".into()),
+            golem_events::EventKind::DeviceAutoBootFinished {
+                device_name: best.name.clone(),
+                slot_shape: shape,
+                duration_ms: boot_start.elapsed().as_millis() as u64,
+            },
+        );
         resource_mgr.mark_golem_booted(booted_device.clone());
         return Ok(booted_device);
     }
@@ -2423,6 +2640,134 @@ mod tests {
         assert!(!config.keep_devices);
         assert!(config.seed.is_none());
         assert!(!config.no_perf);
+        assert!(!config.rebuild);
+        assert!(!config.no_build);
+    }
+
+    // ---------------------------------------------------------------
+    // gate_decision — every combination
+    // ---------------------------------------------------------------
+    fn make_entry(
+        fp: golem_runner::fingerprint::Fingerprint,
+        install_time: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> golem_runner::installer::PersistedInstall {
+        golem_runner::installer::PersistedInstall {
+            fingerprint: fp,
+            device_install_time: install_time,
+            installed_version: None,
+            installed_at: chrono::Utc::now(),
+        }
+    }
+
+    fn info_present(install_time: Option<chrono::DateTime<chrono::Utc>>) -> golem_runner::installed_state::DeviceInstallInfo {
+        golem_runner::installed_state::DeviceInstallInfo {
+            installed: true,
+            install_time,
+            version: None,
+        }
+    }
+
+    fn fp_git(rev: &str) -> golem_runner::fingerprint::Fingerprint {
+        golem_runner::fingerprint::Fingerprint::Git {
+            rev: rev.into(),
+            porcelain: "x".into(),
+        }
+    }
+
+    fn miss_reason(v: CacheVerdict) -> String {
+        match v {
+            CacheVerdict::Miss { reason } => reason,
+            CacheVerdict::Hit { .. } => panic!("expected Miss, got Hit"),
+        }
+    }
+
+    #[test]
+    fn gate_decision_none_fingerprint_misses_with_reason() {
+        let entry = make_entry(fp_git("a"), None);
+        let v = gate_decision(
+            Some(&entry),
+            &golem_runner::fingerprint::Fingerprint::None,
+            &info_present(None),
+        );
+        let r = miss_reason(v);
+        assert!(r.contains("fingerprint unavailable"), "got: {r}");
+    }
+
+    #[test]
+    fn gate_decision_no_entry_misses_with_reason() {
+        let v = gate_decision(None, &fp_git("a"), &info_present(None));
+        let r = miss_reason(v);
+        assert!(r.contains("no prior cache entry"), "got: {r}");
+    }
+
+    #[test]
+    fn gate_decision_fingerprint_mismatch_reports_both_sides() {
+        let entry = make_entry(fp_git("aaaaaaaaaaa"), None);
+        let v = gate_decision(Some(&entry), &fp_git("bbbbbbbbbbb"), &info_present(None));
+        let r = miss_reason(v);
+        assert!(r.contains("fingerprint changed"), "got: {r}");
+        assert!(r.contains("git:aaaaaaa") && r.contains("git:bbbbbbb"),
+            "miss reason SHALL show stored → current: {r}");
+    }
+
+    #[test]
+    fn gate_decision_bundle_absent_misses_with_reason() {
+        let entry = make_entry(fp_git("a"), None);
+        let info = golem_runner::installed_state::DeviceInstallInfo::not_installed();
+        let v = gate_decision(Some(&entry), &fp_git("a"), &info);
+        let r = miss_reason(v);
+        assert!(r.contains("no longer installed"), "got: {r}");
+    }
+
+    #[test]
+    fn gate_decision_match_no_install_time_hits() {
+        // When install-time isn't recorded on either side, fingerprint match
+        // alone is sufficient.
+        let entry = make_entry(fp_git("a"), None);
+        let v = gate_decision(Some(&entry), &fp_git("a"), &info_present(None));
+        assert!(matches!(v, CacheVerdict::Hit { .. }));
+    }
+
+    #[test]
+    fn gate_decision_install_time_match_hits() {
+        let t = chrono::Utc::now();
+        let entry = make_entry(fp_git("a"), Some(t));
+        let v = gate_decision(Some(&entry), &fp_git("a"), &info_present(Some(t)));
+        assert!(matches!(v, CacheVerdict::Hit { .. }));
+    }
+
+    #[test]
+    fn gate_decision_install_time_drift_misses_with_external_reinstall_hint() {
+        let t = chrono::Utc::now();
+        let drifted = t + chrono::Duration::seconds(10);
+        let entry = make_entry(fp_git("a"), Some(t));
+        let v = gate_decision(Some(&entry), &fp_git("a"), &info_present(Some(drifted)));
+        let r = miss_reason(v);
+        assert!(r.contains("install-time differs"), "got: {r}");
+        assert!(r.contains("external reinstall"),
+            "miss reason SHALL hint at external reinstall cause: {r}");
+    }
+
+    #[test]
+    fn gate_decision_install_time_within_tolerance_hits() {
+        let t = chrono::Utc::now();
+        let close = t + chrono::Duration::seconds(1);
+        let entry = make_entry(fp_git("a"), Some(t));
+        let v = gate_decision(Some(&entry), &fp_git("a"), &info_present(Some(close)));
+        assert!(matches!(v, CacheVerdict::Hit { .. }), "1s drift SHALL be within tolerance");
+    }
+
+    #[test]
+    fn gate_decision_hit_label_is_fingerprint_short_label() {
+        let entry = make_entry(fp_git("abc1234567"), None);
+        let v = gate_decision(Some(&entry), &fp_git("abc1234567"), &info_present(None));
+        match v {
+            CacheVerdict::Hit { label } => {
+                assert!(label.contains("git:abc1234"),
+                    "hit label SHALL be the source-fingerprint short label: {label}");
+            }
+            CacheVerdict::Miss { .. } => panic!("expected Hit"),
+        }
     }
 
     // ---------------------------------------------------------------

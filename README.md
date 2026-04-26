@@ -61,7 +61,9 @@ golem run [FILES...] [OPTIONS]
 | `--no-teardown` | Skip teardown blocks (not yet wired) |
 | `--keep-devices` | Keep devices running after completion (not yet wired) |
 | `--no-perf` | Disable performance capture |
-| `--verbose` | Show substeps (scroll coordinates, strategies, tree stats) + plan summary (flow runs, install matrix, device availability) |
+| `--rebuild` | Bypass the persistent install cache for this run (rebuild + reinstall every app on every device). Cache is still written after a successful build, so the next run benefits. |
+| `--no-build` | Skip build+install entirely. If the device already has the bundle, golem trusts it and runs flows; if not, the flow fails loudly. The cache is left untouched. Use when iterating on flow files against a known-good binary. |
+| `--verbose` | Show substeps (scroll coordinates, strategies, tree stats) + plan summary (flow runs, install matrix, device availability) + cache hits/misses |
 | `--debug` | Show driver diagnostics (WebKit/CDP) and per-line install-script stderr |
 
 **Examples:**
@@ -324,6 +326,17 @@ name = "iPhone 15"
 `name` pins an exact device display name (as shown by `golem devices` / `xcrun simctl list` / `adb devices -l`). Use this when you have a customised simulator or a specific physical device the flow must target.
 
 Under `create_if_missing = true`, a slot with `name = ...` that doesn't match any connected/booted device errors with an actionable message instead of auto-creating a mis-named sim — `name` is a user assertion that the device already exists; golem won't guess its configuration.
+
+##### Auto-boot behaviour
+
+When a slot's requirement matches a device that is **shutdown** (no booted match, but a compatible AVD/sim exists), golem boots it automatically and waits for it to be fully ready before continuing. The readiness gate is per-platform:
+
+- **iOS**: `xcrun simctl boot` then `xcrun simctl bootstatus -b` blocks until the sim reports `Booted` with system services up. Typical: 10-25s for a cold boot.
+- **Android**: `emulator -avd <id> -no-window -no-audio` spawned detached, then `adb wait-for-device` + poll `getprop sys.boot_completed` until `"1"`. Typical: 60-120s for a cold boot.
+
+**Android emulators always run headless** (`-no-window -no-audio` is hardcoded). Even if you have Android Studio's emulator UI open separately, golem-booted emulators have no GUI window. Useful for CI; if you want to *see* the emulator during local debugging, boot it manually via Android Studio first — golem will reuse the booted device instead of starting another headless one.
+
+iOS sims are headless from `simctl boot` by default, but if you have `Simulator.app` open, it'll attach automatically and show the booted sim. So iOS gives you visibility for free when you want it; Android requires you to boot externally.
 
 #### Performance Monitoring
 
@@ -763,16 +776,76 @@ Stdout is discarded. Stderr is streamed live via the event system and shows up i
 
 Scripts also support a 4th `"install-only"` arg for manual dev-iteration (skip build, reuse previous artifact). Golem currently always passes empty; see the roadmap for the future build-once-install-many optimisation.
 
-### Install cache (current behaviour)
+### Install cache
 
-Per-suite cache keyed on `(device_udid, bundle_id)`. The script runs at most once per combination. Cache propagates:
+Two layers of caching, both transparent in the default mode:
+
+**In-memory (per suite)** — keyed on `(device_udid, bundle_id)`. Within a single `golem run`, the script runs at most once per combination.
 
 - `Succeeded` → subsequent flows on the same device skip the script and go straight to launch
 - `FailedScript` / `FailedNoScript` → subsequent flows using that combo are **skipped** with a clear reason (no repeated retries on broken setups)
 
-### When no script is configured
+**Persistent (cross-run)** — `.golem/install-cache.json`, keyed `(udid, bundle)` → `{ fingerprint, device_install_time, installed_version, installed_at }`. Subsequent `golem run` invocations skip both build AND install when **all three** integrity gates pass:
 
-Golem skips the install step and assumes the app is pre-installed. If `launch` later fails, the error message nudges the user to configure an install script.
+1. **Device-present** — device reports the bundle as installed (`xcrun simctl get_app_container` / `adb shell pm path`)
+2. **Install-time matches** — device's bundle mtime / `lastUpdateTime` matches the cached `device_install_time`. Catches external reinstalls (Xcode "Run", manual `simctl install`)
+3. **Fingerprint matches** — current source fingerprint equals the cached one. Tier 1: `git rev-parse HEAD` + sha1 of `git status --porcelain`. Tier 2 (non-git): content hash of the project tree honouring `.gitignore`
+
+Any gate failing → cache miss, normal build+install runs, fresh entry written.
+
+**On hit** the live stream prints `skipped (cache hit)` — terse. A hit always means **all three gates passed**; the source-fingerprint identity is implied (you almost always know what state your tree is in already, so listing it on every hit is noise).
+
+**On miss** the stream prints a specific reason so you can see *why* a build was triggered. Examples:
+
+- `cache miss on iPhone 17 — source fingerprint changed (git:abc → git:def)` — you committed / edited code (label shows clean→dirty or rev→rev movement)
+- `cache miss on iPhone 17 — device install-time differs (... — external reinstall?)` — Xcode "Run", manual `simctl install`, or another tool replaced the binary
+- `cache miss on iPhone 17 — bundle no longer installed on device` — sim was reset / app was uninstalled
+- `cache miss on iPhone 17 — fingerprint unavailable (no git, no readable source tree)` — neither tier could compute a fingerprint (extremely rare)
+
+The "no prior cache entry" case (first-time install on a fresh checkout) is silent — that's the normal path on a cold cache, not a cache invalidation worth flagging.
+
+Where the label *does* render (in fingerprint-changed misses): clean trees show just the rev (`git:abc1234`); dirty trees include a 4-char porcelain-hash suffix (`git:abc1234+0a1b`) so two dirty trees with the same commit but different uncommitted edits render distinctly.
+
+### Cache flags: `--rebuild` and `--no-build`
+
+Two flags control cache behaviour. Default (no flag) = strict mode: read cache, skip on full gate match, write after build.
+
+**`--rebuild`** — force a fresh build for this run. Bypasses cache reads so every `(device, bundle)` is rebuilt + reinstalled. The cache is **still written** after a successful build, so the next run benefits. Use when:
+
+- A flaky build produced a bad binary and you want to start clean
+- You suspect the cache is wrong but don't want to manually delete it
+- You're verifying a CI build matches what local develops
+
+```bash
+golem run flows/ --rebuild
+```
+
+**`--no-build`** — skip build+install entirely. The cache is **not consulted and not written**. For each `(device, bundle)`:
+
+- Device has the bundle → flow runs against the existing binary
+- Device missing the bundle → flow fails immediately with `--no-build: <bundle> not installed on <device>; drop --no-build or install manually`
+
+Use when:
+
+- Iterating on flow files only — the binary hasn't changed and you want to skip even the ~150ms cache check
+- You built manually via Xcode / Android Studio and want golem to test against that
+
+```bash
+golem run flows/ --no-build
+```
+
+**Both passed** — `--no-build` wins; golem emits a warning. The two intents are mutually exclusive (force rebuild vs trust device), so passing both is almost always a mistake.
+
+### When no `install_script` is configured
+
+If an app has no `install_script` field in `golem.toml` or its flow file, golem behaves like a permanent `--no-build` for that app: no install runs, the flow goes straight to `launch`. The two paths converge on the success case but differ on the failure mode:
+
+| Scenario | App present | App absent |
+|---|---|---|
+| **No `install_script` in TOML** | launches, runs flow | `launch` errors at runtime, cache marks `FailedNoScript`, subsequent flows skip with that reason |
+| **`--no-build` flag** | mark `Succeeded` upfront, runs flow | flow fails immediately with an actionable hint to drop the flag |
+
+So if your project has no install scripts anywhere, `--no-build` is redundant — golem already assumes the apps are preinstalled. The flag earns its keep when scripts *are* configured and you want to bypass them temporarily.
 
 ### Frameworks the scaffold supports
 

@@ -320,6 +320,20 @@ pub async fn stream_human(
                     }
                 }
             }
+            EventKind::InstallSkipped { app_name, bundle_id, target, reason } => {
+                if use_color {
+                    eprintln!("{ts}  {dp}{DIM}{SYM_SUCCESS} [install {app_name}] {bundle_id} on {target} — skipped ({reason}){RESET}");
+                } else {
+                    eprintln!("{ts}  {dp}{SYM_SUCCESS} [install {app_name}] {bundle_id} on {target} — skipped ({reason})");
+                }
+            }
+            EventKind::InstallCacheMiss { app_name, bundle_id: _, target, reason } => {
+                if use_color {
+                    eprintln!("{ts}  {dp}{DIM}[install {app_name}] cache miss on {target} — {reason}{RESET}");
+                } else {
+                    eprintln!("{ts}  {dp}[install {app_name}] cache miss on {target} — {reason}");
+                }
+            }
             EventKind::FlowSkipped { flow_name, reason } => {
                 if use_color {
                     eprintln!("{ts}  {dp}{YELLOW}{SYM_WARNING} SKIPPED{RESET}  {flow_name}  {DIM}{reason}{RESET}");
@@ -339,6 +353,14 @@ pub async fn stream_human(
                     eprintln!("{ts}  {DIM}[devices] no booted match — booting {device_name} to satisfy {slot_shape}...{RESET}");
                 } else {
                     eprintln!("{ts}  [devices] no booted match — booting {device_name} to satisfy {slot_shape}...");
+                }
+            }
+            EventKind::DeviceAutoBootFinished { device_name, slot_shape, duration_ms } => {
+                let secs = *duration_ms as f64 / 1000.0;
+                if use_color {
+                    eprintln!("{ts}  {GREEN}{SYM_SUCCESS}{RESET} {DIM}[devices] booted {device_name} for {slot_shape}  [{secs:.1}s]{RESET}");
+                } else {
+                    eprintln!("{ts}  {SYM_SUCCESS} [devices] booted {device_name} for {slot_shape}  [{secs:.1}s]");
                 }
             }
             EventKind::SlotSetupFailed { slot_label, reason } => {

@@ -125,6 +125,18 @@ pub struct RunArgs {
     /// Debug output: show driver-level diagnostics (WebKit/CDP connection, errors)
     #[arg(long)]
     pub debug: bool,
+
+    /// Bypass the persistent install cache for this run — every (device,
+    /// bundle) pair is rebuilt + reinstalled. The cache is still updated
+    /// after, so the next run benefits.
+    #[arg(long)]
+    pub rebuild: bool,
+
+    /// Skip build+install entirely. If a device already has the bundle
+    /// installed, golem trusts it and runs flows; if not, the flow fails
+    /// loudly with an actionable message. The cache is left untouched.
+    #[arg(long = "no-build")]
+    pub no_build: bool,
 }
 
 #[derive(clap::Args, Debug)]

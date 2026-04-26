@@ -73,13 +73,13 @@ If pre-install fails for app `X` on device `D`, today's per-flow install check m
 
 **Files:** `golem-events/src/lib.rs` (enrich `FlowSkipped` variant), `golem-report/src/stream.rs` + `accumulator.rs` (render distinct skip reasons).
 
-## `--rebuild` Flag for Forced Install-Script Reruns
+## Persistent Install Cache: Polish
 
-With the per-orchestrator `InstallCache`, successive submits transparently reuse prior installs on the same device. When a submit needs to ignore cache hits (e.g. the user changed the build output and wants a fresh install), there's no way to force it today.
+The persistent install cache is shipped (`.golem/install-cache.json`, three integrity gates, `--rebuild`, `--no-build`). Remaining polish:
 
-**Fix:** add a `--rebuild` CLI flag that clears the relevant cache entries (or short-circuits the lookup) for the submit's apps before preinstall.
-
-**Files:** `golem-cli/src/cli.rs` (flag), `golem-cli/src/suite.rs` (consult flag during preinstall).
+- **Surface skipped installs in JSON / JUnit / TOON reports.** Today the live stream prints `[install] ... — skipped (cache hit ...)` but the persistent reports list cached installs as silent — they don't appear in `installs[]`. Add `skipped: bool` + `skip_reason: Option<String>` to `InstallReport` and wire it through the four serialisers. Useful for CI artifacts where reviewers want to confirm nothing was rebuilt.
+- **`golem cache clear` subcommand** — only if shared-CI long-running orchestrator surfaces a real workflow. Today `rm .golem/install-cache.json` is enough.
+- **Cache size diagnostics** — `golem cache info` (or under `--verbose`) printing entry count + last-updated dates. Low-priority debugging aid.
 
 ## Migrate SuiteRunner + IPC into `golem-orchestrator`
 

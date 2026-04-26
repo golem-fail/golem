@@ -38,7 +38,11 @@ pub fn boot_command(device: &DeviceInfo) -> Vec<String> {
         Platform::Android => vec![
             "emulator".into(),
             "-avd".into(),
-            device.name.clone(),
+            // `emulator -avd` expects the on-disk AVD identifier (no
+            // spaces / parens). For shutdown AVDs, `udid` carries that
+            // value; `name` is the human display name from
+            // `avd.ini.displayname` and may contain spaces.
+            device.udid.clone(),
             "-no-window".into(),
             "-no-audio".into(),
         ],
@@ -351,12 +355,159 @@ async fn run_commands(commands: &[Vec<String>], context: &str) -> Result<()> {
     Ok(())
 }
 
-/// Boot a device (simulator or emulator).
-pub async fn boot_device(device: &DeviceInfo) -> Result<()> {
+/// Boot a device (simulator or emulator) and **wait until it's ready**
+/// for subsequent operations. Returns the post-boot [`DeviceInfo`].
+///
+/// The naive `simctl boot` / `emulator -avd` commands return as soon as the
+/// boot is initiated — not when the OS is actually up. A subsequent
+/// `simctl install` / `adb shell` then blocks internally until readiness,
+/// making downstream operations look slow when the real cost is boot.
+/// We chain a readiness gate per platform so the timing reported by
+/// `boot_device` matches actual ready-for-use.
+///
+/// Per-platform gates:
+/// - **iOS**: `xcrun simctl bootstatus <udid> -b` blocks until the sim
+///   reports `Booted` with system services up. The returned [`DeviceInfo`]
+///   keeps the same `udid` (sims are addressed by the static UDID).
+/// - **Android**: spawn `emulator` detached (it runs forever), then
+///   `adb wait-for-device` + poll `getprop sys.boot_completed` for `"1"`.
+///   The returned [`DeviceInfo`] has its `udid` rewritten from the AVD
+///   identifier (`Pixel_3a_3GB_API_34`) to the dynamic emulator serial
+///   (`emulator-5554`) so subsequent `adb -s <udid>` calls work.
+///   Timeout 180s — well above typical cold-boot times (~60-120s).
+pub async fn boot_device(device: &DeviceInfo) -> Result<DeviceInfo> {
+    match device.platform {
+        Platform::Ios => boot_ios_and_wait(device).await,
+        Platform::Android => boot_android_and_wait(device).await,
+    }
+}
+
+async fn boot_ios_and_wait(device: &DeviceInfo) -> Result<DeviceInfo> {
     let args = boot_command(device);
     run_command(&args, &format!("boot {}", device.name)).await?;
-    Ok(())
+    // `bootstatus -b` blocks until the sim is fully booted (services up).
+    // The boot itself is idempotent — running it on an already-booted sim
+    // is a fast no-op.
+    let status = vec![
+        "xcrun".into(),
+        "simctl".into(),
+        "bootstatus".into(),
+        device.udid.clone(),
+        "-b".into(),
+    ];
+    run_command(&status, &format!("bootstatus {}", device.name)).await?;
+    Ok(DeviceInfo {
+        state: crate::DeviceState::Booted,
+        ..device.clone()
+    })
 }
+
+async fn boot_android_and_wait(device: &DeviceInfo) -> Result<DeviceInfo> {
+    // Snapshot serials *before* spawning so we can identify the new emulator
+    // afterwards. Multiple emulators booting in parallel would otherwise
+    // race for the same `emulator-NNNN` slot.
+    let pre_serials = list_running_emulator_serials().await;
+
+    // `emulator -avd` runs as long as the emulator does, so we spawn it
+    // detached. Stdout/stderr are discarded; user-facing diagnostics come
+    // from the readiness probes below.
+    let args = boot_command(device);
+    let Some((program, arguments)) = args.split_first() else {
+        bail!("boot {}: empty command", device.name);
+    };
+    tokio::process::Command::new(program)
+        .args(arguments)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .with_context(|| format!("spawn emulator for {}", device.name))?;
+
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(180);
+    let avd_name = device.udid.clone();
+
+    // Phase 1: find the new serial. Loop scanning `adb devices` for a
+    // serial that wasn't there before AND reports our AVD name when
+    // queried via `adb emu avd name`. Distinguishes "our boot" from any
+    // unrelated emulator booting concurrently.
+    let serial: String = 'find_serial: loop {
+        if tokio::time::Instant::now() >= deadline {
+            bail!(
+                "boot {}: timed out waiting for emulator to appear in adb devices",
+                device.name
+            );
+        }
+        let current = list_running_emulator_serials().await;
+        for s in &current {
+            if pre_serials.contains(s) {
+                continue;
+            }
+            // New serial — query its AVD name. The console isn't always
+            // responsive on first boot; if `emu avd name` errors we retry
+            // on the next iteration.
+            if let Some(name) = crate::android::get_emulator_avd_name(s).await {
+                if name == avd_name {
+                    break 'find_serial s.clone();
+                }
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    };
+
+    // Phase 2: poll sys.boot_completed on the resolved serial.
+    loop {
+        if tokio::time::Instant::now() >= deadline {
+            bail!(
+                "boot {}: timed out waiting for sys.boot_completed on {serial}",
+                device.name
+            );
+        }
+        let probe = vec![
+            "adb".into(),
+            "-s".into(),
+            serial.clone(),
+            "shell".into(),
+            "getprop".into(),
+            "sys.boot_completed".into(),
+        ];
+        if let Ok(out) = run_command(&probe, &format!("getprop boot_completed {serial}")).await {
+            if out.trim() == "1" {
+                return Ok(DeviceInfo {
+                    udid: serial,
+                    state: crate::DeviceState::Booted,
+                    ..device.clone()
+                });
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+}
+
+/// Snapshot every emulator serial currently visible to adb. Physical
+/// devices are excluded — they don't show as `emulator-NNNN`.
+async fn list_running_emulator_serials() -> Vec<String> {
+    let out = match tokio::process::Command::new("adb")
+        .args(["devices"])
+        .output()
+        .await
+    {
+        Ok(o) if o.status.success() => o,
+        _ => return Vec::new(),
+    };
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    stdout
+        .lines()
+        .skip(1)
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 2 && parts[1] == "device" && parts[0].starts_with("emulator-") {
+                Some(parts[0].to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 
 /// Shut down a device (simulator or emulator).
 pub async fn shutdown_device(device: &DeviceInfo) -> Result<()> {
@@ -625,12 +776,7 @@ async fn auto_create_ios(
     };
 
     eprintln!("  Booting {name}...");
-    boot_device(&device).await?;
-
-    Ok(crate::DeviceInfo {
-        state: crate::DeviceState::Booted,
-        ..device
-    })
+    boot_device(&device).await
 }
 
 async fn auto_create_android(
@@ -707,12 +853,7 @@ async fn auto_create_android(
     };
 
     eprintln!("  Booting {name}...");
-    boot_device(&device).await?;
-
-    Ok(crate::DeviceInfo {
-        state: crate::DeviceState::Booted,
-        ..device
-    })
+    boot_device(&device).await
 }
 
 // ---------------------------------------------------------------------------
@@ -746,6 +887,9 @@ mod tests {
         }
     }
 
+    /// Booted Android emulator fixture — `udid` is the dynamic
+    /// `emulator-NNNN` serial used in `adb -s ...` commands. Used by
+    /// install / port-forward / instrument tests.
     fn android_device() -> DeviceInfo {
         DeviceInfo {
             name: "Pixel_8_API_34".into(),
@@ -774,10 +918,16 @@ mod tests {
         assert_eq!(cmd, vec!["xcrun", "simctl", "boot", "AAAA-BBBB-CCCC"]);
     }
 
-    // 2. Android boot
+    // 2. Android boot — uses the AVD identifier (in `udid` for shutdown
+    //    AVDs, per `parse_avd_config`), not the display name.
     #[test]
     fn android_boot_command_is_correct() {
-        let d = android_device();
+        let d = DeviceInfo {
+            name: "Pixel 8 API 34".into(),       // display name with spaces
+            udid: "Pixel_8_API_34".into(),       // on-disk AVD identifier
+            state: DeviceState::Shutdown,
+            ..android_device()
+        };
         let cmd = boot_command(&d);
         assert_eq!(
             cmd,

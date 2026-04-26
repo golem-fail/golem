@@ -14,12 +14,16 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
+use chrono::{DateTime, Utc};
 use golem_events::emitter::DeviceEmitter;
 use golem_events::EventKind;
+use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::Mutex;
+
+use crate::fingerprint::Fingerprint;
 
 /// Default install script timeout if none is configured.
 pub const DEFAULT_INSTALL_TIMEOUT_MS: u64 = 600_000; // 10 min
@@ -84,6 +88,42 @@ impl BuildSlot {
     }
 }
 
+/// Persisted install record. One per `(udid, bundle)` in the on-disk
+/// cache. All three "integrity gates" come from this entry: the cache
+/// `device_install_time` is compared against the device's current install
+/// time to detect external reinstalls; the `fingerprint` is compared
+/// against the current source fingerprint to detect source changes;
+/// presence on the device is checked separately at gate time.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PersistedInstall {
+    /// Source fingerprint at the time of the recorded install.
+    pub fingerprint: Fingerprint,
+    /// Device-reported install time at install. Compared against
+    /// the current device value to detect external reinstalls.
+    /// `None` when the platform doesn't expose it (e.g. iOS phys today).
+    pub device_install_time: Option<DateTime<Utc>>,
+    /// Best-effort device-reported version at install. For debugging /
+    /// future CI scenarios; not used in cache decisions today.
+    pub installed_version: Option<String>,
+    /// Wall-clock time golem completed the install. For human inspection.
+    pub installed_at: DateTime<Utc>,
+}
+
+/// On-disk cache file shape. Keyed by `<udid>:<bundle>`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct CacheFile {
+    /// Schema version. Bump on incompatible field changes; readers ignore
+    /// unknown versions (treat as empty).
+    version: u32,
+    entries: HashMap<String, PersistedInstall>,
+}
+
+const CACHE_FILE_VERSION: u32 = 1;
+
+fn entry_key(udid: &str, bundle: &str) -> String {
+    format!("{udid}:{bundle}")
+}
+
 /// Shared install cache. Safe to clone (`Arc` inside).
 #[derive(Clone, Default)]
 pub struct InstallCache {
@@ -106,6 +146,14 @@ pub struct InstallCache {
     /// and re-check `build_outcomes` once they acquire.
     #[allow(clippy::type_complexity)]
     build_locks: Arc<Mutex<HashMap<BuildKey, Arc<tokio::sync::Mutex<()>>>>>,
+    /// In-memory snapshot of the on-disk persistent cache. Loaded from
+    /// `persistent_path` at suite start, written back after each
+    /// successful install. `None` until [`InstallCache::load_persistent`]
+    /// is called — calls before that get/set treat the cache as empty.
+    persistent: Arc<Mutex<HashMap<String, PersistedInstall>>>,
+    /// Path to the JSON cache file. `None` disables persistence (loads /
+    /// saves are no-ops).
+    persistent_path: Arc<Mutex<Option<PathBuf>>>,
 }
 
 impl InstallCache {
@@ -130,6 +178,115 @@ impl InstallCache {
         map.entry((root.to_path_buf(), script.to_path_buf()))
             .or_insert_with(|| Arc::new(Mutex::new(())))
             .clone()
+    }
+
+    /// Configure the on-disk persistent cache and load its contents.
+    /// Subsequent [`Self::get_persistent`] / [`Self::set_persistent`] calls
+    /// read from / write to `path`. Soft-fails on parse / IO errors —
+    /// returns `Ok(())` with an empty cache and emits a warning to stderr,
+    /// rather than blocking the suite from running. A corrupt cache should
+    /// degrade to "every (udid, bundle) misses" not crash the suite.
+    pub async fn load_persistent(&self, path: PathBuf) -> Result<()> {
+        let entries = match std::fs::read_to_string(&path) {
+            Ok(s) => match serde_json::from_str::<CacheFile>(&s) {
+                Ok(file) if file.version == CACHE_FILE_VERSION => file.entries,
+                Ok(file) => {
+                    eprintln!(
+                        "  [install] cache file {} has unknown version {} — treating as empty",
+                        path.display(),
+                        file.version
+                    );
+                    HashMap::new()
+                }
+                Err(e) => {
+                    eprintln!(
+                        "  [install] cache file {} unreadable ({e}) — treating as empty",
+                        path.display()
+                    );
+                    HashMap::new()
+                }
+            },
+            // Missing file is normal for a fresh project — quiet path.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => HashMap::new(),
+            Err(e) => {
+                eprintln!(
+                    "  [install] cache file {} unreadable ({e}) — treating as empty",
+                    path.display()
+                );
+                HashMap::new()
+            }
+        };
+        *self.persistent.lock().await = entries;
+        *self.persistent_path.lock().await = Some(path);
+        Ok(())
+    }
+
+    /// Get the persisted install entry for `(udid, bundle)`, if any.
+    pub async fn get_persistent(&self, udid: &str, bundle: &str) -> Option<PersistedInstall> {
+        self.persistent
+            .lock()
+            .await
+            .get(&entry_key(udid, bundle))
+            .cloned()
+    }
+
+    /// Insert / update the persisted entry for `(udid, bundle)` and write
+    /// the whole cache file atomically (tmp + rename). When persistence
+    /// is disabled (no `load_persistent` call), this is a no-op.
+    pub async fn set_persistent(
+        &self,
+        udid: &str,
+        bundle: &str,
+        entry: PersistedInstall,
+    ) -> Result<()> {
+        let path_opt = self.persistent_path.lock().await.clone();
+        let Some(path) = path_opt else {
+            return Ok(());
+        };
+        {
+            let mut map = self.persistent.lock().await;
+            map.insert(entry_key(udid, bundle), entry);
+        }
+        self.flush_persistent(&path).await
+    }
+
+    /// Remove a persisted entry for `(udid, bundle)`. Used when external
+    /// integrity checks fail and we want the cache to forget. Writes
+    /// through to disk.
+    pub async fn forget_persistent(&self, udid: &str, bundle: &str) -> Result<()> {
+        let path_opt = self.persistent_path.lock().await.clone();
+        let Some(path) = path_opt else {
+            return Ok(());
+        };
+        let removed = {
+            let mut map = self.persistent.lock().await;
+            map.remove(&entry_key(udid, bundle)).is_some()
+        };
+        if removed {
+            self.flush_persistent(&path).await?;
+        }
+        Ok(())
+    }
+
+    async fn flush_persistent(&self, path: &Path) -> Result<()> {
+        let snapshot = self.persistent.lock().await.clone();
+        let file = CacheFile {
+            version: CACHE_FILE_VERSION,
+            entries: snapshot,
+        };
+        let json = serde_json::to_string_pretty(&file).context("serialise install cache")?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("create cache dir {}", parent.display()))?;
+        }
+        // Atomic write: tmp + rename so a crash mid-write can't corrupt
+        // the cache file. The rename is atomic on the same filesystem.
+        let tmp = path.with_extension("json.tmp");
+        std::fs::write(&tmp, json)
+            .with_context(|| format!("write cache tmp {}", tmp.display()))?;
+        std::fs::rename(&tmp, path)
+            .with_context(|| format!("rename cache tmp -> {}", path.display()))?;
+        Ok(())
     }
 
     /// Determine this caller's role in the (platform, bundle) build.
@@ -385,6 +542,118 @@ mod tests {
         let _gb = tokio::time::timeout(Duration::from_millis(100), b.lock())
             .await
             .expect("locks for different scripts SHALL be independent");
+    }
+
+    #[tokio::test]
+    async fn persistent_load_missing_file_is_empty_ok() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("install-cache.json");
+        let cache = InstallCache::new();
+        cache.load_persistent(path).await.unwrap();
+        assert!(cache.get_persistent("u-1", "com.x").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn persistent_set_then_get_in_same_session() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("install-cache.json");
+        let cache = InstallCache::new();
+        cache.load_persistent(path.clone()).await.unwrap();
+        let entry = PersistedInstall {
+            fingerprint: Fingerprint::Git { rev: "abc".into(), porcelain: "def".into() },
+            device_install_time: None,
+            installed_version: Some("0.1.0".into()),
+            installed_at: chrono::Utc::now(),
+        };
+        cache
+            .set_persistent("u-1", "com.x", entry.clone())
+            .await
+            .unwrap();
+        let got = cache.get_persistent("u-1", "com.x").await.unwrap();
+        assert_eq!(got, entry);
+        // The file SHALL exist after a set.
+        assert!(path.exists(), "set_persistent SHALL write the file");
+    }
+
+    #[tokio::test]
+    async fn persistent_round_trip_across_caches() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("install-cache.json");
+
+        let entry = PersistedInstall {
+            fingerprint: Fingerprint::Content { hash: "abc".into() },
+            device_install_time: None,
+            installed_version: None,
+            installed_at: chrono::Utc::now(),
+        };
+
+        let cache_a = InstallCache::new();
+        cache_a.load_persistent(path.clone()).await.unwrap();
+        cache_a
+            .set_persistent("u-9", "com.y", entry.clone())
+            .await
+            .unwrap();
+
+        let cache_b = InstallCache::new();
+        cache_b.load_persistent(path).await.unwrap();
+        let got = cache_b.get_persistent("u-9", "com.y").await.unwrap();
+        assert_eq!(got, entry, "fresh cache SHALL load entries written by another");
+    }
+
+    #[tokio::test]
+    async fn persistent_corrupt_file_treated_as_empty() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("install-cache.json");
+        std::fs::write(&path, "{not json").unwrap();
+        let cache = InstallCache::new();
+        cache.load_persistent(path).await.unwrap();
+        assert!(cache.get_persistent("u-1", "com.x").await.is_none(),
+            "corrupt cache SHALL not block startup");
+    }
+
+    #[tokio::test]
+    async fn persistent_unknown_version_treated_as_empty() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("install-cache.json");
+        std::fs::write(&path, r#"{"version": 99, "entries": {}}"#).unwrap();
+        let cache = InstallCache::new();
+        cache.load_persistent(path).await.unwrap();
+        assert!(cache.get_persistent("u-1", "com.x").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn persistent_no_load_means_set_is_noop() {
+        let cache = InstallCache::new();
+        let entry = PersistedInstall {
+            fingerprint: Fingerprint::None,
+            device_install_time: None,
+            installed_version: None,
+            installed_at: chrono::Utc::now(),
+        };
+        // Should not error, just nothing happens.
+        cache
+            .set_persistent("u-1", "com.x", entry)
+            .await
+            .unwrap();
+        // get returns None because the in-memory map remains empty.
+        assert!(cache.get_persistent("u-1", "com.x").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn persistent_forget_removes_entry() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("install-cache.json");
+        let cache = InstallCache::new();
+        cache.load_persistent(path).await.unwrap();
+        let entry = PersistedInstall {
+            fingerprint: Fingerprint::None,
+            device_install_time: None,
+            installed_version: None,
+            installed_at: chrono::Utc::now(),
+        };
+        cache.set_persistent("u-1", "com.x", entry).await.unwrap();
+        cache.forget_persistent("u-1", "com.x").await.unwrap();
+        assert!(cache.get_persistent("u-1", "com.x").await.is_none());
     }
 
     #[tokio::test]

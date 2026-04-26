@@ -296,6 +296,8 @@ async fn handle_submit(
         "full" => Some(golem_parser::CoverageStrategy::Full),
         _ => None,
     });
+    let rebuild = cfg["rebuild"].as_bool().unwrap_or(false);
+    let no_build = cfg["no_build"].as_bool().unwrap_or(false);
 
     // Re-read the project's golem.toml from the client's project_root so
     // apps pick up bundle IDs, install scripts, and device defaults the
@@ -351,6 +353,8 @@ async fn handle_submit(
         project_root,
         project_apps: project_config.apps,
         coverage_override,
+        rebuild,
+        no_build,
         // Server doesn't do its own human streaming — client handles output.
         stream_human: false,
     };

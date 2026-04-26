@@ -235,7 +235,9 @@ async fn discover_running_android_devices() -> Vec<(String, Option<String>)> {
 }
 
 /// Get the AVD name for a running emulator via `adb emu avd name`.
-async fn get_emulator_avd_name(serial: &str) -> Option<String> {
+/// Returns `None` while the emulator is still early-booting (`adb`
+/// reachable but emulator console not yet responsive).
+pub async fn get_emulator_avd_name(serial: &str) -> Option<String> {
     let output = tokio::process::Command::new("adb")
         .args(["-s", serial, "emu", "avd", "name"])
         .output()

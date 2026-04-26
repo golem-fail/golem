@@ -245,6 +245,31 @@ pub enum EventKind {
         flow_name: String,
         reason: String,
     },
+    /// The persistent install cache decided no install was needed for
+    /// this `(device, bundle)`. Emitted once per skipped install. Lets
+    /// stream consumers tell the user why no `[install]` lines appeared.
+    InstallSkipped {
+        app_name: String,
+        bundle_id: String,
+        /// Same target string format as `InstallStarted.target`.
+        target: String,
+        /// Human-readable reason: e.g. `cache hit (git:abc1234)` or
+        /// `no-build: bundle present on device`.
+        reason: String,
+    },
+    /// The persistent install cache rejected a candidate hit. Emitted
+    /// before `InstallStarted` so the user sees *why* a build was
+    /// triggered. Only fires when there was a meaningful gate to fail
+    /// against (i.e. an entry existed); fresh entries don't emit this.
+    InstallCacheMiss {
+        app_name: String,
+        bundle_id: String,
+        target: String,
+        /// Specific gate that failed, e.g.
+        /// `source fingerprint changed (git:abc → git:def)` or
+        /// `device install-time differs (... — external reinstall?)`.
+        reason: String,
+    },
 
     // ── Setup narrative ──
     //
@@ -269,6 +294,13 @@ pub enum EventKind {
         device_name: String,
         /// Pre-formatted slot shape, e.g. `ios/v26/phone`.
         slot_shape: String,
+    },
+    /// Auto-boot completed successfully. Lets streams render boot duration
+    /// alongside install / companion timings.
+    DeviceAutoBootFinished {
+        device_name: String,
+        slot_shape: String,
+        duration_ms: u64,
     },
     /// A slot couldn't acquire a device, companion, or allocation and was
     /// skipped. The worker still emits a failed FlowReport; this event

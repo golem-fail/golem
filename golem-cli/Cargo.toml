@@ -28,6 +28,7 @@ toml_edit = "0.22"
 dialoguer = { version = "0.11", default-features = false, features = ["fuzzy-select"] }
 rand = { workspace = true }
 rand_chacha = "0.3"
+chrono = { workspace = true }
 dirs = "6"
 
 [dev-dependencies]

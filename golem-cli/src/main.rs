@@ -100,6 +100,18 @@ async fn main() -> anyhow::Result<()> {
 
             let include_junit = stdout_formats.iter().any(|f| matches!(f, golem_report::output::OutputFormat::Junit));
 
+            // Conflicting flags: --no-build wins over --rebuild because
+            // skipping work entirely is the more concrete intent. Warn
+            // loudly so the user knows their --rebuild was ignored.
+            let rebuild = args.rebuild;
+            let no_build = args.no_build;
+            if rebuild && no_build {
+                eprintln!(
+                    "  [install] both --rebuild and --no-build passed — \
+                     --no-build wins (skipping build+install)"
+                );
+            }
+
             let config = SuiteConfig {
                 no_clean: args.no_clean,
                 no_teardown: args.no_teardown,
@@ -117,6 +129,8 @@ async fn main() -> anyhow::Result<()> {
                 project_root,
                 project_apps: project_config.apps,
                 coverage_override,
+                rebuild,
+                no_build,
             };
 
             // Check if an orchestrator is already running
@@ -141,6 +155,8 @@ async fn main() -> anyhow::Result<()> {
                     "output_dir": config.output_dir.display().to_string(),
                     "project_root": config.project_root.display().to_string(),
                     "coverage": args.coverage,
+                    "rebuild": config.rebuild,
+                    "no_build": config.no_build,
                 });
                 let all_passed = orchestrator::submit_and_wait(stream, &flow_paths, &config_json, config.verbose, config.debug).await?;
                 if !all_passed {
