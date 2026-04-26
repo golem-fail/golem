@@ -18,5 +18,10 @@ futures-util = "0.3"
 plist = "1.8"
 uuid = { workspace = true }
 
+[dev-dependencies]
+# `test-util` enables `tokio::test(start_paused = true)` so settle-gate
+# tests don't burn real wall-clock against the 10s deadline.
+tokio = { workspace = true, features = ["test-util"] }
+
 [lints]
 workspace = true

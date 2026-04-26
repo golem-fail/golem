@@ -309,8 +309,15 @@ impl PlatformDriver for IosDriver {
         self.client.post_json("/launch", &body).await?;
         // Reset WebKit Inspector — the target app may have changed, or
         // the inspector session may be stale after an app switch.
-        let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
-        *wk = WebKitLifecycle::Idle;
+        {
+            let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
+            *wk = WebKitLifecycle::Idle;
+        }
+        // Settle gate: companion's /launch returns when the OS has spawned
+        // the app, not when the UI is interactive. Wait for the first
+        // interactive frame so the next action doesn't race accessibility
+        // tree population.
+        self.await_first_frame().await?;
         Ok(())
     }
 

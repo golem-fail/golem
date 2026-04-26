@@ -200,19 +200,36 @@ Possible approaches:
 - Cache element positions across consecutive steps when the viewport hasn't changed
 - Longer default multiplier for WebView-context actions (requires detecting WebView context)
 
-## e2e Flakiness: Tap "Submit" not found on cold-boot iOS
+The native `await_first_frame` settle gate (in `golem-driver/src/lib.rs`) handles the launch → first-action race for native screens. Extending the same pattern to also poll WebKit Inspector readiness when a WebView is present would close the WebView gap.
 
-`e2e/cross/tap.test.toml` under `coverage = "one"` on a freshly auto-booted iOS 26 simulator: the first `tap on_text="Submit"` times out after 30s. The sim boots, install succeeds, companion starts, but the app either never renders the Submit button or its identifier differs by version. Reproduces reliably on iOS 26 auto-boot; passes on Android and on already-booted iOS simulators.
+## Mach -308 on Cold-Boot iOS Install (CoreSimulator Daemon Flake)
 
-Possible causes: launch race between companion readiness and app first-frame; Submit accessibility label differs by iOS major; cold-boot keyboard/WebView priming issue.
+On a freshly-booted iOS 26 simulator, `xcrun simctl install` periodically fails with `Mach error -308 (ipc/mig) server died`. Reproduces on iPhone 17 / iOS 26.4.1 right after `bootstatus -b` returns. Bundle build (`xcodebuild`) succeeds; the failure is at the install step. Once the sim has been "warm" for ~30s, installs work cleanly.
 
-**Files:** investigation first — add post-launch screenshot + tree dump to `e2e/cross/tap.test.toml` to capture what's actually on screen when the timeout fires.
+Likely cause: CoreSimulator service is in an early-boot state where `bootstatus` reports Booted but the install IPC pipe hasn't fully settled.
 
-## e2e Flakiness: Tap roundtrip iOS increment tap timeout
+**Mitigation tasks:**
+- Detect Mach -308 / `NSMachErrorDomain code=-308` patterns in install_script stderr and retry once with a 2-3s backoff before marking the cache `FailedScript`.
+- Optional grace period after `bootstatus -b` before allowing first install (e.g. probe `xcrun simctl getenv <udid> HOME` until it succeeds quickly).
 
-`e2e/perf/tap_roundtrip.test.toml` under `ios:latest:2` (iOS 18 + 26) sees the first `tap on_text="+"` time out after 5s on both versions. The app launches, counter is visible at "0", then the tap step hangs. Pre-existing before the `:latest:2` change — smart fan-out just makes it repro on two iOS versions instead of one.
+**Files:** `golem-runner/src/installer.rs` (retry classifier), possibly `golem-devices/src/lifecycle.rs` (extra grace).
 
-Likely related to perf-test-specific companion/driver race or accessibility label drift on the `+` button. Android passes cleanly.
+## iOS 26 Tap on `+` Doesn't Register After UI Fully Rendered
 
-**Files:** `e2e/perf/tap_roundtrip.test.toml`, possibly `golem-driver/src/ios.rs` tap path.
+`e2e/perf/tap_roundtrip.test.toml` on iOS 26: launch → wait Counter (✓) → assert "0" (✓) → screenshot (✓) → next block's first `tap on_text="+"` times out 5s. The element resolves visually (other steps in the same screen state work), but tap to the same coords doesn't register an increment. Pre-existing on iOS 26; iOS 18 in the same flow works.
+
+**Settle gate (`await_first_frame`) is now in place** so this is no longer a launch-race issue — the tree is fully settled before the failing tap fires. The remaining cause is iOS 26 specific: possibly the companion's tap path uses an API that behaves differently on iOS 26, or `+` has an accessibility-tree representation that the tap-to-element resolution can't reach.
+
+**Files:** `golem-driver/src/ios.rs` tap path; `e2e/perf/tap_roundtrip.test.toml` for repro. Investigate by adding a tree-dump immediately before the failing tap to capture the state.
+
+## e2e Flakiness: `auto_scroll` Doesn't Find Off-Screen Element
+
+`e2e/cross/wait.test.toml` step `tap on_text="Show Delayed" auto_scroll` times out at 30s on Android (and iOS 26). The element exists below the visible viewport; auto_scroll should scroll until visible but doesn't.
+
+Could be:
+- Scroll target detection failing (scrolling to wrong direction)
+- Scroll step too small (element below the viewport but each scroll moves only a few pixels)
+- Element renders but in an inner scroll list that auto_scroll doesn't traverse
+
+**Files:** `golem-runner/src/scroll.rs` auto_scroll logic; `e2e/cross/wait.test.toml` for repro.
 

@@ -353,6 +353,11 @@ impl PlatformDriver for AndroidDriver {
             "-c", "android.intent.category.LAUNCHER",
             "-n", &format!("{bundle_id}/.MainActivity"),
         ]).await?;
+        // Settle gate: `am start` returns when the start intent is queued,
+        // not when the app is interactive. Poll the UI tree until the
+        // first interactive frame stabilises so the next action doesn't
+        // race accessibility tree population.
+        self.await_first_frame().await?;
         Ok(())
     }
 

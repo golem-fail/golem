@@ -138,6 +138,102 @@ pub trait PlatformDriver: Send + Sync {
 
     /// Remove adb port forwards (Android-only; no-op on iOS)
     async fn remove_port_forwards(&self) -> anyhow::Result<()>;
+
+    /// Wait for the UI to finish rendering after a launch. Polls
+    /// `get_hierarchy()` and returns once the tree is non-empty AND
+    /// stable across two consecutive polls — i.e. the first interactive
+    /// screen has rendered.
+    ///
+    /// This is the post-launch settle gate. Without it, the first action
+    /// after `launch_app` races against the OS finishing the spawn /
+    /// the app drawing its first frame / the accessibility tree
+    /// populating. See the `Audit existing flake roadmap entries` task
+    /// — three e2e flakes (cold-boot iOS Submit timeout, tap_roundtrip
+    /// "+", WebView first action) all share this single root cause.
+    ///
+    /// Settle conditions:
+    /// - tree node count ≥ [`AWAIT_FIRST_FRAME_MIN_NODES`] (filters
+    ///   out splash screens / pre-render states)
+    /// - same count observed across 2 consecutive polls (UI has stopped
+    ///   re-rendering)
+    ///
+    /// Returns `Ok(())` on settle OR on deadline. Doesn't fail launch
+    /// — if the gate is wrong, the downstream action's own timeout
+    /// catches genuinely broken cases.
+    async fn await_first_frame(&self) -> anyhow::Result<()> {
+        await_first_frame_default(self).await
+    }
+}
+
+/// Minimum node count to consider a tree to represent a real first screen.
+/// Set above the typical splash / status-bar-only state — empirical
+/// observation on iOS sims shows pre-render snapshots in the 5-15 range
+/// (status bar, navigation chrome, transition overlays). Real first
+/// screens land at 30-100+ nodes. 20 is a conservative cut.
+pub const AWAIT_FIRST_FRAME_MIN_NODES: usize = 20;
+
+/// Poll interval for the settle gate. 200ms balances responsiveness
+/// (settle in 400ms typical) against companion load (5 polls/sec).
+pub const AWAIT_FIRST_FRAME_POLL_INTERVAL: std::time::Duration =
+    std::time::Duration::from_millis(200);
+
+/// Hard deadline. Beyond this we proceed anyway — the downstream action's
+/// own timeout will catch genuinely broken UI states.
+pub const AWAIT_FIRST_FRAME_DEADLINE: std::time::Duration =
+    std::time::Duration::from_secs(10);
+
+/// Number of consecutive stable polls required to declare settle.
+const STABLE_POLLS_REQUIRED: u32 = 2;
+
+/// Default settle implementation — shared between iOS and Android since
+/// both use the same `get_hierarchy` companion endpoint. Drivers can
+/// override `await_first_frame` to add platform-specific signals (e.g.
+/// WebKit Inspector readiness on iOS WebView screens) but for native
+/// flows this is sufficient.
+async fn await_first_frame_default(
+    driver: &(impl PlatformDriver + ?Sized),
+) -> anyhow::Result<()> {
+    // Use `tokio::time::Instant` (not `std::time`) so this respects
+    // tokio's paused-time test mode. Otherwise unit tests that simulate
+    // the 10s deadline would burn real wall-clock.
+    let start = tokio::time::Instant::now();
+    let deadline = start + AWAIT_FIRST_FRAME_DEADLINE;
+    let mut prev_count: usize = 0;
+    let mut stable_polls: u32 = 0;
+    loop {
+        if tokio::time::Instant::now() >= deadline {
+            if is_debug() {
+                eprintln!(
+                    "  [launch] settle deadline reached after {:?}, last seen {prev_count} nodes — proceeding anyway",
+                    start.elapsed()
+                );
+            }
+            return Ok(());
+        }
+        let count = match driver.get_hierarchy().await {
+            Ok((tree, _)) => tree.node_count(),
+            // Tree-fetch errors mid-launch are common (companion port
+            // briefly unresponsive). Treat as 0 nodes and keep polling
+            // — bubbling the error would fail launch entirely.
+            Err(_) => 0,
+        };
+        if count >= AWAIT_FIRST_FRAME_MIN_NODES && count == prev_count {
+            stable_polls += 1;
+            if stable_polls >= STABLE_POLLS_REQUIRED {
+                if is_debug() {
+                    eprintln!(
+                        "  [launch] UI settled in {:?} ({count} nodes)",
+                        start.elapsed()
+                    );
+                }
+                return Ok(());
+            }
+        } else {
+            stable_polls = 0;
+        }
+        prev_count = count;
+        tokio::time::sleep(AWAIT_FIRST_FRAME_POLL_INTERVAL).await;
+    }
 }
 
 /// Mock driver for testing — records calls and returns configured responses
@@ -439,5 +535,150 @@ mod tests {
         assert_ne!(Direction::Up, Direction::Down);
         assert_ne!(Direction::Left, Direction::Right);
         assert_ne!(Direction::Up, Direction::Left);
+    }
+
+    // ── await_first_frame settle gate ──────────────────────────────
+    //
+    // Drives the gate against synthetic hierarchies whose node counts
+    // change over time so we can exercise the splash → first-screen
+    // settle path without a real device.
+
+    /// Build a hierarchy with `child_count` direct children (so total
+    /// `node_count` == `child_count + 1`).
+    fn tree_with_children(child_count: usize) -> Element {
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        root.children = (0..child_count)
+            .map(|_| make_element("Button", Bounds::new(0, 0, 10, 10)))
+            .collect();
+        root
+    }
+
+    /// Mock that returns a different hierarchy on each `get_hierarchy`
+    /// call, drawn from a queue. After the queue empties, every
+    /// subsequent call returns the last element. Used to drive the
+    /// settle algorithm through scripted node-count progressions.
+    struct SequencedMock {
+        queue: Mutex<Vec<Element>>,
+    }
+
+    impl SequencedMock {
+        fn new(progression: Vec<usize>) -> Self {
+            // Reverse so we can `pop()` cheaply from the end as the
+            // queue advances.
+            let mut frames: Vec<Element> = progression
+                .into_iter()
+                .map(tree_with_children)
+                .collect();
+            frames.reverse();
+            Self {
+                queue: Mutex::new(frames),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl PlatformDriver for SequencedMock {
+        async fn get_hierarchy(&self) -> anyhow::Result<(Element, common::HierarchyMeta)> {
+            let tree = {
+                let mut q = self.queue.lock().expect("lock poisoned");
+                if q.len() > 1 {
+                    q.pop().expect("non-empty")
+                } else {
+                    // Last element: return without removing so subsequent
+                    // calls keep returning the steady-state tree.
+                    q.last().cloned().unwrap_or_else(|| tree_with_children(0))
+                }
+            };
+            Ok((tree, common::HierarchyMeta::default()))
+        }
+        async fn tap(&self, _x: i32, _y: i32) -> anyhow::Result<()> { unimplemented!() }
+        async fn long_press(&self, _x: i32, _y: i32, _d: u64) -> anyhow::Result<()> { unimplemented!() }
+        async fn type_text(&self, _t: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn backspace(&self, _c: u32) -> anyhow::Result<()> { unimplemented!() }
+        async fn swipe_coords(&self, _: i32, _: i32, _: i32, _: i32) -> anyhow::Result<()> { unimplemented!() }
+        async fn pinch(&self, _x: i32, _y: i32, _s: f64, _v: f64) -> anyhow::Result<()> { unimplemented!() }
+        async fn gesture(&self, _f: Vec<GestureFinger>) -> anyhow::Result<()> { unimplemented!() }
+        async fn screenshot(&self) -> anyhow::Result<ScreenshotResult> { unimplemented!() }
+        async fn hide_keyboard(&self) -> anyhow::Result<()> { unimplemented!() }
+        async fn launch_app(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn stop_app(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn clear_app_data(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn press_button(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn set_orientation(&self, _o: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn set_dark_mode(&self, _e: bool) -> anyhow::Result<()> { unimplemented!() }
+        async fn set_location(&self, _: f64, _: f64) -> anyhow::Result<()> { unimplemented!() }
+        async fn open_url(&self, _u: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn push_notification(&self, _: &str, _: &str, _: Option<&str>) -> anyhow::Result<()> { unimplemented!() }
+        async fn add_media(&self, _p: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn grant_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn revoke_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn start_recording(&self, _n: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn stop_recording(&self) -> anyhow::Result<String> { unimplemented!() }
+        async fn remove_port_forwards(&self) -> anyhow::Result<()> { unimplemented!() }
+    }
+
+    // Helper picks a child count safely above the MIN_NODES threshold so
+    // the gate accepts the resulting tree as a real first screen.
+    fn above_threshold() -> usize {
+        AWAIT_FIRST_FRAME_MIN_NODES + 10
+    }
+
+    fn below_threshold() -> usize {
+        AWAIT_FIRST_FRAME_MIN_NODES.saturating_sub(5)
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn await_first_frame_returns_when_count_stabilises_above_threshold() {
+        // Splash (0) → small below-threshold render → real screen (high
+        // count) → stable. Expect settle on the second stable poll.
+        let high = above_threshold();
+        let driver = SequencedMock::new(vec![0, below_threshold(), high, high, high]);
+        let start = tokio::time::Instant::now();
+        driver.await_first_frame().await.unwrap();
+        // Each poll is 200ms; we need at least 4 polls (0 → below →
+        // high → high stable).
+        assert!(
+            start.elapsed() >= AWAIT_FIRST_FRAME_POLL_INTERVAL * 3,
+            "settle SHALL wait through the splash + settle window: {:?}",
+            start.elapsed()
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn await_first_frame_ignores_stable_below_threshold() {
+        // Tree stays below the threshold for many polls — settle SHALL
+        // keep waiting. Then jumps above + stable.
+        let low = below_threshold();
+        let high = above_threshold();
+        let driver = SequencedMock::new(vec![low, low, low, low, high, high]);
+        let start = tokio::time::Instant::now();
+        driver.await_first_frame().await.unwrap();
+        // 5 transitions before stability means 5 polls minimum.
+        assert!(start.elapsed() >= AWAIT_FIRST_FRAME_POLL_INTERVAL * 4);
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn await_first_frame_returns_at_deadline_without_settle() {
+        // Tree drains to a steady value, so settle DOES eventually fire.
+        // We assert only that we returned within the deadline window.
+        let high = above_threshold();
+        let driver = SequencedMock::new(vec![high, high + 1, high + 2, high + 3, high + 4]);
+        let start = tokio::time::Instant::now();
+        driver.await_first_frame().await.unwrap();
+        assert!(start.elapsed() <= AWAIT_FIRST_FRAME_DEADLINE + AWAIT_FIRST_FRAME_POLL_INTERVAL);
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn await_first_frame_does_not_settle_below_min_nodes() {
+        // Tree stabilises below the threshold — settle SHALL wait until
+        // the deadline (and then return Ok anyway).
+        let driver = SequencedMock::new(vec![below_threshold()]);
+        let start = tokio::time::Instant::now();
+        driver.await_first_frame().await.unwrap();
+        assert!(
+            start.elapsed() >= AWAIT_FIRST_FRAME_DEADLINE,
+            "below-threshold tree SHALL wait until deadline: {:?}",
+            start.elapsed()
+        );
     }
 }

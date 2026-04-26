@@ -80,6 +80,13 @@ impl Element {
     pub fn effective_bounds(&self) -> &Bounds {
         self.visible_bounds.as_ref().unwrap_or(&self.bounds)
     }
+
+    /// Recursively count all elements in the tree, including the root.
+    /// Used by the post-launch settle gate to detect when the UI has
+    /// finished rendering the first interactive screen.
+    pub fn node_count(&self) -> usize {
+        1 + self.children.iter().map(Element::node_count).sum::<usize>()
+    }
 }
 
 #[derive(Debug, Clone)]
