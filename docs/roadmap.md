@@ -48,16 +48,6 @@ The tick-box model is live end-to-end: `CoverageStrategy { One, Min, Smart, Full
 
 **What's left:**
 
-### Retire the `slot_platform_or_ios` stopgap
-
-`golem-cli/src/suite.rs` panics when a `None`-platform slot reaches the scheduler. Today's plan generator always pins a platform via `union_requirements`, so the panic arm is unreachable, but the helper still couples the scheduler to a single-platform-at-a-time model. Genuine cross-platform picking (a free iPad covers a platform-None `{tablet}` box just as well as a free Pixel tab) would let the scheduler wait for *any* free matching device instead of guessing a platform upfront.
-
-**Files:** `golem-cli/src/suite.rs` (scheduler device picker accepts `Option<Platform>`), `discover_all_devices` → merge across platforms.
-
-### Auto-create on platform-None slots
-
-A platform-None box that needs auto-creation should error with "cannot auto-create platform-agnostic slot — specify `os = ...`". Depends on the cross-platform scheduler above.
-
 ### Responsive-design / cross-platform axis sharing
 
 Already works via array syntax on a single `[[flow.apps.devices]]` block: `os = ["ios:latest", "android:latest"]` + `type = ["phone", "tablet"]` emits 4 partial boxes that 2 devices (one per platform, different types) cover end-to-end. Documented in README flow-options.

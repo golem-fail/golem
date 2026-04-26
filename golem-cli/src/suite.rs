@@ -18,26 +18,6 @@ use golem_runner::context::ExecutionContext;
 use golem_runner::executor::execute_flow;
 use golem_vars::VariableStore;
 
-/// The scheduler picker needs a concrete `Platform` per slot. Every
-/// generator path — `Full`, `Min`, `Smart`, `One` — routes partial
-/// tick-boxes through `cover_and_union` / cross-product before emitting
-/// FlowRuns, so `DeviceSlot.platform` is always `Some(_)` by the time
-/// slots land here. This helper exists only to make the invariant loud:
-/// if a `None` slot ever leaks through (planner regression), panic so
-/// the bug surfaces instead of silently running on one platform.
-///
-/// The "retire `slot_platform_or_ios`" roadmap entry tracks widening
-/// the scheduler itself to `Option<Platform>` — the dispatcher would
-/// then look across both iOS and Android booted devices for a match,
-/// enabling genuinely cross-platform slots.
-fn slot_platform_or_ios(slot: &golem_orchestrator::DeviceSlot) -> golem_devices::Platform {
-    slot.platform.expect(
-        "planner invariant violated: a platform-None slot reached the \
-         scheduler. `cover_and_union` should always pin a platform — \
-         investigate the generator path that produced this slot.",
-    )
-}
-
 /// Render a device's coverage axes — the human-readable axis-value list
 /// that tells the user which tick boxes this run satisfied. Example:
 /// `["ios", "v26", "tablet"]`. Populated onto `FlowReport.covered_axes`
@@ -768,7 +748,7 @@ async fn execute_flow_run(
     // across slots — typical flow has one slot; chat-test flows have 2
     // slots on different platforms so sequential setup is fine
     // (installs serialize on `project_lock` anyway).
-    let mut device_setups: Vec<(DeviceInfo, Platform, u16)> = Vec::new();
+    let mut device_setups: Vec<(DeviceInfo, u16)> = Vec::new();
     for slot in &slots {
         match setup_slot(
             slot,
@@ -784,7 +764,7 @@ async fn execute_flow_run(
         )
         .await
         {
-            Ok((device, port)) => device_setups.push((device, slot_platform_or_ios(slot), port)),
+            Ok((device, port)) => device_setups.push((device, port)),
             Err(e) => {
                 event_tx.emit(
                     golem_events::DeviceId("suite".into()),
@@ -818,7 +798,7 @@ async fn execute_flow_run(
 
     let allocated_udids: Vec<String> = device_setups
         .iter()
-        .map(|(d, _, _)| d.udid.clone())
+        .map(|(d, _)| d.udid.clone())
         .collect();
 
     // Post-setup coverage gate: a concurrent group member may have
@@ -843,7 +823,7 @@ async fn execute_flow_run(
     // Clone the picked devices so we can compute bonus ticks after the
     // flow finishes (`device_setups` is moved into the spawn loop below).
     let picked_devices: Vec<DeviceInfo> =
-        device_setups.iter().map(|(d, _, _)| d.clone()).collect();
+        device_setups.iter().map(|(d, _)| d.clone()).collect();
 
     // Per-FlowRun barrier: a device failing at step N aborts the other
     // slot(s) at step ≥ N. MUST stay per-FlowRun — step counts only compare
@@ -851,7 +831,8 @@ async fn execute_flow_run(
     let barrier = golem_runner::barrier::FailureBarrier::new();
     let flow_dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
     let mut handles = Vec::new();
-    for (device, platform, port) in device_setups {
+    for (device, port) in device_setups {
+        let platform = device.platform;
         let flow_c = flow.clone();
         let flow_name_c = flow_name.clone();
         let flow_dir_c = flow_dir.clone();
@@ -982,9 +963,8 @@ async fn setup_slot(
     project_root: &Path,
     debug: bool,
 ) -> Result<(DeviceInfo, u16)> {
-    let platform = slot_platform_or_ios(slot);
     let device = find_available_device(
-        platform,
+        slot.platform,
         Some(slot),
         resource_mgr,
         create_if_missing,
@@ -992,6 +972,7 @@ async fn setup_slot(
         Some(install_cache),
         install_matrix,
     ).await?;
+    let platform = device.platform;
 
     if debug {
         eprintln!("  Platform: {platform}");
@@ -2003,65 +1984,85 @@ async fn run_flow_on_device(
 }
 
 /// Discover ALL devices for the given platform (booted and shutdown).
-async fn discover_all_devices(platform: Platform) -> Result<Vec<DeviceInfo>> {
-    match platform {
-        Platform::Ios => {
-            golem_devices::ios::discover_ios_devices().await
-        }
-        Platform::Android => {
-            let output = tokio::process::Command::new("adb")
-                .args(["devices"])
-                .output()
-                .await?;
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let mut devices = Vec::new();
-            for line in stdout.lines().skip(1) {
-                let parts: Vec<&str> = line.split('\t').collect();
-                if parts.len() >= 2 && parts[1] == "device" {
-                    let serial = parts[0].to_string();
-                    // Query the actual OS version via `adb shell getprop`.
-                    // Hardcoding `os_major: 0` would leak into display labels
-                    // like `android/v0/phone` and break version-based slot
-                    // matching in the Plan phase.
-                    let sdk = tokio::process::Command::new("adb")
-                        .args(["-s", &serial, "shell", "getprop", "ro.build.version.sdk"])
-                        .output()
-                        .await
-                        .ok()
-                        .filter(|o| o.status.success())
-                        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-                        .unwrap_or_default();
-                    let release = tokio::process::Command::new("adb")
-                        .args(["-s", &serial, "shell", "getprop", "ro.build.version.release"])
-                        .output()
-                        .await
-                        .ok()
-                        .filter(|o| o.status.success())
-                        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-                        .unwrap_or_default();
-                    let os_major = sdk.parse::<u32>().unwrap_or(0);
-                    devices.push(DeviceInfo {
-                        name: serial.clone(),
-                        udid: serial,
-                        platform: Platform::Android,
-                        device_type: golem_devices::DeviceType::Phone,
-                        os_major,
-                        os_version: release,
-                        state: DeviceState::Booted,
-                        physical: false,
-                        playstore: false,
-                        screen_width: None,
-                        screen_height: None,
-                        screen_scale: None,
-                        last_booted: None,
-                        runtime_id: None,
-                        device_type_id: None,
-                    });
-                }
-            }
-            Ok(devices)
+async fn discover_all_devices(platform: Option<Platform>) -> Result<Vec<DeviceInfo>> {
+    let want_ios = matches!(platform, None | Some(Platform::Ios));
+    let want_android = matches!(platform, None | Some(Platform::Android));
+
+    let mut out = Vec::new();
+
+    if want_ios {
+        // Soft-fail on iOS when a slot is platform-agnostic — a host with
+        // only Android tooling shouldn't block discovery on the iOS side.
+        match (golem_devices::ios::discover_ios_devices().await, platform) {
+            (Ok(ios), _) => out.extend(ios),
+            (Err(e), Some(Platform::Ios)) => return Err(e),
+            (Err(_), _) => {}
         }
     }
+
+    if want_android {
+        match discover_android_devices_via_adb().await {
+            Ok(android) => out.extend(android),
+            Err(e) if platform == Some(Platform::Android) => return Err(e),
+            Err(_) => {}
+        }
+    }
+
+    Ok(out)
+}
+
+async fn discover_android_devices_via_adb() -> Result<Vec<DeviceInfo>> {
+    let output = tokio::process::Command::new("adb")
+        .args(["devices"])
+        .output()
+        .await?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut devices = Vec::new();
+    for line in stdout.lines().skip(1) {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() >= 2 && parts[1] == "device" {
+            let serial = parts[0].to_string();
+            // Query the actual OS version via `adb shell getprop`.
+            // Hardcoding `os_major: 0` would leak into display labels
+            // like `android/v0/phone` and break version-based slot
+            // matching in the Plan phase.
+            let sdk = tokio::process::Command::new("adb")
+                .args(["-s", &serial, "shell", "getprop", "ro.build.version.sdk"])
+                .output()
+                .await
+                .ok()
+                .filter(|o| o.status.success())
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                .unwrap_or_default();
+            let release = tokio::process::Command::new("adb")
+                .args(["-s", &serial, "shell", "getprop", "ro.build.version.release"])
+                .output()
+                .await
+                .ok()
+                .filter(|o| o.status.success())
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                .unwrap_or_default();
+            let os_major = sdk.parse::<u32>().unwrap_or(0);
+            devices.push(DeviceInfo {
+                name: serial.clone(),
+                udid: serial,
+                platform: Platform::Android,
+                device_type: golem_devices::DeviceType::Phone,
+                os_major,
+                os_version: release,
+                state: DeviceState::Booted,
+                physical: false,
+                playstore: false,
+                screen_width: None,
+                screen_height: None,
+                screen_scale: None,
+                last_booted: None,
+                runtime_id: None,
+                device_type_id: None,
+            });
+        }
+    }
+    Ok(devices)
 }
 
 /// Filter `booted` to those currently unallocated (per `ResourceManager`),
@@ -2071,7 +2072,7 @@ async fn discover_all_devices(platform: Platform) -> Result<Vec<DeviceInfo>> {
 #[allow(clippy::too_many_arguments)]
 async fn try_pick_free(
     booted: &[&DeviceInfo],
-    platform: Platform,
+    platform: Option<Platform>,
     slot: Option<&DeviceSlot>,
     resource_mgr: &golem_devices::resource_manager::ResourceManager,
     install_cache: Option<&golem_runner::installer::InstallCache>,
@@ -2103,7 +2104,7 @@ async fn try_pick_free(
 /// known-failed devices upstream.
 async fn rank_by_install_cache<'a>(
     free: &'a [&'a DeviceInfo],
-    platform: Platform,
+    platform: Option<Platform>,
     slot: Option<&DeviceSlot>,
     install_cache: Option<&golem_runner::installer::InstallCache>,
     install_matrix: &[InstallEntry],
@@ -2111,23 +2112,27 @@ async fn rank_by_install_cache<'a>(
     let (Some(cache), Some(s)) = (install_cache, slot) else {
         return free[0];
     };
-    // Collect bundle IDs this slot will install on the chosen device.
-    let bundles: Vec<&str> = s
-        .apps
-        .iter()
-        .filter_map(|app_name| {
-            install_matrix
-                .iter()
-                .find(|e| e.platform == platform && &e.app_name == app_name)
-                .map(|e| e.bundle_id.as_str())
-        })
-        .collect();
-    if bundles.is_empty() {
-        return free[0];
-    }
     let mut best: &DeviceInfo = free[0];
     let mut best_score = 0usize;
     for (i, dev) in free.iter().enumerate() {
+        // Bundle list is per-device when the slot is platform-agnostic
+        // (mixed-platform free pool). Each device picks its own platform's
+        // install_matrix entries. When the slot pins a platform, we still
+        // honour it as a sanity filter.
+        let dev_platform = platform.unwrap_or(dev.platform);
+        let bundles: Vec<&str> = s
+            .apps
+            .iter()
+            .filter_map(|app_name| {
+                install_matrix
+                    .iter()
+                    .find(|e| e.platform == dev_platform && &e.app_name == app_name)
+                    .map(|e| e.bundle_id.as_str())
+            })
+            .collect();
+        if bundles.is_empty() {
+            continue;
+        }
         let mut score = 0usize;
         for b in &bundles {
             if let Some(golem_runner::installer::InstallOutcome::Succeeded) = cache
@@ -2163,7 +2168,7 @@ async fn rank_by_install_cache<'a>(
 /// back to the pre-slot behaviour: match by platform only.
 #[allow(clippy::too_many_arguments)]
 async fn find_available_device(
-    platform: Platform,
+    platform: Option<Platform>,
     slot: Option<&DeviceSlot>,
     resource_mgr: &golem_devices::resource_manager::ResourceManager,
     create_if_missing: bool,
@@ -2175,7 +2180,7 @@ async fn find_available_device(
 
     let compatible: Vec<&DeviceInfo> = all_devices
         .iter()
-        .filter(|d| d.platform == platform)
+        .filter(|d| platform.map(|p| d.platform == p).unwrap_or(true))
         .filter(|d| match slot {
             Some(s) => device_matches_slot(d, s),
             None => true,
@@ -2221,7 +2226,7 @@ async fn find_available_device(
             .expect("shutdown non-empty");
         let shape = slot
             .map(golem_orchestrator::shape_label)
-            .unwrap_or_else(|| platform.to_string());
+            .unwrap_or_else(|| best.platform.to_string());
         event_tx.emit(
             golem_events::DeviceId("suite".into()),
             golem_events::EventKind::DeviceAutoBoot {
@@ -2264,15 +2269,30 @@ async fn find_available_device(
                     );
                 }
             }
+            // Auto-create needs a concrete platform — we can't provision a
+            // device without knowing iOS vs Android. A platform-None slot
+            // (partial-axis emission with no os pin) reaching here means
+            // neither platform has any matching device booted/shutdown.
+            let target_platform = match platform.or_else(|| slot.and_then(|s| s.platform)) {
+                Some(p) => p,
+                None => anyhow::bail!(
+                    "cannot auto-create a platform-agnostic slot ({}) — \
+                     specify `os = \"ios:...\"` or `os = \"android:...\"` on the \
+                     `[[flow.apps.devices]]` block, or boot a matching device \
+                     manually.",
+                    slot.map(golem_orchestrator::describe_slot)
+                        .unwrap_or_else(|| "unconstrained".to_string())
+                ),
+            };
             let requested_type = slot
                 .and_then(|s| s.device_type)
                 .unwrap_or(golem_devices::DeviceType::Phone);
             let requested_os = slot.and_then(|s| s.os_version.clone());
             let requested_playstore = slot.and_then(|s| s.playstore);
-            eprintln!("  [devices] no {platform} device found — creating one...");
+            eprintln!("  [devices] no {target_platform} device found — creating one...");
             let config = golem_devices::concurrency::ConcurrencyConfig::default();
             let created = golem_devices::lifecycle::auto_create_device(
-                platform,
+                target_platform,
                 requested_type,
                 requested_os,
                 requested_playstore,
@@ -2281,8 +2301,11 @@ async fn find_available_device(
             resource_mgr.mark_golem_booted(created.clone());
             return Ok(created);
         } else {
+            let label = platform
+                .map(|p| p.to_string())
+                .unwrap_or_else(|| "matching".to_string());
             anyhow::bail!(
-                "No {platform} devices found. Use create_if_missing = true to auto-create, \
+                "No {label} devices found. Use create_if_missing = true to auto-create, \
                  or boot a simulator/emulator manually."
             );
         }
@@ -2292,6 +2315,11 @@ async fn find_available_device(
     let timeout = std::time::Duration::from_secs(1200); // 20 minutes
     let deadline = tokio::time::Instant::now() + timeout;
     let mut emitted_waiting = false;
+
+    let wait_label = platform
+        .map(|p| p.to_string())
+        .or_else(|| slot.map(golem_orchestrator::shape_label))
+        .unwrap_or_else(|| "any".to_string());
 
     loop {
         if let Some(pick) =
@@ -2303,7 +2331,7 @@ async fn find_available_device(
 
         if tokio::time::Instant::now() >= deadline {
             anyhow::bail!(
-                "Timed out waiting for a free {platform} device (all {} are in use)",
+                "Timed out waiting for a free {wait_label} device (all {} are in use)",
                 booted.len()
             );
         }
@@ -2312,7 +2340,7 @@ async fn find_available_device(
             event_tx.emit(
                 golem_events::DeviceId("suite".into()),
                 golem_events::EventKind::ResourcesWaiting {
-                    platform: platform.to_string(),
+                    platform: wait_label.clone(),
                 },
             );
             emitted_waiting = true;
@@ -2732,7 +2760,7 @@ mod tests {
         let slot = test_slot(&["app"]);
         let matrix = vec![test_matrix_entry("app", "com.app")];
 
-        let pick = rank_by_install_cache(&free, Platform::Ios, Some(&slot), Some(&cache), &matrix)
+        let pick = rank_by_install_cache(&free, Some(Platform::Ios), Some(&slot), Some(&cache), &matrix)
             .await;
         assert_eq!(
             pick.udid, "udid-2",
@@ -2748,7 +2776,7 @@ mod tests {
         let slot = test_slot(&["app"]);
         let matrix = vec![test_matrix_entry("app", "com.app")];
 
-        let pick = rank_by_install_cache(&free, Platform::Ios, Some(&slot), None, &matrix).await;
+        let pick = rank_by_install_cache(&free, Some(Platform::Ios), Some(&slot), None, &matrix).await;
         assert_eq!(
             pick.udid, "udid-1",
             "SHALL fall back to input order when no cache is available",
@@ -2773,7 +2801,7 @@ mod tests {
         let slot = test_slot(&["app"]);
         let matrix = vec![test_matrix_entry("app", "com.app")];
 
-        let pick = rank_by_install_cache(&free, Platform::Ios, Some(&slot), Some(&cache), &matrix)
+        let pick = rank_by_install_cache(&free, Some(Platform::Ios), Some(&slot), Some(&cache), &matrix)
             .await;
         assert_eq!(
             pick.udid, "udid-1",
@@ -2800,7 +2828,7 @@ mod tests {
             test_matrix_entry("app_b", "com.b"),
         ];
 
-        let pick = rank_by_install_cache(&free, Platform::Ios, Some(&slot), Some(&cache), &matrix)
+        let pick = rank_by_install_cache(&free, Some(Platform::Ios), Some(&slot), Some(&cache), &matrix)
             .await;
         assert_eq!(
             pick.udid, "udid-2",
