@@ -18,6 +18,32 @@ use golem_runner::context::ExecutionContext;
 use golem_runner::executor::execute_flow;
 use golem_vars::VariableStore;
 
+/// Recognise transient install-script errors that warrant a single
+/// retry. The artifact has already been built at this point; the retry
+/// runs the script with `install-only` so only the install step (e.g.
+/// `simctl install`, `adb install`) is re-attempted.
+///
+/// Conservative match list — only patterns observed in real flake reports
+/// where retrying actually helped. Adding patterns liberally would mask
+/// genuine failures behind a 3s delay; better to fail fast on unknowns
+/// and add the pattern explicitly when a new transient is identified.
+fn is_transient_install_error(err: &str) -> bool {
+    // CoreSimulator's IPC pipe occasionally crashes during install on
+    // a freshly-booted iOS 26 sim. Format observed in stderr tail:
+    //   "Mach error -308 - (ipc/mig) server died"
+    //   "domain=NSMachErrorDomain, code=-308"
+    // Match the canonical 308 token to catch both renderings.
+    if err.contains("Mach error -308") || err.contains("NSMachErrorDomain, code=-308") {
+        return true;
+    }
+    // adb's intermittent "device offline" race during emulator early boot.
+    // Often clears within a couple seconds.
+    if err.contains("error: device offline") || err.contains("error: device not found") {
+        return true;
+    }
+    false
+}
+
 /// Format the human-readable target string used in install events:
 /// `iPhone 16e (ios/v18/phone)`. Single-source so events emitted from
 /// pre-install (`InstallStarted`/`Skipped`) and per-flow install paths
@@ -1434,7 +1460,7 @@ async fn run_install_with_build_coord(
         None => None,
     };
 
-    let result = golem_runner::installer::run_install_script(
+    let mut result = golem_runner::installer::run_install_script(
         script_path,
         project_root,
         platform_str,
@@ -1448,6 +1474,41 @@ async fn run_install_with_build_coord(
         emitter,
     )
     .await;
+
+    // Transient-error retry: CoreSimulator's IPC pipe occasionally crashes
+    // mid-install on freshly-booted iOS sims (`Mach error -308 (ipc/mig)
+    // server died`). The artifact is already built; we just need to retry
+    // the install step. Pass `install_only=true` so the script skips its
+    // build phase. One retry only — if it fails twice, the issue is
+    // probably real, not transient.
+    if let Err(ref e) = result {
+        if is_transient_install_error(&e.to_string()) {
+            if let Some(em) = emitter {
+                em.emit(golem_events::EventKind::InstallOutput {
+                    app_name: app_name.to_string(),
+                    line: "transient install error detected — sleeping 3s and retrying with install-only".into(),
+                });
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            let retry = golem_runner::installer::run_install_script(
+                script_path,
+                project_root,
+                platform_str,
+                &device.udid,
+                bundle_id,
+                app_name,
+                timeout_ms,
+                &target,
+                device.os_major,
+                true, // install_only — reuse the already-built artifact
+                emitter,
+            )
+            .await;
+            if retry.is_ok() {
+                result = retry;
+            }
+        }
+    }
 
     let err_str: Option<String> = result.as_ref().err().map(|e| format!("{e}"));
 
@@ -2755,6 +2816,39 @@ mod tests {
         let entry = make_entry(fp_git("a"), Some(t));
         let v = gate_decision(Some(&entry), &fp_git("a"), &info_present(Some(close)));
         assert!(matches!(v, CacheVerdict::Hit { .. }), "1s drift SHALL be within tolerance");
+    }
+
+    // ---------------------------------------------------------------
+    // is_transient_install_error — classifier for retry-on-transient
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn transient_classifier_matches_mach_308_text() {
+        let err = "install script exited 204 for app-b on UDID:\n\
+                   building GolemTestB (Debug) for UDID...\n\
+                   installing ./build/...GolemTestB.app on UDID...\n\
+                   An error was encountered processing the command \
+                   (domain=NSMachErrorDomain, code=-308):\n\
+                   The operation couldn’t be completed. (Mach error -308 \
+                   - (ipc/mig) server died)";
+        assert!(is_transient_install_error(err),
+            "Mach -308 stderr SHALL be classified transient");
+    }
+
+    #[test]
+    fn transient_classifier_matches_adb_device_offline() {
+        let err = "install script exited 1: error: device offline";
+        assert!(is_transient_install_error(err));
+    }
+
+    #[test]
+    fn transient_classifier_rejects_genuine_failures() {
+        // Compile errors, signing failures, missing schemes, etc. SHALL
+        // NOT trigger a retry — they're real and would just waste 3s.
+        assert!(!is_transient_install_error("error: scheme not found"));
+        assert!(!is_transient_install_error("error: code signing required"));
+        assert!(!is_transient_install_error("xcodebuild: error: nothing to build"));
+        assert!(!is_transient_install_error(""));
     }
 
     #[test]

@@ -202,17 +202,16 @@ Possible approaches:
 
 The native `await_first_frame` settle gate (in `golem-driver/src/lib.rs`) handles the launch → first-action race for native screens. Extending the same pattern to also poll WebKit Inspector readiness when a WebView is present would close the WebView gap.
 
-## Mach -308 on Cold-Boot iOS Install (CoreSimulator Daemon Flake)
+## Transient Install Errors: Retry Classifier Polish
 
-On a freshly-booted iOS 26 simulator, `xcrun simctl install` periodically fails with `Mach error -308 (ipc/mig) server died`. Reproduces on iPhone 17 / iOS 26.4.1 right after `bootstatus -b` returns. Bundle build (`xcodebuild`) succeeds; the failure is at the install step. Once the sim has been "warm" for ~30s, installs work cleanly.
+`golem-cli/src/suite.rs::is_transient_install_error` classifies a small set of known-recoverable install-script error patterns and retries the script once with `install_only=true` (reusing the already-built artifact). Currently matches:
 
-Likely cause: CoreSimulator service is in an early-boot state where `bootstatus` reports Booted but the install IPC pipe hasn't fully settled.
+- `Mach error -308 (ipc/mig) server died` / `NSMachErrorDomain code=-308` — CoreSimulator IPC blip on freshly-booted iOS sims
+- `error: device offline` / `error: device not found` — adb device-state race during emulator early boot
 
-**Mitigation tasks:**
-- Detect Mach -308 / `NSMachErrorDomain code=-308` patterns in install_script stderr and retry once with a 2-3s backoff before marking the cache `FailedScript`.
-- Optional grace period after `bootstatus -b` before allowing first install (e.g. probe `xcrun simctl getenv <udid> HOME` until it succeeds quickly).
-
-**Files:** `golem-runner/src/installer.rs` (retry classifier), possibly `golem-devices/src/lifecycle.rs` (extra grace).
+**What's left:**
+- Add an iOS-side grace probe after `bootstatus -b` (e.g. `xcrun simctl getenv <udid> HOME` until fast) to potentially eliminate the Mach -308 case at source rather than retrying after.
+- Expand the classifier as new transient patterns surface in CI logs. Conservative — adding patterns that aren't actually recoverable just masks real errors behind a 3s delay.
 
 ## iOS 26 Tap on `+` Doesn't Register After UI Fully Rendered
 
