@@ -46,6 +46,7 @@ fn show_yes_no(app: tauri::AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_deep_link::init())
         .invoke_handler(tauri::generate_handler![
             show_alert,
             show_confirm,

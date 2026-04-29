@@ -11,18 +11,19 @@ type = "phone"
 [[block]]
 name = "deep_link_tests"
 steps = [
-  # Verify the deep link label is visible before navigating
-  { action = "assert_visible", on_text = "Deep Link:" },
+  # `Deep Link:` lives in the Device State section, well below the
+  # fold on phones — auto_scroll brings it into view.
+  { action = "assert_visible", on_text = "Deep Link:", auto_scroll = true },
 
   # Open a deep link with the golem-test scheme
   { action = "open_link", url = "golem-test://home" },
-  { action = "assert_visible", on_text = "golem-test://home", on_right_of = "Deep Link:" },
+  { action = "assert_visible", on_text = "golem-test://home", on_right_of = "Deep Link:", auto_scroll = true },
 
   # Open a deep link with a path and query parameters
   { action = "open_link", url = "golem-test://profile?user=42&tab=settings" },
-  { action = "assert_visible", on_text = "golem-test://profile?user=42&tab=settings", on_right_of = "Deep Link:" },
+  { action = "assert_visible", on_text = "golem-test://profile?user=42&tab=settings", on_right_of = "Deep Link:", auto_scroll = true },
 
   # Open a deep link to a specific content item
   { action = "open_link", url = "golem-test://item/12345" },
-  { action = "assert_visible", on_text = "golem-test://item/12345", on_right_of = "Deep Link:" },
+  { action = "assert_visible", on_text = "golem-test://item/12345", on_right_of = "Deep Link:", auto_scroll = true },
 ]

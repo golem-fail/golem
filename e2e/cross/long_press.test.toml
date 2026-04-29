@@ -11,12 +11,14 @@ type = "phone"
 [[block]]
 name = "long_press_tests"
 steps = [
-  # Long press on list item with default duration (1000ms)
+  # Long press on list item with default duration (1000ms). Item 0 is
+  # at the top of the inner scroll list; auto_scroll surfaces it.
   { action = "long_press", on_text = "Item 0", auto_scroll = true },
 
-  # Long press on submit button with custom duration
-  { action = "long_press", on_text = "Submit", duration = 2000 },
+  # Long press on submit button — Submit is above the list; we just
+  # scrolled down to Item 0, so auto_scroll back up is needed.
+  { action = "long_press", on_text = "Submit", duration = 2000, auto_scroll = true },
 
-  # Long press on a carousel card
-  { action = "long_press", on_text = "Card 0", duration = 1500 },
+  # Long press on a carousel card — also requires scrolling.
+  { action = "long_press", on_text = "Card 0", duration = 1500, auto_scroll = true },
 ]

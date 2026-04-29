@@ -215,20 +215,70 @@ The native `await_first_frame` settle gate (in `golem-driver/src/lib.rs`) handle
 
 ## iOS 26 Tap on `+` Doesn't Register After UI Fully Rendered
 
-`e2e/perf/tap_roundtrip.test.toml` on iOS 26: launch → wait Counter (✓) → assert "0" (✓) → screenshot (✓) → next block's first `tap on_text="+"` times out 5s. The element resolves visually (other steps in the same screen state work), but tap to the same coords doesn't register an increment. Pre-existing on iOS 26; iOS 18 in the same flow works.
+`e2e/perf/tap_roundtrip.test.toml` and several other flows on iOS 26: launch → wait Counter (✓) → assert "0" (✓) → next `tap on_text="+"` times out 5s. The element resolves visually (other steps in the same screen state work), but tap to the same coords doesn't register an increment. Pre-existing on iOS 26; iOS 18 in the same flows works.
 
-**Settle gate (`await_first_frame`) is now in place** so this is no longer a launch-race issue — the tree is fully settled before the failing tap fires. The remaining cause is iOS 26 specific: possibly the companion's tap path uses an API that behaves differently on iOS 26, or `+` has an accessibility-tree representation that the tap-to-element resolution can't reach.
+Affected flows: `tap_roundtrip`, `mixin`, `multi_app_switching`, `alerts`, others involving `+`.
 
-**Files:** `golem-driver/src/ios.rs` tap path; `e2e/perf/tap_roundtrip.test.toml` for repro. Investigate by adding a tree-dump immediately before the failing tap to capture the state.
+**Settle gate (`await_first_frame`) is in place** — the tree is fully settled before the failing tap fires. The cause is iOS 26 specific: the companion's tap path may use an API that behaves differently on iOS 26, or `+` has an accessibility-tree representation that the tap-to-element resolution can't reach. Investigate by adding a tree-dump immediately before the failing tap to capture the state.
 
-## e2e Flakiness: `auto_scroll` Doesn't Find Off-Screen Element
+**Files:** `golem-driver/src/ios.rs` tap path.
 
-`e2e/cross/wait.test.toml` step `tap on_text="Show Delayed" auto_scroll` times out at 30s on Android (and iOS 26). The element exists below the visible viewport; auto_scroll should scroll until visible but doesn't.
+## iOS 26 + WebView: Auto-Scroll Past Inner Scrollables Fails
 
-Could be:
-- Scroll target detection failing (scrolling to wrong direction)
-- Scroll step too small (element below the viewport but each scroll moves only a few pixels)
-- Element renders but in an inner scroll list that auto_scroll doesn't traverse
+iOS 26 simulator + Tauri WebView: `auto_scroll = true` repeatedly fails to scroll past an inner scrollable into the lower part of the page. `dialog_overlay`, `read`, `scroll_search`, `wait` (`Show Delayed`), `webview` all hit this. Android passes the same flows cleanly.
 
-**Files:** `golem-runner/src/scroll.rs` auto_scroll logic; `e2e/cross/wait.test.toml` for repro.
+The scroll loop logs `inner scrollable consumed gesture` and switches strategies, but never reaches the target. Same root family as the existing "iOS WebView slow element resolution" entry — both are WebKit Inspector + scroll/settle interactions on iOS 26.
+
+**Files:** `golem-runner/src/scroll.rs` strategy switching; `golem-driver/src/webkit.rs` for inspector tree freshness during scroll.
+
+## Android WebView: Placeholder Text Not in Accessibility Tree
+
+Android exposes web `<input>` elements as `EditText` with no associated text/label. Placeholders (`placeholder="Enter email"`) are HTML-only and don't surface in Android's accessibility tree. Affects `form_fill`, `webview`, any flow using placeholder-text selectors.
+
+iOS works because the WebKit Inspector enrichment fills in placeholder/label text. No equivalent on Android today.
+
+**Approaches:**
+- Wire up CDP-style WebView introspection on Android (chrome devtools protocol over adb forward) to extract placeholder/label/value
+- Document that Android tests targeting WebView inputs must use positional selectors (`on_below = "Text Fields"`, `on_index = N`)
+
+**Files:** `golem-driver/src/cdp.rs` (existing CDP module) + `golem-driver/src/android.rs` for the WebView attach path.
+
+## iOS 26 simctl ui home Errors
+
+`device_controls.test` step that calls home button via `xcrun simctl ui <udid> home` errors with `Get or Set UI options` on iOS 26.4.1 (Xcode 26). Likely a `simctl` interface change. Either find the new invocation or fall back to `simctl spawn ... launchctl ...` for home button equivalent.
+
+**Files:** `golem-driver/src/ios.rs` press_button "home" path.
+
+## Test App: Deep Link Listener Wiring
+
+`tauri-plugin-deep-link` is installed and the iOS URL scheme `golem-test://` is registered in `Info.plist` (`simctl openurl` no longer errors). What's still missing: the JS-side `onOpenUrl` callback in `DeviceState.svelte` doesn't fire to update the `deeplink` state when a URL arrives. The dynamic-import wrapper around `@tauri-apps/plugin-deep-link` may be silently failing on the iOS simulator, OR the plugin needs additional capability/permission config.
+
+**Investigate next:**
+- Console-log inside the `onOpenUrl` callback to confirm it's installed
+- Check `RustError`/Tauri logs from `simctl spawn ... log` while `simctl openurl` runs to see whether the OS actually delivered the event to the app
+- Try the static (non-dynamic) import path
+
+**Files:** `test-app/src/lib/DeviceState.svelte`.
+
+## Test App: Menu Component Pattern
+
+`test-app/src/lib/Menu.svelte` provides a sticky menu with anchor links to each section (`goto-{kebab-id}` aria-labels). Test flows can use `tap on_accessibility_label="menu-toggle"` + `tap on_accessibility_label="goto-X"` instead of `auto_scroll = true` to land on a section instantly.
+
+This dramatically speeds up flows that target below-fold content (proven on `dialog_overlay.test` iOS 26: was 30s+ timeout, now passes in ~44s end-to-end with 4 dialog blocks).
+
+**Migration plan:** Audit each e2e flow that uses `auto_scroll = true` solely to reach a section and replace with menu nav. Flows that intentionally test scrolling (`scroll.test`, `scroll_search.test`, `wait.test` `scroll_and_tap` block) should keep `auto_scroll`.
+
+## iOS WebKit Inspector: 0x0 Bounds for Plain Inline Elements
+
+iOS WebKit Inspector enrichment reports 0x0 bounds for `<span>` and certain `<div>` elements that lack explicit dimensions, even when they render visually. Affects:
+
+- Device State labels (`<span>Orientation:</span>`, `<span>Theme:</span>`, etc.)
+- ScrollList items (`<div>Item 0</div>`, etc.)
+- Likely other inline-styled elements
+
+Symptom: `assert_visible on_text="Item 0"` (no auto_scroll) times out because the viewport filter excludes 0x0 elements. `auto_scroll = true` masks it because the spatial fallback iterates regardless of bounds.
+
+CSS workarounds (display:flex, min-height, min-width on .row containers) tested in `DeviceState.svelte` — didn't change the reported bounds. The fix is upstream in `golem-driver/src/webkit.rs` enrichment: query `getBoundingClientRect()` for inline elements that report empty/zero bounds via the inspector.
+
+**Files:** `golem-driver/src/webkit.rs` (enrichment query).
 

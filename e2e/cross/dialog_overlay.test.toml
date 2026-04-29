@@ -13,7 +13,11 @@ type = "phone"
 name = "dialog_a_accept"
 steps = [
   { action = "assert_visible", on_text = "Submit" },
-  { action = "tap", on_text = "Open Dialog A", auto_scroll = true },
+  # Jump to Dialog Overlay section via menu — much faster than
+  # auto_scroll past inner scrollables on iOS WebView.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-dialog-overlay" },
+  { action = "tap", on_text = "Open Dialog A" },
   { action = "assert_visible", on_text = "Continue with A?" },
   { action = "assert_visible", on_text = "Accept A" },
   { action = "assert_visible", on_text = "Cancel A" },
