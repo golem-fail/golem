@@ -191,7 +191,6 @@ fn remap_step_vars(step: &Step, vars: &HashMap<String, String>) -> Step {
         app: step.app.as_ref().map(|s| remap_string(s, vars)),
         restart: step.restart,
         auto_scroll: step.auto_scroll,
-        max_scrolls: step.max_scrolls,
         scroll_timeout: step.scroll_timeout,
         within: step.within.clone(),
         start: step.start.clone(),

@@ -16,7 +16,7 @@ type = "phone"
 [[block]]
 name = "tap_interactions"
 steps = [
-  { action = "tap", on_text = "Submit", timeout = 30000 },
+  { action = "tap", on_text = "Submit" },
   { action = "tap", on_text = "Action", on_index = 0 },
   { action = "tap", on_text = "+" },
   { action = "tap", on_text = "+" },

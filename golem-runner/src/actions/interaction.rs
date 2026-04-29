@@ -7,7 +7,6 @@ use tokio::time::{sleep, Instant};
 
 use crate::context::ExecutionContext;
 use crate::resolution::{build_selector, resolve_element, wait_for_settle};
-use crate::scroll::DEFAULT_MAX_SCROLLS;
 
 
 /// Minimum delay after a tap to prevent the OS interpreting sequential taps
@@ -328,7 +327,10 @@ pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver, ctx: 
 ///
 /// Params:
 /// - `direction`: up/down/left/right (default "down")
-/// - `max_scrolls`: optional, defaults to `DEFAULT_MAX_SCROLLS`
+///
+/// Termination: action timeout bounds wall-clock; stall detection bails
+/// when consecutive swipes have no effect on the tree. Number of swipes
+/// is unbounded by design.
 pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
     let direction_str = step
         .params
@@ -343,8 +345,6 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
         "right" => Direction::Right,
         other => bail!("Invalid scroll direction: \"{}\"", other),
     };
-
-    let max_scrolls = step.max_scrolls.unwrap_or(DEFAULT_MAX_SCROLLS);
 
     let selector = build_selector(step);
 
@@ -378,7 +378,7 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
             // Container not visible — scroll to bring it into view
             let _ = crate::scroll::scroll_to_element(
                 &within_sel, driver, golem_driver::Direction::Down,
-                crate::scroll::DEFAULT_MAX_SCROLLS, None, None, ctx.emitter,
+                None, None, ctx.emitter,
             ).await;
             // Nudge to get more of the container visible
             let (fresh, fresh_meta) = driver.get_hierarchy().await?;
@@ -408,7 +408,7 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
     };
 
     crate::scroll::scroll_to_element(
-        &selector, driver, direction, max_scrolls,
+        &selector, driver, direction,
         step.scroll_timeout, container_bounds, ctx.emitter,
     ).await?;
     Ok(())
@@ -865,6 +865,9 @@ mod tests {
 
         let mut step = make_step("tap");
         step.on_text = Some("Does Not Exist".to_string());
+        // Tight test-only timeout: tap polls for the element until the
+        // deadline; we just want fast failure.
+        step.timeout = Some(50);
 
         let ctx = test_ctx(Path::new("."));
         let result = handle_tap(&step, &driver, &ctx).await;
@@ -918,24 +921,6 @@ mod tests {
         handle_scroll(&step, &driver, &ctx)
             .await
             .expect("scroll SHALL succeed with default direction");
-    }
-
-    #[tokio::test]
-    async fn scroll_action_uses_custom_max_scrolls() {
-        // Empty hierarchy -- element never found
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let driver = MockPlatformDriver::new(root);
-
-        let mut step = make_step("scroll");
-        step.on_text = Some("Missing".to_string());
-        step.params.insert(
-            "max_scrolls".to_string(),
-            toml::Value::Integer(2),
-        );
-
-        let ctx = test_ctx(Path::new("."));
-        let result = handle_scroll(&step, &driver, &ctx).await;
-        assert!(result.is_err(), "scroll SHALL fail when element not found");
     }
 
     // ── 8. multiple actions in sequence ──────────────────────────────

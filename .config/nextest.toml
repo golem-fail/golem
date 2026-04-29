@@ -1,0 +1,14 @@
+# Nextest config — see https://nexte.st/docs/configuration/
+#
+# Goal: surface slow tests early. Most unit tests SHOULD be fast (<1s);
+# anything taking longer is either doing real I/O, hitting a sleep
+# without paused-time, or otherwise mis-shaped for a unit test.
+
+[profile.default]
+# Tests slower than `period` get a SLOW marker (repeating every period).
+# After `terminate-after` markers, the test is killed so a stuck test
+# can't hold up the whole run. Real wall-clock kill = 2s × 5 = 10s.
+# Most tests should be sub-second; flagging at 2s catches drift without
+# noise from legitimately-slow integration-shaped tests (install-script
+# forks ~1s; scroll-cycle loops up to ~5s).
+slow-timeout = { period = "2s", terminate-after = 5 }

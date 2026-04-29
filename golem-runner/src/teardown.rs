@@ -108,11 +108,14 @@ mod tests {
         }
     }
 
-    /// A step that always fails (taps a nonexistent element).
+    /// A step that always fails (taps a nonexistent element). Uses a
+    /// tight per-step timeout so tests don't wait the full 10s default
+    /// element poll.
     fn make_failing_step() -> Step {
         Step {
             action: "tap".to_string(),
             on_text: Some("NONEXISTENT_ELEMENT_xyz_12345".to_string()),
+            timeout: Some(50),
             ..Default::default()
         }
     }

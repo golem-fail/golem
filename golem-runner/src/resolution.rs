@@ -441,10 +441,11 @@ pub async fn resolve_element(
                         .map(|r| r.element.bounds)
                         .or(in_viewport))
                 } else {
-                    // Container not visible — scroll the page to bring it into view
-                    let max_s = step.max_scrolls.unwrap_or(crate::scroll::DEFAULT_MAX_SCROLLS);
+                    // Container not visible — scroll the page to bring
+                    // it into view. Timeout + stall govern; no attempt cap.
                     let _ = crate::scroll::scroll_to_element(
-                        &within_sel, driver, golem_driver::Direction::Down, max_s, None, None, emitter,
+                        &within_sel, driver, golem_driver::Direction::Down,
+                        None, None, emitter,
                     ).await;
                     let (fresh_root, fresh_meta) = driver.get_hierarchy().await?;
                     crate::record_tree_fetch(fresh_meta.node_count);
@@ -493,9 +494,8 @@ pub async fn resolve_element(
                 golem_driver::Direction::Down
             };
 
-            let max_scrolls = step.max_scrolls.unwrap_or(crate::scroll::DEFAULT_MAX_SCROLLS);
             match crate::scroll::scroll_to_element(
-                &selector, driver, direction, max_scrolls,
+                &selector, driver, direction,
                 step.scroll_timeout, container_bounds, emitter,
             ).await {
                 Ok(found) => {
@@ -744,6 +744,10 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
         let mut step = make_step("tap");
         step.on_text = Some("Nonexistent".to_string());
+        // Tight test-only timeout: the resolver polls until the deadline
+        // before declaring the element missing; without a cap it would
+        // wait the full 10s default and slow this test down for no reason.
+        step.timeout = Some(50);
 
         let result = resolve_element(&step, &driver, None).await;
         assert!(result.is_err());

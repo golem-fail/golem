@@ -11,7 +11,7 @@ type = "phone"
 [[block]]
 name = "alert_tests"
 steps = [
-  { action = "assert_visible", on_text = "Submit", timeout = 30000 },
+  { action = "assert_visible", on_text = "Submit" },
 
   # Trigger a simple alert (button is off-screen, use auto_scroll)
   { action = "tap", on_text = "Show Alert", auto_scroll = true },

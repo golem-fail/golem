@@ -78,6 +78,9 @@ mod tests {
 
         let mut step = make_step("assert_visible");
         step.on_text = Some("Nonexistent".to_string());
+        // Tight test-only timeout: assert_visible polls until the
+        // element appears or the deadline; we want fast failure.
+        step.timeout = Some(50);
 
         let ctx = test_ctx(Path::new("."));
         let result = handle_assert_visible(&step, &driver, &ctx).await;
@@ -113,6 +116,10 @@ mod tests {
 
         let mut step = make_step("assert_not_visible");
         step.on_text = Some("Error*".to_string());
+        // Tight test-only timeout: assert_not_visible polls until the
+        // element disappears or the deadline; with the element fixed in
+        // place we just want fast failure.
+        step.timeout = Some(50);
 
         let result = handle_assert_not_visible(&step, &driver).await;
         assert!(result.is_err());
@@ -158,6 +165,8 @@ mod tests {
 
         let mut step = make_step("assert_visible");
         step.on_text = Some("$42.00".to_string());
+        // Tight test-only timeout: assert polls until match or deadline.
+        step.timeout = Some(50);
 
         let ctx = test_ctx(Path::new("."));
         let result = handle_assert_visible(&step, &driver, &ctx).await;
@@ -197,6 +206,9 @@ mod tests {
         let mut step = make_step("assert_visible");
         step.on_text = Some("Submit".to_string());
         step.on_enabled = Some(true);
+        // Tight test-only timeout: assert polls for the enabled state
+        // until the deadline; we want fast failure.
+        step.timeout = Some(50);
 
         let ctx = test_ctx(Path::new("."));
         let result = handle_assert_visible(&step, &driver, &ctx).await;

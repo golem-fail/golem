@@ -280,7 +280,6 @@ pub struct Step {
     pub app: Option<String>,
     pub restart: Option<bool>,
     pub auto_scroll: Option<bool>,
-    pub max_scrolls: Option<u32>,
     pub scroll_timeout: Option<u64>,
     /// Constrain scrolling to within a specific element's bounds.
     pub within: Option<SelectorGroup>,

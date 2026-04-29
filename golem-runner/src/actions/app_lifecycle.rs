@@ -47,9 +47,11 @@ pub(crate) async fn handle_launch(
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
     let start = Instant::now();
+    // `launch_app` includes the post-launch settle gate (node-count
+    // stability via `await_first_frame`) so the OS-transition pause is
+    // already absorbed there. `wait_for_settle` runs after for the
+    // additional WebView-enrichment polling it does on top.
     driver.launch_app(bundle_id).await?;
-    // Brief pause for OS to complete app transition before polling hierarchy.
-    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     let _ = wait_for_settle(driver).await;
     let launch_ms = start.elapsed().as_millis() as u64;
     ctx.substep(golem_events::SubstepEvent::AppLaunch {
@@ -126,7 +128,9 @@ mod tests {
 
     // ── stop action calls driver.stop_app ─────────────────────────────
 
-    #[tokio::test]
+    // `handle_stop` includes a 2s `sleep` to let the OS finish
+    // terminating; under paused-time tokio advances that instantly.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn stop_action_calls_driver_stop_app() {
         let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);

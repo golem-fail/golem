@@ -38,8 +38,10 @@ steps = [
 
   # Switch back to the primary app
   { action = "launch", app = "app" },
-  # Verify primary app state preserved (enriched DOM takes time after app switch)
-  { action = "assert_visible", on_text = "3", on_below = "Counter", timeout = 30000 },
+  # Verify primary app state preserved (`launch` settles the UI before
+  # returning so a default-timeout assert is enough; previous 30s
+  # workaround was for the pre-settle launch race).
+  { action = "assert_visible", on_text = "3", on_below = "Counter" },
 
   # Stop the companion app
   { action = "stop", app = "app-b" },

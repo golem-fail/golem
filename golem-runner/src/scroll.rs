@@ -8,9 +8,6 @@ use tokio::time::Instant;
 
 use crate::resolution::wait_for_settle;
 
-/// Default maximum number of scroll attempts before giving up.
-pub const DEFAULT_MAX_SCROLLS: u32 = 20;
-
 /// Maximum stall attempts (identical hierarchy) before reversing direction.
 /// Scrolling down gets more retries because dynamic content typically loads
 /// at the bottom (infinite scroll, lazy loading).
@@ -262,12 +259,15 @@ pub fn default_swipe_start(viewport: &Viewport, direction: Direction) -> (i32, i
 ///    - Both unchanged → possible boundary. Allow stall retries (3 for Down,
 ///      1 for Up) to handle dynamic content loading, then reverse direction.
 /// 4. When a strategy succeeds (page scrolls), promote it to primary.
-/// 5. Repeat until element found, timeout, or max_scrolls exhausted.
+/// 5. Repeat until element found, timeout, or stall (no-progress).
+///
+/// The action's timeout is the only wall-clock bound. The number of
+/// swipe attempts is unbounded by design — long lists complete; broken
+/// trees are caught by stall detection.
 pub async fn scroll_to_element(
     selector: &Selector,
     driver: &dyn PlatformDriver,
     initial_direction: Direction,
-    max_scrolls: u32,
     timeout_ms: Option<u64>,
     container: Option<golem_element::Bounds>,
     emitter: Option<&golem_events::emitter::DeviceEmitter>,
@@ -335,11 +335,11 @@ pub async fn scroll_to_element(
         }
     });
 
-    #[allow(clippy::explicit_counter_loop)]
-    for _ in 0..max_scrolls {
+    loop {
         if deadline.is_some_and(|d| Instant::now() >= d) {
             bail!(
-                "Scroll timed out after {}ms: text={:?}, id={:?}",
+                "Scroll timed out after {}ms ({scroll_attempt} swipes attempted): \
+                 text={:?}, id={:?}",
                 timeout_ms.unwrap_or(0),
                 selector.text,
                 selector.accessibility_label,
@@ -527,13 +527,6 @@ pub async fn scroll_to_element(
             });
         }
     }
-
-    bail!(
-        "Element not found after {max_scrolls} scroll attempts. \
-         Selector: text={:?}, id={:?}",
-        selector.text,
-        selector.accessibility_label,
-    )
 }
 
 #[cfg(test)]
@@ -728,7 +721,7 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
         let selector = sel_with_text("Target");
 
-        let result = scroll_to_element(&selector, &driver, Direction::Down, 20, None, None, None)
+        let result = scroll_to_element(&selector, &driver, Direction::Down, None, None, None)
             .await
             .expect("should find element without scrolling");
 
@@ -755,7 +748,7 @@ mod tests {
         let driver = SequenceMockDriver::new(vec![hierarchy_1, hierarchy_2]);
         let selector = sel_with_text("Target");
 
-        let result = scroll_to_element(&selector, &driver, Direction::Down, 20, None, None, None)
+        let result = scroll_to_element(&selector, &driver, Direction::Down, None, None, None)
             .await
             .expect("should find element after one scroll");
 
@@ -765,10 +758,10 @@ mod tests {
         assert_eq!(scroll_intent(&swipe_calls[0].1), "Down");
     }
 
-    // ── 3. Element not found after max_scrolls → error ──────────────
+    // ── 3. Timeout error reports the swipe attempt count ────────────
 
     #[tokio::test]
-    async fn element_not_found_after_max_scrolls() {
+    async fn timeout_error_reports_swipe_count() {
         let hierarchies: Vec<Element> = (0..25)
             .map(|i| {
                 let mut root = make_element("View", default_bounds());
@@ -780,12 +773,15 @@ mod tests {
         let driver = SequenceMockDriver::new(hierarchies);
         let selector = sel_with_text("Nonexistent");
 
-        let result = scroll_to_element(&selector, &driver, Direction::Down, 5, None, None, None).await;
+        // Tight timeout — driver returns ever-changing trees so stall
+        // detection won't trigger; only timeout will.
+        let result = scroll_to_element(&selector, &driver, Direction::Down, Some(50), None, None).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(err_msg.contains("Scroll timed out"), "got: {err_msg}");
         assert!(
-            err_msg.contains("not found after 5 scroll attempts"),
-            "error should mention max scrolls, got: {err_msg}"
+            err_msg.contains("swipes attempted"),
+            "timeout error SHALL include the swipe count for diagnostic context: {err_msg}"
         );
     }
 
@@ -813,7 +809,11 @@ mod tests {
         let driver = SequenceMockDriver::new(seq);
         let selector = sel_with_text("Nonexistent");
 
-        let _ = scroll_to_element(&selector, &driver, Direction::Down, 30, None, None, None).await;
+        // Test-only timeout: with no element and no cap, scroll would
+        // cycle directions forever. 3s is enough for the test to reach
+        // the first reversal across all 5 swipe strategies + stall
+        // retries before bailing.
+        let _ = scroll_to_element(&selector, &driver, Direction::Down, Some(3000), None, None).await;
 
         let swipe_calls: Vec<_> = driver.get_calls().into_iter().filter(|(m, _)| m == "swipe_coords").collect();
         let directions: Vec<&str> = swipe_calls.iter().map(|c| scroll_intent(&c.1)).collect();
@@ -850,7 +850,10 @@ mod tests {
         let driver = SequenceMockDriver::new(seq);
         let selector = sel_with_text("Target");
 
-        let result = scroll_to_element(&selector, &driver, Direction::Down, 30, None, None, None)
+        // Test-only timeout — scroll loop without it would cycle
+        // forever. ~20 swipes needed to exhaust the stall-cycle and
+        // reach the target on the post-reversal pass; 6s leaves headroom.
+        let result = scroll_to_element(&selector, &driver, Direction::Down, Some(6000), None, None)
             .await
             .expect("should find element after direction reversal");
 
@@ -864,31 +867,6 @@ mod tests {
         );
     }
 
-    // ── 6. Max scrolls reached returns appropriate error ────────────
-
-    #[tokio::test]
-    async fn max_scrolls_reached_returns_error() {
-        let hierarchies: Vec<Element> = (0..10)
-            .map(|i| {
-                let mut root = make_element("View", default_bounds());
-                root.children.push(make_element_with_text("Label", &format!("Screen {i}"), Bounds::new(0, 0, 200, 40)));
-                root
-            })
-            .collect();
-
-        let driver = SequenceMockDriver::new(hierarchies);
-        let selector = sel_with_text("Missing");
-
-        let result = scroll_to_element(&selector, &driver, Direction::Down, 3, None, None, None).await;
-        assert!(result.is_err());
-        let err = result.expect_err("should error");
-        let msg = format!("{err}");
-        assert!(
-            msg.contains("not found after 3 scroll attempts"),
-            "error should cite max scrolls: {msg}"
-        );
-    }
-
     // ── 7. Empty hierarchy returns error ────────────────────────────
 
     #[tokio::test]
@@ -897,7 +875,10 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
         let selector = sel_with_text("Anything");
 
-        let result = scroll_to_element(&selector, &driver, Direction::Down, 3, None, None, None).await;
+        // Tight test-only timeout: with no element ever appearing, scroll
+        // would stall-cycle directions until the timeout. 50ms is enough
+        // to verify it errors without slowing the test suite.
+        let result = scroll_to_element(&selector, &driver, Direction::Down, Some(50), None, None).await;
         assert!(result.is_err());
     }
 
@@ -918,7 +899,7 @@ mod tests {
         let driver = SequenceMockDriver::new(vec![hierarchy_1, hierarchy_2]);
         let selector = sel_with_text("Found");
 
-        scroll_to_element(&selector, &driver, direction, 20, None, None, None)
+        scroll_to_element(&selector, &driver, direction, None, None, None)
             .await
             .expect("should find element");
 
@@ -938,59 +919,6 @@ mod tests {
 
     #[tokio::test]
     async fn scroll_right_direction_works() { direction_test(Direction::Right, "Right").await; }
-
-    // ── 12. Default max_scrolls behavior ────────────────────────────
-
-    #[tokio::test]
-    async fn default_max_scrolls_behavior() {
-        assert_eq!(DEFAULT_MAX_SCROLLS, 20);
-
-        let hierarchies: Vec<Element> = (0..25)
-            .map(|i| {
-                let mut root = make_element("View", default_bounds());
-                root.children.push(make_element_with_text("Label", &format!("Screen {i}"), Bounds::new(0, 0, 200, 40)));
-                root
-            })
-            .collect();
-
-        let driver = SequenceMockDriver::new(hierarchies);
-        let selector = sel_with_text("Nonexistent");
-
-        let result = scroll_to_element(&selector, &driver, Direction::Down, DEFAULT_MAX_SCROLLS, None, None, None).await;
-        assert!(result.is_err());
-
-        let swipe_calls: Vec<_> = driver.get_calls().into_iter().filter(|(m, _)| m == "swipe_coords").collect();
-        assert_eq!(swipe_calls.len(), DEFAULT_MAX_SCROLLS as usize);
-    }
-
-    // ── 13. Element found on last allowed scroll ────────────────────
-
-    #[tokio::test]
-    async fn element_found_on_last_allowed_scroll() {
-        let max_scrolls = 3_u32;
-        let mut hierarchies: Vec<Element> = (0..3)
-            .map(|i| {
-                let mut root = make_element("View", default_bounds());
-                root.children.push(make_element_with_text("Label", &format!("Page {i}"), Bounds::new(0, 0, 200, 40)));
-                root
-            })
-            .collect();
-
-        let mut target_root = make_element("View", default_bounds());
-        target_root.children.push(make_element_with_text("Button", "Target", Bounds::new(10, 10, 100, 44)));
-        hierarchies.push(target_root);
-
-        let driver = SequenceMockDriver::new(hierarchies);
-        let selector = sel_with_text("Target");
-
-        let result = scroll_to_element(&selector, &driver, Direction::Down, max_scrolls, None, None, None)
-            .await
-            .expect("should find element on last scroll");
-
-        assert_eq!(result.element.text.as_deref(), Some("Target"));
-        let swipe_calls: Vec<_> = driver.get_calls().into_iter().filter(|(m, _)| m == "swipe_coords").collect();
-        assert_eq!(swipe_calls.len(), max_scrolls as usize);
-    }
 
     // ── 14. Horizon fingerprint detects inner scrollable ────────────
 

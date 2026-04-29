@@ -11,7 +11,7 @@ type = "phone"
 [[block]]
 name = "screenshot_tests"
 steps = [
-  { action = "assert_visible", on_text = "Submit", timeout = 30000 },
+  { action = "assert_visible", on_text = "Submit" },
 
   # Take a screenshot of the initial state
   { action = "screenshot", path = "/tmp/golem-screenshot-initial.png" },

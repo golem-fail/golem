@@ -788,10 +788,13 @@ mod tests {
     }
 
     /// Build a step that will fail: "tap" with text that won't be found.
+    /// Uses a tight per-step timeout so tests exercising the failure
+    /// path don't wait the full 10s default poll.
     fn make_failing_step() -> Step {
         Step {
             action: "tap".to_string(),
             on_text: Some("NONEXISTENT_ELEMENT_xyz_12345".to_string()),
+            timeout: Some(50),
             ..Default::default()
         }
     }
@@ -1623,6 +1626,9 @@ name = "child_fail"
 [[block.steps]]
 action = "tap"
 on_text = "NONEXISTENT_ELEMENT_xyz_12345"
+# Tight test-only timeout — without it, the tap polls for the full 10s
+# default before declaring the element missing.
+timeout = 50
 "#;
         std::fs::write(tmp_dir.path().join("fail_child.test.toml"), child_toml)
             .expect("SHALL write child flow");
