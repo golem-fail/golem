@@ -207,8 +207,8 @@ pub struct BranchCondition {
 ///
 /// Deserializes from either a plain string or an inline table:
 /// ```toml
-/// right_of = "Orientation:"                          # text pattern
-/// right_of = { text = "Orientation:", enabled = true } # nested selector
+/// right_of = "Theme:"                          # text pattern
+/// right_of = { text = "Theme:", enabled = true } # nested selector
 /// ```
 #[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
@@ -758,16 +758,16 @@ name = "nested"
 
 [[block]]
 steps = [
-  { action = "tap", on = { text = "Portrait", right_of = { text = "Orientation:", enabled = true } } },
+  { action = "tap", on = { text = "Light", right_of = { text = "Theme:", enabled = true } } },
 ]
 "#;
         let flow = parse_flow(toml_str).expect("nested anchor should parse");
         let step = &flow.block[0].steps[0];
         let g = step.on.as_ref().expect("on group should be present");
-        assert_eq!(g.text.as_deref(), Some("Portrait"));
+        assert_eq!(g.text.as_deref(), Some("Light"));
         match &g.right_of {
             Some(Anchor::Selector(nested)) => {
-                assert_eq!(nested.text.as_deref(), Some("Orientation:"));
+                assert_eq!(nested.text.as_deref(), Some("Theme:"));
                 assert_eq!(nested.enabled, Some(true));
             }
             other => panic!("expected nested Anchor::Selector, got {other:?}"),

@@ -28,11 +28,17 @@ final class GolemRunnerUITests: XCTestCase {
     /// Register with golem's registration server to get a port allocation.
     private static func registerWithGolem(regPort: UInt16) -> UInt16? {
         let device = UIDevice.current
+        // SIMULATOR_UDID is the simulator's actual identifier; fall
+        // back to identifierForVendor on physical devices.
+        let simulatorUdid = ProcessInfo.processInfo.environment["SIMULATOR_UDID"]
+        let deviceId = simulatorUdid
+            ?? device.identifierForVendor?.uuidString
+            ?? "unknown"
         let body: [String: Any] = [
             "platform": "ios",
-            "device_id": device.identifierForVendor?.uuidString ?? "unknown",
+            "device_id": deviceId,
             "device_name": device.name,
-            "version": "0.5.5"
+            "version": "0.5.6"
         ]
 
         guard let jsonData = try? JSONSerialization.data(withJSONObject: body),

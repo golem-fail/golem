@@ -215,14 +215,8 @@
       ]
     },
     "device_state": {
-      "description": "Labels that reflect device state changes (orientation, theme, location, deep links, notifications, media)",
+      "description": "Labels that reflect device state changes (theme, location, deep links, notifications, media)",
       "elements": [
-        {
-          "id": "orientation-label",
-          "type": "Label",
-          "default_text": "Portrait",
-          "responds_to": "orientation_change"
-        },
         {
           "id": "theme-label",
           "type": "Label",

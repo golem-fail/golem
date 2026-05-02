@@ -672,9 +672,6 @@ mod tests {
         async fn press_button(&self, button: &str) -> anyhow::Result<()> {
             self.record_call("press_button", vec![button.to_string()]); Ok(())
         }
-        async fn set_orientation(&self, orientation: &str) -> anyhow::Result<()> {
-            self.record_call("set_orientation", vec![orientation.to_string()]); Ok(())
-        }
         async fn set_dark_mode(&self, enabled: bool) -> anyhow::Result<()> {
             self.record_call("set_dark_mode", vec![enabled.to_string()]); Ok(())
         }

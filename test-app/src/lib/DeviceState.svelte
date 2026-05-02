@@ -1,6 +1,5 @@
 <script>
 import { onMount } from "svelte";
-let orientation = $state("Portrait");
 let theme = $state("Light");
 let location = $state("0.0, 0.0");
 let deeplink = $state("");
@@ -8,13 +7,6 @@ let notification = $state("");
 let mediaCount = $state(0);
 
 onMount(() => {
-  function updateOrientation() {
-    orientation = window.matchMedia("(orientation: landscape)").matches ? "Landscape" : "Portrait";
-  }
-  updateOrientation();
-  const oMql = window.matchMedia("(orientation: landscape)");
-  oMql.addEventListener("change", updateOrientation);
-
   function updateTheme() {
     theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "Dark" : "Light";
   }
@@ -49,7 +41,6 @@ onMount(() => {
   window.__golemResetMediaCount = () => { mediaCount = 0; };
 
   return () => {
-    oMql.removeEventListener("change", updateOrientation);
     tMql.removeEventListener("change", updateTheme);
     if (unlistenDeepLink) unlistenDeepLink();
   };
@@ -57,7 +48,6 @@ onMount(() => {
 </script>
 <div class="section">
   <h2>Device State</h2>
-  <div class="row"><span>Orientation:</span> <span>{orientation}</span></div>
   <div class="row"><span>Theme:</span> <span>{theme}</span></div>
   <div class="row"><span>Location:</span> <span>{location}</span></div>
   <div class="row"><span>Deep Link:</span> <span>{deeplink}</span></div>

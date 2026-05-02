@@ -101,9 +101,6 @@ pub trait PlatformDriver: Send + Sync {
     /// Press a hardware button (home, back, volume_up, volume_down)
     async fn press_button(&self, button: &str) -> anyhow::Result<()>;
 
-    /// Set device orientation
-    async fn set_orientation(&self, orientation: &str) -> anyhow::Result<()>;
-
     /// Set dark mode
     async fn set_dark_mode(&self, enabled: bool) -> anyhow::Result<()>;
 
@@ -388,11 +385,6 @@ impl PlatformDriver for MockPlatformDriver {
         Ok(())
     }
 
-    async fn set_orientation(&self, orientation: &str) -> anyhow::Result<()> {
-        self.record_call("set_orientation", vec![orientation.to_string()]);
-        Ok(())
-    }
-
     async fn set_dark_mode(&self, enabled: bool) -> anyhow::Result<()> {
         self.record_call("set_dark_mode", vec![enabled.to_string()]);
         Ok(())
@@ -621,7 +613,6 @@ mod tests {
         async fn stop_app(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
         async fn clear_app_data(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
         async fn press_button(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn set_orientation(&self, _o: &str) -> anyhow::Result<()> { unimplemented!() }
         async fn set_dark_mode(&self, _e: bool) -> anyhow::Result<()> { unimplemented!() }
         async fn set_location(&self, _: f64, _: f64) -> anyhow::Result<()> { unimplemented!() }
         async fn open_url(&self, _u: &str) -> anyhow::Result<()> { unimplemented!() }

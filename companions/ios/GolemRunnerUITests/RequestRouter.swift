@@ -100,14 +100,23 @@ final class RequestRouter {
 
     private func handleHealth() -> HTTPResponse {
         let device = UIDevice.current
+        // Prefer the simulator's UDID (set by CoreSimulator in
+        // `SIMULATOR_UDID`) over `identifierForVendor`. The latter is
+        // a per-app identifier that has no relationship to the device
+        // the runner booted, so the runner can't use it to verify
+        // it's talking to the right simulator.
+        let simulatorUdid = ProcessInfo.processInfo.environment["SIMULATOR_UDID"]
+        let deviceId = simulatorUdid
+            ?? device.identifierForVendor?.uuidString
+            ?? "unknown"
         return .json([
             "status": "ok",
             "platform": "ios",
-            "version": "0.5.5",
+            "version": "0.5.6",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
-            "device_id": device.identifierForVendor?.uuidString ?? "unknown",
+            "device_id": deviceId,
         ])
     }
 

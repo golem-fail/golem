@@ -1,6 +1,6 @@
 [flow]
 name = "Cross-platform device controls test"
-tags = ["cross-platform", "device", "controls", "rotation", "dark-mode"]
+tags = ["cross-platform", "device", "controls", "dark-mode"]
 
 [[flow.apps]]
 name = "app"
@@ -11,14 +11,13 @@ type = "phone"
 [[block]]
 name = "initial_state"
 steps = [
-  { action = "assert_visible", on_text = "Portrait", on_right_of = "Orientation:", auto_scroll = true },
   { action = "assert_visible", on_text = "Light", on_right_of = "Theme:", auto_scroll = true },
   { action = "assert_visible", on_text = "0.0, 0.0", on_right_of = "Location:", auto_scroll = true },
 
   # Press the home button and re-launch
   { action = "press", button = "home" },
   { action = "launch", app = "app" },
-  { action = "assert_visible", on_text = "Orientation:", auto_scroll = true },
+  { action = "assert_visible", on_text = "Theme:", auto_scroll = true },
 ]
 
 # Android-only: test back button navigation
@@ -28,26 +27,7 @@ where = { os = "android" }
 steps = [
   { action = "press", button = "back" },
   { action = "launch", app = "app" },
-  { action = "assert_visible", on_text = "Orientation:", auto_scroll = true },
-]
-
-[[block]]
-name = "orientation_controls"
-steps = [
-  # Verify initial portrait orientation (using nested anchor syntax)
-  { action = "assert_visible", on = { text = "Portrait", right_of = { text = "Orientation:" } }, auto_scroll = true },
-
-  # Rotate to landscape and verify
-  { action = "rotate", orientation = "landscape" },
-  { action = "assert_visible", on_text = "Landscape", on_right_of = "Orientation:" },
-
-  # Verify core elements are still accessible in landscape
-  { action = "assert_visible", on_text = "Submit" },
-  { action = "assert_visible", on_text = "Counter" },
-
-  # Rotate back to portrait and verify
-  { action = "rotate", orientation = "portrait" },
-  { action = "assert_visible", on_text = "Portrait", on_right_of = "Orientation:" },
+  { action = "assert_visible", on_text = "Theme:", auto_scroll = true },
 ]
 
 [[block]]

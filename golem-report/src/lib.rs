@@ -116,9 +116,6 @@ pub enum SubstepDetail {
     Screenshot {
         path: String,
     },
-    DeviceRotation {
-        orientation: String,
-    },
     BarrierAborted {
         step_count: u64,
     },
@@ -174,8 +171,6 @@ impl From<&golem_events::SubstepEvent> for SubstepDetail {
                 SubstepDetail::AppStop { bundle: bundle.clone() },
             golem_events::SubstepEvent::Screenshot { path } =>
                 SubstepDetail::Screenshot { path: path.clone() },
-            golem_events::SubstepEvent::DeviceRotation { orientation } =>
-                SubstepDetail::DeviceRotation { orientation: orientation.clone() },
             golem_events::SubstepEvent::BarrierAborted { step_count } =>
                 SubstepDetail::BarrierAborted { step_count: *step_count },
             golem_events::SubstepEvent::AlertFound { text } =>

@@ -2,16 +2,6 @@ use anyhow::Result;
 use golem_driver::PlatformDriver;
 use golem_parser::Step;
 
-/// Set device orientation (portrait or landscape).
-pub(crate) async fn handle_rotate(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let orientation = step
-        .params
-        .get("orientation")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("rotate action requires 'orientation' param"))?;
-    driver.set_orientation(orientation).await
-}
-
 /// Toggle dark mode on or off.
 pub(crate) async fn handle_dark_mode(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
     let enabled = step
@@ -81,29 +71,6 @@ mod tests {
     use crate::actions::test_helpers::*;
     use golem_driver::MockPlatformDriver;
     use golem_element::Bounds;
-
-    // ── rotate landscape calls driver.set_orientation ──────────────────
-
-    #[tokio::test]
-    async fn rotate_landscape_calls_driver_set_orientation() {
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let driver = MockPlatformDriver::new(root);
-
-        let mut step = make_step("rotate");
-        step.params.insert(
-            "orientation".to_string(),
-            toml::Value::String("landscape".to_string()),
-        );
-
-        handle_rotate(&step, &driver)
-            .await
-            .expect("rotate should succeed");
-
-        let calls = driver.get_calls();
-        let orient_calls: Vec<_> = calls.iter().filter(|c| c.0 == "set_orientation").collect();
-        assert_eq!(orient_calls.len(), 1);
-        assert_eq!(orient_calls[0].1, vec!["landscape"]);
-    }
 
     // ── dark_mode enabled calls driver.set_dark_mode(true) ────────────
 
@@ -244,22 +211,4 @@ mod tests {
         assert_eq!(rp_calls[0].1, vec!["com.example.app", "location"]);
     }
 
-    // ── rotate without orientation param returns error ─────────────────
-
-    #[tokio::test]
-    async fn rotate_without_orientation_returns_error() {
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let driver = MockPlatformDriver::new(root);
-
-        let step = make_step("rotate");
-        // No orientation param
-
-        let result = handle_rotate(&step, &driver).await;
-        assert!(result.is_err());
-        let err_msg = format!("{}", result.expect_err("should be error"));
-        assert!(
-            err_msg.contains("orientation"),
-            "error should mention orientation, got: {err_msg}"
-        );
-    }
 }

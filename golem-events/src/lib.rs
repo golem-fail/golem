@@ -450,11 +450,6 @@ pub enum SubstepEvent {
         path: String,
     },
 
-    // Device
-    DeviceRotation {
-        orientation: String,
-    },
-
     // Barrier
     BarrierAborted {
         step_count: u64,

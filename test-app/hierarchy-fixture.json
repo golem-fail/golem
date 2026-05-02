@@ -503,18 +503,6 @@
       "children": [
         {
           "element_type": "Label",
-          "text": "Portrait",
-          "id": "orientation-label",
-          "placeholder": null,
-          "enabled": true,
-          "checked": false,
-          "clickable": false,
-          "focused": false,
-          "bounds": { "x": 20, "y": 3674, "width": 350, "height": 30 },
-          "children": []
-        },
-        {
-          "element_type": "Label",
           "text": "Light",
           "id": "theme-label",
           "placeholder": null,

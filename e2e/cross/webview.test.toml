@@ -48,11 +48,9 @@ steps = [
   # and the resolver's viewport filter excludes off-screen elements.
   { action = "tap", on_accessibility_label = "menu-toggle" },
   { action = "tap", on_accessibility_label = "goto-device-state" },
-  { action = "read", on_right_of = "Orientation:", save_to = "orientation" },
   { action = "read", on_right_of = "Theme:", save_to = "theme" },
 
   # Verify device state labels are rendered in the web view
-  { action = "assert_visible", on_text = "Portrait", on_right_of = "Orientation:" },
   { action = "assert_visible", on_text = "Light", on_right_of = "Theme:" },
 
   # Jump to Scroll List for Item 0.

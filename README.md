@@ -1345,3 +1345,7 @@ Fails on non-2xx status codes.
 ```
 
 Useful in conditional branches to mark unreachable paths.
+
+## Unsupported
+
+- **Device orientation control.** Programmatic device rotation is not supported on either platform. iOS 16+ fenced off the cross-process rotation APIs (`UIDevice.setValue("orientation")` is deprecated; the supported `UIWindowScene.requestGeometryUpdate` is in-process only); Android emulator's `user_rotation` setting is overridden by the accelerometer simulator and unreliable. The `rotate` action exists only as a multi-touch *gesture* (`{ action = "rotate", on = ..., rotation = 90.0 }`) — there is no device-orientation variant.

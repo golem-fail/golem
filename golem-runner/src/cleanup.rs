@@ -1,6 +1,6 @@
 //! Auto-cleanup logic that runs after a flow completes (including teardown).
 //!
-//! Resets device state (orientation, dark mode), stops recordings, and optionally
+//! Resets device state (dark mode, location), stops recordings, and optionally
 //! shuts down booted emulators/simulators. All errors are collected as warnings
 //! rather than propagated — cleanup is best-effort.
 
@@ -10,7 +10,7 @@ use golem_driver::PlatformDriver;
 /// Options controlling what cleanup actions to perform.
 #[derive(Default)]
 pub struct CleanupOptions {
-    /// When `true`, skip device shutdown but still reset orientation, dark mode, etc.
+    /// When `true`, skip device shutdown but still reset dark mode, location, etc.
     pub keep_devices: bool,
 }
 
@@ -23,12 +23,11 @@ pub struct CleanupResult {
 /// Run auto-cleanup after flow completion.
 ///
 /// Performs the following steps in order:
-/// 1. Reset device orientation to portrait
-/// 2. Reset dark mode to disabled
-/// 3. Clear mocked location (reset to 0,0)
-/// 4. Remove port forwards (Android only)
-/// 5. Stop any running screen recordings
-/// 6. Shut down the device (unless `options.keep_devices` is set)
+/// 1. Reset dark mode to disabled
+/// 2. Clear mocked location (reset to 0,0)
+/// 3. Remove port forwards (Android only)
+/// 4. Stop any running screen recordings
+/// 5. Shut down the device (unless `options.keep_devices` is set)
 ///
 /// Every step is best-effort: failures are collected into `CleanupResult::warnings`
 /// and never propagated as errors.
@@ -39,12 +38,7 @@ pub async fn auto_cleanup(
 ) -> CleanupResult {
     let mut warnings = Vec::new();
 
-    // 1. Reset orientation to portrait
-    if let Err(e) = driver.set_orientation("portrait").await {
-        warnings.push(format!("Failed to reset orientation: {e}"));
-    }
-
-    // 2. Reset dark mode to disabled
+    // Reset dark mode to disabled
     if let Err(e) = driver.set_dark_mode(false).await {
         warnings.push(format!("Failed to reset dark mode: {e}"));
     }
@@ -88,7 +82,6 @@ mod tests {
     /// A mock driver that can be configured to fail specific methods.
     struct FailableMockDriver {
         calls: Mutex<Vec<String>>,
-        fail_orientation: bool,
         fail_dark_mode: bool,
         fail_stop_recording: bool,
         fail_set_location: bool,
@@ -99,7 +92,6 @@ mod tests {
         fn new() -> Self {
             Self {
                 calls: Mutex::new(Vec::new()),
-                fail_orientation: false,
                 fail_dark_mode: false,
                 fail_stop_recording: false,
                 fail_set_location: false,
@@ -188,14 +180,6 @@ mod tests {
         }
 
         async fn press_button(&self, _button: &str) -> anyhow::Result<()> {
-            Ok(())
-        }
-
-        async fn set_orientation(&self, orientation: &str) -> anyhow::Result<()> {
-            self.record(&format!("set_orientation:{orientation}"));
-            if self.fail_orientation {
-                anyhow::bail!("orientation reset failed");
-            }
             Ok(())
         }
 
@@ -299,26 +283,7 @@ mod tests {
         }
     }
 
-    // 1. auto_cleanup resets orientation
-    #[tokio::test]
-    async fn auto_cleanup_resets_orientation_to_portrait() {
-        let driver = FailableMockDriver::new();
-        let device = test_device();
-        let options = CleanupOptions {
-            keep_devices: true, // skip shutdown so we don't call real commands
-        };
-
-        let result = auto_cleanup(&driver, &device, &options).await;
-
-        let calls = driver.get_calls();
-        assert!(
-            calls.contains(&"set_orientation:portrait".to_string()),
-            "Expected orientation reset call, got: {calls:?}"
-        );
-        assert!(result.warnings.is_empty());
-    }
-
-    // 2. auto_cleanup resets dark mode
+    // 1. auto_cleanup resets dark mode
     #[tokio::test]
     async fn auto_cleanup_resets_dark_mode_to_disabled() {
         let driver = FailableMockDriver::new();
@@ -410,7 +375,7 @@ mod tests {
     #[tokio::test]
     async fn cleanup_failure_collected_as_warning_not_error() {
         let driver = FailableMockDriver {
-            fail_orientation: true,
+            fail_dark_mode: true,
             ..FailableMockDriver::new()
         };
         let device = test_device();
@@ -418,13 +383,13 @@ mod tests {
             keep_devices: true,
         };
 
-        // auto_cleanup returns normally (not Err) even when orientation fails
+        // auto_cleanup returns normally (not Err) even when reset fails
         let result = auto_cleanup(&driver, &device, &options).await;
 
         assert_eq!(result.warnings.len(), 1);
         assert!(
-            result.warnings[0].contains("Failed to reset orientation"),
-            "Expected orientation warning, got: {}",
+            result.warnings[0].contains("Failed to reset dark mode"),
+            "Expected dark mode warning, got: {}",
             result.warnings[0]
         );
     }
@@ -433,7 +398,6 @@ mod tests {
     #[tokio::test]
     async fn multiple_cleanup_failures_all_collected() {
         let driver = FailableMockDriver {
-            fail_orientation: true,
             fail_dark_mode: true,
             fail_stop_recording: true,
             ..FailableMockDriver::new()
@@ -447,13 +411,12 @@ mod tests {
 
         assert_eq!(
             result.warnings.len(),
-            3,
-            "Expected 3 warnings, got: {:?}",
+            2,
+            "Expected 2 warnings, got: {:?}",
             result.warnings
         );
-        assert!(result.warnings[0].contains("orientation"));
-        assert!(result.warnings[1].contains("dark mode"));
-        assert!(result.warnings[2].contains("recording"));
+        assert!(result.warnings[0].contains("dark mode"));
+        assert!(result.warnings[1].contains("recording"));
     }
 
     // 8. Default CleanupOptions has keep_devices=false

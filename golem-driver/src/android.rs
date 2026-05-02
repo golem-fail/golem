@@ -408,28 +408,6 @@ impl PlatformDriver for AndroidDriver {
         Ok(())
     }
 
-    async fn set_orientation(&self, orientation: &str) -> Result<()> {
-        let value = match orientation {
-            "portrait" => "0",
-            "landscape" => "1",
-            "reverse_portrait" => "2",
-            "reverse_landscape" => "3",
-            other => {
-                anyhow::bail!("unsupported orientation on Android: {other}");
-            }
-        };
-        self.adb(&[
-            "shell",
-            "settings",
-            "put",
-            "system",
-            "user_rotation",
-            value,
-        ])
-        .await?;
-        Ok(())
-    }
-
     async fn set_dark_mode(&self, enabled: bool) -> Result<()> {
         let mode = if enabled { "yes" } else { "no" };
         self.adb(&["shell", "cmd", "uimode", "night", mode]).await?;

@@ -22,7 +22,7 @@ use assertion::{handle_assert_alert, handle_assert_not_visible, handle_assert_vi
 use capture::handle_read;
 use device::{
     handle_dark_mode, handle_grant_permission, handle_press, handle_revoke_permission,
-    handle_rotate, handle_set_location,
+    handle_set_location,
 };
 use external::{
     handle_accept_alert, handle_await_email, handle_bash, handle_dismiss_alert, handle_fail,
@@ -70,8 +70,7 @@ pub async fn execute_action(
         "launch" => handle_launch(step, driver, apps, ctx).await,
         "stop" => handle_stop(step, driver, apps, ctx).await,
         "clear_data" => handle_clear_data(step, driver, apps).await,
-        "rotate" if step.rotation.is_some() => handle_rotate_gesture(step, driver).await,
-        "rotate" => handle_rotate(step, driver).await,
+        "rotate" => handle_rotate_gesture(step, driver).await,
         "dark_mode" => handle_dark_mode(step, driver).await,
         "set_location" => handle_set_location(step, driver).await,
         "press" => handle_press(step, driver).await,

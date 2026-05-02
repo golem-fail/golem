@@ -368,11 +368,6 @@ impl PlatformDriver for IosDriver {
         Ok(())
     }
 
-    async fn set_orientation(&self, orientation: &str) -> Result<()> {
-        // Orientation is not directly supported via simctl; would need companion endpoint
-        anyhow::bail!("set_orientation is not yet supported on iOS (requested: {orientation})")
-    }
-
     async fn set_dark_mode(&self, enabled: bool) -> Result<()> {
         let style = if enabled { "dark" } else { "light" };
         self.simctl(&["ui", &self.device_id, "appearance", style])

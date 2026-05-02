@@ -21,10 +21,7 @@ steps = [
   # Read the updated counter value
   { action = "read", on_below = "Counter", on_index = 0, save_to = "updated_count" },
 
-  # Read the orientation label (off-screen, needs scroll)
-  { action = "read", on_right_of = "Orientation:", save_to = "device_orientation", auto_scroll = true },
-
-  # Read the theme label
+  # Read the theme label (off-screen, needs scroll)
   { action = "read", on_right_of = "Theme:", save_to = "current_theme", auto_scroll = true },
 
   # Read text from a list item (need to scroll back up)
