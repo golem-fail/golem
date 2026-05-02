@@ -36,8 +36,19 @@ findings/
 node_modules/
 dist/
 
-# Tauri generated platform projects (machine-specific)
-**/src-tauri/gen/
+# Tauri generated platform projects (machine-specific) — ignore
+# everything inside, then carve out the test app's Android manifest
+# below so its `uses-permission` declarations (CAMERA / RECORD_AUDIO /
+# location, needed by `permissions_*.test`) survive a fresh clone.
+# `tauri android init` doesn't overwrite existing files, so committing
+# this one file is enough.
+**/src-tauri/gen/**
+!test-app/src-tauri/gen/
+!test-app/src-tauri/gen/android/
+!test-app/src-tauri/gen/android/app/
+!test-app/src-tauri/gen/android/app/src/
+!test-app/src-tauri/gen/android/app/src/main/
+!test-app/src-tauri/gen/android/app/src/main/AndroidManifest.xml
 
 # Xcode build output
 companions/ios/build/
