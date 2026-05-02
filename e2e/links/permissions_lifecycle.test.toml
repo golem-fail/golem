@@ -11,15 +11,21 @@ type = "phone"
 [[block]]
 name = "grant_permission_and_verify"
 steps = [
+  # Grant camera before launch — `simctl privacy grant` (iOS) and
+  # `pm grant` (Android) terminate any running instance of the target
+  # app, so granting after launch leaves the test on a dead UI.
+  { action = "grant_permission", app = "fail.golem.test", permission = "camera" },
+
   # Launch the app
   { action = "launch", app = "fail.golem.test" },
-  { action = "wait", on_text = "camera-permission-button" },
-
-  # Grant camera permission
-  { action = "grant_permission", permission = "camera" },
+  # Permissions section is below the fold; menu nav lands on it
+  # directly so the next assert doesn't have to wait on scroll.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-permissions" },
+  { action = "wait", on_accessibility_label = "camera-permission-button" },
 
   # Tap the camera button to confirm permission is active (no dialog)
-  { action = "tap", on_text = "camera-permission-button" },
+  { action = "tap", on_accessibility_label = "camera-permission-button" },
 ]
 
 [[block]]
@@ -28,18 +34,26 @@ steps = [
   # Stop and relaunch the app
   { action = "stop", app = "fail.golem.test" },
   { action = "launch", app = "fail.golem.test" },
-  { action = "wait", on_text = "camera-permission-button", timeout = 15000 },
+  # Re-navigate to the Permissions section after relaunch.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-permissions" },
+  { action = "wait", on_accessibility_label = "camera-permission-button" },
 
   # Tap camera button again; permission should persist across restarts
-  { action = "tap", on_text = "camera-permission-button" },
+  { action = "tap", on_accessibility_label = "camera-permission-button" },
 ]
 
 [[block]]
 name = "revoke_and_verify"
 steps = [
-  # Revoke camera permission
-  { action = "revoke_permission", permission = "camera" },
+  # Revoke camera permission (terminates the app on both platforms)
+  { action = "revoke_permission", app = "fail.golem.test", permission = "camera" },
+
+  # Relaunch and re-navigate so we can assert the UI is still alive.
+  { action = "launch", app = "fail.golem.test" },
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-permissions" },
 
   # Verify permission is revoked by confirming the button is still present
-  { action = "assert_visible", on_text = "camera-permission-button" },
+  { action = "assert_visible", on_accessibility_label = "camera-permission-button" },
 ]

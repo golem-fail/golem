@@ -21,36 +21,34 @@ fn find_free_port() -> std::io::Result<u16> {
     Ok(listener.local_addr()?.port())
 }
 
-/// JavaScript that traverses the DOM and returns a tree matching the companion
-/// JSON format (class, text, contentDescription, bounds, children).
-/// - Excludes `display: none` and `visibility: hidden` (matches accessibility)
-/// - Includes dynamically added elements (fixes the `{#if}` bug)
-/// - Uses `getBoundingClientRect()` for viewport-relative coordinates (CSS pixels)
-/// - Uses `IntersectionObserver` for accurate `visible_bounds` (handles overflow:hidden)
-///
-/// Returns JSON: `{ tree: {...}, meta: { elapsed_ms, node_count, dpr, url } }`
-///
-/// Coordinates are in **CSS pixels** (not device pixels). The caller is
-/// responsible for scaling by `meta.dpr` when the platform's coordinate
-/// system uses device pixels (Android). iOS uses points = CSS pixels, so
-/// no scaling is needed.
-///
-/// The function is async (returns a Promise) because IntersectionObserver
-/// delivers results asynchronously after one animation frame (~16ms).
-///
-/// Text = what the user SEES. accessibility_label = aria-label (for screen readers).
-///
-/// Text priority:
-///   Inputs: value → placeholder → text content → aria-label
-///   Others: text content → aria-label
-///
-/// contentDescription (→ accessibility_label): always aria-label || id
-pub(crate) const DOM_TRAVERSAL_JS: &str = r#"(async function(){var dpr=window.devicePixelRatio||1;var nc=0;var t0=performance.now();var elMap=new Map();function t(el){nc++;var r=el.getBoundingClientRect();var al=el.getAttribute('aria-label')||'';var ph=el.placeholder||'';var tx='';for(var c of el.childNodes){if(c.nodeType===3&&c.textContent.trim()){tx=c.textContent.trim();break;}}var isInput=el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT';var val=(isInput&&el.type!=='checkbox'&&el.type!=='radio')?el.value||'':'';var text=val?val:ph?ph:tx?tx:al;var n={class:el.tagName.toLowerCase(),text:text,contentDescription:al||el.id||'',bounds:{left:Math.round(r.left),top:Math.round(r.top),right:Math.round(r.left+r.width),bottom:Math.round(r.top+r.height)},clickable:el.tagName==='BUTTON'||el.tagName==='A'||el.getAttribute('role')==='button',enabled:!el.disabled,checked:!!el.checked,focused:document.activeElement===el,scrollable:false,selected:false,children:[]};elMap.set(el,n);for(var c of el.children){if(c.tagName!=='SCRIPT'&&c.tagName!=='STYLE'){var s=window.getComputedStyle(c);if(s.display!=='none'&&s.visibility!=='hidden'){n.children.push(t(c));}}}return n;}var tree=t(document.body);var visRects=await new Promise(function(resolve){var results=new Map();var observer=new IntersectionObserver(function(entries){for(var e of entries){results.set(e.target,e.intersectionRect);}observer.disconnect();resolve(results);});elMap.forEach(function(_,el){observer.observe(el);});});visRects.forEach(function(rect,el){var n=elMap.get(el);if(n){n.visible_bounds={left:Math.round(rect.left),top:Math.round(rect.top),right:Math.round(rect.left+rect.width),bottom:Math.round(rect.top+rect.height)};}});var vv=window.visualViewport;var vvd=vv?{scale:vv.scale,offsetLeft:vv.offsetLeft,offsetTop:vv.offsetTop}:null;return JSON.stringify({tree:tree,meta:{elapsed_ms:Math.round(performance.now()-t0),node_count:nc,dpr:dpr,url:location.href,visualViewport:vvd}});})()
-"#;
+/// DOM traversal JavaScript evaluated inside the WebView via CDP
+/// (Android) or the WebKit Inspector (iOS). The readable source lives
+/// in `src/dom_traversal.js`; `build.rs` minifies it via the
+/// `minifier` crate and writes the compact form to `OUT_DIR` — the
+/// embedded blob below is what we send over the wire.
+pub(crate) const DOM_TRAVERSAL_JS: &str =
+    include_str!(concat!(env!("OUT_DIR"), "/dom_traversal.min.js"));
 
-/// Discover the WebView debug socket name for a device.
-/// Returns the socket name (e.g. "webview_devtools_remote_12345") or None.
-pub async fn find_webview_socket(device_serial: &str) -> Option<String> {
+/// Discover the WebView debug socket name for the given app package.
+/// Multiple apps with WebViews can be running at once (current app, prior
+/// builds, companion app). Match by the package's PID so we always connect
+/// to the right WebView instead of whichever socket happens to be listed
+/// first in `/proc/net/unix`.
+pub async fn find_webview_socket(device_serial: &str, package_name: &str) -> Option<String> {
+    let pid_out = tokio::process::Command::new("adb")
+        .args(["-s", device_serial, "shell", "pidof", package_name])
+        .output()
+        .await
+        .ok()?;
+    // `pidof` can return multiple PIDs (main + helper processes) separated
+    // by spaces. Collect them all and try each — the WebView socket is only
+    // registered by the process that actually hosts the WebView.
+    let pid_text = String::from_utf8_lossy(&pid_out.stdout);
+    let pids: Vec<&str> = pid_text.split_whitespace().collect();
+    if pids.is_empty() {
+        return None;
+    }
+
     let output = tokio::process::Command::new("adb")
         .args(["-s", device_serial, "shell", "cat", "/proc/net/unix"])
         .output()
@@ -58,10 +56,13 @@ pub async fn find_webview_socket(device_serial: &str) -> Option<String> {
         .ok()?;
 
     let text = String::from_utf8_lossy(&output.stdout);
-    for line in text.lines() {
-        if let Some(idx) = line.find("webview_devtools_remote") {
-            let name = line[idx..].split_whitespace().next()?;
-            return Some(name.to_string());
+    for pid in &pids {
+        let suffix = format!("webview_devtools_remote_{pid}");
+        for line in text.lines() {
+            if let Some(idx) = line.find(&suffix) {
+                let name = line[idx..].split_whitespace().next()?;
+                return Some(name.to_string());
+            }
         }
     }
     None

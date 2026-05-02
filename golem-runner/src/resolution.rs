@@ -347,6 +347,11 @@ pub async fn resolve_element(
     let deadline = Instant::now() + Duration::from_millis(timeout_ms);
 
     let auto_scroll = step.auto_scroll == Some(true);
+    // Auto-recovery: when resolution fails because the soft keyboard is
+    // up and has occluded the target field, dismiss the keyboard once
+    // and retry. Tracked outside the loop so we only attempt it once
+    // per resolve call.
+    let mut tried_hide_keyboard = false;
 
     // Handle coordinate-only selector: { x = 150, y = 300 } or { x = "50%", y = "25%" }
     // No element resolution needed — just return the coordinates.
@@ -415,6 +420,44 @@ pub async fn resolve_element(
                 });
             }
             return Ok((first.element.clone(), coords));
+        }
+
+        // Auto-recovery: target absent from the keyboard-aware viewport
+        // but present in the unfiltered DOM. The soft keyboard has eaten
+        // the field — dismiss it and re-poll. One-shot per resolve.
+        //
+        // Android's IME hide is animated + asynchronous: `hide_keyboard`
+        // returns immediately but `keyboard_height` reports non-zero
+        // until the panel finishes sliding down. Without waiting for
+        // that, the re-poll sees the old layout, taps the target at
+        // its pre-hide bounds, and the click hits the still-up
+        // keyboard — focus stays on the previous field and the typed
+        // text appends there. Block on `keyboard_height = 0` (with a
+        // timeout) before continuing.
+        if !tried_hide_keyboard && meta.keyboard_height > 0 {
+            let unfiltered_count = find_elements(&root, &selector).len();
+            if golem_driver::is_debug() {
+                eprintln!(
+                    "  [resolver] kb={} filtered=0 unfiltered={} for {:?}",
+                    meta.keyboard_height,
+                    unfiltered_count,
+                    selector_label(&selector)
+                );
+            }
+            if unfiltered_count > 0 {
+                tried_hide_keyboard = true;
+                let _ = driver.hide_keyboard().await;
+                let kb_deadline = Instant::now() + Duration::from_millis(2000);
+                while Instant::now() < kb_deadline {
+                    if let Ok((_, m)) = driver.get_hierarchy().await {
+                        if m.keyboard_height == 0 {
+                            break;
+                        }
+                    }
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+                continue;
+            }
         }
 
         // Element not in viewport — if auto_scroll is set, scroll to find it.
@@ -755,6 +798,68 @@ mod tests {
         assert!(
             err_msg.contains("No element found"),
             "error message should mention no element found, got: {err_msg}"
+        );
+    }
+
+    // ── 4b. resolve_element auto-recovers from keyboard occlusion ────
+
+    #[tokio::test]
+    async fn resolve_element_auto_hides_keyboard_when_target_occluded() {
+        // Simulate: viewport 375x812, keyboard taking the bottom 350px
+        // (height 350). A target field at y=600 falls into the
+        // keyboard-occluded zone (812 - 350 = 462 viewport bottom).
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        root.children.push(make_element_with_text(
+            "Input",
+            "Search",
+            Bounds::new(10, 600, 80, 40),
+        ));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_keyboard_height(350);
+
+        let mut step = make_step("type");
+        step.on_text = Some("Search".to_string());
+        step.timeout = Some(500);
+
+        let (elem, _coords) = resolve_element(&step, &driver, None)
+            .await
+            .expect("should auto-hide keyboard and find Search");
+        assert_eq!(elem.text.as_deref(), Some("Search"));
+
+        let calls = driver.get_calls();
+        let hide_calls: Vec<_> = calls.iter().filter(|c| c.0 == "hide_keyboard").collect();
+        assert_eq!(
+            hide_calls.len(),
+            1,
+            "expected exactly one hide_keyboard recovery call, got {}",
+            hide_calls.len()
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_element_does_not_hide_keyboard_when_target_visible() {
+        // Same target but the keyboard is much smaller — target at y=200
+        // is inside the (812-100)=712 viewport. No recovery needed.
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        root.children.push(make_element_with_text(
+            "Input",
+            "Search",
+            Bounds::new(10, 200, 80, 40),
+        ));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_keyboard_height(100);
+
+        let mut step = make_step("type");
+        step.on_text = Some("Search".to_string());
+        step.timeout = Some(500);
+
+        let _ = resolve_element(&step, &driver, None)
+            .await
+            .expect("should find Search without recovery");
+        let calls = driver.get_calls();
+        assert!(
+            !calls.iter().any(|c| c.0 == "hide_keyboard"),
+            "hide_keyboard should NOT be called when target is already visible"
         );
     }
 

@@ -705,11 +705,44 @@ pub(crate) async fn fetch_webview_dom(
         .and_then(|v| v.as_f64())
         .unwrap_or(1.0);
 
+    // CSS env(safe-area-inset-top) probe — non-zero when the page declared
+    // `viewport-fit=cover`, so the layout viewport extends behind the
+    // status bar / dynamic island. Caller already added the native
+    // safe-area to `webview_bounds_top` (correct for the no-cover case);
+    // when the page IS cover, we cancel that double-count by subtracting
+    // the same value back out.
+    let css_safe_area_top = wrapper
+        .get("meta")
+        .and_then(|m| m.get("cssSafeAreaInset"))
+        .and_then(|v| v.get("top"))
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let css_safe_area_left = wrapper
+        .get("meta")
+        .and_then(|m| m.get("cssSafeAreaInset"))
+        .and_then(|v| v.get("left"))
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+
     if let Some(mut tree) = wrapper.get("tree").cloned() {
         if (vv_scale - 1.0).abs() > 0.01 {
             crate::cdp::scale_bounds_by_dpr(&mut tree, vv_scale);
         }
-        crate::cdp::offset_bounds(&mut tree, webview_bounds_left, webview_bounds_top);
+        // Final screen Y for a DOM node:
+        //   bcr + webview_bounds_top - css_safe_area_top
+        //
+        // - `viewport-fit=cover` page: bcr is in screen coords (layout
+        //   viewport top = screen 0), css env returns the native inset
+        //   (e.g. 54). webview_bounds_top already includes that 54
+        //   (added by the caller). Subtracting css_safe_area_top cancels
+        //   it out, leaving bcr + (wv_native_y) — correct.
+        // - Non-cover page: layout viewport sits below the safe area, so
+        //   bcr is offset by 0 from there. webview_bounds_top has the
+        //   native inset added. css env returns 0. Subtracting 0 leaves
+        //   the existing behaviour intact.
+        let dx = webview_bounds_left - css_safe_area_left;
+        let dy = webview_bounds_top - css_safe_area_top;
+        crate::cdp::offset_bounds(&mut tree, dx, dy);
         Some(tree)
     } else {
         None

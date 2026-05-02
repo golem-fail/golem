@@ -1782,8 +1782,14 @@ async fn find_or_allocate_port(device: &DeviceInfo, platform: Platform) -> Resul
         }
     }
 
-    // If exactly one companion for this platform, assume it's ours
-    if platform_companions.len() == 1 {
+    // Android-only fallback: the Android companion can't report its own
+    // ADB serial via UIDevice (the equivalent doesn't exist), so when
+    // there's exactly one matching companion we assume it's ours. iOS
+    // *can* report device id/name reliably, so don't fall through there
+    // — otherwise a stale iPhone companion from a previous run will be
+    // reused when the slot is targeting iPad, and we never spin up a
+    // companion on the right simulator.
+    if platform == Platform::Android && platform_companions.len() == 1 {
         return Ok(platform_companions[0].0);
     }
 
@@ -1837,7 +1843,20 @@ async fn ensure_companion_with_reg(
         device, &companion_path, 0, Some(reg_port),
     ).await?;
 
-    // Wait for the companion to register (up to 60s)
+    // Wait for the companion we just spawned to register (up to 60s).
+    // We require two things to match before returning a port:
+    //   1. The registered device_id matches `device.udid` (filters out
+    //      other simulators' companions registering at the same time).
+    //   2. A live `/health` on the assigned port also reports the
+    //      expected device. This is the critical check: registration
+    //      assigns a port based on a free-bind probe, but a stale
+    //      companion from a previous golem run can already be bound
+    //      to that port — the new companion then re-registers on a
+    //      different port, and any code that trusted only the first
+    //      registration would route to the wrong simulator.
+    // (iOS and Android both report a canonical device id; Android via
+    // the explicit `device_serial` env var, iOS via `UIDevice.current
+    // .identifierForVendor`.)
     let mut rx = reg_state.subscribe();
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
     loop {
@@ -1845,6 +1864,12 @@ async fn ensure_companion_with_reg(
             msg = rx.recv() => {
                 if let Ok(registered_id) = msg {
                     if let Some(comp) = reg_state.get(&registered_id) {
+                        // Strict UDID match. `device_name` is shown to
+                        // users but isn't unique (two iPhones can share
+                        // a name) — UDID is canonical on both platforms.
+                        if comp.device_id != device.udid {
+                            continue;
+                        }
                         // For Android, set up ADB forward for the assigned port
                         if platform == Platform::Android {
                             let fwd = golem_devices::lifecycle::port_forward_command(device, comp.port);
@@ -1852,7 +1877,20 @@ async fn ensure_companion_with_reg(
                         }
                         // Wait briefly for the companion to start serving after registration
                         let client = golem_driver::common::CompanionClient::new(comp.port);
-                        let _ = client.wait_for_health(std::time::Duration::from_secs(15)).await;
+                        let health = match client
+                            .wait_for_health(std::time::Duration::from_secs(15))
+                            .await
+                        {
+                            Ok(h) => h,
+                            Err(_) => continue, // companion never came up on this port; keep waiting
+                        };
+                        // Final cross-check: the live process on this
+                        // port must report the same UDID we asked for.
+                        // Without this, a stale companion bound to the
+                        // assigned port would be silently routed to.
+                        if health.device_id != device.udid {
+                            continue;
+                        }
                         return Ok(comp.port);
                     }
                 }

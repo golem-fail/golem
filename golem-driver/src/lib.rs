@@ -13,7 +13,7 @@ pub fn set_debug(enabled: bool) {
     DEBUG.store(enabled, Ordering::Relaxed);
 }
 
-fn is_debug() -> bool {
+pub fn is_debug() -> bool {
     DEBUG.load(Ordering::Relaxed)
 }
 pub mod ios_display;
@@ -242,6 +242,10 @@ pub struct MockPlatformDriver {
     pub hierarchy: Mutex<Element>,
     /// Record of all method calls (method_name, args)
     pub calls: Mutex<Vec<(String, Vec<String>)>>,
+    /// Simulated soft-keyboard height — non-zero means "keyboard up".
+    /// Cleared when `hide_keyboard()` is called, mirroring real driver
+    /// behaviour. Mutate via `set_keyboard_height` only.
+    keyboard_height: Mutex<i32>,
 }
 
 impl MockPlatformDriver {
@@ -249,11 +253,17 @@ impl MockPlatformDriver {
         Self {
             hierarchy: Mutex::new(hierarchy),
             calls: Mutex::new(Vec::new()),
+            keyboard_height: Mutex::new(0),
         }
     }
 
     pub fn set_hierarchy(&self, hierarchy: Element) {
         *self.hierarchy.lock().expect("lock poisoned") = hierarchy;
+    }
+
+    /// Set the simulated keyboard height. Zero = hidden.
+    pub fn set_keyboard_height(&self, height: i32) {
+        *self.keyboard_height.lock().expect("lock poisoned") = height;
     }
 
     /// Get all recorded calls
@@ -278,7 +288,11 @@ impl MockPlatformDriver {
 impl PlatformDriver for MockPlatformDriver {
     async fn get_hierarchy(&self) -> anyhow::Result<(Element, common::HierarchyMeta)> {
         self.record_call("get_hierarchy", vec![]);
-        Ok((self.hierarchy.lock().expect("lock poisoned").clone(), common::HierarchyMeta::default()))
+        let meta = common::HierarchyMeta {
+            keyboard_height: *self.keyboard_height.lock().expect("lock poisoned"),
+            ..common::HierarchyMeta::default()
+        };
+        Ok((self.hierarchy.lock().expect("lock poisoned").clone(), meta))
     }
 
     async fn tap(&self, x: i32, y: i32) -> anyhow::Result<()> {
@@ -348,6 +362,9 @@ impl PlatformDriver for MockPlatformDriver {
 
     async fn hide_keyboard(&self) -> anyhow::Result<()> {
         self.record_call("hide_keyboard", vec![]);
+        // Mirror real driver behaviour: dismissing the keyboard zeroes
+        // the height the next get_hierarchy() reports.
+        *self.keyboard_height.lock().expect("lock poisoned") = 0;
         Ok(())
     }
 

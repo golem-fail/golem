@@ -1,5 +1,26 @@
 # Roadmap
 
+## Architecture and DX follow-ups from May 2026 review
+
+Captured during the post-merge audit; none are blocking but each removes a sharp edge.
+
+- **`is_debug` cross-crate coupling.** `golem-runner` reaches into `golem_driver::is_debug()` for a diagnostic eprintln. Move to `golem-common` or give the runner its own debug flag so the runner doesn't depend on the driver for telemetry.
+- **`cssSafeAreaInset` invisible to callers.** Today the WebKit Inspector enrichment subtracts the inset locally and discards it. Adding `css_safe_area_top: i32` to `HierarchyMeta` (default 0) keeps the diagnostic record. Sets up Android once an equivalent surfaces.
+- **iOS `handleLaunch` worst-case 15s wait.** Three `waitForExistence(timeout: 5.0)` probes in series. Apps with no static text on first paint pay the full third probe before `/launch` returns. Tighten the `staticTexts` timeout or make it configurable per-app.
+- **Companion tap waits up to 2s for `windows.firstMatch`.** `handleTap` / `handleLongPress` / `handleHideKeyboard` each block for up to 2s when the window query lags. Long flows pay this per action.
+- **`tap()` → `press(forDuration: 0.05)`.** Pages with a long-press distinguisher above ~50ms threshold may classify these as long-presses. Document the boundary or add an explicit `tap-fast` shorthand.
+- **Resolver auto-hide-keyboard fires unconditionally.** Tests that intentionally exercise keyboard-up state will be perturbed. Consider an opt-out flag on the step or scope to specific actions.
+- **`find_webview_socket` returns `None` on empty `pidof`.** Previously fell back to first-socket, useful for ad-hoc debugging. If we want to keep the loose path for `golem tree`, add a `--any` flag.
+- **`normalize_android_permission` typo passthrough.** A misspelled `"locaiton"` is forwarded to `pm grant` verbatim. Either error on unknown shorthands or document the passthrough explicitly.
+- **`location-always` collapses to `ACCESS_FINE_LOCATION`.** Always-on location actually needs `ACCESS_BACKGROUND_LOCATION` too. Collapse is silent.
+- **`photos` shorthand picks `READ_MEDIA_IMAGES` only.** Android 12 and below want `READ_EXTERNAL_STORAGE`; Android 14+ has `READ_MEDIA_VISUAL_USER_SELECTED`. API-level-blind today.
+- **No iOS analogue to `normalize_android_permission`.** iOS path passes the shorthand verbatim to `simctl privacy`; works for `camera` / `location` but silently diverges from Android for less common ones.
+- **Tests gap.** `normalize_android_permission`, `find_webview_socket` PID filter, safe-area subtraction, BUTTON/A textContent fallback, `EventLog`, `find_or_allocate_port` Android-only fallback, `ensure_companion_with_reg` UDID cross-check — none have unit coverage.
+- **Docs gap.** `/press` companion endpoint, resolver auto-hide-keyboard, the now-required `app =` field on `grant_permission` / `revoke_permission` actions — none are externally documented.
+- **`tauri-plugin-deep-link::register` never invoked.** Flagged during deep-link investigation. iOS plumbing is broken regardless (see Deep-link entry below); decide and document whether `register()` would help on Android.
+- **`Menu.svelte` `scroll-margin-top` hard-codes 60px.** Refactors that grow the menu height regress scroll-into-view. Compute from the menu's bounding box.
+- **`EventLog.MAX = 50`.** Pointermove bursts evict prior events. Acceptable for a debug tool today; bumping to time-windowed (last 5s) would survive long flows.
+
 ## e2e Coverage for Physical Device Path
 
 No e2e flow exercises the physical-device path today. Android is the easier starter (ADB-based, no special transport). Add:
@@ -231,42 +252,44 @@ The scroll loop logs `inner scrollable consumed gesture` and switches strategies
 
 **Files:** `golem-runner/src/scroll.rs` strategy switching; `golem-driver/src/webkit.rs` for inspector tree freshness during scroll.
 
-## Android WebView: Placeholder Text Not in Accessibility Tree
+## iPad WKWebView: menu-nav after auto_scroll-into-counter
 
-Android exposes web `<input>` elements as `EditText` with no associated text/label. Placeholders (`placeholder="Enter email"`) are HTML-only and don't surface in Android's accessibility tree. Affects `form_fill`, `webview`, any flow using placeholder-text selectors.
+Now that iPad routing is fixed (above), `webview.test` on iPad gets through 15 of its 27 steps and fails at the first `tap on_accessibility_label="menu-toggle"` after `tap Increment` with `auto_scroll = true`. Suspect: iPad's larger viewport + scroll-into-Counter leaves the sticky menu in a different bounds box than the resolver expects, OR iPad's a11y tree exposes the menu differently.
 
-iOS works because the WebKit Inspector enrichment fills in placeholder/label text. No equivalent on Android today.
+Repro:
+```
+golem run e2e/cross/webview.test.toml --platform ios --coverage one
+```
+fails at step 15 `tap menu-toggle` (label `[ios/iPad (A16)]`).
 
-**Approaches:**
-- Wire up CDP-style WebView introspection on Android (chrome devtools protocol over adb forward) to extract placeholder/label/value
-- Document that Android tests targeting WebView inputs must use positional selectors (`on_below = "Text Fields"`, `on_index = N`)
+**Files:** `test-app/src/lib/Menu.svelte` (sticky-menu CSS), `golem-driver/src/webkit.rs` (iPad inspector enrichment).
 
-**Files:** `golem-driver/src/cdp.rs` (existing CDP module) + `golem-driver/src/android.rs` for the WebView attach path.
+## Deep-link delivery on iOS — two stacked blockers
 
-## iOS 26 simctl ui home Errors
+Investigated end-to-end. The JS listener wiring is fine; two separate iOS-level problems sit between `simctl openurl` and `onOpenUrl` in JS.
 
-`device_controls.test` step that calls home button via `xcrun simctl ui <udid> home` errors with `Get or Set UI options` on iOS 26.4.1 (Xcode 26). Likely a `simctl` interface change. Either find the new invocation or fall back to `simctl spawn ... launchctl ...` for home button equivalent.
+**Blocker 1: `simctl openurl` triggers an iOS confirmation dialog.** For a custom URL scheme delivered from outside the app (simctl counts as outside), iOS shows `Open in "GOLEM Test App"?` with Cancel/Open. Until "Open" is tapped, the URL never reaches the app process. golem's `open_url` action (driver-side) just calls `simctl openurl` and returns — doesn't dismiss the dialog.
 
-**Files:** `golem-driver/src/ios.rs` press_button "home" path.
+**Blocker 2: even after tapping "Open", the URL doesn't reach the JS listener.** With the test-app rebuilt to expose plugin-side state in the DOM:
+- `import('@tauri-apps/plugin-deep-link')` succeeds (keys: `getCurrent, isRegistered, onOpenUrl, register, unregister`).
+- `onOpenUrl(handler)` returns successfully (`listener-ok`).
+- `getCurrent()` returns `null` on cold-start (after dialog confirm-Open) AND on warm-start.
+- `onOpenUrl` callback never fires after openurl + dialog confirm.
+- `isRegistered("golem-test")` is permission-blocked (`deep-link:allow-is-registered` not in `capabilities/default.json`'s `deep-link:default` set), but that's an unrelated minor gap.
 
-## Test App: Deep Link Listener Wiring
+The Tauri plugin's iOS path (Tauri 2.x → Tao → UIApplicationDelegate hook → plugin event → JS) appears to silently drop the URL. This is in `tauri-plugin-deep-link 2.4.7` territory; not a test-app config we can tweak from outside.
 
-`tauri-plugin-deep-link` is installed and the iOS URL scheme `golem-test://` is registered in `Info.plist` (`simctl openurl` no longer errors). What's still missing: the JS-side `onOpenUrl` callback in `DeviceState.svelte` doesn't fire to update the `deeplink` state when a URL arrives. The dynamic-import wrapper around `@tauri-apps/plugin-deep-link` may be silently failing on the iOS simulator, OR the plugin needs additional capability/permission config.
+**Files / next attempts (when picked back up):**
+- `golem-driver/src/ios.rs::open_url` — auto-tap "Open" on the iOS confirmation dialog (simulator-only side fix; real-device flows hit the same dialog).
+- `test-app/src-tauri/Cargo.toml` — try a newer `tauri-plugin-deep-link` if released, or pin to a known-good version.
+- `test-app/src-tauri/capabilities/default.json` — add `deep-link:allow-is-registered` (separate small gap).
+- Inspect Tao's iOS app delegate (vendored under `~/.cargo/registry/.../tao-*`) to see whether `application:openURL:options:` is bridged through to plugins or shadowed.
 
-**Investigate next:**
-- Console-log inside the `onOpenUrl` callback to confirm it's installed
-- Check `RustError`/Tauri logs from `simctl spawn ... log` while `simctl openurl` runs to see whether the OS actually delivered the event to the app
-- Try the static (non-dynamic) import path
+## Test App: Menu nav migration — remaining flows
 
-**Files:** `test-app/src/lib/DeviceState.svelte`.
+Menu nav (`tap on_accessibility_label="menu-toggle"` + `tap on_accessibility_label="goto-X"`) replaces `auto_scroll = true` for non-scroll-testing flows. Already migrated: `dialog_overlay`, `read`, `wait` (scroll_and_tap block), `permissions_lifecycle`, `permissions_grant_revoke`, `deep_link` (first step).
 
-## Test App: Menu Component Pattern
-
-`test-app/src/lib/Menu.svelte` provides a sticky menu with anchor links to each section (`goto-{kebab-id}` aria-labels). Test flows can use `tap on_accessibility_label="menu-toggle"` + `tap on_accessibility_label="goto-X"` instead of `auto_scroll = true` to land on a section instantly.
-
-This dramatically speeds up flows that target below-fold content (proven on `dialog_overlay.test` iOS 26: was 30s+ timeout, now passes in ~44s end-to-end with 4 dialog blocks).
-
-**Migration plan:** Audit each e2e flow that uses `auto_scroll = true` solely to reach a section and replace with menu nav. Flows that intentionally test scrolling (`scroll.test`, `scroll_search.test`, `wait.test` `scroll_and_tap` block) should keep `auto_scroll`.
+**Still on auto_scroll:** `device_controls` (blocked — see scroll-margin overshoot entry), `webview` (test fails earlier on consecutive-`type` issue, not menu nav). Intentionally on auto_scroll: `scroll.test`, `scroll_search.test`, the `wait_for_elements` block of `wait.test`.
 
 ## iOS WebKit Inspector: 0x0 Bounds for Plain Inline Elements
 
@@ -281,4 +304,63 @@ Symptom: `assert_visible on_text="Item 0"` (no auto_scroll) times out because th
 CSS workarounds (display:flex, min-height, min-width on .row containers) tested in `DeviceState.svelte` — didn't change the reported bounds. The fix is upstream in `golem-driver/src/webkit.rs` enrichment: query `getBoundingClientRect()` for inline elements that report empty/zero bounds via the inspector.
 
 **Files:** `golem-driver/src/webkit.rs` (enrichment query).
+
+## iOS sim: first-tap race against fresh-launch WKWebView (parked)
+
+Any flow whose first action after `launch` is a `tap` (or implicit-tap action) flakes on iOS Simulator iPhone 17 (iOS 26.4.1). Confirmed affected: `permissions_lifecycle.test`, `permissions_grant_revoke.test`, `read.test` (when the `+` taps run before any wait). Confirmed unaffected: flows that wait on visible text first (`wait.test`, `dialog_overlay.test`) — the wait absorbs the race.
+
+**Symptom:** the first post-launch `tap` "succeeds" against the matched element bounds (golem-side reports OK because the HID synthesis returned), but the JS click handler does **not** fire. The WKWebView is rendered DOM-wise (CDP enrichment reads the tree fine) but it's *quiescent* — the gesture-recognizer wiring hasn't attached to the iOS sim's HID dispatch path used by XCUITest synthesized taps. Real Cocoa mouse events would wake it up; XCUITest's `IOHID` injection apparently doesn't.
+
+The screen-goes-black artifact is a **secondary symptom, not a consequence of the tap** — once the WebView misses input, iOS sim de-allocates / throttles its GPU surface, and the screen renders black until something forces a wake-up. Manual `xcrun simctl launch + mouse-click` always works because mouse events take the wake-up path.
+
+Mitigations in place (companion + driver):
+- `RequestRouter.handleLaunch` now blocks on `XCUIApplication.wait(.runningForeground)` + `windows.firstMatch.waitForExistence` + `staticTexts.firstMatch.waitForExistence` before returning. `/launch` returns only after the DOM has rendered text.
+- `RequestRouter.handleTap` / `handleLongPress` / `handleHideKeyboard` root the coordinate on `windows.firstMatch` (forces a snapshot) and use `press(forDuration: 0.05)` instead of bare `tap()` (explicit down/up timing).
+- `IosDriver.stop_app` uses `simctl terminate` and adds a 500ms post-kill grace before the next launch (avoids the WKWebView teardown race that otherwise stacks WebViews).
+
+Even with all of the above, flake on `permissions_lifecycle.test` is ~3/5. Pure timing isn't the whole story — the XCUITest HID-injection path takes a different OS route than Cocoa mouse events and fresh WKWebViews drop the former. Fixing it cleanly likely requires injecting touches via `IOHIDEventSystemClient` directly or a private `CoreSimulator` API, which is a significant detour.
+
+**Workaround for flow authors today:** put a `wait on_text="..."` as the first step after every `launch` so the wait absorbs the race instead of the next tap. Note: Maestro and most other mobile test runners have similar limitations on iOS sim privacy + relaunch flows — this isn't a uniquely golem problem.
+
+**Status: parked.** Picking it back up needs a different injection mechanism, not more XCUITest tweaking.
+
+**Files:** `companions/ios/GolemRunnerUITests/RequestRouter.swift`, `golem-driver/src/ios.rs`.
+
+## device_controls.test: iOS scroll-margin overshoot on relational selectors
+
+After menu-nav lands on `#section-device-state`, iOS reports the row's `Portrait` value at viewport y=-27 — the scroll-into-view places the section just above the visible area on iPhone 17 / iOS 26.
+
+`scroll-margin-top: calc(60px + env(safe-area-inset-top, 0px))` in `Menu.svelte` is intended to clear the sticky menu, but the resulting offset under `viewport-fit=cover` overshoots. Affects every assertion in `device_controls.test` that uses `right_of` / `below` relational selectors after menu nav.
+
+**Investigate:** measure the actual sticky-menu height on iOS WKWebView (it may be smaller than 60px on `position:sticky;top:0` with cover-mode), and reconcile with the runtime safe-area inset. Likely fixable by computing `scroll-margin-top` dynamically from the menu's measured bounding box.
+
+**Files:** `test-app/src/lib/Menu.svelte`, possibly `test-app/src/App.svelte`.
+
+## device_controls.test: Android back+launch lands in 37-node partial render
+
+`press button="back"` on Android exits the test-app activity. The next `launch` returns success and `await_first_frame` fires (settle gate passes), but the DOM is 37 nodes — h1 only, no Counter / Menu / sections. Both menu-nav and `auto_scroll = true` time out because the targets don't exist in the tree.
+
+Pre-existing — also fails on the legacy `auto_scroll`-based flow. The Tauri Android WebView doesn't fully re-render after `back` → `launch`. Could be a `singleTask` activity vs WebView lifecycle interaction.
+
+**Files:** `test-app/src-tauri/gen/android/...` activity config; possibly `golem-driver/src/android.rs` settle gate to detect partial render and re-poll.
+
+## Android: AndroidManifest permission persistence
+
+`pm grant` requires `<uses-permission>` declarations in `AndroidManifest.xml`. The test-app currently has CAMERA / RECORD_AUDIO / ACCESS_FINE_LOCATION / ACCESS_COARSE_LOCATION declared in `test-app/src-tauri/gen/android/app/src/main/AndroidManifest.xml`, but `gen/` is gitignored — fresh clones lose the declarations and `permissions_*.test` will fail at the grant step.
+
+Tauri 2.x has no first-class config for Android `<uses-permission>`. Options:
+
+- Commit `test-app/src-tauri/gen/android/` (standard for many Tauri 2.x projects)
+- Add a `build.rs` / pre-build script that patches the manifest
+- Wait for upstream Tauri to expose `tauri.conf.json` → `bundle.android.permissions`
+
+**Files:** `.gitignore`, `test-app/src-tauri/gen/android/app/src/main/AndroidManifest.xml`.
+
+## Android: sticky menu tap target only half-clickable
+
+On Android phone with the sticky `Menu.svelte` at `scrollTop = 0`, roughly the top half of the menu-toggle button overlaps the system status bar / notification area and is not tappable by a human (the OS intercepts touches). Tests work because the companion's `tap` syntheses go through to the WebView regardless. Pure UX issue for manual testing.
+
+The `padding: max(8px, env(safe-area-inset-top, 8px))` already shifts the button down some — but Android's `env(safe-area-inset-top)` reports 0 on most emulators, so the padding doesn't compensate.
+
+**Files:** `test-app/src/lib/Menu.svelte`.
 

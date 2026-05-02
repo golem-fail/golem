@@ -49,6 +49,8 @@ final class RequestRouter {
             return handleScreenshot()
         case ("POST", "/hide-keyboard"):
             return handleHideKeyboard(query: query)
+        case ("POST", "/press"):
+            return handlePress(body: body)
         case ("POST", "/launch"):
             return handleLaunch(body: body, query: query)
         case ("POST", "/stop"):
@@ -101,7 +103,7 @@ final class RequestRouter {
         return .json([
             "status": "ok",
             "platform": "ios",
-            "version": "0.5.4",
+            "version": "0.5.5",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
@@ -169,9 +171,21 @@ final class RequestRouter {
         let application = app(query: query)
         DispatchQueue.main.sync {
             application.activate()
-            let normalized = application.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+            // Force XCUITest to materialise an accessibility snapshot of
+            // the topmost window before synthesising the tap. Rooting
+            // the coordinate on the window (vs the application) also
+            // ensures the resulting HID event is dispatched on the
+            // same OS path the WKWebView gesture recognizer is wired
+            // to receive.
+            let win = application.windows.firstMatch
+            _ = win.waitForExistence(timeout: 2.0)
+            let normalized = win.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
             let target = normalized.withOffset(CGVector(dx: x, dy: y))
-            target.tap()
+            // `press(forDuration:)` gives explicit touch-down + hold +
+            // touch-up timing; bare `tap()` synthesises an instant
+            // up-after-down that the WebView can race-drop the up of,
+            // leaving the click event unfired.
+            target.press(forDuration: 0.05)
         }
         return .json(["status": "ok"])
     }
@@ -186,7 +200,9 @@ final class RequestRouter {
         let application = app(query: query)
         DispatchQueue.main.sync {
             application.activate()
-            let normalized = application.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+            let win = application.windows.firstMatch
+            _ = win.waitForExistence(timeout: 2.0)
+            let normalized = win.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
             let target = normalized.withOffset(CGVector(dx: x, dy: y))
             target.press(forDuration: duration)
         }
@@ -314,9 +330,31 @@ final class RequestRouter {
         let application = app(query: query)
         DispatchQueue.main.sync {
             application.activate()
-            let normalized = application.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+            let win = application.windows.firstMatch
+            _ = win.waitForExistence(timeout: 2.0)
+            let normalized = win.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
             let target = normalized.withOffset(CGVector(dx: 10, dy: 10))
             target.tap()
+        }
+        return .json(["status": "ok"])
+    }
+
+    /// Press a hardware/system button via `XCUIDevice`. XCUITest's
+    /// `XCUIDevice.shared.press(.home)` is the version-stable path —
+    /// `simctl ui <udid> home` was dropped in Xcode 26.
+    private func handlePress(body: Data?) -> HTTPResponse {
+        guard let params = parseBody(body),
+              let button = params["button"] as? String else {
+            return .error("Missing 'button' field", status: 400)
+        }
+        let mapped: XCUIDevice.Button
+        switch button {
+        case "home": mapped = .home
+        default:
+            return .error("Unsupported button on iOS: \(button)", status: 400)
+        }
+        DispatchQueue.main.sync {
+            XCUIDevice.shared.press(mapped)
         }
         return .json(["status": "ok"])
     }
@@ -331,6 +369,22 @@ final class RequestRouter {
             // activate() brings to foreground without restarting.
             // If not running, it launches it fresh.
             application.activate()
+            // Block until XCUITest considers the app fully foregrounded
+            // AND the WKWebView has rendered enough DOM that we can
+            // observe at least one accessibility element produced by
+            // the page itself. Without this gate the HTTP response
+            // returns before the WebView's gesture recognizer is
+            // wired — the next /tap then synthesises HID events the
+            // WebView silently drops, the long-standing "first tap
+            // after launch is dead" flake.
+            //
+            // `staticTexts.firstMatch` is the cheapest probe that
+            // requires a real DOM render: empty/loading WebViews have
+            // no static text in their tree, but an `<h1>` or button
+            // label produces one as soon as it's painted.
+            _ = application.wait(for: .runningForeground, timeout: 5.0)
+            _ = application.windows.firstMatch.waitForExistence(timeout: 5.0)
+            _ = application.staticTexts.firstMatch.waitForExistence(timeout: 5.0)
         }
         lastLaunchedBundle = bundleId
         return .json(["status": "ok"])

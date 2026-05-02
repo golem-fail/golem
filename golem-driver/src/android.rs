@@ -37,6 +37,27 @@ struct CdpState {
 }
 
 
+/// Map a cross-platform permission shorthand (e.g. `camera`, `location`)
+/// to the Android `pm grant` permission constant. Pass-through anything
+/// already starting with `android.permission.`.
+fn normalize_android_permission(permission: &str) -> String {
+    if permission.starts_with("android.permission.") {
+        return permission.to_string();
+    }
+    match permission {
+        "camera" => "android.permission.CAMERA".into(),
+        "microphone" => "android.permission.RECORD_AUDIO".into(),
+        "location" | "location-always" | "location-when-in-use" => {
+            "android.permission.ACCESS_FINE_LOCATION".into()
+        }
+        "contacts" => "android.permission.READ_CONTACTS".into(),
+        "calendar" => "android.permission.READ_CALENDAR".into(),
+        "photos" | "photo-library" => "android.permission.READ_MEDIA_IMAGES".into(),
+        "notifications" => "android.permission.POST_NOTIFICATIONS".into(),
+        other => other.to_string(),
+    }
+}
+
 /// Build the adb command arguments for launching an app via monkey.
 #[cfg(test)]
 fn build_launch_app_args(serial: &str, package: &str) -> Vec<String> {
@@ -132,11 +153,11 @@ enum CdpAction {
 
 /// Set up CDP: discover socket, ADB forward, get page ID.
 /// Cleans up any previous forward before creating a new one.
-async fn setup_cdp(device_serial: &str) -> Option<CdpState> {
+async fn setup_cdp(device_serial: &str, package_name: &str) -> Option<CdpState> {
     // Clean up stale CDP forwards from previous sessions
     crate::cdp::cleanup_stale_forwards(device_serial).await;
 
-    let socket_name = crate::cdp::find_webview_socket(device_serial).await?;
+    let socket_name = crate::cdp::find_webview_socket(device_serial, package_name).await?;
     let port = crate::cdp::setup_forward(device_serial, &socket_name).await.ok()?;
     let page_id = match crate::cdp::get_page_id(port).await {
         Ok(id) => id,
@@ -211,8 +232,9 @@ impl PlatformDriver for AndroidDriver {
                         // First WebView sighting — kick off background setup
                         let (tx, rx) = tokio::sync::oneshot::channel();
                         let serial = self.device_serial.clone();
+                        let pkg = self.package_name.clone();
                         tokio::spawn(async move {
-                            let result = setup_cdp(&serial).await;
+                            let result = setup_cdp(&serial, &pkg).await;
                             let _ = tx.send(result);
                         });
                         *cdp = CdpLifecycle::SetupInProgress(rx);
@@ -246,8 +268,9 @@ impl PlatformDriver for AndroidDriver {
                         // Retry — the app may have been relaunched with a new WebView
                         let (tx, rx) = tokio::sync::oneshot::channel();
                         let serial = self.device_serial.clone();
+                        let pkg = self.package_name.clone();
                         tokio::spawn(async move {
-                            let result = setup_cdp(&serial).await;
+                            let result = setup_cdp(&serial, &pkg).await;
                             let _ = tx.send(result);
                         });
                         *cdp = CdpLifecycle::SetupInProgress(rx);
@@ -262,7 +285,7 @@ impl PlatformDriver for AndroidDriver {
                     // CDP failed (dead socket, app restart). Reconnect immediately
                     // rather than deferring to background — the caller is already
                     // waiting for hierarchy data.
-                    if let Some(new_state) = setup_cdp(&self.device_serial).await {
+                    if let Some(new_state) = setup_cdp(&self.device_serial, &self.package_name).await {
                         try_enrich(&mut raw, new_state.port, &new_state.page_id, wv_left, wv_top).await;
                         let mut cdp = self.cdp.lock().expect("cdp mutex poisoned");
                         *cdp = CdpLifecycle::Ready(new_state);
@@ -467,13 +490,14 @@ impl PlatformDriver for AndroidDriver {
     }
 
     async fn grant_permission(&self, bundle_id: &str, permission: &str) -> Result<()> {
-        self.adb(&["shell", "pm", "grant", bundle_id, permission])
-            .await?;
+        let perm = normalize_android_permission(permission);
+        self.adb(&["shell", "pm", "grant", bundle_id, &perm]).await?;
         Ok(())
     }
 
     async fn revoke_permission(&self, bundle_id: &str, permission: &str) -> Result<()> {
-        self.adb(&["shell", "pm", "revoke", bundle_id, permission])
+        let perm = normalize_android_permission(permission);
+        self.adb(&["shell", "pm", "revoke", bundle_id, &perm])
             .await?;
         Ok(())
     }

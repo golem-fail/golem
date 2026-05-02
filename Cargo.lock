@@ -571,7 +571,7 @@ dependencies = [
 
 [[package]]
 name = "golem-cli"
-version = "0.5.3"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "chrono",
@@ -600,7 +600,7 @@ dependencies = [
 
 [[package]]
 name = "golem-devices"
-version = "0.5.3"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "libc",
@@ -612,12 +612,13 @@ dependencies = [
 
 [[package]]
 name = "golem-driver"
-version = "0.5.3"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "async-trait",
  "futures-util",
  "golem-element",
+ "minifier",
  "plist",
  "reqwest",
  "serde",
@@ -631,7 +632,7 @@ dependencies = [
 
 [[package]]
 name = "golem-element"
-version = "0.5.3"
+version = "0.5.5"
 dependencies = [
  "serde",
  "serde_json",
@@ -640,7 +641,7 @@ dependencies = [
 
 [[package]]
 name = "golem-email"
-version = "0.5.3"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -654,7 +655,7 @@ dependencies = [
 
 [[package]]
 name = "golem-events"
-version = "0.5.3"
+version = "0.5.5"
 dependencies = [
  "serde",
  "serde_json",
@@ -663,7 +664,7 @@ dependencies = [
 
 [[package]]
 name = "golem-orchestrator"
-version = "0.5.3"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "golem-devices",
@@ -676,7 +677,7 @@ dependencies = [
 
 [[package]]
 name = "golem-parser"
-version = "0.5.3"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "serde",
@@ -687,7 +688,7 @@ dependencies = [
 
 [[package]]
 name = "golem-report"
-version = "0.5.3"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "chrono",
@@ -700,7 +701,7 @@ dependencies = [
 
 [[package]]
 name = "golem-runner"
-version = "0.5.3"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -728,7 +729,7 @@ dependencies = [
 
 [[package]]
 name = "golem-vars"
-version = "0.5.3"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1156,6 +1157,15 @@ name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
+
+[[package]]
+name = "minifier"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14f1541610994bba178cb36757e102d06a52a2d9612aa6d34c64b3b377c5d943"
+dependencies = [
+ "clap",
+]
 
 [[package]]
 name = "mio"

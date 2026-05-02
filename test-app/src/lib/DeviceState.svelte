@@ -24,7 +24,9 @@ onMount(() => {
 
   // Deep link: dynamically import so a non-Tauri (e.g. `vite preview`)
   // build doesn't fail on the import. Subscribe both for cold-start
-  // (`getCurrent`) and warm-start (`onOpenUrl`) deliveries.
+  // (`getCurrent`) and warm-start (`onOpenUrl`) deliveries. iOS
+  // currently fails to deliver — see "Deep-link delivery on iOS"
+  // in docs/roadmap.md.
   let unlistenDeepLink;
   (async () => {
     try {

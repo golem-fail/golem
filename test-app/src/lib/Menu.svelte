@@ -1,5 +1,8 @@
 <script>
+import EventLog from "./EventLog.svelte";
+
 let open = $state(false);
+let logsOpen = $state(false);
 
 const links = [
   { id: "counter",         label: "Counter" },
@@ -33,14 +36,24 @@ function gotoSection(id) {
 </script>
 
 <nav class="menu" aria-label="section-navigation">
-  <button
-    type="button"
-    class="menu-toggle"
-    aria-label="menu-toggle"
-    onclick={() => (open = !open)}
-  >
-    Menu
-  </button>
+  <div class="menu-bar">
+    <button
+      type="button"
+      class="menu-toggle"
+      aria-label="menu-toggle"
+      onclick={() => (open = !open)}
+    >
+      Menu
+    </button>
+    <button
+      type="button"
+      class="menu-toggle"
+      aria-label="logs-toggle"
+      onclick={() => (logsOpen = !logsOpen)}
+    >
+      Logs
+    </button>
+  </div>
   {#if open}
     <ul class="menu-links">
       {#each links as link (link.id)}
@@ -56,6 +69,9 @@ function gotoSection(id) {
       {/each}
     </ul>
   {/if}
+  {#if logsOpen}
+    <EventLog />
+  {/if}
 </nav>
 
 <style>
@@ -65,14 +81,19 @@ function gotoSection(id) {
   z-index: 10;
   background: var(--menu-bg, #fff);
   border-bottom: 1px solid #ccc;
-  padding: 4px 8px;
+  /* Padding-top includes the device's safe-area inset so the menu
+     isn't hidden under the iOS notch / Android status bar. */
+  padding: max(8px, env(safe-area-inset-top, 8px)) 8px 4px;
 }
 /* Sections we jump to via the menu need a scroll-margin-top equal to
-   the (closed) menu height so `scrollIntoView` doesn't park them under
-   the sticky menu bar. Using a global selector so we don't have to
-   touch every section component. */
+   the (closed) menu height + the device's safe-area inset so that
+   `scrollIntoView` doesn't park them under the sticky menu bar. */
 :global([id^="section-"]) {
-  scroll-margin-top: 60px;
+  scroll-margin-top: calc(60px + env(safe-area-inset-top, 0px));
+}
+.menu-bar {
+  display: flex;
+  gap: 6px;
 }
 .menu-toggle {
   font-size: 14px;

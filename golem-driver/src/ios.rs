@@ -8,6 +8,18 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use golem_element::Element;
 
+/// Post-stop grace period on iOS. `simctl terminate` returns when the
+/// kill signal is dispatched; the OS still needs time to release the
+/// WKWebView's surface/GPU resources before a fresh launch can claim
+/// them cleanly. 500ms is empirically enough to avoid the partial-init
+/// race observed when stop and launch are back-to-back.
+///
+/// (The companion's `/launch` already blocks on
+/// `XCUIApplication.wait(.runningForeground)` + first window +
+/// staticTexts existence, so we don't need a Rust-side post-launch
+/// grace — the HTTP response already waits for DOM render.)
+const IOS_POST_STOP_GRACE: std::time::Duration = std::time::Duration::from_millis(500);
+
 /// iOS driver that communicates with an XCUITest companion server via HTTP.
 ///
 /// The companion server runs inside the iOS simulator and exposes
@@ -322,8 +334,17 @@ impl PlatformDriver for IosDriver {
     }
 
     async fn stop_app(&self, bundle_id: &str) -> Result<()> {
-        let body = serde_json::json!({ "bundle_id": bundle_id }).to_string();
-        self.client.post_json("/stop", &body).await?;
+        // `simctl terminate` actually kills the process. The companion's
+        // in-process `/stop` only suspends, which leaves the WKWebView
+        // alive — repeated stop+launch cycles then stack new WebViews
+        // on top of the suspended ones, and taps land on a frontmost
+        // dead surface that never dispatches events to the live DOM.
+        self.simctl(&["terminate", &self.device_id, bundle_id]).await?;
+        // simctl returns when the kill signal is sent, not when the
+        // OS has actually torn down the process + its WKWebView
+        // resources. A `launch` that races that teardown sometimes
+        // gets a half-initialised WebView. Small grace is cheap.
+        tokio::time::sleep(IOS_POST_STOP_GRACE).await;
         // App process is gone — the old inspector connection is dead.
         let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
         *wk = WebKitLifecycle::Idle;
@@ -338,14 +359,12 @@ impl PlatformDriver for IosDriver {
     }
 
     async fn press_button(&self, button: &str) -> Result<()> {
-        match button {
-            "home" => {
-                self.simctl(&["ui", &self.device_id, "home"]).await?;
-            }
-            other => {
-                anyhow::bail!("unsupported button on iOS: {other}");
-            }
-        }
+        // `xcrun simctl ui <udid> home` was removed in Xcode 26 / iOS
+        // 26.4 — `simctl ui` only takes `appearance`, `increase_contrast`
+        // etc. now. Route through the companion's `XCUIDevice.shared
+        // .press(.home)` instead, which is version-stable.
+        let body = serde_json::json!({ "button": button }).to_string();
+        self.client.post_json("/press", &body).await?;
         Ok(())
     }
 
@@ -451,12 +470,11 @@ impl PlatformDriver for IosDriver {
         anyhow::bail!("stop_recording is not yet supported on iOS")
     }
 
-
-
     async fn remove_port_forwards(&self) -> Result<()> {
         Ok(()) // Not applicable to iOS
     }
 }
+
 
 // ===========================================================================
 // Tests

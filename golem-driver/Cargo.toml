@@ -23,5 +23,8 @@ uuid = { workspace = true }
 # tests don't burn real wall-clock against the 10s deadline.
 tokio = { workspace = true, features = ["test-util"] }
 
+[build-dependencies]
+minifier = "0.3"
+
 [lints]
 workspace = true

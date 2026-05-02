@@ -15,15 +15,18 @@ steps = [
   { action = "wait", on_text = "Counter" },
 ]
 
-# Test that auto_scroll works with polling — find an off-screen element
+# `Show Delayed` lives in the Delayed Element section, well below the
+# fold. Use the menu to jump there directly — much faster than
+# auto_scroll past inner scrollables on iOS WebView.
 [[block]]
-name = "scroll_and_tap"
+name = "menu_nav_and_tap"
 steps = [
-  # "Show Delayed" is at the bottom, needs scrolling past inner scroll lists
-  { action = "tap", on_text = "Show Delayed", auto_scroll = true },
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-delayed-element" },
+  { action = "tap", on_text = "Show Delayed" },
 
   # After tapping, wait for delayed text to appear (~3s)
-  { action = "wait", on_text = "Delayed Text", auto_scroll = true },
+  { action = "wait", on_text = "Delayed Text" },
 
   # Wait for it to disappear (~3s)
   { action = "wait_not", on_text = "Delayed Text" },

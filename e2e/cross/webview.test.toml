@@ -26,13 +26,15 @@ steps = [
   { action = "assert_visible", on_text = "Submit" },
   { action = "assert_visible", on_text = "Counter" },
 
-  # Interact with text input elements inside the web view
+  # Interact with text input elements inside the web view. The resolver
+  # auto-dismisses the keyboard once if the target field is keyboard-
+  # occluded — no manual `hide_keyboard` boilerplate needed between
+  # consecutive type/assert actions.
   { action = "type", on_text = "Enter email", input = "webview@test.com" },
   { action = "assert_visible", on_text = "webview@test.com" },
 
   { action = "type", on_text = "Search", input = "webview search query" },
   { action = "assert_visible", on_text = "webview search query" },
-  { action = "hide_keyboard" },
 
   # Interact with buttons inside the web view (may need scrolling after typing)
   { action = "tap", on_accessibility_label = "Increment", auto_scroll = true },
@@ -41,6 +43,11 @@ steps = [
 
   # Read values from web view elements
   { action = "read", on_below = "Counter", on_index = 0, save_to = "counter_value" },
+
+  # Jump to Device State via the menu — its rows live below the fold
+  # and the resolver's viewport filter excludes off-screen elements.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-device-state" },
   { action = "read", on_right_of = "Orientation:", save_to = "orientation" },
   { action = "read", on_right_of = "Theme:", save_to = "theme" },
 
@@ -48,11 +55,15 @@ steps = [
   { action = "assert_visible", on_text = "Portrait", on_right_of = "Orientation:" },
   { action = "assert_visible", on_text = "Light", on_right_of = "Theme:" },
 
-  # Scroll to find list elements
-  { action = "assert_visible", on_text = "Item 0", auto_scroll = true },
+  # Jump to Scroll List for Item 0.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-scroll-list" },
+  { action = "assert_visible", on_text = "Item 0" },
 
-  # Scroll back to the top
-  { action = "assert_visible", on_text = "Submit", auto_scroll = true },
+  # Back to Buttons for Submit (sanity that the menu can return us up).
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-buttons" },
+  { action = "assert_visible", on_text = "Submit" },
 
   # Take a screenshot to capture final web view state
   { action = "screenshot", path = "/tmp/golem-cross-webview.png" },
