@@ -5,23 +5,32 @@ use chrono::{DateTime, Local};
 use golem_events::{Event, EventKind, SubstepEvent, ScrollAttemptResult};
 use tokio::sync::broadcast;
 
-const SYM_SUCCESS: &str = "\u{2713}";  // ✓
-const SYM_FAILED: &str = "\u{2717}";   // ✗
-const SYM_WARNING: &str = "\u{26A0}";  // ⚠
-const SYM_SKIPPED: &str = "\u{2212}";  // −
-const SYM_FLOW: &str = "\u{25B6}";     // ▶
+const SYM_FAILED: &str = "\u{2717}";   // ✗ (install failure marker)
 const SYM_BULLET: &str = "\u{2219}";   // ∙
+const SEPARATOR: &str = "────────────────────────────────────────";
 
 // ANSI color codes — muted palette, bright reserved for errors
 const DIM: &str = "\x1b[2m";           // dim/faint — indices, timing, structural
 const RESET: &str = "\x1b[0m";
-const GREEN: &str = "\x1b[32m";        // success (not bright)
-const YELLOW: &str = "\x1b[33m";       // warning (not bright)
-const BRIGHT_RED: &str = "\x1b[1;31m"; // FAIL — bright, stands out
-const BRIGHT_YELLOW: &str = "\x1b[1;33m"; // warning symbol — bright
-const CYAN: &str = "\x1b[36m";         // block headers
-const BLUE: &str = "\x1b[34m";         // flow name
-const BOLD: &str = "\x1b[1m";         // action names — bold pops against dim indices
+const YELLOW: &str = "\x1b[33m";       // warning message body
+const CYAN: &str = "\x1b[36m";         // block headers, [plan] tag
+const MAGENTA: &str = "\x1b[35m";      // [devices] tag
+const BLUE: &str = "\x1b[34m";         // [companion] tag
+const BOLD_BLUE: &str = "\x1b[1;34m";  // flow name leaf, step local index
+const BOLD_GREEN: &str = "\x1b[1;32m"; // PASS / Starting / Summary
+const BOLD_RED: &str = "\x1b[1;31m";   // FAIL
+const BOLD_YELLOW: &str = "\x1b[1;33m"; // SKIP / WARN, [install ...] tag
+const BOLD_MAGENTA: &str = "\x1b[1;35m"; // bundle ID identity
+const BOLD: &str = "\x1b[1m";          // action names, device name
+
+// Threshold (ms) above which a successful step is annotated SLOW.
+const SLOW_THRESHOLD_MS: u64 = 5_000;
+
+/// Padding that visually replaces the timestamp column on continuation
+/// lines (`HH:MM:SS.mmm` is 12 chars; format_timestamp adds a trailing
+/// space; the renderer adds 2 more before `{dp}`). Total: 15 visible chars
+/// before `{dp}`. The `│` gutter consumes 1, leaving 14 spaces here.
+const TS_CONTINUATION_PAD: &str = "              "; // 14 spaces
 
 /// Circled number symbols ① through ㊿ for device identification.
 const CIRCLED_NUMBERS: &[&str] = &[
@@ -69,6 +78,121 @@ fn format_circle(idx: usize, multi_device: bool, use_color: bool) -> String {
     }
 }
 
+/// 8-char right-aligned duration column, dim when colour is on.
+/// `[   1.500s]` — fixed width so timing aligns vertically across lines,
+/// nextest-style. Always renders seconds, three decimals.
+fn fmt_dur(ms: u64, use_color: bool) -> String {
+    let secs = ms as f64 / 1000.0;
+    if use_color {
+        format!("{DIM}[{secs:>8.3}s]{RESET}")
+    } else {
+        format!("[{secs:>8.3}s]")
+    }
+}
+
+/// 6-char left-aligned bold status keyword. The keyword + color carries the
+/// status — no leading symbol needed. PASS/FAIL/SKIP/WARN render in the same
+/// fixed column so the eye can scan the left margin for failures.
+fn keyword(label: &str, color: &str, use_color: bool) -> String {
+    if use_color {
+        format!("{color}{label:<6}{RESET}")
+    } else {
+        format!("{label:<6}")
+    }
+}
+
+/// Render a step path as `{global}::{block}({iter})::{local}` — global
+/// right-padded to 5 chars dim, `::` dim, block cyan, iteration dim parens
+/// (omitted when 0), local index bold. Empty block degrades to
+/// `{global}::{local}` (rare — pre-block events).
+fn fmt_step_path(
+    global: u64,
+    block: &(String, u32),
+    local: usize,
+    use_color: bool,
+) -> String {
+    let (block_name, iteration) = block;
+    let iter_part = if *iteration > 0 {
+        if use_color {
+            format!("{DIM}({iteration}){RESET}")
+        } else {
+            format!("({iteration})")
+        }
+    } else {
+        String::new()
+    };
+    if block_name.is_empty() {
+        if use_color {
+            format!("{DIM}{global:>5}::{RESET}{BOLD_BLUE}{local}{RESET}")
+        } else {
+            format!("{global:>5}::{local}")
+        }
+    } else if use_color {
+        format!(
+            "{DIM}{global:>5}::{RESET}{CYAN}{block_name}{RESET}{iter_part}{DIM}::{RESET}{BOLD_BLUE}{local}{RESET}"
+        )
+    } else {
+        format!("{global:>5}::{block_name}{iter_part}::{local}")
+    }
+}
+
+/// Render a subsystem tag like `[plan]` / `[devices]` / `[install …]` in a
+/// fixed colour. Lets the eye scan the left margin to tell apart setup-phase
+/// concerns. No-color path returns the tag verbatim.
+fn tag(label: &str, color: &str, use_color: bool) -> String {
+    if use_color {
+        format!("{color}{label}{RESET}")
+    } else {
+        label.to_string()
+    }
+}
+
+/// Bold every digit run in a string. Used on `[devices]` availability lines
+/// where the counts (`2 device(s)`, `1 booted`, …) are the actionable
+/// information. Numbers embedded in identifiers (like `v34`) are excluded by
+/// only bolding runs preceded by whitespace, `(`, or start-of-string.
+fn bold_numbers(s: &str, use_color: bool) -> String {
+    if !use_color {
+        return s.to_string();
+    }
+    let mut out = String::with_capacity(s.len() + 32);
+    let chars: Vec<char> = s.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        let prev_ok = i == 0 || matches!(chars[i - 1], ' ' | '(' | '\t');
+        if c.is_ascii_digit() && prev_ok {
+            let start = i;
+            while i < chars.len() && chars[i].is_ascii_digit() {
+                i += 1;
+            }
+            out.push_str(BOLD);
+            for &d in &chars[start..i] {
+                out.push(d);
+            }
+            out.push_str(RESET);
+        } else {
+            out.push(c);
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Render a flow path as `dir/name` with directory dim and leaf bold-blue.
+/// Strips the `.test` suffix from the leaf for cleaner display when present.
+fn fmt_flow_name(flow_name: &str, use_color: bool) -> String {
+    if !use_color {
+        return flow_name.to_string();
+    }
+    if let Some(slash) = flow_name.rfind('/') {
+        let (dir, leaf) = (&flow_name[..=slash], &flow_name[slash + 1..]);
+        format!("{DIM}{dir}{RESET}{BOLD_BLUE}{leaf}{RESET}")
+    } else {
+        format!("{BOLD_BLUE}{flow_name}{RESET}")
+    }
+}
+
 /// Stream events to stderr in human-readable format.
 ///
 /// `debug` enables per-line install script output. When false, install
@@ -90,10 +214,16 @@ pub async fn stream_human(
     // allocated on-demand per device_id.
     let mut current_slot: HashMap<String, usize> = HashMap::new();
     let mut next_slot: usize = 0;
-    // Legacy device_map retained for legend printing on FlowStarted.
-    let mut device_map: HashMap<String, usize> = HashMap::new();
     // Track current block per device
     let mut current_blocks: HashMap<String, (String, u32)> = HashMap::new();
+    // Track in-flight step (action + selector + local index) per device so
+    // StepFinished can render the full row — collapses two-line render to
+    // one line, vital for parallel interleaving readability.
+    let mut current_steps: HashMap<String, (String, String, usize)> = HashMap::new();
+    // Buffer substeps per device so a non-verbose failure can replay them
+    // under the FAIL line as post-mortem context. Verbose streams them live
+    // and never reads this map.
+    let mut pending_substeps: HashMap<String, Vec<(SystemTime, SubstepEvent)>> = HashMap::new();
 
     while let Ok(event) = rx.recv().await {
         let ts = format_timestamp(event.wall_time, use_color);
@@ -106,7 +236,6 @@ pub async fn stream_human(
             let idx = next_slot;
             next_slot += 1;
             current_slot.insert(event.device_id.0.clone(), idx);
-            device_map.insert(event.device_id.0.clone(), idx);
             format_circle(idx, multi_device, use_color)
         } else if let Some(&slot) = current_slot.get(&event.device_id.0) {
             // Non-flow event on a device that has already entered a flow —
@@ -121,49 +250,55 @@ pub async fn stream_human(
 
         match &event.kind {
             EventKind::SuitePlanned { flow_runs, install_entries, device_availability } => {
-                // Only render under --verbose; diagnostic view of plan output.
+                // Top bookend + Starting header — non-verbose, single line.
+                if use_color {
+                    eprintln!("{ts}{DIM}{SEPARATOR}{RESET}");
+                } else {
+                    eprintln!("{ts}{SEPARATOR}");
+                }
+                let kw = keyword("Starting", BOLD_GREEN, use_color);
+                let n_flows = flow_runs.len();
+                let n_devs = device_availability.len();
+                let flow_word = if n_flows == 1 { "flow" } else { "flows" };
+                let dev_word = if n_devs == 1 { "device slot" } else { "device slots" };
+                eprintln!(
+                    "{ts}{kw} {n_flows} {flow_word} across {n_devs} {dev_word}"
+                );
+
+                // Verbose adds the diagnostic plan + install matrix dump.
                 if verbose {
-                    eprintln!("{ts}  [plan] {} flow run(s):", flow_runs.len());
+                    let plan_tag = tag("[plan]", CYAN, use_color);
+                    let dev_tag = tag("[devices]", MAGENTA, use_color);
                     for line in flow_runs {
-                        eprintln!("{ts}  [plan]   {line}");
+                        eprintln!("{ts}  {plan_tag} {line}");
                     }
                     if !install_entries.is_empty() {
                         eprintln!(
-                            "{ts}  [plan] install matrix ({} entr{}):",
+                            "{ts}  {plan_tag} install matrix ({} entr{})",
                             install_entries.len(),
                             if install_entries.len() == 1 { "y" } else { "ies" }
                         );
                         for line in install_entries {
-                            eprintln!("{ts}  [plan]   {line}");
+                            eprintln!("{ts}  {plan_tag}   {line}");
                         }
                     }
                     if !device_availability.is_empty() {
-                        eprintln!(
-                            "{ts}  [devices] {} slot requirement(s):",
-                            device_availability.len()
-                        );
                         for line in device_availability {
-                            eprintln!("{ts}  [devices]   · {line}");
+                            let line = bold_numbers(line, use_color);
+                            eprintln!("{ts}  {dev_tag} {line}");
                         }
                     }
                 }
             }
             EventKind::FlowStarted { flow_name, .. } => {
+                let name = fmt_flow_name(flow_name, use_color);
                 if use_color {
-                    eprintln!("{ts}{dp}{BLUE}{SYM_FLOW} {flow_name}{RESET}");
+                    eprintln!(
+                        "{ts}{dp}{BOLD_GREEN}\u{25B6}{RESET} {name}  {DIM}device={}{RESET}",
+                        event.device_id
+                    );
                 } else {
-                    eprintln!("{ts}{dp}{SYM_FLOW} {flow_name}");
-                }
-                // Print device legend on first flow start in multi-device mode
-                if multi_device && device_map.len() <= 2 {
-                    let idx = device_map.get(&event.device_id.0).copied().unwrap_or(0);
-                    let num = CIRCLED_NUMBERS.get(idx).unwrap_or(&"?");
-                    if use_color {
-                        let color = DEVICE_COLORS.get(idx % DEVICE_COLORS.len()).unwrap_or(&"");
-                        eprintln!("{ts}  {DIM}{color}{num} {}{RESET}", event.device_id);
-                    } else {
-                        eprintln!("{ts}  {num} {}", event.device_id);
-                    }
+                    eprintln!("{ts}{dp}\u{25B6} {name}  device={}", event.device_id);
                 }
             }
             EventKind::BlockStarted { block_name, iteration, .. } => {
@@ -180,27 +315,68 @@ pub async fn stream_human(
                 }
             }
             EventKind::StepStarted { global_step_index, step_index_in_block, action, selector_label, .. } => {
+                // Capture action+selector+local-index so StepFinished can render
+                // the full row on one line. Two-line render fragments badly
+                // under parallel device interleaving; we collapse to one line
+                // per outcome.
+                current_steps.insert(
+                    event.device_id.0.clone(),
+                    (action.clone(), selector_label.clone(), *step_index_in_block),
+                );
+                // Reset substep buffer for this device — only the about-to-run
+                // step's substeps are interesting if it fails.
+                pending_substeps.remove(&event.device_id.0);
+                if !verbose {
+                    continue;
+                }
+                // --verbose only: dim "starting" hint so substeps have context.
                 let target_str = if selector_label.is_empty() {
                     String::new()
                 } else {
                     format!(" {selector_label}")
                 };
-                let (block_name, iteration) = current_blocks
+                let path = fmt_step_path(
+                    *global_step_index,
+                    &current_blocks.get(&event.device_id.0).cloned().unwrap_or_default(),
+                    *step_index_in_block,
+                    use_color,
+                );
+                if use_color {
+                    eprintln!("{ts}  {dp}{path} {BOLD}{action}{RESET}{target_str}");
+                } else {
+                    eprintln!("{ts}  {dp}{path} {action}{target_str}");
+                }
+            }
+            EventKind::StepFinished { outcome, duration_ms, tree_stats, retry_count, global_step_index, .. } => {
+                let (action, selector, local_idx) = current_steps
+                    .remove(&event.device_id.0)
+                    .unwrap_or_default();
+                let target_str = if selector.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {selector}")
+                };
+                let block = current_blocks
                     .get(&event.device_id.0)
                     .cloned()
                     .unwrap_or_default();
-                let block_tag = if iteration > 0 {
-                    format!("{block_name}:{iteration}")
+                let path = fmt_step_path(*global_step_index, &block, local_idx, use_color);
+                let block_suffix = format!("  {path}");
+                let dur = fmt_dur(*duration_ms, use_color);
+                let action_target = if use_color {
+                    format!("{BOLD}{action}{RESET}{target_str}")
                 } else {
-                    block_name
+                    format!("{action}{target_str}")
                 };
-                if use_color {
-                    eprintln!("{ts}  {dp}{DIM}[{global_step_index}][{block_tag}][{step_index_in_block}]{RESET} {BOLD}{action}{RESET}{target_str}");
-                } else {
-                    eprintln!("{ts}  {dp}[{global_step_index}][{block_tag}][{step_index_in_block}] {action}{target_str}");
+                let mut tags: Vec<String> = Vec::new();
+                if *retry_count > 0 {
+                    let s = format!("RETRY {retry_count}");
+                    tags.push(if use_color {
+                        format!("{BOLD_YELLOW}{s}{RESET}")
+                    } else {
+                        s
+                    });
                 }
-            }
-            EventKind::StepFinished { outcome, duration_ms, tree_stats, .. } => {
                 let stats_text = if verbose && tree_stats.fetches > 0 {
                     format_tree_stats(tree_stats)
                 } else {
@@ -213,186 +389,259 @@ pub async fn stream_human(
                 } else {
                     String::new()
                 };
-                if use_color {
-                    match outcome {
-                        golem_events::StepOutcome::Success => {
-                            eprintln!("{ts}  {dp}    {GREEN}{SYM_SUCCESS}{RESET}  {DIM}[{duration_ms}ms]{RESET}{stats_str}");
+                match outcome {
+                    golem_events::StepOutcome::Success => {
+                        if *duration_ms > SLOW_THRESHOLD_MS {
+                            tags.push(if use_color {
+                                format!("{BOLD_YELLOW}SLOW{RESET}")
+                            } else {
+                                "SLOW".to_string()
+                            });
                         }
-                        golem_events::StepOutcome::Failed(msg) => {
-                            eprintln!("{ts}  {dp}    {BRIGHT_RED}{SYM_FAILED} FAIL  [{duration_ms}ms]{RESET}");
-                            eprintln!("{ts}  {dp}    {BRIGHT_RED}{msg}{RESET}");
-                        }
-                        golem_events::StepOutcome::Warning(msg) => {
-                            eprintln!("{ts}  {dp}    {BRIGHT_YELLOW}{SYM_WARNING}{RESET}  {DIM}[{duration_ms}ms]{RESET}");
-                            eprintln!("{ts}  {dp}    {YELLOW}{msg}{RESET}");
-                        }
-                        golem_events::StepOutcome::Skipped | golem_events::StepOutcome::Ignored => {
-                            eprintln!("{ts}  {dp}    {DIM}{SYM_SKIPPED}  [{duration_ms}ms]{RESET}");
-                        }
+                        let tag_str = if tags.is_empty() {
+                            String::new()
+                        } else {
+                            format!("  {}", tags.join(" "))
+                        };
+                        let kw = keyword("PASS", BOLD_GREEN, use_color);
+                        eprintln!("{ts}  {dp}{kw} {dur}  {action_target}{tag_str}{block_suffix}{stats_str}");
+                        pending_substeps.remove(&event.device_id.0);
                     }
-                } else {
-                    match outcome {
-                        golem_events::StepOutcome::Success => {
-                            eprintln!("{ts}  {dp}    {SYM_SUCCESS}  [{duration_ms}ms]{stats_str}");
-                        }
-                        golem_events::StepOutcome::Failed(msg) => {
-                            eprintln!("{ts}  {dp}    {SYM_FAILED} FAIL  [{duration_ms}ms]");
-                            eprintln!("{ts}  {dp}    {msg}");
-                        }
-                        golem_events::StepOutcome::Warning(msg) => {
-                            eprintln!("{ts}  {dp}    {SYM_WARNING}  [{duration_ms}ms]");
-                            eprintln!("{ts}  {dp}    {msg}");
-                        }
-                        golem_events::StepOutcome::Skipped | golem_events::StepOutcome::Ignored => {
-                            eprintln!("{ts}  {dp}    {SYM_SKIPPED}  [{duration_ms}ms]");
-                        }
+                    golem_events::StepOutcome::Failed(msg) => {
+                        let tag_str = if tags.is_empty() {
+                            String::new()
+                        } else {
+                            format!("  {}", tags.join(" "))
+                        };
+                        let kw = keyword("FAIL", BOLD_RED, use_color);
+                        eprintln!("{ts}  {dp}{kw} {dur}  {action_target}{tag_str}{block_suffix}");
+                        let pending = pending_substeps.remove(&event.device_id.0).unwrap_or_default();
+                        print_failure_block(msg, BOLD_RED, &dp, &pending, use_color);
+                    }
+                    golem_events::StepOutcome::Warning(msg) => {
+                        let tag_str = if tags.is_empty() {
+                            String::new()
+                        } else {
+                            format!("  {}", tags.join(" "))
+                        };
+                        let kw = keyword("WARN", BOLD_YELLOW, use_color);
+                        eprintln!("{ts}  {dp}{kw} {dur}  {action_target}{tag_str}{block_suffix}");
+                        let pending = pending_substeps.remove(&event.device_id.0).unwrap_or_default();
+                        print_failure_block(msg, YELLOW, &dp, &pending, use_color);
+                    }
+                    golem_events::StepOutcome::Skipped | golem_events::StepOutcome::Ignored => {
+                        let kw = keyword("SKIP", DIM, use_color);
+                        eprintln!("{ts}  {dp}{kw} {dur}  {action_target}{block_suffix}");
+                        pending_substeps.remove(&event.device_id.0);
                     }
                 }
             }
-            EventKind::Substep(sub) if verbose => {
-                print_substep(&ts, &dp, sub, use_color);
+            EventKind::Substep(sub) => {
+                if verbose {
+                    print_substep(&ts, &dp, sub, use_color);
+                } else {
+                    pending_substeps
+                        .entry(event.device_id.0.clone())
+                        .or_default()
+                        .push((event.wall_time, sub.clone()));
+                }
             }
             EventKind::FlowFinished { flow_name, success, duration_ms, seed, .. } => {
-                let secs = *duration_ms as f64 / 1000.0;
                 eprintln!();
-                if use_color {
-                    if *success {
-                        eprintln!("{ts}  {dp}{GREEN}{SYM_SUCCESS} PASSED{RESET}  {flow_name}  {DIM}[{secs:.1}s]  seed:{seed}{RESET}");
-                    } else {
-                        eprintln!("{ts}  {dp}{BRIGHT_RED}{SYM_FAILED} FAILED{RESET}  {flow_name}  {DIM}[{secs:.1}s]  seed:{seed}{RESET}");
-                    }
+                let dur = fmt_dur(*duration_ms, use_color);
+                let name = fmt_flow_name(flow_name, use_color);
+                let kw = if *success {
+                    keyword("PASS", BOLD_GREEN, use_color)
                 } else {
-                    let sym = if *success { SYM_SUCCESS } else { SYM_FAILED };
-                    let label = if *success { "PASSED" } else { "FAILED" };
-                    eprintln!("{ts}  {dp}{sym} {label}  {flow_name}  [{secs:.1}s]  seed:{seed}");
+                    keyword("FAIL", BOLD_RED, use_color)
+                };
+                if use_color {
+                    eprintln!("{ts}  {dp}{kw} {dur}  {name}  {DIM}seed:{seed}{RESET}");
+                } else {
+                    eprintln!("{ts}  {dp}{kw} {dur}  {name}  seed:{seed}");
                 }
             }
             EventKind::SuiteFinished { duration_ms, passed, failed, skipped } => {
-                let secs = *duration_ms as f64 / 1000.0;
                 eprintln!();
                 if use_color {
-                    eprintln!("{ts}{DIM}──────────────────────────────────────{RESET}");
+                    eprintln!("{ts}{DIM}{SEPARATOR}{RESET}");
                 } else {
-                    eprintln!("{ts}──────────────────────────────────────");
+                    eprintln!("{ts}{SEPARATOR}");
                 }
                 let skip_suffix = if *skipped > 0 {
                     format!(", {skipped} skipped")
                 } else {
                     String::new()
                 };
-                eprintln!("{ts}Suite: {passed} passed, {failed} failed{skip_suffix}  [{secs:.1}s]");
+                let kw = keyword("Summary", BOLD_GREEN, use_color);
+                let dur = fmt_dur(*duration_ms, use_color);
+                eprintln!(
+                    "{ts}{kw} {dur}  {passed} passed, {failed} failed{skip_suffix}"
+                );
             }
             EventKind::InstallStarted { app_name, bundle_id, target, .. } => {
-                // Script may build + install, or just install (install-only mode).
-                // We can't tell which from events; "building and installing" covers both.
-                if use_color {
-                    eprintln!("{ts}  {dp}{DIM}[install {app_name}] building and installing {bundle_id} on {target}...{RESET}");
+                let t = tag(&format!("[install {app_name}]"), BOLD_YELLOW, use_color);
+                let bid = if use_color {
+                    format!("{BOLD_MAGENTA}{bundle_id}{RESET}")
                 } else {
-                    eprintln!("{ts}  {dp}[install {app_name}] building and installing {bundle_id} on {target}...");
-                }
+                    bundle_id.clone()
+                };
+                eprintln!("{ts}  {dp}{t} building and installing {bid} on {target}...");
             }
             EventKind::InstallOutput { app_name, line } => {
-                // Only stream per-line script stderr under --debug.
-                // Otherwise the install is silent between "building..." and
-                // the final success/failure line.
                 if debug {
-                    if use_color {
-                        eprintln!("{ts}  {dp}{DIM}[install {app_name}]{RESET} {line}");
-                    } else {
-                        eprintln!("{ts}  {dp}[install {app_name}] {line}");
-                    }
+                    let t = tag(&format!("[install {app_name}]"), BOLD_YELLOW, use_color);
+                    eprintln!("{ts}  {dp}{t} {line}");
                 }
             }
             EventKind::InstallFinished { app_name, bundle_id, success, duration_ms, error, target, .. } => {
-                let secs = *duration_ms as f64 / 1000.0;
+                let dur = fmt_dur(*duration_ms, use_color);
+                let t = tag(&format!("[install {app_name}]"), BOLD_YELLOW, use_color);
+                let bid = if use_color {
+                    format!("{BOLD_MAGENTA}{bundle_id}{RESET}")
+                } else {
+                    bundle_id.clone()
+                };
                 if *success {
-                    if use_color {
-                        eprintln!("{ts}  {dp}{GREEN}{SYM_SUCCESS}{RESET} {DIM}[install {app_name}] installed {bundle_id} on {target}  [{secs:.1}s]{RESET}");
-                    } else {
-                        eprintln!("{ts}  {dp}{SYM_SUCCESS} [install {app_name}] installed {bundle_id} on {target}  [{secs:.1}s]");
-                    }
+                    eprintln!("{ts}  {dp}{t} installed {bid} on {target}  {dur}");
                 } else {
                     let err = error.as_deref().unwrap_or("install failed");
                     if use_color {
-                        eprintln!("{ts}  {dp}{BRIGHT_RED}{SYM_FAILED}{RESET} [install {app_name}] on {target} — {err}");
+                        eprintln!("{ts}  {dp}{t} {BOLD_RED}{SYM_FAILED} {err}{RESET} on {target}  {dur}");
                     } else {
-                        eprintln!("{ts}  {dp}{SYM_FAILED} [install {app_name}] on {target} — {err}");
+                        eprintln!("{ts}  {dp}{t} {SYM_FAILED} {err} on {target}  {dur}");
                     }
                 }
             }
             EventKind::InstallSkipped { app_name, bundle_id, target, reason } => {
-                if use_color {
-                    eprintln!("{ts}  {dp}{DIM}{SYM_SUCCESS} [install {app_name}] {bundle_id} on {target} — skipped ({reason}){RESET}");
+                let t = tag(&format!("[install {app_name}]"), BOLD_YELLOW, use_color);
+                let bid = if use_color {
+                    format!("{BOLD_MAGENTA}{bundle_id}{RESET}")
                 } else {
-                    eprintln!("{ts}  {dp}{SYM_SUCCESS} [install {app_name}] {bundle_id} on {target} — skipped ({reason})");
+                    bundle_id.clone()
+                };
+                if use_color {
+                    eprintln!("{ts}  {dp}{t} {bid} on {target} {DIM}— skipped ({reason}){RESET}");
+                } else {
+                    eprintln!("{ts}  {dp}{t} {bid} on {target} — skipped ({reason})");
                 }
             }
             EventKind::InstallCacheMiss { app_name, bundle_id: _, target, reason } => {
+                let t = tag(&format!("[install {app_name}]"), BOLD_YELLOW, use_color);
                 if use_color {
-                    eprintln!("{ts}  {dp}{DIM}[install {app_name}] cache miss on {target} — {reason}{RESET}");
+                    eprintln!("{ts}  {dp}{t} {DIM}cache miss on {target} — {reason}{RESET}");
                 } else {
-                    eprintln!("{ts}  {dp}[install {app_name}] cache miss on {target} — {reason}");
+                    eprintln!("{ts}  {dp}{t} cache miss on {target} — {reason}");
                 }
             }
             EventKind::FlowSkipped { flow_name, reason } => {
-                if use_color {
-                    eprintln!("{ts}  {dp}{YELLOW}{SYM_WARNING} SKIPPED{RESET}  {flow_name}  {DIM}{reason}{RESET}");
+                let kw = keyword("SKIP", BOLD_YELLOW, use_color);
+                let name = fmt_flow_name(flow_name, use_color);
+                let dur_blank = if use_color {
+                    format!("{DIM}[       --]{RESET}")
                 } else {
-                    eprintln!("{ts}  {dp}{SYM_WARNING} SKIPPED  {flow_name}  {reason}");
+                    "[       --]".to_string()
+                };
+                if use_color {
+                    eprintln!("{ts}  {dp}{kw} {dur_blank}  {name}  {DIM}{reason}{RESET}");
+                } else {
+                    eprintln!("{ts}  {dp}{kw} {dur_blank}  {name}  {reason}");
                 }
             }
             EventKind::FlowParseFailed { path, error } => {
                 if use_color {
-                    eprintln!("{ts}  {BRIGHT_RED}Parse error{RESET} ({path}): {error}");
+                    eprintln!("{ts}  {BOLD_RED}Parse error{RESET} ({path}): {error}");
                 } else {
                     eprintln!("{ts}  Parse error ({path}): {error}");
                 }
             }
             EventKind::DeviceAutoBoot { device_name, slot_shape } => {
+                let t = tag("[devices]", MAGENTA, use_color);
+                let dn = if use_color { format!("{BOLD}{device_name}{RESET}") } else { device_name.clone() };
                 if use_color {
-                    eprintln!("{ts}  {DIM}[devices] no booted match — booting {device_name} to satisfy {slot_shape}...{RESET}");
+                    eprintln!("{ts}  {t} {DIM}no booted match — booting{RESET} {dn} {DIM}to satisfy {slot_shape}...{RESET}");
                 } else {
-                    eprintln!("{ts}  [devices] no booted match — booting {device_name} to satisfy {slot_shape}...");
+                    eprintln!("{ts}  {t} no booted match — booting {dn} to satisfy {slot_shape}...");
                 }
             }
             EventKind::DeviceAutoBootFinished { device_name, slot_shape, duration_ms } => {
-                let secs = *duration_ms as f64 / 1000.0;
+                let dur = fmt_dur(*duration_ms, use_color);
+                let t = tag("[devices]", MAGENTA, use_color);
+                let dn = if use_color { format!("{BOLD}{device_name}{RESET}") } else { device_name.clone() };
                 if use_color {
-                    eprintln!("{ts}  {GREEN}{SYM_SUCCESS}{RESET} {DIM}[devices] booted {device_name} for {slot_shape}  [{secs:.1}s]{RESET}");
+                    eprintln!("{ts}  {t} booted {dn} {DIM}for {slot_shape}{RESET}  {dur}");
                 } else {
-                    eprintln!("{ts}  {SYM_SUCCESS} [devices] booted {device_name} for {slot_shape}  [{secs:.1}s]");
+                    eprintln!("{ts}  {t} booted {dn} for {slot_shape}  {dur}");
                 }
             }
             EventKind::SlotSetupFailed { slot_label, reason } => {
                 if use_color {
-                    eprintln!("{ts}  {BRIGHT_RED}[slot] setup failed for {slot_label}:{RESET} {reason}");
+                    eprintln!("{ts}  {BOLD_RED}[slot] setup failed for {slot_label}:{RESET} {reason}");
                 } else {
                     eprintln!("{ts}  [slot] setup failed for {slot_label}: {reason}");
                 }
             }
             EventKind::ResourcesWaiting { platform } => {
+                let t = tag("[resources]", DIM, use_color);
                 if use_color {
-                    eprintln!("{ts}  {dp}{DIM}[resources] waiting for {platform}...{RESET}");
+                    eprintln!("{ts}  {dp}{t} {DIM}waiting for {platform}...{RESET}");
                 } else {
-                    eprintln!("{ts}  {dp}[resources] waiting for {platform}...");
+                    eprintln!("{ts}  {dp}{t} waiting for {platform}...");
                 }
             }
             EventKind::CompanionStarting { platform, device_name } => {
+                let t = tag("[companion]", BLUE, use_color);
+                let dn = if use_color { format!("{BOLD}{device_name}{RESET}") } else { device_name.clone() };
                 if use_color {
-                    eprintln!("{ts}  {dp}{DIM}[companion] starting on {device_name} ({platform})...{RESET}");
+                    eprintln!("{ts}  {dp}{t} {DIM}starting on{RESET} {dn} {DIM}({platform})...{RESET}");
                 } else {
-                    eprintln!("{ts}  {dp}[companion] starting on {device_name} ({platform})...");
+                    eprintln!("{ts}  {dp}{t} starting on {dn} ({platform})...");
                 }
             }
             EventKind::CompanionReady { platform, version, device_name, os_version } => {
+                let t = tag("[companion]", BLUE, use_color);
+                let dn = if use_color { format!("{BOLD}{device_name}{RESET}") } else { device_name.clone() };
                 if use_color {
-                    eprintln!("{ts}  {dp}{DIM}[companion] ready — {platform} v{version} on {device_name} ({os_version}){RESET}");
+                    eprintln!("{ts}  {dp}{t} {DIM}ready —{RESET} {dn} {DIM}{platform} v{version} ({os_version}){RESET}");
                 } else {
-                    eprintln!("{ts}  {dp}[companion] ready — {platform} v{version} on {device_name} ({os_version})");
+                    eprintln!("{ts}  {dp}{t} ready — {dn} {platform} v{version} ({os_version})");
                 }
             }
             _ => {}
         }
+    }
+}
+
+/// Print the post-FAIL/WARN error message + buffered substep replay tied
+/// to the just-finished step. The error continuation gets a `│` gutter
+/// (still part of the FAIL line); replayed substeps get `├` (or `╰` on the
+/// last) to visually rope them under the failure. Substeps print with their
+/// own original wall_time — the user sees timestamps "go back" then forward
+/// again, which is the cue that this is post-mortem context.
+fn print_failure_block(
+    msg: &str,
+    msg_color: &str,
+    dp: &str,
+    pending: &[(SystemTime, SubstepEvent)],
+    use_color: bool,
+) {
+    // Continuation gutter for the error message — `│` replaces the
+    // timestamp column so the line reads as "still the FAIL above talking".
+    let gutter_pipe = if use_color { format!("{DIM}│{RESET}") } else { "│".to_string() };
+    if use_color {
+        eprintln!("{gutter_pipe}{TS_CONTINUATION_PAD}{dp}       {msg_color}{msg}{RESET}");
+    } else {
+        eprintln!("{gutter_pipe}{TS_CONTINUATION_PAD}{dp}       {msg}");
+    }
+    // Replayed substeps with ├/╰ rope.
+    let total = pending.len();
+    for (i, (st, sub)) in pending.iter().enumerate() {
+        let last = i + 1 == total;
+        let g = if last { "\u{2570}" } else { "\u{251C}" }; // ╰ or ├
+        let gutter = if use_color { format!("{DIM}{g}{RESET} ") } else { format!("{g} ") };
+        let sub_ts = format_timestamp(*st, use_color);
+        let prefixed_ts = format!("{gutter}{sub_ts}");
+        print_substep(&prefixed_ts, dp, sub, use_color);
     }
 }
 

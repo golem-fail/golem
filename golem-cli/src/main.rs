@@ -192,6 +192,25 @@ async fn main() -> anyhow::Result<()> {
             // Write results to output dir (json + toon always, junit if requested).
             if !args.no_results {
                 golem_report::output::write_results_to_dir(&report, &output_dir, include_junit)?;
+                if has_human_output {
+                    let formats = if include_junit { "json, toon, xml" } else { "json, toon" };
+                    let display_dir = output_dir.display().to_string();
+                    let abs_dir = std::fs::canonicalize(&output_dir)
+                        .unwrap_or_else(|_| output_dir.clone());
+                    let use_color = std::io::IsTerminal::is_terminal(&std::io::stderr());
+                    if use_color {
+                        // OSC 8 hyperlink — clickable in iTerm2, Terminal.app,
+                        // vscode integrated terminal, etc. Falls back to plain
+                        // text on unsupported terminals. Path is percent-encoded
+                        // so spaces/non-ASCII don't break the URI.
+                        let uri = file_uri(&abs_dir);
+                        eprintln!(
+                            "             \x1b[2mResults: \x1b]8;;{uri}\x1b\\{display_dir}/\x1b]8;;\x1b\\  ({formats})\x1b[0m"
+                        );
+                    } else {
+                        eprintln!("             Results: {display_dir}/  ({formats})");
+                    }
+                }
             }
 
             // Write to stdout (non-human formats only — human streams live to stderr).
@@ -240,4 +259,23 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Build a `file://` URI from an absolute path with percent-encoding so
+/// spaces and non-ASCII characters don't break OSC 8 hyperlinks. Encodes
+/// every byte that isn't unreserved per RFC 3986 (`A-Z a-z 0-9 - . _ ~`)
+/// or a path delimiter (`/`).
+fn file_uri(path: &Path) -> String {
+    let mut out = String::from("file://");
+    for byte in path.to_string_lossy().as_bytes() {
+        let c = *byte;
+        let unreserved = c.is_ascii_alphanumeric()
+            || matches!(c, b'-' | b'.' | b'_' | b'~' | b'/');
+        if unreserved {
+            out.push(c as char);
+        } else {
+            out.push_str(&format!("%{c:02X}"));
+        }
+    }
+    out
 }

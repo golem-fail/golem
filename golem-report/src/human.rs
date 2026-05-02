@@ -17,17 +17,12 @@ const SEPARATOR: &str = "\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-/// Format a duration given in milliseconds into a human-friendly string.
-///
-/// * Under 1 000 ms → `"120ms"`
-/// * 1 000 ms and above → `"10.2s"`
+/// Format a duration given in milliseconds as a fixed-width seconds field.
+/// Matches the streaming reporter — `[   0.045s]`, `[  10.012s]` — so all
+/// durations align in a single visual column.
 fn format_duration(ms: u64) -> String {
-    if ms < 1_000 {
-        format!("{ms}ms")
-    } else {
-        let secs = ms as f64 / 1_000.0;
-        format!("{secs:.1}s")
-    }
+    let secs = ms as f64 / 1_000.0;
+    format!("{secs:>8.3}s")
 }
 
 /// Format a single perf snapshot as a compact one-line summary.
@@ -68,8 +63,8 @@ fn format_perf_snapshot(snap: &PerfSnapshot) -> String {
 ///
 /// Example outputs:
 /// ```text
-///   ✓ tap "Sign Up"                    [45ms]
-///   ✗ assert_visible "Welcome"         [10012ms] (timed out)
+///   ✓ tap "Sign Up"                    [   0.045s]
+///   ✗ assert_visible "Welcome"         [  10.012s] (timed out)
 /// ```
 pub fn format_step(step: &StepReport) -> String {
     let (symbol, suffix) = match &step.outcome {
@@ -313,7 +308,7 @@ mod tests {
         let step = success_step("tap", "Sign Up", 45);
         let out = format_step(&step);
         assert!(out.contains(SYM_SUCCESS), "SHALL contain ✓");
-        assert!(out.contains("[45ms]"), "SHALL contain timing");
+        assert!(out.contains("0.045s]"), "SHALL contain timing");
         assert!(out.contains("tap"), "SHALL contain action");
         assert!(out.contains("\"Sign Up\""), "SHALL contain target");
     }
@@ -325,7 +320,7 @@ mod tests {
         let step = failed_step("assert_visible", "Welcome", 10012, "timed out");
         let out = format_step(&step);
         assert!(out.contains(SYM_FAILED), "SHALL contain ✗");
-        assert!(out.contains("[10.0s]"), "SHALL format as seconds");
+        assert!(out.contains("10.012s]"), "SHALL format as seconds");
         assert!(out.contains("(timed out)"), "SHALL contain error message");
     }
 
@@ -336,7 +331,7 @@ mod tests {
         let step = warning_step("assert_visible", "Promo", 15, "warning: element not found");
         let out = format_step(&step);
         assert!(out.contains(SYM_WARNING), "SHALL contain ⚠");
-        assert!(out.contains("[15ms]"), "SHALL contain timing");
+        assert!(out.contains("0.015s]"), "SHALL contain timing");
         assert!(
             out.contains("(warning: element not found)"),
             "should contain warning"
@@ -538,7 +533,7 @@ mod tests {
         };
 
         let out = format_suite(&suite);
-        assert!(out.contains("[45.3s]"), "SHALL show total duration");
+        assert!(out.contains("45.300s]"), "SHALL show total duration");
     }
 
     // 9. format_step skipped shows appropriate indicator ---------------
@@ -549,7 +544,7 @@ mod tests {
         let out = format_step(&step);
         assert!(out.contains(SYM_SKIPPED), "SHALL contain − symbol");
         assert!(out.contains("(skipped)"), "SHALL say skipped");
-        assert!(out.contains("[0ms]"), "skipped steps show 0ms");
+        assert!(out.contains("0.000s]"), "skipped steps show 0ms");
     }
 
     // 10. Empty flow report formats correctly -------------------------
@@ -577,7 +572,7 @@ mod tests {
         assert!(out.contains("empty_flow"), "SHALL contain flow name");
         assert!(out.contains(SYM_FLOW), "SHALL have flow symbol");
         assert!(out.contains("PASSED"), "SHALL say PASSED");
-        assert!(out.contains("[0ms]"), "SHALL show 0ms duration");
+        assert!(out.contains("0.000s]"), "SHALL show 0ms duration");
         // No seed or screenshot lines
         assert!(!out.contains("Seed:"), "no seed line");
         assert!(!out.contains("Screenshot:"), "no screenshot line");

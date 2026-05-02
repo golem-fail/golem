@@ -209,10 +209,11 @@ pub struct SuiteRunner {
     /// requirements the scheduler uses to pick a matching free device.
     /// Co-populated with `flow_paths`.
     pub flow_runs: Arc<Vec<FlowRun>>,
-    /// One-shot `SuitePlanned` event cache. Populated in `run_suite` from
-    /// the Plan output (only when `--verbose` is on) and `take()`-ed by
-    /// whichever execute path first attaches subscribers (multi-flow:
-    /// `suite_tx`; single-flow: per-flow `event_tx`).
+    /// One-shot `SuitePlanned` event cache. Populated in `run_suite` and
+    /// `take()`-ed by whichever execute path first attaches subscribers
+    /// (multi-flow: `suite_tx`; single-flow: per-flow `event_tx`). Used by
+    /// the human stream renderer for the `Starting N flows…` header
+    /// (always) plus a verbose plan/install dump under `--verbose`.
     ///
     /// Contract: set once per `run_suite` call, consumed at most once. After
     /// consumption subsequent emit paths see `None`. Callers that invoke
@@ -298,11 +299,10 @@ impl SuiteRunner {
         )
         .await?;
 
-        // Build the SuitePlanned event under --verbose. Emitted via the
-        // event channel once it's set up.
-        if self.config.verbose {
-            self.plan_event = Some(build_suite_planned_event(&parsed));
-        }
+        // Build the SuitePlanned event always — the human stream renderer
+        // uses it for the non-verbose `Starting N flows…` header. Verbose
+        // additionally renders the per-line plan + install matrix dump.
+        self.plan_event = Some(build_suite_planned_event(&parsed));
 
         self.install_matrix = Arc::new(parsed.install_matrix.clone());
         self.flow_paths = Arc::new(flow_paths.to_vec());
