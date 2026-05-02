@@ -17,7 +17,10 @@ use golem_runner::teardown::execute_teardown;
 use golem_vars::{Scope, ScopeLevel, VarValue, VariableStore};
 use rand::SeedableRng;
 
-const DEFAULT_TIMEOUT: u64 = 10_000;
+// See note on the same constant in policy_tests.rs — short timeout keeps
+// failure-path tests fast (resolution loop hits deadline in ~1 s instead
+// of 10 s) without flaking under parallel scheduling pressure.
+const DEFAULT_TIMEOUT: u64 = 1_000;
 
 static DEFAULT_CAPTURE: LazyLock<CaptureConfig> = LazyLock::new(|| CaptureConfig {
     screenshot_on_failure: false,

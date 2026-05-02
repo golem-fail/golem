@@ -1,0 +1,9 @@
+# Cargo aliases. `cargo test` is a built-in subcommand and can't be
+# overridden, so `cargo t` is the project convention for running the
+# workspace test suite via nextest (faster, parallel-isolated, slow-test
+# kill via .config/nextest.toml).
+#
+# Install: `cargo binstall cargo-nextest` or `cargo install cargo-nextest`.
+
+[alias]
+t = "nextest run --workspace"
