@@ -257,6 +257,28 @@ Suspects: shared WebKit Inspector socket discovery hitting a race when two sims 
 
 **Files:** `golem-driver/src/webkit.rs` (inspector socket/connection lifecycle), `golem-driver/src/ios.rs` (per-driver state).
 
+## auto_scroll gets stuck on Gesture Target section
+
+Observed during `device_controls.test` debugging: auto_scroll for `Light right_of Theme:` would page-scroll a few times then stall on the Gesture Target section, exhaust strategy 1 (page scroll) and strategy 2 (inner scrollable), and never reach Device State further down. Gesture Target's `<div class="gesture-area">` registers `pointerdown` / `pointermove` / `pointerup` and disables touch-action, which appears to swallow the synthesized swipe and convince the resolver that the page has hit a scroll boundary.
+
+Likely fixes:
+- Strategy 2 should detect "this scrollable consumed but didn't actually move" (no scrollTop delta) and bail back to strategy 1 with a different swipe column.
+- Or: route swipes around elements with `touch-action: none` by sampling the swipe column off-center.
+
+Today's workaround in `device_controls.test` is to use menu nav for far-away sections instead of auto_scroll.
+
+**Files:** `golem-runner/src/scroll.rs` (strategy switching, swipe column selection).
+
+## set_location doesn't propagate to the test-app WebView
+
+`golem-driver/src/ios.rs::set_location` calls `simctl location set` which updates Core Location, but the test app's `DeviceState.svelte` shows "Location:" from a `__golemSetLocation` JS hook only — it doesn't subscribe to `navigator.geolocation.watchPosition`. Result: `device_controls.test`'s `assert_visible "37.7749, -122.4194" right_of "Location:"` always times out on iOS, no matter what coords were set. Android may have the same gap.
+
+Fix is one of:
+- Subscribe `DeviceState.svelte` to `navigator.geolocation.watchPosition` (real-world correct, but needs location permission granted before the watch starts).
+- Have iOS / Android `set_location` also evaluate `__golemSetLocation(lat, lon)` via WebKit Inspector / CDP after the native call (matches the existing hook contract; cheaper than wiring real geolocation).
+
+**Files:** `test-app/src/lib/DeviceState.svelte`, `golem-driver/src/ios.rs`, `golem-driver/src/android.rs`, possibly `golem-driver/src/webkit.rs` for the JS-eval helper.
+
 ## Deep-link delivery on iOS — two stacked blockers
 
 Investigated end-to-end. The JS listener wiring is fine; two separate iOS-level problems sit between `simctl openurl` and `onOpenUrl` in JS.
@@ -282,21 +304,7 @@ The Tauri plugin's iOS path (Tauri 2.x → Tao → UIApplicationDelegate hook �
 
 Menu nav (`tap on_accessibility_label="menu-toggle"` + `tap on_accessibility_label="goto-X"`) replaces `auto_scroll = true` for non-scroll-testing flows. Already migrated: `dialog_overlay`, `read`, `wait` (scroll_and_tap block), `permissions_lifecycle`, `permissions_grant_revoke`, `deep_link` (first step).
 
-**Still on auto_scroll:** `device_controls` (blocked — see scroll-margin overshoot entry), `webview` (test fails earlier on consecutive-`type` issue, not menu nav). Intentionally on auto_scroll: `scroll.test`, `scroll_search.test`, the `wait_for_elements` block of `wait.test`.
-
-## iOS WebKit Inspector: 0x0 Bounds for Plain Inline Elements
-
-iOS WebKit Inspector enrichment reports 0x0 bounds for `<span>` and certain `<div>` elements that lack explicit dimensions, even when they render visually. Affects:
-
-- Device State labels (`<span>Orientation:</span>`, `<span>Theme:</span>`, etc.)
-- ScrollList items (`<div>Item 0</div>`, etc.)
-- Likely other inline-styled elements
-
-Symptom: `assert_visible on_text="Item 0"` (no auto_scroll) times out because the viewport filter excludes 0x0 elements. `auto_scroll = true` masks it because the spatial fallback iterates regardless of bounds.
-
-CSS workarounds (display:flex, min-height, min-width on .row containers) tested in `DeviceState.svelte` — didn't change the reported bounds. The fix is upstream in `golem-driver/src/webkit.rs` enrichment: query `getBoundingClientRect()` for inline elements that report empty/zero bounds via the inspector.
-
-**Files:** `golem-driver/src/webkit.rs` (enrichment query).
+**Still on auto_scroll:** `device_controls` (auto_scroll struggles to reach `Theme:` row on iPhone — strategy 1 stalls, strategy 2 stalls; separate scroll-strategy bug, not menu nav). Intentionally on auto_scroll: `scroll.test`, `scroll_search.test`, the `wait_for_elements` block of `wait.test`.
 
 ## iOS sim: first-tap race against fresh-launch WKWebView (parked)
 
@@ -318,16 +326,6 @@ Even with all of the above, flake on `permissions_lifecycle.test` is ~3/5. Pure 
 **Status: parked.** Picking it back up needs a different injection mechanism, not more XCUITest tweaking.
 
 **Files:** `companions/ios/GolemRunnerUITests/RequestRouter.swift`, `golem-driver/src/ios.rs`.
-
-## device_controls.test: iOS scroll-margin overshoot on relational selectors
-
-After menu-nav lands on `#section-device-state`, iOS reports the row's `Portrait` value at viewport y=-27 — the scroll-into-view places the section just above the visible area on iPhone 17 / iOS 26.
-
-`scroll-margin-top: calc(60px + env(safe-area-inset-top, 0px))` in `Menu.svelte` is intended to clear the sticky menu, but the resulting offset under `viewport-fit=cover` overshoots. Affects every assertion in `device_controls.test` that uses `right_of` / `below` relational selectors after menu nav.
-
-**Investigate:** measure the actual sticky-menu height on iOS WKWebView (it may be smaller than 60px on `position:sticky;top:0` with cover-mode), and reconcile with the runtime safe-area inset. Likely fixable by computing `scroll-margin-top` dynamically from the menu's measured bounding box.
-
-**Files:** `test-app/src/lib/Menu.svelte`, possibly `test-app/src/App.svelte`.
 
 ## device_controls.test: Android back+launch lands in 37-node partial render
 

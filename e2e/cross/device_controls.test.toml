@@ -11,8 +11,17 @@ type = "phone"
 [[block]]
 name = "initial_state"
 steps = [
-  { action = "assert_visible", on_text = "Light", on_right_of = "Theme:", auto_scroll = true },
-  { action = "assert_visible", on_text = "0.0, 0.0", on_right_of = "Location:", auto_scroll = true },
+  # iOS / Android system dark-mode is device-level state and persists
+  # across app launches. A prior run that toggled it on would leak
+  # into the next run's "initial" assertion. Reset before asserting.
+  { action = "dark_mode", enabled = false },
+
+  # Jump to Device State via the menu rather than swiping ~3000px
+  # past every preceding section — scroll is not what this flow tests.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-device-state" },
+  { action = "assert_visible", on_text = "Light", on_right_of = "Theme:" },
+  { action = "assert_visible", on_text = "0.0, 0.0", on_right_of = "Location:" },
 
   # Press the home button and re-launch
   { action = "press", button = "home" },
@@ -33,8 +42,10 @@ steps = [
 [[block]]
 name = "dark_mode_controls"
 steps = [
-  # Verify initial light theme
-  { action = "assert_visible", on_text = "Light", on_right_of = "Theme:", auto_scroll = true },
+  # Jump to Device State to read Theme.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-device-state" },
+  { action = "assert_visible", on_text = "Light", on_right_of = "Theme:" },
 
   # Enable dark mode and verify
   { action = "dark_mode", enabled = true },
@@ -43,11 +54,15 @@ steps = [
   # Take a screenshot in dark mode
   { action = "screenshot", path = "/tmp/golem-cross-dark-mode.png" },
 
-  # Verify elements are still functional in dark mode
+  # Verify Counter still works in dark mode — jump to it via menu.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-counter" },
   { action = "tap", on_text = "+" },
   { action = "assert_visible", on_text = "1", on_below = "Counter" },
 
-  # Disable dark mode and verify return to light theme
+  # Back to Device State to verify return to light theme.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-device-state" },
   { action = "dark_mode", enabled = false },
   { action = "assert_visible", on_text = "Light", on_right_of = "Theme:" },
 ]
@@ -55,8 +70,10 @@ steps = [
 [[block]]
 name = "location_controls"
 steps = [
-  # Verify initial location
-  { action = "assert_visible", on_text = "0.0, 0.0", on_right_of = "Location:", auto_scroll = true },
+  # Jump to Device State.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-device-state" },
+  { action = "assert_visible", on_text = "0.0, 0.0", on_right_of = "Location:" },
 
   # Set GPS location to San Francisco
   { action = "set_location", latitude = 37.7749, longitude = -122.4194 },

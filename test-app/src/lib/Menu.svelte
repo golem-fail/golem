@@ -22,16 +22,22 @@ const links = [
 ];
 
 function gotoSection(id) {
-  // `scrollIntoView` is more reliable than location.hash in iOS/Android
-  // WebViews. `instant` keeps tests fast — animated scrolls wait for
-  // settle before the next action runs.
-  const el = document.getElementById(`section-${id}`);
-  if (el) {
-    el.scrollIntoView({ block: "start", behavior: "instant" });
-  }
-  // Close the menu so it doesn't obscure the target section's first
-  // child when the test's next `assert_visible` runs.
+  // Close the menu BEFORE scrolling. With the menu open, the scroll
+  // target is computed against the expanded layout, then closing the
+  // menu reflows the page and iOS WKWebView's scroll anchoring leaves
+  // us ~100px overshot. Defer the scroll one frame so layout settles.
   open = false;
+  requestAnimationFrame(() => {
+    const el = document.getElementById(`section-${id}`);
+    if (!el) return;
+    const cs = window.getComputedStyle(el);
+    const margin = parseInt(cs.scrollMarginTop, 10) || 0;
+    // Manual `scrollTo` instead of `scrollIntoView({block:"start"})` —
+    // iPad WKWebView in viewport-fit=cover mode mishandles
+    // `scroll-margin-top` and overshoots; computing the target
+    // explicitly is deterministic across iOS / Android / desktop.
+    window.scrollTo({ top: el.offsetTop - margin, behavior: "instant" });
+  });
 }
 </script>
 
