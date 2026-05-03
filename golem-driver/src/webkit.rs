@@ -65,79 +65,96 @@ pub(crate) async fn find_inspector_sockets() -> Vec<PathBuf> {
 /// Without filtering, two drivers concurrently calling `connect()` can both
 /// pick the same socket — first one wins, the second ends up driving the
 /// wrong WebView. Filter by walking `lsof` to find the `launchd_sim` PID
-/// holding each socket, then mapping PID → UDID via the process command line
+/// holding each socket, then querying each PID's full command line
 /// (`Devices/{UDID}/...` is part of the launchd_sim args).
 ///
 /// Falls back to the unfiltered list when `lsof` / `ps` are unavailable
 /// or the UDID can't be resolved — same behaviour as before for the
 /// single-sim case.
 pub(crate) async fn find_inspector_sockets_for_udid(udid: &str) -> Vec<PathBuf> {
-    let all = find_inspector_sockets().await;
-    if all.is_empty() {
-        return all;
+    // Each booted simulator's `launchd_sim` opens its inspector socket
+    // and keeps it open. `lsof -U +c 0` lists every Unix socket with
+    // its owning process — far more reliable than `read_dir` on
+    // `/private/var/tmp`, which misses sandboxed sim dirs (the actual
+    // inspector dir is created with permissions that exclude other
+    // users from `read_dir`, even though the listening process holds
+    // the socket open and we can `connect()` to it just fine).
+    let live = enumerate_live_inspector_sockets().await;
+    if live.is_empty() {
+        // lsof unavailable or no booted sims — fall back to filesystem
+        // discovery so single-sim hosts without `lsof` still work.
+        return find_inspector_sockets().await;
     }
-    let pid_to_udid = match build_launchd_sim_pid_to_udid().await {
-        Some(m) if !m.is_empty() => m,
-        _ => return all, // fallback: caller probes each
-    };
     let mut filtered = Vec::new();
-    for socket in &all {
-        if let Some(pid) = lsof_socket_owner(socket).await {
-            if pid_to_udid.get(&pid).map(|u| u.as_str()) == Some(udid) {
-                filtered.push(socket.clone());
-            }
+    for (pid, socket) in &live {
+        if pid_owns_udid(*pid, udid).await {
+            filtered.push(socket.clone());
         }
     }
     if filtered.is_empty() {
-        // No match — caller should still be able to probe (maybe lsof
-        // was incomplete). Returning all preserves the legacy code path.
-        all
+        // No UDID match — return live sockets so the caller can still
+        // probe (better than empty). Includes the case where ps
+        // command-line lookups failed.
+        live.into_iter().map(|(_, s)| s).collect()
     } else {
         filtered
     }
 }
 
-/// Build a map from `launchd_sim` PID to simulator UDID by parsing
-/// `ps -ax -ww -o pid=,command=`. Each booted simulator runs exactly one
-/// `launchd_sim` whose command-line contains `Devices/{UDID}/`.
-async fn build_launchd_sim_pid_to_udid() -> Option<std::collections::HashMap<u32, String>> {
-    let output = tokio::process::Command::new("ps")
-        .args(["-ax", "-ww", "-o", "pid=,command="])
+/// Enumerate `(launchd_sim PID, socket path)` pairs from `lsof -U +c 0`.
+async fn enumerate_live_inspector_sockets() -> Vec<(u32, PathBuf)> {
+    let output = match tokio::process::Command::new("lsof")
+        .args(["-U", "+c", "0"])
         .output()
         .await
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
+    {
+        Ok(o) if o.status.success() => o,
+        _ => return Vec::new(),
+    };
     let text = String::from_utf8_lossy(&output.stdout);
-    let mut map = std::collections::HashMap::new();
+    let mut pairs: Vec<(u32, PathBuf)> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     for line in text.lines() {
-        if !line.contains("launchd_sim") {
+        if !line.contains("launchd_sim") || !line.contains("webinspectord_sim.socket") {
             continue;
         }
-        let trimmed = line.trim_start();
-        let (pid_str, rest) = match trimmed.split_once(' ') {
+        let mut fields = line.split_whitespace();
+        let _name = fields.next();
+        let pid: u32 = match fields.next().and_then(|s| s.parse().ok()) {
             Some(p) => p,
             None => continue,
         };
-        let pid: u32 = match pid_str.parse() {
-            Ok(p) => p,
-            Err(_) => continue,
+        // The socket path is the last whitespace-delimited token. Slicing
+        // from the last `/private/var/tmp/` (or `/private/tmp/`) marker
+        // is more robust than counting columns.
+        let path = match line.rfind("/private/").map(|i| &line[i..]) {
+            Some(p) => PathBuf::from(p.trim()),
+            None => continue,
         };
-        // Extract UDID from `Devices/{UDID}/`. UDIDs are
-        // 8-4-4-4-12 hex chars but we just slice between the
-        // marker and the next `/` to keep the parser permissive.
-        if let Some(start) = rest.find("Devices/") {
-            let after = &rest[start + "Devices/".len()..];
-            if let Some(end) = after.find('/') {
-                let udid = &after[..end];
-                if !udid.is_empty() {
-                    map.insert(pid, udid.to_string());
-                }
-            }
+        if seen.insert((pid, path.clone())) {
+            pairs.push((pid, path));
         }
     }
-    Some(map)
+    pairs
+}
+
+/// Check whether a `launchd_sim` PID's command line names the given UDID.
+///
+/// `ps -p $PID -ww -o command=` returns one line, and `-ww` keeps the
+/// arg vector intact for individual PIDs (the truncation that bites
+/// `ps -ax` is per-row terminal-width, which only narrows the view —
+/// not the actual command). We look for `Devices/{UDID}` as a substring.
+async fn pid_owns_udid(pid: u32, udid: &str) -> bool {
+    let output = match tokio::process::Command::new("ps")
+        .args(["-p", &pid.to_string(), "-ww", "-o", "command="])
+        .output()
+        .await
+    {
+        Ok(o) if o.status.success() => o,
+        _ => return false,
+    };
+    let text = String::from_utf8_lossy(&output.stdout);
+    text.contains(&format!("Devices/{udid}"))
 }
 
 /// Return the PID of the process holding the given Unix socket open, if any.

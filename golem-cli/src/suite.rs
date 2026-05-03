@@ -2263,7 +2263,7 @@ async fn run_flow_on_device(
     let base_timeout = flow.flow.options.as_ref()
         .and_then(|o| o.step_timeout)
         .unwrap_or(golem_runner::policy::DEFAULT_BASE_TIMEOUT_MS);
-    match execute_flow(&flow, driver.as_ref(), &mut vars, effective_start, base_timeout, &mut ctx, Some(&barrier)).await {
+    let mut report = match execute_flow(&flow, driver.as_ref(), &mut vars, effective_start, base_timeout, &mut ctx, Some(&barrier)).await {
         Ok(result) => {
             if !result.success && result.barrier_aborted {
                 eprintln!("  [{device_label}] Aborted: another device failed at this point");
@@ -2280,14 +2280,14 @@ async fn run_flow_on_device(
                 os_major: device.os_major,
             });
             FlowReport {
-                flow_name,
+                flow_name: flow_name.clone(),
                 success: result.success,
                 step_results: Vec::new(),
                 warnings: result.warnings,
                 duration_ms,
                 seed: Some(actual_seed),
                 screenshot_path: None,
-                device_name: Some(device_label),
+                device_name: Some(device_label.clone()),
                 os_major: None,
                 perf_snapshots: result.perf_snapshots,
                 skipped_reason: None,
@@ -2307,14 +2307,14 @@ async fn run_flow_on_device(
                 os_major: device.os_major,
             });
             FlowReport {
-                flow_name,
+                flow_name: flow_name.clone(),
                 success: false,
                 step_results: Vec::new(),
                 warnings: vec![format!("Execution error: {e}")],
                 duration_ms,
                 seed: Some(actual_seed),
                 screenshot_path: None,
-                device_name: Some(device_label),
+                device_name: Some(device_label.clone()),
                 os_major: None,
                 perf_snapshots: vec![],
                 skipped_reason: None,
@@ -2323,7 +2323,25 @@ async fn run_flow_on_device(
                 finished_at: None,
             }
         }
+    };
+
+    // Reset device-level state between flows so the next flow starts
+    // from a known baseline — dark mode off, location 0/0, no stale
+    // recordings or port forwards. The actual device shutdown is
+    // handled by `ResourceManager::shutdown_golem_booted` at suite end,
+    // so we always pass `keep_devices: true` here (state-reset only).
+    let cleanup_result = golem_runner::cleanup::auto_cleanup(
+        driver.as_ref(),
+        &device,
+        &golem_runner::cleanup::CleanupOptions { keep_devices: true },
+    )
+    .await;
+    for w in cleanup_result.warnings {
+        eprintln!("  [{device_label}] Cleanup: {w}");
+        report.warnings.push(format!("Cleanup: {w}"));
     }
+
+    report
 }
 
 /// Discover ALL devices for the given platform (booted and shutdown).

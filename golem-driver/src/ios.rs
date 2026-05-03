@@ -518,7 +518,12 @@ impl PlatformDriver for IosDriver {
     }
 
     async fn stop_recording(&self) -> Result<String> {
-        anyhow::bail!("stop_recording is not yet supported on iOS")
+        // Recording isn't implemented on iOS, so there's never an active
+        // recording to stop. Return Ok so post-flow cleanup doesn't
+        // surface a spurious "not yet supported" warning every run.
+        // `start_recording` still errors loudly when explicitly invoked
+        // by a step.
+        Ok(String::new())
     }
 
     async fn remove_port_forwards(&self) -> Result<()> {
