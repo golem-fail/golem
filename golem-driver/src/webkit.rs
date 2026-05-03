@@ -58,6 +58,105 @@ pub(crate) async fn find_inspector_sockets() -> Vec<PathBuf> {
     candidates
 }
 
+/// Find inspector sockets owned by the simulator with the given UDID.
+///
+/// When multiple simulators are booted (e.g. iPhone + iPad in a multi-flow
+/// run) every booted sim has its own `com.apple.launchd.*/com.apple.webinspectord_sim.socket`.
+/// Without filtering, two drivers concurrently calling `connect()` can both
+/// pick the same socket — first one wins, the second ends up driving the
+/// wrong WebView. Filter by walking `lsof` to find the `launchd_sim` PID
+/// holding each socket, then mapping PID → UDID via the process command line
+/// (`Devices/{UDID}/...` is part of the launchd_sim args).
+///
+/// Falls back to the unfiltered list when `lsof` / `ps` are unavailable
+/// or the UDID can't be resolved — same behaviour as before for the
+/// single-sim case.
+pub(crate) async fn find_inspector_sockets_for_udid(udid: &str) -> Vec<PathBuf> {
+    let all = find_inspector_sockets().await;
+    if all.is_empty() {
+        return all;
+    }
+    let pid_to_udid = match build_launchd_sim_pid_to_udid().await {
+        Some(m) if !m.is_empty() => m,
+        _ => return all, // fallback: caller probes each
+    };
+    let mut filtered = Vec::new();
+    for socket in &all {
+        if let Some(pid) = lsof_socket_owner(socket).await {
+            if pid_to_udid.get(&pid).map(|u| u.as_str()) == Some(udid) {
+                filtered.push(socket.clone());
+            }
+        }
+    }
+    if filtered.is_empty() {
+        // No match — caller should still be able to probe (maybe lsof
+        // was incomplete). Returning all preserves the legacy code path.
+        all
+    } else {
+        filtered
+    }
+}
+
+/// Build a map from `launchd_sim` PID to simulator UDID by parsing
+/// `ps -ax -ww -o pid=,command=`. Each booted simulator runs exactly one
+/// `launchd_sim` whose command-line contains `Devices/{UDID}/`.
+async fn build_launchd_sim_pid_to_udid() -> Option<std::collections::HashMap<u32, String>> {
+    let output = tokio::process::Command::new("ps")
+        .args(["-ax", "-ww", "-o", "pid=,command="])
+        .output()
+        .await
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut map = std::collections::HashMap::new();
+    for line in text.lines() {
+        if !line.contains("launchd_sim") {
+            continue;
+        }
+        let trimmed = line.trim_start();
+        let (pid_str, rest) = match trimmed.split_once(' ') {
+            Some(p) => p,
+            None => continue,
+        };
+        let pid: u32 = match pid_str.parse() {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        // Extract UDID from `Devices/{UDID}/`. UDIDs are
+        // 8-4-4-4-12 hex chars but we just slice between the
+        // marker and the next `/` to keep the parser permissive.
+        if let Some(start) = rest.find("Devices/") {
+            let after = &rest[start + "Devices/".len()..];
+            if let Some(end) = after.find('/') {
+                let udid = &after[..end];
+                if !udid.is_empty() {
+                    map.insert(pid, udid.to_string());
+                }
+            }
+        }
+    }
+    Some(map)
+}
+
+/// Return the PID of the process holding the given Unix socket open, if any.
+async fn lsof_socket_owner(path: &std::path::Path) -> Option<u32> {
+    let output = tokio::process::Command::new("lsof")
+        .args(["-t", path.to_str()?])
+        .output()
+        .await
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    // `lsof -t` emits one PID per line. Take the first valid one —
+    // additional PIDs would be peers connected to the listener, but
+    // the launchd_sim listener is what we want.
+    text.lines().find_map(|l| l.trim().parse().ok())
+}
+
 // ---------------------------------------------------------------------------
 // Transport: framed binary plist over Unix socket
 // ---------------------------------------------------------------------------
@@ -227,8 +326,15 @@ pub(crate) struct WebKitInspector {
 impl WebKitInspector {
     /// Discover the simulator inspector socket, connect, and complete the
     /// full handshake. Tries each candidate socket until one works.
-    pub(crate) async fn connect() -> Result<Self> {
-        let candidates = find_inspector_sockets().await;
+    ///
+    /// Pass `Some(udid)` to constrain discovery to one simulator's socket
+    /// when multiple sims are booted; pass `None` to keep the legacy
+    /// any-socket behaviour (single-sim runs, ad-hoc `golem tree`).
+    pub(crate) async fn connect(target_udid: Option<&str>) -> Result<Self> {
+        let candidates = match target_udid {
+            Some(udid) => find_inspector_sockets_for_udid(udid).await,
+            None => find_inspector_sockets().await,
+        };
         if candidates.is_empty() {
             bail!("no WebKit Inspector socket found — is a simulator running?");
         }

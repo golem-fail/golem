@@ -247,15 +247,11 @@ The scroll loop logs `inner scrollable consumed gesture` and switches strategies
 
 **Files:** `golem-runner/src/scroll.rs` strategy switching; `golem-driver/src/webkit.rs` for inspector tree freshness during scroll.
 
-## iOS form_fill flakes when iPhone + iPad run concurrently
+## iOS form_fill: residual flake at step 6 backspace under concurrent runs
 
-Solo runs of `form_fill.test` pass 21/21 on each device. When the scheduler launches both flows in parallel (no `--coverage one`), both flows fail at step 1 `type on_text="Enter email"` — element resolves and `text_input` substep fires, then the step burns its full 10s budget and times out. Sequential runs after a sim reboot pass cleanly again, so the state isn't permanently poisoned — something about the concurrent setup wedges one or both companions/inspectors transiently.
+The original step-1 failure under concurrent iPhone + iPad runs is fixed (UDID-filtered inspector socket discovery in webkit.rs). Concurrent passes are now 21/21 most runs, but one of the two flows still occasionally fails around step 6 `backspace on_text="golem testt"` — element resolves, then the step times out at 5s with no further substep. Solo runs never trigger this. Suspect: shared host-side resource contention (simctl, lsof, or both sims racing on something), or a sim-state issue from `--keep-devices` accumulating focus state. Not blocking — just retry-flaky.
 
-Repro: with both iPhone 17 and iPad (A16) booted on iOS 26.4.1, run `./target/release/golem run --platform ios e2e/cross/form_fill.test.toml --no-build` (no coverage flag — both flows run). 1/2 to 2/2 fail at step 1 type. Same command after `--coverage one` (single device): always passes.
-
-Suspects: shared WebKit Inspector socket discovery hitting a race when two sims register near-simultaneously, or a concurrency bug in `wait_for_settle` / `fetch_webview_dom` when both drivers fire requests in lockstep.
-
-**Files:** `golem-driver/src/webkit.rs` (inspector socket/connection lifecycle), `golem-driver/src/ios.rs` (per-driver state).
+**Files:** `golem-driver/src/webkit.rs`, possibly `golem-runner/src/resolution.rs` (settle path).
 
 ## Deep-link delivery on iOS — two stacked blockers
 

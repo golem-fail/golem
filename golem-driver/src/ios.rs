@@ -149,8 +149,12 @@ enum WebKitAction {
 }
 
 /// Set up WebKit Inspector: discover socket, connect, handshake.
-async fn setup_webkit() -> Option<WebKitState> {
-    match crate::webkit::WebKitInspector::connect().await {
+///
+/// `target_udid` constrains discovery to one simulator's socket when
+/// multiple sims are booted concurrently — without it, two drivers can
+/// pick the same socket and end up driving each other's WebView.
+async fn setup_webkit(target_udid: &str) -> Option<WebKitState> {
+    match crate::webkit::WebKitInspector::connect(Some(target_udid)).await {
         Ok(inspector) => Some(WebKitState { inspector }),
         Err(e) => {
             if crate::is_debug() { eprintln!("  [webkit] setup failed: {e}"); }
@@ -207,8 +211,9 @@ impl PlatformDriver for IosDriver {
                     WebKitLifecycle::Idle => {
                         // First WebView sighting — kick off background setup
                         let (tx, rx) = tokio::sync::oneshot::channel();
+                        let udid = self.device_id.clone();
                         tokio::spawn(async move {
-                            let result = setup_webkit().await;
+                            let result = setup_webkit(&udid).await;
                             let _ = tx.send(result);
                         });
                         *wk = WebKitLifecycle::SetupInProgress(rx);
@@ -244,8 +249,9 @@ impl PlatformDriver for IosDriver {
                     WebKitLifecycle::Failed => {
                         // Retry — the app may have been relaunched
                         let (tx, rx) = tokio::sync::oneshot::channel();
+                        let udid = self.device_id.clone();
                         tokio::spawn(async move {
-                            let result = setup_webkit().await;
+                            let result = setup_webkit(&udid).await;
                             let _ = tx.send(result);
                         });
                         *wk = WebKitLifecycle::SetupInProgress(rx);
@@ -262,7 +268,7 @@ impl PlatformDriver for IosDriver {
                     *wk = WebKitLifecycle::Ready(state);
                 } else {
                     // Inspector failed — reconnect immediately
-                    if let Some(new_state) = setup_webkit().await {
+                    if let Some(new_state) = setup_webkit(&self.device_id).await {
                         if let Some(new_state) =
                             try_enrich(&mut raw, new_state, wv_x, wv_y).await
                         {
