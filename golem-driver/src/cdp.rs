@@ -156,12 +156,19 @@ pub async fn get_page_id(port: u16) -> Result<String> {
         .context("CDP page target has no id")
 }
 
-/// Evaluate the DOM traversal JavaScript via CDP and return the raw JSON string.
-/// Uses an existing ADB forward (assumes `setup_forward` was called earlier).
-pub async fn evaluate_dom_js_cached(port: u16, page_id: &str) -> Result<String> {
-    let url = format!(
-        "ws://localhost:{port}/devtools/page/{page_id}"
-    );
+/// Evaluate a JavaScript expression in the WebView via CDP.
+///
+/// Pass `await_promise = true` for async expressions (the DOM traversal
+/// uses this); `false` for fire-and-forget hooks like
+/// `__golemSetLocation`. Returns the result as a string when it can
+/// be coerced; for `undefined`/`null` returns an empty string.
+pub async fn evaluate_js(
+    port: u16,
+    page_id: &str,
+    expression: &str,
+    await_promise: bool,
+) -> Result<String> {
+    let url = format!("ws://localhost:{port}/devtools/page/{page_id}");
 
     let (ws_stream, _) = tokio_tungstenite::connect_async(&url)
         .await
@@ -169,14 +176,13 @@ pub async fn evaluate_dom_js_cached(port: u16, page_id: &str) -> Result<String> 
 
     let (mut write, mut read) = ws_stream.split();
 
-    // Send Runtime.evaluate command (awaitPromise: true for async JS)
     let cmd = serde_json::json!({
         "id": 1,
         "method": "Runtime.evaluate",
         "params": {
-            "expression": DOM_TRAVERSAL_JS.trim(),
+            "expression": expression,
             "returnByValue": true,
-            "awaitPromise": true
+            "awaitPromise": await_promise
         }
     });
 
@@ -185,36 +191,37 @@ pub async fn evaluate_dom_js_cached(port: u16, page_id: &str) -> Result<String> 
         .await
         .context("failed to send CDP command")?;
 
-    // Read response
     while let Some(msg) = read.next().await {
         let msg = msg.context("CDP WebSocket read error")?;
         if let Message::Text(text) = msg {
             let resp: serde_json::Value =
                 serde_json::from_str(&text).context("failed to parse CDP response")?;
 
-            // Check if this is our response (id: 1)
             if resp.get("id").and_then(|v| v.as_i64()) == Some(1) {
-                // Extract result.result.value
-                if let Some(value) = resp
-                    .get("result")
-                    .and_then(|r| r.get("result"))
-                    .and_then(|r| r.get("value"))
-                    .and_then(|v| v.as_str())
-                {
-                    return Ok(value.to_string());
-                }
-
-                // Check for error
                 if let Some(err) = resp.get("result").and_then(|r| r.get("exceptionDetails")) {
                     bail!("CDP evaluation error: {err}");
                 }
-
-                bail!("CDP response missing result value");
+                let value = resp
+                    .get("result")
+                    .and_then(|r| r.get("result"))
+                    .and_then(|r| r.get("value"));
+                return Ok(match value {
+                    Some(v) if v.is_string() => v.as_str().unwrap_or("").to_string(),
+                    Some(v) if v.is_null() => String::new(),
+                    Some(v) => v.to_string(),
+                    None => String::new(),
+                });
             }
         }
     }
 
     bail!("CDP WebSocket closed without response")
+}
+
+/// Evaluate the DOM traversal JavaScript via CDP and return the raw JSON string.
+/// Uses an existing ADB forward (assumes `setup_forward` was called earlier).
+pub async fn evaluate_dom_js_cached(port: u16, page_id: &str) -> Result<String> {
+    evaluate_js(port, page_id, DOM_TRAVERSAL_JS.trim(), true).await
 }
 
 /// Recursively scale all coordinate values in bounds/visible_bounds by a factor.

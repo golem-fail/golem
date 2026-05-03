@@ -587,6 +587,15 @@ impl WebKitInspector {
 
         let result_type = result_obj.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
+        // `undefined` / `null` are valid outcomes for fire-and-forget
+        // evaluations (e.g. `window.__golemSetLocation(lat, lon)` whose
+        // function body returns nothing). Treat them as empty strings,
+        // not errors — otherwise the caller marks the inspector failed
+        // even though the JS ran successfully.
+        if result_type == "undefined" || result_type == "null" {
+            return Ok(String::new());
+        }
+
         // If the result is a string, return it directly
         if result_type == "string" {
             if let Some(value) = result_obj.get("value").and_then(|v| v.as_str()) {

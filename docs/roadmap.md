@@ -257,28 +257,6 @@ Suspects: shared WebKit Inspector socket discovery hitting a race when two sims 
 
 **Files:** `golem-driver/src/webkit.rs` (inspector socket/connection lifecycle), `golem-driver/src/ios.rs` (per-driver state).
 
-## auto_scroll gets stuck on Gesture Target section
-
-Observed during `device_controls.test` debugging: auto_scroll for `Light right_of Theme:` would page-scroll a few times then stall on the Gesture Target section, exhaust strategy 1 (page scroll) and strategy 2 (inner scrollable), and never reach Device State further down. Gesture Target's `<div class="gesture-area">` registers `pointerdown` / `pointermove` / `pointerup` and disables touch-action, which appears to swallow the synthesized swipe and convince the resolver that the page has hit a scroll boundary.
-
-Likely fixes:
-- Strategy 2 should detect "this scrollable consumed but didn't actually move" (no scrollTop delta) and bail back to strategy 1 with a different swipe column.
-- Or: route swipes around elements with `touch-action: none` by sampling the swipe column off-center.
-
-Today's workaround in `device_controls.test` is to use menu nav for far-away sections instead of auto_scroll.
-
-**Files:** `golem-runner/src/scroll.rs` (strategy switching, swipe column selection).
-
-## set_location doesn't propagate to the test-app WebView
-
-`golem-driver/src/ios.rs::set_location` calls `simctl location set` which updates Core Location, but the test app's `DeviceState.svelte` shows "Location:" from a `__golemSetLocation` JS hook only — it doesn't subscribe to `navigator.geolocation.watchPosition`. Result: `device_controls.test`'s `assert_visible "37.7749, -122.4194" right_of "Location:"` always times out on iOS, no matter what coords were set. Android may have the same gap.
-
-Fix is one of:
-- Subscribe `DeviceState.svelte` to `navigator.geolocation.watchPosition` (real-world correct, but needs location permission granted before the watch starts).
-- Have iOS / Android `set_location` also evaluate `__golemSetLocation(lat, lon)` via WebKit Inspector / CDP after the native call (matches the existing hook contract; cheaper than wiring real geolocation).
-
-**Files:** `test-app/src/lib/DeviceState.svelte`, `golem-driver/src/ios.rs`, `golem-driver/src/android.rs`, possibly `golem-driver/src/webkit.rs` for the JS-eval helper.
-
 ## Deep-link delivery on iOS — two stacked blockers
 
 Investigated end-to-end. The JS listener wiring is fine; two separate iOS-level problems sit between `simctl openurl` and `onOpenUrl` in JS.

@@ -126,6 +126,32 @@ impl AndroidDriver {
         &self.package_name
     }
 
+    /// Evaluate JavaScript in the foreground WebView (best-effort).
+    ///
+    /// Returns `Ok(None)` when CDP isn't connected (no WebView yet,
+    /// setup still in progress, or the previous attempt failed).
+    /// Used to push native-state changes into the page — e.g.
+    /// `set_location` calling `__golemSetLocation` so the test app's
+    /// rendered "Location:" row reflects the new GPS coordinate.
+    async fn eval_in_webview(&self, expression: &str) -> Option<String> {
+        let (port, page_id) = {
+            let cdp = self.cdp.lock().expect("cdp mutex poisoned");
+            match &*cdp {
+                CdpLifecycle::Ready(state) => (state.port, state.page_id.clone()),
+                _ => return None,
+            }
+        };
+        match crate::cdp::evaluate_js(port, &page_id, expression, false).await {
+            Ok(s) => Some(s),
+            Err(e) => {
+                if crate::is_debug() {
+                    eprintln!("  [cdp] eval_in_webview failed: {e}");
+                }
+                None
+            }
+        }
+    }
+
     /// Run an `adb` subcommand targeting this device.
     async fn adb(&self, args: &[&str]) -> Result<String> {
         let output = tokio::process::Command::new("adb")
@@ -422,6 +448,15 @@ impl PlatformDriver for AndroidDriver {
         // Note: `emu geo fix` takes longitude before latitude
         self.adb(&["emu", "geo", "fix", &lon.to_string(), &lat.to_string()])
             .await?;
+        // Mirror the iOS hook: poke `window.__golemSetLocation` so the
+        // test app's rendered "Location:" row updates without needing
+        // a granted geolocation permission. Native screens / apps
+        // without the hook quietly no-op.
+        let _ = self
+            .eval_in_webview(&format!(
+                "window.__golemSetLocation && window.__golemSetLocation({lat}, {lon})"
+            ))
+            .await;
         Ok(())
     }
 

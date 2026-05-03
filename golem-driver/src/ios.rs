@@ -89,6 +89,41 @@ impl IosDriver {
         &self.bundle_id
     }
 
+    /// Evaluate JavaScript in the foreground WKWebView (best-effort).
+    ///
+    /// Returns `Ok(None)` when there's no inspectable WebView (native
+    /// screen, app not yet launched, inspector connection not yet up,
+    /// or eval failed). Used to push native-state changes into the
+    /// page — e.g. `set_location` calling `__golemSetLocation` so the
+    /// test app's UI reflects the new GPS coordinate.
+    async fn eval_in_webview(&self, expression: &str) -> Option<String> {
+        let mut state = {
+            let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
+            match std::mem::replace(&mut *wk, WebKitLifecycle::Failed) {
+                WebKitLifecycle::Ready(s) => s,
+                other => {
+                    *wk = other;
+                    return None;
+                }
+            }
+        };
+        let result = state.inspector.evaluate_js(expression).await;
+        let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
+        match result {
+            Ok(s) => {
+                *wk = WebKitLifecycle::Ready(state);
+                Some(s)
+            }
+            Err(e) => {
+                if crate::is_debug() {
+                    eprintln!("  [webkit] eval_in_webview failed: {e}");
+                }
+                *wk = WebKitLifecycle::Failed;
+                None
+            }
+        }
+    }
+
     /// Run an `xcrun simctl` subcommand.
     async fn simctl(&self, args: &[&str]) -> Result<String> {
         let output = tokio::process::Command::new("xcrun")
@@ -387,6 +422,17 @@ impl PlatformDriver for IosDriver {
             &format!("{lat},{lon}"),
         ])
         .await?;
+        // The test app's `DeviceState.svelte` exposes a manual hook
+        // (`window.__golemSetLocation`) rather than subscribing to
+        // `navigator.geolocation` (which would need a permission grant
+        // first). Poke the hook so the rendered "Location:" row reflects
+        // the simctl coords. Best-effort: native screens / apps without
+        // the hook quietly no-op.
+        let _ = self
+            .eval_in_webview(&format!(
+                "window.__golemSetLocation && window.__golemSetLocation({lat}, {lon})"
+            ))
+            .await;
         Ok(())
     }
 
