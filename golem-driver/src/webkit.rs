@@ -704,6 +704,23 @@ pub(crate) async fn fetch_webview_dom(
         .and_then(|v| v.get("scale"))
         .and_then(|v| v.as_f64())
         .unwrap_or(1.0);
+    // iOS shifts the visual viewport (not the layout viewport) when the
+    // soft keyboard pops up over a focused input — `getBoundingClientRect`
+    // still returns layout-viewport coords, but the user sees the page at
+    // `(bcr.top - vv.offsetTop)`. Subtracting these aligns DOM bounds with
+    // what's actually on screen.
+    let vv_offset_top = wrapper
+        .get("meta")
+        .and_then(|m| m.get("visualViewport"))
+        .and_then(|v| v.get("offsetTop"))
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0) as i32;
+    let vv_offset_left = wrapper
+        .get("meta")
+        .and_then(|m| m.get("visualViewport"))
+        .and_then(|v| v.get("offsetLeft"))
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0) as i32;
 
     // CSS env(safe-area-inset-top) probe — non-zero when the page declared
     // `viewport-fit=cover`, so the layout viewport extends behind the
@@ -740,8 +757,8 @@ pub(crate) async fn fetch_webview_dom(
         //   bcr is offset by 0 from there. webview_bounds_top has the
         //   native inset added. css env returns 0. Subtracting 0 leaves
         //   the existing behaviour intact.
-        let dx = webview_bounds_left - css_safe_area_left;
-        let dy = webview_bounds_top - css_safe_area_top;
+        let dx = webview_bounds_left - css_safe_area_left - vv_offset_left;
+        let dy = webview_bounds_top - css_safe_area_top - vv_offset_top;
         crate::cdp::offset_bounds(&mut tree, dx, dy);
         Some(tree)
     } else {

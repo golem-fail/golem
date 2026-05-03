@@ -218,19 +218,6 @@ Also roadmap-adjacent: consider whether `golem_events::StepOutcome::Skipped` sho
 
 **Files:** `golem-events/src/lib.rs` (StepOutcome shape), `golem-runner/src/executor.rs` (populate reasons at skip decision), `golem-report/src/{accumulator,human,json,junit,toon}.rs` (surface).
 
-## iOS WebView: Slow Element Resolution Between Consecutive Actions
-
-Consecutive `type` actions on iOS WebView elements are slow — resolving the second input field after typing in the first takes >10s. The DOM tree changes after each keystroke (WebKit enrichment re-fetches), and finding the next element requires waiting for the tree to settle.
-
-Example: `e2e/cross/webview.test.toml` step 7 (`type on_text="Search"`) times out at 10s even though the previous `type` (step 5) completes in ~3.6s. The bottleneck is element resolution, not keystroke delivery.
-
-Possible approaches:
-- Smarter settle detection that recognizes when WebView content is still updating
-- Cache element positions across consecutive steps when the viewport hasn't changed
-- Longer default multiplier for WebView-context actions (requires detecting WebView context)
-
-The native `await_first_frame` settle gate (in `golem-driver/src/lib.rs`) handles the launch → first-action race for native screens. Extending the same pattern to also poll WebKit Inspector readiness when a WebView is present would close the WebView gap.
-
 ## Transient Install Errors: Retry Classifier Polish
 
 `golem-cli/src/suite.rs::is_transient_install_error` classifies a small set of known-recoverable install-script error patterns and retries the script once with `install_only=true` (reusing the already-built artifact). Currently matches:
