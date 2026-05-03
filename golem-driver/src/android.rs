@@ -214,6 +214,10 @@ use crate::common::{find_webview_bounds, replace_webview_children};
 
 #[async_trait]
 impl PlatformDriver for AndroidDriver {
+    fn set_request_timeout(&self, timeout: std::time::Duration) {
+        self.client.set_request_timeout(timeout);
+    }
+
     async fn get_hierarchy(&self) -> Result<(Element, crate::common::HierarchyMeta)> {
         let text = self.client.get_text("/hierarchy").await?;
         let wrapper: serde_json::Value = serde_json::from_str(&text)

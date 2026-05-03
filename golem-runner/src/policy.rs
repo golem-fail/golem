@@ -170,6 +170,14 @@ pub async fn execute_step_with_policy(
     let retry_delay_ms = step.retry_delay.unwrap_or(DEFAULT_RETRY_DELAY_MS);
     let if_fail = step.if_fail.as_deref().unwrap_or("error");
 
+    // Sub the outer step deadline back into the companion HTTP client so
+    // a wedged companion fails fast at the connection layer (clean
+    // network error) instead of cascading the full step budget into
+    // every later request. 500ms headroom lets reqwest fire before
+    // the outer `tokio::time::timeout` cancels.
+    let request_timeout_ms = timeout_ms.saturating_sub(500).max(1_000);
+    driver.set_request_timeout(Duration::from_millis(request_timeout_ms));
+
     let mut last_error: Option<anyhow::Error> = None;
 
     for attempt in 0..=max_retries {

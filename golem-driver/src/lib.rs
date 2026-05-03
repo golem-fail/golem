@@ -136,6 +136,12 @@ pub trait PlatformDriver: Send + Sync {
     /// Remove adb port forwards (Android-only; no-op on iOS)
     async fn remove_port_forwards(&self) -> anyhow::Result<()>;
 
+    /// Set a per-HTTP-request timeout on the driver's companion client.
+    /// Called by the runner before each step so a wedged companion fails
+    /// fast at the connection layer rather than burning the outer
+    /// `tokio::time::timeout` budget. Default: no-op (mock drivers).
+    fn set_request_timeout(&self, _timeout: std::time::Duration) {}
+
     /// Wait for the UI to finish rendering after a launch. Polls
     /// `get_hierarchy()` and returns once the tree is non-empty AND
     /// stable across two consecutive polls — i.e. the first interactive

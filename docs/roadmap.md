@@ -1,5 +1,13 @@
 # Roadmap
 
+## iOS companion HTTP server runs on main thread
+
+`RequestRouter.swift` dispatches every handler with `DispatchQueue.main.sync { ... }`. Once one handler wedges (e.g. `XCUIApplication.typeText` blocking on a soft-keyboard race), the whole HTTP loop wedges with it — every subsequent request from the runner stalls until reqwest's per-request timeout fires (now wired up via `CompanionClient::set_request_timeout`, but each step still burns its full deadline).
+
+Real fix: serve the HTTP loop off main, hop to main only for XCUITest calls that actually need it, with a per-handler watchdog so a stuck `typeText` returns 504 instead of permanently freezing the harness.
+
+**Files:** `companions/ios/GolemRunnerUITests/RequestRouter.swift`, `companions/ios/GolemRunnerUITests/RequestHandlers/*.swift`.
+
 ## Architecture and DX follow-ups from May 2026 review
 
 Captured during the post-merge audit; none are blocking but each removes a sharp edge.

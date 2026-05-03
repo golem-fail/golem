@@ -2265,22 +2265,8 @@ async fn run_flow_on_device(
         .unwrap_or(golem_runner::policy::DEFAULT_BASE_TIMEOUT_MS);
     match execute_flow(&flow, driver.as_ref(), &mut vars, effective_start, base_timeout, &mut ctx, Some(&barrier)).await {
         Ok(result) => {
-            if !result.success {
-                if result.barrier_aborted {
-                    eprintln!("  [{device_label}] Aborted: another device failed at this point");
-                } else {
-                    if let Some(ref block) = result.failed_block {
-                        let step_info = match (result.failed_step, &result.failed_action) {
-                            (Some(s), Some(a)) => format!(" step {s} ({a})"),
-                            (Some(s), None) => format!(" step {s}"),
-                            _ => String::new(),
-                        };
-                        eprintln!("  [{device_label}] Failed in {block}{step_info}");
-                    }
-                    if let Some(ref reason) = result.failed_reason {
-                        eprintln!("  [{device_label}] Error: {reason}");
-                    }
-                }
+            if !result.success && result.barrier_aborted {
+                eprintln!("  [{device_label}] Aborted: another device failed at this point");
             }
             for w in &result.warnings {
                 eprintln!("  [{device_label}] Warning: {w}");

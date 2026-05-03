@@ -647,6 +647,11 @@ pub struct CompanionClient {
     /// Default query string appended to every request (e.g. `"bundle_id=fail.golem.test"`).
     default_query: std::sync::RwLock<String>,
     pub client: reqwest::Client,
+    /// Per-request timeout (ms) applied to `post_json`/`get_text`/`get_bytes`.
+    /// 0 = no per-request timeout. Updated by the runner before each step
+    /// so a wedged companion surfaces as a clean network error before the
+    /// outer `tokio::time::timeout` cancels the future.
+    request_timeout_ms: std::sync::atomic::AtomicU64,
 }
 
 /// Health information returned by the companion server.
@@ -665,6 +670,7 @@ impl CompanionClient {
             base_url: format!("http://localhost:{port}"),
             default_query: std::sync::RwLock::new(String::new()),
             client: reqwest::Client::new(),
+            request_timeout_ms: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
@@ -673,6 +679,21 @@ impl CompanionClient {
         if let Ok(mut q) = self.default_query.write() {
             *q = query.to_string();
         }
+    }
+
+    /// Set the per-request timeout for `post_json`/`get_text`/`get_bytes`.
+    /// Pass `Duration::ZERO` to clear. Sub-millisecond values clamp to 1ms.
+    pub fn set_request_timeout(&self, timeout: std::time::Duration) {
+        let ms = timeout.as_millis().min(u64::MAX as u128) as u64;
+        self.request_timeout_ms
+            .store(ms, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn current_request_timeout(&self) -> Option<std::time::Duration> {
+        let ms = self
+            .request_timeout_ms
+            .load(std::sync::atomic::Ordering::Relaxed);
+        (ms > 0).then(|| std::time::Duration::from_millis(ms))
     }
 
     /// Check companion health and return device info.
@@ -736,11 +757,15 @@ impl CompanionClient {
 
     pub async fn post_json(&self, path: &str, body: &str) -> Result<String> {
         let url = self.url(path);
-        let resp = self
+        let mut req = self
             .client
             .post(&url)
             .header("Content-Type", "application/json")
-            .body(body.to_string())
+            .body(body.to_string());
+        if let Some(t) = self.current_request_timeout() {
+            req = req.timeout(t);
+        }
+        let resp = req
             .send()
             .await
             .with_context(|| format!("POST {url} failed"))?;
@@ -760,9 +785,11 @@ impl CompanionClient {
 
     pub async fn get_text(&self, path: &str) -> Result<String> {
         let url = self.url(path);
-        let resp = self
-            .client
-            .get(&url)
+        let mut req = self.client.get(&url);
+        if let Some(t) = self.current_request_timeout() {
+            req = req.timeout(t);
+        }
+        let resp = req
             .send()
             .await
             .with_context(|| format!("GET {url} failed"))?;
@@ -782,9 +809,11 @@ impl CompanionClient {
 
     pub async fn get_bytes(&self, path: &str) -> Result<Vec<u8>> {
         let url = self.url(path);
-        let resp = self
-            .client
-            .get(&url)
+        let mut req = self.client.get(&url);
+        if let Some(t) = self.current_request_timeout() {
+            req = req.timeout(t);
+        }
+        let resp = req
             .send()
             .await
             .with_context(|| format!("GET {url} failed"))?;

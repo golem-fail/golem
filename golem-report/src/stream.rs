@@ -625,9 +625,16 @@ fn print_failure_block(
     pending: &[(SystemTime, SubstepEvent)],
     use_color: bool,
 ) {
-    // Continuation gutter for the error message — `│` replaces the
-    // timestamp column so the line reads as "still the FAIL above talking".
-    let gutter_pipe = if use_color { format!("{DIM}│{RESET}") } else { "│".to_string() };
+    // Continuation gutter for the error message — replaces the timestamp
+    // column so the line reads as "still the FAIL above talking". When
+    // there are no substeps below, close the rope with `╰`; otherwise `│`
+    // continues into the substep replay.
+    let pipe_glyph = if pending.is_empty() { "\u{2570}" } else { "│" }; // ╰ or │
+    let gutter_pipe = if use_color {
+        format!("{DIM}{pipe_glyph}{RESET}")
+    } else {
+        pipe_glyph.to_string()
+    };
     if use_color {
         eprintln!("{gutter_pipe}{TS_CONTINUATION_PAD}{dp}       {msg_color}{msg}{RESET}");
     } else {
