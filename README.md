@@ -1,8 +1,12 @@
 # Golem
 
-Cross-platform mobile UI testing framework. Write tests once in TOML, run on iOS and Android simultaneously.
+*A golem of clay needs an inscribed word to move. Yours is TOML.*
+
+Cross-platform mobile UI testing framework. Mold your tests once in TOML, animate them on iOS and Android.
 
 ## Quick Start
+
+*Shape the clay.*
 
 ```bash
 # Initialize a project
@@ -28,6 +32,8 @@ golem tree
 ```
 
 ## CLI Reference
+
+*The words you speak to it.*
 
 ### `golem run`
 
@@ -125,6 +131,8 @@ See [App Install](#app-install) below for the full resolution and execution mode
 
 ## Output Formats
 
+*How the golem reports back.*
+
 Specify with `--output FORMAT[:FILE]`. Multiple formats can run simultaneously.
 
 ### `human` (default)
@@ -181,6 +189,8 @@ R:PASS 2/0/0
 ---
 
 ## Test Structure
+
+*Anatomy of a flow.*
 
 Tests are written in TOML. A `.test.toml` file defines a **flow** — the top-level unit of execution.
 
@@ -704,6 +714,8 @@ steps = [
 
 ## App Install
 
+*Putting the clay on the device before the word reaches it.*
+
 By default golem assumes the app under test is already installed on the target device. For fresh simulators, CI pipelines, or teams that want per-test builds, you can supply an install script that golem runs before each flow.
 
 ### Quick start
@@ -859,6 +871,8 @@ Scripts are plain bash — customise freely after scaffolding. Extend to other f
 
 ## Orchestration
 
+*Many golems, one suite.*
+
 Golem orchestrates a suite run in two phases: a **Plan** phase that parses flows and computes what needs to happen, and an **Execute** phase that runs flows on devices. The Plan phase is pure and idempotent; the Execute phase is async and interacts with devices, companions, and install scripts.
 
 ### How it works today
@@ -933,6 +947,8 @@ See `docs/roadmap.md` → **Dynamic JIT Scheduler — Device Reuse, Lazy Install
 ---
 
 ## Actions Reference
+
+*Every word the golem knows.*
 
 ### Interaction
 
@@ -1347,5 +1363,7 @@ Fails on non-2xx status codes.
 Useful in conditional branches to mark unreachable paths.
 
 ## Unsupported
+
+*Cracks in the clay.*
 
 - **Device orientation control.** Programmatic device rotation is not supported on either platform. iOS 16+ fenced off the cross-process rotation APIs (`UIDevice.setValue("orientation")` is deprecated; the supported `UIWindowScene.requestGeometryUpdate` is in-process only); Android emulator's `user_rotation` setting is overridden by the accelerometer simulator and unreliable. The `rotate` action exists only as a multi-touch *gesture* (`{ action = "rotate", on = ..., rotation = 90.0 }`) — there is no device-orientation variant.
