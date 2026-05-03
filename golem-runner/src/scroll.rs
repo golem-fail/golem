@@ -461,7 +461,31 @@ pub async fn scroll_to_element(
             continue;
         }
 
-        // Stall limit reached. Reverse direction.
+        // Stall limit reached on this strategy. Try the next strategy
+        // before declaring a boundary — strategies 4/5 swipe off the
+        // center column, which is what unsticks pages where an
+        // interactive element (e.g. a `pointerdown` handler with
+        // `touch-action: none`) sits in the centre and swallows every
+        // center-column swipe. Only reverse direction once all
+        // strategies have failed.
+        //
+        // Stall budget carries over (`stall_count` not reset) so the
+        // remaining strategies each get exactly one last-chance swipe
+        // before reversal, instead of a fresh 3-stall budget per
+        // strategy. Worst-case: 3 stalls in strategy 1 + 1 in each of
+        // strategies 2–5 = 7 swipes before reversing.
+        if container.is_none() && strategy_idx + 1 < strategies.len() {
+            strategy_idx += 1;
+            if let Some(e) = emitter {
+                e.substep(golem_events::SubstepEvent::ScrollStrategySwitch {
+                    to_index: strategy_idx,
+                    reason: "stall budget exhausted on previous strategy".to_string(),
+                });
+            }
+            continue;
+        }
+
+        // All strategies exhausted. Reverse direction.
         if reversed {
             if let Some(e) = emitter {
                 e.substep(golem_events::SubstepEvent::ScrollDirectionReversed {
