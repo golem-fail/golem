@@ -1,7 +1,9 @@
 pub mod cli;
+pub mod companion_paths;
 pub mod companions;
 pub mod devices;
 pub mod discovery;
+pub mod install_cache;
 pub mod install_script_cmd;
 pub mod orchestrator;
 pub mod project;
