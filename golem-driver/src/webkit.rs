@@ -417,12 +417,22 @@ impl WebKitInspector {
             .await?;
 
         // Step 2: Receive messages until we find a page to inspect.
+        //
+        // iOS 26's webinspectord registers a freshly-launched app
+        // asynchronously — when the runner connects right after a
+        // launch, the first burst of messages can take >5s to arrive
+        // because the daemon hasn't observed our app's WebView yet.
+        // The original 5s/10s budget was tuned for warm apps and trips
+        // a `tap_roundtrip`-style flow's first inspector connection on
+        // iOS 26 every time. Loosening to 15s/30s absorbs the cold-
+        // register delay without slowing the warm path (we exit early
+        // on `pages_received`).
         let mut pages_received = false;
-        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
 
         while tokio::time::Instant::now() < deadline {
             let msg = match tokio::time::timeout(
-                std::time::Duration::from_secs(5),
+                std::time::Duration::from_secs(15),
                 self.transport.recv_plist(),
             )
             .await
@@ -433,7 +443,7 @@ impl WebKitInspector {
                     if pages_received {
                         break; // Timeout is OK after we got pages
                     }
-                    bail!("timeout (5s) waiting for WebKit Inspector handshake");
+                    bail!("timeout (15s) waiting for WebKit Inspector handshake");
                 }
             };
 

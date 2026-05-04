@@ -221,16 +221,6 @@ Also roadmap-adjacent: consider whether `golem_events::StepOutcome::Skipped` sho
 - Add an iOS-side grace probe after `bootstatus -b` (e.g. `xcrun simctl getenv <udid> HOME` until fast) to potentially eliminate the Mach -308 case at source rather than retrying after.
 - Expand the classifier as new transient patterns surface in CI logs. Conservative — adding patterns that aren't actually recoverable just masks real errors behind a 3s delay.
 
-## iOS 26 Tap on `+` Doesn't Register After UI Fully Rendered
-
-`e2e/perf/tap_roundtrip.test.toml` and several other flows on iOS 26: launch → wait Counter (✓) → assert "0" (✓) → next `tap on_text="+"` times out 5s. The element resolves visually (other steps in the same screen state work), but tap to the same coords doesn't register an increment. Pre-existing on iOS 26; iOS 18 in the same flows works.
-
-Affected flows: `tap_roundtrip`, `mixin`, `multi_app_switching`, `alerts`, others involving `+`.
-
-**Settle gate (`await_first_frame`) is in place** — the tree is fully settled before the failing tap fires. The cause is iOS 26 specific: the companion's tap path may use an API that behaves differently on iOS 26, or `+` has an accessibility-tree representation that the tap-to-element resolution can't reach. Investigate by adding a tree-dump immediately before the failing tap to capture the state.
-
-**Files:** `golem-driver/src/ios.rs` tap path.
-
 ## iOS 26 + WebView: Auto-Scroll Past Inner Scrollables Fails
 
 iOS 26 simulator + Tauri WebView: `auto_scroll = true` repeatedly fails to scroll past an inner scrollable into the lower part of the page. `dialog_overlay`, `read`, `scroll_search`, `wait` (`Show Delayed`), `webview` all hit this. Android passes the same flows cleanly.

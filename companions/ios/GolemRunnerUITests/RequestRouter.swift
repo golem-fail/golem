@@ -184,7 +184,7 @@ final class RequestRouter {
         return .json([
             "status": "ok",
             "platform": "ios",
-            "version": "0.5.7",
+            "version": "0.5.8",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,

@@ -18,9 +18,29 @@ enum HierarchySerializer {
     /// Recursively serialize a single element snapshot node.
     private static func serializeNode(_ snapshot: any XCUIElementSnapshot) -> [String: Any] {
         let frame = snapshot.frame
+        // For HTML elements rendered inside a WKWebView, `snapshot.label`
+        // is the computed accessibility name (i.e. `aria-label` when set,
+        // otherwise the visible text). `snapshot.title` is XCUITest's view
+        // of the element's title attribute, which for HTML buttons with
+        // an explicit `aria-label` resolves to the visible textContent.
+        // So `<button aria-label="Increment">+</button>` exposes
+        // `label = "Increment"` and `title = "+"`.
+        //
+        // Using `title || label` for `text` matches what the user sees on
+        // screen — `tap on_text="+"` hits the rendered "+" without
+        // having to wait for WebKit Inspector DOM enrichment to overlay
+        // a separate text. `accessibility_label` still gets the aria-label
+        // via the `id` / `label` fields downstream so identity-based
+        // selectors keep working.
+        let visibleText: String
+        if !snapshot.title.isEmpty {
+            visibleText = snapshot.title
+        } else {
+            visibleText = snapshot.label
+        }
         var node: [String: Any] = [
             "element_type": elementTypeName(snapshot.elementType),
-            "text": snapshot.label,
+            "text": visibleText,
             "label": snapshot.label,
             "title": snapshot.title,
             "value": (snapshot.value as? String) ?? "",

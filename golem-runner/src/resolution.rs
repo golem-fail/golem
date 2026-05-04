@@ -241,10 +241,18 @@ fn build_bounds_fingerprint(element: &Element, buf: &mut String) {
 ///
 /// When the UI is already stable, this completes in a single extra hierarchy
 /// fetch (~250ms). During animations it waits up to `SETTLE_TIMEOUT` (1.5s).
-/// Maximum time to wait for WebView enrichment after settle (10 seconds).
+/// Maximum time to wait for WebView enrichment after settle.
 /// Only applies when the tree contains a web_view with no children,
 /// indicating WebKit Inspector hasn't connected yet.
-const ENRICHMENT_TIMEOUT: Duration = Duration::from_secs(10);
+///
+/// Tighter than the inspector handshake budget (15s+30s) on purpose:
+/// if enrichment hasn't arrived in 2.5s of post-action settle, the
+/// previous action's effects are already observable in the
+/// XCUITest accessibility tree — waiting longer just burns the
+/// step's budget without adding information. The wedge case (handshake
+/// genuinely never completes) shouldn't hold up every step's settle
+/// for 10s.
+const ENRICHMENT_TIMEOUT: Duration = Duration::from_millis(2500);
 
 /// Check if the tree contains a web_view element with no children
 /// (unenriched — WebKit Inspector hasn't connected yet).

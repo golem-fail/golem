@@ -62,16 +62,20 @@ fn action_multiplier(step: &Step) -> u64 {
     }
 
     match step.action.as_str() {
-        // 1x — simple interactions, capture, instant actions
-        "tap" | "doubleTap" | "backspace" | "long_press" | "swipe"
-        | "pinch" | "gesture" | "press" | "rotate" | "dark_mode" | "set_location"
-        | "grant_permission" | "revoke_permission" | "hide_keyboard"
-        | "screenshot" | "start_recording" | "stop_recording" | "add_media"
+        // 1x — instant actions and capture-only steps that don't go
+        // through the element resolver / settle path.
+        "screenshot" | "start_recording" | "stop_recording" | "add_media"
         | "fail" | "load_fixture" | "push_notification" | "set_variable"
-        | "log" | "clear_data" => 1,
+        | "log" | "clear_data" | "press" | "rotate" | "dark_mode" | "set_location"
+        | "grant_permission" | "revoke_permission" | "hide_keyboard" => 1,
 
-        // 2x — assertions, waits, type (element resolve + keystroke delivery)
-        "type" | "assert_visible" | "assert_checked" | "assert_not_visible"
+        // 2x — interactions that include element resolution + post-action
+        // settle (the first tap after a fresh app launch on iOS 26 spends
+        // multiple seconds on WebKit Inspector enrichment + tree
+        // stabilisation; a 1x = 5s budget consistently underflows).
+        "tap" | "doubleTap" | "backspace" | "long_press" | "swipe"
+        | "pinch" | "gesture"
+        | "type" | "assert_visible" | "assert_checked" | "assert_not_visible"
         | "assert_alert" | "accept_alert" | "dismiss_alert"
         | "wait" | "wait_not" | "read" => 2,
 
@@ -557,12 +561,12 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // 12. Action multiplier: tap = 1x, assert_visible = 2x, scroll = 6x
+    // 12. Action multiplier: tap = 2x, assert_visible = 2x, scroll = 6x
     // -----------------------------------------------------------------
     #[test]
     fn action_multiplier_values() {
         let tap = Step { action: "tap".into(), ..Default::default() };
-        assert_eq!(effective_timeout(&tap, 5_000), 5_000);
+        assert_eq!(effective_timeout(&tap, 5_000), 10_000);
 
         let assert_vis = Step { action: "assert_visible".into(), ..Default::default() };
         assert_eq!(effective_timeout(&assert_vis, 5_000), 10_000);
@@ -597,11 +601,12 @@ mod tests {
     #[test]
     fn long_press_duration_extends_timeout() {
         let mut step = Step { action: "long_press".into(), ..Default::default() };
-        // Default long_press duration=1000, so intrinsic=1000, floor=3000
-        // Multiplied=5000 (1x). max(5000, 3000) = 5000
-        assert_eq!(effective_timeout(&step, 5_000), 5_000);
+        // Default long_press duration=1000, intrinsic=1000, floor=3000.
+        // Multiplied=10000 (2x). max(10000, 3000) = 10000.
+        assert_eq!(effective_timeout(&step, 5_000), 10_000);
 
-        // long_press with duration=8000: floor=10000, multiplied=5000
+        // long_press with duration=8000: intrinsic=8000, floor=10000,
+        // multiplied=10000. max(10000, 10000) = 10000.
         step.params.insert("duration".to_string(), toml::Value::Integer(8_000));
         assert_eq!(effective_timeout(&step, 5_000), 10_000);
     }
