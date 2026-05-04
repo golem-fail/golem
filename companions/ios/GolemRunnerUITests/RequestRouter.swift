@@ -60,6 +60,75 @@ final class RequestRouter {
         }
     }
 
+    // MARK: - Main-thread watchdog
+    //
+    // Every XCUITest call must run on the main thread. Today's HTTP server
+    // serves requests from background threads, so handlers `DispatchQueue.main
+    // .sync` to hop. The hazard: when one main-thread call wedges (a
+    // `typeText` racing the soft keyboard, a `windows.firstMatch` waiting on
+    // a snapshot that never comes, an unexpected modal stealing focus), the
+    // bare `.sync` form blocks the calling thread for the lifetime of the
+    // wedge. The HTTP server's own thread is fine, but the runner sees the
+    // request hang past its own deadline — and if the runner reissues, the
+    // new connection's handler also hops to main and queues behind the
+    // wedge.
+    //
+    // `runOnMain(timeout:)` switches every hop to `.async` plus a deadline-
+    // semaphore wait. When the deadline fires, the handler returns 504 and
+    // the connection closes. The work itself stays queued on main (we have
+    // no way to cancel it from outside), so when main eventually frees the
+    // late-completing call still runs — but the runner has already moved on.
+    // That's a deliberately degraded but recovering state: better than the
+    // current behaviour where every later request also pays the wedge time.
+
+    private func runOnMain<T>(timeout: TimeInterval, _ work: @escaping () -> T) -> T? {
+        let semaphore = DispatchSemaphore(value: 0)
+        // Box the result so the @escaping closure can write through after
+        // the outer function may have already returned (timeout path).
+        let resultBox = ResultBox<T>()
+        DispatchQueue.main.async {
+            let value = work()
+            resultBox.value = value
+            semaphore.signal()
+        }
+        if semaphore.wait(timeout: .now() + timeout) == .timedOut {
+            return nil
+        }
+        return resultBox.value
+    }
+
+    /// Void-returning overload — Swift infers `T = Void.Type` for void
+    /// closures via the generic version, which doesn't compile. Returns
+    /// `true` on completion within the deadline, `false` on timeout.
+    @discardableResult
+    private func runOnMainVoid(timeout: TimeInterval, _ work: @escaping () -> Void) -> Bool {
+        let semaphore = DispatchSemaphore(value: 0)
+        DispatchQueue.main.async {
+            work()
+            semaphore.signal()
+        }
+        return semaphore.wait(timeout: .now() + timeout) != .timedOut
+    }
+
+    /// Reference holder for the result of an async main-thread block, so
+    /// the value survives across the @escaping closure / outer function
+    /// boundary (the closure may write after the function has timed out
+    /// and returned).
+    private final class ResultBox<T> {
+        var value: T?
+    }
+
+    // Per-handler timeouts. Generous enough to not cut off legitimate
+    // slow paths (long type strings, post-launch settle), tight enough
+    // that a true wedge fails-fast at one handler instead of stacking.
+    private static let kTimeoutFast: TimeInterval = 5.0
+    private static let kTimeoutLaunch: TimeInterval = 20.0
+    private static let kTimeoutType: TimeInterval = 30.0
+
+    private func gatewayTimeout(_ what: String) -> HTTPResponse {
+        .error("\(what) timed out on main thread", status: 504)
+    }
+
     // MARK: - Query parsing
 
     private func parseQuery(_ query: String) -> [String: String] {
@@ -99,6 +168,9 @@ final class RequestRouter {
     // MARK: - Route handlers
 
     private func handleHealth() -> HTTPResponse {
+        // /health intentionally does NOT touch the main thread — it should
+        // stay responsive even when XCUITest is wedged so the runner can
+        // distinguish "harness alive but stuck" from "harness dead".
         let device = UIDevice.current
         // Prefer the simulator's UDID (set by CoreSimulator in
         // `SIMULATOR_UDID`) over `identifierForVendor`. The latter is
@@ -112,7 +184,7 @@ final class RequestRouter {
         return .json([
             "status": "ok",
             "platform": "ios",
-            "version": "0.5.6",
+            "version": "0.5.7",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
@@ -122,7 +194,7 @@ final class RequestRouter {
 
     private func handleHierarchy(query: [String: String]) -> HTTPResponse {
         let application = app(query: query)
-        let (hierarchy, keyboardHeight, safeAreaTop, safeAreaBottom): ([[String: Any]], Int, Int, Int) = DispatchQueue.main.sync {
+        guard let result = runOnMain(timeout: Self.kTimeoutFast, { () -> ([[String: Any]], Int, Int, Int) in
             application.activate()
             let tree = HierarchySerializer.serialize(app: application)
             // Detect keyboard area: from the top of the toolbar (above keys)
@@ -159,7 +231,10 @@ final class RequestRouter {
             let safeBottom = safeTop > 20 ? 34 : 0
 
             return (tree, kbHeight, safeTop, safeBottom)
+        }) else {
+            return gatewayTimeout("hierarchy")
         }
+        let (hierarchy, keyboardHeight, safeAreaTop, safeAreaBottom) = result
         // Wrap hierarchy with metadata
         let response: [String: Any] = [
             "tree": hierarchy,
@@ -178,7 +253,7 @@ final class RequestRouter {
             return .error("Missing x/y coordinates", status: 400)
         }
         let application = app(query: query)
-        DispatchQueue.main.sync {
+        guard runOnMainVoid(timeout: Self.kTimeoutFast, {
             application.activate()
             // Force XCUITest to materialise an accessibility snapshot of
             // the topmost window before synthesising the tap. Rooting
@@ -195,6 +270,8 @@ final class RequestRouter {
             // up-after-down that the WebView can race-drop the up of,
             // leaving the click event unfired.
             target.press(forDuration: 0.05)
+        }) else {
+            return gatewayTimeout("tap")
         }
         return .json(["status": "ok"])
     }
@@ -207,13 +284,17 @@ final class RequestRouter {
         }
         let duration = (params["duration_ms"] as? Double ?? 1000.0) / 1000.0
         let application = app(query: query)
-        DispatchQueue.main.sync {
+        // Long-press budget: gesture itself + 5s slack for window snapshot.
+        let timeout = Self.kTimeoutFast + duration
+        guard runOnMainVoid(timeout: timeout, {
             application.activate()
             let win = application.windows.firstMatch
             _ = win.waitForExistence(timeout: 2.0)
             let normalized = win.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
             let target = normalized.withOffset(CGVector(dx: x, dy: y))
             target.press(forDuration: duration)
+        }) else {
+            return gatewayTimeout("longpress")
         }
         return .json(["status": "ok"])
     }
@@ -224,9 +305,11 @@ final class RequestRouter {
             return .error("Missing 'text' field", status: 400)
         }
         let application = app(query: query)
-        DispatchQueue.main.sync {
+        guard runOnMainVoid(timeout: Self.kTimeoutType, {
             application.activate()
             application.typeText(text)
+        }) else {
+            return gatewayTimeout("type")
         }
         return .json(["status": "ok"])
     }
@@ -238,9 +321,11 @@ final class RequestRouter {
         }
         let application = app(query: query)
         let deleteString = String(repeating: XCUIKeyboardKey.delete.rawValue, count: count)
-        DispatchQueue.main.sync {
+        guard runOnMainVoid(timeout: Self.kTimeoutType, {
             application.activate()
             application.typeText(deleteString)
+        }) else {
+            return gatewayTimeout("backspace")
         }
         return .json(["status": "ok"])
     }
@@ -255,12 +340,15 @@ final class RequestRouter {
         }
         let duration = (params["duration_ms"] as? Double ?? 300.0) / 1000.0
         let application = app(query: query)
-        DispatchQueue.main.sync {
+        let timeout = Self.kTimeoutFast + duration
+        guard runOnMainVoid(timeout: timeout, {
             application.activate()
             let normalized = application.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
             let start = normalized.withOffset(CGVector(dx: startX, dy: startY))
             let end = normalized.withOffset(CGVector(dx: endX, dy: endY))
             start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .default, thenHoldForDuration: duration)
+        }) else {
+            return gatewayTimeout("swipe")
         }
         return .json(["status": "ok"])
     }
@@ -325,11 +413,15 @@ final class RequestRouter {
     }
 
     private func handleScreenshot() -> HTTPResponse {
-        let pngData: Data? = DispatchQueue.main.sync {
-            let screenshot = XCUIScreen.main.screenshot()
-            return screenshot.pngRepresentation
+        let pngData: Data?? = runOnMain(timeout: Self.kTimeoutFast) {
+            XCUIScreen.main.screenshot().pngRepresentation
         }
-        guard let data = pngData else {
+        guard let data = pngData?.flatMap({ $0 }) else {
+            // Distinguish between a timed-out main and a screenshot that
+            // ran but produced no PNG bytes.
+            if pngData == nil {
+                return gatewayTimeout("screenshot")
+            }
             return .error("Failed to capture screenshot")
         }
         return .png(data)
@@ -337,13 +429,15 @@ final class RequestRouter {
 
     private func handleHideKeyboard(query: [String: String]) -> HTTPResponse {
         let application = app(query: query)
-        DispatchQueue.main.sync {
+        guard runOnMainVoid(timeout: Self.kTimeoutFast, {
             application.activate()
             let win = application.windows.firstMatch
             _ = win.waitForExistence(timeout: 2.0)
             let normalized = win.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
             let target = normalized.withOffset(CGVector(dx: 10, dy: 10))
             target.tap()
+        }) else {
+            return gatewayTimeout("hide-keyboard")
         }
         return .json(["status": "ok"])
     }
@@ -362,8 +456,10 @@ final class RequestRouter {
         default:
             return .error("Unsupported button on iOS: \(button)", status: 400)
         }
-        DispatchQueue.main.sync {
+        guard runOnMainVoid(timeout: Self.kTimeoutFast, {
             XCUIDevice.shared.press(mapped)
+        }) else {
+            return gatewayTimeout("press")
         }
         return .json(["status": "ok"])
     }
@@ -374,7 +470,7 @@ final class RequestRouter {
             return .error("Missing bundle_id", status: 400)
         }
         let application = XCUIApplication(bundleIdentifier: bundleId)
-        DispatchQueue.main.sync {
+        guard runOnMainVoid(timeout: Self.kTimeoutLaunch, {
             // activate() brings to foreground without restarting.
             // If not running, it launches it fresh.
             application.activate()
@@ -394,6 +490,8 @@ final class RequestRouter {
             _ = application.wait(for: .runningForeground, timeout: 5.0)
             _ = application.windows.firstMatch.waitForExistence(timeout: 5.0)
             _ = application.staticTexts.firstMatch.waitForExistence(timeout: 5.0)
+        }) else {
+            return gatewayTimeout("launch")
         }
         lastLaunchedBundle = bundleId
         return .json(["status": "ok"])
@@ -405,8 +503,10 @@ final class RequestRouter {
             return .error("Missing bundle_id", status: 400)
         }
         let application = XCUIApplication(bundleIdentifier: bundleId)
-        DispatchQueue.main.sync {
+        guard runOnMainVoid(timeout: Self.kTimeoutFast, {
             application.terminate()
+        }) else {
+            return gatewayTimeout("stop")
         }
         return .json(["status": "ok"])
     }

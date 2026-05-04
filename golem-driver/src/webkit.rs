@@ -158,6 +158,10 @@ async fn pid_owns_udid(pid: u32, udid: &str) -> bool {
 }
 
 /// Return the PID of the process holding the given Unix socket open, if any.
+/// Currently unused — `enumerate_live_inspector_sockets` does the bulk lsof
+/// in one shot — but kept as a small helper that may be useful for other
+/// per-socket lookups. Annotated to silence dead-code warnings.
+#[allow(dead_code)]
 async fn lsof_socket_owner(path: &std::path::Path) -> Option<u32> {
     let output = tokio::process::Command::new("lsof")
         .args(["-t", path.to_str()?])

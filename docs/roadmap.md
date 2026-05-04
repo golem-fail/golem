@@ -1,13 +1,5 @@
 # Roadmap
 
-## iOS companion HTTP server runs on main thread
-
-`RequestRouter.swift` dispatches every handler with `DispatchQueue.main.sync { ... }`. Once one handler wedges (e.g. `XCUIApplication.typeText` blocking on a soft-keyboard race), the whole HTTP loop wedges with it — every subsequent request from the runner stalls until reqwest's per-request timeout fires (now wired up via `CompanionClient::set_request_timeout`, but each step still burns its full deadline).
-
-Real fix: serve the HTTP loop off main, hop to main only for XCUITest calls that actually need it, with a per-handler watchdog so a stuck `typeText` returns 504 instead of permanently freezing the harness.
-
-**Files:** `companions/ios/GolemRunnerUITests/RequestRouter.swift`, `companions/ios/GolemRunnerUITests/RequestHandlers/*.swift`.
-
 ## Architecture and DX follow-ups from May 2026 review
 
 Captured during the post-merge audit; none are blocking but each removes a sharp edge.
@@ -247,11 +239,21 @@ The scroll loop logs `inner scrollable consumed gesture` and switches strategies
 
 **Files:** `golem-runner/src/scroll.rs` strategy switching; `golem-driver/src/webkit.rs` for inspector tree freshness during scroll.
 
-## iOS form_fill: residual flake at step 6 backspace under concurrent runs
+## iOS concurrent flows: cross-flow focus / state corruption
 
-The original step-1 failure under concurrent iPhone + iPad runs is fixed (UDID-filtered inspector socket discovery in webkit.rs). Concurrent passes are now 21/21 most runs, but one of the two flows still occasionally fails around step 6 `backspace on_text="golem testt"` — element resolves, then the step times out at 5s with no further substep. Solo runs never trigger this. Suspect: shared host-side resource contention (simctl, lsof, or both sims racing on something), or a sim-state issue from `--keep-devices` accumulating focus state. Not blocking — just retry-flaky.
+When iPhone + iPad run flows in parallel, occasional state leaks between sims:
 
-**Files:** `golem-driver/src/webkit.rs`, possibly `golem-runner/src/resolution.rs` (settle path).
+- **Wrong-field type:** observed once on iPhone 17 — typing for `Password` landed in the `Search` input. The next field's focus snapshot apparently lagged by one step, so `typeText` delivered keystrokes to the previously-focused field instead.
+- **Step-6 backspace flake:** one of the two flows occasionally times out at `backspace on_text="golem testt"` — element resolves but the action stalls past the step deadline. Solo runs never trigger.
+- **Step-19 auto_scroll for Submit:** scroll loop enters strategy 2 stalls under concurrent load even after our scroll-strategy fix.
+
+The companion-side off-main fix (commit on this entry's removal) prevents one wedge from cascading into all later requests, but doesn't address the underlying issue: XCUITest's HID injection and accessibility-snapshot paths are process-global. When two sims drive XCUITest concurrently from the same host, they interleave on shared `simctl` / `usbmuxd` / `IOHIDEvent` plumbing. Apple's official guidance is one XCUITest run per host process — we're stretching that.
+
+Likely shape of the real fix: serialise the host-side simctl-touching operations (mainly tap synthesis + window-snapshot probes) behind a host-wide mutex, or run each sim's companion in a separate XCUITest process so OS-level state is per-process.
+
+Not blocking — single-device runs are stable, multi-device retry-flaky.
+
+**Files:** `companions/ios/GolemRunnerUITests/RequestRouter.swift`, `golem-driver/src/ios.rs` (a host-wide mutex would live here).
 
 ## Deep-link delivery on iOS — two stacked blockers
 

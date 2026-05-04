@@ -65,7 +65,7 @@ public class CompanionServerTest {
         body.put("platform", "android");
         body.put("device_id", deviceSerial);
         body.put("device_name", android.os.Build.MODEL);
-        body.put("version", "0.5.6");
+        body.put("version", "0.5.7");
 
         URL url = new URL("http://localhost:" + regPort + "/register");
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
