@@ -201,7 +201,7 @@ fn matches_selector(element: &Element, selector: &Selector) -> bool {
 /// Traits are computed from existing element data — no companion changes needed.
 /// Element types are compared case-insensitively to handle iOS (lowercase)
 /// vs Android (PascalCase) differences.
-fn element_has_trait(element: &Element, trait_name: &str) -> bool {
+pub fn element_has_trait(element: &Element, trait_name: &str) -> bool {
     let et = element.element_type.to_lowercase();
     let text_len = element.text.as_ref().map_or(0, |t| t.len());
     let w = element.bounds.width;

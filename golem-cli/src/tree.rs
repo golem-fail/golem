@@ -2,7 +2,18 @@ use anyhow::{bail, Result};
 use golem_driver::android::AndroidDriver;
 use golem_driver::ios::IosDriver;
 use golem_driver::PlatformDriver;
+use golem_element::selector::element_has_trait;
 use golem_element::{filter_viewport, Element, Viewport};
+
+/// Traits surfaced in tree output. Order = render order: content type →
+/// text → shape → size. `text` is an alias of `has_text` and is omitted to
+/// avoid duplicate rendering.
+const RENDERED_TRAITS: &[&str] = &[
+    "button", "input", "toggle",
+    "has_text", "no_text", "short_text", "long_text",
+    "square", "wide", "tall",
+    "small", "large",
+];
 
 use crate::cli::TreeArgs;
 
@@ -154,10 +165,14 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
             if let Ok(json) = serde_json::to_string_pretty(&display) {
                 println!("{json}");
             }
-        } else if args.verbose {
-            print_tree_debug(&display, 0);
+        } else if args.full || args.verbose {
+            if args.verbose {
+                print_tree_debug(&display, 0);
+            } else {
+                print_tree(&display, 0);
+            }
         } else {
-            print_tree(&display, 0);
+            print_selectable_list(&display);
         }
         println!();
     }
@@ -264,19 +279,104 @@ fn print_tree_inner(element: &Element, depth: usize, debug: bool) {
         String::new()
     };
 
+    let traits = format_traits(element);
+    let traits_part = if traits.is_empty() { String::new() } else { format!("  {traits}") };
+
     if !text.is_empty() || !label.is_empty() {
         println!(
-            "{indent}{et} \"{text}\"{label} ({},{} {}x{}){bounds_extra}{state}",
+            "{indent}{et} \"{text}\"{label} ({},{} {}x{}){bounds_extra}{traits_part}{state}",
             b.x, b.y, b.width, b.height
         );
     } else {
         println!(
-            "{indent}{et} ({},{} {}x{}){bounds_extra}{state}",
+            "{indent}{et} ({},{} {}x{}){bounds_extra}{traits_part}{state}",
             b.x, b.y, b.width, b.height
         );
     }
 
     for child in &element.children {
         print_tree_inner(child, depth + 1, debug);
+    }
+}
+
+/// True if this element is worth surfacing in the default `golem tree`
+/// output. Filters out pure layout containers that have no selector
+/// affordance.
+fn is_selectable(e: &Element) -> bool {
+    let has_text = e.text.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
+    let has_label = e.accessibility_label.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
+    has_text
+        || has_label
+        || e.clickable
+        || element_has_trait(e, "button")
+        || element_has_trait(e, "input")
+        || element_has_trait(e, "toggle")
+}
+
+fn collect_selectable<'a>(e: &'a Element, out: &mut Vec<&'a Element>) {
+    if is_selectable(e) {
+        out.push(e);
+    }
+    for child in &e.children {
+        collect_selectable(child, out);
+    }
+}
+
+/// Render trait list as `·a·b·c·`, or empty string if none match.
+fn format_traits(e: &Element) -> String {
+    let matched: Vec<&str> = RENDERED_TRAITS
+        .iter()
+        .copied()
+        .filter(|t| element_has_trait(e, t))
+        .collect();
+    if matched.is_empty() {
+        String::new()
+    } else {
+        format!("·{}·", matched.join("·"))
+    }
+}
+
+fn print_selectable_list(root: &Element) {
+    let mut nodes: Vec<&Element> = Vec::new();
+    collect_selectable(root, &mut nodes);
+
+    if nodes.is_empty() {
+        println!("(no selectable elements — try --full)");
+        return;
+    }
+
+    for (i, e) in nodes.iter().enumerate() {
+        let idx = i + 1;
+        let b = e.effective_bounds();
+        let bounds = format!("({},{} {}x{})", b.x, b.y, b.width, b.height);
+
+        let text = e.text.as_deref().unwrap_or("");
+        let text_part = if text.is_empty() {
+            String::new()
+        } else {
+            format!(" \"{text}\"")
+        };
+
+        let label_part = e
+            .accessibility_label
+            .as_deref()
+            .filter(|s| !s.is_empty() && Some(*s) != e.text.as_deref())
+            .map(|s| format!(" label={s}"))
+            .unwrap_or_default();
+
+        let traits = format_traits(e);
+        let traits_part = if traits.is_empty() { String::new() } else { format!("  {traits}") };
+
+        let mut state_parts = Vec::new();
+        if !e.enabled { state_parts.push("disabled"); }
+        if e.checked { state_parts.push("checked"); }
+        if e.focused { state_parts.push("focused"); }
+        let state = if state_parts.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}]", state_parts.join(", "))
+        };
+
+        println!("[{idx}] {bounds}{text_part}{label_part}{traits_part}{state}");
     }
 }
