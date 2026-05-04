@@ -327,6 +327,16 @@ pub async fn run_command_public(args: &[String], context: &str) -> Result<String
     run_command(args, context).await
 }
 
+/// Detect simctl's "already-booted" error so concurrent boot calls
+/// against the same sim can treat the loser as success rather than
+/// failing the slot. Apple's exact message:
+/// `An error was encountered processing the command (domain=com.apple.CoreSimulator.SimError, code=405): Unable to boot device in current state: Booted`
+fn is_already_booted_error(e: &anyhow::Error) -> bool {
+    let s = format!("{e:#}");
+    s.contains("Unable to boot device in current state: Booted")
+        || s.contains("code=405")
+}
+
 async fn run_command(args: &[String], context: &str) -> Result<String> {
     let Some((program, arguments)) = args.split_first() else {
         bail!("{context}: empty command");
@@ -384,10 +394,19 @@ pub async fn boot_device(device: &DeviceInfo) -> Result<DeviceInfo> {
 
 async fn boot_ios_and_wait(device: &DeviceInfo) -> Result<DeviceInfo> {
     let args = boot_command(device);
-    run_command(&args, &format!("boot {}", device.name)).await?;
+    // Older simctl treated `boot` on an already-booted device as a no-op.
+    // Recent versions (Xcode 26 / iOS 26) error out with
+    // `Unable to boot device in current state: Booted` — which races
+    // when multiple flow slots independently boot the same shared sim
+    // (one wins, the rest see the error and tear down their slot).
+    // Treat that specific error as success; bootstatus below confirms
+    // the device is actually ready.
+    if let Err(e) = run_command(&args, &format!("boot {}", device.name)).await {
+        if !is_already_booted_error(&e) {
+            return Err(e);
+        }
+    }
     // `bootstatus -b` blocks until the sim is fully booted (services up).
-    // The boot itself is idempotent — running it on an already-booted sim
-    // is a fast no-op.
     let status = vec![
         "xcrun".into(),
         "simctl".into(),
