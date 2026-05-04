@@ -40,6 +40,15 @@ pub struct RegisteredCompanion {
 #[derive(Clone)]
 pub struct RegistrationState {
     inner: Arc<Mutex<RegistrationInner>>,
+    /// Per-UDID launch lock. When N flows want the same simulator, the
+    /// first to take this lock kicks off `ensure_companion_with_reg`;
+    /// the rest wait, and once they take the lock they find the
+    /// already-registered companion via `get()` and return immediately.
+    /// Without this, all N flows xcodebuild-launch the harness in
+    /// parallel — only one xcodebuild instance can actually run, and
+    /// the others "succeed" at spawning but their xcodebuild process
+    /// exits silently, so they never see a registration event.
+    launch_locks: Arc<tokio::sync::Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
 }
 
 struct RegistrationInner {
@@ -58,8 +67,23 @@ impl RegistrationState {
                 next_port: COMPANION_PORT_START,
                 notify_tx: tx,
             })),
+            launch_locks: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         };
         (state, rx)
+    }
+
+    /// Acquire a per-UDID lock guarding the launch path. Caller must
+    /// hold the returned guard for the duration of the
+    /// `ensure_companion_with_reg` call (or any equivalent flow that
+    /// triggers `xcodebuild test-without-building` for that sim).
+    pub async fn launch_guard(&self, udid: &str) -> tokio::sync::OwnedMutexGuard<()> {
+        let mutex = {
+            let mut map = self.launch_locks.lock().await;
+            map.entry(udid.to_string())
+                .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+                .clone()
+        };
+        mutex.lock_owned().await
     }
 
     /// Allocate a free port for a companion. Skips ports that are already

@@ -1744,6 +1744,16 @@ async fn ensure_companion_with_reg(
     reg_state: &crate::registration::RegistrationState,
     event_tx: &golem_events::channel::EventSender,
 ) -> Result<u16> {
+    // Serialize concurrent launches per UDID. When N flows want the
+    // same sim, only one runs `xcodebuild test-without-building` (or
+    // simctl launch) at a time. The rest queue, and once they take the
+    // guard they short-circuit on `reg_state.get(udid)` — the harness
+    // is already registered.
+    let _launch_guard = reg_state.launch_guard(&device.udid).await;
+    if let Some(comp) = reg_state.get(&device.udid) {
+        return Ok(comp.port);
+    }
+
     event_tx.emit(
         golem_events::DeviceId(format!("{platform}/{}", device.name)),
         golem_events::EventKind::CompanionStarting {
@@ -1792,17 +1802,18 @@ async fn ensure_companion_with_reg(
     // Concurrent flows all hit this path simultaneously when launching a
     // fresh companion — only one XCUITest harness can run per UDID, so
     // only one registration fires. Without this pre-check, every flow
-    // after the winner waits 60s for its own (never-arriving) event.
+    // after the winner waits 60s for its own (never-arriving) event
+    // (broadcast doesn't replay events to late subscribers, and the
+    // event already fired before this flow subscribed).
+    //
+    // Trust the registration — caller validates health afterwards. We
+    // intentionally don't health-check here because the harness might
+    // still be in its `setUp()` between registering and binding the
+    // HTTP socket; that's a few hundred ms gap that's fine for the
+    // caller to absorb but not worth the 15s budget the wait_for_health
+    // path used to spend (which then fell through to a 60s wait).
     if let Some(comp) = reg_state.get(&device.udid) {
-        let client = golem_driver::common::CompanionClient::new(comp.port);
-        if let Ok(health) = client
-            .wait_for_health(std::time::Duration::from_secs(15))
-            .await
-        {
-            if health.device_id == device.udid {
-                return Ok(comp.port);
-            }
-        }
+        return Ok(comp.port);
     }
     loop {
         tokio::select! {
