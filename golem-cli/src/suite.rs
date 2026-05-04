@@ -1080,8 +1080,34 @@ async fn setup_slot(
     )
     .await;
 
-    // Reuse an existing healthy companion if one's already bound to a port
-    // we can detect, otherwise spawn a fresh one via the registration path.
+    // Reuse an existing healthy companion if one is already bound to this
+    // device. Three places to check, in order of cost:
+    //
+    // 1. `reg_state` — the in-process registration map. Cheap and
+    //    authoritative; a companion that registered earlier in this
+    //    `golem run` is here. Critical for the multi-flow case: when 30
+    //    flows all want iPhone 17, only one should kick off the
+    //    XCUITest harness — the rest should reuse the registered port.
+    //    Without this, every flow after the first calls
+    //    `ensure_companion_with_reg`, simctl-launches the harness (a
+    //    no-op since one's already running), waits 60s for ITS own
+    //    registration that never fires, then bails.
+    //
+    // 2. Port scan — `find_or_allocate_port` probes the whole port
+    //    range and finds companions from previous `golem run`
+    //    invocations. Slower; only reached when reg_state is empty.
+    //
+    // 3. Spawn — last resort, kick off the registration path.
+    if let Some(comp) = reg_state.get(&device.udid) {
+        let client = golem_driver::common::CompanionClient::new(comp.port);
+        if let Ok(health) = client.check_health().await {
+            if health.device_id == device.udid
+                && health.version == env!("CARGO_PKG_VERSION")
+            {
+                return Ok((device, comp.port));
+            }
+        }
+    }
     let existing_port = find_or_allocate_port(&device, platform).await.ok();
     let reused = if let Some(p) = existing_port {
         let client = golem_driver::common::CompanionClient::new(p);
@@ -1763,6 +1789,21 @@ async fn ensure_companion_with_reg(
     // .identifierForVendor`.)
     let mut rx = reg_state.subscribe();
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
+    // Concurrent flows all hit this path simultaneously when launching a
+    // fresh companion — only one XCUITest harness can run per UDID, so
+    // only one registration fires. Without this pre-check, every flow
+    // after the winner waits 60s for its own (never-arriving) event.
+    if let Some(comp) = reg_state.get(&device.udid) {
+        let client = golem_driver::common::CompanionClient::new(comp.port);
+        if let Ok(health) = client
+            .wait_for_health(std::time::Duration::from_secs(15))
+            .await
+        {
+            if health.device_id == device.udid {
+                return Ok(comp.port);
+            }
+        }
+    }
     loop {
         tokio::select! {
             msg = rx.recv() => {
