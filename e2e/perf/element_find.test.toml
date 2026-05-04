@@ -47,49 +47,55 @@ steps = [
 [[block]]
 name = "find_by_id_display_and_containers"
 steps = [
-  # Assert visibility of display and container elements
-  { action = "assert_visible", on_text = "Counter" },
-  { action = "assert_visible", on_text = "scroll-list" },
-  { action = "assert_visible", on_text = "carousel" },
+  # Jump to the Scroll List section so the list and carousel headers
+  # are within the viewport — this flow is testing find latency on
+  # an in-view tree, not the scroller.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-scroll-list" },
+  { action = "assert_visible", on_text = "Counter", auto_scroll = true },
+  { action = "assert_visible", on_text = "Scroll List", auto_scroll = true },
 
   { action = "wait", on_text = "Counter", timeout = 2000 },
-  { action = "wait", on_text = "scroll-list", timeout = 2000 },
-  { action = "wait", on_text = "carousel", timeout = 2000 },
+  { action = "wait", on_text = "Scroll List", timeout = 2000 },
 ]
 
 [[block]]
 name = "find_list_items_rapid"
 steps = [
   # Rapidly find list items scattered throughout the hierarchy
-  { action = "assert_visible", on_text = "list-item-0" },
-  { action = "assert_visible", on_text = "list-item-1" },
-  { action = "assert_visible", on_text = "list-item-2" },
-  { action = "assert_visible", on_text = "list-item-3" },
-  { action = "assert_visible", on_text = "list-item-4" },
+  { action = "assert_visible", on_text = "Item 0" },
+  { action = "assert_visible", on_text = "Item 1" },
+  { action = "assert_visible", on_text = "Item 2" },
+  { action = "assert_visible", on_text = "Item 3" },
+  { action = "assert_visible", on_text = "Item 4" },
 
   # Tight-timeout waits on each list item
-  { action = "wait", on_text = "list-item-0", timeout = 2000 },
-  { action = "wait", on_text = "list-item-1", timeout = 2000 },
-  { action = "wait", on_text = "list-item-2", timeout = 2000 },
-  { action = "wait", on_text = "list-item-3", timeout = 2000 },
-  { action = "wait", on_text = "list-item-4", timeout = 2000 },
+  { action = "wait", on_text = "Item 0", timeout = 2000 },
+  { action = "wait", on_text = "Item 1", timeout = 2000 },
+  { action = "wait", on_text = "Item 2", timeout = 2000 },
+  { action = "wait", on_text = "Item 3", timeout = 2000 },
+  { action = "wait", on_text = "Item 4", timeout = 2000 },
 ]
 
 [[block]]
 name = "find_carousel_items_rapid"
 steps = [
-  # Rapidly find carousel items
-  { action = "assert_visible", on_text = "carousel-item-0" },
-  { action = "assert_visible", on_text = "carousel-item-1" },
-  { action = "assert_visible", on_text = "carousel-item-2" },
-  { action = "assert_visible", on_text = "carousel-item-3" },
-  { action = "assert_visible", on_text = "carousel-item-4" },
+  # Jump to the Carousel section.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-carousel" },
 
-  { action = "wait", on_text = "carousel-item-0", timeout = 2000 },
-  { action = "wait", on_text = "carousel-item-1", timeout = 2000 },
-  { action = "wait", on_text = "carousel-item-2", timeout = 2000 },
-  { action = "wait", on_text = "carousel-item-3", timeout = 2000 },
-  { action = "wait", on_text = "carousel-item-4", timeout = 2000 },
+  # Rapidly find carousel items
+  { action = "assert_visible", on_text = "Card 0" },
+  { action = "assert_visible", on_text = "Card 1" },
+  { action = "assert_visible", on_text = "Card 2" },
+  { action = "assert_visible", on_text = "Card 3" },
+  { action = "assert_visible", on_text = "Card 4" },
+
+  { action = "wait", on_text = "Card 0", timeout = 2000 },
+  { action = "wait", on_text = "Card 1", timeout = 2000 },
+  { action = "wait", on_text = "Card 2", timeout = 2000 },
+  { action = "wait", on_text = "Card 3", timeout = 2000 },
+  { action = "wait", on_text = "Card 4", timeout = 2000 },
 ]
 
 [[block]]

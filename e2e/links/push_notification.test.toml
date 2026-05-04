@@ -11,8 +11,13 @@ type = "phone"
 [[block]]
 name = "verify_initial_state"
 steps = [
-  # Launch the app and verify notification display is initially empty
+  # Launch the app and verify notification display is initially empty.
+  # `Notification:` lives in Device State below the fold — jump to it
+  # via the menu rather than relying on auto_scroll (this flow isn't
+  # testing scroll behaviour).
   { action = "launch", app = "fail.golem.test" },
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-device-state" },
   { action = "wait", on_text = "Notification:" },
   { action = "assert_visible", on_text = "Notification:" },
 ]

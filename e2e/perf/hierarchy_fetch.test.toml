@@ -47,30 +47,38 @@ steps = [
 [[block]]
 name = "read_list_items_spread"
 steps = [
+  # Jump to Scroll List so the items are in view.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-scroll-list" },
+
   # Read list items from different positions — top, early, and mid-list
   # This stresses the hierarchy endpoint with elements at varying depths
   { action = "read", on_text = "Item 0", save_to = "item_0" },
-  { action = "wait", on_text = "list-item-0", timeout = 2000 },
+  { action = "wait", on_text = "Item 0", timeout = 2000 },
   { action = "read", on_text = "Item 1", save_to = "item_1" },
-  { action = "wait", on_text = "list-item-1", timeout = 2000 },
+  { action = "wait", on_text = "Item 1", timeout = 2000 },
   { action = "read", on_text = "Item 2", save_to = "item_2" },
-  { action = "wait", on_text = "list-item-2", timeout = 2000 },
+  { action = "wait", on_text = "Item 2", timeout = 2000 },
   { action = "read", on_text = "Item 3", save_to = "item_3" },
-  { action = "wait", on_text = "list-item-3", timeout = 2000 },
+  { action = "wait", on_text = "Item 3", timeout = 2000 },
   { action = "read", on_text = "Item 4", save_to = "item_4" },
-  { action = "wait", on_text = "list-item-4", timeout = 2000 },
+  { action = "wait", on_text = "Item 4", timeout = 2000 },
 ]
 
 [[block]]
 name = "read_carousel_items"
 steps = [
+  # Jump to Carousel.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-carousel" },
+
   # Read carousel items to exercise a different subtree
-  { action = "read", on_text = "carousel-item-0", save_to = "carousel_0" },
-  { action = "wait", on_text = "carousel-item-0", timeout = 2000 },
-  { action = "read", on_text = "carousel-item-1", save_to = "carousel_1" },
-  { action = "wait", on_text = "carousel-item-1", timeout = 2000 },
-  { action = "read", on_text = "carousel-item-2", save_to = "carousel_2" },
-  { action = "wait", on_text = "carousel-item-2", timeout = 2000 },
+  { action = "read", on_text = "Card 0", save_to = "carousel_0" },
+  { action = "wait", on_text = "Card 0", timeout = 2000 },
+  { action = "read", on_text = "Card 1", save_to = "carousel_1" },
+  { action = "wait", on_text = "Card 1", timeout = 2000 },
+  { action = "read", on_text = "Card 2", save_to = "carousel_2" },
+  { action = "wait", on_text = "Card 2", timeout = 2000 },
 
   # Final screenshot to capture end state
   { action = "screenshot" },

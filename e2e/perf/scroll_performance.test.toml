@@ -11,10 +11,13 @@ type = "phone"
 [[block]]
 name = "launch_and_wait"
 steps = [
-  # Launch the app and wait for initial load
+  # Launch the app and jump to the Scroll List section. Menu nav so the
+  # flow doesn't waste swipe budget getting to the section under test.
   { action = "launch", app = "fail.golem.test" },
-  { action = "wait", on_text = "scroll-list" },
-  { action = "assert_visible", on_text = "list-item-0" },
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-scroll-list" },
+  { action = "wait", on_text = "Scroll List" },
+  { action = "assert_visible", on_text = "Item 0" },
   { action = "screenshot" },
 ]
 
@@ -27,8 +30,7 @@ steps = [
   { action = "swipe", direction = "down" },
 
   # Verify a mid-range item appears quickly
-  { action = "wait", on_text = "list-item-15", timeout = 2000 },
-  { action = "assert_visible", on_text = "list-item-15" },
+  { action = "wait", on_text = "Item 15", timeout = 2000 },
   { action = "assert_visible", on_text = "Item 15" },
 
   # Continue scrolling
@@ -36,8 +38,7 @@ steps = [
   { action = "swipe", direction = "down" },
 
   # Verify another mid-list element with tight timeout
-  { action = "wait", on_text = "list-item-25", timeout = 2000 },
-  { action = "assert_visible", on_text = "list-item-25" },
+  { action = "wait", on_text = "Item 25", timeout = 2000 },
   { action = "assert_visible", on_text = "Item 25" },
 ]
 
@@ -52,15 +53,14 @@ steps = [
   { action = "swipe", direction = "down" },
 
   # Verify near-bottom items appear within tight timeout
-  { action = "wait", on_text = "list-item-40", timeout = 2000 },
+  { action = "wait", on_text = "Item 40", timeout = 2000 },
   { action = "assert_visible", on_text = "Item 40" },
 
   { action = "swipe", direction = "down" },
   { action = "swipe", direction = "down" },
 
   # Verify the last item in the list
-  { action = "wait", on_text = "list-item-49", timeout = 2000 },
-  { action = "assert_visible", on_text = "list-item-49" },
+  { action = "wait", on_text = "Item 49", timeout = 2000 },
   { action = "assert_visible", on_text = "Item 49" },
   { action = "screenshot" },
 ]
@@ -83,34 +83,35 @@ steps = [
   { action = "swipe", direction = "up" },
 
   # Verify we are back at the top with a tight timeout
-  { action = "wait", on_text = "list-item-0", timeout = 2000 },
-  { action = "assert_visible", on_text = "list-item-0" },
+  { action = "wait", on_text = "Item 0", timeout = 2000 },
   { action = "assert_visible", on_text = "Item 0" },
 ]
 
 [[block]]
 name = "carousel_scroll_forward"
 steps = [
-  # Test horizontal carousel scrolling performance
-  { action = "assert_visible", on_text = "carousel" },
-  { action = "assert_visible", on_text = "carousel-item-0" },
+  # Jump to the Carousel section.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-carousel" },
+  { action = "assert_visible", on_text = "Carousel" },
+  { action = "assert_visible", on_text = "Card 0" },
 
   # Swipe left through the entire carousel
   { action = "swipe", direction = "left" },
-  { action = "wait", on_text = "carousel-item-2", timeout = 2000 },
+  { action = "wait", on_text = "Card 2", timeout = 2000 },
 
   { action = "swipe", direction = "left" },
-  { action = "wait", on_text = "carousel-item-4", timeout = 2000 },
+  { action = "wait", on_text = "Card 4", timeout = 2000 },
 
   { action = "swipe", direction = "left" },
-  { action = "wait", on_text = "carousel-item-6", timeout = 2000 },
+  { action = "wait", on_text = "Card 6", timeout = 2000 },
 
   { action = "swipe", direction = "left" },
   { action = "swipe", direction = "left" },
 
   # Verify the last carousel item is reachable
-  { action = "wait", on_text = "carousel-item-9", timeout = 2000 },
-  { action = "assert_visible", on_text = "carousel-item-9" },
+  { action = "wait", on_text = "Card 9", timeout = 2000 },
+  { action = "assert_visible", on_text = "Card 9" },
 ]
 
 [[block]]
@@ -128,8 +129,8 @@ steps = [
   { action = "swipe", direction = "right" },
 
   # Verify return to the start of the carousel
-  { action = "wait", on_text = "carousel-item-0", timeout = 2000 },
-  { action = "assert_visible", on_text = "carousel-item-0" },
+  { action = "wait", on_text = "Card 0", timeout = 2000 },
+  { action = "assert_visible", on_text = "Card 0" },
 
   # Final screenshot to confirm consistent state
   { action = "screenshot" },

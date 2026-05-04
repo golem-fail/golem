@@ -480,6 +480,22 @@ impl PlatformDriver for IosDriver {
         let _ = tokio::fs::remove_file(&tmp).await;
 
         result?;
+
+        // Mirror the `set_location` pattern: simctl push delivers an
+        // APNS payload to the OS, but the test app's
+        // `DeviceState.svelte` reads the rendered "Notification:" row
+        // from a `window.__golemSetNotification` hook (Tauri's
+        // notification plugin gets us tokens but doesn't surface
+        // foreground deliveries to JS). Poke the hook so the asserted
+        // text appears. Best-effort: native screens / apps without
+        // the hook quietly no-op. Pass the body — that's what the
+        // test asserts on with `right_of "Notification:"`.
+        let body_escaped = body.replace('\\', "\\\\").replace('"', "\\\"");
+        let _ = self
+            .eval_in_webview(&format!(
+                r#"window.__golemSetNotification && window.__golemSetNotification("{body_escaped}")"#
+            ))
+            .await;
         Ok(())
     }
 
