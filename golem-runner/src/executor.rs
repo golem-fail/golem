@@ -90,9 +90,15 @@ pub async fn execute_flow<'a>(
     };
 
     let apps = &flow.flow.apps;
-    // Lifecycle stop/launch mirror the "launch"/"stop" step multiplier (3x base).
-    // Unresponsive companions would otherwise block forever here.
-    let lifecycle_timeout = std::time::Duration::from_millis(default_timeout_ms * 3);
+    // Lifecycle stop/launch budget. The companion's handleLaunch runs
+    // three sequential 5s `waitForExistence` probes (foregrounded,
+    // window, staticText) — worst case 15s on a cold iOS 26 launch.
+    // Matching that exactly with `× 3` left no safety margin: the
+    // runner's deadline fired the same instant the companion was
+    // still finishing its third probe. `× 5` gives headroom for
+    // request-routing latency, the off-main watchdog dispatch, and
+    // small first-launch slowdowns without uncapping forever.
+    let lifecycle_timeout = std::time::Duration::from_millis(default_timeout_ms * 5);
     match lifecycle {
         golem_parser::AppLifecycle::Reset => {
             for app in apps {
