@@ -1,17 +1,5 @@
 # Roadmap
 
-## iOS companion lifecycle: only one flow per `golem run` succeeds
-
-A full `golem run e2e --platform ios` sweep (any concurrency setting, fresh sim shutdown) reliably runs the first flow successfully, then every subsequent flow fails at slot setup with `Companion did not register within 60 seconds`. The XCUITest harness is a one-shot process — once its first flow completes (or auto_cleanup tears it down at flow end), the next flow's slot setup tries to launch a fresh companion, but registration never lands. The companion process either doesn't restart or restarts but doesn't re-register on the orchestrator's expected port.
-
-Repro: `xcrun simctl shutdown all && ./target/release/golem run --platform ios e2e --coverage one --no-build --max-concurrency 1` — first flow passes, ~38 subsequent flows all fail with the registration timeout.
-
-Suspect surfaces: companion auto_cleanup may be killing the XCUITest harness, the harness can't be relaunched in the same simctl context, or the registration-port-allocator in `suite.rs::wait_for_register` (~line 1803) holds stale state across flows.
-
-This blocks any meaningful e2e sweep — every flow today must be run in its own `golem run` invocation. Single-flow runs (`--coverage one` on one test) work fine.
-
-**Files:** `golem-cli/src/suite.rs` (registration), `golem-runner/src/cleanup.rs` (auto_cleanup wired today, shouldn't kill harness but does), `companions/ios/GolemRunnerUITests/HTTPServer.swift`.
-
 ## Architecture and DX follow-ups from May 2026 review
 
 Captured during the post-merge audit; none are blocking but each removes a sharp edge.
