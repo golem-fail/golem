@@ -20,7 +20,27 @@ final class RequestRouter {
     }()
 
     /// Handle an incoming HTTP request and return an HTTPResponse.
+    ///
+    /// Wraps dispatch in an Obj-C `@try/@catch`. XCUITest internals
+    /// raise NSException on a few rare paths (XCTWaiter timeouts inside
+    /// `XCUIApplication.init`, missing bundle id, snapshot races). Swift
+    /// `try` can't catch those; without this guard, one bad request
+    /// terminates the harness via `_XCTTerminateHandler`.
     func handle(method: String, path: String, body: Data?) -> HTTPResponse {
+        var response: HTTPResponse?
+        var caught: NSException?
+        let ok = SnapshotHelper.catchNSException({
+            response = self.dispatch(method: method, path: path, body: body)
+        }, exception: &caught)
+        if !ok {
+            let name = caught?.name.rawValue ?? "unknown"
+            let reason = caught?.reason ?? ""
+            return .error("handler raised NSException \(name): \(reason)", status: 500)
+        }
+        return response ?? .error("handler returned no response", status: 500)
+    }
+
+    private func dispatch(method: String, path: String, body: Data?) -> HTTPResponse {
         // Parse path and query string.
         let components = path.split(separator: "?", maxSplits: 1)
         let route = String(components[0])

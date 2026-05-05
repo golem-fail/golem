@@ -23,4 +23,17 @@
     }
 }
 
++ (BOOL)catchNSException:(void (^)(void))block
+         exception:(NSException * _Nullable * _Nullable)outException {
+    @try {
+        block();
+        return YES;
+    } @catch (NSException *e) {
+        if (outException) {
+            *outException = e;
+        }
+        return NO;
+    }
+}
+
 @end
