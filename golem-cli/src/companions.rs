@@ -1,8 +1,11 @@
+use std::collections::hash_map::DefaultHasher;
 use std::fs;
+use std::hash::Hasher;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{bail, Context, Result};
+
 
 /// Embedded iOS companion archive (tar.gz of XCTest build products).
 /// Empty if build was unavailable.
@@ -33,7 +36,18 @@ pub struct CompanionPaths {
 /// wasn't embedded.
 pub fn ensure_extracted() -> Result<CompanionPaths> {
     let version = env!("CARGO_PKG_VERSION");
-    let base_dir = home_dir()?.join(".golem/companions").join(version);
+    // Include a content hash of the embedded companions in the dir name
+    // so a rebuilt companion (same version, different bytes) gets a
+    // fresh extraction directory. Avoids the "I changed companion code
+    // but `golem` keeps using the old cached extraction" gotcha.
+    let mut hasher = DefaultHasher::new();
+    hasher.write(IOS_COMPANION);
+    hasher.write(ANDROID_TEST_APK);
+    hasher.write(ANDROID_MAIN_APK);
+    // 32-bit truncation: collision risk within a single version is
+    // ~1 in 4B, negligible for our use. Keeps the dir name tidy.
+    let tag = format!("{}-{:08x}", version, hasher.finish() as u32);
+    let base_dir = home_dir()?.join(".golem/companions").join(&tag);
 
     let ios_products = extract_ios(&base_dir)?;
     let (android_apk, android_main_apk) = extract_android(&base_dir)?;

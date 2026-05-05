@@ -15,6 +15,103 @@ enum HierarchySerializer {
         return snapshot.children.map { serializeNode($0) }
     }
 
+    /// Serialize any system alerts presented by SpringBoard (deep-link
+    /// "Open in <App>?" confirms, photo-library prompts, etc.). These
+    /// are owned by `com.apple.springboard`, not the app under test, so
+    /// they don't appear in `serialize(app:)`. Returning them as
+    /// additional top-level entries lets `find_alert` on the runner side
+    /// pick them up without needing to know which process owns the
+    /// alert — closer to what a user sees on screen.
+    static func serializeSpringBoardAlerts() -> [[String: Any]] {
+        // System alert ownership varies on iOS — SpringBoard for most,
+        // but iOS 26+ openURL confirmations show up under
+        // `com.apple.springboard.SystemApp` or sometimes the calling
+        // simulator's launchd path. Probe each candidate.
+        let candidateBundles = [
+            "com.apple.springboard",
+            "com.apple.springboard.SystemApp",
+        ]
+        var out: [[String: Any]] = []
+        for bid in candidateBundles {
+            let app = XCUIApplication(bundleIdentifier: bid)
+            // .alerts (UIAlertController .alert)
+            let alerts = app.alerts
+            for i in 0..<alerts.count {
+                let el = alerts.element(boundBy: i)
+                guard el.exists else { continue }
+                if let snap = try? el.snapshot() {
+                    out.append(serializeNode(snap))
+                }
+            }
+            // .sheets (UIAlertController .actionSheet)
+            let sheets = app.sheets
+            for i in 0..<sheets.count {
+                let el = sheets.element(boundBy: i)
+                guard el.exists else { continue }
+                if let snap = try? el.snapshot() {
+                    var node = serializeNode(snap)
+                    node["element_type"] = "alert"
+                    out.append(node)
+                }
+            }
+            // Dialog-shaped window fallback for confirmations that don't
+            // classify as .alert or .sheet (iOS 26 "Open in <App>?").
+            if out.isEmpty {
+                if let snap = try? app.snapshot() {
+                    if let dialog = findDialogLikeWindow(snap) {
+                        var node = serializeNode(dialog)
+                        node["element_type"] = "alert"
+                        out.append(node)
+                    }
+                }
+            }
+            if !out.isEmpty { break }
+        }
+        return out
+    }
+
+    /// Heuristic: a window-or-other that owns >=2 visible buttons and
+    /// at least one non-button text child, rendered in the middle of
+    /// the screen. Catches deep-link / "share with" confirms that
+    /// aren't formal UIAlertController instances.
+    private static func findDialogLikeWindow(_ snap: any XCUIElementSnapshot) -> (any XCUIElementSnapshot)? {
+        if countButtons(snap) >= 2 && hasNonButtonText(snap) {
+            // Reject root windows that contain the whole UI; require
+            // a moderately small bounding box.
+            let f = snap.frame
+            if f.width > 0 && f.height > 0 && f.width < 600 && f.height < 600 {
+                return snap
+            }
+        }
+        for child in snap.children {
+            if let hit = findDialogLikeWindow(child) {
+                return hit
+            }
+        }
+        return nil
+    }
+
+    private static func countButtons(_ snap: any XCUIElementSnapshot) -> Int {
+        var n = snap.elementType == .button ? 1 : 0
+        for c in snap.children { n += countButtons(c) }
+        return n
+    }
+
+    private static func hasNonButtonText(_ snap: any XCUIElementSnapshot) -> Bool {
+        if snap.elementType != .button && !snap.label.isEmpty {
+            return true
+        }
+        for c in snap.children {
+            if hasNonButtonText(c) { return true }
+        }
+        return false
+    }
+
+    /// Public wrapper around `serializeNode` for the debug probe.
+    static func serializeNodePublic(_ snap: any XCUIElementSnapshot) -> [String: Any] {
+        return serializeNode(snap)
+    }
+
     /// Recursively serialize a single element snapshot node.
     private static func serializeNode(_ snapshot: any XCUIElementSnapshot) -> [String: Any] {
         let frame = snapshot.frame

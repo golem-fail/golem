@@ -21,6 +21,16 @@ Captured during the post-merge audit; none are blocking but each removes a sharp
 - **`Menu.svelte` `scroll-margin-top` hard-codes 60px.** Refactors that grow the menu height regress scroll-into-view. Compute from the menu's bounding box.
 - **`EventLog.MAX = 50`.** Pointermove bursts evict prior events. Acceptable for a debug tool today; bumping to time-windowed (last 5s) would survive long flows.
 
+## Stale-bundle defense (Tauri iOS build pipeline)
+
+`scripts/install-app.sh` and the corresponding template now (a) clear the per-arch build dir so the `tauri-cli` rename step succeeds, (b) prefer the per-arch path over the xcarchive copy when picking the produced `.app`, and (c) hard-fail when the picked `.app`'s mtime predates the build start. That closes the specific failure mode where weeks-old bundles were silently installed (see post-mortem: "menu missing" was actually "running an Apr 20 build for 3 weeks").
+
+Further hardening that would catch the next variant of this class:
+
+- **Content sanity hash.** Hash `test-app/dist/` after `npm run build` and verify the same hash appears as an embedded resource inside the `.app` (Tauri compresses the web bundle into the Rust binary, so we'd compute the hash on the source dist and embed it as a build-stamp the runner can `grep -F` for). Catches the case where Tauri produces a `.app` with empty/wrong web assets.
+- **Reject `set +e` failures with a known signature.** The tolerated `tauri-cli` rename error is "failed to rename app ... Directory not empty". Instead of blanket-tolerating any nonzero exit, parse stderr and only tolerate that exact line. Anything else fails fast.
+- **Build cache key includes lockfiles.** `install_cache.rs`'s fingerprint is git porcelain — works when lockfiles are tracked. When they're not (e.g. some downstream consumers), include lockfile hashes explicitly so `cargo update` / `npm install` invalidate the install cache.
+
 ## e2e Coverage for Physical Device Path
 
 No e2e flow exercises the physical-device path today. Android is the easier starter (ADB-based, no special transport). Add:

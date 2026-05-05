@@ -363,33 +363,51 @@ pub(crate) fn handle_fail(step: &Step) -> Result<()> {
 /// label to dismiss with. Otherwise the alert is dismissed with the default action.
 /// Accept (positive): tap the last button in the alert (OK, Yes).
 pub(crate) async fn handle_accept_alert(_step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let (root, _meta) = driver.get_hierarchy().await?;
-    let alert = golem_driver::common::find_alert(&root)
-        .ok_or_else(|| anyhow::anyhow!("accept_alert failed: no alert is displayed"))?;
-
-    let buttons = golem_driver::common::find_alert_buttons(&alert);
-    if buttons.is_empty() {
-        bail!("accept_alert failed: no buttons found in alert");
+    // Poll up to 5s for the alert to appear. iOS dialogs (e.g. the
+    // "Open in <App>?" custom-URL-scheme confirmation, permission
+    // prompts) animate in after the triggering action and aren't
+    // synchronous — accepting immediately races and fails.
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let (root, _meta) = driver.get_hierarchy().await?;
+        if let Some(alert) = golem_driver::common::find_alert(&root) {
+            let buttons = golem_driver::common::find_alert_buttons(&alert);
+            if buttons.is_empty() {
+                bail!("accept_alert failed: no buttons found in alert");
+            }
+            // Last button is the positive action (OK, Yes, Open)
+            let btn = &buttons[buttons.len() - 1];
+            return driver.tap(btn.effective_bounds().center_x(), btn.effective_bounds().center_y()).await;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            bail!("accept_alert failed: no alert is displayed");
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
     }
-    // Last button is the positive action (OK, Yes)
-    let btn = &buttons[buttons.len() - 1];
-    driver.tap(btn.effective_bounds().center_x(), btn.effective_bounds().center_y()).await
 }
 
 /// Dismiss (negative): tap the first button in the alert (Cancel, No).
 /// For single-button alerts, taps the only button.
 pub(crate) async fn handle_dismiss_alert(_step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let (root, _meta) = driver.get_hierarchy().await?;
-    let alert = golem_driver::common::find_alert(&root)
-        .ok_or_else(|| anyhow::anyhow!("dismiss_alert failed: no alert is displayed"))?;
-
-    let buttons = golem_driver::common::find_alert_buttons(&alert);
-    if buttons.is_empty() {
-        bail!("dismiss_alert failed: no buttons found in alert");
+    // Mirror accept_alert's 5s poll so callers don't have to interleave
+    // a manual `wait` step before dismiss.
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let (root, _meta) = driver.get_hierarchy().await?;
+        if let Some(alert) = golem_driver::common::find_alert(&root) {
+            let buttons = golem_driver::common::find_alert_buttons(&alert);
+            if buttons.is_empty() {
+                bail!("dismiss_alert failed: no buttons found in alert");
+            }
+            // First button is the negative action (Cancel, No)
+            let btn = &buttons[0];
+            return driver.tap(btn.effective_bounds().center_x(), btn.effective_bounds().center_y()).await;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            bail!("dismiss_alert failed: no alert is displayed");
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
     }
-    // First button is the negative action (Cancel, No)
-    let btn = &buttons[0];
-    driver.tap(btn.effective_bounds().center_x(), btn.effective_bounds().center_y()).await
 }
 
 #[cfg(test)]

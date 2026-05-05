@@ -22,7 +22,12 @@ onMount(() => {
   let unlistenDeepLink;
   (async () => {
     try {
-      const { onOpenUrl, getCurrent } = await import("@tauri-apps/plugin-deep-link");
+      const { onOpenUrl, getCurrent, register } = await import("@tauri-apps/plugin-deep-link");
+      // Register first — on iOS this hooks the plugin into the
+      // UIApplicationDelegate's openURL path so warm-start URLs are
+      // forwarded to the JS listener. Without it, only cold-start URLs
+      // (via getCurrent) are delivered.
+      try { await register("golem-test"); } catch { /* already registered */ }
       try {
         const urls = await getCurrent();
         if (urls && urls.length > 0) deeplink = urls[urls.length - 1];

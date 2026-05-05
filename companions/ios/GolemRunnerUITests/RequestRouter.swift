@@ -51,6 +51,8 @@ final class RequestRouter {
             return handleHealth()
         case ("GET", "/hierarchy"):
             return handleHierarchy(query: query)
+        case ("GET", "/debug/probe"):
+            return handleDebugProbe(query: query)
         case ("POST", "/tap"):
             return handleTap(body: body, query: query)
         case ("POST", "/longpress"):
@@ -211,7 +213,7 @@ final class RequestRouter {
         return .json([
             "status": "ok",
             "platform": "ios",
-            "version": "0.5.9",
+            "version": "0.5.10",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
@@ -223,7 +225,13 @@ final class RequestRouter {
         let application = app(query: query)
         guard let result = runOnMain(timeout: Self.kTimeoutFast, { () -> ([[String: Any]], Int, Int, Int) in
             application.activate()
-            let tree = HierarchySerializer.serialize(app: application)
+            var tree = HierarchySerializer.serialize(app: application)
+            // Append any SpringBoard-owned alerts (deep-link confirms,
+            // permission prompts, …). They render over the app but are
+            // owned by a different process, so XCUI's app-scoped
+            // snapshot doesn't include them. Merging here gives the
+            // runner a single screen-wide tree to query against.
+            tree.append(contentsOf: HierarchySerializer.serializeSpringBoardAlerts())
             // Detect keyboard area: from the top of the toolbar (above keys)
             // to the bottom of the screen. Includes toolbar, predictions, and keys.
             let kbHeight: Int
@@ -271,6 +279,38 @@ final class RequestRouter {
             "device_model": Self.deviceModel
         ]
         return .json(response)
+    }
+
+    /// Debug-only: dump the XCUI snapshot of an arbitrary bundle.
+    /// Use `/debug/probe?bundle=com.apple.springboard` to inspect what
+    /// XCUITest can actually see for a given system process. Returns a
+    /// summary (alert/sheet/window counts + serialized children) so we
+    /// can pinpoint where confirmation dialogs (deep-link "Open in
+    /// <App>?", privacy prompts, etc.) live.
+    private func handleDebugProbe(query: [String: String]) -> HTTPResponse {
+        guard let bid = query["bundle"], !bid.isEmpty else {
+            return .error("Missing bundle query param", status: 400)
+        }
+        guard let result = runOnMain(timeout: Self.kTimeoutFast, { () -> [String: Any] in
+            let app = XCUIApplication(bundleIdentifier: bid)
+            var info: [String: Any] = [
+                "bundle": bid,
+                "exists": app.exists,
+                "state": app.state.rawValue,
+                "alerts_count": app.alerts.count,
+                "sheets_count": app.sheets.count,
+                "windows_count": app.windows.count,
+            ]
+            if let snap = try? app.snapshot() {
+                info["tree"] = snap.children.map { HierarchySerializer.serializeNodePublic($0) }
+            } else {
+                info["snapshot_error"] = "snapshot() threw"
+            }
+            return info
+        }) else {
+            return gatewayTimeout("debug/probe")
+        }
+        return .json(result)
     }
 
     private func handleTap(body: Data?, query: [String: String]) -> HTTPResponse {

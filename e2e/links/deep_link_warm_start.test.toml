@@ -21,6 +21,10 @@ steps = [
   { action = "tap", on_text = "+" },
   { action = "assert_visible", on_text = "3", on_below = "Counter" },
 
+  # Navigate to the Device State section where the Deep Link display lives
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-device-state" },
+
   # Verify deep link display is empty before receiving a link
   { action = "assert_visible", on_text = "Deep Link:" },
 ]
@@ -28,8 +32,12 @@ steps = [
 [[block]]
 name = "receive_deep_link_while_running"
 steps = [
-  # Open a deep link while the app is already running (warm start)
+  # Open a deep link while the app is already running (warm start).
+  # iOS shows a native "Open in <App>?" confirmation the first time a
+  # custom URL scheme is opened from outside the app — accept it to
+  # forward the URL to the plugin's openURL handler.
   { action = "open_link", url = "golem-test://warm-start" },
+  { action = "accept_alert" },
   { action = "wait", on_text = "Deep Link:" },
   { action = "assert_visible", on_text = "golem-test://warm-start", on_right_of = "Deep Link:" },
 ]

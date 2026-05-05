@@ -38,7 +38,7 @@ final class GolemRunnerUITests: XCTestCase {
             "platform": "ios",
             "device_id": deviceId,
             "device_name": device.name,
-            "version": "0.5.9"
+            "version": "0.5.10"
         ]
 
         guard let jsonData = try? JSONSerialization.data(withJSONObject: body),

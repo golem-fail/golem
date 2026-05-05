@@ -40,9 +40,18 @@ case "$PLATFORM" in
     fi
 
     if [[ "$MODE" != "install-only" ]]; then
+      BUILD_START_TS=$(date +%s)
       echo "building Tauri iOS for $DEVICE_ID..." >&2
-      # Clear prior xcarchive to avoid stale-state conflicts.
+      # Clear prior build artifacts. The rename step that tauri-cli does
+      # at the end of `ios build` fails with "Directory not empty" if the
+      # target-arch dir already exists from a prior run — and the failure
+      # is silent under `set +e`. When that happens the .app we pick up
+      # below is whatever stale tree was left behind, leading to weeks-
+      # old bundles being installed without warning.
       rm -rf src-tauri/gen/apple/build/*.xcarchive
+      rm -rf src-tauri/gen/apple/build/arm64-sim
+      rm -rf src-tauri/gen/apple/build/x86_64
+      rm -rf src-tauri/gen/apple/build/aarch64
       # Tauri 2.x iOS targets: aarch64-sim / x86_64 / aarch64.
       # Known bug: tauri-cli 2.10 + Xcode 26 exits nonzero on a post-archive
       # rename step even after producing a valid signed .app. We tolerate
@@ -65,11 +74,38 @@ case "$PLATFORM" in
       TAURI_EXIT=0
     fi
 
-    # Find produced .app (-print -quit avoids SIGPIPE under pipefail).
-    APP_PATH=$(find src-tauri/gen/apple/build -maxdepth 5 -name "*.app" -type d -print -quit)
+    # Find produced .app. Prefer the per-arch target dir (the canonical
+    # output) over the xcarchive copy — when the rename succeeded both
+    # exist with the same content, but when it failed the xcarchive copy
+    # may be a stale or empty shell.
+    if [[ "$IS_SIMULATOR" == "1" ]]; then
+      HOST_ARCH=$(uname -m)
+      if [[ "$HOST_ARCH" == "x86_64" ]]; then
+        TARGET_DIR="src-tauri/gen/apple/build/x86_64"
+      else
+        TARGET_DIR="src-tauri/gen/apple/build/arm64-sim"
+      fi
+    else
+      TARGET_DIR="src-tauri/gen/apple/build/aarch64"
+    fi
+    APP_PATH=$(find "$TARGET_DIR" -maxdepth 2 -name "*.app" -type d -print -quit 2>/dev/null)
+    if [[ -z "$APP_PATH" ]]; then
+      APP_PATH=$(find src-tauri/gen/apple/build -maxdepth 5 -name "*.app" -type d -print -quit)
+    fi
     if [[ -z "$APP_PATH" || ! -f "$APP_PATH/Info.plist" ]]; then
       echo "error: tauri build failed (exit $TAURI_EXIT) and no valid .app was produced" >&2
       exit 1
+    fi
+    # Guard against silent stale-bundle installs: if we ran the build
+    # (not install-only) the .app must have been written during this run.
+    # Picking up a months-old .app because the rename-step failed silently
+    # is what bit us for weeks; this turns it into a loud failure.
+    if [[ "$MODE" != "install-only" ]]; then
+      APP_MTIME=$(stat -f %m "$APP_PATH")
+      if (( APP_MTIME < BUILD_START_TS )); then
+        echo "error: .app at $APP_PATH was not refreshed by this build (mtime $APP_MTIME < build start $BUILD_START_TS). The tauri-cli rename likely failed and we'd be installing a stale bundle." >&2
+        exit 1
+      fi
     fi
     if [[ "$TAURI_EXIT" -ne 0 ]]; then
       echo "warning: tauri exited $TAURI_EXIT but .app was built; proceeding to install" >&2

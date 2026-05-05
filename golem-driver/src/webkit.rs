@@ -478,32 +478,46 @@ impl WebKitInspector {
                         if let Some(listing) =
                             rpc_args.get("WIRListingKey").and_then(|v| v.as_dictionary())
                         {
+                            // Two-pass: prefer a real (non-blank) URL.
+                            // Some Tauri plugin updates create an extra
+                            // hidden about:blank WKWebView (e.g. for URL
+                            // scheme registration). If we picked it, the
+                            // DOM traversal would return None for "page
+                            // not loaded" and the hierarchy would be just
+                            // the empty native rects.
+                            let mut fallback: Option<(u64, &str)> = None;
+                            let mut chosen: Option<(u64, &str)> = None;
                             for (page_key, page_val) in listing {
-                                if let Some(page_dict) = page_val.as_dictionary() {
-                                    let page_type = page_dict
-                                        .get("WIRTypeKey")
-                                        .and_then(|v| v.as_string())
-                                        .unwrap_or("");
-                                    if page_type == "WIRTypeServiceWorker" {
-                                        continue;
-                                    }
-                                    let _url = page_dict
-                                        .get("WIRURLKey")
-                                        .and_then(|v| v.as_string())
-                                        .unwrap_or("");
-                                    // Use WIRPageIdentifierKey (integer) if available,
-                                    // fall back to parsing the dict key
-                                    let pid = page_dict
-                                        .get("WIRPageIdentifierKey")
-                                        .and_then(|v| v.as_unsigned_integer())
-                                        .or_else(|| page_key.parse::<u64>().ok());
-                                    if let Some(pid) = pid {
-                                        self.page_id = pid;
-                                        self.app_id = listing_app.to_string();
-                                        pages_received = true;
-                                        break;
-                                    }
+                                let Some(page_dict) = page_val.as_dictionary() else { continue };
+                                let page_type = page_dict
+                                    .get("WIRTypeKey")
+                                    .and_then(|v| v.as_string())
+                                    .unwrap_or("");
+                                if page_type == "WIRTypeServiceWorker" {
+                                    continue;
                                 }
+                                let url = page_dict
+                                    .get("WIRURLKey")
+                                    .and_then(|v| v.as_string())
+                                    .unwrap_or("");
+                                let pid = page_dict
+                                    .get("WIRPageIdentifierKey")
+                                    .and_then(|v| v.as_unsigned_integer())
+                                    .or_else(|| page_key.parse::<u64>().ok());
+                                let Some(pid) = pid else { continue };
+                                if url.is_empty() || url == "about:blank" {
+                                    if fallback.is_none() {
+                                        fallback = Some((pid, page_key));
+                                    }
+                                    continue;
+                                }
+                                chosen = Some((pid, page_key));
+                                break;
+                            }
+                            if let Some((pid, _)) = chosen.or(fallback) {
+                                self.page_id = pid;
+                                self.app_id = listing_app.to_string();
+                                pages_received = true;
                             }
                         }
                     }
