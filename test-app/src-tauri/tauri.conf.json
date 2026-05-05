@@ -1,6 +1,6 @@
 {
   "productName": "GOLEM Test App",
-  "version": "0.5.8",
+  "version": "0.5.9",
   "identifier": "fail.golem.test",
   "build": {
     "frontendDist": "../dist",

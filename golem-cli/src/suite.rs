@@ -1107,6 +1107,9 @@ async fn setup_slot(
                 return Ok((device, comp.port));
             }
         }
+        // Stale registration — companion died or got replaced. Drop the
+        // entry so the spawn path doesn't blindly route to a dead port.
+        reg_state.remove(&device.udid);
     }
     let existing_port = find_or_allocate_port(&device, platform).await.ok();
     let reused = if let Some(p) = existing_port {
@@ -1750,8 +1753,19 @@ async fn ensure_companion_with_reg(
     // guard they short-circuit on `reg_state.get(udid)` — the harness
     // is already registered.
     let _launch_guard = reg_state.launch_guard(&device.udid).await;
+    // Trust the registration only if the port is still alive — a previous
+    // flow may have wedged the harness, leaving a stale entry that would
+    // otherwise short-circuit every subsequent flow into a dead port.
     if let Some(comp) = reg_state.get(&device.udid) {
-        return Ok(comp.port);
+        let client = golem_driver::common::CompanionClient::new(comp.port);
+        if let Ok(health) = client.check_health().await {
+            if health.device_id == device.udid
+                && health.version == env!("CARGO_PKG_VERSION")
+            {
+                return Ok(comp.port);
+            }
+        }
+        reg_state.remove(&device.udid);
     }
 
     event_tx.emit(

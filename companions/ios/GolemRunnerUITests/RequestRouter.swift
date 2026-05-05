@@ -155,6 +155,13 @@ final class RequestRouter {
 
     /// Get an XCUIApplication, targeting a specific bundle ID if provided,
     /// otherwise falling back to the last launched bundle.
+    ///
+    /// Construction stays off-main: callers reference an already-running
+    /// app, so the constructor's XCTWaiter wait resolves immediately
+    /// without raising. The only constructor that can raise NSException
+    /// is in `handleLaunch`, which targets a possibly-not-running bundle
+    /// — that one is wrapped in `runOnMain` so the XCTest runloop's
+    /// handler catches the exception instead of SIGABRT.
     private func app(query: [String: String]) -> XCUIApplication {
         if let bundleId = query["bundle_id"], !bundleId.isEmpty {
             return XCUIApplication(bundleIdentifier: bundleId)
@@ -184,7 +191,7 @@ final class RequestRouter {
         return .json([
             "status": "ok",
             "platform": "ios",
-            "version": "0.5.8",
+            "version": "0.5.9",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
@@ -469,7 +476,19 @@ final class RequestRouter {
               let bundleId = params["bundle_id"] as? String, !bundleId.isEmpty else {
             return .error("Missing bundle_id", status: 400)
         }
-        let application = XCUIApplication(bundleIdentifier: bundleId)
+        // XCUIApplication's initializer synchronously waits via XCTWaiter
+        // and can throw an NSException if the wait fails. NSException
+        // can't be caught by Swift `try`, and when raised on a non-main
+        // thread (this handler runs on an HTTPServer worker) it
+        // propagates up to `_XCTTerminateHandler` and SIGABRTs the
+        // entire harness — taking the whole companion process down.
+        // Construct on main, behind the same watchdog timeout as the
+        // rest of the launch flow.
+        guard let application = runOnMain(timeout: Self.kTimeoutLaunch, {
+            XCUIApplication(bundleIdentifier: bundleId)
+        }) else {
+            return gatewayTimeout("launch (init)")
+        }
         guard runOnMainVoid(timeout: Self.kTimeoutLaunch, {
             // activate() brings to foreground without restarting.
             // If not running, it launches it fresh.

@@ -132,6 +132,14 @@ impl RegistrationState {
         inner.companions.get(device_id).cloned()
     }
 
+    /// Remove a stale registration. Called when a previously-registered
+    /// companion fails its health check, so subsequent reg-state hits
+    /// fall through to the spawn path instead of routing to a dead port.
+    pub fn remove(&self, device_id: &str) {
+        let mut inner = self.inner.lock().expect("lock poisoned");
+        inner.companions.remove(device_id);
+    }
+
     /// Get all registered companions.
     pub fn all(&self) -> Vec<RegisteredCompanion> {
         let inner = self.inner.lock().expect("lock poisoned");
