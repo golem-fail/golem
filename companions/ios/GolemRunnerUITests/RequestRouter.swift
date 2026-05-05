@@ -476,19 +476,7 @@ final class RequestRouter {
               let bundleId = params["bundle_id"] as? String, !bundleId.isEmpty else {
             return .error("Missing bundle_id", status: 400)
         }
-        // XCUIApplication's initializer synchronously waits via XCTWaiter
-        // and can throw an NSException if the wait fails. NSException
-        // can't be caught by Swift `try`, and when raised on a non-main
-        // thread (this handler runs on an HTTPServer worker) it
-        // propagates up to `_XCTTerminateHandler` and SIGABRTs the
-        // entire harness — taking the whole companion process down.
-        // Construct on main, behind the same watchdog timeout as the
-        // rest of the launch flow.
-        guard let application = runOnMain(timeout: Self.kTimeoutLaunch, {
-            XCUIApplication(bundleIdentifier: bundleId)
-        }) else {
-            return gatewayTimeout("launch (init)")
-        }
+        let application = XCUIApplication(bundleIdentifier: bundleId)
         guard runOnMainVoid(timeout: Self.kTimeoutLaunch, {
             // activate() brings to foreground without restarting.
             // If not running, it launches it fresh.
