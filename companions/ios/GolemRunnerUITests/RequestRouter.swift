@@ -51,6 +51,8 @@ final class RequestRouter {
             return handleHealth()
         case ("GET", "/hierarchy"):
             return handleHierarchy(query: query)
+        case ("GET", "/system-alert"):
+            return handleSystemAlert()
         case ("GET", "/debug/probe"):
             return handleDebugProbe(query: query)
         case ("POST", "/tap"):
@@ -225,13 +227,14 @@ final class RequestRouter {
         let application = app(query: query)
         guard let result = runOnMain(timeout: Self.kTimeoutFast, { () -> ([[String: Any]], Int, Int, Int) in
             application.activate()
-            var tree = HierarchySerializer.serialize(app: application)
-            // Append any SpringBoard-owned alerts (deep-link confirms,
-            // permission prompts, …). They render over the app but are
-            // owned by a different process, so XCUI's app-scoped
-            // snapshot doesn't include them. Merging here gives the
-            // runner a single screen-wide tree to query against.
-            tree.append(contentsOf: HierarchySerializer.serializeSpringBoardAlerts())
+            let tree = HierarchySerializer.serialize(app: application)
+            // NB: SpringBoard-owned alerts (deep-link "Open in App?"
+            // confirms, permission prompts, …) are deliberately NOT
+            // merged into this hierarchy. Querying SpringBoard from
+            // main here blocks for several seconds in normal flow,
+            // tipping every /hierarchy past the 5s watchdog. Callers
+            // that need to interact with system dialogs (accept_alert,
+            // dismiss_alert) should call /system-alert separately.
             // Detect keyboard area: from the top of the toolbar (above keys)
             // to the bottom of the screen. Includes toolbar, predictions, and keys.
             let kbHeight: Int
@@ -279,6 +282,20 @@ final class RequestRouter {
             "device_model": Self.deviceModel
         ]
         return .json(response)
+    }
+
+    /// Return any SpringBoard-owned alerts/sheets currently on screen
+    /// (deep-link "Open in <App>?" confirms, system permission prompts,
+    /// etc.). Kept separate from /hierarchy because querying SpringBoard
+    /// from main blocks for seconds in normal flow — only call this
+    /// when explicitly handling a system alert.
+    private func handleSystemAlert() -> HTTPResponse {
+        guard let alerts = runOnMain(timeout: Self.kTimeoutFast, {
+            HierarchySerializer.serializeSpringBoardAlerts()
+        }) else {
+            return gatewayTimeout("system-alert")
+        }
+        return .json(["alerts": alerts])
     }
 
     /// Debug-only: dump the XCUI snapshot of an arbitrary bundle.
@@ -536,7 +553,16 @@ final class RequestRouter {
               let bundleId = params["bundle_id"] as? String, !bundleId.isEmpty else {
             return .error("Missing bundle_id", status: 400)
         }
-        let application = XCUIApplication(bundleIdentifier: bundleId)
+        // Construct on main: XCUIApplication.init internally calls
+        // XCTWaiter, which fails an internal assert
+        // ("waiter == _waiterStack.lastObject") when invoked off the
+        // XCTest test thread. Pre-NSException-bridge this would SIGABRT;
+        // now it'd surface as a 500. Either way, init belongs on main.
+        guard let application = runOnMain(timeout: Self.kTimeoutLaunch, {
+            XCUIApplication(bundleIdentifier: bundleId)
+        }) else {
+            return gatewayTimeout("launch (init)")
+        }
         guard runOnMainVoid(timeout: Self.kTimeoutLaunch, {
             // activate() brings to foreground without restarting.
             // If not running, it launches it fresh.

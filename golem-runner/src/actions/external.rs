@@ -369,8 +369,8 @@ pub(crate) async fn handle_accept_alert(_step: &Step, driver: &dyn PlatformDrive
     // synchronous — accepting immediately races and fails.
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
     loop {
-        let (root, _meta) = driver.get_hierarchy().await?;
-        if let Some(alert) = golem_driver::common::find_alert(&root) {
+        let alert = find_app_or_system_alert(driver).await?;
+        if let Some(alert) = alert {
             let buttons = golem_driver::common::find_alert_buttons(&alert);
             if buttons.is_empty() {
                 bail!("accept_alert failed: no buttons found in alert");
@@ -386,6 +386,32 @@ pub(crate) async fn handle_accept_alert(_step: &Step, driver: &dyn PlatformDrive
     }
 }
 
+/// Look for an alert in the app's hierarchy first; if absent, ask the
+/// driver for system-owned alerts (SpringBoard on iOS, no-op
+/// elsewhere). Lets accept_alert / dismiss_alert handle both in-app
+/// dialogs and OS-level confirmations transparently.
+async fn find_app_or_system_alert(
+    driver: &dyn PlatformDriver,
+) -> Result<Option<golem_element::Element>> {
+    let (root, _meta) = driver.get_hierarchy().await?;
+    if let Some(a) = golem_driver::common::find_alert(&root) {
+        return Ok(Some(a));
+    }
+    let system = driver.fetch_system_alerts().await.unwrap_or_default();
+    for el in system {
+        if let Some(a) = golem_driver::common::find_alert(&el) {
+            return Ok(Some(a));
+        }
+        // The companion already tags these as element_type="alert"; if
+        // find_alert misses (e.g. wrapped one level deep), treat the
+        // top-level element as the alert itself.
+        if el.element_type.eq_ignore_ascii_case("alert") {
+            return Ok(Some(el));
+        }
+    }
+    Ok(None)
+}
+
 /// Dismiss (negative): tap the first button in the alert (Cancel, No).
 /// For single-button alerts, taps the only button.
 pub(crate) async fn handle_dismiss_alert(_step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
@@ -393,8 +419,8 @@ pub(crate) async fn handle_dismiss_alert(_step: &Step, driver: &dyn PlatformDriv
     // a manual `wait` step before dismiss.
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
     loop {
-        let (root, _meta) = driver.get_hierarchy().await?;
-        if let Some(alert) = golem_driver::common::find_alert(&root) {
+        let alert = find_app_or_system_alert(driver).await?;
+        if let Some(alert) = alert {
             let buttons = golem_driver::common::find_alert_buttons(&alert);
             if buttons.is_empty() {
                 bail!("dismiss_alert failed: no buttons found in alert");

@@ -306,6 +306,21 @@ impl PlatformDriver for IosDriver {
         parse_hierarchy(&enriched_str)
     }
 
+    async fn fetch_system_alerts(&self) -> Result<Vec<Element>> {
+        let text = self.client.get_text("/system-alert").await?;
+        let wrapper: serde_json::Value = serde_json::from_str(&text)
+            .context("failed to parse /system-alert JSON")?;
+        let arr = wrapper.get("alerts").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        let mut out = Vec::new();
+        for node in arr {
+            let s = serde_json::to_string(&node).context("serialize alert node")?;
+            if let Ok((el, _)) = crate::common::parse_hierarchy(&s) {
+                out.push(el);
+            }
+        }
+        Ok(out)
+    }
+
     async fn tap(&self, x: i32, y: i32) -> Result<()> {
         let body = build_tap_body(x, y)?;
         self.client.post_json("/tap", &body).await?;

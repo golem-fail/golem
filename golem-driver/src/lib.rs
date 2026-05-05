@@ -136,6 +136,15 @@ pub trait PlatformDriver: Send + Sync {
     /// Remove adb port forwards (Android-only; no-op on iOS)
     async fn remove_port_forwards(&self) -> anyhow::Result<()>;
 
+    /// Fetch system-owned alerts/sheets visible on screen (iOS only).
+    /// Used by accept_alert/dismiss_alert to find dialogs owned by
+    /// SpringBoard (deep-link "Open in <App>?" confirms, permission
+    /// prompts) that aren't in the test app's own accessibility tree.
+    /// Default: returns empty (Android/mock — no equivalent concept).
+    async fn fetch_system_alerts(&self) -> anyhow::Result<Vec<Element>> {
+        Ok(Vec::new())
+    }
+
     /// Set a per-HTTP-request timeout on the driver's companion client.
     /// Called by the runner before each step so a wedged companion fails
     /// fast at the connection layer rather than burning the outer
