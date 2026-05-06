@@ -109,6 +109,9 @@ pub struct ParsedSuite {
     /// the suite — the scheduler converts each entry into a failed
     /// FlowReport.
     pub parse_failures: Vec<ParseFailure>,
+    /// Pre-formatted lint warnings collected during parse. Empty when
+    /// every flow is lint-clean. Surfaced via the `SuiteLint` event.
+    pub lint_warnings: Vec<String>,
 }
 
 /// A flow file that failed to load before the Plan could expand it.
@@ -133,9 +136,13 @@ pub async fn plan(
 ) -> Result<ParsedSuite> {
     let mut flows: Vec<ParsedFlow> = Vec::with_capacity(flow_paths.len());
     let mut parse_failures: Vec<ParseFailure> = Vec::new();
+    let mut lint_warnings: Vec<String> = Vec::new();
     for path in flow_paths {
         match parse_one(path, project_apps, project_root) {
-            Ok(flow) => flows.push(ParsedFlow { path: path.clone(), flow }),
+            Ok(flow) => {
+                lint_warnings.extend(lint_warnings_for(path, &flow));
+                flows.push(ParsedFlow { path: path.clone(), flow });
+            }
             Err(e) => parse_failures.push(ParseFailure {
                 path: path.clone(),
                 error: format!("{e:#}"),
@@ -168,6 +175,7 @@ pub async fn plan(
         install_matrix,
         device_availability,
         parse_failures,
+        lint_warnings,
     })
 }
 
@@ -191,6 +199,24 @@ fn parse_one(
     }
 
     Ok(flow)
+}
+
+/// Soft lints — warnings but not failures. A future `--validate` mode
+/// would promote these to hard errors. Today they are surfaced through
+/// the `SuiteLint` event so remote clients see them too.
+fn lint_warnings_for(path: &Path, flow: &FlowFile) -> Vec<String> {
+    golem_parser::validation::lint_within_no_op(flow)
+        .into_iter()
+        .map(|issue| {
+            let block = issue.block_name.as_deref().unwrap_or("<unnamed>");
+            format!(
+                "{}:{}::{} `within` is set on action `{}` which doesn't \
+                 consume it — only `scroll` and steps with `auto_scroll = true` \
+                 use `within`. See README §swipe.",
+                path.display(), block, issue.step_index, issue.action,
+            )
+        })
+        .collect()
 }
 
 /// For each unique slot shape across all FlowRuns, count how many devices

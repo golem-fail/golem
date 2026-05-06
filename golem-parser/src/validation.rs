@@ -66,6 +66,40 @@ const KNOWN_ACTIONS: &[&str] = &[
 
 const VALID_ON_FAIL: &[&str] = &["error", "warn", "ignore"];
 
+/// A `within = { ... }` setting that won't actually constrain the step.
+/// Returned by `lint_within_no_op` for both runtime warnings and a
+/// future `--validate` mode (which should treat them as errors).
+#[derive(Debug, Clone)]
+pub struct WithinNoOpIssue {
+    pub block_name: Option<String>,
+    pub step_index: usize,
+    pub action: String,
+}
+
+/// `within` is consumed by `scroll` and by any step that has
+/// `auto_scroll = true` (the resolver uses it to constrain scroll-into-
+/// view to the container). On any other step it's silently dropped —
+/// most often a footgun for swipes ported from a scroll snippet.
+pub fn lint_within_no_op(flow: &FlowFile) -> Vec<WithinNoOpIssue> {
+    let mut issues = Vec::new();
+    for block in &flow.block {
+        for (idx, step) in block.steps.iter().enumerate() {
+            if step.within.is_none() {
+                continue;
+            }
+            let consumed = step.action == "scroll" || step.auto_scroll == Some(true);
+            if !consumed {
+                issues.push(WithinNoOpIssue {
+                    block_name: block.name.clone(),
+                    step_index: idx,
+                    action: step.action.clone(),
+                });
+            }
+        }
+    }
+    issues
+}
+
 /// Validate a parsed FlowFile for structural correctness.
 pub fn validate_flow(flow: &FlowFile) -> Vec<ValidationError> {
     let mut errors = Vec::new();

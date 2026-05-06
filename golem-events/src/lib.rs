@@ -163,6 +163,17 @@ pub enum EventKind {
     /// If a machine-readable plan payload is ever needed (programmatic
     /// consumers, report tooling), add a separate structured sibling event
     /// rather than extending this one; its contract is "UI-only strings".
+    /// Plan-phase lint findings — warnings about TOML that parses fine
+    /// but won't behave as the author probably expects (e.g. `within`
+    /// set on an action that doesn't consume it). Pre-formatted, one
+    /// string per finding. Emitted once per suite before
+    /// `SuitePlanned`; empty `warnings` means none, in which case the
+    /// orchestrator omits the event entirely. UI-only — JSON/JUnit
+    /// sinks intentionally ignore this variant.
+    SuiteLint {
+        warnings: Vec<String>,
+    },
+
     SuitePlanned {
         /// One line per FlowRun, e.g. `#1 tap.test: ios/v18 apps=[app]`.
         flow_runs: Vec<String>,

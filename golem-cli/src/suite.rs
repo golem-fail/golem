@@ -224,6 +224,10 @@ pub struct SuiteRunner {
     /// scheduler adapters) will not see the plan summary unless they
     /// populate `plan_event` themselves before the call.
     pub plan_event: Option<golem_events::EventKind>,
+    /// Lint warnings collected during Plan parsing. Emitted as a
+    /// `SuiteLint` event right before `plan_event` so renderers can
+    /// surface them before the `Starting N flows…` header.
+    pub lint_event: Option<golem_events::EventKind>,
 }
 
 impl SuiteRunner {
@@ -241,6 +245,7 @@ impl SuiteRunner {
             flow_paths: Arc::new(Vec::new()),
             flow_runs: Arc::new(Vec::new()),
             plan_event: None,
+            lint_event: None,
         }
     }
 
@@ -264,6 +269,7 @@ impl SuiteRunner {
             flow_paths: Arc::new(Vec::new()),
             flow_runs: Arc::new(Vec::new()),
             plan_event: None,
+            lint_event: None,
         }
     }
 
@@ -306,6 +312,13 @@ impl SuiteRunner {
         // uses it for the non-verbose `Starting N flows…` header. Verbose
         // additionally renders the per-line plan + install matrix dump.
         self.plan_event = Some(build_suite_planned_event(&parsed));
+        // SuiteLint goes out before SuitePlanned so warnings appear above
+        // the `Starting N flows…` banner. Empty findings → no event.
+        if !parsed.lint_warnings.is_empty() {
+            self.lint_event = Some(golem_events::EventKind::SuiteLint {
+                warnings: parsed.lint_warnings.clone(),
+            });
+        }
 
         self.install_matrix = Arc::new(parsed.install_matrix.clone());
         self.flow_paths = Arc::new(flow_paths.to_vec());
@@ -382,6 +395,11 @@ impl SuiteRunner {
             None
         };
 
+        // Emit the lint summary (if any) before SuitePlanned so the
+        // warnings appear above the `Starting N flows…` banner.
+        if let Some(event) = self.lint_event.take() {
+            suite_tx.emit(golem_events::DeviceId("suite".into()), event);
+        }
         // Emit the Plan summary (if any) now that subscribers are attached.
         if let Some(event) = self.plan_event.take() {
             suite_tx.emit(golem_events::DeviceId("suite".into()), event);

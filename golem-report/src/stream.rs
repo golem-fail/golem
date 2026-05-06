@@ -249,6 +249,12 @@ pub async fn stream_human(
         };
 
         match &event.kind {
+            EventKind::SuiteLint { warnings } => {
+                let tag_str = tag("[lint]", YELLOW, use_color);
+                for w in warnings {
+                    eprintln!("{ts}{tag_str} {w}");
+                }
+            }
             EventKind::SuitePlanned { flow_runs, install_entries, device_availability } => {
                 // Top bookend + Starting header — non-verbose, single line.
                 if use_color {
