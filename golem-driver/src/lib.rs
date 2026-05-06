@@ -136,13 +136,15 @@ pub trait PlatformDriver: Send + Sync {
     /// Remove adb port forwards (Android-only; no-op on iOS)
     async fn remove_port_forwards(&self) -> anyhow::Result<()>;
 
-    /// Fetch system-owned alerts/sheets visible on screen (iOS only).
-    /// Used by accept_alert/dismiss_alert to find dialogs owned by
-    /// SpringBoard (deep-link "Open in <App>?" confirms, permission
-    /// prompts) that aren't in the test app's own accessibility tree.
-    /// Default: returns empty (Android/mock — no equivalent concept).
-    async fn fetch_system_alerts(&self) -> anyhow::Result<Vec<Element>> {
-        Ok(Vec::new())
+    /// Poke a no-op interaction on the test app to give XCTest a chance
+    /// to invoke its UI-interruption-monitor handler (iOS only). The
+    /// monitor auto-dismisses OS-owned dialogs (deep-link "Open in
+    /// <App>?" confirms, permission prompts) without cross-app XCUI
+    /// queries — see the roadmap entry on UIInterruptionMonitor for
+    /// why we can't query SpringBoard directly. Default: no-op (the
+    /// concept is iOS-XCUITest-specific).
+    async fn poke_for_system_alert(&self) -> anyhow::Result<()> {
+        Ok(())
     }
 
     /// Set a per-HTTP-request timeout on the driver's companion client.

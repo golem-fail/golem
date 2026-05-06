@@ -21,18 +21,6 @@ Captured during the post-merge audit; none are blocking but each removes a sharp
 - **`Menu.svelte` `scroll-margin-top` hard-codes 60px.** Refactors that grow the menu height regress scroll-into-view. Compute from the menu's bounding box.
 - **`EventLog.MAX = 50`.** Pointermove bursts evict prior events. Acceptable for a debug tool today; bumping to time-windowed (last 5s) would survive long flows.
 
-## Deep-link warm-start: URL not delivered to JS under XCUITest control
-
-Custom URL scheme + `register()` + `accept_alert` of SpringBoard's "Open in <App>?" confirmation all work — the dialog dismisses, the app returns to foreground. But the URL doesn't appear in `DeviceState.svelte`'s `Deep Link:` field within 15s.
-
-Manual user tap of "Open" (after the test app is launched outside XCUITest control) does propagate the URL to JS, so the plugin's full delivery chain is wired. The failure mode is specific to the XCUITest-controlled flow:
-
-- Either XCUITest's synthesized "Open" tap on SpringBoard's dialog isn't user-attributed and iOS drops the URL dispatch,
-- Or Tauri's iOS plugin's UIApplicationDelegate hook isn't installed/forwarded under XCUITest harness,
-- Or there's a deeper iOS 26 difference between user-touch and test-touch on cross-app dialogs.
-
-Worth probing: (a) Tauri Swift initialization order — does the plugin's `application(_:open:options:)` hook get installed in the test harness's UIApplication? (b) try a custom Tauri command path that bypasses the system dialog entirely (in-app trigger of the URL handler).
-
 ## Stale-bundle defense (Tauri iOS build pipeline)
 
 `scripts/install-app.sh` and the corresponding template now (a) clear the per-arch build dir so the `tauri-cli` rename step succeeds, (b) prefer the per-arch path over the xcarchive copy when picking the produced `.app`, and (c) hard-fail when the picked `.app`'s mtime predates the build start. That closes the specific failure mode where weeks-old bundles were silently installed (see post-mortem: "menu missing" was actually "running an Apr 20 build for 3 weeks").

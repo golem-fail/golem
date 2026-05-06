@@ -367,19 +367,33 @@ pub(crate) async fn handle_accept_alert(
     driver: &dyn PlatformDriver,
     ctx: &crate::context::ExecutionContext<'_>,
 ) -> Result<()> {
-    // Poll up to 5s for the alert to appear. iOS dialogs (e.g. the
-    // "Open in <App>?" custom-URL-scheme confirmation, permission
-    // prompts) animate in after the triggering action and aren't
-    // synchronous — accepting immediately races and fails.
+    // Two-phase resolve:
+    //
+    // 1. In-app dialogs (JS confirms, WKWebView dialogs) show up in
+    //    `get_hierarchy()` as alert/sheet elements — tap the positive
+    //    button directly.
+    // 2. OS-owned dialogs (deep-link "Open in <App>?", permission
+    //    prompts) live in SpringBoard's process. We can't safely
+    //    query that cross-app from XCTest (cross-app XCUI attach
+    //    terminates the harness in iOS 26). Instead the companion
+    //    pre-installs a UIInterruptionMonitor that taps the common
+    //    positive labels (Open / Allow / OK / Yes); iOS invokes the
+    //    handler on the next UI action against the test app. The
+    //    `poke_for_system_alert` call below synthesises that action.
+    //
+    // Idempotent: if no alert surfaces, accept_alert fails — callers
+    // who want optional behaviour (warm sims that have already
+    // accepted the URL scheme) should set `if_fail = "ignore"`.
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+    let mut poked = false;
     loop {
-        let alert = find_app_or_system_alert(driver).await?;
-        if let Some(alert) = alert {
+        let (root, _meta) = driver.get_hierarchy().await?;
+        if let Some(alert) = golem_driver::common::find_alert(&root) {
             let buttons = golem_driver::common::find_alert_buttons(&alert);
             if buttons.is_empty() {
                 bail!("accept_alert failed: no buttons found in alert");
             }
-            // Last button is the positive action (OK, Yes, Open)
+            // Last button is the positive action (OK, Yes, Open).
             let btn = &buttons[buttons.len() - 1];
             let b = btn.effective_bounds();
             let (x, y) = (b.center_x(), b.center_y());
@@ -391,37 +405,19 @@ pub(crate) async fn handle_accept_alert(
             });
             return driver.tap(x, y).await;
         }
+        // First miss: poke the test app so the harness's interruption
+        // monitor gets a chance to fire and dismiss any pending system
+        // dialog. Only poke once — repeated taps would interfere with
+        // a test that genuinely has no alert.
+        if !poked {
+            poked = true;
+            let _ = driver.poke_for_system_alert().await;
+        }
         if tokio::time::Instant::now() >= deadline {
             bail!("accept_alert failed: no alert is displayed");
         }
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
     }
-}
-
-/// Look for an alert in the app's hierarchy first; if absent, ask the
-/// driver for system-owned alerts (SpringBoard on iOS, no-op
-/// elsewhere). Lets accept_alert / dismiss_alert handle both in-app
-/// dialogs and OS-level confirmations transparently.
-async fn find_app_or_system_alert(
-    driver: &dyn PlatformDriver,
-) -> Result<Option<golem_element::Element>> {
-    let (root, _meta) = driver.get_hierarchy().await?;
-    if let Some(a) = golem_driver::common::find_alert(&root) {
-        return Ok(Some(a));
-    }
-    let system = driver.fetch_system_alerts().await.unwrap_or_default();
-    for el in system {
-        if let Some(a) = golem_driver::common::find_alert(&el) {
-            return Ok(Some(a));
-        }
-        // The companion already tags these as element_type="alert"; if
-        // find_alert misses (e.g. wrapped one level deep), treat the
-        // top-level element as the alert itself.
-        if el.element_type.eq_ignore_ascii_case("alert") {
-            return Ok(Some(el));
-        }
-    }
-    Ok(None)
 }
 
 /// Dismiss (negative): tap the first button in the alert (Cancel, No).
@@ -431,17 +427,22 @@ pub(crate) async fn handle_dismiss_alert(
     driver: &dyn PlatformDriver,
     ctx: &crate::context::ExecutionContext<'_>,
 ) -> Result<()> {
-    // Mirror accept_alert's 5s poll so callers don't have to interleave
-    // a manual `wait` step before dismiss.
+    // Mirror accept_alert's structure. dismiss_alert only resolves
+    // in-app dialogs cleanly — system dialogs are auto-handled by the
+    // companion's UIInterruptionMonitor with the *positive* button,
+    // not the negative one. The monitor doesn't expose a per-call
+    // choice. If a test author needs to assert a particular system
+    // dialog appeared and was cancelled, that's a future enhancement
+    // (e.g. a configurable monitor verb).
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
     loop {
-        let alert = find_app_or_system_alert(driver).await?;
-        if let Some(alert) = alert {
+        let (root, _meta) = driver.get_hierarchy().await?;
+        if let Some(alert) = golem_driver::common::find_alert(&root) {
             let buttons = golem_driver::common::find_alert_buttons(&alert);
             if buttons.is_empty() {
                 bail!("dismiss_alert failed: no buttons found in alert");
             }
-            // First button is the negative action (Cancel, No)
+            // First button is the negative action (Cancel, No).
             let btn = &buttons[0];
             let b = btn.effective_bounds();
             let (x, y) = (b.center_x(), b.center_y());

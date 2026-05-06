@@ -38,13 +38,15 @@ steps = [
   # forward the URL to the plugin's openURL handler.
   { action = "open_link", url = "golem-test://warm-start" },
   # iOS shows an "Open in <App>?" confirmation the first time a custom
-  # URL scheme is opened from outside the app. Once accepted, iOS
-  # remembers and subsequent opens skip the prompt — so accept_alert
-  # is optional here. `if_fail = "ignore"` keeps the action strict
-  # (it still fails when the dialog *is* expected but absent in other
-  # tests) while letting the warm-sim case fall through cleanly.
+  # URL scheme is opened from outside the app. The companion's
+  # UIInterruptionMonitor handles it (taps Open) when accept_alert
+  # pokes the test app — so a fresh-install sim no longer needs
+  # an explicit dialog tap from the test author.
+  # `if_fail = "ignore"` keeps the step happy on warm sims where
+  # iOS has already remembered the user's prior accept and skipped
+  # the prompt entirely.
   { action = "accept_alert", if_fail = "ignore" },
-  { action = "wait", on_text = "golem-test://warm-start", timeout = 30000 },
+  { action = "wait", on_text = "golem-test://warm-start", timeout = 15000 },
   { action = "assert_visible", on_text = "golem-test://warm-start" },
 ]
 

@@ -51,8 +51,8 @@ final class RequestRouter {
             return handleHealth()
         case ("GET", "/hierarchy"):
             return handleHierarchy(query: query)
-        case ("GET", "/system-alert"):
-            return handleSystemAlert()
+        case ("POST", "/poke-interruption-monitor"):
+            return handlePokeInterruptionMonitor(query: query)
         case ("GET", "/debug/probe"):
             return handleDebugProbe(query: query)
         case ("POST", "/tap"):
@@ -233,7 +233,7 @@ final class RequestRouter {
         return .json([
             "status": "ok",
             "platform": "ios",
-            "version": "0.5.10",
+            "version": "0.5.11",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
@@ -314,21 +314,36 @@ final class RequestRouter {
         return .json(response)
     }
 
-    /// Return any SpringBoard-owned alerts/sheets currently on screen
-    /// (deep-link "Open in <App>?" confirms, system permission prompts,
-    /// etc.). Kept separate from /hierarchy because querying SpringBoard
-    /// from main blocks for seconds in normal flow — only call this
-    /// when explicitly handling a system alert.
-    private func handleSystemAlert() -> HTTPResponse {
-        // `runOnMain` now wraps its closure in catchNSException, so
-        // SpringBoard cross-app query failures no longer crash the
-        // harness — they just yield nil here and we surface a 504.
-        guard let alerts = runOnMain(timeout: Self.kTimeoutFast, {
-            HierarchySerializer.serializeSpringBoardAlerts()
+    /// Trigger the XCTest UI-interruption-monitor. The monitor only
+    /// fires when an XCUI *action* (tap/swipe) is attempted against
+    /// the test app while a foreign element (system alert, permission
+    /// prompt, deep-link "Open in <App>?" confirm) is on top. Pure
+    /// queries don't invoke it — Apple documents this for "actions
+    /// performed on elements". A swipe doesn't reliably fire it
+    /// either, so we synthesise a real tap. Coordinate is the top
+    /// edge of the app frame so it can't collide with the monitor's
+    /// own "Open" tap (alert centre) as a WebKit double-tap-to-zoom
+    /// on the same point. Callers should only invoke
+    /// /poke-interruption-monitor when expecting a dialog (golem's
+    /// `accept_alert` does this) and pair it with `if_fail = "ignore"`
+    /// if a no-dialog run is also acceptable.
+    private func handlePokeInterruptionMonitor(query: [String: String]) -> HTTPResponse {
+        let application = app(query: query)
+        guard runOnMainVoid(timeout: Self.kTimeoutFast, {
+            application.activate()
+            // Tap near the top edge of the app frame. The monitor's
+            // own "Open" tap lands at the alert centre (mid-screen);
+            // tapping the top edge here keeps our coordinate far
+            // from the monitor's so the two events are never seen
+            // by WebKit as a double-tap-to-zoom on the same point.
+            // A swipe doesn't reliably fire the interruption
+            // monitor, so we have to use a real tap.
+            let coord = application.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05))
+            coord.tap()
         }) else {
-            return gatewayTimeout("system-alert")
+            return gatewayTimeout("poke-interruption-monitor")
         }
-        return .json(["alerts": alerts])
+        return .json(["status": "ok"])
     }
 
     /// Debug-only: dump the XCUI snapshot of an arbitrary bundle.

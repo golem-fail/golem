@@ -38,7 +38,7 @@ final class GolemRunnerUITests: XCTestCase {
             "platform": "ios",
             "device_id": deviceId,
             "device_name": device.name,
-            "version": "0.5.10"
+            "version": "0.5.11"
         ]
 
         guard let jsonData = try? JSONSerialization.data(withJSONObject: body),
@@ -73,6 +73,38 @@ final class GolemRunnerUITests: XCTestCase {
     override func setUp() {
         super.setUp()
         continueAfterFailure = true
+
+        // UI interruption monitor for OS-owned system alerts (deep-link
+        // "Open in <App>?" confirms, permission prompts, etc.). XCTest
+        // fires this handler whenever a UI action against the test app
+        // is blocked by an interrupting element. The handler runs in
+        // the test process, so it can safely use XCUI APIs to tap the
+        // dialog's positive button — no cross-app XCUI query required.
+        //
+        // This is the supported XCTest-native path. Our prior approach
+        // — querying SpringBoard via `XCUIApplication(bundleIdentifier:)
+        // .alerts.count` — terminated the harness in iOS 26 (XCTest's
+        // "test done" lifecycle treats cross-app proxy attach as a
+        // fatal step). The monitor is invoked only at iOS's discretion
+        // and never directly queries cross-app state.
+        //
+        // The monitor only fires when an XCUI interaction is attempted
+        // against the test app *while* the interruption is on screen.
+        // Callers that have just triggered a system dialog (e.g. an
+        // `open_link` immediately followed by an assert) should poke
+        // a no-op XCUI query via `/poke-interruption-monitor` to give
+        // XCTest a chance to invoke us.
+        addUIInterruptionMonitor(withDescription: "golem-system-alert") { alert in
+            for label in ["Open", "Allow", "OK", "Yes", "Confirm", "Continue"] {
+                let btn = alert.buttons[label]
+                if btn.exists {
+                    btn.tap()
+                    return true
+                }
+            }
+            return false
+        }
+
         let router = RequestRouter()
 
         // Try to bind, re-registering on port conflict (up to 3 attempts)

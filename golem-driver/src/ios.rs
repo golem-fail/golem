@@ -306,19 +306,14 @@ impl PlatformDriver for IosDriver {
         parse_hierarchy(&enriched_str)
     }
 
-    async fn fetch_system_alerts(&self) -> Result<Vec<Element>> {
-        let text = self.client.get_text("/system-alert").await?;
-        let wrapper: serde_json::Value = serde_json::from_str(&text)
-            .context("failed to parse /system-alert JSON")?;
-        let arr = wrapper.get("alerts").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-        let mut out = Vec::new();
-        for node in arr {
-            let s = serde_json::to_string(&node).context("serialize alert node")?;
-            if let Ok((el, _)) = crate::common::parse_hierarchy(&s) {
-                out.push(el);
-            }
-        }
-        Ok(out)
+    async fn poke_for_system_alert(&self) -> Result<()> {
+        // No-op XCUI query on the test app. iOS only invokes the
+        // harness's UI-interruption-monitor when an XCUI query is
+        // attempted against the app and a foreign dialog is blocking
+        // it. Polling /hierarchy via WebKit Inspector doesn't count;
+        // a real XCUI query does, without synthesising any input.
+        self.client.post_json("/poke-interruption-monitor", "{}").await?;
+        Ok(())
     }
 
     async fn tap(&self, x: i32, y: i32) -> Result<()> {
