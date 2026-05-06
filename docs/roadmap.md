@@ -17,7 +17,6 @@ Captured during the post-merge audit; none are blocking but each removes a sharp
 - **No iOS analogue to `normalize_android_permission`.** iOS path passes the shorthand verbatim to `simctl privacy`; works for `camera` / `location` but silently diverges from Android for less common ones.
 - **Tests gap.** `normalize_android_permission`, `find_webview_socket` PID filter, safe-area subtraction, BUTTON/A textContent fallback, `EventLog`, `find_or_allocate_port` Android-only fallback, `ensure_companion_with_reg` UDID cross-check — none have unit coverage.
 - **Docs gap.** `/press` companion endpoint, resolver auto-hide-keyboard, the now-required `app =` field on `grant_permission` / `revoke_permission` actions — none are externally documented.
-- **`tauri-plugin-deep-link::register` never invoked.** Flagged during deep-link investigation. iOS plumbing is broken regardless (see Deep-link entry below); decide and document whether `register()` would help on Android.
 - **`Menu.svelte` `scroll-margin-top` hard-codes 60px.** Refactors that grow the menu height regress scroll-into-view. Compute from the menu's bounding box.
 - **`EventLog.MAX = 50`.** Pointermove bursts evict prior events. Acceptable for a debug tool today; bumping to time-windowed (last 5s) would survive long flows.
 
@@ -255,53 +254,11 @@ Not blocking — single-device runs are stable, multi-device retry-flaky.
 
 **Files:** `companions/ios/GolemRunnerUITests/RequestRouter.swift`, `golem-driver/src/ios.rs` (a host-wide mutex would live here).
 
-## Deep-link delivery on iOS — two stacked blockers
-
-Investigated end-to-end. The JS listener wiring is fine; two separate iOS-level problems sit between `simctl openurl` and `onOpenUrl` in JS.
-
-**Blocker 1: `simctl openurl` triggers an iOS confirmation dialog.** For a custom URL scheme delivered from outside the app (simctl counts as outside), iOS shows `Open in "GOLEM Test App"?` with Cancel/Open. Until "Open" is tapped, the URL never reaches the app process. golem's `open_url` action (driver-side) just calls `simctl openurl` and returns — doesn't dismiss the dialog.
-
-**Blocker 2: even after tapping "Open", the URL doesn't reach the JS listener.** With the test-app rebuilt to expose plugin-side state in the DOM:
-- `import('@tauri-apps/plugin-deep-link')` succeeds (keys: `getCurrent, isRegistered, onOpenUrl, register, unregister`).
-- `onOpenUrl(handler)` returns successfully (`listener-ok`).
-- `getCurrent()` returns `null` on cold-start (after dialog confirm-Open) AND on warm-start.
-- `onOpenUrl` callback never fires after openurl + dialog confirm.
-- `isRegistered("golem-test")` is permission-blocked (`deep-link:allow-is-registered` not in `capabilities/default.json`'s `deep-link:default` set), but that's an unrelated minor gap.
-
-The Tauri plugin's iOS path (Tauri 2.x → Tao → UIApplicationDelegate hook → plugin event → JS) appears to silently drop the URL. This is in `tauri-plugin-deep-link 2.4.7` territory; not a test-app config we can tweak from outside.
-
-**Files / next attempts (when picked back up):**
-- `golem-driver/src/ios.rs::open_url` — auto-tap "Open" on the iOS confirmation dialog (simulator-only side fix; real-device flows hit the same dialog).
-- `test-app/src-tauri/Cargo.toml` — try a newer `tauri-plugin-deep-link` if released, or pin to a known-good version.
-- `test-app/src-tauri/capabilities/default.json` — add `deep-link:allow-is-registered` (separate small gap).
-- Inspect Tao's iOS app delegate (vendored under `~/.cargo/registry/.../tao-*`) to see whether `application:openURL:options:` is bridged through to plugins or shadowed.
-
 ## Test App: Menu nav migration — remaining flows
 
-Menu nav (`tap on_accessibility_label="menu-toggle"` + `tap on_accessibility_label="goto-X"`) replaces `auto_scroll = true` for non-scroll-testing flows. Already migrated: `dialog_overlay`, `read`, `wait` (scroll_and_tap block), `permissions_lifecycle`, `permissions_grant_revoke`, `deep_link` (first step).
+Menu nav (`tap on_accessibility_label="menu-toggle"` + `tap on_accessibility_label="goto-X"`) replaces `auto_scroll = true` for non-scroll-testing flows.
 
-**Still on auto_scroll:** `device_controls` (auto_scroll struggles to reach `Theme:` row on iPhone — strategy 1 stalls, strategy 2 stalls; separate scroll-strategy bug, not menu nav). Intentionally on auto_scroll: `scroll.test`, `scroll_search.test`, the `wait_for_elements` block of `wait.test`.
-
-## iOS sim: first-tap race against fresh-launch WKWebView (parked)
-
-Any flow whose first action after `launch` is a `tap` (or implicit-tap action) flakes on iOS Simulator iPhone 17 (iOS 26.4.1). Confirmed affected: `permissions_lifecycle.test`, `permissions_grant_revoke.test`, `read.test` (when the `+` taps run before any wait). Confirmed unaffected: flows that wait on visible text first (`wait.test`, `dialog_overlay.test`) — the wait absorbs the race.
-
-**Symptom:** the first post-launch `tap` "succeeds" against the matched element bounds (golem-side reports OK because the HID synthesis returned), but the JS click handler does **not** fire. The WKWebView is rendered DOM-wise (CDP enrichment reads the tree fine) but it's *quiescent* — the gesture-recognizer wiring hasn't attached to the iOS sim's HID dispatch path used by XCUITest synthesized taps. Real Cocoa mouse events would wake it up; XCUITest's `IOHID` injection apparently doesn't.
-
-The screen-goes-black artifact is a **secondary symptom, not a consequence of the tap** — once the WebView misses input, iOS sim de-allocates / throttles its GPU surface, and the screen renders black until something forces a wake-up. Manual `xcrun simctl launch + mouse-click` always works because mouse events take the wake-up path.
-
-Mitigations in place (companion + driver):
-- `RequestRouter.handleLaunch` now blocks on `XCUIApplication.wait(.runningForeground)` + `windows.firstMatch.waitForExistence` + `staticTexts.firstMatch.waitForExistence` before returning. `/launch` returns only after the DOM has rendered text.
-- `RequestRouter.handleTap` / `handleLongPress` / `handleHideKeyboard` root the coordinate on `windows.firstMatch` (forces a snapshot) and use `press(forDuration: 0.05)` instead of bare `tap()` (explicit down/up timing).
-- `IosDriver.stop_app` uses `simctl terminate` and adds a 500ms post-kill grace before the next launch (avoids the WKWebView teardown race that otherwise stacks WebViews).
-
-Even with all of the above, flake on `permissions_lifecycle.test` is ~3/5. Pure timing isn't the whole story — the XCUITest HID-injection path takes a different OS route than Cocoa mouse events and fresh WKWebViews drop the former. Fixing it cleanly likely requires injecting touches via `IOHIDEventSystemClient` directly or a private `CoreSimulator` API, which is a significant detour.
-
-**Workaround for flow authors today:** put a `wait on_text="..."` as the first step after every `launch` so the wait absorbs the race instead of the next tap. Note: Maestro and most other mobile test runners have similar limitations on iOS sim privacy + relaunch flows — this isn't a uniquely golem problem.
-
-**Status: parked.** Picking it back up needs a different injection mechanism, not more XCUITest tweaking.
-
-**Files:** `companions/ios/GolemRunnerUITests/RequestRouter.swift`, `golem-driver/src/ios.rs`.
+**Still on auto_scroll:** `device_controls` (auto_scroll struggles to reach `Theme:` row on iPhone — strategy 1 stalls, strategy 2 stalls; separate scroll-strategy bug, not menu nav). Intentionally on auto_scroll: `scroll.test`, `scroll_search.test`.
 
 ## device_controls.test: Android back+launch lands in 37-node partial render
 
