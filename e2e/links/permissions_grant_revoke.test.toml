@@ -20,7 +20,7 @@ steps = [
   { action = "launch", app = "fail.golem.test" },
   { action = "tap", on_accessibility_label = "menu-toggle" },
   { action = "tap", on_accessibility_label = "goto-permissions" },
-  { action = "wait", on_accessibility_label = "camera-permission-button" },
+  { action = "assert_visible", on_accessibility_label = "camera-permission-button" },
 
   # Tap the camera permission button; no permission dialog should appear
   { action = "tap", on_accessibility_label = "camera-permission-button" },
@@ -37,7 +37,7 @@ steps = [
   { action = "launch", app = "fail.golem.test" },
   { action = "tap", on_accessibility_label = "menu-toggle" },
   { action = "tap", on_accessibility_label = "goto-permissions" },
-  { action = "wait", on_accessibility_label = "location-permission-button" },
+  { action = "assert_visible", on_accessibility_label = "location-permission-button" },
 
   # Tap the location permission button; no permission dialog should appear
   { action = "tap", on_accessibility_label = "location-permission-button" },

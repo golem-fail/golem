@@ -22,7 +22,7 @@ steps = [
   # directly so the next assert doesn't have to wait on scroll.
   { action = "tap", on_accessibility_label = "menu-toggle" },
   { action = "tap", on_accessibility_label = "goto-permissions" },
-  { action = "wait", on_accessibility_label = "camera-permission-button" },
+  { action = "assert_visible", on_accessibility_label = "camera-permission-button" },
 
   # Tap the camera button to confirm permission is active (no dialog)
   { action = "tap", on_accessibility_label = "camera-permission-button" },
@@ -37,7 +37,7 @@ steps = [
   # Re-navigate to the Permissions section after relaunch.
   { action = "tap", on_accessibility_label = "menu-toggle" },
   { action = "tap", on_accessibility_label = "goto-permissions" },
-  { action = "wait", on_accessibility_label = "camera-permission-button" },
+  { action = "assert_visible", on_accessibility_label = "camera-permission-button" },
 
   # Tap camera button again; permission should persist across restarts
   { action = "tap", on_accessibility_label = "camera-permission-button" },

@@ -513,7 +513,7 @@ on_text = "Logout"
         let steps = vec![
             simple_step("screenshot"),
             load_mixin_step("login", None),
-            simple_step("wait"),
+            simple_step("screenshot"),
             load_mixin_step("logout", None),
             simple_step("screenshot"),
         ];
@@ -525,7 +525,7 @@ on_text = "Logout"
         assert_eq!(expanded[0].action, "screenshot");
         assert_eq!(expanded[1].action, "tap");
         assert_eq!(expanded[1].on_text.as_deref(), Some("Login"));
-        assert_eq!(expanded[2].action, "wait");
+        assert_eq!(expanded[2].action, "screenshot");
         assert_eq!(expanded[3].action, "tap");
         assert_eq!(expanded[3].on_text.as_deref(), Some("Logout"));
         assert_eq!(expanded[4].action, "screenshot");
@@ -545,7 +545,7 @@ on_text = "Logout"
         let steps = vec![
             simple_step("tap"),
             load_mixin_step("empty", None),
-            simple_step("wait"),
+            simple_step("screenshot"),
         ];
 
         let expanded =
@@ -553,7 +553,7 @@ on_text = "Logout"
 
         assert_eq!(expanded.len(), 2);
         assert_eq!(expanded[0].action, "tap");
-        assert_eq!(expanded[1].action, "wait");
+        assert_eq!(expanded[1].action, "screenshot");
     }
 
     // ---------------------------------------------------------------
@@ -738,7 +738,7 @@ on_text = "mixin-step-3"
         let steps = vec![
             simple_step("screenshot"),
             load_mixin_step("middle", None),
-            simple_step("wait"),
+            simple_step("screenshot"),
         ];
 
         let expanded =
@@ -747,7 +747,7 @@ on_text = "mixin-step-3"
         let actions: Vec<&str> = expanded.iter().map(|s| s.action.as_str()).collect();
         assert_eq!(
             actions,
-            vec!["screenshot", "type", "tap", "swipe", "wait"],
+            vec!["screenshot", "type", "tap", "swipe", "screenshot"],
             "Steps should maintain order: before, mixin steps in order, after"
         );
 

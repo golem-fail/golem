@@ -13,7 +13,7 @@ name = "launch_and_wait"
 steps = [
   # Launch the app and wait for initial load
   { action = "launch", app = "fail.golem.test" },
-  { action = "wait", on_text = "Submit" },
+  { action = "assert_visible", on_text = "Submit" },
   { action = "screenshot" },
 ]
 
@@ -23,13 +23,13 @@ steps = [
   # Read elements near the top of the hierarchy
   # Each read exercises a full hierarchy fetch + element find + text extraction
   { action = "read", on_below = "Counter", on_index = 0, save_to = "counter_val" },
-  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
   { action = "read", on_text = "Enter email", save_to = "email_val" },
-  { action = "wait", on_text = "Enter email", timeout = 2000 },
+  { action = "assert_visible", on_text = "Enter email", timeout = 2000 },
   { action = "read", on_text = "Password", save_to = "password_val" },
-  { action = "wait", on_text = "Password", timeout = 2000 },
+  { action = "assert_visible", on_text = "Password", timeout = 2000 },
   { action = "read", on_text = "Search", save_to = "search_val" },
-  { action = "wait", on_text = "Search", timeout = 2000 },
+  { action = "assert_visible", on_text = "Search", timeout = 2000 },
 ]
 
 [[block]]
@@ -37,11 +37,11 @@ name = "read_buttons"
 steps = [
   # Read button elements — exercises finding interactive elements in the tree
   { action = "read", on_text = "Submit", save_to = "submit_val" },
-  { action = "wait", on_text = "Submit", timeout = 2000 },
+  { action = "assert_visible", on_text = "Submit", timeout = 2000 },
   { action = "read", on_text = "+", save_to = "inc_val" },
-  { action = "wait", on_text = "+", timeout = 2000 },
+  { action = "assert_visible", on_text = "+", timeout = 2000 },
   { action = "read", on_text = "-", save_to = "dec_val" },
-  { action = "wait", on_text = "-", timeout = 2000 },
+  { action = "assert_visible", on_text = "-", timeout = 2000 },
 ]
 
 [[block]]
@@ -54,15 +54,15 @@ steps = [
   # Read list items from different positions — top, early, and mid-list
   # This stresses the hierarchy endpoint with elements at varying depths
   { action = "read", on_text = "Item 0", save_to = "item_0" },
-  { action = "wait", on_text = "Item 0", timeout = 2000 },
+  { action = "assert_visible", on_text = "Item 0", timeout = 2000 },
   { action = "read", on_text = "Item 1", save_to = "item_1" },
-  { action = "wait", on_text = "Item 1", timeout = 2000 },
+  { action = "assert_visible", on_text = "Item 1", timeout = 2000 },
   { action = "read", on_text = "Item 2", save_to = "item_2" },
-  { action = "wait", on_text = "Item 2", timeout = 2000 },
+  { action = "assert_visible", on_text = "Item 2", timeout = 2000 },
   { action = "read", on_text = "Item 3", save_to = "item_3" },
-  { action = "wait", on_text = "Item 3", timeout = 2000 },
+  { action = "assert_visible", on_text = "Item 3", timeout = 2000 },
   { action = "read", on_text = "Item 4", save_to = "item_4" },
-  { action = "wait", on_text = "Item 4", timeout = 2000 },
+  { action = "assert_visible", on_text = "Item 4", timeout = 2000 },
 ]
 
 [[block]]
@@ -74,11 +74,11 @@ steps = [
 
   # Read carousel items to exercise a different subtree
   { action = "read", on_text = "Card 0", save_to = "carousel_0" },
-  { action = "wait", on_text = "Card 0", timeout = 2000 },
+  { action = "assert_visible", on_text = "Card 0", timeout = 2000 },
   { action = "read", on_text = "Card 1", save_to = "carousel_1" },
-  { action = "wait", on_text = "Card 1", timeout = 2000 },
+  { action = "assert_visible", on_text = "Card 1", timeout = 2000 },
   { action = "read", on_text = "Card 2", save_to = "carousel_2" },
-  { action = "wait", on_text = "Card 2", timeout = 2000 },
+  { action = "assert_visible", on_text = "Card 2", timeout = 2000 },
 
   # Final screenshot to capture end state
   { action = "screenshot" },

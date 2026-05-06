@@ -5,7 +5,6 @@ mod device;
 mod external;
 pub(crate) mod interaction;
 mod media;
-mod wait;
 
 #[cfg(test)]
 mod test_helpers;
@@ -33,7 +32,6 @@ use interaction::{
     handle_pinch, handle_rotate_gesture, handle_scroll, handle_swipe, handle_tap, handle_type,
 };
 use media::{handle_add_media, handle_screenshot, handle_start_recording, handle_stop_recording};
-use wait::{handle_wait, handle_wait_not};
 
 /// Resolve an element using all step selectors except `text`.
 ///
@@ -64,8 +62,6 @@ pub async fn execute_action(
         "assert_alert" => handle_assert_alert(step, driver).await,
         "accept_alert" => handle_accept_alert(step, driver, ctx).await,
         "dismiss_alert" => handle_dismiss_alert(step, driver, ctx).await,
-        "wait" => handle_wait(step, driver, ctx).await,
-        "wait_not" => handle_wait_not(step, driver).await,
         "fail" => handle_fail(step),
         "launch" => handle_launch(step, driver, apps, ctx).await,
         "stop" => handle_stop(step, driver, apps, ctx).await,

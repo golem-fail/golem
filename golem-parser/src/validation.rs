@@ -38,8 +38,6 @@ const KNOWN_ACTIONS: &[&str] = &[
     "assert_text",
     "assert_enabled",
     "assert_checked",
-    "wait",
-    "wait_not",
     "fail",
     "set_location",
     "dark_mode",

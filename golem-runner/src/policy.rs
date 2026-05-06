@@ -77,7 +77,7 @@ fn action_multiplier(step: &Step) -> u64 {
         | "pinch" | "gesture"
         | "type" | "assert_visible" | "assert_checked" | "assert_not_visible"
         | "assert_alert" | "accept_alert" | "dismiss_alert"
-        | "wait" | "wait_not" | "read" => 2,
+        | "read" => 2,
 
         // 3x — app lifecycle (cold start)
         "launch" | "stop" => 3,

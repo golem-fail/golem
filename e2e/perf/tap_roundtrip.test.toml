@@ -15,7 +15,7 @@ name = "launch_and_verify_initial"
 steps = [
   # Launch the app and wait for initial load
   { action = "launch", app = "fail.golem.test" },
-  { action = "wait", on_text = "Counter" },
+  { action = "assert_visible", on_text = "Counter" },
 
   # Verify counter starts at zero
   { action = "assert_visible", on_text = "0", on_below = "Counter" },
@@ -27,27 +27,27 @@ name = "increment_roundtrip_1_to_5"
 steps = [
   # Tap 1: tap increment, assert counter updated within 2s
   { action = "tap", on_text = "+" },
-  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
   { action = "assert_visible", on_text = "1", on_below = "Counter" },
 
   # Tap 2
   { action = "tap", on_text = "+" },
-  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
   { action = "assert_visible", on_text = "2", on_below = "Counter" },
 
   # Tap 3
   { action = "tap", on_text = "+" },
-  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
   { action = "assert_visible", on_text = "3", on_below = "Counter" },
 
   # Tap 4
   { action = "tap", on_text = "+" },
-  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
   { action = "assert_visible", on_text = "4", on_below = "Counter" },
 
   # Tap 5
   { action = "tap", on_text = "+" },
-  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
   { action = "assert_visible", on_text = "5", on_below = "Counter" },
 ]
 
@@ -56,27 +56,27 @@ name = "increment_roundtrip_6_to_10"
 steps = [
   # Tap 6
   { action = "tap", on_text = "+" },
-  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
   { action = "assert_visible", on_text = "6", on_below = "Counter" },
 
   # Tap 7
   { action = "tap", on_text = "+" },
-  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
   { action = "assert_visible", on_text = "7", on_below = "Counter" },
 
   # Tap 8
   { action = "tap", on_text = "+" },
-  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
   { action = "assert_visible", on_text = "8", on_below = "Counter" },
 
   # Tap 9
   { action = "tap", on_text = "+" },
-  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
   { action = "assert_visible", on_text = "9", on_below = "Counter" },
 
   # Tap 10
   { action = "tap", on_text = "+" },
-  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
   { action = "assert_visible", on_text = "10", on_below = "Counter" },
 
   # Read the final counter value
@@ -89,23 +89,23 @@ name = "decrement_roundtrip"
 steps = [
   # Rapidly decrement back down to verify round-trip in the other direction
   { action = "tap", on_text = "-" },
-  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
   { action = "assert_visible", on_text = "9", on_below = "Counter" },
 
   { action = "tap", on_text = "-" },
-  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
   { action = "assert_visible", on_text = "8", on_below = "Counter" },
 
   { action = "tap", on_text = "-" },
-  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
   { action = "assert_visible", on_text = "7", on_below = "Counter" },
 
   { action = "tap", on_text = "-" },
-  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
   { action = "assert_visible", on_text = "6", on_below = "Counter" },
 
   { action = "tap", on_text = "-" },
-  { action = "wait", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
   { action = "assert_visible", on_text = "5", on_below = "Counter" },
 
   # Final read to confirm state

@@ -13,7 +13,7 @@ name = "set_app_state"
 steps = [
   # Launch the app and wait for it to be ready
   { action = "launch", app = "fail.golem.test" },
-  { action = "wait", on_text = "Counter" },
+  { action = "assert_visible", on_text = "Counter" },
 
   # Set some state by incrementing the counter
   { action = "tap", on_text = "+" },
@@ -46,7 +46,7 @@ steps = [
   # iOS has already remembered the user's prior accept and skipped
   # the prompt entirely.
   { action = "accept_alert", if_fail = "ignore" },
-  { action = "wait", on_text = "golem-test://warm-start", timeout = 15000 },
+  { action = "assert_visible", on_text = "golem-test://warm-start", timeout = 15000 },
   { action = "assert_visible", on_text = "golem-test://warm-start" },
 ]
 

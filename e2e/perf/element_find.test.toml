@@ -13,7 +13,7 @@ name = "launch_and_wait"
 steps = [
   # Launch the app and wait for initial load
   { action = "launch", app = "fail.golem.test" },
-  { action = "wait", on_text = "Submit" },
+  { action = "assert_visible", on_text = "Submit" },
 ]
 
 [[block]]
@@ -25,9 +25,9 @@ steps = [
   { action = "assert_visible", on_text = "-" },
 
   # Tight-timeout waits to enforce speed
-  { action = "wait", on_text = "Submit", timeout = 2000 },
-  { action = "wait", on_text = "+", timeout = 2000 },
-  { action = "wait", on_text = "-", timeout = 2000 },
+  { action = "assert_visible", on_text = "Submit", timeout = 2000 },
+  { action = "assert_visible", on_text = "+", timeout = 2000 },
+  { action = "assert_visible", on_text = "-", timeout = 2000 },
 ]
 
 [[block]]
@@ -39,9 +39,9 @@ steps = [
   { action = "assert_visible", on_text = "Search" },
 
   # Tight-timeout waits on input fields
-  { action = "wait", on_text = "Enter email", timeout = 2000 },
-  { action = "wait", on_text = "Password", timeout = 2000 },
-  { action = "wait", on_text = "Search", timeout = 2000 },
+  { action = "assert_visible", on_text = "Enter email", timeout = 2000 },
+  { action = "assert_visible", on_text = "Password", timeout = 2000 },
+  { action = "assert_visible", on_text = "Search", timeout = 2000 },
 ]
 
 [[block]]
@@ -55,8 +55,8 @@ steps = [
   { action = "assert_visible", on_text = "Counter", auto_scroll = true },
   { action = "assert_visible", on_text = "Scroll List", auto_scroll = true },
 
-  { action = "wait", on_text = "Counter", timeout = 2000 },
-  { action = "wait", on_text = "Scroll List", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Scroll List", timeout = 2000 },
 ]
 
 [[block]]
@@ -70,11 +70,11 @@ steps = [
   { action = "assert_visible", on_text = "Item 4" },
 
   # Tight-timeout waits on each list item
-  { action = "wait", on_text = "Item 0", timeout = 2000 },
-  { action = "wait", on_text = "Item 1", timeout = 2000 },
-  { action = "wait", on_text = "Item 2", timeout = 2000 },
-  { action = "wait", on_text = "Item 3", timeout = 2000 },
-  { action = "wait", on_text = "Item 4", timeout = 2000 },
+  { action = "assert_visible", on_text = "Item 0", timeout = 2000 },
+  { action = "assert_visible", on_text = "Item 1", timeout = 2000 },
+  { action = "assert_visible", on_text = "Item 2", timeout = 2000 },
+  { action = "assert_visible", on_text = "Item 3", timeout = 2000 },
+  { action = "assert_visible", on_text = "Item 4", timeout = 2000 },
 ]
 
 [[block]]
@@ -91,11 +91,11 @@ steps = [
   { action = "assert_visible", on_text = "Card 3" },
   { action = "assert_visible", on_text = "Card 4" },
 
-  { action = "wait", on_text = "Card 0", timeout = 2000 },
-  { action = "wait", on_text = "Card 1", timeout = 2000 },
-  { action = "wait", on_text = "Card 2", timeout = 2000 },
-  { action = "wait", on_text = "Card 3", timeout = 2000 },
-  { action = "wait", on_text = "Card 4", timeout = 2000 },
+  { action = "assert_visible", on_text = "Card 0", timeout = 2000 },
+  { action = "assert_visible", on_text = "Card 1", timeout = 2000 },
+  { action = "assert_visible", on_text = "Card 2", timeout = 2000 },
+  { action = "assert_visible", on_text = "Card 3", timeout = 2000 },
+  { action = "assert_visible", on_text = "Card 4", timeout = 2000 },
 ]
 
 [[block]]

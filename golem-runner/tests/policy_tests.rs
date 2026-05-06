@@ -446,12 +446,10 @@ steps = [
 // ---------------------------------------------------------------------------
 #[tokio::test]
 async fn step_timeout_causes_failure() {
-    // The "wait" action sleeps for the given duration. Since there's no "wait"
-    // action that actually blocks in the runner (screenshot is instant with the mock),
-    // we test timeout at the flow level by using a very short default_timeout_ms
-    // on a step that requires element resolution (which will trigger get_hierarchy).
-    // This is a structural test: a step that fails due to element not found with
-    // the default timeout is conceptually equivalent to a timeout-caused failure.
+    // Test timeout at the flow level by using a very short timeout on a step
+    // that requires element resolution (which polls get_hierarchy until the
+    // deadline). A step that fails due to element not found with the default
+    // timeout is structurally equivalent to a timeout-caused failure.
     let toml = r#"
 [flow]
 name = "timeout test"

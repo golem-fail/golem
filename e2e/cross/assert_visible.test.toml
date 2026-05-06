@@ -1,5 +1,5 @@
 [flow]
-name = "Wait and wait_not test"
+name = "assert_visible and assert_not_visible"
 tags = ["cross-platform", "synchronization"]
 
 [[flow.apps]]
@@ -9,10 +9,10 @@ os = ["ios:latest", "android:latest"]
 type = "phone"
 
 [[block]]
-name = "wait_for_elements"
+name = "assert_initial_elements"
 steps = [
-  { action = "wait", on_text = "Submit" },
-  { action = "wait", on_text = "Counter" },
+  { action = "assert_visible", on_text = "Submit" },
+  { action = "assert_visible", on_text = "Counter" },
 ]
 
 # `Show Delayed` lives in the Delayed Element section, well below the
@@ -26,8 +26,8 @@ steps = [
   { action = "tap", on_text = "Show Delayed" },
 
   # After tapping, wait for delayed text to appear (~3s)
-  { action = "wait", on_text = "Delayed Text" },
+  { action = "assert_visible", on_text = "Delayed Text" },
 
   # Wait for it to disappear (~3s)
-  { action = "wait_not", on_text = "Delayed Text" },
+  { action = "assert_not_visible", on_text = "Delayed Text" },
 ]

@@ -461,9 +461,6 @@ action = "swipe"
 action = "scroll"
 
 [[block.steps]]
-action = "wait"
-
-[[block.steps]]
 action = "assert_visible"
 
 [[block.steps]]
@@ -491,7 +488,6 @@ action = "clear_text"
                 "type_text",
                 "swipe",
                 "scroll",
-                "wait",
                 "assert_visible",
                 "assert_not_visible",
                 "back",
@@ -513,7 +509,7 @@ name = "compact"
 
 [[block]]
 name = "b1"
-steps = [{action = "tap", on_text = "OK"}, {action = "wait"}]
+steps = [{action = "tap", on_text = "OK"}, {action = "assert_visible"}]
 "#;
         let verbose_toml = r#"
 [flow]
@@ -527,7 +523,7 @@ action = "tap"
 on_text = "OK"
 
 [[block.steps]]
-action = "wait"
+action = "assert_visible"
 "#;
         let compact = parse_flow(compact_toml).expect("compact syntax should parse");
         let verbose = parse_flow(verbose_toml).expect("verbose syntax should parse");

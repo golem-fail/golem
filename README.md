@@ -511,7 +511,7 @@ Each action has a built-in multiplier applied to the base timeout (`step_timeout
 | Multiplier | Timeout (at 5s base) | Actions |
 |------------|---------------------|---------|
 | 1x | 5s | `tap`, `doubleTap`, `backspace`, `long_press`, `swipe`, `pinch`, `gesture`, `press`, `rotate`, `screenshot`, `hide_keyboard`, device controls |
-| 2x | 10s | `type`, `assert_visible`, `assert_checked`, `assert_not_visible`, `wait`, `wait_not`, `read`, alerts |
+| 2x | 10s | `type`, `assert_visible`, `assert_checked`, `assert_not_visible`, `read`, alerts |
 | 3x | 15s | `launch`, `stop` |
 | 4x | 20s | `bash`, `run` |
 | 6x | 30s | `scroll`, `auto_scroll`, `http_*`, `open_link` |
@@ -1103,9 +1103,9 @@ Dismiss the on-screen keyboard. No-op if no keyboard is visible.
 
 ### Assertions
 
-#### `assert_visible` — Assert element exists
+#### `assert_visible` — Wait for / assert element exists
 
-Verify an element matching the selectors is on screen. Aliases: `assert_text`, `assert_enabled`, `assert_checked`.
+Poll the hierarchy until an element matching the selectors is on screen, or `timeout` elapses (default 10s). Use a short `timeout` for instantaneous checks, a long one for waits. Aliases: `assert_text`, `assert_enabled`, `assert_checked`.
 
 ```toml
 { action = "assert_visible", on_text = "Welcome" }
@@ -1122,9 +1122,9 @@ Verify an element matching the selectors is on screen. Aliases: `assert_text`, `
 { action = "assert_checked", on_accessibility_label = "agree-checkbox", on_checked = true }
 ```
 
-#### `assert_not_visible` — Assert element absent
+#### `assert_not_visible` — Wait for / assert element absent
 
-Verify no element matches the selectors.
+Poll the hierarchy until no element matches the selectors, or `timeout` elapses (default 10s).
 
 ```toml
 { action = "assert_not_visible", on_text = "Error" }
@@ -1138,24 +1138,6 @@ Verify an alert/dialog is showing. Optionally match alert text with a glob patte
 ```toml
 { action = "assert_alert" }
 { action = "assert_alert", on_text = "Are you sure*" }
-```
-
-### Wait
-
-#### `wait` — Wait for element to appear
-
-Poll until an element matching selectors becomes visible.
-
-```toml
-{ action = "wait", on_text = "Ready", timeout = 15000 }
-```
-
-#### `wait_not` — Wait for element to disappear
-
-Poll until no element matches the selectors.
-
-```toml
-{ action = "wait_not", on_text = "Loading...", timeout = 10000 }
 ```
 
 ### Reading

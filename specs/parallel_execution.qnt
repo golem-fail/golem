@@ -866,7 +866,7 @@ module parallel_execution {
       List(),
       List("tap_login"),
       List("tap_login", "enter_text", "assert_visible"),
-      List("scroll", "tap", "wait", "assert"),
+      List("scroll", "tap", "assert_visible", "assert"),
     ).oneOf()
     nondet blk_next    = Set("", "login", "test", "verify", "setup").oneOf()
     nondet blk_fe      = Set("", "com.app.a", "com.app.b").oneOf()
