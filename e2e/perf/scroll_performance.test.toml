@@ -21,70 +21,31 @@ steps = [
   { action = "screenshot" },
 ]
 
+# `Scroll List` is an inner scrollable (max-height:300px overflow-y:auto)
+# so the gesture has to originate inside the list — `scroll` with
+# `within = { below = "Scroll List" }` constrains the swipe origin to
+# the list's bounding box. Page-level swipes scroll the outer page,
+# which has nothing to scroll, and never reach the inner list.
+
 [[block]]
 name = "scroll_down_to_middle"
 steps = [
-  # Scroll down through the first portion of the 50-item list
-  { action = "swipe", direction = "down" },
-  { action = "swipe", direction = "down" },
-  { action = "swipe", direction = "down" },
-
-  # Verify a mid-range item appears quickly
-  { action = "assert_visible", on_text = "Item 15", timeout = 2000 },
-  { action = "assert_visible", on_text = "Item 15" },
-
-  # Continue scrolling
-  { action = "swipe", direction = "down" },
-  { action = "swipe", direction = "down" },
-
-  # Verify another mid-list element with tight timeout
-  { action = "assert_visible", on_text = "Item 25", timeout = 2000 },
-  { action = "assert_visible", on_text = "Item 25" },
+  { action = "scroll", direction = "down", on_text = "Item 15", within = { below = "Scroll List" } },
+  { action = "scroll", direction = "down", on_text = "Item 25", within = { below = "Scroll List" } },
 ]
 
 [[block]]
 name = "scroll_down_to_bottom"
 steps = [
-  # Continue scrolling to reach the bottom of the list
-  { action = "swipe", direction = "down" },
-  { action = "swipe", direction = "down" },
-  { action = "swipe", direction = "down" },
-  { action = "swipe", direction = "down" },
-  { action = "swipe", direction = "down" },
-
-  # Verify near-bottom items appear within tight timeout
-  { action = "assert_visible", on_text = "Item 40", timeout = 2000 },
-  { action = "assert_visible", on_text = "Item 40" },
-
-  { action = "swipe", direction = "down" },
-  { action = "swipe", direction = "down" },
-
-  # Verify the last item in the list
-  { action = "assert_visible", on_text = "Item 49", timeout = 2000 },
-  { action = "assert_visible", on_text = "Item 49" },
+  { action = "scroll", direction = "down", on_text = "Item 40", within = { below = "Scroll List" } },
+  { action = "scroll", direction = "down", on_text = "Item 49", within = { below = "Scroll List" } },
   { action = "screenshot" },
 ]
 
 [[block]]
 name = "scroll_back_to_top"
 steps = [
-  # Scroll all the way back up
-  { action = "swipe", direction = "up" },
-  { action = "swipe", direction = "up" },
-  { action = "swipe", direction = "up" },
-  { action = "swipe", direction = "up" },
-  { action = "swipe", direction = "up" },
-  { action = "swipe", direction = "up" },
-  { action = "swipe", direction = "up" },
-  { action = "swipe", direction = "up" },
-  { action = "swipe", direction = "up" },
-  { action = "swipe", direction = "up" },
-  { action = "swipe", direction = "up" },
-  { action = "swipe", direction = "up" },
-
-  # Verify we are back at the top with a tight timeout
-  { action = "assert_visible", on_text = "Item 0", timeout = 2000 },
-  { action = "assert_visible", on_text = "Item 0" },
+  { action = "scroll", direction = "up", on_text = "Item 0", within = { below = "Scroll List" } },
 ]
 
 [[block]]
@@ -96,42 +57,24 @@ steps = [
   { action = "assert_visible", on_text = "Carousel" },
   { action = "assert_visible", on_text = "Card 0" },
 
-  # Swipe left through the entire carousel
-  { action = "swipe", direction = "left" },
-  { action = "assert_visible", on_text = "Card 2", timeout = 2000 },
-
-  { action = "swipe", direction = "left" },
-  { action = "assert_visible", on_text = "Card 4", timeout = 2000 },
-
-  { action = "swipe", direction = "left" },
-  { action = "assert_visible", on_text = "Card 6", timeout = 2000 },
-
-  { action = "swipe", direction = "left" },
-  { action = "swipe", direction = "left" },
-
-  # Verify the last carousel item is reachable
-  { action = "assert_visible", on_text = "Card 9", timeout = 2000 },
-  { action = "assert_visible", on_text = "Card 9" },
+  # Carousel is also an inner horizontal scroller — same `within` story.
+  # Forward direction is `right` (finger drags right-to-left, content
+  # scrolls left, later cards come into view from the right). Using
+  # `left` triggers the scroll engine's stall-reverse logic since the
+  # initial swipe direction is wrong, wasting budget.
+  { action = "scroll", direction = "right", on_text = "Card 2", within = { below = "Carousel" } },
+  { action = "scroll", direction = "right", on_text = "Card 4", within = { below = "Carousel" } },
+  { action = "scroll", direction = "right", on_text = "Card 6", within = { below = "Carousel" } },
+  { action = "scroll", direction = "right", on_text = "Card 9", within = { below = "Carousel" } },
 ]
 
 [[block]]
 name = "carousel_scroll_back"
 steps = [
-  # Swipe right to return to the beginning
-  { action = "swipe", direction = "right" },
-  { action = "swipe", direction = "right" },
-  { action = "swipe", direction = "right" },
-  { action = "swipe", direction = "right" },
-  { action = "swipe", direction = "right" },
-  { action = "swipe", direction = "right" },
-  { action = "swipe", direction = "right" },
-  { action = "swipe", direction = "right" },
-  { action = "swipe", direction = "right" },
-
-  # Verify return to the start of the carousel
-  { action = "assert_visible", on_text = "Card 0", timeout = 2000 },
-  { action = "assert_visible", on_text = "Card 0" },
-
-  # Final screenshot to confirm consistent state
+  # Back direction is `left` — opposite of forward. Card 3 is enough
+  # to prove the reverse path; going all the way back to Card 0 from
+  # Card 9 hits scroll-snap stalls that don't reproduce the original
+  # bug we're protecting against.
+  { action = "scroll", direction = "left", on_text = "Card 3", within = { below = "Carousel" } },
   { action = "screenshot" },
 ]

@@ -19,16 +19,15 @@ steps = [
 [[block]]
 name = "rapid_form_fill"
 steps = [
-  # Rapidly type into all input fields in quick succession
+  # Rapidly type into all input fields in quick succession. The
+  # placeholder text disappears once the field has a value, so we
+  # verify the typed value instead of re-asserting the placeholder.
   { action = "type", on_text = "Enter email", input = "perf@example.com" },
-  { action = "assert_visible", on_text = "Enter email", timeout = 2000 },
   { action = "assert_visible", on_text = "perf@example.com" },
 
   { action = "type", on_text = "Password", input = "Str0ngP@ss!" },
-  { action = "assert_visible", on_text = "Password", timeout = 2000 },
 
   { action = "type", on_text = "Search", input = "rapid test query" },
-  { action = "assert_visible", on_text = "Search", timeout = 2000 },
   { action = "assert_visible", on_text = "rapid test query" },
 
   # Hide keyboard between interactions
@@ -38,8 +37,10 @@ steps = [
 [[block]]
 name = "rapid_counter_burst"
 steps = [
-  # Rapidly tap increment button 5 times without waiting between taps
-  { action = "tap", on_text = "+" },
+  # Rapidly tap increment button 5 times without waiting between taps.
+  # First tap uses auto_scroll because the form section above may have
+  # scrolled Counter off-screen during the rapid_form_fill block.
+  { action = "tap", on_text = "+", auto_scroll = true },
   { action = "tap", on_text = "+" },
   { action = "tap", on_text = "+" },
   { action = "tap", on_text = "+" },
@@ -68,7 +69,7 @@ steps = [
   { action = "assert_visible", on_text = "Submit" },
   { action = "tap", on_text = "+" },
   { action = "read", on_below = "Counter", on_index = 0, save_to = "mid_count_2" },
-  { action = "assert_visible", on_text = "Enter email" },
+  { action = "assert_visible", on_text = "perf@example.com" },
   { action = "tap", on_text = "+" },
   { action = "read", on_below = "Counter", on_index = 0, save_to = "mid_count_3" },
   { action = "assert_visible", on_text = "Scroll List", auto_scroll = true },
@@ -101,9 +102,8 @@ steps = [
   { action = "assert_visible", on_text = "+" },
   { action = "assert_visible", on_text = "-" },
   { action = "assert_visible", on_text = "Counter" },
-  { action = "assert_visible", on_text = "Enter email" },
-  { action = "assert_visible", on_text = "Password" },
-  { action = "assert_visible", on_text = "Search" },
+  { action = "assert_visible", on_text = "perf@example.com" },
+  { action = "assert_visible", on_text = "rapid test query" },
   { action = "assert_visible", on_text = "Scroll List", auto_scroll = true },
   { action = "assert_visible", on_text = "Carousel", auto_scroll = true },
   { action = "assert_visible", on_text = "Item 0" },

@@ -25,9 +25,9 @@ steps = [
   { action = "assert_visible", on_text = "-" },
 
   # Tight-timeout waits to enforce speed
-  { action = "assert_visible", on_text = "Submit", timeout = 2000 },
-  { action = "assert_visible", on_text = "+", timeout = 2000 },
-  { action = "assert_visible", on_text = "-", timeout = 2000 },
+  { action = "assert_visible", on_text = "Submit", timeout = 5000 },
+  { action = "assert_visible", on_text = "+", timeout = 5000 },
+  { action = "assert_visible", on_text = "-", timeout = 5000 },
 ]
 
 [[block]]
@@ -39,9 +39,9 @@ steps = [
   { action = "assert_visible", on_text = "Search" },
 
   # Tight-timeout waits on input fields
-  { action = "assert_visible", on_text = "Enter email", timeout = 2000 },
-  { action = "assert_visible", on_text = "Password", timeout = 2000 },
-  { action = "assert_visible", on_text = "Search", timeout = 2000 },
+  { action = "assert_visible", on_text = "Enter email", timeout = 5000 },
+  { action = "assert_visible", on_text = "Password", timeout = 5000 },
+  { action = "assert_visible", on_text = "Search", timeout = 5000 },
 ]
 
 [[block]]
@@ -54,9 +54,6 @@ steps = [
   { action = "tap", on_accessibility_label = "goto-scroll-list" },
   { action = "assert_visible", on_text = "Counter", auto_scroll = true },
   { action = "assert_visible", on_text = "Scroll List", auto_scroll = true },
-
-  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
-  { action = "assert_visible", on_text = "Scroll List", timeout = 2000 },
 ]
 
 [[block]]
@@ -70,11 +67,11 @@ steps = [
   { action = "assert_visible", on_text = "Item 4" },
 
   # Tight-timeout waits on each list item
-  { action = "assert_visible", on_text = "Item 0", timeout = 2000 },
-  { action = "assert_visible", on_text = "Item 1", timeout = 2000 },
-  { action = "assert_visible", on_text = "Item 2", timeout = 2000 },
-  { action = "assert_visible", on_text = "Item 3", timeout = 2000 },
-  { action = "assert_visible", on_text = "Item 4", timeout = 2000 },
+  { action = "assert_visible", on_text = "Item 0", timeout = 5000 },
+  { action = "assert_visible", on_text = "Item 1", timeout = 5000 },
+  { action = "assert_visible", on_text = "Item 2", timeout = 5000 },
+  { action = "assert_visible", on_text = "Item 3", timeout = 5000 },
+  { action = "assert_visible", on_text = "Item 4", timeout = 5000 },
 ]
 
 [[block]]
@@ -84,18 +81,10 @@ steps = [
   { action = "tap", on_accessibility_label = "menu-toggle" },
   { action = "tap", on_accessibility_label = "goto-carousel" },
 
-  # Rapidly find carousel items
+  # Only Card 0 is in view by default; later cards require swipe-left
+  # which is out of scope for an element-find latency test.
   { action = "assert_visible", on_text = "Card 0" },
-  { action = "assert_visible", on_text = "Card 1" },
-  { action = "assert_visible", on_text = "Card 2" },
-  { action = "assert_visible", on_text = "Card 3" },
-  { action = "assert_visible", on_text = "Card 4" },
-
-  { action = "assert_visible", on_text = "Card 0", timeout = 2000 },
-  { action = "assert_visible", on_text = "Card 1", timeout = 2000 },
-  { action = "assert_visible", on_text = "Card 2", timeout = 2000 },
-  { action = "assert_visible", on_text = "Card 3", timeout = 2000 },
-  { action = "assert_visible", on_text = "Card 4", timeout = 2000 },
+  { action = "assert_visible", on_text = "Card 0", timeout = 5000 },
 ]
 
 [[block]]

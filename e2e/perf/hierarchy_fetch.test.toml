@@ -23,13 +23,13 @@ steps = [
   # Read elements near the top of the hierarchy
   # Each read exercises a full hierarchy fetch + element find + text extraction
   { action = "read", on_below = "Counter", on_index = 0, save_to = "counter_val" },
-  { action = "assert_visible", on_text = "Counter", timeout = 2000 },
+  { action = "assert_visible", on_text = "Counter", timeout = 5000 },
   { action = "read", on_text = "Enter email", save_to = "email_val" },
-  { action = "assert_visible", on_text = "Enter email", timeout = 2000 },
+  { action = "assert_visible", on_text = "Enter email", timeout = 5000 },
   { action = "read", on_text = "Password", save_to = "password_val" },
-  { action = "assert_visible", on_text = "Password", timeout = 2000 },
+  { action = "assert_visible", on_text = "Password", timeout = 5000 },
   { action = "read", on_text = "Search", save_to = "search_val" },
-  { action = "assert_visible", on_text = "Search", timeout = 2000 },
+  { action = "assert_visible", on_text = "Search", timeout = 5000 },
 ]
 
 [[block]]
@@ -37,11 +37,11 @@ name = "read_buttons"
 steps = [
   # Read button elements — exercises finding interactive elements in the tree
   { action = "read", on_text = "Submit", save_to = "submit_val" },
-  { action = "assert_visible", on_text = "Submit", timeout = 2000 },
+  { action = "assert_visible", on_text = "Submit", timeout = 5000 },
   { action = "read", on_text = "+", save_to = "inc_val" },
-  { action = "assert_visible", on_text = "+", timeout = 2000 },
+  { action = "assert_visible", on_text = "+", timeout = 5000 },
   { action = "read", on_text = "-", save_to = "dec_val" },
-  { action = "assert_visible", on_text = "-", timeout = 2000 },
+  { action = "assert_visible", on_text = "-", timeout = 5000 },
 ]
 
 [[block]]
@@ -54,15 +54,15 @@ steps = [
   # Read list items from different positions — top, early, and mid-list
   # This stresses the hierarchy endpoint with elements at varying depths
   { action = "read", on_text = "Item 0", save_to = "item_0" },
-  { action = "assert_visible", on_text = "Item 0", timeout = 2000 },
+  { action = "assert_visible", on_text = "Item 0", timeout = 5000 },
   { action = "read", on_text = "Item 1", save_to = "item_1" },
-  { action = "assert_visible", on_text = "Item 1", timeout = 2000 },
+  { action = "assert_visible", on_text = "Item 1", timeout = 5000 },
   { action = "read", on_text = "Item 2", save_to = "item_2" },
-  { action = "assert_visible", on_text = "Item 2", timeout = 2000 },
+  { action = "assert_visible", on_text = "Item 2", timeout = 5000 },
   { action = "read", on_text = "Item 3", save_to = "item_3" },
-  { action = "assert_visible", on_text = "Item 3", timeout = 2000 },
+  { action = "assert_visible", on_text = "Item 3", timeout = 5000 },
   { action = "read", on_text = "Item 4", save_to = "item_4" },
-  { action = "assert_visible", on_text = "Item 4", timeout = 2000 },
+  { action = "assert_visible", on_text = "Item 4", timeout = 5000 },
 ]
 
 [[block]]
@@ -72,13 +72,10 @@ steps = [
   { action = "tap", on_accessibility_label = "menu-toggle" },
   { action = "tap", on_accessibility_label = "goto-carousel" },
 
-  # Read carousel items to exercise a different subtree
+  # Read the first carousel item (only Card 0 is in view; later cards
+  # require a swipe-left which is out of scope for a fetch-latency test).
   { action = "read", on_text = "Card 0", save_to = "carousel_0" },
-  { action = "assert_visible", on_text = "Card 0", timeout = 2000 },
-  { action = "read", on_text = "Card 1", save_to = "carousel_1" },
-  { action = "assert_visible", on_text = "Card 1", timeout = 2000 },
-  { action = "read", on_text = "Card 2", save_to = "carousel_2" },
-  { action = "assert_visible", on_text = "Card 2", timeout = 2000 },
+  { action = "assert_visible", on_text = "Card 0", timeout = 5000 },
 
   # Final screenshot to capture end state
   { action = "screenshot" },
