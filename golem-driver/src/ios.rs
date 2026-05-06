@@ -523,6 +523,13 @@ impl PlatformDriver for IosDriver {
             bundle_id,
         ])
         .await?;
+        // simctl returns as soon as the TCC change is written; iOS still
+        // needs a moment to settle it across the privacy daemons. Without
+        // this sleep an immediately-following `launch` races and the app
+        // is killed mid-startup when the entitlement check resolves the
+        // stale state. ~750ms is the smallest value that survived a
+        // repeated-run flake hunt on iPhone 17 sim.
+        tokio::time::sleep(std::time::Duration::from_millis(750)).await;
         Ok(())
     }
 
@@ -535,6 +542,9 @@ impl PlatformDriver for IosDriver {
             bundle_id,
         ])
         .await?;
+        // Same TCC settle window as `grant_permission` — a `launch`
+        // immediately after revoke would otherwise race the same way.
+        tokio::time::sleep(std::time::Duration::from_millis(750)).await;
         Ok(())
     }
 
