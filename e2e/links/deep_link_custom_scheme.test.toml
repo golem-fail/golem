@@ -11,35 +11,35 @@ type = "phone"
 [[block]]
 name = "verify_initial_state"
 steps = [
-  # Launch the app and verify deep link display is initially empty
+  # Launch the app and navigate to the Device State section where the
+  # Deep Link display lives — the default landing section is Counter.
   { action = "launch", app = "fail.golem.test" },
-  { action = "assert_visible", on_text = "Deep Link:" },
+  { action = "assert_visible", on_text = "Counter" },
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-device-state" },
   { action = "assert_visible", on_text = "Deep Link:" },
 ]
 
 [[block]]
 name = "open_simple_deep_link"
 steps = [
-  # Open a simple deep link with the golem-test scheme
   { action = "open_link", url = "golem-test://home" },
-  { action = "assert_visible", on_text = "Deep Link:" },
-  { action = "assert_visible", on_text = "golem-test://home", on_right_of = "Deep Link:" },
+  { action = "accept_alert", if_fail = "ignore" },
+  { action = "assert_visible", on_text = "golem-test://home", on_right_of = "Deep Link:", timeout = 15000 },
 ]
 
 [[block]]
 name = "open_deep_link_with_query_params"
 steps = [
-  # Open a deep link with path and query parameters
   { action = "open_link", url = "golem-test://profile?user=42&tab=settings" },
-  { action = "assert_visible", on_text = "Deep Link:" },
-  { action = "assert_visible", on_text = "golem-test://profile?user=42&tab=settings", on_right_of = "Deep Link:" },
+  { action = "accept_alert", if_fail = "ignore" },
+  { action = "assert_visible", on_text = "golem-test://profile?user=42&tab=settings", on_right_of = "Deep Link:", timeout = 15000 },
 ]
 
 [[block]]
 name = "open_deep_link_with_path_segment"
 steps = [
-  # Open a deep link to a specific content item with a nested path
   { action = "open_link", url = "golem-test://item/12345" },
-  { action = "assert_visible", on_text = "Deep Link:" },
-  { action = "assert_visible", on_text = "golem-test://item/12345", on_right_of = "Deep Link:" },
+  { action = "accept_alert", if_fail = "ignore" },
+  { action = "assert_visible", on_text = "golem-test://item/12345", on_right_of = "Deep Link:", timeout = 15000 },
 ]

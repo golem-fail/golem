@@ -11,13 +11,24 @@ type = "phone"
 [[block]]
 name = "cold_start_via_deep_link"
 steps = [
-  # Ensure the app is not running by stopping it first
+  # Ensure the app is not running before opening the URL — guarantees
+  # a true cold start rather than a foreground URL delivery.
   { action = "stop", app = "fail.golem.test" },
 
-  # Open a deep link while the app is not running (cold start)
+  # Opening the URL with the app down launches it from cold. iOS shows
+  # an "Open in <App>?" confirmation the first time a custom scheme is
+  # used on a sim; the companion's UIInterruptionMonitor handles it
+  # via accept_alert (idempotent on warm sims that remembered the
+  # earlier accept, hence if_fail = "ignore").
   { action = "open_link", url = "golem-test://cold-start-test" },
+  { action = "accept_alert", if_fail = "ignore" },
 
-  # Wait for the app to launch from cold and display the deep link
-  { action = "assert_visible", on_text = "Deep Link:", timeout = 15000 },
+  # The app launches into the Counter section by default — navigate
+  # to Device State to see the deep-link display.
+  { action = "assert_visible", on_text = "Counter", timeout = 15000 },
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-device-state" },
+
+  { action = "assert_visible", on_text = "Deep Link:" },
   { action = "assert_visible", on_text = "golem-test://cold-start-test", on_right_of = "Deep Link:" },
 ]
