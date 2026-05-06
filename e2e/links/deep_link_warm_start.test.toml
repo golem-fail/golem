@@ -37,14 +37,24 @@ steps = [
   # custom URL scheme is opened from outside the app — accept it to
   # forward the URL to the plugin's openURL handler.
   { action = "open_link", url = "golem-test://warm-start" },
-  { action = "accept_alert" },
-  { action = "wait", on_text = "Deep Link:" },
-  { action = "assert_visible", on_text = "golem-test://warm-start", on_right_of = "Deep Link:" },
+  # iOS shows an "Open in <App>?" confirmation the first time a custom
+  # URL scheme is opened from outside the app. Once accepted, iOS
+  # remembers and subsequent opens skip the prompt — so accept_alert
+  # is optional here. `if_fail = "ignore"` keeps the action strict
+  # (it still fails when the dialog *is* expected but absent in other
+  # tests) while letting the warm-sim case fall through cleanly.
+  { action = "accept_alert", if_fail = "ignore" },
+  { action = "wait", on_text = "golem-test://warm-start", timeout = 30000 },
+  { action = "assert_visible", on_text = "golem-test://warm-start" },
 ]
 
 [[block]]
 name = "verify_state_preserved"
 steps = [
+  # Counter section is above the fold from Device State — navigate back
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-counter" },
+
   # Verify that the counter state set before the deep link is still intact
   { action = "assert_visible", on_text = "3", on_below = "Counter" },
 

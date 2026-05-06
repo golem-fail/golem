@@ -362,7 +362,11 @@ pub(crate) fn handle_fail(step: &Step) -> Result<()> {
 /// If the step has a `text` param or `button` param, it is passed as the button
 /// label to dismiss with. Otherwise the alert is dismissed with the default action.
 /// Accept (positive): tap the last button in the alert (OK, Yes).
-pub(crate) async fn handle_accept_alert(_step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+pub(crate) async fn handle_accept_alert(
+    _step: &Step,
+    driver: &dyn PlatformDriver,
+    ctx: &crate::context::ExecutionContext<'_>,
+) -> Result<()> {
     // Poll up to 5s for the alert to appear. iOS dialogs (e.g. the
     // "Open in <App>?" custom-URL-scheme confirmation, permission
     // prompts) animate in after the triggering action and aren't
@@ -377,7 +381,15 @@ pub(crate) async fn handle_accept_alert(_step: &Step, driver: &dyn PlatformDrive
             }
             // Last button is the positive action (OK, Yes, Open)
             let btn = &buttons[buttons.len() - 1];
-            return driver.tap(btn.effective_bounds().center_x(), btn.effective_bounds().center_y()).await;
+            let b = btn.effective_bounds();
+            let (x, y) = (b.center_x(), b.center_y());
+            ctx.substep(golem_events::SubstepEvent::Tap {
+                point: golem_events::Point { x, y },
+                element_bounds: Some(golem_events::Rect {
+                    x: b.x, y: b.y, width: b.width, height: b.height,
+                }),
+            });
+            return driver.tap(x, y).await;
         }
         if tokio::time::Instant::now() >= deadline {
             bail!("accept_alert failed: no alert is displayed");
@@ -414,7 +426,11 @@ async fn find_app_or_system_alert(
 
 /// Dismiss (negative): tap the first button in the alert (Cancel, No).
 /// For single-button alerts, taps the only button.
-pub(crate) async fn handle_dismiss_alert(_step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+pub(crate) async fn handle_dismiss_alert(
+    _step: &Step,
+    driver: &dyn PlatformDriver,
+    ctx: &crate::context::ExecutionContext<'_>,
+) -> Result<()> {
     // Mirror accept_alert's 5s poll so callers don't have to interleave
     // a manual `wait` step before dismiss.
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
@@ -427,7 +443,15 @@ pub(crate) async fn handle_dismiss_alert(_step: &Step, driver: &dyn PlatformDriv
             }
             // First button is the negative action (Cancel, No)
             let btn = &buttons[0];
-            return driver.tap(btn.effective_bounds().center_x(), btn.effective_bounds().center_y()).await;
+            let b = btn.effective_bounds();
+            let (x, y) = (b.center_x(), b.center_y());
+            ctx.substep(golem_events::SubstepEvent::Tap {
+                point: golem_events::Point { x, y },
+                element_bounds: Some(golem_events::Rect {
+                    x: b.x, y: b.y, width: b.width, height: b.height,
+                }),
+            });
+            return driver.tap(x, y).await;
         }
         if tokio::time::Instant::now() >= deadline {
             bail!("dismiss_alert failed: no alert is displayed");
@@ -688,7 +712,8 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let step = make_step("dismiss_alert");
-        handle_dismiss_alert(&step, &driver)
+        let ctx = test_ctx(Path::new("."));
+        handle_dismiss_alert(&step, &driver, &ctx)
             .await
             .expect("dismiss_alert SHALL succeed");
 
@@ -713,7 +738,8 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let step = make_step("accept_alert");
-        handle_accept_alert(&step, &driver)
+        let ctx = test_ctx(Path::new("."));
+        handle_accept_alert(&step, &driver, &ctx)
             .await
             .expect("accept_alert SHALL succeed");
 
@@ -730,7 +756,8 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let step = make_step("dismiss_alert");
-        let result = handle_dismiss_alert(&step, &driver).await;
+        let ctx = test_ctx(Path::new("."));
+        let result = handle_dismiss_alert(&step, &driver, &ctx).await;
         assert!(result.is_err(), "dismiss_alert SHALL fail when no alert is displayed");
     }
 

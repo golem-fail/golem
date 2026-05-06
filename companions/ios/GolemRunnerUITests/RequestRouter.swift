@@ -111,8 +111,18 @@ final class RequestRouter {
         // the outer function may have already returned (timeout path).
         let resultBox = ResultBox<T>()
         DispatchQueue.main.async {
-            let value = work()
-            resultBox.value = value
+            // Wrap in Obj-C @try/@catch: XCUITest internals (XCTWaiter
+            // stack asserts, cross-app snapshot failures, missing
+            // bundle errors, etc.) raise NSException on the main
+            // queue. Those bypass the outer NSException bridge in
+            // `handle()` because they're raised asynchronously, after
+            // `handle()` has already entered the main-thread hop.
+            // Without this catch, one bad main-thread call aborts the
+            // whole harness via `_XCTTerminateHandler`. With it, the
+            // request just returns nil and the caller surfaces a 504.
+            _ = SnapshotHelper.catchNSException({
+                resultBox.value = work()
+            }, exception: nil)
             semaphore.signal()
         }
         if semaphore.wait(timeout: .now() + timeout) == .timedOut {
@@ -127,11 +137,19 @@ final class RequestRouter {
     @discardableResult
     private func runOnMainVoid(timeout: TimeInterval, _ work: @escaping () -> Void) -> Bool {
         let semaphore = DispatchSemaphore(value: 0)
+        var threw = false
         DispatchQueue.main.async {
-            work()
+            // See runOnMain<T> for why this catch is necessary.
+            var ex: NSException?
+            let ok = SnapshotHelper.catchNSException({ work() }, exception: &ex)
+            if !ok { threw = true }
+            _ = ex
             semaphore.signal()
         }
-        return semaphore.wait(timeout: .now() + timeout) != .timedOut
+        if semaphore.wait(timeout: .now() + timeout) == .timedOut {
+            return false
+        }
+        return !threw
     }
 
     /// Reference holder for the result of an async main-thread block, so
@@ -224,7 +242,19 @@ final class RequestRouter {
     }
 
     private func handleHierarchy(query: [String: String]) -> HTTPResponse {
-        let application = app(query: query)
+        // Construct XCUIApplication on main: its initializer calls
+        // XCTWaiter, which asserts ("waiter == _waiterStack.lastObject")
+        // when invoked off the test thread. Same root cause as the
+        // handleLaunch fix.
+        let bundleId = query["bundle_id"].flatMap { $0.isEmpty ? nil : $0 } ?? lastLaunchedBundle
+        guard let application = runOnMain(timeout: Self.kTimeoutFast, { () -> XCUIApplication in
+            if let id = bundleId {
+                return XCUIApplication(bundleIdentifier: id)
+            }
+            return XCUIApplication()
+        }) else {
+            return gatewayTimeout("hierarchy (app init)")
+        }
         guard let result = runOnMain(timeout: Self.kTimeoutFast, { () -> ([[String: Any]], Int, Int, Int) in
             application.activate()
             let tree = HierarchySerializer.serialize(app: application)
@@ -290,6 +320,9 @@ final class RequestRouter {
     /// from main blocks for seconds in normal flow — only call this
     /// when explicitly handling a system alert.
     private func handleSystemAlert() -> HTTPResponse {
+        // `runOnMain` now wraps its closure in catchNSException, so
+        // SpringBoard cross-app query failures no longer crash the
+        // harness — they just yield nil here and we surface a 504.
         guard let alerts = runOnMain(timeout: Self.kTimeoutFast, {
             HierarchySerializer.serializeSpringBoardAlerts()
         }) else {

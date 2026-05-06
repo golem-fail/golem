@@ -54,17 +54,14 @@ enum HierarchySerializer {
                     out.append(node)
                 }
             }
-            // Dialog-shaped window fallback for confirmations that don't
-            // classify as .alert or .sheet (iOS 26 "Open in <App>?").
-            if out.isEmpty {
-                if let snap = try? app.snapshot() {
-                    if let dialog = findDialogLikeWindow(snap) {
-                        var node = serializeNode(dialog)
-                        node["element_type"] = "alert"
-                        out.append(node)
-                    }
-                }
-            }
+            // NOTE: a dialog-shape fallback via `try? app.snapshot()` was
+            // removed here. SpringBoard's full snapshot is expensive
+            // and, when polled repeatedly by accept_alert, has been
+            // observed to wedge or terminate the XCTest harness. Stick
+            // to the cheap `.alerts` / `.sheets` queries. If a system
+            // confirmation doesn't classify as either, callers will get
+            // an empty array and accept_alert can fall through to its
+            // own timeout instead of taking the harness down with it.
             if !out.isEmpty { break }
         }
         return out
