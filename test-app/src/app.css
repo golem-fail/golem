@@ -40,7 +40,11 @@ textarea {
   margin-bottom: 8px;
   border: 1px solid #ccc;
   border-radius: 4px;
-  font-size: 14px;
+  /* 16px is the iOS threshold for input auto-zoom on focus. Under
+     16px iOS WebKit zooms into the input, which unsticks
+     `position: sticky` elements (the menu bar) and breaks every
+     element-resolution after the form is touched. */
+  font-size: 16px;
 }
 
 textarea {

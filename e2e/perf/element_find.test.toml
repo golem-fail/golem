@@ -90,9 +90,14 @@ steps = [
 [[block]]
 name = "find_by_text_content"
 steps = [
+  # Menu-nav back to Counter — the previous block left us on the
+  # Carousel section, with Counter scrolled well above the fold.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-counter" },
+
   # Assert text on elements — exercises the slower text-matching path
   { action = "assert_visible", on_text = "0", on_below = "Counter" },
-  { action = "assert_visible", on_text = "Item 0" },
+  { action = "assert_visible", on_text = "Item 0", auto_scroll = true },
   { action = "assert_visible", on_text = "Item 1" },
   { action = "assert_visible", on_text = "Item 2" },
   { action = "assert_visible", on_text = "Item 3" },

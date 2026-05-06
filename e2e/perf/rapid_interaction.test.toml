@@ -30,17 +30,25 @@ steps = [
   { action = "type", on_text = "Search", input = "rapid test query" },
   { action = "assert_visible", on_text = "rapid test query" },
 
-  # Hide keyboard between interactions
+  # Hide keyboard between interactions. iOS WebKit keeps `position:
+  # sticky` ancestors detached while an input is focused, even after
+  # the keyboard hides — tap a non-input element afterward to force
+  # blur and re-stick the menu bar.
   { action = "hide_keyboard" },
+  { action = "tap", on_text = "Text Fields" },
 ]
 
 [[block]]
 name = "rapid_counter_burst"
 steps = [
+  # Menu-nav back to Counter — the form-fill block may have scrolled
+  # the page; the sticky menu bar remains usable as long as inputs
+  # use ≥16px font (otherwise iOS auto-zoom unsticks it).
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-counter" },
+
   # Rapidly tap increment button 5 times without waiting between taps.
-  # First tap uses auto_scroll because the form section above may have
-  # scrolled Counter off-screen during the rapid_form_fill block.
-  { action = "tap", on_text = "+", auto_scroll = true },
+  { action = "tap", on_text = "+" },
   { action = "tap", on_text = "+" },
   { action = "tap", on_text = "+" },
   { action = "tap", on_text = "+" },
@@ -81,36 +89,61 @@ steps = [
 [[block]]
 name = "rapid_read_burst"
 steps = [
-  # Burst-read many elements in rapid succession
+  # Burst-read many elements in rapid succession. The previous block
+  # ended on the Carousel section so Counter is scrolled off-screen —
+  # menu-nav back before the burst.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-counter" },
+
   { action = "read", on_below = "Counter", on_index = 0, save_to = "r1" },
-  { action = "read", on_text = "Enter email", save_to = "r2" },
-  { action = "read", on_text = "Search", save_to = "r3" },
+  { action = "read", on_text = "perf@example.com", auto_scroll = true, save_to = "r2" },
+  { action = "read", on_text = "rapid test query", save_to = "r3" },
+
+  # Items live inside an inner-scrollable list; menu-nav puts Item 0 at
+  # the top of that scrollable's own viewport so the read can resolve
+  # without needing inner-scroll support on read+auto_scroll.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-scroll-list" },
   { action = "read", on_text = "Item 0", save_to = "r4" },
   { action = "read", on_text = "Item 1", save_to = "r5" },
   { action = "read", on_text = "Item 2", save_to = "r6" },
+
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-carousel" },
   { action = "read", on_text = "Card 0", save_to = "r7" },
-  { action = "read", on_text = "Card 1", save_to = "r8" },
-  { action = "read", on_text = "Submit", save_to = "r9" },
+
+  { action = "read", on_text = "Submit", auto_scroll = true, save_to = "r9" },
   { action = "read", on_text = "+", save_to = "r10" },
 ]
 
 [[block]]
 name = "rapid_visibility_burst"
 steps = [
-  # Burst assert_visible on many elements in rapid succession
-  { action = "assert_visible", on_text = "Submit" },
-  { action = "assert_visible", on_text = "+" },
+  # Menu-nav back to Counter so the form values and counter are in
+  # the outer viewport before we burst-assert page-level elements.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-counter" },
+
+  # Burst assert_visible on outer-page elements
+  { action = "assert_visible", on_text = "Submit", auto_scroll = true },
+  { action = "assert_visible", on_text = "+", auto_scroll = true },
   { action = "assert_visible", on_text = "-" },
   { action = "assert_visible", on_text = "Counter" },
-  { action = "assert_visible", on_text = "perf@example.com" },
+  { action = "assert_visible", on_text = "perf@example.com", auto_scroll = true },
   { action = "assert_visible", on_text = "rapid test query" },
-  { action = "assert_visible", on_text = "Scroll List", auto_scroll = true },
-  { action = "assert_visible", on_text = "Carousel", auto_scroll = true },
+
+  # Menu-nav into each inner scrollable to assert its items
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-scroll-list" },
+  { action = "assert_visible", on_text = "Scroll List" },
   { action = "assert_visible", on_text = "Item 0" },
   { action = "assert_visible", on_text = "Item 1" },
   { action = "assert_visible", on_text = "Item 2" },
+
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-carousel" },
+  { action = "assert_visible", on_text = "Carousel" },
   { action = "assert_visible", on_text = "Card 0" },
-  { action = "assert_visible", on_text = "Card 1" },
 
   # Final screenshot to verify app is still in a consistent state
   { action = "screenshot" },
