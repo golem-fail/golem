@@ -22,6 +22,20 @@ let upY = $state(-1);
 
 let rotation = $state(0);    // cumulative degrees
 let rotDir = $state("None"); // last rotation direction: "CW", "CCW", or "None"
+
+// Press duration tracking — exposed as a coarse bucket label so
+// long_press tests can assert that the duration parameter was
+// honoured. Buckets keep the assertion stable against minor timing
+// jitter on slow simulators.
+let downTs = $state(0);
+let upTs = $state(0);
+let pressMs = $derived(downTs > 0 && upTs >= downTs ? upTs - downTs : 0);
+let pressLabel = $derived(
+  pressMs === 0 ? "none" :
+  pressMs < 500 ? "tap" :
+  pressMs < 1500 ? "long" :
+  "very-long"
+);
 let snappedRot = $derived(Math.round(rotation / 90) * 90);
 let rotLabel = $derived(
   snappedRot === 0 && rotDir === "None" ? "0" :
@@ -81,6 +95,13 @@ function onPointerDown(e) {
   const { x, y } = relCoords(e);
   downX = x;
   downY = y;
+  // First finger down starts the press timer. Subsequent fingers
+  // don't reset it — multi-touch press duration is from the first
+  // contact to the final lift.
+  if (pointers.size === 1) {
+    downTs = Date.now();
+    upTs = 0;
+  }
 
   if (pointers.size === 2) {
     const [p1, p2] = [...pointers.values()];
@@ -124,6 +145,11 @@ function onPointerUp(e) {
   upY = y;
   pointers.delete(e.pointerId);
   fingerCount = pointers.size;
+  // Last finger up ends the press; pressLabel re-derives from
+  // upTs - downTs and lands in one of: tap / long / very-long.
+  if (pointers.size === 0) {
+    upTs = Date.now();
+  }
 }
 
 function reset() {
@@ -136,6 +162,7 @@ function reset() {
   grid = [0,0,0, 0,0,0, 0,0,0];
   minX = -1; minY = -1; maxX = -1; maxY = -1;
   downX = -1; downY = -1; upX = -1; upY = -1;
+  downTs = 0; upTs = 0;
 }
 </script>
 
@@ -156,6 +183,7 @@ function reset() {
     <div>Grid: {gridStr}</div>
     <div>Range: {minX},{minY} to {maxX},{maxY}</div>
     <div>Down: {downX},{downY} Up: {upX},{upY}</div>
+    <div>Press: {pressLabel} ({pressMs}ms)</div>
     <div>Fingers: {fingerCount} Max: {maxFingers}</div>
   </div>
   <button onclick={reset}>Reset Gesture</button>
@@ -169,6 +197,13 @@ function reset() {
   border: 2px solid #999;
   border-radius: 8px;
   display: flex;
+  /* iOS WebKit long-press on text triggers the system text-
+     selection menu (Copy / Look Up / Translate / Share), which
+     intercepts the gesture and breaks long_press tests. Suppress
+     selection + the callout on the whole gesture surface. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
   flex-direction: column;
   align-items: center;
   justify-content: center;

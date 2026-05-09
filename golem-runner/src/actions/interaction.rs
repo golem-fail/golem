@@ -194,12 +194,7 @@ pub(crate) async fn handle_backspace(step: &Step, driver: &dyn PlatformDriver, c
 pub(crate) async fn handle_long_press(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
     let (_elem, (x, y)) = resolve_element(step, driver, ctx.emitter).await?;
 
-    let duration = step
-        .params
-        .get("duration")
-        .and_then(|v| v.as_integer())
-        .map(|n| n as u64)
-        .unwrap_or(1000);
+    let duration = step.duration.unwrap_or(1000);
 
     driver.long_press(x, y, duration).await?;
     let _ = wait_for_settle(driver).await;

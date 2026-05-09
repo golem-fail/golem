@@ -8,17 +8,35 @@ name = "app"
 os = ["ios:latest", "android:latest"]
 type = "phone"
 
+# Targets the Gesture Target section's `gesture-area`, which tracks
+# both pointer coordinates and press duration. The duration bucket
+# (`tap` <500ms, `long` 500-1500ms, `very-long` ≥1500ms) is the
+# observable that lets a flow tell a 1000ms press apart from a
+# 2000ms one. Without it, a long_press only proves the action
+# returned — not that the requested duration reached the WebView.
+#
+# Glob `*` after the bucket name lets the assertion ignore the
+# trailing `(<ms>ms)` part of the displayed row.
+#
+# Selectable text targets (Item 0, Card 0) are deliberately avoided
+# — iOS's UITextSelectionMenu (Copy / Look Up / Translate) hijacks
+# the gesture and steals the next step's input.
+
 [[block]]
 name = "long_press_tests"
 steps = [
-  # Long press on list item with default duration (1000ms). Item 0 is
-  # at the top of the inner scroll list; auto_scroll surfaces it.
-  { action = "long_press", on_text = "Item 0", auto_scroll = true },
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-gesture-target" },
+  { action = "assert_visible", on_text = "Press: none*" },
 
-  # Long press on submit button — Submit is above the list; we just
-  # scrolled down to Item 0, so auto_scroll back up is needed.
-  { action = "long_press", on_text = "Submit", duration = 2000, auto_scroll = true },
+  # Default 1000ms — lands in the `long` bucket (500..1500ms).
+  { action = "long_press", on_accessibility_label = "gesture-area" },
+  { action = "assert_visible", on_text = "Press: long*" },
 
-  # Long press on a carousel card — also requires scrolling.
-  { action = "long_press", on_text = "Card 0", duration = 1500, auto_scroll = true },
+  # 2000ms — lands in `very-long` (≥1500ms). Different bucket
+  # proves the `duration` parameter is actually being honoured.
+  { action = "tap", on_text = "Reset Gesture" },
+  { action = "assert_visible", on_text = "Press: none*" },
+  { action = "long_press", on_accessibility_label = "gesture-area", duration = 2000 },
+  { action = "assert_visible", on_text = "Press: very-long*" },
 ]

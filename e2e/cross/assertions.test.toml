@@ -15,35 +15,38 @@ name = "app"
 os = ["ios:latest", "android:latest"]
 type = "phone"
 
+# Test purpose is the assertion semantics (visibility, traits,
+# enabled, checked, not_visible). Asserts are ordered by viewport
+# proximity to the default Counter landing so auto_scroll moves
+# strictly downward once — no bouncing back up.
+
 [[block]]
 name = "visibility_assertions"
 steps = [
-  # assert_visible: elements that should be on screen (using grouped on = {} syntax)
+  # In-viewport (Counter section): no scroll needed
   { action = "assert_visible", on = { text = "Submit" } },
-  { action = "assert_visible", on_text = "Enter email" },
   { action = "assert_visible", on_text = "Counter" },
-
-  # assert_visible with traits
   { action = "assert_visible", on = { text = "Submit", traits = ["button", "has_text"] } },
   { action = "assert_visible", on = { accessibility_label = "Increment", traits = ["button"] } },
-
-  # assert_not_visible: elements that should not be on screen
-  { action = "assert_not_visible", on_text = "GOLEM Test B" },
-  { action = "assert_not_visible", on_text = "GOLEM Test B" },
-
-  # assert_visible: verify exact text content using relational selectors
   { action = "assert_visible", on_text = "0", on_below = "Counter" },
-  { action = "assert_visible", on_text = "Item 0", auto_scroll = true },
-  { action = "assert_visible", on_text = "Item 3" },
+  { action = "assert_visible", on_text = "Submit", on_enabled = true },
+  { action = "assert_visible", on_accessibility_label = "Increment", on_enabled = true },
+  { action = "assert_not_visible", on_text = "GOLEM Test B" },
 
-  # assert_visible with enabled: verify elements are enabled
-  { action = "assert_visible", on_text = "Submit", on_enabled = true, auto_scroll = true },
-  { action = "assert_visible", on_accessibility_label = "Increment", on_enabled = true, auto_scroll = true },
+  # Below the fold — scroll down once. Subsequent asserts in the
+  # same section don't need auto_scroll because the viewport
+  # already overlaps the target.
+  { action = "assert_visible", on_text = "Enter email", auto_scroll = true },
   { action = "assert_visible", on_text = "Enter email", on_enabled = true },
-  { action = "assert_visible", on_text = "Dark Mode", on_enabled = true, auto_scroll = true },
 
-  # Verify checkbox is unchecked, tap it, verify it's checked
+  { action = "assert_visible", on_text = "Dark Mode", auto_scroll = true },
+  { action = "assert_visible", on_text = "Dark Mode", on_enabled = true },
   { action = "assert_checked", on_accessibility_label = "agree-checkbox", on_checked = false, auto_scroll = true },
   { action = "tap", on_text = "I agree" },
   { action = "assert_checked", on_accessibility_label = "agree-checkbox", on_checked = true },
+
+  # Scroll List items — further down. Auto_scroll handles the
+  # inner-scrollable too.
+  { action = "assert_visible", on_text = "Item 0", auto_scroll = true },
+  { action = "assert_visible", on_text = "Item 3" },
 ]

@@ -8,25 +8,31 @@ name = "app"
 os = ["ios:latest", "android:latest"]
 type = "phone"
 
+# Reads `Theme:` (Device State, ~12 sections down) and `Item 0`
+# (Scroll List, ~5 sections down) and an initial / final counter
+# value (default Counter landing). Auto_scroll downward in a
+# single sweep (Counter → Scroll List → Device State) plus a
+# menu-nav back for the final counter check — that's two short
+# scrolls and one menu-nav, vs four long scrolls if we bounced.
+
 [[block]]
 name = "read_and_save"
 steps = [
-  # Read the initial counter value and save it to a variable
+  # Counter section (default landing).
   { action = "read", on_below = "Counter", on_index = 0, save_to = "initial_count" },
-
-  # Increment the counter twice
   { action = "tap", on_text = "+" },
   { action = "tap", on_text = "+" },
-
-  # Read the updated counter value
   { action = "read", on_below = "Counter", on_index = 0, save_to = "updated_count" },
 
-  # Read the theme label (off-screen, needs scroll)
-  { action = "read", on_right_of = "Theme:", save_to = "current_theme", auto_scroll = true },
-
-  # Read text from a list item (need to scroll back up)
+  # Scroll List — short scroll down.
   { action = "read", on_text = "Item 0", save_to = "first_item_text", auto_scroll = true },
 
-  # Verify the counter was updated correctly (back at top)
-  { action = "assert_visible", on_text = "2", on_below = "Counter", auto_scroll = true },
+  # Device State — further scroll down to reach Theme.
+  { action = "read", on_right_of = "Theme:", save_to = "current_theme", auto_scroll = true },
+
+  # Counter is now ~12 sections back up — menu-nav is much faster
+  # than a long scroll-up sweep.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-counter" },
+  { action = "assert_visible", on_text = "2", on_below = "Counter" },
 ]
