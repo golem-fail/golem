@@ -274,14 +274,6 @@ Menu nav (`tap on_accessibility_label="menu-toggle"` + `tap on_accessibility_lab
 
 **Still on auto_scroll:** `device_controls` (auto_scroll struggles to reach `Theme:` row on iPhone — strategy 1 stalls, strategy 2 stalls; separate scroll-strategy bug, not menu nav). Intentionally on auto_scroll: `scroll.test`, `scroll_search.test`.
 
-## device_controls.test: Android back+launch lands in 37-node partial render
-
-`press button="back"` on Android exits the test-app activity. The next `launch` returns success and `await_first_frame` fires (settle gate passes), but the DOM is 37 nodes — h1 only, no Counter / Menu / sections. Both menu-nav and `auto_scroll = true` time out because the targets don't exist in the tree.
-
-Pre-existing — also fails on the legacy `auto_scroll`-based flow. The Tauri Android WebView doesn't fully re-render after `back` → `launch`. Could be a `singleTask` activity vs WebView lifecycle interaction.
-
-**Files:** `test-app/src-tauri/gen/android/...` activity config; possibly `golem-driver/src/android.rs` settle gate to detect partial render and re-poll.
-
 ## Android: AndroidManifest permission persistence
 
 `pm grant` requires `<uses-permission>` declarations in `AndroidManifest.xml`. The test-app currently has CAMERA / RECORD_AUDIO / ACCESS_FINE_LOCATION / ACCESS_COARSE_LOCATION declared in `test-app/src-tauri/gen/android/app/src/main/AndroidManifest.xml`, but `gen/` is gitignored — fresh clones lose the declarations and `permissions_*.test` will fail at the grant step.

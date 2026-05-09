@@ -29,14 +29,32 @@ steps = [
   { action = "assert_visible", on_text = "Theme:", auto_scroll = true },
 ]
 
-# Android-only: test back button navigation
+# Android-only: prove the back button signal reaches the WebView.
+# DeviceState seeds an initial `history.pushState({})` and listens
+# for `popstate`, which fires when Tauri's Android activity
+# forwards the back key to the WebView (instead of finishing the
+# activity outright). Each fire increments the `Back:` counter
+# rendered in the Device State section.
 [[block]]
 name = "android_back_button"
 where = { os = "android" }
 steps = [
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-device-state" },
+  { action = "assert_visible", on_text = "0", on_right_of = "Back:" },
+  # Each `press back` fires `tauri://close-requested` in the
+  # WebView; the handler in DeviceState.svelte calls
+  # `preventDefault()` and increments `backCount`. Tauri also
+  # scrolls the page to the top on back, so subsequent asserts
+  # need menu-nav back to Device State to bring the row in view.
   { action = "press", button = "back" },
-  { action = "launch", app = "app" },
-  { action = "assert_visible", on_text = "Theme:", auto_scroll = true },
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-device-state" },
+  { action = "assert_visible", on_text = "1", on_right_of = "Back:" },
+  { action = "press", button = "back" },
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-device-state" },
+  { action = "assert_visible", on_text = "2", on_right_of = "Back:" },
 ]
 
 [[block]]

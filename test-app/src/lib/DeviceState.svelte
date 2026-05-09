@@ -13,6 +13,12 @@ let mediaCount = $state(0);
 let lifecycle = $state("visible @ load");
 let pageshowCount = $state(0);
 let visibilityChangeCount = $state(0);
+// Android back button → if a history state exists, the OS fires
+// `popstate` in the WebView instead of finishing the activity.
+// Count fires so device_controls.test can assert that golem's
+// `press button="back"` reaches the app rather than just doing
+// OS-level dismissal.
+let backCount = $state(0);
 
 onMount(() => {
   function updateTheme() {
@@ -70,11 +76,31 @@ onMount(() => {
   document.addEventListener("visibilitychange", onVisibility);
   window.addEventListener("pageshow", onPageShow);
 
+  // Capture the Android back signal. Tauri 2.x Android intercepts
+  // back at the activity level and fires a `tauri://close-requested`
+  // window event before finishing — calling `preventDefault()` lets
+  // the WebView observe the back without losing the activity, and
+  // we increment a counter so golem's `press button="back"` action
+  // can be asserted against an app-level state change rather than
+  // just OS-level dismissal of a system dialog.
+  let unlistenClose;
+  (async () => {
+    try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const win = getCurrentWindow();
+      unlistenClose = await win.onCloseRequested((event) => {
+        event.preventDefault();
+        backCount += 1;
+      });
+    } catch { /* not Tauri / desktop build */ }
+  })();
+
   return () => {
     tMql.removeEventListener("change", updateTheme);
     if (unlistenDeepLink) unlistenDeepLink();
     document.removeEventListener("visibilitychange", onVisibility);
     window.removeEventListener("pageshow", onPageShow);
+    if (unlistenClose) unlistenClose();
   };
 });
 </script>
@@ -86,6 +112,7 @@ onMount(() => {
   <div class="row"><span>Notification:</span> <span>{notification}</span></div>
   <div class="row"><span>Media Count:</span> <span>{mediaCount}</span></div>
   <div class="row"><span>Lifecycle:</span> <span>{lifecycle}</span></div>
+  <div class="row"><span>Back:</span> <span>{backCount}</span></div>
 </div>
 
 <style>

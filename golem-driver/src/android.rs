@@ -462,14 +462,35 @@ impl PlatformDriver for AndroidDriver {
     }
 
     async fn launch_app(&self, bundle_id: &str) -> Result<Option<String>> {
-        // Use adb shell directly — uiAutomation.executeShellCommand doesn't
-        // reliably launch apps on all Android versions.
-        self.adb(&[
-            "shell", "am", "start",
+        // Collapse the notification / Quick Settings shade if it was
+        // left pulled down — swipe-style HID gestures landing near
+        // the top edge can accidentally drag it open, and the app
+        // we're about to launch would then be invisible underneath.
+        // Best-effort; harmless if the shade was already closed.
+        let _ = self.adb(&["shell", "cmd", "statusbar", "collapse"]).await;
+        // `-W` waits for the activity to come up, returns Status / Activity
+        // lines on success. Without it, `am start` returns immediately
+        // after queueing the intent, and the `await_first_frame` settle
+        // gate can mistakenly stabilise on the Android home screen if
+        // the activity-start was rejected (e.g. after `press button="back"`
+        // killed the activity and the launch races a still-tearing-down
+        // task). The synchronous wait surfaces the failure here instead
+        // of leaking it into the next step's element resolver.
+        let out = self.adb(&[
+            "shell", "am", "start", "-W",
             "-a", "android.intent.action.MAIN",
             "-c", "android.intent.category.LAUNCHER",
             "-n", &format!("{bundle_id}/.MainActivity"),
         ]).await?;
+        // `am start -W` always prints a `Status:` line; success is
+        // `Status: ok`. The "Activity not started, its current task
+        // has been brought to the front" warning (the safe case
+        // where the task was already running) is followed by
+        // `Status: ok` too — only treat the absence of `Status: ok`
+        // as a real failure.
+        if !out.contains("Status: ok") {
+            bail!("am start failed for {bundle_id}: {}", out.trim());
+        }
         // Settle gate: `am start` returns when the start intent is queued,
         // not when the app is interactive. Poll the UI tree until the
         // first interactive frame stabilises so the next action doesn't
