@@ -75,16 +75,23 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
         // Create the appropriate driver — same code path as test execution,
         // including CDP enrichment for Android WebViews.
         let device_id = find_device_id(platform, name).await;
+        // `golem tree` only reads the accessibility hierarchy — it
+        // never calls actions that branch on the `physical` flag, so
+        // passing `false` here is correct regardless of the target's
+        // actual kind. If a future tree feature needs phys/sim info,
+        // plumb `DeviceInfo` through `find_device_id` instead.
         let driver: Box<dyn PlatformDriver> = match platform.as_str() {
             "android" => Box::new(AndroidDriver::new(
                 device_id.clone(),
                 bundle.to_string(),
                 *port,
+                false,
             )),
             _ => Box::new(IosDriver::new(
                 device_id.clone(),
                 bundle.to_string(),
                 *port,
+                false,
             )),
         };
 

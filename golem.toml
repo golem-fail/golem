@@ -2,6 +2,15 @@
 name = "app"
 bundle = "fail.golem.test"
 install_script = "scripts/install-app.sh"
+
+# Native second app used by tests that need primitives Tauri 2.x doesn't
+# expose (accessibility ids, native push receive bridge, etc.). Install
+# scripts are per-platform — the iOS target is a SwiftUI Xcode project,
+# the Android target is a Compose Activity.
+[[apps]]
+name = "app-b"
+bundle = "fail.golem.testb"
+install_script = { ios = "scripts/install-app-b-ios.sh", android = "scripts/install-app-b-android.sh" }
 # GOLEM project configuration
 # See documentation for all available options.
 #

@@ -56,6 +56,12 @@ pub struct IosDriver {
     client: CompanionClient,
     device_id: String,
     bundle_id: String,
+    /// True for real hardware, false for a simulator. Set from the
+    /// resolved `DeviceInfo.physical` at driver-construction time so
+    /// actions that have a sim-only OS backdoor (currently
+    /// `push_notification`) can refuse loudly on real devices instead
+    /// of getting an opaque error from `simctl push`.
+    physical: bool,
     /// WebKit Inspector lifecycle for WKWebView DOM access.
     webkit: std::sync::Mutex<WebKitLifecycle>,
 }
@@ -82,12 +88,13 @@ struct WebKitState {
 /// the origin point and a 200pt gesture distance.
 impl IosDriver {
     /// Create a new iOS driver targeting the companion server at the given port.
-    pub fn new(device_id: String, bundle_id: String, port: u16) -> Self {
+    pub fn new(device_id: String, bundle_id: String, port: u16, physical: bool) -> Self {
         let client = CompanionClient::new(port);
         Self {
             client,
             device_id,
             bundle_id,
+            physical,
             webkit: std::sync::Mutex::new(WebKitLifecycle::Idle),
         }
     }
@@ -505,6 +512,19 @@ impl PlatformDriver for IosDriver {
         body: &str,
         payload: Option<&str>,
     ) -> Result<()> {
+        // Refuse on physical devices — `simctl push` is sim-only. Real
+        // APNS delivery needs provisioning + Apple's push servers + a
+        // device token, which is outside this action's scope. See
+        // README §push_notification for the cross-device pattern using
+        // `branch` + `http_*` to your own APNS backend.
+        if self.physical {
+            bail!(
+                "push_notification is sim-only on iOS — `{}` is a \
+                 physical device. Compose phys delivery via http_post \
+                 to your APNS backend, gated by a branch on `_hardware`.",
+                self.device_id,
+            );
+        }
         // Build an APNS payload JSON and push via simctl
         let apns_payload = if let Some(custom) = payload {
             format!(
@@ -816,6 +836,7 @@ mod tests {
             "ABCD-1234".to_string(),
             "com.example.app".to_string(),
             8222,
+            false,
         );
         assert_eq!(driver.base_url(), "http://localhost:8222");
         assert_eq!(driver.device_id(), "ABCD-1234");
@@ -828,6 +849,7 @@ mod tests {
             "device-99".to_string(),
             "com.test.bundle".to_string(),
             9999,
+            true,
         );
         assert_eq!(driver.base_url(), "http://localhost:9999");
     }

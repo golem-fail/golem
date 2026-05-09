@@ -1911,8 +1911,18 @@ async fn run_flow_on_device(
         .unwrap_or_else(|| "fail.golem.test".to_string());
 
     let driver: Box<dyn PlatformDriver> = match platform {
-        Platform::Ios => Box::new(IosDriver::new(device.udid.clone(), bundle_id.clone(), port)),
-        Platform::Android => Box::new(AndroidDriver::new(device.udid.clone(), bundle_id.clone(), port)),
+        Platform::Ios => Box::new(IosDriver::new(
+            device.udid.clone(),
+            bundle_id.clone(),
+            port,
+            device.physical,
+        )),
+        Platform::Android => Box::new(AndroidDriver::new(
+            device.udid.clone(),
+            bundle_id.clone(),
+            port,
+            device.physical,
+        )),
     };
 
     // Resolve perf setting: CLI --no-perf overrides flow perf option (default: true)

@@ -76,6 +76,68 @@ pub struct WithinNoOpIssue {
     pub action: String,
 }
 
+/// A `push_notification` step in a flow that *could* be scheduled
+/// against a physical device — the action is sim/emu-only on both
+/// platforms (see `golem-driver/src/{ios,android}.rs::push_notification`)
+/// and would error at runtime there. Caller decides severity:
+/// `--validate` rejects with error, runtime emits a warning.
+#[derive(Debug, Clone)]
+pub struct PushNotificationPhysIssue {
+    pub block_name: Option<String>,
+    pub step_index: usize,
+    pub app_name: String,
+}
+
+/// `push_notification` is sim/emu-only on both platforms. Flag any
+/// flow whose app explicitly opts into `hardware = "real"` (or
+/// `["virtual", "real"]`) AND uses the action — the runtime would
+/// bail on the phys-device run. Apps with `hardware` absent default
+/// to virtual-only today and don't trigger the lint; if the default
+/// changes (see roadmap), this trigger condition flips to include
+/// the absent case too.
+pub fn lint_push_notification_phys(flow: &FlowFile) -> Vec<PushNotificationPhysIssue> {
+    // Apps whose device constraints permit real hardware.
+    let phys_capable_apps: Vec<&str> = flow
+        .flow
+        .apps
+        .iter()
+        .filter(|app| {
+            app.devices.iter().any(|dc| {
+                dc.hardware.as_ref().is_some_and(|h| {
+                    h.to_vec().iter().any(|v| v == "real")
+                })
+            })
+        })
+        .map(|app| app.name.as_str())
+        .collect();
+    if phys_capable_apps.is_empty() {
+        return Vec::new();
+    }
+    let mut issues = Vec::new();
+    for block in &flow.block {
+        for (idx, step) in block.steps.iter().enumerate() {
+            if step.action != "push_notification" {
+                continue;
+            }
+            // Resolve step's app target — `step.app` overrides flow-
+            // default (the first [[flow.apps]] entry).
+            let target = step
+                .app
+                .as_deref()
+                .or_else(|| flow.flow.apps.first().map(|a| a.name.as_str()));
+            let Some(target) = target else { continue; };
+            if phys_capable_apps.contains(&target) {
+                issues.push(PushNotificationPhysIssue {
+                    block_name: block.name.clone(),
+                    step_index: idx,
+                    app_name: target.to_string(),
+                });
+            }
+        }
+    }
+    issues
+}
+
 /// `within` is consumed by `scroll` and by any step that has
 /// `auto_scroll = true` (the resolver uses it to constrain scroll-into-
 /// view to the container). On any other step it's silently dropped —

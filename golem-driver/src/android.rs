@@ -16,6 +16,11 @@ pub struct AndroidDriver {
     client: CompanionClient,
     device_serial: String,
     package_name: String,
+    /// True for real hardware, false for an emulator. Set from the
+    /// resolved `DeviceInfo.physical` at driver-construction time so
+    /// actions that have an emu-only OS backdoor (currently
+    /// `push_notification`) can refuse loudly on real devices.
+    physical: bool,
     /// CDP lifecycle: None → SetupInProgress → Ready | Failed
     cdp: std::sync::Mutex<CdpLifecycle>,
 }
@@ -93,6 +98,14 @@ fn normalize_android_permission(permission: &str, sdk_int: u32) -> Result<Vec<St
     Ok(perms.into_iter().map(String::from).collect())
 }
 
+/// Wrap a string in single quotes for safe interpolation into a
+/// device-side shell command, escaping any embedded single quotes
+/// via the `'\''` close-reopen sequence. Used by `push_notification`
+/// where adb shell concatenates remaining args before re-tokenising.
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', r"'\''"))
+}
+
 /// Build the adb command arguments for launching an app via monkey.
 #[cfg(test)]
 fn build_launch_app_args(serial: &str, package: &str) -> Vec<String> {
@@ -127,11 +140,12 @@ fn build_set_location_args(serial: &str, lat: f64, lon: f64) -> Vec<String> {
 
 impl AndroidDriver {
     /// Create a new Android driver targeting the companion server at the given port.
-    pub fn new(device_serial: String, package_name: String, port: u16) -> Self {
+    pub fn new(device_serial: String, package_name: String, port: u16, physical: bool) -> Self {
         Self {
             client: CompanionClient::new(port),
             device_serial,
             package_name,
+            physical,
             cdp: std::sync::Mutex::new(CdpLifecycle::Idle),
         }
     }
@@ -532,22 +546,45 @@ impl PlatformDriver for AndroidDriver {
         body: &str,
         _payload: Option<&str>,
     ) -> Result<()> {
-        // Android push notifications via adb require a broadcast receiver in the app.
-        // Use a simple am broadcast approach.
+        // Refuse on physical devices for parity with iOS — push delivery
+        // on real hardware needs FCM (server keys, device tokens) and is
+        // outside this action's scope. See README §push_notification
+        // for the cross-device pattern using `branch` + `http_*` to
+        // your own backend.
+        if self.physical {
+            bail!(
+                "push_notification is emu-only on Android — `{}` is a \
+                 physical device. Compose phys delivery via http_post \
+                 to your FCM backend, gated by a branch on `_hardware`.",
+                self.device_serial,
+            );
+        }
+        // Broadcast an intent the app's registered receiver listens for.
+        // Action is namespaced under the bundle id (e.g.
+        // `fail.golem.testb.PUSH_NOTIFICATION`) so other apps' receivers
+        // don't intercept it. Body / title travel as string extras —
+        // the receiver pulls `body` out, which is what the test asserts
+        // on the right of "Notification:".
+        //
+        // adb shell concatenates remaining args into a single device-
+        // shell command, so any space in title / body would otherwise
+        // be re-split by `sh` and `am` would treat the trailing tokens
+        // as positional args (e.g. an unrelated package filter). Wrap
+        // each value in single quotes with embedded single-quote
+        // escaping to survive the round-trip.
+        let action = format!("{}.PUSH_NOTIFICATION", self.package_name);
         self.adb(&[
             "shell",
             "am",
             "broadcast",
             "-a",
-            "fail.golem.PUSH_NOTIFICATION",
+            &action,
             "--es",
             "title",
-            title,
+            &shell_quote(title),
             "--es",
             "body",
-            body,
-            "-n",
-            &format!("{}/fail.golem.PushReceiver", self.package_name),
+            &shell_quote(body),
         ])
         .await?;
         Ok(())
@@ -807,6 +844,7 @@ mod tests {
             "emulator-5554".to_string(),
             "com.example.myapp".to_string(),
             8223,
+            false,
         );
         assert_eq!(driver.base_url(), "http://localhost:8223");
         assert_eq!(driver.device_serial(), "emulator-5554");
@@ -819,6 +857,7 @@ mod tests {
             "device-abc123".to_string(),
             "com.test.app".to_string(),
             9999,
+            true,
         );
         assert_eq!(driver.base_url(), "http://localhost:9999");
     }

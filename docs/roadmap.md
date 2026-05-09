@@ -1,5 +1,27 @@
 # Roadmap
 
+## `hardware` default — accept both, prefer virtual
+
+`[[flow.apps.devices]] hardware` field today defaults to `[Some(false)]`
+(virtual-only) when absent. That means a flow without an explicit
+`hardware = "real"` line silently can't run on physical devices even
+when one is connected. Better default: accept both kinds (virtual +
+real) when absent, **prefer virtual** when both shapes are bootable
+(so CI runs that have a sim and a phys connected pick the sim by
+default for speed). Authors who need phys-only or virtual-only still
+spell it out explicitly.
+
+When this lands, the `push_notification` plan-time lint (added with
+the action's sim/emu-only contract) needs its trigger condition
+flipped: today it warns when `hardware` explicitly permits `real`;
+post-change it should warn whenever `hardware` is absent **or**
+explicitly permits real, since the absent case now also targets
+phys.
+
+**Files:** `golem-orchestrator/src/plan.rs::expand_hardware_entries`,
+device-prefer logic in the resolver, `lint_push_notification_phys` (or
+wherever the lint lives once added).
+
 ## Architecture and DX follow-ups from May 2026 review
 
 Captured during the post-merge audit; none are blocking but each removes a sharp edge.

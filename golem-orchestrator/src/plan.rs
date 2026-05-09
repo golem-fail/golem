@@ -205,7 +205,7 @@ fn parse_one(
 /// would promote these to hard errors. Today they are surfaced through
 /// the `SuiteLint` event so remote clients see them too.
 fn lint_warnings_for(path: &Path, flow: &FlowFile) -> Vec<String> {
-    golem_parser::validation::lint_within_no_op(flow)
+    let mut warnings: Vec<String> = golem_parser::validation::lint_within_no_op(flow)
         .into_iter()
         .map(|issue| {
             let block = issue.block_name.as_deref().unwrap_or("<unnamed>");
@@ -216,7 +216,23 @@ fn lint_warnings_for(path: &Path, flow: &FlowFile) -> Vec<String> {
                 path.display(), block, issue.step_index, issue.action,
             )
         })
-        .collect()
+        .collect();
+    warnings.extend(
+        golem_parser::validation::lint_push_notification_phys(flow)
+            .into_iter()
+            .map(|issue| {
+                let block = issue.block_name.as_deref().unwrap_or("<unnamed>");
+                format!(
+                    "{}:{}::{} `push_notification` (app=`{}`) targets an app \
+                     that may run on physical hardware. The action is sim/emu-\
+                     only on both platforms and will error at runtime there. \
+                     Branch on `_hardware` and use `http_*` to your APNS/FCM \
+                     backend for phys delivery. See README §push_notification.",
+                    path.display(), block, issue.step_index, issue.app_name,
+                )
+            }),
+    );
+    warnings
 }
 
 /// For each unique slot shape across all FlowRuns, count how many devices

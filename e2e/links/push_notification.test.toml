@@ -1,9 +1,20 @@
 [flow]
+# Push notifications need a native receive bridge — Tauri 2.x doesn't
+# expose UNUserNotificationCenter / BroadcastReceiver hooks via plugins
+# today, so this flow runs against test-app-b (native SwiftUI / Compose
+# Activity) where the delegate / receiver code lives in plain Swift /
+# Kotlin and updates a `notification-display-b` element.
+#
+# `push_notification` is sim/emu-only on both platforms by design.
+# Physical-device push delivery requires real APNS / FCM infrastructure
+# (provisioning, server keys, device tokens) which is out of scope for
+# golem's action library. Test authors targeting physical devices
+# compose their own delivery via `branch` + `http_*` to their backend.
 name = "Push notification display and verification"
 tags = ["push-notification", "cross-platform"]
 
 [[flow.apps]]
-name = "app"
+name = "app-b"
 [[flow.apps.devices]]
 os = ["ios:latest", "android:latest"]
 type = "phone"
@@ -11,35 +22,21 @@ type = "phone"
 [[block]]
 name = "verify_initial_state"
 steps = [
-  # Launch the app and verify notification display is initially empty.
-  # `Notification:` lives in Device State below the fold — jump to it
-  # via the menu rather than relying on auto_scroll (this flow isn't
-  # testing scroll behaviour).
-  { action = "launch", app = "fail.golem.test" },
-  { action = "tap", on_accessibility_label = "menu-toggle" },
-  { action = "tap", on_accessibility_label = "goto-device-state" },
-  { action = "assert_visible", on_text = "Notification:" },
+  { action = "launch", app = "app-b" },
+  { action = "assert_visible", on_text = "GOLEM Test B" },
   { action = "assert_visible", on_text = "Notification:" },
 ]
 
 [[block]]
 name = "send_first_notification"
 steps = [
-  # Send a push notification to the app
-  { action = "push_notification", title = "Test Alert", body = "Hello from GOLEM", app = "fail.golem.test" },
-
-  # Wait for the notification display to update and verify content
-  { action = "assert_visible", on_text = "Notification:" },
+  { action = "push_notification", title = "Test Alert", body = "Hello from GOLEM", app = "app-b" },
   { action = "assert_visible", on_text = "Hello from GOLEM", on_right_of = "Notification:" },
 ]
 
 [[block]]
 name = "send_second_notification"
 steps = [
-  # Send another push notification with different content
-  { action = "push_notification", title = "Second Alert", body = "Updated notification payload", app = "fail.golem.test" },
-
-  # Verify the notification display updates with the new content
-  { action = "assert_visible", on_text = "Notification:" },
+  { action = "push_notification", title = "Second Alert", body = "Updated notification payload", app = "app-b" },
   { action = "assert_visible", on_text = "Updated notification payload", on_right_of = "Notification:" },
 ]

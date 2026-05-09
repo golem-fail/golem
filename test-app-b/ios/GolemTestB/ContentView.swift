@@ -4,12 +4,22 @@ struct ContentView: View {
     @State private var counter = 0
     @State private var status = "Ready"
     @State private var toggleOn = false
+    @EnvironmentObject var notifications: NotificationStore
 
     var body: some View {
         VStack(spacing: 20) {
             Text("GOLEM Test B")
                 .font(.largeTitle)
                 .accessibilityIdentifier("app-b-title")
+
+            // Updated by AppDelegate's UNUserNotificationCenterDelegate
+            // on every foreground push delivery. push_notification.test
+            // asserts the body text shows up here.
+            HStack {
+                Text("Notification:")
+                Text(notifications.latestBody)
+                    .accessibilityIdentifier("notification-display-b")
+            }
 
             Text(status)
                 .accessibilityIdentifier("status-label")
