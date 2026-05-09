@@ -11,12 +11,8 @@ Captured during the post-merge audit; none are blocking but each removes a sharp
 - **`tap()` → `press(forDuration: 0.05)`.** Pages with a long-press distinguisher above ~50ms threshold may classify these as long-presses. Document the boundary or add an explicit `tap-fast` shorthand.
 - **Resolver auto-hide-keyboard fires unconditionally.** Tests that intentionally exercise keyboard-up state will be perturbed. Consider an opt-out flag on the step or scope to specific actions.
 - **`find_webview_socket` returns `None` on empty `pidof`.** Previously fell back to first-socket, useful for ad-hoc debugging. If we want to keep the loose path for `golem tree`, add a `--any` flag.
-- **`normalize_android_permission` typo passthrough.** A misspelled `"locaiton"` is forwarded to `pm grant` verbatim. Either error on unknown shorthands or document the passthrough explicitly.
-- **`location-always` collapses to `ACCESS_FINE_LOCATION`.** Always-on location actually needs `ACCESS_BACKGROUND_LOCATION` too. Collapse is silent.
-- **`photos` shorthand picks `READ_MEDIA_IMAGES` only.** Android 12 and below want `READ_EXTERNAL_STORAGE`; Android 14+ has `READ_MEDIA_VISUAL_USER_SELECTED`. API-level-blind today.
-- **No iOS analogue to `normalize_android_permission`.** iOS path passes the shorthand verbatim to `simctl privacy`; works for `camera` / `location` but silently diverges from Android for less common ones.
-- **Tests gap.** `normalize_android_permission`, `find_webview_socket` PID filter, safe-area subtraction, BUTTON/A textContent fallback, `EventLog`, `find_or_allocate_port` Android-only fallback, `ensure_companion_with_reg` UDID cross-check — none have unit coverage.
-- **Docs gap.** `/press` companion endpoint, resolver auto-hide-keyboard, the now-required `app =` field on `grant_permission` / `revoke_permission` actions — none are externally documented.
+- **Tests gap.** `find_webview_socket` PID filter, safe-area subtraction, BUTTON/A textContent fallback, `EventLog`, `find_or_allocate_port` Android-only fallback, `ensure_companion_with_reg` UDID cross-check — none have unit coverage.
+- **Docs gap.** `/press` companion endpoint, resolver auto-hide-keyboard — neither externally documented.
 - **`Menu.svelte` `scroll-margin-top` hard-codes 60px.** Refactors that grow the menu height regress scroll-into-view. Compute from the menu's bounding box.
 - **`EventLog.MAX = 50`.** Pointermove bursts evict prior events. Acceptable for a debug tool today; bumping to time-windowed (last 5s) would survive long flows.
 

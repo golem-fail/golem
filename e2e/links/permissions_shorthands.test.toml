@@ -1,0 +1,36 @@
+[flow]
+# Covers the cross-platform permission-shorthand normalization paths:
+# `location-always` (Android: grants both FINE_LOCATION and
+# BACKGROUND_LOCATION; iOS: maps to simctl `location-always` token)
+# and `photos` (Android: SDK-conditional grouping of READ_MEDIA_IMAGES
+# / READ_MEDIA_VISUAL_USER_SELECTED / READ_EXTERNAL_STORAGE; iOS:
+# simctl `photos` token). A failure in either shorthand surfaces as
+# the grant_permission step failing — `pm grant` / `simctl privacy`
+# rejects undeclared or wrong-API-level permissions loudly, which
+# propagates back through the driver and fails the step.
+name = "Permission shorthands"
+tags = ["permissions", "cross-platform"]
+
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "location_always_grants_foreground_and_background"
+steps = [
+  { action = "grant_permission", app = "fail.golem.test", permission = "location-always" },
+  { action = "launch", app = "fail.golem.test" },
+  { action = "assert_visible", on_text = "Counter" },
+  { action = "revoke_permission", app = "fail.golem.test", permission = "location-always" },
+]
+
+[[block]]
+name = "photos_sdk_conditional"
+steps = [
+  { action = "grant_permission", app = "fail.golem.test", permission = "photos" },
+  { action = "launch", app = "fail.golem.test" },
+  { action = "assert_visible", on_text = "Counter" },
+  { action = "revoke_permission", app = "fail.golem.test", permission = "photos" },
+]

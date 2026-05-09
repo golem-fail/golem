@@ -1225,10 +1225,40 @@ Clear the app's storage and cache.
 
 #### `grant_permission`, `revoke_permission` — Manage app permissions
 
+Pre-grants (or revokes) a permission via the platform's privacy
+database (`pm grant` on Android, `simctl privacy` on iOS sims). The
+`app` field is required and must name an entry from `[[flow.apps]]`
+or the project's `golem.toml` so the bundle id can be resolved.
+
 ```toml
 { action = "grant_permission", app = "app", permission = "camera" }
 { action = "revoke_permission", app = "app", permission = "location" }
 ```
+
+**Cross-platform shorthands.** One vocabulary, mapped per platform:
+
+| Shorthand        | Android (`pm grant`)                                      | iOS (`simctl privacy`) |
+|------------------|-----------------------------------------------------------|------------------------|
+| `camera`         | `CAMERA`                                                  | `camera`               |
+| `microphone`     | `RECORD_AUDIO`                                            | `microphone`           |
+| `location`       | `ACCESS_FINE_LOCATION` (foreground only)                  | `location`             |
+| `location-always`| `ACCESS_FINE_LOCATION` + `ACCESS_BACKGROUND_LOCATION`     | `location-always`      |
+| `contacts`       | `READ_CONTACTS`                                           | `contacts`             |
+| `calendar`       | `READ_CALENDAR`                                           | `calendar`             |
+| `photos`         | SDK-conditional: `READ_MEDIA_IMAGES` (+ `…_VISUAL_USER_SELECTED` on Android 14+) / `READ_EXTERNAL_STORAGE` on Android 12 and below | `photos` |
+
+Unknown shorthands fail loudly at the action layer (no silent passthrough to `pm grant` / `simctl privacy`). You can also pass a full `android.permission.*` string and Android will use it verbatim.
+
+> **Note: notifications aren't a pre-grantable shorthand.** Both iOS and Android (13+) show a system dialog the first time the app calls the notification-authorization API — pre-granting is Android-only and breaks parity. The cross-platform pattern is to trigger the request from inside the app and dismiss the dialog with `accept_alert`:
+>
+> ```toml
+> { action = "tap", on_text = "Enable Notifications" }
+> { action = "accept_alert", if_fail = "ignore" }
+> ```
+>
+> `if_fail = "ignore"` keeps the step happy on warm sims/emulators that have already recorded the user's prior choice and skipped the prompt.
+
+The test app's `AndroidManifest.xml` must declare every permission you intend to `grant_permission` — `pm grant` rejects undeclared permissions. The committed manifest in `test-app/src-tauri/gen/android/app/src/main/AndroidManifest.xml` declares all the shorthands above; copy that pattern for your own apps.
 
 ### Capture
 

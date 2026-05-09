@@ -4,9 +4,37 @@ use crate::common::{
     replace_webview_children, CompanionClient,
 };
 use crate::{PlatformDriver, ScreenshotResult};
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use golem_element::Element;
+
+/// Map a cross-platform permission shorthand to the corresponding
+/// `simctl privacy` service token. The set deliberately matches the
+/// Android normalizer's shorthand vocabulary so flows stay
+/// platform-agnostic; the values are simctl tokens (which mostly
+/// coincide with the shorthand names by design).
+///
+/// Notifications aren't here: iOS doesn't accept a `notifications`
+/// simctl token and Android prompts identically when the app first
+/// requests `POST_NOTIFICATIONS` — let the prompt fire and use
+/// `accept_alert` / the companion's UIInterruptionMonitor instead.
+fn normalize_ios_permission(permission: &str) -> Result<&str> {
+    match permission {
+        "camera" => Ok("camera"),
+        "microphone" => Ok("microphone"),
+        "location" => Ok("location"),
+        "location-always" => Ok("location-always"),
+        "contacts" => Ok("contacts"),
+        "calendar" => Ok("calendar"),
+        "photos" => Ok("photos"),
+        other => bail!(
+            "Unknown iOS permission shorthand: {other:?}. Known shorthands: \
+             camera, microphone, location, location-always, contacts, calendar, \
+             photos. (Notifications: don't pre-grant — trigger the prompt from \
+             the app and use `accept_alert` for cross-platform parity.)"
+        ),
+    }
+}
 
 /// Post-stop grace period on iOS. `simctl terminate` returns when the
 /// kill signal is dispatched; the OS still needs time to release the
@@ -515,11 +543,12 @@ impl PlatformDriver for IosDriver {
     }
 
     async fn grant_permission(&self, bundle_id: &str, permission: &str) -> Result<()> {
+        let token = normalize_ios_permission(permission)?;
         self.simctl(&[
             "privacy",
             &self.device_id,
             "grant",
-            permission,
+            token,
             bundle_id,
         ])
         .await?;
@@ -534,11 +563,12 @@ impl PlatformDriver for IosDriver {
     }
 
     async fn revoke_permission(&self, bundle_id: &str, permission: &str) -> Result<()> {
+        let token = normalize_ios_permission(permission)?;
         self.simctl(&[
             "privacy",
             &self.device_id,
             "revoke",
-            permission,
+            token,
             bundle_id,
         ])
         .await?;
@@ -796,5 +826,58 @@ mod tests {
         let body = build_backspace_body(5).expect("serialize");
         let parsed: serde_json::Value = serde_json::from_str(&body).expect("parse");
         assert_eq!(parsed["count"], 5);
+    }
+
+    // -----------------------------------------------------------------------
+    // normalize_ios_permission — shorthand → simctl token
+    // -----------------------------------------------------------------------
+    #[test]
+    fn normalize_known_shorthands_match_simctl_tokens() {
+        // simctl `privacy` accepts these exact strings as service tokens —
+        // most coincide with the shorthand names by design.
+        for (shorthand, expected) in [
+            ("camera", "camera"),
+            ("microphone", "microphone"),
+            ("location", "location"),
+            ("location-always", "location-always"),
+            ("contacts", "contacts"),
+            ("calendar", "calendar"),
+            ("photos", "photos"),
+        ] {
+            assert_eq!(
+                normalize_ios_permission(shorthand).expect("known shorthand"),
+                expected,
+                "iOS shorthand {shorthand:?} SHALL map to simctl token {expected:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn normalize_unknown_shorthand_errors_loudly() {
+        let err = normalize_ios_permission("locaiton")
+            .expect_err("unknown shorthand SHALL error");
+        let msg = format!("{err}");
+        assert!(msg.contains("locaiton"), "should echo the bad shorthand, got: {msg}");
+        assert!(msg.contains("Known shorthands"), "should list known set, got: {msg}");
+    }
+
+    #[test]
+    fn normalize_rejects_dropped_synonyms() {
+        // location-when-in-use / photo-library were Android-only aliases;
+        // they were dropped to keep the cross-platform vocabulary single-
+        // canonical-name per intent. iOS rejects them too.
+        assert!(normalize_ios_permission("location-when-in-use").is_err());
+        assert!(normalize_ios_permission("photo-library").is_err());
+    }
+
+    #[test]
+    fn normalize_rejects_notifications_with_accept_alert_hint() {
+        let err = normalize_ios_permission("notifications")
+            .expect_err("notifications SHALL not be a shorthand on iOS");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("accept_alert"),
+            "error should point at the cross-platform pattern, got: {msg}",
+        );
     }
 }
