@@ -13,8 +13,6 @@ Captured during the post-merge audit; none are blocking but each removes a sharp
 - **`find_webview_socket` returns `None` on empty `pidof`.** Previously fell back to first-socket, useful for ad-hoc debugging. If we want to keep the loose path for `golem tree`, add a `--any` flag.
 - **Tests gap.** `find_webview_socket` PID filter, safe-area subtraction, BUTTON/A textContent fallback, `EventLog`, `find_or_allocate_port` Android-only fallback, `ensure_companion_with_reg` UDID cross-check — none have unit coverage.
 - **Docs gap.** `/press` companion endpoint, resolver auto-hide-keyboard — neither externally documented.
-- **`Menu.svelte` `scroll-margin-top` hard-codes 60px.** Refactors that grow the menu height regress scroll-into-view. Compute from the menu's bounding box.
-- **`EventLog.MAX = 50`.** Pointermove bursts evict prior events. Acceptable for a debug tool today; bumping to time-windowed (last 5s) would survive long flows.
 
 ## Stale-bundle defense (Tauri iOS build pipeline)
 

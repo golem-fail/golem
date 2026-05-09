@@ -3,6 +3,7 @@ import EventLog from "./EventLog.svelte";
 
 let open = $state(false);
 let logsOpen = $state(false);
+let menuEl;
 
 const links = [
   { id: "counter",         label: "Counter" },
@@ -25,23 +26,24 @@ function gotoSection(id) {
   // Close the menu BEFORE scrolling. With the menu open, the scroll
   // target is computed against the expanded layout, then closing the
   // menu reflows the page and iOS WKWebView's scroll anchoring leaves
-  // us ~100px overshot. Defer the scroll one frame so layout settles.
+  // us ~100px overshot. Defer the scroll one frame so layout settles
+  // — at which point we also measure the now-closed menu's real
+  // height instead of relying on a hard-coded offset.
   open = false;
   requestAnimationFrame(() => {
     const el = document.getElementById(`section-${id}`);
     if (!el) return;
-    const cs = window.getComputedStyle(el);
-    const margin = parseInt(cs.scrollMarginTop, 10) || 0;
+    const offset = menuEl ? menuEl.getBoundingClientRect().height : 0;
     // Manual `scrollTo` instead of `scrollIntoView({block:"start"})` —
     // iPad WKWebView in viewport-fit=cover mode mishandles
     // `scroll-margin-top` and overshoots; computing the target
     // explicitly is deterministic across iOS / Android / desktop.
-    window.scrollTo({ top: el.offsetTop - margin, behavior: "instant" });
+    window.scrollTo({ top: el.offsetTop - offset, behavior: "instant" });
   });
 }
 </script>
 
-<nav class="menu" aria-label="section-navigation">
+<nav class="menu" aria-label="section-navigation" bind:this={menuEl}>
   <div class="menu-bar">
     <button
       type="button"
@@ -90,12 +92,6 @@ function gotoSection(id) {
   /* Padding-top includes the device's safe-area inset so the menu
      isn't hidden under the iOS notch / Android status bar. */
   padding: max(8px, env(safe-area-inset-top, 8px)) 8px 4px;
-}
-/* Sections we jump to via the menu need a scroll-margin-top equal to
-   the (closed) menu height + the device's safe-area inset so that
-   `scrollIntoView` doesn't park them under the sticky menu bar. */
-:global([id^="section-"]) {
-  scroll-margin-top: calc(60px + env(safe-area-inset-top, 0px));
 }
 .menu-bar {
   display: flex;

@@ -13,9 +13,15 @@
 
 class EventLog {
   entries = $state([]);
-  static MAX = 50;
+  // Paused while the log panel is visible — otherwise pointermove
+  // bursts (any tap involves several `pointermove`s on top of the
+  // down/up pair) would keep mutating the list the user is trying
+  // to read. `EventLog.svelte` flips this on mount / off on unmount.
+  paused = $state(false);
+  static MAX = 100;
 
   push(entry) {
+    if (this.paused) return;
     this.entries.unshift(entry);
     if (this.entries.length > EventLog.MAX) {
       this.entries.length = EventLog.MAX;

@@ -1,10 +1,19 @@
 <script>
 import { eventLog } from "./eventLog.svelte.js";
+
+// Pause logging while the panel is mounted. A tap fires pointerdown
+// + several pointermove + pointerup; without the pause the entries
+// list keeps shifting under the reader. Cleanup resumes capture so
+// the next session sees fresh events.
+$effect(() => {
+  eventLog.paused = true;
+  return () => { eventLog.paused = false; };
+});
 </script>
 
 <section class="event-log" aria-label="event-log">
   <div class="event-log-header">
-    <span class="event-log-title">Events ({eventLog.entries.length})</span>
+    <span class="event-log-title">Events ({eventLog.entries.length}) — paused</span>
     <button
       type="button"
       aria-label="clear-event-log"
