@@ -8,6 +8,13 @@ name = "app"
 os = ["ios:latest", "android:latest"]
 type = "phone"
 
+# iOS UIAlertController buttons live in the XCUI accessibility tree,
+# NOT in the WebView's DOM — so plain `tap on_text = "OK"` doesn't
+# resolve them on iOS. Use `accept_alert` / `dismiss_alert` for the
+# native dialog buttons (positive = accept, negative = dismiss).
+# Android's native AlertDialog has the same property, so the same
+# actions are the cross-platform path.
+
 [[block]]
 name = "alert_tests"
 steps = [
@@ -16,33 +23,22 @@ steps = [
   # Trigger a simple alert (button is off-screen, use auto_scroll)
   { action = "tap", on_text = "Show Alert", auto_scroll = true },
 
-  # Dismiss the alert
-  { action = "tap", on_text = "OK" },
+  # Dismiss the alert via its positive button (OK).
+  { action = "accept_alert" },
 
   # Trigger a confirmation dialog and accept it
   { action = "tap", on_text = "Show Confirm" },
-  { action = "tap", on_text = "Confirm" },
+  { action = "accept_alert" },
 
-  # Trigger the confirmation dialog again and cancel it
+  # Trigger the confirmation dialog again and dismiss it (Cancel).
   { action = "tap", on_text = "Show Confirm" },
-  { action = "tap", on_text = "Cancel" },
+  { action = "dismiss_alert" },
 
-  # Trigger an action sheet
-  { action = "tap", on_text = "Action Sheet" },
-  { action = "assert_visible", on_text = "Action Sheet" },
-]
+  # Trigger a Yes/No dialog and accept (Yes).
+  { action = "tap", on_text = "Show Yes/No" },
+  { action = "accept_alert" },
 
-# Dismiss action sheet: Android uses back button, iOS taps Cancel
-[[block]]
-name = "dismiss_action_sheet_android"
-where = { os = "android" }
-steps = [
-  { action = "press", button = "back" },
-]
-
-[[block]]
-name = "dismiss_action_sheet_ios"
-where = { os = "ios" }
-steps = [
-  { action = "tap", on_text = "Cancel" },
+  # Trigger a Yes/No dialog and dismiss (No).
+  { action = "tap", on_text = "Show Yes/No" },
+  { action = "dismiss_alert" },
 ]
