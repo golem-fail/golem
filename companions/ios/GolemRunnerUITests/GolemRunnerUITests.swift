@@ -94,8 +94,16 @@ final class GolemRunnerUITests: XCTestCase {
         // `open_link` immediately followed by an assert) should poke
         // a no-op XCUI query via `/poke-interruption-monitor` to give
         // XCTest a chance to invoke us.
+        // Only auto-tap labels that are unambiguously system-prompt
+        // confirmations. Generic affirmatives like "OK" or "Yes" also
+        // appear in in-app dialogs (UIAlertController) the test wants
+        // to interact with explicitly — auto-tapping those would
+        // dismiss them before the test's own `tap` step had a chance,
+        // which broke `alerts.test` after the monitor first landed.
+        // For permission prompts that *only* expose "OK" or "Yes",
+        // the test should use `accept_alert` explicitly.
         addUIInterruptionMonitor(withDescription: "golem-system-alert") { alert in
-            for label in ["Open", "Allow", "OK", "Yes", "Confirm", "Continue"] {
+            for label in ["Open", "Allow", "Allow Once", "Allow While Using App"] {
                 let btn = alert.buttons[label]
                 if btn.exists {
                     btn.tap()
