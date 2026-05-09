@@ -98,6 +98,8 @@ fn format_substeps_toon(substeps: &[crate::SubstepDetail]) -> String {
                 parts.push(format!("launch:{bundle} {duration_ms}ms")),
             SubstepDetail::AppStop { bundle } =>
                 parts.push(format!("stop:{bundle}")),
+            SubstepDetail::DriverWarning { message } =>
+                parts.push(format!("warn:\"{message}\"")),
             SubstepDetail::TextInput { text, .. } =>
                 parts.push(format!("t:\"{text}\"")),
             SubstepDetail::Swipe { from, to } =>

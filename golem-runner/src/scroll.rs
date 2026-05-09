@@ -684,8 +684,8 @@ mod tests {
         }
 
         async fn hide_keyboard(&self) -> anyhow::Result<()> { Ok(()) }
-        async fn launch_app(&self, bundle_id: &str) -> anyhow::Result<()> {
-            self.record_call("launch_app", vec![bundle_id.to_string()]); Ok(())
+        async fn launch_app(&self, bundle_id: &str) -> anyhow::Result<Option<String>> {
+            self.record_call("launch_app", vec![bundle_id.to_string()]); Ok(None)
         }
         async fn stop_app(&self, bundle_id: &str) -> anyhow::Result<()> {
             self.record_call("stop_app", vec![bundle_id.to_string()]); Ok(())

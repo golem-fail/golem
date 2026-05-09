@@ -51,13 +51,16 @@ pub(crate) async fn handle_launch(
     // stability via `await_first_frame`) so the OS-transition pause is
     // already absorbed there. `wait_for_settle` runs after for the
     // additional WebView-enrichment polling it does on top.
-    driver.launch_app(bundle_id).await?;
+    let warning = driver.launch_app(bundle_id).await?;
     let _ = wait_for_settle(driver).await;
     let launch_ms = start.elapsed().as_millis() as u64;
     ctx.substep(golem_events::SubstepEvent::AppLaunch {
         bundle: bundle_id.to_string(),
         duration_ms: launch_ms,
     });
+    if let Some(message) = warning {
+        ctx.substep(golem_events::SubstepEvent::DriverWarning { message });
+    }
     if let Some(collector) = ctx.perf_collector {
         ctx.set_launch_ms(launch_ms);
         collector.set_active(bundle_id);

@@ -455,6 +455,14 @@ pub enum SubstepEvent {
     AppStop {
         bundle: String,
     },
+    /// Driver-level warning surfaced inside a step. Currently emitted
+    /// when the iOS companion's launch settle-probe times out — the
+    /// app is foregrounded but the WebView's first paint may not be
+    /// ready, so the next interaction can race. Step still passes;
+    /// this is a breadcrumb for downstream-failure diagnosis.
+    DriverWarning {
+        message: String,
+    },
 
     // Media
     Screenshot {

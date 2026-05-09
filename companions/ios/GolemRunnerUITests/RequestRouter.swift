@@ -233,7 +233,7 @@ final class RequestRouter {
         return .json([
             "status": "ok",
             "platform": "ios",
-            "version": "0.5.11",
+            "version": "0.5.12",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
@@ -611,31 +611,38 @@ final class RequestRouter {
         }) else {
             return gatewayTimeout("launch (init)")
         }
+        // `staticTexts.firstMatch` is the cheapest probe that requires
+        // a real DOM render: empty/loading WebViews have no static text
+        // in their tree, but an `<h1>` or button label produces one as
+        // soon as it's painted. Earlier versions also probed
+        // `.runningForeground` and `windows.firstMatch` in series, each
+        // with its own 5s clock — three independent waits stacked to
+        // 15s worst-case. Both are subsumed by the staticTexts probe:
+        // an app that isn't foregrounded or has no window can't produce
+        // accessibility elements, so the static-text wait covers them
+        // implicitly without burning their budgets.
+        var settled = false
         guard runOnMainVoid(timeout: Self.kTimeoutLaunch, {
             // activate() brings to foreground without restarting.
             // If not running, it launches it fresh.
             application.activate()
-            // Block until XCUITest considers the app fully foregrounded
-            // AND the WKWebView has rendered enough DOM that we can
-            // observe at least one accessibility element produced by
-            // the page itself. Without this gate the HTTP response
-            // returns before the WebView's gesture recognizer is
-            // wired — the next /tap then synthesises HID events the
-            // WebView silently drops, the long-standing "first tap
-            // after launch is dead" flake.
-            //
-            // `staticTexts.firstMatch` is the cheapest probe that
-            // requires a real DOM render: empty/loading WebViews have
-            // no static text in their tree, but an `<h1>` or button
-            // label produces one as soon as it's painted.
-            _ = application.wait(for: .runningForeground, timeout: 5.0)
-            _ = application.windows.firstMatch.waitForExistence(timeout: 5.0)
-            _ = application.staticTexts.firstMatch.waitForExistence(timeout: 5.0)
+            settled = application.staticTexts.firstMatch.waitForExistence(timeout: 5.0)
         }) else {
             return gatewayTimeout("launch")
         }
         lastLaunchedBundle = bundleId
-        return .json(["status": "ok"])
+        // Probe C is a hint, not a guarantee — a canvas-only app or one
+        // whose first paint has no static-text accessibility node will
+        // time out here legitimately. Return ok so flows can proceed,
+        // but surface a warning so when the next step fails the test
+        // author has the breadcrumb (`launch returned ok but DOM did
+        // not settle`) instead of a mysterious "tap after launch did
+        // nothing" downstream.
+        var response: [String: Any] = ["status": "ok"]
+        if !settled {
+            response["warning"] = "DOM not settled within 5s; the next step may race the WebView's first paint"
+        }
+        return .json(response)
     }
 
     private func handleStop(body: Data?, query: [String: String]) -> HTTPResponse {

@@ -89,8 +89,13 @@ pub trait PlatformDriver: Send + Sync {
     /// Hide the on-screen keyboard
     async fn hide_keyboard(&self) -> anyhow::Result<()>;
 
-    /// Launch the app with the given bundle/package ID
-    async fn launch_app(&self, bundle_id: &str) -> anyhow::Result<()>;
+    /// Launch the app with the given bundle/package ID. Returns an
+    /// optional warning string when the launch succeeded but the
+    /// platform layer wants the next step to know about a soft race
+    /// (e.g. iOS settle-probe timed out, app is foregrounded but DOM
+    /// may not be painted yet). Callers should surface the warning
+    /// as a `DriverWarning` substep — the launch itself is still ok.
+    async fn launch_app(&self, bundle_id: &str) -> anyhow::Result<Option<String>>;
 
     /// Stop/force-kill the app
     async fn stop_app(&self, bundle_id: &str) -> anyhow::Result<()>;
@@ -382,9 +387,9 @@ impl PlatformDriver for MockPlatformDriver {
         Ok(())
     }
 
-    async fn launch_app(&self, bundle_id: &str) -> anyhow::Result<()> {
+    async fn launch_app(&self, bundle_id: &str) -> anyhow::Result<Option<String>> {
         self.record_call("launch_app", vec![bundle_id.to_string()]);
-        Ok(())
+        Ok(None)
     }
 
     async fn stop_app(&self, bundle_id: &str) -> anyhow::Result<()> {
@@ -626,7 +631,7 @@ mod tests {
         async fn gesture(&self, _f: Vec<GestureFinger>) -> anyhow::Result<()> { unimplemented!() }
         async fn screenshot(&self) -> anyhow::Result<ScreenshotResult> { unimplemented!() }
         async fn hide_keyboard(&self) -> anyhow::Result<()> { unimplemented!() }
-        async fn launch_app(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn launch_app(&self, _b: &str) -> anyhow::Result<Option<String>> { unimplemented!() }
         async fn stop_app(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
         async fn clear_app_data(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
         async fn press_button(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }

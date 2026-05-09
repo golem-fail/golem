@@ -167,8 +167,8 @@ mod tests {
             Ok(())
         }
 
-        async fn launch_app(&self, _bundle_id: &str) -> anyhow::Result<()> {
-            Ok(())
+        async fn launch_app(&self, _bundle_id: &str) -> anyhow::Result<Option<String>> {
+            Ok(None)
         }
 
         async fn stop_app(&self, _bundle_id: &str) -> anyhow::Result<()> {

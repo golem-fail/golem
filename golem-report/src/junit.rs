@@ -79,6 +79,8 @@ fn format_substeps_text(substeps: &[SubstepDetail]) -> String {
                 lines.push(format!("app_launch bundle={} {}ms", bundle, duration_ms)),
             SubstepDetail::AppStop { bundle } =>
                 lines.push(format!("app_stop bundle={}", bundle)),
+            SubstepDetail::DriverWarning { message } =>
+                lines.push(format!("[warning] {}", message)),
             SubstepDetail::RetryAttempt { attempt, max, delay_ms, error } =>
                 lines.push(format!("retry {}/{} delay={}ms: {}", attempt, max, delay_ms, error)),
             SubstepDetail::HttpRequest { method, url, status, duration_ms } => {

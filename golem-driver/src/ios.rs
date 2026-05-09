@@ -399,9 +399,23 @@ impl PlatformDriver for IosDriver {
         Ok(())
     }
 
-    async fn launch_app(&self, bundle_id: &str) -> Result<()> {
+    async fn launch_app(&self, bundle_id: &str) -> Result<Option<String>> {
         let body = serde_json::json!({ "bundle_id": bundle_id }).to_string();
-        self.client.post_json("/launch", &body).await?;
+        let response = self.client.post_json("/launch", &body).await?;
+        // Companion's /launch returns a `warning` field when the
+        // staticTexts settle probe times out — the launch still
+        // succeeded but the WebView's first paint may not be ready.
+        // Surface as a DriverWarning substep upstream so when the
+        // next step fails, the root cause isn't a mystery. Returns
+        // ok so canvas-only apps (no static text on first paint)
+        // can still proceed.
+        let warning = serde_json::from_str::<serde_json::Value>(&response)
+            .ok()
+            .and_then(|json| {
+                json.get("warning")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            });
         // Reset WebKit Inspector — the target app may have changed, or
         // the inspector session may be stale after an app switch.
         {
@@ -413,7 +427,7 @@ impl PlatformDriver for IosDriver {
         // interactive frame so the next action doesn't race accessibility
         // tree population.
         self.await_first_frame().await?;
-        Ok(())
+        Ok(warning)
     }
 
     async fn stop_app(&self, bundle_id: &str) -> Result<()> {

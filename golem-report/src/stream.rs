@@ -721,6 +721,13 @@ fn print_substep(ts: &str, dp: &str, sub: &SubstepEvent, use_color: bool) {
         SubstepEvent::AppStop { bundle } => {
             eprintln!("{ts}  {dp}    {d}{b} app_stop bundle={bundle}{r}");
         }
+        SubstepEvent::DriverWarning { message } => {
+            // Render in yellow + bold to stand out next to neutral
+            // substep lines — the operator should notice before the
+            // next step fails.
+            let warn_tag = tag("[warning]", YELLOW, use_color);
+            eprintln!("{ts}  {dp}    {warn_tag} {message}");
+        }
         SubstepEvent::RetryAttempt { attempt, max, delay_ms, error } => {
             eprintln!("{ts}  {dp}    {d}{b} retry {attempt}/{max} delay={delay_ms}ms: {error}{r}");
         }

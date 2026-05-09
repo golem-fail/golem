@@ -447,7 +447,7 @@ impl PlatformDriver for AndroidDriver {
         Ok(())
     }
 
-    async fn launch_app(&self, bundle_id: &str) -> Result<()> {
+    async fn launch_app(&self, bundle_id: &str) -> Result<Option<String>> {
         // Use adb shell directly — uiAutomation.executeShellCommand doesn't
         // reliably launch apps on all Android versions.
         self.adb(&[
@@ -461,7 +461,9 @@ impl PlatformDriver for AndroidDriver {
         // first interactive frame stabilises so the next action doesn't
         // race accessibility tree population.
         self.await_first_frame().await?;
-        Ok(())
+        // Android doesn't have an iOS-style soft settle warning today —
+        // `await_first_frame` either stabilises or returns an error.
+        Ok(None)
     }
 
     async fn stop_app(&self, bundle_id: &str) -> Result<()> {
