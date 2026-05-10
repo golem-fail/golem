@@ -244,14 +244,6 @@ Also roadmap-adjacent: consider whether `golem_events::StepOutcome::Skipped` sho
 - Add an iOS-side grace probe after `bootstatus -b` (e.g. `xcrun simctl getenv <udid> HOME` until fast) to potentially eliminate the Mach -308 case at source rather than retrying after.
 - Expand the classifier as new transient patterns surface in CI logs. Conservative — adding patterns that aren't actually recoverable just masks real errors behind a 3s delay.
 
-## iOS 26 + WebView: Auto-Scroll Past Inner Scrollables Fails
-
-iOS 26 simulator + Tauri WebView: `auto_scroll = true` repeatedly fails to scroll past an inner scrollable into the lower part of the page. `dialog_overlay`, `read`, `scroll_search`, `wait` (`Show Delayed`), `webview` all hit this. Android passes the same flows cleanly.
-
-The scroll loop logs `inner scrollable consumed gesture` and switches strategies, but never reaches the target. Same root family as the existing "iOS WebView slow element resolution" entry — both are WebKit Inspector + scroll/settle interactions on iOS 26.
-
-**Files:** `golem-runner/src/scroll.rs` strategy switching; `golem-driver/src/webkit.rs` for inspector tree freshness during scroll.
-
 ## iOS concurrent flows: cross-flow focus / state corruption
 
 When iPhone + iPad run flows in parallel, occasional state leaks between sims:
