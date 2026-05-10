@@ -26,17 +26,24 @@ steps = [
   { action = "assert_visible", on_text = "Item 0" },
 ]
 
+# Carousel direction semantics: cards 0 → 9 are laid out left-to-right,
+# so to reveal later cards the content needs to scroll LEFT, which our
+# engine spells as `direction = "right"` (the user's intent is "see
+# content to the right"). Using "left" here triggers the stall-reverse
+# heuristic — wastes 2-3 swipes per scroll before the engine flips —
+# and reliably timed out at Card 9 against the scroll-snap boundary.
+
 [[block]]
 name = "horizontal_carousel_scroll"
 steps = [
   # Smart within auto-scrolls to the carousel from wherever the page is
-  { action = "scroll", to = { text = "Card 5" }, within = { below = "Carousel" }, direction = "left" },
+  { action = "scroll", to = { text = "Card 5" }, within = { below = "Carousel" }, direction = "right" },
   { action = "assert_visible", on_text = "Card 5" },
 
-  { action = "scroll", to = { text = "Card 9" }, within = { below = "Carousel" }, direction = "left" },
+  { action = "scroll", to = { text = "Card 9" }, within = { below = "Carousel" }, direction = "right" },
   { action = "assert_visible", on_text = "Card 9" },
 
   # Scroll back to the start
-  { action = "scroll", to = { text = "Card 0" }, within = { below = "Carousel" }, direction = "right" },
+  { action = "scroll", to = { text = "Card 0" }, within = { below = "Carousel" }, direction = "left" },
   { action = "assert_visible", on_text = "Card 0" },
 ]

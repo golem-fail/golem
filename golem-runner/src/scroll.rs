@@ -442,6 +442,18 @@ pub async fn scroll_to_element(
                     tree_stats: iter_stats,
                 });
             }
+            // When a `within` container is set, scrolling INSIDE the
+            // inner scrollable is the explicit intent — full_fp
+            // changing means the carousel / list advanced, which is
+            // real progress. Reset stall_count and try the same
+            // strategy again on the next iteration. Without this
+            // reset, the engine falls into stall_count++ and within
+            // a few iterations decides the container is stuck,
+            // reverses direction, and cycles indefinitely.
+            if container.is_some() {
+                stall_count = 0;
+                continue;
+            }
         }
 
         stall_count += 1;
