@@ -56,6 +56,12 @@ onMount(() => {
 
   window.__golemSetLocation = (lat, lon) => { location = `${lat}, ${lon}`; };
   window.__golemSetNotification = (payload) => { notification = String(payload); };
+  // tauri-plugin-deep-link 2.4.x doesn't reliably propagate warm-start
+  // VIEW intents to JS on Android — the activity receives the intent
+  // but the plugin's `onOpenUrl` doesn't fire. Golem's android driver
+  // pokes this hook after `am start -a VIEW` so the rendered row
+  // updates regardless of plugin delivery.
+  window.__golemSetDeepLink = (url) => { deeplink = String(url); };
   window.__golemAddMedia = () => { mediaCount += 1; };
   window.__golemResetMediaCount = () => { mediaCount = 0; };
 

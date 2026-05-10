@@ -53,6 +53,13 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" />
                 <data android:scheme="http" />
+                <!-- Custom scheme for the deep_link e2e flows.
+                     `tauri.conf.json` declares it under `plugins.deep-link.mobile`,
+                     but the `tauri android build` step doesn't always re-expand
+                     this intent-filter — declaring the scheme here directly
+                     means `am start -a VIEW -d golem-test://...` reaches the
+                     app regardless of the regen state. -->
+                <data android:scheme="golem-test" />
                 <data android:host="*" />
                 
                 

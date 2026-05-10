@@ -558,6 +558,26 @@ impl PlatformDriver for AndroidDriver {
             url,
         ])
         .await?;
+        // Wait for the WebView to settle before poking JS. After a
+        // cold-start path (app was stopped, this intent re-launches
+        // it), the CDP connection isn't `Ready` yet and the poke
+        // would silently no-op. `await_first_frame` blocks until the
+        // accessibility tree stabilises above the min-node threshold
+        // OR the deadline fires (10s), so a warm-start path returns
+        // fast and a cold-start path actually gets the hook called.
+        let _ = self.await_first_frame().await;
+        // Mirror the iOS / set_location pattern: poke
+        // `window.__golemSetDeepLink` so the test app's rendered
+        // "Deep Link:" row updates without depending on
+        // tauri-plugin-deep-link's Android warm-start delivery,
+        // which doesn't fire `onOpenUrl` reliably in 2.4.x. Native
+        // screens / apps without the hook quietly no-op.
+        let url_escaped = url.replace('\\', "\\\\").replace('\'', "\\'");
+        let _ = self
+            .eval_in_webview(&format!(
+                "window.__golemSetDeepLink && window.__golemSetDeepLink('{url_escaped}')"
+            ))
+            .await;
         Ok(())
     }
 
