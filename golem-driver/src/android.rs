@@ -476,18 +476,33 @@ impl PlatformDriver for AndroidDriver {
         // killed the activity and the launch races a still-tearing-down
         // task). The synchronous wait surfaces the failure here instead
         // of leaking it into the next step's element resolver.
-        let out = self.adb(&[
-            "shell", "am", "start", "-W",
-            "-a", "android.intent.action.MAIN",
-            "-c", "android.intent.category.LAUNCHER",
-            "-n", &format!("{bundle_id}/.MainActivity"),
-        ]).await?;
+        let am_start = || async {
+            self.adb(&[
+                "shell", "am", "start", "-W",
+                "-a", "android.intent.action.MAIN",
+                "-c", "android.intent.category.LAUNCHER",
+                "-n", &format!("{bundle_id}/.MainActivity"),
+            ]).await
+        };
+        let mut out = am_start().await?;
         // `am start -W` always prints a `Status:` line; success is
         // `Status: ok`. The "Activity not started, its current task
         // has been brought to the front" warning (the safe case
         // where the task was already running) is followed by
         // `Status: ok` too — only treat the absence of `Status: ok`
         // as a real failure.
+        //
+        // `Status: timeout` shows up sporadically on loaded emulators
+        // when dexopt / GC delays the activity's first draw past the
+        // 10s `am -W` wait. Retry once: the second attempt almost
+        // always succeeds because the JIT / activity record is now
+        // warm. We deliberately do not retry other failure shapes
+        // (e.g. "Unable to resolve activity") since those are
+        // deterministic.
+        if out.contains("Status: timeout") {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            out = am_start().await?;
+        }
         if !out.contains("Status: ok") {
             bail!("am start failed for {bundle_id}: {}", out.trim());
         }

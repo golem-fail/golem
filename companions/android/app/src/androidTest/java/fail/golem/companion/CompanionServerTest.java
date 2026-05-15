@@ -1,5 +1,6 @@
 package fail.golem.companion;
 
+import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.UiAutomation;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -20,6 +21,17 @@ public class CompanionServerTest {
     @Test
     public void startServer() throws Exception {
         UiAutomation uiAutomation = InstrumentationRegistry.getInstrumentation().getUiAutomation();
+        // Android 15 (API 35) requires opt-in for cross-process window
+        // access. Without FLAG_RETRIEVE_INTERACTIVE_WINDOWS the
+        // companion's UiAutomation can see its own (test) process
+        // windows but `getRootInActiveWindow()` returns null for the
+        // app-under-test in another process — every hierarchy fetch
+        // returns "no active window". This was implicit pre-API-35.
+        AccessibilityServiceInfo info = uiAutomation.getServiceInfo();
+        if (info != null) {
+            info.flags |= AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
+            uiAutomation.setServiceInfo(info);
+        }
         android.os.Bundle args = InstrumentationRegistry.getArguments();
 
         String deviceSerial = args.getString("device_serial", "unknown");
@@ -65,7 +77,7 @@ public class CompanionServerTest {
         body.put("platform", "android");
         body.put("device_id", deviceSerial);
         body.put("device_name", android.os.Build.MODEL);
-        body.put("version", "0.6.1");
+        body.put("version", "0.6.3");
 
         URL url = new URL("http://localhost:" + regPort + "/register");
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();

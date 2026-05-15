@@ -139,7 +139,7 @@ public class CompanionServer {
                     sendJson(out, 200, new JSONObject()
                         .put("status", "ok")
                         .put("platform", "android")
-                        .put("version", "0.6.1")
+                        .put("version", "0.6.3")
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
@@ -539,7 +539,15 @@ public class CompanionServer {
     }
 
     private void handleHideKeyboard(OutputStream out) throws Exception {
-        executeShell("input keyevent KEYCODE_BACK");
+        // KEYCODE_BACK is the universal "dismiss IME" gesture on Android,
+        // but if the IME is already hidden the same key event propagates
+        // to the activity and finishes it — exiting the app under test.
+        // Probe `dumpsys input_method` for `mInputShown=true` and only
+        // press BACK when there's actually a keyboard to dismiss.
+        String dump = executeShellAndRead("dumpsys input_method");
+        if (dump != null && dump.contains("mInputShown=true")) {
+            executeShell("input keyevent KEYCODE_BACK");
+        }
         sendJson(out, 200, new JSONObject().put("status", "ok"));
     }
 
