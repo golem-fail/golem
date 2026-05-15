@@ -355,8 +355,16 @@ pub async fn scroll_to_element(
             let vis_right = (cb.x + cb.width).min(viewport.width);
             let vis_h = vis_bot - vis_top;
             let vis_w = vis_right - vis_left;
+            // Inner-scrollable swipe distance — kept moderate on the
+            // horizontal axis because `scroll-snap-type: x mandatory`
+            // carousels with finite snap stops will glide past the
+            // target on a long, momentum-rich swipe (each 80%-of-
+            // container swipe was carrying Card 0 directly to Card 9
+            // on Pixel 8 Pro). 50% advances ~1 snap point per swipe
+            // on common card widths (~200 CSS px in a ~400 CSS px
+            // viewport) so the engine can re-check between gestures.
             let dy = vis_h * 80 / 100;
-            let dx = vis_w * 80 / 100;
+            let dx = vis_w * 50 / 100;
             let clamp_x = |v: i32| v.max(vis_left + 5).min(vis_right - 5);
             let clamp_y = |v: i32| v.max(vis_top + 5).min(vis_bot - 5);
             let (fx, fy, tx, ty) = match direction {

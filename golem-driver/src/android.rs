@@ -431,7 +431,18 @@ impl PlatformDriver for AndroidDriver {
     }
 
     async fn swipe_coords(&self, from_x: i32, from_y: i32, to_x: i32, to_y: i32) -> Result<()> {
-        let body = build_swipe_body(from_x, from_y, to_x, to_y, 300)?;
+        // Horizontal swipes get a longer duration so the gesture
+        // velocity stays below Chromium's fling threshold (~400 CSS
+        // px/sec). Above that, `scroll-snap-type: x mandatory`
+        // carousels glide past several snap points per swipe, making
+        // it impossible to land on a specific intermediate card.
+        // Vertical swipes keep the snappier 300ms since the page and
+        // non-snap inner lists scroll deterministically by gesture
+        // distance, and a slower swipe just adds latency.
+        let dx_abs = (to_x - from_x).abs();
+        let dy_abs = (to_y - from_y).abs();
+        let duration = if dx_abs > dy_abs { 700 } else { 300 };
+        let body = build_swipe_body(from_x, from_y, to_x, to_y, duration)?;
         self.client.post_json("/swipe", &body).await?;
         Ok(())
     }
