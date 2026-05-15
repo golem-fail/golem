@@ -25,6 +25,9 @@ steps = [
   # Swipe right on the carousel to go back
   { action = "swipe", direction = "right" },
 
-  # Verify we can still see a known element after swiping
-  { action = "assert_visible", on_text = "Submit" },
+  # Verify we can still see a known element after swiping.
+  # Net scroll position after the sequence varies with viewport
+  # height — taller devices land further from Submit — so let
+  # the assert auto-scroll it back into view.
+  { action = "assert_visible", on_text = "Submit", auto_scroll = true },
 ]
