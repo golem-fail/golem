@@ -56,9 +56,18 @@ pub fn effective_timeout(step: &Step, base_timeout_ms: u64) -> u64 {
 
 /// Per-action timeout multiplier applied to the base timeout.
 fn action_multiplier(step: &Step) -> u64 {
+    // `within = { ... }` on a scrolling step (either action="scroll"
+    // or any step with auto_scroll=true) means the engine runs in
+    // two phases: a page-level scroll to bring the container into
+    // view, then an inner-scrollable scroll to find the target.
+    // Each phase needs its own slice of the budget — auto-locate
+    // alone can eat 10-15s on slower devices, leaving the inner
+    // phase starved. Add 4x (=20s on the 5s base) when both apply.
+    let within_bump = if step.within.is_some() { 4 } else { 0 };
+
     // auto_scroll forces 6x minimum regardless of action.
     if step.auto_scroll == Some(true) {
-        return 6;
+        return 6 + within_bump;
     }
 
     match step.action.as_str() {
@@ -85,8 +94,10 @@ fn action_multiplier(step: &Step) -> u64 {
         // 4x — external scripts (unknown duration)
         "bash" | "run" => 4,
 
-        // 6x — scroll, network I/O
-        "scroll" | "http_get" | "http_post" | "http_put" | "http_patch"
+        // 6x — scroll (the within_bump above bumps to 10x when a
+        // container is set), network I/O.
+        "scroll" => 6 + within_bump,
+        "http_get" | "http_post" | "http_put" | "http_patch"
         | "http_delete" | "open_link" => 6,
 
         // 48x — email polling (240s at 5s base)
@@ -593,6 +604,30 @@ mod tests {
         step.auto_scroll = Some(true);
         // tap is normally 1x (5s), but auto_scroll forces 6x (30s)
         assert_eq!(effective_timeout(&step, 5_000), 30_000);
+    }
+
+    // -----------------------------------------------------------------
+    // 13a. `within` bumps scrolling timeouts by 4x
+    // -----------------------------------------------------------------
+    #[test]
+    fn within_adds_to_scroll_timeout() {
+        let within = golem_parser::SelectorGroup { text: Some("Carousel".into()), ..Default::default() };
+
+        // scroll without within stays at 6x = 30s.
+        let scroll = Step { action: "scroll".into(), ..Default::default() };
+        assert_eq!(effective_timeout(&scroll, 5_000), 30_000);
+
+        // scroll with within bumps to 10x = 50s.
+        let scroll_within = Step { action: "scroll".into(), within: Some(within.clone()), ..Default::default() };
+        assert_eq!(effective_timeout(&scroll_within, 5_000), 50_000);
+
+        // auto_scroll alone stays at 6x = 30s.
+        let auto = Step { action: "tap".into(), auto_scroll: Some(true), ..Default::default() };
+        assert_eq!(effective_timeout(&auto, 5_000), 30_000);
+
+        // auto_scroll + within bumps to 10x = 50s.
+        let auto_within = Step { action: "tap".into(), auto_scroll: Some(true), within: Some(within), ..Default::default() };
+        assert_eq!(effective_timeout(&auto_within, 5_000), 50_000);
     }
 
     // -----------------------------------------------------------------

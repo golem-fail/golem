@@ -75,6 +75,23 @@ fn resolve_anchor(root: &Element, anchor: &AnchorSelector) -> Option<FindResult>
     }
 }
 
+/// Resolve an anchor and return `Some` only when the anchor is
+/// currently visible. The DOM walker sets `visible_bounds = {0,0,0,0}`
+/// for elements outside the viewport, so a zero-area visible_bounds
+/// is the signal that the anchor exists in the DOM but the human
+/// can't see it. Native a11y trees don't typically emit off-screen
+/// elements at all, so when `visible_bounds` is `None` we trust the
+/// anchor's presence — its `bounds` reflect a currently rendered
+/// element.
+fn resolve_visible_anchor(root: &Element, anchor: &AnchorSelector) -> Option<FindResult> {
+    let found = resolve_anchor(root, anchor)?;
+    let on_screen = match found.element.visible_bounds {
+        Some(b) => b.width > 0 && b.height > 0,
+        None => found.element.bounds.width > 0 && found.element.bounds.height > 0,
+    };
+    if on_screen { Some(found) } else { None }
+}
+
 fn find_by_text_recursive<'a>(element: &'a Element, matcher: &GlobMatcher) -> Option<&'a Element> {
     if let Some(ref text) = element.text {
         if matcher.is_match(text) {
@@ -90,45 +107,42 @@ fn find_by_text_recursive<'a>(element: &'a Element, matcher: &GlobMatcher) -> Op
 }
 
 /// Apply all relational filters to the results.
+///
+/// A positional anchor (`below`, `above`, `right_of`, `left_of`) is
+/// only meaningful when the human can see the anchor element — "the
+/// thing just below the Carousel text" requires Carousel itself to be
+/// on screen. If the anchor exists in the tree but is currently
+/// off-screen (zero-area visible_bounds from IntersectionObserver),
+/// we treat the relational match as unresolved and return an empty
+/// list. Callers (typically `within` resolution) interpret empty as
+/// "scroll the page to bring the anchor into view first".
 fn apply_relational_filters(
     root: &Element,
     selector: &Selector,
     mut results: Vec<FindResult>,
 ) -> Vec<FindResult> {
     if let Some(ref anchor) = selector.below {
-        if let Some(found) = resolve_anchor(root, anchor) {
-            let anchor_bottom = found.element.effective_bounds().bottom();
-            results.retain(|r| r.element.effective_bounds().y > anchor_bottom);
-        } else {
-            return Vec::new();
-        }
+        let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
+        let anchor_bottom = found.element.effective_bounds().bottom();
+        results.retain(|r| r.element.effective_bounds().y > anchor_bottom);
     }
 
     if let Some(ref anchor) = selector.above {
-        if let Some(found) = resolve_anchor(root, anchor) {
-            let anchor_y = found.element.effective_bounds().y;
-            results.retain(|r| r.element.effective_bounds().bottom() < anchor_y);
-        } else {
-            return Vec::new();
-        }
+        let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
+        let anchor_y = found.element.effective_bounds().y;
+        results.retain(|r| r.element.effective_bounds().bottom() < anchor_y);
     }
 
     if let Some(ref anchor) = selector.right_of {
-        if let Some(found) = resolve_anchor(root, anchor) {
-            let anchor_right = found.element.effective_bounds().right();
-            results.retain(|r| r.element.effective_bounds().x > anchor_right);
-        } else {
-            return Vec::new();
-        }
+        let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
+        let anchor_right = found.element.effective_bounds().right();
+        results.retain(|r| r.element.effective_bounds().x > anchor_right);
     }
 
     if let Some(ref anchor) = selector.left_of {
-        if let Some(found) = resolve_anchor(root, anchor) {
-            let anchor_x = found.element.effective_bounds().x;
-            results.retain(|r| r.element.effective_bounds().right() < anchor_x);
-        } else {
-            return Vec::new();
-        }
+        let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
+        let anchor_x = found.element.effective_bounds().x;
+        results.retain(|r| r.element.effective_bounds().right() < anchor_x);
     }
 
     results

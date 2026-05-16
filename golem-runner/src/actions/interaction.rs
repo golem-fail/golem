@@ -702,8 +702,7 @@ mod tests {
 
         let mut step = make_step("long_press");
         step.on_text = Some("Item to select".to_string());
-        step.params
-            .insert("duration".to_string(), toml::Value::Integer(2000));
+        step.duration = Some(2000);
 
         let ctx = test_ctx(Path::new("."));
         handle_long_press(&step, &driver, &ctx)
