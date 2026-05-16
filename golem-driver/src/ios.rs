@@ -181,6 +181,10 @@ impl IosDriver {
 enum WebKitAction {
     Skip,
     Enrich(WebKitState),
+    /// Background setup is mid-flight — block briefly to give it a chance
+    /// to finish so the first few hierarchy fetches after a fresh launch
+    /// actually see the WebView DOM instead of skipping past it.
+    AwaitSetup(tokio::sync::oneshot::Receiver<Option<WebKitState>>),
 }
 
 /// Set up WebKit Inspector: discover socket, connect, handshake.
@@ -254,22 +258,16 @@ impl PlatformDriver for IosDriver {
                         *wk = WebKitLifecycle::SetupInProgress(rx);
                         WebKitAction::Skip
                     }
-                    WebKitLifecycle::SetupInProgress(rx) => {
-                        match rx.try_recv() {
-                            Ok(Some(state)) => {
-                                WebKitAction::Enrich(state)
-                            }
-                            Ok(None) => {
-                                *wk = WebKitLifecycle::Failed;
-                                WebKitAction::Skip
-                            }
-                            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {
-                                WebKitAction::Skip // Still setting up
-                            }
-                            Err(_) => {
-                                *wk = WebKitLifecycle::Failed;
-                                WebKitAction::Skip
-                            }
+                    WebKitLifecycle::SetupInProgress(_) => {
+                        // Take ownership of the receiver so we can await it
+                        // outside the mutex. We restore it (or transition)
+                        // after the bounded wait below.
+                        let placeholder = WebKitLifecycle::Failed;
+                        let old = std::mem::replace(&mut *wk, placeholder);
+                        if let WebKitLifecycle::SetupInProgress(rx) = old {
+                            WebKitAction::AwaitSetup(rx)
+                        } else {
+                            WebKitAction::Skip
                         }
                     }
                     WebKitLifecycle::Ready(_) => {
@@ -294,6 +292,32 @@ impl PlatformDriver for IosDriver {
                     }
                 }
             }; // mutex dropped here
+
+            // If setup is mid-flight, give it a bounded window to land so
+            // the first hierarchy fetch after launch can actually enrich.
+            // Without this, every fetch during setup returned Skip and the
+            // caller's retry budget (typically 10s / ~4 fetches) often
+            // expired before the inspector handshake completed on cold boot.
+            let webkit_action = if let WebKitAction::AwaitSetup(mut rx) = webkit_action {
+                match tokio::time::timeout(std::time::Duration::from_secs(3), &mut rx).await {
+                    Ok(Ok(Some(state))) => WebKitAction::Enrich(state),
+                    Ok(Ok(None)) | Ok(Err(_)) => {
+                        let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
+                        *wk = WebKitLifecycle::Failed;
+                        WebKitAction::Skip
+                    }
+                    Err(_) => {
+                        // Timed out — restore the in-flight receiver so a
+                        // later fetch can continue waiting on the same
+                        // background task instead of starting a new one.
+                        let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
+                        *wk = WebKitLifecycle::SetupInProgress(rx);
+                        WebKitAction::Skip
+                    }
+                }
+            } else {
+                webkit_action
+            };
 
             // Now do async WebKit work outside the lock
             if let WebKitAction::Enrich(state) = webkit_action {
