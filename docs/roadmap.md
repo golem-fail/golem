@@ -62,26 +62,6 @@ loop or open a follow-up entry per remaining failure.
 
 **Files:** `e2e/links/deep_link_*.test.toml`.
 
-## iOS `multi_app_switching` — 0/5 in Phase 1, never investigated
-
-Hard failure in the pre-compact robustness sweep. Not triaged.
-Most likely culprits: app-switch focus loss on iOS 26 (XCUITest
-target-app handle goes stale when SpringBoard takes focus), or
-companion `/launch` racing the system app-switch animation.
-
-**Files:** `e2e/cross/multi_app_switching.test.toml`,
-`golem-driver/src/ios.rs::launch_app`,
-`companions/ios/GolemRunnerUITests/RequestRouter.swift`.
-
-## iOS `webview` — borderline flake (was 7/8), never investigated
-
-Phase 1: 7/8 — one stall, didn't reach 5/5. Re-run 10× on iOS 26
-sim and bisect the failing step. Could be the same XCUI idle-wait
-that bit `tap_roundtrip`; could be WebKit Inspector reconnection
-under churn.
-
-**Files:** `e2e/cross/webview.test.toml`.
-
 ## Phase 2 and Phase 3 robustness sweep coverage
 
 Phase 1 covered single-test, single-device runs only (78 entries,

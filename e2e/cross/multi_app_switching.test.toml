@@ -33,7 +33,7 @@ steps = [
   { action = "hide_keyboard" },
 
   # Read the counter value into a variable for later verification
-  { action = "read", on_below = "Counter", on_index = 0, save_to = "primary_counter" },
+  { action = "read", on_below = "Counter", on_index = 0, save_to = "primary_counter", auto_scroll = true },
   { action = "read", on_text = "cross-test@example.com", save_to = "primary_email" },
 ]
 

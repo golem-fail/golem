@@ -64,16 +64,19 @@ async fn find_inner_toggle(
     let mut candidates = Vec::new();
     collect_toggles(&root, &mut candidates);
 
+    // iOS occasionally reports a child element's frame a few points larger
+    // than its parent (SwiftUI hit-target rounding). Without a tolerance,
+    // strict containment rejects the very pair this workaround targets.
+    const TOL: i32 = 4;
     let ob = &outer.bounds;
     candidates.into_iter().find(|b| {
-        let is_toggle_type = true; // already filtered by collect_toggles
-        let fits_inside = b.x >= ob.x
-            && b.y >= ob.y
-            && b.x + b.width <= ob.x + ob.width
-            && b.y + b.height <= ob.y + ob.height;
+        let fits_inside = b.x + TOL >= ob.x
+            && b.y + TOL >= ob.y
+            && b.x + b.width <= ob.x + ob.width + TOL
+            && b.y + b.height <= ob.y + ob.height + TOL;
         let is_smaller = b.width < ob.width || b.height < ob.height;
         let on_right = b.center_x() > ob.center_x();
-        is_toggle_type && fits_inside && is_smaller && on_right
+        fits_inside && is_smaller && on_right
     })
 }
 

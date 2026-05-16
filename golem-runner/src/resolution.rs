@@ -529,7 +529,13 @@ pub async fn resolve_element(
 
             // Use position hints from the full tree to determine direction.
             // If the element isn't in the tree at all (e.g. Android WebView
-            // accessibility gap), default to scrolling down.
+            // accessibility gap), fall back to the selector's positional
+            // anchor: when `below`/`above`/etc. is set and the anchor is
+            // scrolled off-screen, the visibility guard rightly suppresses
+            // it from `find_elements`, so we look it up unguarded here just
+            // to pick a sane scroll direction. Without this, every such
+            // case defaults to Down and we scroll away from an anchor
+            // that's actually above the viewport.
             let full_results = find_elements(&root, &selector);
             let direction = if let Some(found) = full_results.first() {
                 let elem_y = found.element.bounds.center_y();
@@ -540,6 +546,24 @@ pub async fn resolve_element(
                     golem_driver::Direction::Down
                 } else {
                     golem_driver::Direction::Up
+                }
+            } else if let Some(anchor) = selector.below.as_ref()
+                .or(selector.above.as_ref())
+                .or(selector.right_of.as_ref())
+                .or(selector.left_of.as_ref())
+            {
+                match golem_element::selector::resolve_anchor(&root, anchor) {
+                    Some(found) => {
+                        let y = found.element.bounds.center_y();
+                        if y < 0 {
+                            golem_driver::Direction::Up
+                        } else if y > viewport.height {
+                            golem_driver::Direction::Down
+                        } else {
+                            golem_driver::Direction::Down
+                        }
+                    }
+                    None => golem_driver::Direction::Down,
                 }
             } else {
                 golem_driver::Direction::Down

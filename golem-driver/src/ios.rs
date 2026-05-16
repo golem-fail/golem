@@ -426,6 +426,19 @@ impl PlatformDriver for IosDriver {
     }
 
     async fn hide_keyboard(&self) -> Result<()> {
+        // Prefer blurring the focused DOM element via the WebKit Inspector:
+        // it directly tells the WebView to relinquish focus, which iOS
+        // honours by dismissing the soft keyboard. The companion's
+        // coordinate-tap fallback is best-effort — a tap inside a Tauri
+        // WebView lands on whatever HTML is at that point, which may be
+        // the status bar inset (no effect) or another focusable element
+        // (refocuses instead of blurring).
+        if let Some(_) = self
+            .eval_in_webview("(()=>{const a=document.activeElement;if(a&&a.blur)a.blur();return ''})()")
+            .await
+        {
+            return Ok(());
+        }
         self.client.post_json("/hide-keyboard", "{}").await?;
         Ok(())
     }
