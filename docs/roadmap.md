@@ -1,35 +1,5 @@
 # Roadmap
 
-## Scroll engine viewport tuning for taller Android devices
-
-Scroll-cluster tests (`gestures`, `scroll_search`, `rapid_interaction`,
-`scroll_performance`) pass on Pixel 3a 4GB API 34 (CSS viewport
-393×807) but fail on Pixel 8 API 35 (411×914). Two failure shapes:
-
-- **`auto_scroll` overshoot.** `tap on_text="Reset Gesture",
-  auto_scroll=true` lands the button at top of viewport with the
-  preceding gesture-area scrolled offscreen above it — next
-  `assert_visible on_text="Not zoomed"` then times out. The
-  scroll engine centers on the element but the taller viewport
-  changes the relationship between "centered" and surrounding
-  section content.
-- **Carousel scroll-snap stall.** Strategy-2 swipes inside the
-  `scroll-snap-type: x mandatory` carousel travel further on the
-  taller viewport (swipe distance is a percentage of viewport
-  height — even horizontal swipes scale via `swipe_strategies`'s
-  shared height fraction) and the snap can land past the target
-  card, then the engine declares stall.
-
-**Suggestion:** swipe distances should be a function of either the
-inner-scrollable's bounds (when `within` is set) or a fixed CSS-px
-constant (e.g. 300 CSS px) rather than a percentage of the device
-viewport. Centering math for `auto_scroll` should account for the
-nearest section ancestor so the whole section stays in view, not
-just the target element.
-
-**Files:** `golem-runner/src/scroll.rs::swipe_strategies`,
-`golem-runner/src/scroll.rs::run_scroll` (auto-scroll positioning).
-
 ## Phase 2 and Phase 3 robustness sweep coverage
 
 Phase 1 covered single-test, single-device runs only (78 entries,
