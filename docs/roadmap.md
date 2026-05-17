@@ -50,18 +50,6 @@ just the target element.
 **Files:** `golem-runner/src/scroll.rs::swipe_strategies`,
 `golem-runner/src/scroll.rs::run_scroll` (auto-scroll positioning).
 
-## Android deep-link delivery: verify Phase 1 fix at 5/5
-
-Phase 1 robustness sweep marked all 4 Android deep-link tests
-(`deep_link.test`, `deep_link_cold_start`, `deep_link_custom_scheme`,
-`deep_link_warm_start`) as hard failures (0/5 each). The
-`__golemSetDeepLink` JS hook + driver poke (commit `9fe8150`) was
-the intended fix but has not been re-run through the 5-in-a-row
-criterion. Run each 5× on Pixel 3a 4GB API 34 and either close the
-loop or open a follow-up entry per remaining failure.
-
-**Files:** `e2e/links/deep_link_*.test.toml`.
-
 ## Phase 2 and Phase 3 robustness sweep coverage
 
 Phase 1 covered single-test, single-device runs only (78 entries,

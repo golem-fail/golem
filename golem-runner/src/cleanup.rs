@@ -25,9 +25,12 @@ pub struct CleanupResult {
 /// Performs the following steps in order:
 /// 1. Reset dark mode to disabled
 /// 2. Clear mocked location (reset to 0,0)
-/// 3. Remove port forwards (Android only)
-/// 4. Stop any running screen recordings
-/// 5. Shut down the device (unless `options.keep_devices` is set)
+/// 3. Stop any running screen recordings
+/// 4. Shut down the device (unless `options.keep_devices` is set)
+///
+/// Adb port forwards are intentionally not torn down here — they're scoped
+/// to the device session, not the flow, and removing them between flows on
+/// a surviving emulator breaks the next flow's companion health check.
 ///
 /// Every step is best-effort: failures are collected into `CleanupResult::warnings`
 /// and never propagated as errors.
@@ -48,12 +51,11 @@ pub async fn auto_cleanup(
         warnings.push(format!("Failed to reset location: {e}"));
     }
 
-    // 4. Remove port forwards (Android only)
-    if device.platform == golem_devices::Platform::Android {
-        if let Err(e) = driver.remove_port_forwards().await {
-            warnings.push(format!("Failed to remove port forwards: {e}"));
-        }
-    }
+    // Port forwards are scoped to the device session, not the flow.
+    // Removing them per-flow breaks subsequent flows on the same emulator —
+    // the next health check probes localhost:8250 with nothing on the
+    // other end. When the device is shut down, the forward dies with
+    // it; an explicit teardown earlier is wrong, not just redundant.
 
     // 5. Stop recording if running (ignore the result path or error)
     if let Err(e) = driver.stop_recording().await {
@@ -85,7 +87,6 @@ mod tests {
         fail_dark_mode: bool,
         fail_stop_recording: bool,
         fail_set_location: bool,
-        fail_remove_port_forwards: bool,
     }
 
     impl FailableMockDriver {
@@ -95,7 +96,6 @@ mod tests {
                 fail_dark_mode: false,
                 fail_stop_recording: false,
                 fail_set_location: false,
-                fail_remove_port_forwards: false,
             }
         }
 
@@ -256,9 +256,6 @@ mod tests {
 
         async fn remove_port_forwards(&self) -> anyhow::Result<()> {
             self.record("remove_port_forwards");
-            if self.fail_remove_port_forwards {
-                anyhow::bail!("remove port forwards failed");
-            }
             Ok(())
         }
     }
@@ -486,50 +483,21 @@ mod tests {
         );
     }
 
-    // 11. auto_cleanup attempts port forward removal for Android devices
+    // auto_cleanup does not remove port forwards — they're scoped to the
+    // device session, not the flow. Per-flow removal would break the next
+    // flow's health check on a surviving emulator.
     #[tokio::test]
-    async fn auto_cleanup_attempts_port_forward_removal_for_android() {
-        let mut driver = FailableMockDriver::new();
-        driver.fail_remove_port_forwards = true;
-        let device = android_test_device();
-        let options = CleanupOptions {
-            keep_devices: true,
-        };
-
-        let result = auto_cleanup(&driver, &device, &options).await;
-
-        // Port forward removal will fail in test env (no adb), but should
-        // be attempted and failure collected as a warning.
-        let has_port_forward_warning = result
-            .warnings
-            .iter()
-            .any(|w| w.contains("port forward"));
-        assert!(
-            has_port_forward_warning,
-            "SHALL attempt port forward removal for Android and collect failure as warning, got: {:?}",
-            result.warnings
-        );
-    }
-
-    // 12. auto_cleanup skips port forward removal for iOS devices
-    #[tokio::test]
-    async fn auto_cleanup_skips_port_forward_removal_for_ios() {
+    async fn auto_cleanup_does_not_remove_port_forwards() {
         let driver = FailableMockDriver::new();
-        let device = test_device(); // iOS device
-        let options = CleanupOptions {
-            keep_devices: true,
-        };
+        let device = android_test_device();
+        let options = CleanupOptions { keep_devices: true };
 
-        let result = auto_cleanup(&driver, &device, &options).await;
+        let _ = auto_cleanup(&driver, &device, &options).await;
 
-        let has_port_forward_warning = result
-            .warnings
-            .iter()
-            .any(|w| w.contains("port forward"));
+        let calls = driver.get_calls();
         assert!(
-            !has_port_forward_warning,
-            "SHALL NOT attempt port forward removal for iOS, got: {:?}",
-            result.warnings
+            !calls.iter().any(|c| c == "remove_port_forwards"),
+            "SHALL NOT call remove_port_forwards in per-flow cleanup, got: {calls:?}",
         );
     }
 }

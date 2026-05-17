@@ -1117,6 +1117,16 @@ async fn setup_slot(
     //
     // 3. Spawn — last resort, kick off the registration path.
     if let Some(comp) = reg_state.get(&device.udid) {
+        // On Android the adb port forward is dropped whenever the device
+        // disconnects from adbd — including during the per-flow cleanup's
+        // shutdown attempt against a user-booted emulator (the kill is
+        // refused but adbd still tears the connection). Re-establish the
+        // forward idempotently before health-checking so a surviving
+        // companion is reachable for the next flow.
+        if platform == Platform::Android {
+            let fwd = golem_devices::lifecycle::port_forward_command(&device, comp.port);
+            let _ = golem_devices::lifecycle::run_command_public(&fwd, "re-establish port forward").await;
+        }
         let client = golem_driver::common::CompanionClient::new(comp.port);
         if let Ok(health) = client.check_health().await {
             if health.device_id == device.udid
@@ -1174,6 +1184,15 @@ async fn setup_slot(
         }
     }
 
+    // Android: re-establish adb forward idempotently. Per-flow cleanup's
+    // shutdown attempt against a user-booted (or otherwise persistent)
+    // emulator can drop the forward without killing the device, so even
+    // a freshly resolved port may be unreachable when the cleanup of a
+    // prior flow ran while this one was waiting for resources.
+    if platform == Platform::Android {
+        let fwd = golem_devices::lifecycle::port_forward_command(&device, port);
+        let _ = golem_devices::lifecycle::run_command_public(&fwd, "re-establish port forward").await;
+    }
     let client = golem_driver::common::CompanionClient::new(port);
     match client.check_health().await {
         Ok(health) => {
