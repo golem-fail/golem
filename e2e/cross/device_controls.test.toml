@@ -42,11 +42,11 @@ steps = [
   { action = "tap", on_accessibility_label = "menu-toggle" },
   { action = "tap", on_accessibility_label = "goto-device-state" },
   { action = "assert_visible", on_text = "0", on_right_of = "Back:" },
-  # Each `press back` fires `tauri://close-requested` in the
-  # WebView; the handler in DeviceState.svelte calls
-  # `preventDefault()` and increments `backCount`. Tauri also
-  # scrolls the page to the top on back, so subsequent asserts
-  # need menu-nav back to Device State to bring the row in view.
+  # Each `press back` pops the seeded history entry in DeviceState,
+  # firing `popstate`; the handler increments `backCount` and
+  # re-seeds so the next press also intercepts. Tauri scrolls the
+  # page to the top on back, so subsequent asserts menu-nav back
+  # to Device State to bring the row in view.
   { action = "press", button = "back" },
   { action = "tap", on_accessibility_label = "menu-toggle" },
   { action = "tap", on_accessibility_label = "goto-device-state" },
