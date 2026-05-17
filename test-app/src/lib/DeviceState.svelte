@@ -82,31 +82,29 @@ onMount(() => {
   document.addEventListener("visibilitychange", onVisibility);
   window.addEventListener("pageshow", onPageShow);
 
-  // Capture the Android back signal. Tauri 2.x Android intercepts
-  // back at the activity level and fires a `tauri://close-requested`
-  // window event before finishing — calling `preventDefault()` lets
-  // the WebView observe the back without losing the activity, and
-  // we increment a counter so golem's `press button="back"` action
-  // can be asserted against an app-level state change rather than
-  // just OS-level dismissal of a system dialog.
-  let unlistenClose;
-  (async () => {
-    try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      const win = getCurrentWindow();
-      unlistenClose = await win.onCloseRequested((event) => {
-        event.preventDefault();
-        backCount += 1;
-      });
-    } catch { /* not Tauri / desktop build */ }
-  })();
+  // Capture the Android back signal. Tauri 2.x's WryActivity intercepts
+  // the back press and calls `webView.goBack()` if the WebView's history
+  // can go back, otherwise finishes the activity. To keep the activity
+  // alive and observe the press from JS, we seed an extra history entry
+  // — every subsequent back press then pops that entry, fires the
+  // standard `popstate` event, and gets re-seeded for the next press.
+  // `onCloseRequested` was the wrong primitive here: Tauri never emits
+  // a window close event for the Android back key, only for genuine
+  // activity-finish paths like swipe-from-recents.
+  history.pushState({ golemBackGuard: true }, "");
+  function onPopState() {
+    backCount += 1;
+    // Re-seed so the next back press also pops instead of finishing.
+    history.pushState({ golemBackGuard: true }, "");
+  }
+  window.addEventListener("popstate", onPopState);
 
   return () => {
     tMql.removeEventListener("change", updateTheme);
     if (unlistenDeepLink) unlistenDeepLink();
     document.removeEventListener("visibilitychange", onVisibility);
     window.removeEventListener("pageshow", onPageShow);
-    if (unlistenClose) unlistenClose();
+    window.removeEventListener("popstate", onPopState);
   };
 });
 </script>
