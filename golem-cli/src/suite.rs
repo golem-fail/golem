@@ -1098,62 +1098,37 @@ async fn setup_slot(
     )
     .await;
 
-    // Reuse an existing healthy companion if one is already bound to this
-    // device. Three places to check, in order of cost:
-    //
-    // 1. `reg_state` — the in-process registration map. Cheap and
-    //    authoritative; a companion that registered earlier in this
-    //    `golem run` is here. Critical for the multi-flow case: when 30
-    //    flows all want iPhone 17, only one should kick off the
-    //    XCUITest harness — the rest should reuse the registered port.
-    //    Without this, every flow after the first calls
-    //    `ensure_companion_with_reg`, simctl-launches the harness (a
-    //    no-op since one's already running), waits 60s for ITS own
-    //    registration that never fires, then bails.
-    //
-    // 2. Port scan — `find_or_allocate_port` probes the whole port
-    //    range and finds companions from previous `golem run`
-    //    invocations. Slower; only reached when reg_state is empty.
-    //
-    // 3. Spawn — last resort, kick off the registration path.
-    if let Some(comp) = reg_state.get(&device.udid) {
-        // On Android the adb port forward is dropped whenever the device
-        // disconnects from adbd — including during the per-flow cleanup's
-        // shutdown attempt against a user-booted emulator (the kill is
-        // refused but adbd still tears the connection). Re-establish the
-        // forward idempotently before health-checking so a surviving
-        // companion is reachable for the next flow.
-        if platform == Platform::Android {
-            let fwd = golem_devices::lifecycle::port_forward_command(&device, comp.port);
-            let _ = golem_devices::lifecycle::run_command_public(&fwd, "re-establish port forward").await;
-        }
-        let client = golem_driver::common::CompanionClient::new(comp.port);
-        if let Ok(health) = client.check_health().await {
-            if health.device_id == device.udid
-                && health.version == env!("CARGO_PKG_VERSION")
-            {
-                return Ok((device, comp.port));
+    // Resolve the companion port via a per-UDID OnceCell. Whichever
+    // flow arrives first drives the in-session cache check + spawn
+    // pipeline; the rest await the same cell and resolve once it's
+    // populated. Without this, N parallel flows would race past the
+    // `reg_state.get()` early-return before any of them registered,
+    // each calling `ensure_companion_with_reg`, and only one would
+    // win the launch_guard — the others timed out probing a port
+    // nobody answered on.
+    let port = {
+        let device_for_init = device.clone();
+        let reg_state_for_init = reg_state.clone();
+        let event_tx_for_init = event_tx.clone();
+        reg_state.ensure_companion_port(&device.udid, || async move {
+            // In-session cache: a winning flow already registered.
+            if let Some(comp) = reg_state_for_init.get(&device_for_init.udid) {
+                if platform == Platform::Android {
+                    let fwd = golem_devices::lifecycle::port_forward_command(&device_for_init, comp.port);
+                    let _ = golem_devices::lifecycle::run_command_public(&fwd, "re-establish port forward").await;
+                }
+                let client = golem_driver::common::CompanionClient::new(comp.port);
+                if let Ok(health) = client.check_health().await {
+                    if health.device_id == device_for_init.udid
+                        && health.version == env!("CARGO_PKG_VERSION")
+                    {
+                        return Ok(comp.port);
+                    }
+                }
             }
-        }
-    }
-    let existing_port = find_or_allocate_port(&device, platform).await.ok();
-    let reused = if let Some(p) = existing_port {
-        let client = golem_driver::common::CompanionClient::new(p);
-        if let Ok(health) = client.check_health().await {
-            if health.version == env!("CARGO_PKG_VERSION") {
-                Some(p)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-    let port = match reused {
-        Some(p) => p,
-        None => ensure_companion_with_reg(&device, platform, reg_port, reg_state, event_tx).await?,
+            // No cache hit: spawn fresh.
+            ensure_companion_with_reg(&device_for_init, platform, reg_port, &reg_state_for_init, &event_tx_for_init).await
+        }).await?
     };
 
     // Wait for a free allocation slot. The cap here is RAM + concurrency
@@ -1719,57 +1694,6 @@ async fn scan_companions() -> Vec<(u16, golem_driver::CompanionHealth)> {
         }
     }
     found
-}
-
-/// Find a port for a device: reuse an existing matching companion or allocate a free port.
-async fn find_or_allocate_port(device: &DeviceInfo, platform: Platform) -> Result<u16> {
-    let golem_version = env!("CARGO_PKG_VERSION");
-    let platform_str = match platform {
-        Platform::Ios => "ios",
-        Platform::Android => "android",
-    };
-
-    let companions = scan_companions().await;
-
-    // Try to find an existing companion for this device with matching version.
-    // First try exact match by device name or ID. Then fall back to matching
-    // by platform+version if there's only one companion for that platform
-    // (handles Android where the companion can't report the ADB serial).
-    let platform_companions: Vec<_> = companions
-        .iter()
-        .filter(|(_, h)| h.platform == platform_str && h.version == golem_version)
-        .collect();
-
-    for (port, health) in &platform_companions {
-        if health.device_id == device.udid
-            || health.device_name == device.name
-            || health.device_name == device.udid
-        {
-            return Ok(*port);
-        }
-    }
-
-    // Android-only fallback: the Android companion can't report its own
-    // ADB serial via UIDevice (the equivalent doesn't exist), so when
-    // there's exactly one matching companion we assume it's ours. iOS
-    // *can* report device id/name reliably, so don't fall through there
-    // — otherwise a stale iPhone companion from a previous run will be
-    // reused when the slot is targeting iPad, and we never spin up a
-    // companion on the right simulator.
-    if platform == Platform::Android && platform_companions.len() == 1 {
-        return Ok(platform_companions[0].0);
-    }
-
-    // No match — find first free port
-    let used_ports: Vec<u16> = companions.iter().map(|(p, _)| *p).collect();
-    use golem_devices::resource_manager::{PORT_RANGE_START, PORT_RANGE_END};
-    for port in PORT_RANGE_START..=PORT_RANGE_END {
-        if !used_ports.contains(&port) {
-            return Ok(port);
-        }
-    }
-
-    anyhow::bail!("No free companion ports in range {PORT_RANGE_START}-{PORT_RANGE_END}")
 }
 
 /// Launch a companion using the registration server.

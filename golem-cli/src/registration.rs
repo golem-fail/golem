@@ -49,6 +49,16 @@ pub struct RegistrationState {
     /// the others "succeed" at spawning but their xcodebuild process
     /// exits silently, so they never see a registration event.
     launch_locks: Arc<tokio::sync::Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
+    /// Per-UDID "companion port is ready" cell. The first flow to ask
+    /// drives the in-session cache check + spawn pipeline to
+    /// completion; the rest await the same cell and resolve
+    /// immediately once it's populated. Without this, N parallel
+    /// flows would race past the `reg_state.get()` early-return
+    /// before any of them registered, then all fall through to the
+    /// spawn path. The per-UDID launch_guard serialised them but the
+    /// losers still couldn't make progress because their target port
+    /// was the one the winner had already claimed.
+    companion_cells: Arc<Mutex<HashMap<String, Arc<tokio::sync::OnceCell<u16>>>>>,
 }
 
 struct RegistrationInner {
@@ -68,8 +78,34 @@ impl RegistrationState {
                 notify_tx: tx,
             })),
             launch_locks: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            companion_cells: Arc::new(Mutex::new(HashMap::new())),
         };
         (state, rx)
+    }
+
+    /// Get-or-init the companion port for a UDID. The `init` future runs
+    /// at most once per UDID across the suite — all concurrent callers
+    /// share the same OnceCell and wake when it's populated. If `init`
+    /// errors, the cell stays empty so a subsequent call can retry.
+    pub async fn ensure_companion_port<F, Fut>(&self, udid: &str, init: F) -> Result<u16>
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = Result<u16>>,
+    {
+        let cell = {
+            let mut map = self.companion_cells.lock().expect("lock poisoned");
+            map.entry(udid.to_string())
+                .or_insert_with(|| Arc::new(tokio::sync::OnceCell::new()))
+                .clone()
+        };
+        cell.get_or_try_init(init).await.map(|p| *p)
+    }
+
+    /// Clear the cached companion port for a UDID. Used when a previously
+    /// healthy companion fails — the next caller drives a fresh init.
+    pub fn invalidate_companion(&self, udid: &str) {
+        let mut map = self.companion_cells.lock().expect("lock poisoned");
+        map.remove(udid);
     }
 
     /// Acquire a per-UDID lock guarding the launch path. Caller must

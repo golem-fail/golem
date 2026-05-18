@@ -11,9 +11,13 @@ type = "phone"
 [[block]]
 name = "deep_link_tests"
 steps = [
-  # `Deep Link:` lives in the Device State section, well below the
-  # fold on phones — auto_scroll brings it into view.
-  { action = "assert_visible", on_text = "Deep Link:", auto_scroll = true },
+  # `Deep Link:` lives in the Device State section. Menu-nav rather
+  # than auto_scroll: the auto_scroll engine can get trapped inside
+  # the Scroll List's inner overflow-y:auto container before reaching
+  # Device State, especially on taller viewports.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-device-state" },
+  { action = "assert_visible", on_text = "Deep Link:" },
 
   # Open a deep link with the golem-test scheme
   { action = "open_link", url = "golem-test://home" },

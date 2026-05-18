@@ -113,7 +113,7 @@ steps = [
   { action = "read", on_text = "Card 0", save_to = "r7" },
 
   { action = "read", on_text = "Submit", auto_scroll = true, save_to = "r9" },
-  { action = "read", on_text = "+", save_to = "r10" },
+  { action = "read", on_text = "+", auto_scroll = true, save_to = "r10" },
 ]
 
 [[block]]
