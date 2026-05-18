@@ -59,19 +59,25 @@ steps = [
 [[block]]
 name = "find_list_items_rapid"
 steps = [
-  # Rapidly find list items scattered throughout the hierarchy
-  { action = "assert_visible", on_text = "Item 0" },
-  { action = "assert_visible", on_text = "Item 1" },
-  { action = "assert_visible", on_text = "Item 2" },
-  { action = "assert_visible", on_text = "Item 3" },
-  { action = "assert_visible", on_text = "Item 4" },
+  # ScrollList is an inner overflow-y:auto container of fixed height
+  # — only the first row sits inside the outer viewport when the
+  # section is scrolled into view. Use auto_scroll on each item so
+  # the resolver brings it on-screen before the find. The "rapid"
+  # latency claim is exercised by the tight-timeout second pass.
+  { action = "assert_visible", on_text = "Item 0", auto_scroll = true },
+  { action = "assert_visible", on_text = "Item 1", auto_scroll = true },
+  { action = "assert_visible", on_text = "Item 2", auto_scroll = true },
+  { action = "assert_visible", on_text = "Item 3", auto_scroll = true },
+  { action = "assert_visible", on_text = "Item 4", auto_scroll = true },
 
-  # Tight-timeout waits on each list item
-  { action = "assert_visible", on_text = "Item 0", timeout = 5000 },
-  { action = "assert_visible", on_text = "Item 1", timeout = 5000 },
-  { action = "assert_visible", on_text = "Item 2", timeout = 5000 },
-  { action = "assert_visible", on_text = "Item 3", timeout = 5000 },
-  { action = "assert_visible", on_text = "Item 4", timeout = 5000 },
+  # Tight-timeout waits — the find must complete inside 5s even
+  # after auto_scroll has shifted the page, exercising the
+  # element-find path on an already-rendered tree.
+  { action = "assert_visible", on_text = "Item 0", timeout = 5000, auto_scroll = true },
+  { action = "assert_visible", on_text = "Item 1", timeout = 5000, auto_scroll = true },
+  { action = "assert_visible", on_text = "Item 2", timeout = 5000, auto_scroll = true },
+  { action = "assert_visible", on_text = "Item 3", timeout = 5000, auto_scroll = true },
+  { action = "assert_visible", on_text = "Item 4", timeout = 5000, auto_scroll = true },
 ]
 
 [[block]]
@@ -95,13 +101,15 @@ steps = [
   { action = "tap", on_accessibility_label = "menu-toggle" },
   { action = "tap", on_accessibility_label = "goto-counter" },
 
-  # Assert text on elements — exercises the slower text-matching path
+  # Assert text on elements — exercises the slower text-matching path.
+  # Items 1-4 also need auto_scroll: ScrollList's inner overflow-y:auto
+  # only renders one row inside the outer viewport at a time.
   { action = "assert_visible", on_text = "0", on_below = "Counter" },
   { action = "assert_visible", on_text = "Item 0", auto_scroll = true },
-  { action = "assert_visible", on_text = "Item 1" },
-  { action = "assert_visible", on_text = "Item 2" },
-  { action = "assert_visible", on_text = "Item 3" },
-  { action = "assert_visible", on_text = "Item 4" },
+  { action = "assert_visible", on_text = "Item 1", auto_scroll = true },
+  { action = "assert_visible", on_text = "Item 2", auto_scroll = true },
+  { action = "assert_visible", on_text = "Item 3", auto_scroll = true },
+  { action = "assert_visible", on_text = "Item 4", auto_scroll = true },
 
   # Final screenshot
   { action = "screenshot" },
