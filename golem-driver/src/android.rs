@@ -177,18 +177,72 @@ impl AndroidDriver {
 
     /// Evaluate JavaScript in the foreground WebView (best-effort).
     ///
-    /// Returns `Ok(None)` when CDP isn't connected (no WebView yet,
-    /// setup still in progress, or the previous attempt failed).
+    /// Returns `Ok(None)` when CDP isn't connected (no WebView yet, or
+    /// the previous attempt failed). When background CDP setup is
+    /// mid-flight, the call blocks for up to 3s waiting for it to land
+    /// rather than silently no-op'ing — open_url's cold-start path
+    /// would otherwise race CDP-ready and miss its
+    /// `__golemSetDeepLink` poke, leaving the rendered "Deep Link:"
+    /// row blank.
+    ///
     /// Used to push native-state changes into the page — e.g.
     /// `set_location` calling `__golemSetLocation` so the test app's
     /// rendered "Location:" row reflects the new GPS coordinate.
     async fn eval_in_webview(&self, expression: &str) -> Option<String> {
-        let (port, page_id) = {
-            let cdp = self.cdp.lock().expect("cdp mutex poisoned");
-            match &*cdp {
-                CdpLifecycle::Ready(state) => (state.port, state.page_id.clone()),
-                _ => return None,
+        enum Initial {
+            Ready(u16, String),
+            Setup(tokio::sync::oneshot::Receiver<Option<CdpState>>),
+            NotReady,
+        }
+        let initial = {
+            let mut cdp = self.cdp.lock().expect("cdp mutex poisoned");
+            match &mut *cdp {
+                CdpLifecycle::Ready(state) => Initial::Ready(state.port, state.page_id.clone()),
+                CdpLifecycle::SetupInProgress(_) => {
+                    // Take ownership of the receiver so the await
+                    // below happens outside the lock. The cell is
+                    // restored (or transitioned) once the timeout
+                    // resolves.
+                    let placeholder = CdpLifecycle::Failed;
+                    let old = std::mem::replace(&mut *cdp, placeholder);
+                    if let CdpLifecycle::SetupInProgress(rx) = old {
+                        Initial::Setup(rx)
+                    } else {
+                        Initial::NotReady
+                    }
+                }
+                _ => Initial::NotReady,
             }
+        };
+        let (port, page_id) = match initial {
+            Initial::Ready(p, pid) => (p, pid),
+            Initial::Setup(mut rx) => {
+                let res = tokio::time::timeout(
+                    std::time::Duration::from_secs(3),
+                    &mut rx,
+                ).await;
+                let mut cdp = self.cdp.lock().expect("cdp mutex poisoned");
+                match res {
+                    Ok(Ok(Some(state))) => {
+                        let p = state.port;
+                        let pid = state.page_id.clone();
+                        *cdp = CdpLifecycle::Ready(state);
+                        (p, pid)
+                    }
+                    Ok(Ok(None)) | Ok(Err(_)) => {
+                        *cdp = CdpLifecycle::Failed;
+                        return None;
+                    }
+                    Err(_) => {
+                        // Timed out — restore the in-flight receiver
+                        // so the next caller continues the wait
+                        // rather than spawning a fresh setup.
+                        *cdp = CdpLifecycle::SetupInProgress(rx);
+                        return None;
+                    }
+                }
+            }
+            Initial::NotReady => return None,
         };
         match crate::cdp::evaluate_js(port, &page_id, expression, false).await {
             Ok(s) => Some(s),
