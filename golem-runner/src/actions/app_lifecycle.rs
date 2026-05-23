@@ -5,7 +5,6 @@ use golem_driver::PlatformDriver;
 use golem_parser::{AppConfig, Step};
 
 use crate::context::ExecutionContext;
-use crate::resolution::wait_for_settle;
 
 /// Resolve the app identifier from a step to a bundle ID.
 ///
@@ -49,10 +48,11 @@ pub(crate) async fn handle_launch(
     let start = Instant::now();
     // `launch_app` includes the post-launch settle gate (node-count
     // stability via `await_first_frame`) so the OS-transition pause is
-    // already absorbed there. `wait_for_settle` runs after for the
-    // additional WebView-enrichment polling it does on top.
+    // already absorbed there. Additional WebView-enrichment settle
+    // runs out-of-band after this step returns (see policy.rs's
+    // `needs_post_settle`), not inline — otherwise the launch step's
+    // own timeout would absorb the wait.
     let warning = driver.launch_app(bundle_id).await?;
-    let _ = wait_for_settle(driver).await;
     let launch_ms = start.elapsed().as_millis() as u64;
     ctx.substep(golem_events::SubstepEvent::AppLaunch {
         bundle: bundle_id.to_string(),

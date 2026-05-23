@@ -6,7 +6,7 @@ use golem_parser::Step;
 use tokio::time::{sleep, Instant};
 
 use crate::context::ExecutionContext;
-use crate::resolution::{build_selector, resolve_element, wait_for_settle};
+use crate::resolution::{build_selector, resolve_element};
 
 
 /// Minimum delay after a tap to prevent the OS interpreting sequential taps
@@ -128,7 +128,6 @@ pub(crate) async fn handle_tap(step: &Step, driver: &dyn PlatformDriver, ctx: &E
     });
     tap_at(driver, x, y).await?;
     sleep(TAP_COOLDOWN).await;
-    let _ = wait_for_settle(driver).await;
     Ok(())
 }
 
@@ -148,7 +147,6 @@ pub(crate) async fn handle_double_tap(step: &Step, driver: &dyn PlatformDriver, 
     }
     tap_at(driver, x, y).await?;
     sleep(TAP_COOLDOWN).await;
-    let _ = wait_for_settle(driver).await;
     Ok(())
 }
 
@@ -170,7 +168,6 @@ pub(crate) async fn handle_type(step: &Step, driver: &dyn PlatformDriver, ctx: &
         field_bounds: None,
     });
     driver.type_text(value).await?;
-    let _ = wait_for_settle(driver).await;
     Ok(())
 }
 
@@ -188,7 +185,6 @@ pub(crate) async fn handle_backspace(step: &Step, driver: &dyn PlatformDriver, c
         .unwrap_or(1);
 
     driver.backspace(count).await?;
-    let _ = wait_for_settle(driver).await;
     Ok(())
 }
 
@@ -200,7 +196,6 @@ pub(crate) async fn handle_long_press(step: &Step, driver: &dyn PlatformDriver, 
     let duration = step.duration.unwrap_or(1000);
 
     driver.long_press(x, y, duration).await?;
-    let _ = wait_for_settle(driver).await;
     Ok(())
 }
 
@@ -317,7 +312,6 @@ pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver, ctx: 
         }]).await?;
     }
 
-    let _ = wait_for_settle(driver).await;
     Ok(())
 }
 
@@ -474,7 +468,6 @@ pub(crate) async fn handle_pinch(step: &Step, driver: &dyn PlatformDriver) -> Re
     let (cx, cy) = resolve_gesture_center(step, driver).await?;
 
     driver.pinch(cx, cy, scale, velocity).await?;
-    let _ = wait_for_settle(driver).await;
     Ok(())
 }
 
@@ -523,7 +516,6 @@ pub(crate) async fn handle_rotate_gesture(step: &Step, driver: &dyn PlatformDriv
         golem_driver::GestureFinger { points: finger1, duration_ms },
         golem_driver::GestureFinger { points: finger2, duration_ms },
     ]).await?;
-    let _ = wait_for_settle(driver).await;
     Ok(())
 }
 
@@ -586,7 +578,6 @@ pub(crate) async fn handle_gesture(step: &Step, driver: &dyn PlatformDriver) -> 
     }
 
     driver.gesture(gesture_fingers).await?;
-    let _ = wait_for_settle(driver).await;
     Ok(())
 }
 

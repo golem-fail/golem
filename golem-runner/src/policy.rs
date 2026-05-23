@@ -166,6 +166,40 @@ fn intrinsic_duration_ms(step: &Step) -> u64 {
     }
 }
 
+/// Does the post-action settle wait apply to this action?
+///
+/// Mutating actions (tap, type, swipe, etc.) need the UI to stop
+/// reacting before the next step starts asserting / finding /
+/// interacting. Read-only actions (assert_*, read, screenshot)
+/// don't. The settle wall-clock runs *outside* the next step's
+/// timeout — that way a user-set `timeout = 5000` on an assert
+/// reflects "find this within 5s" rather than "find this within
+/// 5s minus whatever the previous tap's UI is still doing."
+fn needs_post_settle(step: &Step) -> bool {
+    matches!(
+        step.action.as_str(),
+        "tap"
+            | "double_tap"
+            | "type"
+            | "backspace"
+            | "long_press"
+            | "swipe"
+            | "scroll"
+            | "hide_keyboard"
+            | "pinch"
+            | "rotate"
+            | "gesture"
+            | "press"
+            | "launch"
+            | "stop"
+            | "accept_alert"
+            | "dismiss_alert"
+            | "dark_mode"
+            | "set_location"
+            | "open_link"
+    )
+}
+
 /// Execute a step with if_fail, timeout, and retry policies applied.
 ///
 /// This wraps [`execute_action`] with:
@@ -206,7 +240,29 @@ pub async fn execute_step_with_policy(
         )
         .await
         {
-            Ok(Ok(())) => return Ok(StepOutcome::Success),
+            Ok(Ok(())) => {
+                // Post-action settle runs out-of-band: its wall-clock
+                // doesn't consume this step's budget nor the next
+                // step's. Action handlers used to call wait_for_settle
+                // inline, which counted toward whichever step the
+                // animation was finishing — a stressed UI then made
+                // user-budgeted timeouts on later steps unreachable.
+                if needs_post_settle(step) {
+                    let started = std::time::Instant::now();
+                    let _ = crate::resolution::wait_for_settle(driver).await;
+                    let elapsed = started.elapsed();
+                    // `wait_for_settle`'s internal SETTLE_TIMEOUT is
+                    // 1500ms — anything close to that means it gave up
+                    // waiting for the UI to stop animating.
+                    let stable = elapsed < std::time::Duration::from_millis(1300);
+                    ctx.substep(golem_events::SubstepEvent::PostSettle {
+                        action: step.action.clone(),
+                        duration_ms: elapsed.as_millis() as u64,
+                        stable,
+                    });
+                }
+                return Ok(StepOutcome::Success);
+            }
             Ok(Err(e)) => {
                 last_error = Some(e);
                 continue;

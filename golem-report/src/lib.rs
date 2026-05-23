@@ -113,6 +113,11 @@ pub enum SubstepDetail {
     AppStop {
         bundle: String,
     },
+    PostSettle {
+        action: String,
+        duration_ms: u64,
+        stable: bool,
+    },
     DriverWarning {
         message: String,
     },
@@ -172,6 +177,8 @@ impl From<&golem_events::SubstepEvent> for SubstepDetail {
                 SubstepDetail::AppLaunch { bundle: bundle.clone(), duration_ms: *duration_ms },
             golem_events::SubstepEvent::AppStop { bundle } =>
                 SubstepDetail::AppStop { bundle: bundle.clone() },
+            golem_events::SubstepEvent::PostSettle { action, duration_ms, stable } =>
+                SubstepDetail::PostSettle { action: action.clone(), duration_ms: *duration_ms, stable: *stable },
             golem_events::SubstepEvent::DriverWarning { message } =>
                 SubstepDetail::DriverWarning { message: message.clone() },
             golem_events::SubstepEvent::Screenshot { path } =>

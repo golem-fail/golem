@@ -718,6 +718,10 @@ fn print_substep(ts: &str, dp: &str, sub: &SubstepEvent, use_color: bool) {
         SubstepEvent::AppLaunch { bundle, duration_ms } => {
             eprintln!("{ts}  {dp}    {d}{b} app_launch bundle={bundle} {duration_ms}ms{r}");
         }
+        SubstepEvent::PostSettle { action, duration_ms, stable } => {
+            let note = if *stable { "stable" } else { "timeout, still animating" };
+            eprintln!("{ts}  {dp}    {d}{b} post_settle {action} {duration_ms}ms ({note}){r}");
+        }
         SubstepEvent::AppStop { bundle } => {
             eprintln!("{ts}  {dp}    {d}{b} app_stop bundle={bundle}{r}");
         }

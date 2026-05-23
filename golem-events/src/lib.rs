@@ -447,6 +447,16 @@ pub enum SubstepEvent {
         duration_ms: u64,
     },
 
+    // Post-action UI settle, emitted out-of-band (not inside any
+    // step's timeout). Surfaces the wall-clock between an action
+    // completing and the next step starting, so a slow settle is
+    // visible when triaging intermittent failures on long sweeps.
+    PostSettle {
+        action: String,
+        duration_ms: u64,
+        stable: bool,
+    },
+
     // App lifecycle
     AppLaunch {
         bundle: String,
