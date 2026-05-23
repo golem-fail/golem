@@ -384,7 +384,12 @@ pub(crate) async fn handle_accept_alert(
     // Idempotent: if no alert surfaces, accept_alert fails — callers
     // who want optional behaviour (warm sims that have already
     // accepted the URL scheme) should set `if_fail = "ignore"`.
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+    //
+    // No internal deadline: the step's timeout (via policy.rs's
+    // `tokio::time::timeout`) governs how long we poll. The previous
+    // hard-coded 5s gave up before alerts that appeared at ~5-6s
+    // under sweep load, while the surrounding step still had budget
+    // left to find them.
     let mut poked = false;
     loop {
         let (root, _meta) = driver.get_hierarchy().await?;
@@ -403,7 +408,8 @@ pub(crate) async fn handle_accept_alert(
                     x: b.x, y: b.y, width: b.width, height: b.height,
                 }),
             });
-            return driver.tap(x, y).await;
+            driver.tap(x, y).await?;
+            return wait_for_alert_gone(driver).await;
         }
         // First miss: poke the test app so the harness's interruption
         // monitor gets a chance to fire and dismiss any pending system
@@ -413,11 +419,46 @@ pub(crate) async fn handle_accept_alert(
             poked = true;
             let _ = driver.poke_for_system_alert().await;
         }
-        if tokio::time::Instant::now() >= deadline {
-            bail!("accept_alert failed: no alert is displayed");
-        }
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
     }
+}
+
+/// Block until the alert window is gone from the hierarchy. Called
+/// after `accept_alert` / `dismiss_alert` taps a button — without
+/// this, the next step can race a still-dismissing alert: `find_alert`
+/// in a subsequent `dismiss_alert` re-matches the lingering window and
+/// taps a phantom Cancel that no-ops, then the action returns "success"
+/// in tens of ms and the test moves on while the underlying app is
+/// actually mid-animation. Subsequent `Show X` tap then races the
+/// closing overlay and the new alert never reaches the foreground.
+async fn wait_for_alert_gone(driver: &dyn PlatformDriver) -> Result<()> {
+    // Bounded poll. The step's surrounding timeout is the hard cap;
+    // this loop short-circuits as soon as the alert leaves. A 2.5s
+    // ceiling matches the typical native AlertDialog dismiss animation
+    // on Android (mostly 200-500ms in practice).
+    //
+    // Hierarchy fetch errors are tolerated mid-loop: between an alert
+    // tap and the next window gaining focus, Android can briefly have
+    // no active window and return a 500 "no active window" — that
+    // transient state is consistent with the alert being gone, so we
+    // count it as success.
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(2500);
+    while tokio::time::Instant::now() < deadline {
+        match driver.get_hierarchy().await {
+            Ok((root, _meta)) => {
+                if golem_driver::common::find_alert(&root).is_none() {
+                    return Ok(());
+                }
+            }
+            Err(_) => {
+                // Transient "no active window" or similar — treat as
+                // "alert is gone". Don't fail the action over it.
+                return Ok(());
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    Ok(())
 }
 
 /// Dismiss (negative): tap the first button in the alert (Cancel, No).
@@ -434,7 +475,9 @@ pub(crate) async fn handle_dismiss_alert(
     // choice. If a test author needs to assert a particular system
     // dialog appeared and was cancelled, that's a future enhancement
     // (e.g. a configurable monitor verb).
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+    //
+    // No internal deadline — the step's timeout governs (see
+    // accept_alert for rationale).
     loop {
         let (root, _meta) = driver.get_hierarchy().await?;
         if let Some(alert) = golem_driver::common::find_alert(&root) {
@@ -452,10 +495,8 @@ pub(crate) async fn handle_dismiss_alert(
                     x: b.x, y: b.y, width: b.width, height: b.height,
                 }),
             });
-            return driver.tap(x, y).await;
-        }
-        if tokio::time::Instant::now() >= deadline {
-            bail!("dismiss_alert failed: no alert is displayed");
+            driver.tap(x, y).await?;
+            return wait_for_alert_gone(driver).await;
         }
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
     }
