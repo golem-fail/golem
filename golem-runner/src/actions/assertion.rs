@@ -26,22 +26,29 @@ pub(crate) async fn handle_assert_not_visible(step: &Step, driver: &dyn Platform
 /// If the step has a `text` field, the alert element's text is glob-matched
 /// against it. If no `text` is provided, any alert satisfies the assertion.
 pub(crate) async fn handle_assert_alert(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let (root, _meta) = driver.get_hierarchy().await?;
-    let alert = golem_driver::common::find_alert(&root)
-        .ok_or_else(|| anyhow::anyhow!("assert_alert failed: no alert is displayed"))?;
-
-    if let Some(ref expected_pattern) = step.on_text {
-        let alert_text = alert.text.as_deref().unwrap_or("");
-        if !glob_match(expected_pattern, alert_text) {
-            bail!(
-                "assert_alert failed: alert text {:?} does not match pattern {:?}",
-                alert_text,
-                expected_pattern,
-            );
+    // Poll for the alert until the surrounding step timeout fires.
+    // A one-shot `get_hierarchy()` raced the dialog open animation
+    // on busy emulators — `tap "Show Alert"` returned but the
+    // accessibility tree hadn't yet reflected the new alert window,
+    // so this assertion failed despite the step having seconds of
+    // budget left.
+    loop {
+        let (root, _meta) = driver.get_hierarchy().await?;
+        if let Some(alert) = golem_driver::common::find_alert(&root) {
+            if let Some(ref expected_pattern) = step.on_text {
+                let alert_text = alert.text.as_deref().unwrap_or("");
+                if !glob_match(expected_pattern, alert_text) {
+                    bail!(
+                        "assert_alert failed: alert text {:?} does not match pattern {:?}",
+                        alert_text,
+                        expected_pattern,
+                    );
+                }
+            }
+            return Ok(());
         }
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
     }
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -265,19 +272,25 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn assert_alert_fails_when_no_alert_displayed() {
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn assert_alert_times_out_when_no_alert_displayed() {
+        // The action now polls for an alert until the surrounding
+        // step timeout fires (no internal deadline). With no outer
+        // timeout in the test, wrap the call in a short one — when
+        // it fires we know the action was correctly looping rather
+        // than bailing on the first miss.
         let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
-
         let step = make_step("assert_alert");
 
-        let result = handle_assert_alert(&step, &driver).await;
-        assert!(result.is_err(), "assert_alert SHALL fail when no alert is displayed");
-        let err_msg = format!("{}", result.expect_err("should be error"));
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            handle_assert_alert(&step, &driver),
+        )
+        .await;
         assert!(
-            err_msg.contains("no alert"),
-            "error SHALL mention no alert, got: {err_msg}"
+            result.is_err(),
+            "assert_alert SHALL keep polling until cancelled — got {result:?}",
         );
     }
 }
