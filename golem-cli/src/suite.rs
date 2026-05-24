@@ -160,6 +160,10 @@ pub struct SuiteConfig {
     /// have the bundle installed run flows; devices that don't fail
     /// loudly. The cache is untouched.
     pub no_build: bool,
+    /// Per-platform OS-level tweaks from `golem.toml`'s
+    /// `[device_settings]`. Applied once per device session before
+    /// any flow runs.
+    pub device_settings: crate::project::DeviceSettings,
 }
 
 impl Default for SuiteConfig {
@@ -183,6 +187,7 @@ impl Default for SuiteConfig {
             coverage_override: None,
             rebuild: false,
             no_build: false,
+            device_settings: crate::project::DeviceSettings::default(),
         }
     }
 }
@@ -343,6 +348,7 @@ impl SuiteRunner {
         if self.config.verbose && needs_cache {
             eprintln!("  [install] source fingerprint: {}", fingerprint.short_label());
         }
+        let device_settings = Arc::new(self.config.device_settings.clone());
 
         // Suite-level event channel — ONE sink for every FlowRun worker,
         // every setup-phase emitter, and the plan summary. Previously the
@@ -508,6 +514,7 @@ impl SuiteRunner {
             let fingerprint = fingerprint.clone();
             let rebuild = self.config.rebuild;
             let no_build = self.config.no_build;
+            let device_settings = device_settings.clone();
             let coverage_groups_c = coverage_groups.clone();
             let coverage_progress_c = coverage_progress.clone();
             let coverage_group_idx = run.coverage_group;
@@ -539,6 +546,7 @@ impl SuiteRunner {
                         fingerprint,
                         rebuild,
                         no_build,
+                        device_settings,
                     },
                     CoverageCtx {
                         groups: coverage_groups_c,
@@ -714,6 +722,8 @@ struct FlowRunConfig {
     rebuild: bool,
     /// CLI `--no-build`: skip build+install if device already has the bundle.
     no_build: bool,
+    /// Device settings to apply once per device session.
+    device_settings: Arc<crate::project::DeviceSettings>,
 }
 
 /// Build a synthetic `FlowReport` for a FlowRun short-circuited by the
@@ -865,6 +875,7 @@ async fn execute_flow_run(
             &cfg.fingerprint,
             cfg.rebuild,
             cfg.no_build,
+            &cfg.device_settings,
         )
         .await
         {
@@ -1069,6 +1080,7 @@ async fn setup_slot(
     fingerprint: &golem_runner::fingerprint::Fingerprint,
     rebuild: bool,
     no_build: bool,
+    device_settings: &crate::project::DeviceSettings,
 ) -> Result<(DeviceInfo, u16)> {
     let device = find_available_device(
         slot.platform,
@@ -1110,7 +1122,23 @@ async fn setup_slot(
         let device_for_init = device.clone();
         let reg_state_for_init = reg_state.clone();
         let event_tx_for_init = event_tx.clone();
+        let android_settings = device_settings.android.clone();
+        let ios_settings = device_settings.ios.clone();
         reg_state.ensure_companion_port(&device.udid, || async move {
+            // First flow to reach this device-session applies the
+            // [device_settings] block from golem.toml. Idempotent —
+            // safe to re-apply even if some keys are already set.
+            // OnceCell ensures we only do it once per UDID per
+            // `golem run`.
+            let setting_warnings = golem_devices::settings::apply_device_settings(
+                &device_for_init,
+                &android_settings,
+                &ios_settings,
+            ).await;
+            for w in setting_warnings {
+                eprintln!("  [device_settings] {w}");
+            }
+
             // In-session cache: a winning flow already registered.
             if let Some(comp) = reg_state_for_init.get(&device_for_init.udid) {
                 if platform == Platform::Android {

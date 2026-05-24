@@ -16,6 +16,28 @@ pub struct ProjectConfig {
     /// and inherit bundle/install_script/install_timeout_ms/devices.
     #[serde(default)]
     pub apps: Vec<ProjectAppConfig>,
+    /// Per-platform OS-level tweaks applied once per device session
+    /// before any flow runs. Lets a project pin emulator/sim state
+    /// (suppress system pop-ups, first-run sheets, gesture
+    /// tutorials) so tests aren't perturbed by defaults that change
+    /// across wipes.
+    #[serde(default)]
+    pub device_settings: DeviceSettings,
+}
+
+/// Per-platform device settings, keyed by namespace.
+#[derive(Deserialize, Debug, Default, Clone)]
+pub struct DeviceSettings {
+    /// Android `settings put <ns> <key> <value>` keys, formatted as
+    /// `"<namespace>.<key>" = "<value>"`. Namespaces: system,
+    /// secure, global.
+    #[serde(default)]
+    pub android: std::collections::HashMap<String, String>,
+    /// iOS `defaults write <domain> <key> <value>` keys. The domain
+    /// goes in the TOML key with dots-replaced-by-underscores
+    /// (translated back before invoking `defaults`).
+    #[serde(default)]
+    pub ios: std::collections::HashMap<String, String>,
 }
 
 impl ProjectConfig {

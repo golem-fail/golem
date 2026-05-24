@@ -275,10 +275,22 @@ pub async fn execute_step_with_policy(
         }
     }
 
-    // All attempts exhausted — capture screenshot before applying if_fail policy.
-    // Only capture for "error" and "warn" policies, not "ignore".
+    // All attempts exhausted — capture screenshot + tree before
+    // applying if_fail policy. Only capture for "error" and "warn"
+    // policies, not "ignore". Both fail-tolerantly: one missing
+    // doesn't suppress the other.
     if if_fail != "ignore" {
         let _ = capture_failure_screenshot(
+            driver,
+            ctx.capture_config,
+            ctx.block_name.unwrap_or("unnamed"),
+            ctx.global_step_index,
+            ctx.block_iteration,
+            ctx.step_index,
+            if_fail,
+        )
+        .await;
+        let _ = crate::capture::capture_failure_tree(
             driver,
             ctx.capture_config,
             ctx.block_name.unwrap_or("unnamed"),

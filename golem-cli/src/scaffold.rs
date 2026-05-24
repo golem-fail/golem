@@ -11,8 +11,29 @@ const GOLEM_TOML_TEMPLATE: &str = r#"# GOLEM project configuration
 #   [options]              — defaults for flows (step_timeout, screenshot_on_failure, ...)
 #   [vars]                 — project-level variables (referenced in flows as ${name})
 #   [[apps]]               — app registry (bundle, install_script, install_timeout_ms, devices)
+#   [device_settings]      — per-platform OS-level tweaks applied before flows run
 #
 # Run `golem install-script` to add an app and install script interactively.
+
+# Per-platform device settings applied once per session before any
+# flow runs. Useful for suppressing OS-level interruptions that bias
+# test results — system pop-ups, first-run sheets, gesture tutorials.
+# Idempotent across runs; survives emulator wipes (re-applied next
+# `golem run`).
+#
+# [device_settings.android]
+# # Suppress Android 14+ stylus handwriting overlay (otherwise a
+# # slow tap on a focused input opens a full-screen handwriting
+# # receiver that steals subsequent touches).
+# "secure.stylus_handwriting_enabled" = "0"
+# "secure.stylus_handwriting_default_value" = "0"
+# # Suppress heads-up notifications during test runs.
+# "global.heads_up_notifications_enabled" = "0"
+#
+# [device_settings.ios]
+# # iOS `defaults write` — domain dots become underscores in the
+# # TOML key (translated back before invoking `defaults write`).
+# # "com_apple_springboard.SBHomeScreenHintWelcomeShown" = "true"
 "#;
 
 /// Generate the content for a new flow file template.

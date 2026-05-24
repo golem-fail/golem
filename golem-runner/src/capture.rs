@@ -105,6 +105,62 @@ pub async fn capture_failure_screenshot(
     Ok(path)
 }
 
+/// Build the path for the hierarchy-tree dump that accompanies a
+/// failure screenshot. Same naming scheme + directory, `.json`
+/// extension. Lives next to the PNG so a reader can pair them
+/// without guessing.
+pub fn build_tree_path(
+    config: &CaptureConfig,
+    block_name: &str,
+    global_step_index: u64,
+    block_iteration: u32,
+    step_index: usize,
+    failure_type: &str,
+) -> PathBuf {
+    let filename = format!(
+        "{}_{}_{}_{}_{}_tree.json",
+        global_step_index,
+        sanitize_filename(block_name),
+        block_iteration,
+        step_index,
+        failure_type,
+    );
+    screenshot_dir(config).join(filename)
+}
+
+/// Dump the accessibility tree alongside the failure screenshot.
+///
+/// Cheap to run (~30KB JSON, single hierarchy fetch) and dramatically
+/// improves post-mortem signal for intermittents — the screenshot
+/// shows what was on-screen, the tree shows whether golem could see
+/// the expected element at all. Errors are non-fatal: failure-time
+/// capture is best-effort.
+pub async fn capture_failure_tree(
+    driver: &dyn PlatformDriver,
+    config: &CaptureConfig,
+    block_name: &str,
+    global_step_index: u64,
+    block_iteration: u32,
+    step_index: usize,
+    failure_type: &str,
+) -> Result<PathBuf> {
+    if !config.screenshot_on_failure || !config.write_to_disk {
+        anyhow::bail!("Tree dump is disabled");
+    }
+
+    let (root, _meta) = driver.get_hierarchy().await?;
+    let json = serde_json::to_string_pretty(&root)?;
+
+    let path = build_tree_path(config, block_name, global_step_index, block_iteration, step_index, failure_type);
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    std::fs::write(&path, json)?;
+    Ok(path)
+}
+
 /// Build the recording directory for this flow/device.
 fn recording_dir(config: &CaptureConfig) -> PathBuf {
     config.output_dir

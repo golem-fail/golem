@@ -355,6 +355,7 @@ async fn handle_submit(
         coverage_override,
         rebuild,
         no_build,
+        device_settings: project_config.device_settings,
         // Server doesn't do its own human streaming — client handles output.
         stream_human: false,
     };

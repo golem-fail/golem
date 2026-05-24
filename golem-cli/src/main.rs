@@ -133,6 +133,7 @@ async fn main() -> anyhow::Result<()> {
                 coverage_override,
                 rebuild,
                 no_build,
+                device_settings: project_config.device_settings,
             };
 
             // Check if an orchestrator is already running
