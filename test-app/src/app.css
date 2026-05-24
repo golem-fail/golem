@@ -60,6 +60,15 @@ button {
   background: #fff;
   font-size: 14px;
   cursor: pointer;
+  /* Prevent Android's text-selection menu from triggering when a
+     tap exceeds the long-press threshold on slow / loaded
+     emulators. Without this, golem's `input tap` getting delayed
+     between DOWN/UP under sweep load can land on the button text
+     and pop a "Copy / Share / Select all" overlay that swallows
+     the click. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 button:hover:not(:disabled) {
