@@ -19,6 +19,12 @@ pub struct CaptureConfig {
     /// `golem.toml` `[options].record` — project-wide fallback for
     /// blocks where neither flow nor block sets a value.
     pub project_record: Option<bool>,
+    /// `--trace`: capture a screenshot + accessibility tree at every
+    /// step boundary into `{output_dir}/{flow}/{device}/trace/`.
+    /// Implies recording (the suite forces `cli_force_record =
+    /// Some(true)` when trace is set). Off by default — ~200ms/step
+    /// overhead.
+    pub trace: bool,
     /// When true, write results to disk. When false, skip all file output.
     pub write_to_disk: bool,
     /// Root output directory (default: `.golem/results`).
@@ -35,6 +41,7 @@ impl Default for CaptureConfig {
             screenshot_on_failure: true,
             cli_force_record: None,
             project_record: None,
+            trace: false,
             write_to_disk: true,
             output_dir: PathBuf::from(".golem/results"),
             flow_name: String::new(),
@@ -166,6 +173,187 @@ pub async fn capture_failure_tree(
         std::fs::create_dir_all(parent)?;
     }
 
+    std::fs::write(&path, json)?;
+    Ok(path)
+}
+
+/// Trace directory for `--trace` boundary snapshots.
+fn trace_dir(config: &CaptureConfig) -> PathBuf {
+    config.output_dir
+        .join(sanitize_filename(&config.flow_name))
+        .join(sanitize_filename(&config.device_name))
+        .join("trace")
+}
+
+/// Path for one boundary snapshot. `boundary_idx` is the global step
+/// counter — 0 = pre-flow, N (>=1) = after step N.
+pub fn build_trace_path(
+    config: &CaptureConfig,
+    boundary_idx: u64,
+    suffix: &str,
+    ext: &str,
+) -> PathBuf {
+    let filename = format!("{boundary_idx:03}_{suffix}.{ext}");
+    trace_dir(config).join(filename)
+}
+
+/// Splice PNG `tEXt` chunks into an existing PNG byte stream so each
+/// snapshot is self-describing — receiver can read context from the
+/// file alone without the surrounding directory or sidecar.
+///
+/// Cheap (~30µs for typical screenshots) and never re-encodes: tEXt
+/// chunks are inserted between IHDR and the first IDAT, parent boxes
+/// don't exist in PNG (flat chunk stream with per-chunk CRCs).
+///
+/// Returns the modified PNG bytes. On any malformed input we return
+/// the original unchanged — capture must never fail because of
+/// metadata fiddling.
+pub fn embed_png_metadata(png: &[u8], entries: &[(&str, &str)]) -> Vec<u8> {
+    const SIG: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    if png.len() < 8 || png[..8] != SIG {
+        return png.to_vec();
+    }
+    // Locate end of IHDR chunk: signature (8) + IHDR length (4) +
+    // type (4) + data (13) + crc (4) = byte 33.
+    let ihdr_end = 8 + 4 + 4 + 13 + 4;
+    if png.len() < ihdr_end {
+        return png.to_vec();
+    }
+    let mut out = Vec::with_capacity(png.len() + entries.len() * 64);
+    out.extend_from_slice(&png[..ihdr_end]);
+    for (key, value) in entries {
+        // PNG tEXt: keyword (Latin-1, 1-79 chars, no null) + null + text.
+        // Strip nulls defensively; values aren't constrained to ASCII
+        // but real Latin-1 is required for tEXt. UTF-8 escape on
+        // surprising bytes: lossy is fine for diagnostic metadata.
+        let mut payload = Vec::with_capacity(key.len() + 1 + value.len());
+        payload.extend(key.bytes().filter(|b| *b != 0));
+        payload.push(0);
+        payload.extend(value.bytes().filter(|b| *b != 0));
+        write_png_chunk(&mut out, b"tEXt", &payload);
+    }
+    out.extend_from_slice(&png[ihdr_end..]);
+    out
+}
+
+fn write_png_chunk(out: &mut Vec<u8>, chunk_type: &[u8; 4], data: &[u8]) {
+    out.extend_from_slice(&(data.len() as u32).to_be_bytes());
+    out.extend_from_slice(chunk_type);
+    out.extend_from_slice(data);
+    let mut crc = 0xFFFF_FFFFu32;
+    for &b in chunk_type.iter().chain(data.iter()) {
+        crc ^= b as u32;
+        for _ in 0..8 {
+            crc = if crc & 1 != 0 { 0xEDB8_8320 ^ (crc >> 1) } else { crc >> 1 };
+        }
+    }
+    out.extend_from_slice(&(!crc).to_be_bytes());
+}
+
+/// Capture one boundary snapshot — PNG + tree JSON pair.
+///
+/// Best-effort: errors are returned but the caller typically logs and
+/// continues, since trace failures must not abort the flow. Runs
+/// out-of-band of step timeouts (caller is responsible for invoking
+/// after `tokio::time::timeout` returns).
+pub async fn capture_trace_boundary(
+    driver: &dyn PlatformDriver,
+    config: &CaptureConfig,
+    boundary_idx: u64,
+    suffix: &str,
+    meta: TraceMeta<'_>,
+) -> Result<(PathBuf, PathBuf)> {
+    if !config.trace || !config.write_to_disk {
+        anyhow::bail!("trace capture disabled");
+    }
+    let png_path = build_trace_path(config, boundary_idx, suffix, "png");
+    let json_path = build_trace_path(config, boundary_idx, suffix, "json");
+    if let Some(parent) = png_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    // Screenshot + hierarchy fetched in series. They aren't perfectly
+    // co-temporal but the gap is sub-100ms — small enough that they
+    // describe "the same UI state" for forensic purposes.
+    let shot = driver.screenshot().await?;
+    let boundary_str = boundary_idx.to_string();
+    let after_step_str = meta.after_step.map(|n| n.to_string());
+    let mut entries: Vec<(&str, &str)> = vec![
+        ("golem-flow", &config.flow_name),
+        ("golem-device", &config.device_name),
+        ("golem-boundary", &boundary_str),
+        ("golem-wall-clock", meta.wall_clock),
+        ("golem-version", env!("CARGO_PKG_VERSION")),
+    ];
+    if let Some(ref s) = after_step_str {
+        entries.push(("golem-after-step", s));
+    }
+    if let Some(action) = meta.action {
+        entries.push(("golem-action", action));
+    }
+    let png_with_meta = embed_png_metadata(&shot.data, &entries);
+    std::fs::write(&png_path, &png_with_meta)?;
+    let (root, _meta) = driver.get_hierarchy().await?;
+    let json = serde_json::to_string_pretty(&root)?;
+    std::fs::write(&json_path, json)?;
+    Ok((png_path, json_path))
+}
+
+/// Snapshot-level metadata embedded into the PNG `tEXt` chunks.
+pub struct TraceMeta<'a> {
+    /// `None` for the pre-flow boundary; `Some(global_step_index)`
+    /// otherwise.
+    pub after_step: Option<u64>,
+    /// Action name that produced this boundary (e.g. "tap"). `None`
+    /// for the pre-flow boundary.
+    pub action: Option<&'a str>,
+    /// ISO-8601 UTC wall-clock at capture time.
+    pub wall_clock: &'a str,
+}
+
+/// Sidecar JSON describing trace boundaries within one block recording.
+///
+/// Lives at `recordings/{block}_{iter}_steps.json` so that
+/// `golem trace-extract` (future) can pull a video frame at the right
+/// offset using ffmpeg.
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct TraceSidecar {
+    pub flow: String,
+    pub device: String,
+    pub block: String,
+    pub iteration: u32,
+    pub golem_version: String,
+    pub recording_started_at_ms: u64,
+    pub boundaries: Vec<TraceBoundary>,
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
+pub struct TraceBoundary {
+    /// Global boundary index (0 = pre-flow, N = after step N).
+    pub boundary: u64,
+    /// `None` for the pre-flow boundary; `Some(step_count)` otherwise.
+    pub after_step: Option<u64>,
+    /// Milliseconds from `recording_started_at_ms` to this boundary.
+    pub offset_ms: u64,
+}
+
+pub fn write_trace_sidecar(
+    config: &CaptureConfig,
+    block_name: &str,
+    iteration: u32,
+    sidecar: &TraceSidecar,
+) -> Result<PathBuf> {
+    if !config.write_to_disk {
+        anyhow::bail!("sidecar write disabled");
+    }
+    let dir = config.output_dir
+        .join(sanitize_filename(&config.flow_name))
+        .join(sanitize_filename(&config.device_name))
+        .join("recordings");
+    std::fs::create_dir_all(&dir)?;
+    let filename = format!("{}_{}_steps.json", sanitize_filename(block_name), iteration);
+    let path = dir.join(filename);
+    let json = serde_json::to_string_pretty(sidecar)?;
     std::fs::write(&path, json)?;
     Ok(path)
 }

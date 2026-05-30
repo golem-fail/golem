@@ -144,6 +144,7 @@ async fn main() -> anyhow::Result<()> {
                 record: args.record,
                 no_record: args.no_record,
                 project_record: project_config.options.record,
+                trace: args.trace,
             };
 
             // Check if an orchestrator is already running
@@ -172,6 +173,7 @@ async fn main() -> anyhow::Result<()> {
                     "no_build": config.no_build,
                     "record": config.record,
                     "no_record": config.no_record,
+                    "trace": config.trace,
                 });
                 let all_passed = orchestrator::submit_and_wait(stream, &flow_paths, &config_json, config.verbose, config.debug).await?;
                 if !all_passed {

@@ -170,6 +170,9 @@ pub struct SuiteConfig {
     pub no_record: bool,
     /// `[options].record` from `golem.toml` — project-wide default.
     pub project_record: Option<bool>,
+    /// `--trace`: per-step forensic capture (screenshot + tree at
+    /// every boundary). Implies recording, beats `--no-record`.
+    pub trace: bool,
 }
 
 impl Default for SuiteConfig {
@@ -197,6 +200,7 @@ impl Default for SuiteConfig {
             record: false,
             no_record: false,
             project_record: None,
+            trace: false,
         }
     }
 }
@@ -528,6 +532,7 @@ impl SuiteRunner {
             let record = self.config.record;
             let no_record = self.config.no_record;
             let project_record = self.config.project_record;
+            let trace = self.config.trace;
             let coverage_groups_c = coverage_groups.clone();
             let coverage_progress_c = coverage_progress.clone();
             let coverage_group_idx = run.coverage_group;
@@ -563,6 +568,7 @@ impl SuiteRunner {
                         record,
                         no_record,
                         project_record,
+                        trace,
                     },
                     CoverageCtx {
                         groups: coverage_groups_c,
@@ -747,6 +753,8 @@ struct FlowRunConfig {
     no_record: bool,
     /// `golem.toml` `[options].record` — project-wide default.
     project_record: Option<bool>,
+    /// CLI `--trace` — per-step forensic capture (implies record).
+    trace: bool,
 }
 
 /// Build a synthetic `FlowReport` for a FlowRun short-circuited by the
@@ -989,6 +997,7 @@ async fn execute_flow_run(
         let record = cfg.record;
         let no_record = cfg.no_record;
         let project_record = cfg.project_record;
+        let trace = cfg.trace;
         handles.push(tokio::spawn(async move {
             run_flow_on_device(
                 flow_c,
@@ -1010,6 +1019,7 @@ async fn execute_flow_run(
                 record,
                 no_record,
                 project_record,
+                trace,
             )
             .await
         }));
@@ -1904,6 +1914,7 @@ async fn run_flow_on_device(
     record: bool,
     no_record: bool,
     project_record: Option<bool>,
+    trace: bool,
 ) -> FlowReport {
     let start = Instant::now();
     let device_name = device.name.clone();
@@ -1984,8 +1995,11 @@ async fn run_flow_on_device(
     //     true/false regardless of explicit block opts).
     //   * `project_record` is folded into the seed default below;
     //     `execute_flow` then refines per-flow + per-subflow.
-    // `--no-record` beats `--record` when both are passed.
-    let cli_force_record = if no_record {
+    // `--trace` beats everything (forces on). `--no-record` beats
+    // `--record` when both are passed.
+    let cli_force_record = if trace {
+        Some(true)
+    } else if no_record {
         Some(false)
     } else if record {
         Some(true)
@@ -2001,6 +2015,7 @@ async fn run_flow_on_device(
             write_to_disk: !no_results,
             cli_force_record,
             project_record,
+            trace,
             ..CaptureConfig::default()
         };
         if let Some(ref opts) = flow.flow.options {

@@ -176,6 +176,30 @@ pub async fn execute_flow<'a>(
     let mut perf_snapshots: Vec<PerfSnapshot> = Vec::new();
     let mut recordings: Vec<golem_report::RecordingEntry> = Vec::new();
     let mut block_iterations: HashMap<usize, u32> = HashMap::new();
+
+    // `--trace` boundary state, lazily populated when a recording block
+    // starts. One tracker active at a time since blocks don't nest.
+    // Reset to None when the block recording stops (sidecar flushed).
+    let mut block_trace: Option<BlockTrace> = None;
+
+    // Pre-first-step capture (boundary 0). Only fire at the topmost
+    // entry into a flow — subflows pick up an already-incremented
+    // global_step_index from the parent, so checking == 0 distinguishes
+    // them. No tracker yet (no block recording has started); the trace
+    // sits in the trace/ dir but won't appear in any sidecar. That's
+    // fine — pre-flow context is rarely consulted via sidecar.
+    if ctx.capture_config.trace && ctx.global_step_index == 0 {
+        if let Err(e) = crate::capture::capture_trace_boundary(
+            driver, ctx.capture_config, 0, "start",
+            crate::capture::TraceMeta {
+                after_step: None,
+                action: None,
+                wall_clock: &iso8601_now(),
+            },
+        ).await {
+            warnings.push(format!("trace boundary 0 capture failed: {e}"));
+        }
+    }
     let perf_enabled = flow
         .flow
         .options
@@ -341,6 +365,19 @@ pub async fn execute_flow<'a>(
                     "start_recording failed for block '{}' iter {}: {}",
                     block_label, block_iter_for_recording, e
                 ));
+            } else if ctx.capture_config.trace {
+                // Open a trace tracker for this block iteration. The
+                // first boundary (offset 0) is "just after recording
+                // started, before step 1 of this block." When the
+                // parent flow has run previous steps, this also lets
+                // viewers locate post-step-N inside the right video.
+                block_trace = Some(BlockTrace {
+                    block_label: block_label.clone(),
+                    iteration: block_iter_for_recording,
+                    recording_started_at_ms: now_unix_ms(),
+                    recording_started_at: std::time::Instant::now(),
+                    boundaries: Vec::new(),
+                });
             }
         }
         for (step_idx, step) in block.steps.iter().enumerate() {
@@ -379,6 +416,7 @@ pub async fn execute_flow<'a>(
                     } else {
                         None
                     };
+                    flush_trace_sidecar(&mut block_trace, ctx.capture_config, &mut warnings);
                     ctx.emit(golem_events::EventKind::BlockFinished {
                         block_name: block_label.clone(),
                         block_index: current_idx,
@@ -409,7 +447,45 @@ pub async fn execute_flow<'a>(
             });
             let step_start = Instant::now();
             crate::reset_step_tree_stats();
-            match execute_step_with_policy(step, driver, vars, default_timeout_ms, ctx, &flow.flow.apps).await {
+            let step_action_result = execute_step_with_policy(
+                step, driver, vars, default_timeout_ms, ctx, &flow.flow.apps,
+            ).await;
+
+            // `--trace` post-step capture, OOB of the step timeout
+            // budget. Boundary index N == "after step N". Errors are
+            // collected as warnings; the flow continues so trace
+            // failures never abort a real run.
+            if ctx.capture_config.trace {
+                let suffix = format!(
+                    "after_{}_{}_{}",
+                    crate::capture::sanitize_filename(&block_label),
+                    block_iter_for_recording,
+                    step_idx + 1,
+                );
+                match crate::capture::capture_trace_boundary(
+                    driver, ctx.capture_config, step_count, &suffix,
+                    crate::capture::TraceMeta {
+                        after_step: Some(step_count),
+                        action: Some(&step.action),
+                        wall_clock: &iso8601_now(),
+                    },
+                ).await {
+                    Ok(_) => {
+                        if let Some(ref mut bt) = block_trace {
+                            bt.boundaries.push(crate::capture::TraceBoundary {
+                                boundary: step_count,
+                                after_step: Some(step_count),
+                                offset_ms: bt.recording_started_at.elapsed().as_millis() as u64,
+                            });
+                        }
+                    }
+                    Err(e) => warnings.push(format!(
+                        "trace boundary {step_count} capture failed: {e}"
+                    )),
+                }
+            }
+
+            match step_action_result {
                 Ok(StepOutcome::Success) => {
                     ctx.emit(golem_events::EventKind::StepFinished {
                         global_step_index: step_count,
@@ -475,6 +551,7 @@ pub async fn execute_flow<'a>(
                     } else {
                         None
                     };
+                    flush_trace_sidecar(&mut block_trace, ctx.capture_config, &mut warnings);
                     // Emit BlockFinished even on failure so the
                     // recording-path event reaches stream/accumulator
                     // before the FlowFinished sweep.
@@ -527,6 +604,7 @@ pub async fn execute_flow<'a>(
             None
         };
 
+        flush_trace_sidecar(&mut block_trace, ctx.capture_config, &mut warnings);
         ctx.emit(golem_events::EventKind::BlockFinished {
             block_name: block_label.clone(),
             block_index: current_idx,
@@ -697,6 +775,55 @@ enum ThresholdResult {
     Ok,
     Warn(String),
     Error(String),
+}
+
+struct BlockTrace {
+    block_label: String,
+    iteration: u32,
+    recording_started_at_ms: u64,
+    recording_started_at: std::time::Instant,
+    boundaries: Vec<crate::capture::TraceBoundary>,
+}
+
+fn now_unix_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+fn iso8601_now() -> String {
+    let dt: chrono::DateTime<chrono::Utc> = std::time::SystemTime::now().into();
+    dt.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+}
+
+/// Take the active `BlockTrace`, write its sidecar JSON next to the
+/// block recording, and reset the slot to `None`. No-op when no trace
+/// is active. Failures collected as warnings — sidecar write must not
+/// fail a flow.
+fn flush_trace_sidecar(
+    slot: &mut Option<BlockTrace>,
+    capture_config: &crate::capture::CaptureConfig,
+    warnings: &mut Vec<String>,
+) {
+    let Some(bt) = slot.take() else { return };
+    let sidecar = crate::capture::TraceSidecar {
+        flow: capture_config.flow_name.clone(),
+        device: capture_config.device_name.clone(),
+        block: bt.block_label.clone(),
+        iteration: bt.iteration,
+        golem_version: env!("CARGO_PKG_VERSION").to_string(),
+        recording_started_at_ms: bt.recording_started_at_ms,
+        boundaries: bt.boundaries,
+    };
+    if let Err(e) = crate::capture::write_trace_sidecar(
+        capture_config, &bt.block_label, bt.iteration, &sidecar,
+    ) {
+        warnings.push(format!(
+            "trace sidecar write failed for block '{}' iter {}: {}",
+            bt.block_label, bt.iteration, e
+        ));
+    }
 }
 
 fn evaluate_thresholds(snapshot: &PerfSnapshot, options: Option<&FlowOptions>) -> ThresholdResult {

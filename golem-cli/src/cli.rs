@@ -94,6 +94,13 @@ pub struct RunArgs {
     #[arg(long)]
     pub no_record: bool,
 
+    /// Forensic capture mode for intermittent investigation. Forces
+    /// recording on (beats `--no-record`) and captures a screenshot +
+    /// accessibility tree at every step boundary. ~200ms/step
+    /// overhead — not for regular CI runs.
+    #[arg(long)]
+    pub trace: bool,
+
     /// Skip app data clear between flows
     #[arg(long)]
     pub no_clean: bool,

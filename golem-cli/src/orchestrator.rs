@@ -300,6 +300,7 @@ async fn handle_submit(
     let no_build = cfg["no_build"].as_bool().unwrap_or(false);
     let record = cfg["record"].as_bool().unwrap_or(false);
     let no_record = cfg["no_record"].as_bool().unwrap_or(false);
+    let trace = cfg["trace"].as_bool().unwrap_or(false);
 
     // Re-read the project's golem.toml from the client's project_root so
     // apps pick up bundle IDs, install scripts, and device defaults the
@@ -361,6 +362,7 @@ async fn handle_submit(
         record,
         no_record,
         project_record: project_config.options.record,
+        trace,
         // Server doesn't do its own human streaming — client handles output.
         stream_human: false,
     };

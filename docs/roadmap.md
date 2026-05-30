@@ -15,44 +15,28 @@ rotation needed). Remaining gap:
 
 **Files:** `golem-driver/src/ios.rs` (physical path).
 
-## `--trace` flag: per-step forensic capture
+## `golem trace-extract` subcommand
 
-CLI flag for investigating intermittent failures. Layered on top
-of the recording feature above:
+`--trace` is shipped: forces recording on, captures a screenshot +
+accessibility-tree at every step boundary, writes a per-block sidecar
+mapping each boundary to its ms offset within the block recording.
+PNGs carry self-describing `tEXt` metadata
+(flow/device/block/boundary/wall-clock/version) so a single file can
+travel without context.
 
-- Forces `record = true` for every block (single video covers the
-  whole flow per device).
-- Captures **tree + screenshot before and after every step** to
-  `results/{flow}/{device}/trace/{step}_pre.{png,json}` and
-  `_post.{png,json}`. ~150KB screenshot + ~30KB JSON per phase,
-  two phases per step ≈ ~400KB/step. 35-test sweep ≈ 600MB.
-  Acceptable — per-flow dirs already overwrite each run.
-- Adds **step-timestamp sidecar** for the per-block video:
-  `recordings/{block}_{iter}_steps.json` mapping each step's
-  global index to its wall-clock offset from recording start.
-  Enables `golem trace-extract <flow> <step>` (future subcommand)
-  to pull a frame at the right offset via ffmpeg — captures
-  animation between steps that step-boundary screenshots miss.
+Remaining follow-up: a `golem trace-extract <flow> <step>` (or
+`<flow> <boundary_ms>`) subcommand that pulls a video frame at the
+sidecar offset. Two impls considered:
 
-**Why both video + per-step disk?** Video covers
-animation-between-steps (e.g. alert dismiss-then-tap races); the
-per-step tree dump captures the accessibility-tree timeline as
-greppable JSON that no video format can. Complementary.
+- **Shell ffmpeg**: simplest, zero build deps. Fails if ffmpeg
+  isn't installed (~not preinstalled on macOS or minimal Linux).
+- **Pure-Rust stack** (`mp4` + `openh264` + `image`): ~2.5-4 MB
+  added to the release binary; works in any env (relevant if golem
+  ever exposes an MCP server). Defer until that use case
+  materialises — `--trace` PNGs already give snapshot-time frames
+  for the common case.
 
-**Off by default** — ~200ms/step overhead from screenshot + tree
-capture, plus the constant record cost. Suitable for
-investigation runs, not regular CI.
-
-**Pre-fail context is the key use case.** Today's failure-time
-screenshot + tree (already shipped) covers "what was on screen
-when X failed." `--trace` adds "what was on screen for the 5
-steps leading up to X" — sometimes the failure isn't the bug.
-
-**Files:** `golem-cli/src/cli.rs` (flag + plumbing),
-`golem-runner/src/policy.rs` (per-step pre/post capture hook),
-`golem-runner/src/capture.rs` (trace dir path helpers),
-`golem-cli/src/trace_extract.rs` (new subcommand for video frame
-extraction; depends on ffmpeg presence).
+**Files:** `golem-cli/src/trace_extract.rs` (new subcommand).
 
 ## Phase 2 and Phase 3 robustness sweep coverage
 
