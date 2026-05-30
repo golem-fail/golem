@@ -1,19 +1,121 @@
 # Roadmap
 
+## Recording: per-block default with cascading config
+
+Today recording works only via explicit `start_recording` /
+`stop_recording` step actions. The `--record` CLI flag and
+`[flow.options].record` field are parsed but ignored. Replace this
+with a per-block-primary model that cascades from project → flow →
+block, with block-level being the natural unit (record a specific
+test section, skip setup/teardown).
+
+**Config layering (highest priority wins; falsy can override truthy):**
+
+| Priority | Source | Scope |
+|---|---|---|
+| 1 | `--trace` CLI flag | Forces record on every block (plus per-step tree/screenshot dumps) |
+| 2 | `--no-record` CLI flag | Forces record off everywhere (overrides everything below) |
+| 3 | `--record` CLI flag | Defaults every block to record (block can still override `record = false`) |
+| 4 | `[[block]] record = true \| false` | Per-block opt-in / opt-out |
+| 5 | `[flow.options] record = true` | Defaults every block in this flow to record |
+| 6 | `golem.toml [options] record = true` | Project-wide default |
+
+**Drop step-level `start_recording` / `stop_recording` actions.**
+They compose poorly with branching, loops, and multi-device flows.
+Block-level is the right granularity — users wanting sub-block
+control should split the block. Migrate any existing flows.
+
+**Multi-device, iteration, file naming.** When a block runs on
+multiple devices, each records independently:
+`{output_dir}/{flow}/{device}/recordings/{block}_{iter}.mp4`. Loops
+get separate files per iteration so timestamps line up.
+
+**Android 3-minute screenrecord cap.** `adb shell screenrecord`
+truncates output at ~3 min on older Android. Auto-rotate every
+~2:55: emit `{block}_{iter}_part1.mp4`, `_part2.mp4`, etc. Apply
+the same rotation on iOS for consistency even though `simctl io
+recordVideo` has no inherent cap — keeps the file-naming uniform
+across platforms. Modern Android (11+) may have removed the cap;
+verify before special-casing.
+
+**Implementation order:**
+1. Wire `--record` / `[flow.options].record` / `[options].record`
+   through to `CaptureConfig.record` (consolidates two existing
+   "not yet wired" roadmap entries below).
+2. Add block-level `record` field to `Block` in golem-parser; honour
+   in the executor with the cascading priority above.
+3. Add `--no-record` symmetric flag.
+4. Drop `start_recording` / `stop_recording` step actions; migrate
+   any in-tree flows using them.
+5. Implement file naming + Android part-rotation (start as a
+   single-part file; rotate when duration exceeds the cap).
+
+**Files:** `golem-cli/src/cli.rs`, `golem-parser/src/lib.rs`
+(`Block.record`, `FlowOptions.record`), `golem-cli/src/project.rs`
+(project-level record default), `golem-runner/src/capture.rs`
+(rotation logic), `golem-runner/src/executor.rs` (per-block
+start/stop), `golem-runner/src/actions/media.rs` (delete the
+two action handlers).
+
+## `--trace` flag: per-step forensic capture
+
+CLI flag for investigating intermittent failures. Layered on top
+of the recording feature above:
+
+- Forces `record = true` for every block (single video covers the
+  whole flow per device).
+- Captures **tree + screenshot before and after every step** to
+  `results/{flow}/{device}/trace/{step}_pre.{png,json}` and
+  `_post.{png,json}`. ~150KB screenshot + ~30KB JSON per phase,
+  two phases per step ≈ ~400KB/step. 35-test sweep ≈ 600MB.
+  Acceptable — per-flow dirs already overwrite each run.
+- Adds **step-timestamp sidecar** for the per-block video:
+  `recordings/{block}_{iter}_steps.json` mapping each step's
+  global index to its wall-clock offset from recording start.
+  Enables `golem trace-extract <flow> <step>` (future subcommand)
+  to pull a frame at the right offset via ffmpeg — captures
+  animation between steps that step-boundary screenshots miss.
+
+**Why both video + per-step disk?** Video covers
+animation-between-steps (e.g. alert dismiss-then-tap races); the
+per-step tree dump captures the accessibility-tree timeline as
+greppable JSON that no video format can. Complementary.
+
+**Off by default** — ~200ms/step overhead from screenshot + tree
+capture, plus the constant record cost. Suitable for
+investigation runs, not regular CI.
+
+**Pre-fail context is the key use case.** Today's failure-time
+screenshot + tree (already shipped) covers "what was on screen
+when X failed." `--trace` adds "what was on screen for the 5
+steps leading up to X" — sometimes the failure isn't the bug.
+
+**Files:** `golem-cli/src/cli.rs` (flag + plumbing),
+`golem-runner/src/policy.rs` (per-step pre/post capture hook),
+`golem-runner/src/capture.rs` (trace dir path helpers),
+`golem-cli/src/trace_extract.rs` (new subcommand for video frame
+extraction; depends on ffmpeg presence).
+
 ## Phase 2 and Phase 3 robustness sweep coverage
 
 Phase 1 covered single-test, single-device runs only (78 entries,
-64 at 5/5). Remaining sweep phases never ran:
+64 at 5/5).
 
-- **Phase 2 — multi-device**: every test 5× on each meaningful
-  multi-device combo (iPhone+iPad, iOS+Android simultaneous).
-  Surfaces XCUITest cross-flow corruption (already roadmapped
-  under "iOS concurrent flows") and Android emulator
-  resource-contention.
-- **Phase 3 — suite-context**: every test must succeed at least
-  once embedded in a multi-test suite run (not isolated). Surfaces
-  cleanup leakage between tests (orphan companions, port
-  exhaustion, install-cache stickiness).
+**Phase 3 — suite-context**: substantially exercised in the
+2026-06-01 session. The 35-test sweep on Pixel 8 Pro API 36 ran
+many times during intermittent investigation. Current ceiling
+~98% per sweep (172/175 across 5×). Distinct intermittents that
+were chased and either fixed or characterised: alert delivery
+race, dialog dismiss race, accept/dismiss internal deadlines,
+stylus handwriting overlay corruption, tap-too-long → text
+selection, `assert_alert` not polling. Phase 3 isn't formally
+"done at 5/5 per test" but the suite-context infrastructure is
+proven stable enough to keep using.
+
+**Phase 2 — multi-device** (iPhone+iPad, iOS+Android
+simultaneous): not yet run. Surfaces XCUITest cross-flow
+corruption (already roadmapped under "iOS concurrent flows") and
+Android emulator resource-contention.
 
 Tracking files (`/tmp/golem_robust.{json,log}`) and the `robust.sh`
 driver script were transient — re-derivable from the sweep plan.
@@ -198,10 +300,6 @@ Teardown blocks are parsed but never executed. The executor ignores the `teardow
 
 No app data cleaning logic exists in the execution path. The flag is accepted but there is nothing to skip.
 
-### `--record` — Auto screen recording
-
-Flag is accepted but never triggers recording. Recording only works via explicit `start_recording`/`stop_recording` steps in flows.
-
 ### `--max-concurrency <N>` — Parallel device limit
 
 Flag is defined but never read. `ResourceManager` uses default concurrency config regardless of this value.
@@ -210,11 +308,11 @@ Flag is defined but never read. `ResourceManager` uses default concurrency confi
 
 These `[flow.options]` fields are parsed into `FlowOptions` but never read during execution.
 
-### `record` / `recording_dir` — Auto recording
-
-Both parsed but ignored. `CaptureConfig` hardcodes `record: false` and `recording_dir: .golem/recordings`. Recording only works via explicit `start_recording`/`stop_recording` steps.
-
-`screenshot_dir` and `recording_dir` are superseded by the unified output directory design (see below).
+The `record` and `recording_dir` cases are covered by the
+"Recording: per-block default with cascading config" entry at the
+top — that's where the actual wiring lands. `screenshot_dir` and
+`recording_dir` are also superseded by the unified output
+directory design.
 
 ## Ethereal Email Integration
 
@@ -280,9 +378,20 @@ Not blocking — single-device runs are stable, multi-device retry-flaky.
 
 ## Test App: Menu nav migration — remaining flows
 
-Menu nav (`tap on_accessibility_label="menu-toggle"` + `tap on_accessibility_label="goto-X"`) replaces `auto_scroll = true` for non-scroll-testing flows.
+Menu nav (`tap on_accessibility_label="menu-toggle"` +
+`tap on_accessibility_label="goto-X"`) replaces `auto_scroll = true`
+for non-scroll-testing flows.
 
-**Still on auto_scroll:** `device_controls` (auto_scroll struggles to reach `Theme:` row on iPhone — strategy 1 stalls, strategy 2 stalls; separate scroll-strategy bug, not menu nav). Intentionally on auto_scroll: `scroll.test`, `scroll_search.test`.
+Most flows are migrated. `device_controls` now uses menu nav for
+all navigation; one residual `auto_scroll = true` survives on the
+"after press(home) + relaunch, find Theme: again" step (the
+relaunch state means the menu may not be where it was). That's
+the correct use of auto_scroll, not pending migration.
+
+Intentionally on auto_scroll: `scroll.test`, `scroll_search.test`,
+`element_find.test` (Scroll List items are inside an inner
+overflow-y:auto container — auto_scroll is the only way to bring
+items 1-4 into the outer viewport).
 
 ## Android: AndroidManifest permission persistence
 
