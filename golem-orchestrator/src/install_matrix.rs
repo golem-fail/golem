@@ -140,7 +140,7 @@ mod tests {
             install_script: Some(InstallScriptValue::Single("scripts/i.sh".into())),
             install_timeout_ms: None,
         }];
-        let suite = plan(&[a, b], &apps, tmp.path(), None, None).await.unwrap();
+        let suite = plan(&[a, b], &apps, tmp.path(), None, None, 1).await.unwrap();
         assert_eq!(suite.install_matrix.len(), 1,
             "two flows on the same (platform, app) SHALL produce one entry");
     }
@@ -176,7 +176,7 @@ mod tests {
                 install_timeout_ms: None,
             },
         ];
-        let suite = plan(&[f], &apps, tmp.path(), None, None).await.unwrap();
+        let suite = plan(&[f], &apps, tmp.path(), None, None, 1).await.unwrap();
         assert_eq!(suite.install_matrix.len(), 2,
             "chat-test apps on different platforms SHALL produce 2 install entries");
     }
@@ -193,7 +193,7 @@ mod tests {
             [[flow.apps.devices]]
             os = "ios"
         "#);
-        let suite = plan(&[f], &[], tmp.path(), None, None).await.unwrap();
+        let suite = plan(&[f], &[], tmp.path(), None, None, 1).await.unwrap();
         assert!(suite.install_matrix.is_empty(),
             "apps without install_script SHALL NOT appear in install_matrix");
     }
@@ -212,7 +212,7 @@ mod tests {
             os = "ios"
             type = "tablet"
         "#);
-        let suite = plan(&[f], &[], tmp.path(), None, None).await.unwrap();
+        let suite = plan(&[f], &[], tmp.path(), None, None, 1).await.unwrap();
         assert_eq!(suite.install_matrix.len(), 1);
         let entry = &suite.install_matrix[0];
         assert_eq!(entry.device_constraints.len(), 1);

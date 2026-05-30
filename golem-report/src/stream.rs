@@ -296,15 +296,19 @@ pub async fn stream_human(
                     }
                 }
             }
-            EventKind::FlowStarted { flow_name, .. } => {
+            EventKind::FlowStarted { flow_name, repeat, .. } => {
                 let name = fmt_flow_name(flow_name, use_color);
+                let repeat_suffix = repeat
+                    .as_ref()
+                    .map(|r| format!("  (run {}/{})", r.index + 1, r.total))
+                    .unwrap_or_default();
                 if use_color {
                     eprintln!(
-                        "{ts}{dp}{BOLD_GREEN}\u{25B6}{RESET} {name}  {DIM}device={}{RESET}",
+                        "{ts}{dp}{BOLD_GREEN}\u{25B6}{RESET} {name}{repeat_suffix}  {DIM}device={}{RESET}",
                         event.device_id
                     );
                 } else {
-                    eprintln!("{ts}{dp}\u{25B6} {name}  device={}", event.device_id);
+                    eprintln!("{ts}{dp}\u{25B6} {name}{repeat_suffix}  device={}", event.device_id);
                 }
             }
             EventKind::BlockStarted { block_name, iteration, .. } => {

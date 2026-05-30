@@ -42,6 +42,12 @@ pub struct FlowRun {
     pub slots: Vec<DeviceSlot>,
     pub coverage_group: Option<usize>,
     pub covers_boxes: Vec<usize>,
+    /// Repeat-index for `--repeat N` invocations. 0..N-1. Always 0
+    /// when N=1. Drives the per-FlowRun output dir override
+    /// (`{output_dir}/run_{repeat_index+1}/`) and flows through into
+    /// `FlowStarted` / `FlowFinished` events so renderers and the
+    /// flake-summary tally can group by run.
+    pub repeat_index: u32,
 }
 
 /// Coverage group: shared goal across a set of FlowRuns. Used by `One`
@@ -133,6 +139,7 @@ pub async fn plan(
     project_root: &Path,
     platform_override: Option<Platform>,
     coverage_override: Option<CoverageStrategy>,
+    repeat: u32,
 ) -> Result<ParsedSuite> {
     let mut flows: Vec<ParsedFlow> = Vec::with_capacity(flow_paths.len());
     let mut parse_failures: Vec<ParseFailure> = Vec::new();
@@ -163,6 +170,31 @@ pub async fn plan(
             coverage_override,
             &mut coverage_groups,
         )?);
+    }
+
+    // --repeat: replicate the entire (flow_runs + coverage_groups)
+    // batch N times. Each replica is tagged with its `repeat_index`
+    // and gets its own coverage groups (cloned with adjusted indices)
+    // so smart/one strategies operate per-run for valid flake
+    // comparison.
+    let repeat = repeat.max(1);
+    if repeat > 1 {
+        let base_groups = coverage_groups.clone();
+        let base_runs = flow_runs.clone();
+        coverage_groups.clear();
+        flow_runs.clear();
+        for run_idx in 0..repeat {
+            let group_base = coverage_groups.len();
+            coverage_groups.extend(base_groups.iter().cloned());
+            for run in &base_runs {
+                let mut r = run.clone();
+                r.repeat_index = run_idx;
+                if let Some(g) = r.coverage_group {
+                    r.coverage_group = Some(group_base + g);
+                }
+                flow_runs.push(r);
+            }
+        }
     }
 
     let install_matrix = build_install_matrix(&flows, &flow_runs, project_root);
@@ -552,6 +584,8 @@ fn expand_full(
                 slots,
                 coverage_group: None,
                 covers_boxes: Vec::new(),
+                // Default 0 — `plan()` rewrites this when --repeat > 1.
+                repeat_index: 0,
             });
         }
     }
@@ -1160,6 +1194,90 @@ mod tests {
         }
     }
 
+    // --repeat fan-out: every FlowRun replicated N times, each tagged
+    // with its repeat_index. Coverage groups are cloned per replica so
+    // smart/one progress stays per-run (each repeat is its own
+    // independent execution for flake comparison).
+    #[tokio::test]
+    async fn plan_repeat_fans_out_flow_runs() {
+        let tmp = TempDir::new().unwrap();
+        let flow = write_flow(tmp.path(), "f.test.toml", r#"
+            [flow]
+            name = "f"
+            [[flow.apps]]
+            name = "app"
+            [[flow.apps.devices]]
+            os = "ios"
+        "#);
+        let apps = vec![project_app("app", "com.app", Some("scripts/i.sh"))];
+
+        let single = plan(&[flow.clone()], &apps, tmp.path(), None, None, 1).await.unwrap();
+        let base_runs = single.flow_runs.len();
+        assert!(base_runs > 0, "preflight: single-run plan SHALL emit at least one FlowRun");
+
+        let repeated = plan(&[flow], &apps, tmp.path(), None, None, 3).await.unwrap();
+        assert_eq!(
+            repeated.flow_runs.len(),
+            base_runs * 3,
+            "repeat=3 SHALL emit 3× as many FlowRuns",
+        );
+
+        // repeat_index spread: 0..3, each appearing `base_runs` times.
+        let mut counts = [0usize; 3];
+        for r in &repeated.flow_runs {
+            assert!((r.repeat_index as usize) < 3, "repeat_index in range");
+            counts[r.repeat_index as usize] += 1;
+        }
+        assert_eq!(counts, [base_runs; 3]);
+    }
+
+    #[tokio::test]
+    async fn plan_repeat_clones_coverage_groups() {
+        let tmp = TempDir::new().unwrap();
+        // `coverage = "smart"` ensures a coverage group is emitted.
+        let flow = write_flow(tmp.path(), "f.test.toml", r#"
+            [flow]
+            name = "f"
+            [flow.options]
+            coverage = "smart"
+            [[flow.apps]]
+            name = "app"
+            [[flow.apps.devices]]
+            os = "ios:latest"
+        "#);
+        let apps = vec![project_app("app", "com.app", Some("scripts/i.sh"))];
+
+        let single = plan(&[flow.clone()], &apps, tmp.path(), None, None, 1).await.unwrap();
+        let base_groups = single.coverage_groups.len();
+        if base_groups == 0 {
+            // Device snapshot may not have an ios device at plan-time —
+            // bail rather than make a misleading assertion.
+            return;
+        }
+
+        let repeated = plan(&[flow], &apps, tmp.path(), None, None, 3).await.unwrap();
+        assert_eq!(
+            repeated.coverage_groups.len(),
+            base_groups * 3,
+            "each repeat batch SHALL get its own coverage groups so smart/one progress is per-run",
+        );
+
+        // Each FlowRun's `coverage_group` index should land inside its
+        // own batch's group range — i.e. groups grow by `base_groups`
+        // per repeat index.
+        for r in &repeated.flow_runs {
+            if let Some(g) = r.coverage_group {
+                let batch_start = r.repeat_index as usize * base_groups;
+                let batch_end = batch_start + base_groups;
+                assert!(
+                    g >= batch_start && g < batch_end,
+                    "FlowRun repeat={} coverage_group={} SHALL land in [{batch_start},{batch_end})",
+                    r.repeat_index, g,
+                );
+            }
+        }
+    }
+
     #[tokio::test]
     async fn plan_single_app_single_ios_run() {
         let tmp = TempDir::new().unwrap();
@@ -1172,7 +1290,7 @@ mod tests {
             os = "ios"
         "#);
         let apps = vec![project_app("app", "com.app", Some("scripts/i.sh"))];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None).await.unwrap();
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1).await.unwrap();
         assert_eq!(suite.flow_runs.len(), 1);
         assert_eq!(suite.flow_runs[0].slots.len(), 1);
         assert_eq!(suite.flow_runs[0].slots[0].platform, Some(Platform::Ios));
@@ -1193,7 +1311,7 @@ mod tests {
             os = "ios:18"
         "#);
         let apps = vec![project_app("app", "com.app", None)];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None).await.unwrap();
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1).await.unwrap();
         assert_eq!(suite.flow_runs.len(), 1);
         let spec = suite.flow_runs[0].slots[0].os_version.as_ref().unwrap();
         assert!(matches!(spec, OsVersionSpec::Exact { major: 18, .. }),
@@ -1212,7 +1330,7 @@ mod tests {
             os = ["ios:18", "ios:26"]
         "#);
         let apps = vec![project_app("app", "com.app", None)];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None).await.unwrap();
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1).await.unwrap();
         assert_eq!(suite.flow_runs.len(), 2,
             "os list of 2 entries SHALL produce 2 FlowRuns");
     }
@@ -1230,7 +1348,7 @@ mod tests {
             type = ["phone", "tablet"]
         "#);
         let apps = vec![project_app("app", "com.app", None)];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None).await.unwrap();
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1).await.unwrap();
         assert_eq!(suite.flow_runs.len(), 2);
         let mut types: Vec<_> = suite
             .flow_runs
@@ -1260,7 +1378,7 @@ mod tests {
             project_app("a", "com.a", None),
             project_app("b", "com.b", None),
         ];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None).await.unwrap();
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1).await.unwrap();
         assert_eq!(suite.flow_runs.len(), 1);
         assert_eq!(suite.flow_runs[0].slots.len(), 1,
             "apps with identical constraints SHALL share a slot");
@@ -1288,7 +1406,7 @@ mod tests {
             project_app("client", "com.c", None),
             project_app("supplier", "com.s", None),
         ];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None).await.unwrap();
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1).await.unwrap();
         assert_eq!(suite.flow_runs.len(), 1,
             "chat-test pattern SHALL emit one FlowRun (not two)");
         assert_eq!(suite.flow_runs[0].slots.len(), 2,
@@ -1314,7 +1432,7 @@ mod tests {
             project_app("client", "com.c", None),
             project_app("supplier", "com.s", None),
         ];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None).await.unwrap();
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1).await.unwrap();
         assert_eq!(suite.flow_runs.len(), 2,
             "client coverage fan-out SHALL produce 2 FlowRuns");
         for run in &suite.flow_runs {
@@ -1337,7 +1455,7 @@ mod tests {
             os = "android"
         "#);
         let apps = vec![project_app("app", "com.app", None)];
-        let suite = plan(&[flow], &apps, tmp.path(), Some(Platform::Android), None).await.unwrap();
+        let suite = plan(&[flow], &apps, tmp.path(), Some(Platform::Android), None, 1).await.unwrap();
         for run in &suite.flow_runs {
             for slot in &run.slots {
                 assert_eq!(slot.platform, Some(Platform::Android),
@@ -1358,7 +1476,7 @@ mod tests {
             os = "ios"
         "#);
         let apps = vec![project_app("a", "com.project.a", Some("scripts/a.sh"))];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None).await.unwrap();
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1).await.unwrap();
         let app = &suite.flows[0].flow.flow.apps[0];
         assert_eq!(app.bundle.as_deref(), Some("com.project.a"));
     }
@@ -1378,7 +1496,7 @@ mod tests {
             project_app("a", "com.a", Some("scripts/a.sh")),
             project_app("b", "com.b", Some("scripts/b.sh")),
         ];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None).await.unwrap();
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1).await.unwrap();
         let bundles: Vec<_> = suite
             .install_matrix
             .iter()
@@ -1401,7 +1519,7 @@ mod tests {
         let missing = tmp.path().join("does-not-exist.test.toml");
         let bad_syntax = write_flow(tmp.path(), "bad.test.toml", "this is not [[[valid toml");
         let apps = vec![project_app("a", "com.a", None)];
-        let suite = plan(&[good, missing.clone(), bad_syntax.clone()], &apps, tmp.path(), None, None)
+        let suite = plan(&[good, missing.clone(), bad_syntax.clone()], &apps, tmp.path(), None, None, 1)
             .await
             .expect("plan SHALL succeed even when some files fail to parse");
         assert_eq!(suite.flows.len(), 1, "only the parseable flow SHALL remain");
@@ -1428,7 +1546,7 @@ mod tests {
             [[flow.apps.devices]]
             os = "ios"
         "#);
-        let suite = plan(&[flow], &[], tmp.path(), None, None).await.unwrap();
+        let suite = plan(&[flow], &[], tmp.path(), None, None, 1).await.unwrap();
         assert_eq!(suite.install_matrix.len(), 1);
         assert!(suite.install_matrix[0].script_path.ends_with("scripts/flow-only.sh"));
     }

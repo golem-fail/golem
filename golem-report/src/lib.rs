@@ -196,6 +196,7 @@ impl From<&golem_events::SubstepEvent> for SubstepDetail {
 }
 
 /// Result of a single step within a flow.
+#[derive(Clone)]
 pub struct StepReport {
     /// Global step index across all blocks.
     pub global_step_index: u64,
@@ -229,6 +230,7 @@ pub struct StepReport {
 }
 
 /// Possible outcomes for a single step.
+#[derive(Clone)]
 pub enum StepOutcome {
     /// Step completed successfully.
     Success,
@@ -266,7 +268,7 @@ pub struct PerfSnapshot {
 }
 
 /// Result of a complete test flow.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct FlowReport {
     /// Name of the flow (e.g. "login_flow").
     pub flow_name: String,
@@ -306,6 +308,10 @@ pub struct FlowReport {
     /// Screen recordings saved during this flow, one entry per
     /// recorded block iteration.
     pub recordings: Vec<RecordingEntry>,
+    /// `--repeat` context. `None` for single-run suites; `Some(...)`
+    /// when the suite was fanned out across multiple runs. Renderers
+    /// and the flake-summary tally use this to partition flows by run.
+    pub repeat: Option<golem_events::RepeatContext>,
 }
 
 /// One screen recording produced by a recorded block iteration.
@@ -362,7 +368,7 @@ pub struct InstallReport {
 }
 
 /// Result of an entire test suite (multiple flows).
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct SuiteReport {
     /// Individual flow results.
     pub flows: Vec<FlowReport>,
@@ -398,6 +404,7 @@ mod tests {
             skipped_reason,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            repeat: None,
             started_at: None,
             finished_at: None,
         }

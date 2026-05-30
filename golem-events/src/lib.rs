@@ -41,6 +41,16 @@ pub struct Rect {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DeviceId(pub String);
 
+/// `--repeat` context attached to FlowStarted/FlowFinished. `index`
+/// is 0-based; `total` is the value passed to `--repeat` (1..=100).
+/// `Option<RepeatContext>` is `None` at the default `--repeat 1` so
+/// existing logs/events are unchanged.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RepeatContext {
+    pub index: u32,
+    pub total: u32,
+}
+
 impl std::fmt::Display for DeviceId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.0)
@@ -190,8 +200,26 @@ pub enum EventKind {
     },
 
     // Flow level
-    FlowStarted { flow_name: String, os_major: u32 },
-    FlowFinished { flow_name: String, success: bool, duration_ms: u64, seed: u64, os_major: u32 },
+    FlowStarted {
+        flow_name: String,
+        os_major: u32,
+        /// `--repeat` context. `None` when N=1 (historical layout
+        /// unchanged); `Some((index, total))` with 0-based index when
+        /// the suite was fanned out across multiple runs. Carried on
+        /// FlowStarted/FlowFinished only — Block/Step events inherit
+        /// via the surrounding flow, so renderers and accumulators
+        /// partition by (device_id, repeat_index) without bloating
+        /// every event.
+        repeat: Option<RepeatContext>,
+    },
+    FlowFinished {
+        flow_name: String,
+        success: bool,
+        duration_ms: u64,
+        seed: u64,
+        os_major: u32,
+        repeat: Option<RepeatContext>,
+    },
 
     // Block level
     BlockStarted { block_name: String, block_index: usize, iteration: u32 },

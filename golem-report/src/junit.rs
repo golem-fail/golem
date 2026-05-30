@@ -463,6 +463,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            repeat: None,
             started_at: None,
             finished_at: None,
         }
@@ -488,6 +489,7 @@ mod tests {
                     skipped_reason: None,
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    repeat: None,
                     started_at: None,
                     finished_at: None,
                 },
@@ -508,6 +510,7 @@ mod tests {
                     skipped_reason: None,
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    repeat: None,
                     started_at: None,
                     finished_at: None,
                 },
@@ -637,6 +640,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            repeat: None,
             started_at: None,
             finished_at: None,
         };
@@ -665,6 +669,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            repeat: None,
             started_at: None,
             finished_at: None,
         };
@@ -706,6 +711,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            repeat: None,
             started_at: None,
             finished_at: None,
         };
@@ -829,6 +835,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            repeat: None,
             started_at: None,
             finished_at: None,
         };
@@ -858,6 +865,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: vec!["ios".into(), "v26".into(), "tablet".into()],
             recordings: Vec::new(),
+            repeat: None,
             started_at: None,
             finished_at: None,
         };
@@ -886,6 +894,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            repeat: None,
             started_at: None,
             finished_at: None,
         };

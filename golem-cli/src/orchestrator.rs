@@ -301,6 +301,7 @@ async fn handle_submit(
     let record = cfg["record"].as_bool().unwrap_or(false);
     let no_record = cfg["no_record"].as_bool().unwrap_or(false);
     let trace = cfg["trace"].as_bool().unwrap_or(false);
+    let repeat = cfg["repeat"].as_u64().map(|n| n.clamp(1, 100) as u32).unwrap_or(1);
 
     // Re-read the project's golem.toml from the client's project_root so
     // apps pick up bundle IDs, install scripts, and device defaults the
@@ -363,6 +364,7 @@ async fn handle_submit(
         no_record,
         project_record: project_config.options.record,
         trace,
+        repeat,
         // Server doesn't do its own human streaming — client handles output.
         stream_human: false,
     };
@@ -416,8 +418,14 @@ pub async fn submit_and_wait(
     verbose: bool,
     debug: bool,
 ) -> Result<bool> {
+    let repeat = config["repeat"].as_u64().unwrap_or(1).max(1);
+    let repeat_suffix = if repeat > 1 {
+        format!(", {repeat} times")
+    } else {
+        String::new()
+    };
     eprintln!(
-        "  [orchestrator] client — submitting {} flow(s)",
+        "  [orchestrator] client — submitting {} flow(s){repeat_suffix}",
         flow_paths.len()
     );
 

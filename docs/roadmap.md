@@ -1,5 +1,24 @@
 # Roadmap
 
+## Parallel `--repeat` across identical device pool
+
+`--repeat N` ships today: the planner fans every FlowRun out N times,
+each tagged with `repeat_index`. The ResourceManager scheduler runs
+all FlowRuns concurrently when devices are free, so N identical
+booted devices = N parallel runs for free. No special code path
+required.
+
+Remaining polish:
+
+- **Boot-on-demand for identical pools**: today golem boots one
+  device per platform/shape to satisfy the slot, then reuses it
+  across all N repeats sequentially. To get the "5 identical
+  devices = 5 parallel runs" USP without manual pre-booting, the
+  `ResourceManager` would need to boot N matching sims/emulators
+  on demand when free RAM permits, capped by `--max-concurrency`.
+  Already roadmapped under "True Parallel Flow × Device
+  Concurrency" — that entry covers this case.
+
 ## Recording: physical iOS device support
 
 Cascading per-block recording is shipped end-to-end on iOS simulator

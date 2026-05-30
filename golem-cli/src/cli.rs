@@ -84,6 +84,16 @@ pub struct RunArgs {
     #[arg(long)]
     pub no_results: bool,
 
+    /// Repeat the entire suite N times. Each run writes to
+    /// `{output-dir}/run_{i}/`. A flake summary is printed at the end
+    /// listing tests that didn't pass every run. Useful for chasing
+    /// intermittents — `--repeat 5 --trace` gives 5 fully-traced
+    /// passes. Capped at 100; the daemon schedules all N runs as
+    /// independent FlowRuns, so they parallelise across available
+    /// devices for free.
+    #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u32).range(1..=100))]
+    pub repeat: u32,
+
     /// Enable auto-recording for every block. Beats per-block opt-out
     /// only when paired without `--no-record` (which always wins).
     #[arg(long)]

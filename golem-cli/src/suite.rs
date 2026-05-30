@@ -173,6 +173,11 @@ pub struct SuiteConfig {
     /// `--trace`: per-step forensic capture (screenshot + tree at
     /// every boundary). Implies recording, beats `--no-record`.
     pub trace: bool,
+    /// `--repeat N`: run the whole suite N times. Plan-phase fans
+    /// every FlowRun out N times, each tagged with a `repeat_index`.
+    /// Each repeat writes to `{output_dir}/run_{i}/`. Capped 1..=100
+    /// at the CLI layer.
+    pub repeat: u32,
 }
 
 impl Default for SuiteConfig {
@@ -201,6 +206,7 @@ impl Default for SuiteConfig {
             no_record: false,
             project_record: None,
             trace: false,
+            repeat: 1,
         }
     }
 }
@@ -323,6 +329,7 @@ impl SuiteRunner {
             &self.config.project_root,
             self.config.platform,
             self.config.coverage_override,
+            self.config.repeat,
         )
         .await?;
 
@@ -465,6 +472,7 @@ impl SuiteRunner {
                 skipped_reason: None,
                 covered_axes: Vec::new(),
                 recordings: Vec::new(),
+                repeat: None,
                 started_at: None,
                 finished_at: None,
             });
@@ -520,7 +528,16 @@ impl SuiteRunner {
             let seed = self.config.seed;
             let start_block = self.config.start.clone();
             let cli_vars = self.config.vars.clone();
-            let output_dir = self.config.output_dir.clone();
+            // Per-FlowRun output_dir override: when --repeat > 1 the
+            // planner tags each FlowRun with its repeat_index and we
+            // root the run into `{base}/run_{i+1}/`. At repeat = 1
+            // every FlowRun shares the base dir (historical layout).
+            let total_repeats = self.config.repeat.max(1);
+            let output_dir = if total_repeats > 1 {
+                self.config.output_dir.join(format!("run_{}", run.repeat_index + 1))
+            } else {
+                self.config.output_dir.clone()
+            };
             let no_results = self.config.no_results;
             let no_perf = self.config.no_perf;
             let debug = self.config.debug;
@@ -533,6 +550,16 @@ impl SuiteRunner {
             let no_record = self.config.no_record;
             let project_record = self.config.project_record;
             let trace = self.config.trace;
+            // RepeatContext only attached when --repeat > 1 so default
+            // event payloads are unchanged for single-run suites.
+            let repeat_ctx = if total_repeats > 1 {
+                Some(golem_events::RepeatContext {
+                    index: run.repeat_index,
+                    total: total_repeats,
+                })
+            } else {
+                None
+            };
             let coverage_groups_c = coverage_groups.clone();
             let coverage_progress_c = coverage_progress.clone();
             let coverage_group_idx = run.coverage_group;
@@ -569,6 +596,7 @@ impl SuiteRunner {
                         no_record,
                         project_record,
                         trace,
+                        repeat_ctx,
                     },
                     CoverageCtx {
                         groups: coverage_groups_c,
@@ -609,6 +637,7 @@ impl SuiteRunner {
                         skipped_reason: None,
                         covered_axes: Vec::new(),
                         recordings: Vec::new(),
+                        repeat: None,
                         started_at: None,
                         finished_at: None,
                     }, None));
@@ -755,6 +784,8 @@ struct FlowRunConfig {
     project_record: Option<bool>,
     /// CLI `--trace` — per-step forensic capture (implies record).
     trace: bool,
+    /// `--repeat` context for this FlowRun. `None` at N=1.
+    repeat_ctx: Option<golem_events::RepeatContext>,
 }
 
 /// Build a synthetic `FlowReport` for a FlowRun short-circuited by the
@@ -794,6 +825,7 @@ fn coverage_skip_report(
         started_at: None,
         finished_at: None,
         recordings: Vec::new(),
+        repeat: None,
     }
 }
 
@@ -939,6 +971,7 @@ async fn execute_flow_run(
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            repeat: None,
             started_at: None,
             finished_at: None,
         }];
@@ -998,6 +1031,7 @@ async fn execute_flow_run(
         let no_record = cfg.no_record;
         let project_record = cfg.project_record;
         let trace = cfg.trace;
+        let repeat_ctx = cfg.repeat_ctx;
         handles.push(tokio::spawn(async move {
             run_flow_on_device(
                 flow_c,
@@ -1020,6 +1054,7 @@ async fn execute_flow_run(
                 no_record,
                 project_record,
                 trace,
+                repeat_ctx,
             )
             .await
         }));
@@ -1044,6 +1079,7 @@ async fn execute_flow_run(
                     skipped_reason: None,
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    repeat: None,
                     started_at: None,
                     finished_at: None,
                 });
@@ -1915,6 +1951,7 @@ async fn run_flow_on_device(
     no_record: bool,
     project_record: Option<bool>,
     trace: bool,
+    repeat_ctx: Option<golem_events::RepeatContext>,
 ) -> FlowReport {
     let start = Instant::now();
     let device_name = device.name.clone();
@@ -2081,6 +2118,7 @@ async fn run_flow_on_device(
                     skipped_reason: Some(reason),
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    repeat: None,
                     started_at: None,
                     finished_at: None,
                 };
@@ -2112,6 +2150,7 @@ async fn run_flow_on_device(
                     skipped_reason: Some(reason),
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    repeat: None,
                     started_at: None,
                     finished_at: None,
                 };
@@ -2140,6 +2179,7 @@ async fn run_flow_on_device(
                     skipped_reason: Some(reason),
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    repeat: None,
                     started_at: None,
                     finished_at: None,
                 };
@@ -2196,6 +2236,7 @@ async fn run_flow_on_device(
                     skipped_reason: Some(reason),
                     covered_axes: Vec::new(),
                     recordings: Vec::new(),
+                    repeat: None,
                     started_at: None,
                     finished_at: None,
                 };
@@ -2206,6 +2247,7 @@ async fn run_flow_on_device(
     ctx.emit(golem_events::EventKind::FlowStarted {
         flow_name: flow_name.clone(),
         os_major: device.os_major,
+        repeat: repeat_ctx,
     });
     // CLI --start takes precedence over flow-level start field.
     let effective_start = start_block.as_deref().or(flow.flow.start.as_deref());
@@ -2227,6 +2269,7 @@ async fn run_flow_on_device(
                 duration_ms,
                 seed: actual_seed,
                 os_major: device.os_major,
+                repeat: repeat_ctx,
             });
             FlowReport {
                 flow_name: flow_name.clone(),
@@ -2242,6 +2285,7 @@ async fn run_flow_on_device(
                 skipped_reason: None,
                 covered_axes: device_covered_axes(&device),
                 recordings: result.recordings,
+                repeat: repeat_ctx,
                 started_at: None,
                 finished_at: None,
             }
@@ -2255,6 +2299,7 @@ async fn run_flow_on_device(
                 duration_ms,
                 seed: actual_seed,
                 os_major: device.os_major,
+                repeat: repeat_ctx,
             });
             FlowReport {
                 flow_name: flow_name.clone(),
@@ -2270,6 +2315,7 @@ async fn run_flow_on_device(
                 skipped_reason: None,
                 covered_axes: device_covered_axes(&device),
                 recordings: Vec::new(),
+                repeat: None,
                 started_at: None,
                 finished_at: None,
             }
@@ -2599,6 +2645,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            repeat: None,
             started_at: None,
             finished_at: None,
         }
@@ -2620,6 +2667,7 @@ mod tests {
             skipped_reason: None,
             covered_axes: Vec::new(),
             recordings: Vec::new(),
+            repeat: None,
             started_at: None,
             finished_at: None,
         }

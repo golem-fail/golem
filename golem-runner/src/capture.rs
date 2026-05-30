@@ -667,4 +667,82 @@ mod tests {
         assert!(result.is_err());
         assert!(driver.get_calls().is_empty());
     }
+
+    // ---------------------------------------------------------------
+    // 12. embed_png_metadata splices tEXt chunks
+    // ---------------------------------------------------------------
+
+    /// Construct a minimal valid PNG: signature + IHDR + IEND.
+    /// Pixel data is empty (zero-byte IDAT) — we only care about the
+    /// container/chunk structure for the metadata-splice test.
+    fn minimal_png() -> Vec<u8> {
+        let mut out = Vec::new();
+        out.extend_from_slice(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+        // IHDR (13 bytes): 1×1, 8-bit, RGB
+        let ihdr_data: [u8; 13] = [
+            0, 0, 0, 1, // width = 1
+            0, 0, 0, 1, // height = 1
+            8, 2, 0, 0, 0,
+        ];
+        write_png_chunk(&mut out, b"IHDR", &ihdr_data);
+        write_png_chunk(&mut out, b"IEND", &[]);
+        out
+    }
+
+    #[test]
+    fn embed_png_metadata_returns_original_for_malformed_input() {
+        let garbage = vec![0u8; 4]; // too short for signature
+        let out = embed_png_metadata(&garbage, &[("key", "value")]);
+        assert_eq!(out, garbage, "malformed input SHALL be returned unchanged");
+    }
+
+    #[test]
+    fn embed_png_metadata_preserves_signature_and_iend() {
+        let png = minimal_png();
+        let out = embed_png_metadata(&png, &[("golem-flow", "demo")]);
+        // Signature intact.
+        assert_eq!(&out[..8], &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+        // IHDR (length 13 + 4 type + 13 data + 4 crc = 25) immediately after.
+        assert_eq!(&out[12..16], b"IHDR");
+        // IEND chunk still present at the end (type bytes precede the
+        // 4-byte CRC). Search from the back.
+        assert!(out.windows(4).any(|w| w == b"IEND"));
+    }
+
+    #[test]
+    fn embed_png_metadata_inserts_text_chunks() {
+        let png = minimal_png();
+        let entries = [
+            ("golem-flow", "tap.test"),
+            ("golem-device", "iPhone 17"),
+            ("golem-boundary", "3"),
+        ];
+        let out = embed_png_metadata(&png, &entries);
+        // The output should contain each tEXt chunk: type marker + keyword + null + value.
+        for (k, v) in &entries {
+            let mut needle = Vec::from(*b"tEXt");
+            needle.extend_from_slice(k.as_bytes());
+            needle.push(0);
+            needle.extend_from_slice(v.as_bytes());
+            assert!(
+                out.windows(needle.len()).any(|w| w == needle.as_slice()),
+                "tEXt chunk for {k}={v} SHALL be present in output"
+            );
+        }
+        // Output must be strictly larger than input — chunks were added.
+        assert!(out.len() > png.len());
+    }
+
+    #[test]
+    fn embed_png_metadata_strips_null_bytes() {
+        let png = minimal_png();
+        // Null in keyword is illegal in PNG tEXt; verify we strip rather than emit invalid chunk.
+        let out = embed_png_metadata(&png, &[("with\0null", "ok")]);
+        // The literal byte sequence "with\0null" must NOT appear in output;
+        // sanitised "withnull" should instead.
+        let illegal: &[u8] = b"with\0null\0ok";
+        assert!(!out.windows(illegal.len()).any(|w| w == illegal));
+        let cleaned: &[u8] = b"withnull\0ok";
+        assert!(out.windows(cleaned.len()).any(|w| w == cleaned));
+    }
 }

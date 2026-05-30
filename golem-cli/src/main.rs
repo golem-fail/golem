@@ -145,6 +145,7 @@ async fn main() -> anyhow::Result<()> {
                 no_record: args.no_record,
                 project_record: project_config.options.record,
                 trace: args.trace,
+                repeat: args.repeat,
             };
 
             // Check if an orchestrator is already running
@@ -174,6 +175,7 @@ async fn main() -> anyhow::Result<()> {
                     "record": config.record,
                     "no_record": config.no_record,
                     "trace": config.trace,
+                    "repeat": config.repeat,
                 });
                 let all_passed = orchestrator::submit_and_wait(stream, &flow_paths, &config_json, config.verbose, config.debug).await?;
                 if !all_passed {
@@ -238,6 +240,13 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
 
+            // `--repeat` flake summary: tally per (flow, device) across
+            // all repeat runs. Empty (no-op) for single-run suites.
+            let flake_summary = build_flake_summary(&report.flows);
+            if !flake_summary.is_empty() {
+                eprint!("{}", render_flake_summary(&flake_summary));
+            }
+
             // Exit with appropriate code. Skipped flows (coverage-group
             // reclassify + install preconditions) don't fail the suite;
             // only genuine failures do.
@@ -276,6 +285,214 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// One flow's pass/fail count across N repeat runs. Sorted by
+/// "flakiest first" — most failed runs at the top, then most warn
+/// runs, then alphabetical for stable output.
+struct FlakeEntry {
+    flow: String,
+    passed: u32,
+    failed: u32,
+    skipped: u32,
+    total: u32,
+}
+
+/// Tally pass/fail per (flow_name, device) across all repeat runs.
+/// `flows` is the flat `SuiteReport.flows` list — each entry already
+/// carries a `repeat: Option<RepeatContext>` populated by the runner
+/// when `--repeat > 1`. Returns empty when no entry has repeat set
+/// (single-run suites — no flake summary needed).
+fn build_flake_summary(flows: &[golem_report::FlowReport]) -> Vec<FlakeEntry> {
+    if !flows.iter().any(|f| f.repeat.is_some()) {
+        return Vec::new();
+    }
+    let mut acc: std::collections::BTreeMap<String, FlakeEntry> = std::collections::BTreeMap::new();
+    for f in flows {
+        let key = match &f.device_name {
+            Some(d) => format!("{} ({})", f.flow_name, d),
+            None => f.flow_name.clone(),
+        };
+        let entry = acc.entry(key.clone()).or_insert_with(|| FlakeEntry {
+            flow: key,
+            passed: 0,
+            failed: 0,
+            skipped: 0,
+            total: 0,
+        });
+        entry.total += 1;
+        if f.is_skipped() {
+            entry.skipped += 1;
+        } else if f.success {
+            entry.passed += 1;
+        } else {
+            entry.failed += 1;
+        }
+    }
+    let mut out: Vec<FlakeEntry> = acc.into_values().collect();
+    out.sort_by(|a, b| {
+        let a_flake = a.passed > 0 && a.failed > 0;
+        let b_flake = b.passed > 0 && b.failed > 0;
+        b_flake.cmp(&a_flake)
+            .then(b.failed.cmp(&a.failed))
+            .then(a.flow.cmp(&b.flow))
+    });
+    out
+}
+
+fn render_flake_summary(entries: &[FlakeEntry]) -> String {
+    use std::fmt::Write;
+    let use_color = std::io::IsTerminal::is_terminal(&std::io::stderr());
+    // Match the stream renderer's continuation indent — `Summary` /
+    // `Results:` lines start at column 13 (after the timestamp + space),
+    // so the flake block aligns when piped beside them.
+    const INDENT: &str = "             ";
+    const DIM: &str = "\x1b[2m";
+    const CYAN: &str = "\x1b[36m";
+    const RESET: &str = "\x1b[0m";
+    const BOLD_RED: &str = "\x1b[1;31m";
+    const BOLD_YELLOW: &str = "\x1b[1;33m";
+    const BOLD_GREEN: &str = "\x1b[1;32m";
+
+    let total_runs = entries.first().map(|e| e.total).unwrap_or(0);
+    let flakes = entries.iter().filter(|e| e.passed > 0 && e.failed > 0).count();
+    let stable_fails = entries.iter().filter(|e| e.passed == 0 && e.failed > 0).count();
+    let stable_passes = entries.iter()
+        .filter(|e| e.failed == 0 && e.passed > 0)
+        .count();
+
+    let header_body = format!(
+        "── {flakes} flake{}, {stable_fails} fail{}, {stable_passes} stable across {total_runs} runs ──",
+        if flakes == 1 { "" } else { "s" },
+        if stable_fails == 1 { "" } else { "s" },
+    );
+
+    let mut out = String::new();
+    if use_color {
+        let _ = writeln!(out, "\n{INDENT}{CYAN}{header_body}{RESET}");
+    } else {
+        let _ = writeln!(out, "\n{INDENT}{header_body}");
+    }
+
+    if flakes == 0 && stable_fails == 0 {
+        let line = "all flows passed in every run";
+        if use_color {
+            let _ = writeln!(out, "{INDENT}{DIM}{line}{RESET}");
+        } else {
+            let _ = writeln!(out, "{INDENT}{line}");
+        }
+        return out;
+    }
+
+    for e in entries {
+        let (label, label_color) = if e.passed > 0 && e.failed > 0 {
+            ("FLAKE", BOLD_YELLOW)
+        } else if e.failed > 0 {
+            ("FAIL ", BOLD_RED)
+        } else {
+            ("PASS ", BOLD_GREEN)
+        };
+        let body = format!("{:>3}/{:<3}  {}", e.passed, e.total, e.flow);
+        if use_color {
+            // Dim stable PASS rows — they're informational once flakes
+            // and stable fails are listed above; eye should land on the
+            // problematic rows first.
+            let body_color = if e.failed == 0 && e.passed > 0 { DIM } else { "" };
+            let body_reset = if e.failed == 0 && e.passed > 0 { RESET } else { "" };
+            let _ = writeln!(
+                out,
+                "{INDENT}{label_color}{label}{RESET}  {body_color}{body}{body_reset}",
+            );
+        } else {
+            let _ = writeln!(out, "{INDENT}{label}  {body}");
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use golem_events::RepeatContext;
+    use golem_report::FlowReport;
+
+    fn flow(name: &str, success: bool, repeat: Option<RepeatContext>, skipped: bool) -> FlowReport {
+        // `is_skipped` requires success=true + skipped_reason=Some
+        // (a coverage-group skip). Install-precondition skips keep
+        // success=false and classify as failures — we use the
+        // coverage-skip shape here so `skipped` rows actually count.
+        FlowReport {
+            flow_name: name.to_string(),
+            success: if skipped { true } else { success },
+            skipped_reason: if skipped { Some("coverage group satisfied".into()) } else { None },
+            device_name: Some("iPhone 17".into()),
+            repeat,
+            ..FlowReport::default()
+        }
+    }
+
+    #[test]
+    fn flake_summary_empty_when_no_repeat() {
+        // Single-run suites — every flow has repeat=None — get no flake summary.
+        let flows = vec![flow("a.test", true, None, false), flow("b.test", false, None, false)];
+        assert!(build_flake_summary(&flows).is_empty());
+    }
+
+    #[test]
+    fn flake_summary_tallies_pass_fail_skip() {
+        let r = |i| Some(RepeatContext { index: i, total: 3 });
+        let flows = vec![
+            flow("a.test", true, r(0), false),
+            flow("a.test", false, r(1), false),
+            flow("a.test", true, r(2), false),
+            flow("b.test", true, r(0), false),
+            flow("b.test", true, r(1), false),
+            flow("b.test", true, r(2), false),
+            flow("c.test", false, r(0), true),
+            flow("c.test", false, r(1), true),
+            flow("c.test", false, r(2), true),
+        ];
+        let summary = build_flake_summary(&flows);
+        let by_name: std::collections::HashMap<_, _> =
+            summary.iter().map(|e| (e.flow.clone(), e)).collect();
+
+        let a = by_name.get("a.test (iPhone 17)").expect("a entry");
+        assert_eq!((a.passed, a.failed, a.skipped, a.total), (2, 1, 0, 3));
+
+        let b = by_name.get("b.test (iPhone 17)").expect("b entry");
+        assert_eq!((b.passed, b.failed, b.skipped, b.total), (3, 0, 0, 3));
+
+        let c = by_name.get("c.test (iPhone 17)").expect("c entry");
+        // Skipped flows count as skipped (success-false-with-skipped-reason
+        // is still a skip for tally purposes).
+        assert_eq!((c.passed, c.failed, c.skipped, c.total), (0, 0, 3, 3));
+    }
+
+    #[test]
+    fn flake_summary_sort_is_flakes_first_then_failures_then_passes() {
+        let r = |i| Some(RepeatContext { index: i, total: 3 });
+        let flows = vec![
+            // pass-all
+            flow("z_pass.test", true, r(0), false),
+            flow("z_pass.test", true, r(1), false),
+            flow("z_pass.test", true, r(2), false),
+            // stable fail
+            flow("m_fail.test", false, r(0), false),
+            flow("m_fail.test", false, r(1), false),
+            flow("m_fail.test", false, r(2), false),
+            // flake (1/3)
+            flow("a_flake.test", true, r(0), false),
+            flow("a_flake.test", false, r(1), false),
+            flow("a_flake.test", false, r(2), false),
+        ];
+        let summary = build_flake_summary(&flows);
+        let names: Vec<&str> = summary.iter().map(|e| e.flow.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["a_flake.test (iPhone 17)", "m_fail.test (iPhone 17)", "z_pass.test (iPhone 17)"],
+            "SHALL sort flakes first, then stable failures, then stable passes",
+        );
+    }
 }
 
 /// Build a `file://` URI from an absolute path with percent-encoding so

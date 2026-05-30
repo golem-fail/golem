@@ -65,6 +65,7 @@ golem run [FILES...] [OPTIONS]
 | `--record` | Enable auto screen recording for every block. Loses to `--no-record`. |
 | `--no-record` | Force-disable recording everywhere — beats `--record`, flow options, and per-block opts. |
 | `--trace` | Forensic capture: forces recording on (beats `--no-record`) + writes screenshot + accessibility-tree at every step boundary to `results/.../trace/`. ~200ms/step overhead — investigation only. |
+| `--repeat <N>` | Repeat the whole suite N times (1..=100). Each run writes to `{output-dir}/run_{i}/`. The orchestrator fans every FlowRun out N times, so identical-device pools parallelise for free. A flake summary is printed at the end. |
 | `--no-clean` | Skip app data clear between flows (not yet implemented) |
 | `--no-teardown` | Skip teardown blocks (not yet wired) |
 | `--keep-devices` | Keep devices running after completion (not yet wired) |
