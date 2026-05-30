@@ -47,8 +47,6 @@ const KNOWN_ACTIONS: &[&str] = &[
     "push_notification",
     "open_link",
     "screenshot",
-    "start_recording",
-    "stop_recording",
     "add_media",
     "load_fixture",
     "load_mixin",

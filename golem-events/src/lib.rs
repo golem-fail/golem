@@ -195,7 +195,17 @@ pub enum EventKind {
 
     // Block level
     BlockStarted { block_name: String, block_index: usize, iteration: u32 },
-    BlockFinished { block_name: String, block_index: usize },
+    BlockFinished {
+        block_name: String,
+        block_index: usize,
+        iteration: u32,
+        /// Path to the screen recording for this block iteration, when
+        /// recording was active. `None` when recording was off or the
+        /// driver could not produce a file (e.g. iOS pre-recordVideo
+        /// wiring still bails). Absolute or output-dir-relative — the
+        /// renderer decides how to display.
+        recording_path: Option<String>,
+    },
 
     // Step level
     StepStarted {

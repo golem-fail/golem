@@ -105,6 +105,7 @@ mod tests {
             max_iterations: None,
             vars,
             save_to,
+            record: None,
         }
     }
 
@@ -121,6 +122,7 @@ mod tests {
             max_iterations: None,
             vars: HashMap::new(),
             save_to: HashMap::new(),
+            record: None,
         }
     }
 

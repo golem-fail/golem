@@ -953,20 +953,20 @@ mod tests {
 
         let calls = driver.get_calls();
         let method_names: Vec<&str> = calls.iter().map(|c| c.0.as_str()).collect();
-        // type: get_hierarchy (resolve), tap, type_text, get_hierarchy x2 (settle)
+        // execute_action bypasses execute_step_with_policy, so the
+        // out-of-band post-settle (added in policy.rs) doesn't run here.
+        // type: get_hierarchy (resolve), tap (focus), type_text
         // hide_keyboard: hide_keyboard
-        // tap: get_hierarchy (resolve), tap, get_hierarchy x2 (settle)
+        // tap: get_hierarchy (resolve), tap
         assert_eq!(
             method_names,
             vec![
                 "get_hierarchy",
                 "tap",
                 "type_text",
-                "get_hierarchy", "get_hierarchy",
                 "hide_keyboard",
                 "get_hierarchy",
                 "tap",
-                "get_hierarchy", "get_hierarchy",
             ]
         );
     }

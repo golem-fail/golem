@@ -84,9 +84,15 @@ pub struct RunArgs {
     #[arg(long)]
     pub no_results: bool,
 
-    /// Enable auto-recording
+    /// Enable auto-recording for every block. Beats per-block opt-out
+    /// only when paired without `--no-record` (which always wins).
     #[arg(long)]
     pub record: bool,
+
+    /// Force-disable auto-recording everywhere. Beats `--record`,
+    /// `[flow.options].record`, `[options].record`, and per-block opts.
+    #[arg(long)]
+    pub no_record: bool,
 
     /// Skip app data clear between flows
     #[arg(long)]

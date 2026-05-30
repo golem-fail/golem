@@ -201,7 +201,8 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
     // together.
     let has_props = report.os_major.is_some()
         || !report.perf_snapshots.is_empty()
-        || !report.covered_axes.is_empty();
+        || !report.covered_axes.is_empty()
+        || !report.recordings.is_empty();
     if has_props {
         let _ = writeln!(out, "    <properties>");
         if let Some(os) = report.os_major {
@@ -212,6 +213,15 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
                 out,
                 "      <property name=\"covered_axes\" value=\"{}\"/>",
                 xml_escape(&report.covered_axes.join(","))
+            );
+        }
+        for rec in &report.recordings {
+            let _ = writeln!(
+                out,
+                "      <property name=\"recording.{}.{}\" value=\"{}\"/>",
+                xml_escape(&rec.block),
+                rec.iteration,
+                xml_escape(&rec.path),
             );
         }
         for snap in &report.perf_snapshots {
@@ -452,6 +462,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         }
@@ -476,6 +487,7 @@ mod tests {
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 },
@@ -495,6 +507,7 @@ mod tests {
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 },
@@ -623,6 +636,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -650,6 +664,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -690,6 +705,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -812,6 +828,7 @@ mod tests {
             perf_snapshots: vec![sample_perf_snapshot()],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -840,6 +857,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: vec!["ios".into(), "v26".into(), "tablet".into()],
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -867,6 +885,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };

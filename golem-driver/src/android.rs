@@ -23,6 +23,16 @@ pub struct AndroidDriver {
     physical: bool,
     /// CDP lifecycle: None → SetupInProgress → Ready | Failed
     cdp: std::sync::Mutex<CdpLifecycle>,
+    /// Active screenrecord state. `start_recording` spawns a detached
+    /// `adb shell screenrecord` child and stashes the device-side path
+    /// + child handle; `stop_recording` signals the child, waits for
+    /// flush, and pulls the .mp4 to host tmp.
+    recording: tokio::sync::Mutex<Option<RecordingState>>,
+}
+
+struct RecordingState {
+    device_path: String,
+    child: tokio::process::Child,
 }
 
 enum CdpLifecycle {
@@ -147,6 +157,7 @@ impl AndroidDriver {
             package_name,
             physical,
             cdp: std::sync::Mutex::new(CdpLifecycle::Idle),
+            recording: tokio::sync::Mutex::new(None),
         }
     }
 
@@ -733,17 +744,77 @@ impl PlatformDriver for AndroidDriver {
     }
 
     async fn start_recording(&self, name: &str) -> Result<()> {
-        let path = format!("/sdcard/{name}.mp4");
-        // screenrecord runs in background; we detach it using nohup
-        self.adb(&["shell", "screenrecord", &path]).await?;
+        // `adb shell screenrecord <path>` blocks until the process is
+        // signalled, so spawn it as a detached child rather than
+        // awaiting completion. The handle stays in `self.recording`
+        // until stop_recording sends SIGINT and pulls the file.
+        let mut guard = self.recording.lock().await;
+        if guard.is_some() {
+            bail!("start_recording called while a recording is already in progress");
+        }
+        let device_path = format!("/sdcard/{name}.mp4");
+        // Sanitize name to a safe shell token. Driver-side: name comes
+        // from sanitize_filename in capture.rs, so this is belt-and-braces.
+        if device_path.chars().any(|c| c == '\'' || c == '"' || c == '$' || c == '`') {
+            bail!("invalid recording name {name:?}");
+        }
+        // `--time-limit 0` removes the historical 180s cap (Android 11+
+        // screenrecord supports the 0 sentinel). Older Android will
+        // still truncate at 3 min — golem targets modern devices, so
+        // we accept that as a known edge case rather than implementing
+        // file rotation + ffmpeg stitching.
+        let child = tokio::process::Command::new("adb")
+            .args([
+                "-s", &self.device_serial,
+                "shell", "screenrecord", "--time-limit", "0", &device_path,
+            ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .with_context(|| format!("spawning adb screenrecord for {device_path}"))?;
+        *guard = Some(RecordingState { device_path, child });
         Ok(())
     }
 
     async fn stop_recording(&self) -> Result<String> {
-        // Kill the screenrecord process
-        self.adb(&["shell", "pkill", "-INT", "screenrecord"])
-            .await?;
-        Ok("recording.mp4".to_string())
+        let mut guard = self.recording.lock().await;
+        let Some(mut state) = guard.take() else {
+            // No active recording — `cleanup.rs` calls this as an
+            // idempotent safety net, so absence is not an error.
+            return Ok(String::new());
+        };
+        // SIGINT screenrecord on-device so it flushes the mp4 trailer.
+        // Killing the local `adb shell` child does NOT propagate to
+        // the remote screenrecord — we have to signal it server-side.
+        let _ = self.adb(&["shell", "pkill", "-INT", "screenrecord"]).await;
+        // Give the device a moment to finalise the file (mp4 moov
+        // atom is written on SIGINT receipt).
+        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        // Reap the local adb shell so the child handle doesn't leak.
+        let _ = state.child.kill().await;
+        let _ = state.child.wait().await;
+
+        let tmp = std::env::temp_dir().join(format!(
+            "golem-rec-{}-{}.mp4",
+            self.device_serial.replace(['/', ':'], "_"),
+            std::process::id(),
+        ));
+        let tmp_str = tmp.to_string_lossy().to_string();
+        let output = tokio::process::Command::new("adb")
+            .args(["-s", &self.device_serial, "pull", &state.device_path, &tmp_str])
+            .output()
+            .await
+            .with_context(|| format!("adb pull {}", state.device_path))?;
+        if !output.status.success() {
+            bail!(
+                "adb pull {} failed: {}",
+                state.device_path,
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        // Best-effort cleanup of the on-device file.
+        let _ = self.adb(&["shell", "rm", "-f", &state.device_path]).await;
+        Ok(tmp_str)
     }
 
 

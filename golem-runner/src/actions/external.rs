@@ -799,8 +799,18 @@ mod tests {
 
         let step = make_step("dismiss_alert");
         let ctx = test_ctx(Path::new("."));
-        let result = handle_dismiss_alert(&step, &driver, &ctx).await;
-        assert!(result.is_err(), "dismiss_alert SHALL fail when no alert is displayed");
+        // dismiss_alert polls until step timeout for an alert. With no
+        // alert present, the action either errors out (preserved fast
+        // path) or polls until the wall-clock cap below trips.
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            handle_dismiss_alert(&step, &driver, &ctx),
+        )
+        .await;
+        match result {
+            Ok(Ok(_)) => panic!("dismiss_alert SHALL NOT succeed when no alert is displayed"),
+            Ok(Err(_)) | Err(_) => {}
+        }
     }
 
     // ── run action path validation tests ──────────────────────────────

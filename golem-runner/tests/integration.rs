@@ -43,6 +43,7 @@ fn test_ctx() -> ExecutionContext<'static> {
         emitter: None,
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
         rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
+    inherited_record_default: false,
     }
 }
 

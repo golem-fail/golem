@@ -49,6 +49,7 @@ fn make_block_with_run_flow(
         max_iterations: None,
         vars,
         save_to,
+        record: None,
     }
 }
 
@@ -65,6 +66,7 @@ fn make_regular_block() -> Block {
         max_iterations: None,
         vars: HashMap::new(),
         save_to: HashMap::new(),
+        record: None,
     }
 }
 

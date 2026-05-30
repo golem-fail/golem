@@ -164,6 +164,12 @@ pub struct SuiteConfig {
     /// `[device_settings]`. Applied once per device session before
     /// any flow runs.
     pub device_settings: crate::project::DeviceSettings,
+    /// `--record`: default every block to record.
+    pub record: bool,
+    /// `--no-record`: force-disable recording everywhere.
+    pub no_record: bool,
+    /// `[options].record` from `golem.toml` — project-wide default.
+    pub project_record: Option<bool>,
 }
 
 impl Default for SuiteConfig {
@@ -188,6 +194,9 @@ impl Default for SuiteConfig {
             rebuild: false,
             no_build: false,
             device_settings: crate::project::DeviceSettings::default(),
+            record: false,
+            no_record: false,
+            project_record: None,
         }
     }
 }
@@ -451,6 +460,7 @@ impl SuiteRunner {
                 perf_snapshots: vec![],
                 skipped_reason: None,
                 covered_axes: Vec::new(),
+                recordings: Vec::new(),
                 started_at: None,
                 finished_at: None,
             });
@@ -515,6 +525,9 @@ impl SuiteRunner {
             let rebuild = self.config.rebuild;
             let no_build = self.config.no_build;
             let device_settings = device_settings.clone();
+            let record = self.config.record;
+            let no_record = self.config.no_record;
+            let project_record = self.config.project_record;
             let coverage_groups_c = coverage_groups.clone();
             let coverage_progress_c = coverage_progress.clone();
             let coverage_group_idx = run.coverage_group;
@@ -547,6 +560,9 @@ impl SuiteRunner {
                         rebuild,
                         no_build,
                         device_settings,
+                        record,
+                        no_record,
+                        project_record,
                     },
                     CoverageCtx {
                         groups: coverage_groups_c,
@@ -586,6 +602,7 @@ impl SuiteRunner {
                         perf_snapshots: vec![],
                         skipped_reason: None,
                         covered_axes: Vec::new(),
+                        recordings: Vec::new(),
                         started_at: None,
                         finished_at: None,
                     }, None));
@@ -724,6 +741,12 @@ struct FlowRunConfig {
     no_build: bool,
     /// Device settings to apply once per device session.
     device_settings: Arc<crate::project::DeviceSettings>,
+    /// CLI `--record` — default every block to record.
+    record: bool,
+    /// CLI `--no-record` — force-disable recording everywhere.
+    no_record: bool,
+    /// `golem.toml` `[options].record` — project-wide default.
+    project_record: Option<bool>,
 }
 
 /// Build a synthetic `FlowReport` for a FlowRun short-circuited by the
@@ -762,6 +785,7 @@ fn coverage_skip_report(
         covered_axes,
         started_at: None,
         finished_at: None,
+        recordings: Vec::new(),
     }
 }
 
@@ -906,6 +930,7 @@ async fn execute_flow_run(
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         }];
@@ -961,6 +986,9 @@ async fn execute_flow_run(
         let output_dir = cfg.output_dir.clone();
         let no_results = cfg.no_results;
         let no_perf = cfg.no_perf;
+        let record = cfg.record;
+        let no_record = cfg.no_record;
+        let project_record = cfg.project_record;
         handles.push(tokio::spawn(async move {
             run_flow_on_device(
                 flow_c,
@@ -979,6 +1007,9 @@ async fn execute_flow_run(
                 barrier_c,
                 no_perf,
                 Some(tx_c),
+                record,
+                no_record,
+                project_record,
             )
             .await
         }));
@@ -1002,6 +1033,7 @@ async fn execute_flow_run(
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 });
@@ -1869,6 +1901,9 @@ async fn run_flow_on_device(
     barrier: golem_runner::barrier::FailureBarrier,
     no_perf: bool,
     event_sender: Option<golem_events::channel::EventSender>,
+    record: bool,
+    no_record: bool,
+    project_record: Option<bool>,
 ) -> FlowReport {
     let start = Instant::now();
     let device_name = device.name.clone();
@@ -1944,12 +1979,28 @@ async fn run_flow_on_device(
     let actual_seed: u64 = seed.unwrap_or_else(rand::random);
     let rng = rand_chacha::ChaCha8Rng::seed_from_u64(actual_seed);
 
+    // Recording resolution is layered:
+    //   * `cli_force_record` is a per-block override (forces effective
+    //     true/false regardless of explicit block opts).
+    //   * `project_record` is folded into the seed default below;
+    //     `execute_flow` then refines per-flow + per-subflow.
+    // `--no-record` beats `--record` when both are passed.
+    let cli_force_record = if no_record {
+        Some(false)
+    } else if record {
+        Some(true)
+    } else {
+        None
+    };
+
     let capture_config = {
         let mut cfg = CaptureConfig {
             output_dir,
             flow_name: flow_name.clone(),
             device_name: device_name.clone(),
             write_to_disk: !no_results,
+            cli_force_record,
+            project_record,
             ..CaptureConfig::default()
         };
         if let Some(ref opts) = flow.flow.options {
@@ -1980,6 +2031,10 @@ async fn run_flow_on_device(
         emitter: device_emitter.as_ref(),
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
         rng: std::sync::Mutex::new(rng),
+        // Seed from project-level default; `execute_flow` refines from
+        // the top-level flow's own `[flow.options].record`. Subflows
+        // refine again from their own options.
+        inherited_record_default: project_record.unwrap_or(false),
     };
 
     // Run install scripts for all apps in this flow on this device (unless
@@ -2010,6 +2065,7 @@ async fn run_flow_on_device(
                     perf_snapshots: vec![],
                     skipped_reason: Some(reason),
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 };
@@ -2040,6 +2096,7 @@ async fn run_flow_on_device(
                     perf_snapshots: vec![],
                     skipped_reason: Some(reason),
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 };
@@ -2067,6 +2124,7 @@ async fn run_flow_on_device(
                     perf_snapshots: vec![],
                     skipped_reason: Some(reason),
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 };
@@ -2122,6 +2180,7 @@ async fn run_flow_on_device(
                     perf_snapshots: vec![],
                     skipped_reason: Some(reason),
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 };
@@ -2167,6 +2226,7 @@ async fn run_flow_on_device(
                 perf_snapshots: result.perf_snapshots,
                 skipped_reason: None,
                 covered_axes: device_covered_axes(&device),
+                recordings: result.recordings,
                 started_at: None,
                 finished_at: None,
             }
@@ -2194,6 +2254,7 @@ async fn run_flow_on_device(
                 perf_snapshots: vec![],
                 skipped_reason: None,
                 covered_axes: device_covered_axes(&device),
+                recordings: Vec::new(),
                 started_at: None,
                 finished_at: None,
             }
@@ -2522,6 +2583,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         }
@@ -2542,6 +2604,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         }

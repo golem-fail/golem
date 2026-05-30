@@ -303,6 +303,17 @@ pub struct FlowReport {
     /// "tablet"]`. Renderers surface this so users see which axes a
     /// Min/Smart run actually covered.
     pub covered_axes: Vec<String>,
+    /// Screen recordings saved during this flow, one entry per
+    /// recorded block iteration.
+    pub recordings: Vec<RecordingEntry>,
+}
+
+/// One screen recording produced by a recorded block iteration.
+#[derive(Debug, Clone)]
+pub struct RecordingEntry {
+    pub block: String,
+    pub iteration: u32,
+    pub path: String,
 }
 
 impl FlowReport {
@@ -386,6 +397,7 @@ mod tests {
             perf_snapshots: Vec::new(),
             skipped_reason,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         }

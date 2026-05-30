@@ -177,6 +177,9 @@ pub fn format_flow(report: &FlowReport) -> String {
     if !report.covered_axes.is_empty() {
         let _ = writeln!(out, "  Covered: {}", report.covered_axes.join(", "));
     }
+    for rec in &report.recordings {
+        let _ = writeln!(out, "  Recording: {} (block {}, iter {})", rec.path, rec.block, rec.iteration);
+    }
 
     out
 }
@@ -359,6 +362,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -400,6 +404,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -437,6 +442,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -470,6 +476,7 @@ mod tests {
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 },
@@ -489,6 +496,7 @@ mod tests {
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 },
@@ -523,6 +531,7 @@ mod tests {
                 perf_snapshots: vec![],
                 skipped_reason: None,
                 covered_axes: Vec::new(),
+                recordings: Vec::new(),
                 started_at: None,
                 finished_at: None,
             }],
@@ -564,6 +573,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -610,6 +620,7 @@ mod tests {
             perf_snapshots: vec![sample_perf_snapshot()],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -637,6 +648,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };

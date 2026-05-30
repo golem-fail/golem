@@ -62,7 +62,8 @@ golem run [FILES...] [OPTIONS]
 | `--seed <N>` | Deterministic seed for fake data generation. Seed shown in all output formats for reproducibility. |
 | `--start <BLOCK>` | Start execution at a named block (skips app lifecycle, assumes app in correct state) |
 | `--max-concurrency <N>` | Max parallel devices (not yet implemented) |
-| `--record` | Enable auto screen recording (not yet implemented) |
+| `--record` | Enable auto screen recording for every block. Loses to `--no-record`. |
+| `--no-record` | Force-disable recording everywhere — beats `--record`, flow options, and per-block opts. |
 | `--no-clean` | Skip app data clear between flows (not yet implemented) |
 | `--no-teardown` | Skip teardown blocks (not yet wired) |
 | `--keep-devices` | Keep devices running after completion (not yet wired) |
@@ -239,7 +240,7 @@ max_steps = 10000                   # Safety limit
 max_runtime = "30m"                 # "5m", "2h", "500ms"
 app_lifecycle = "reset"             # "reset" (default), "launch", "manual"
 screenshot_on_failure = true        # Auto-capture screenshot on step failure (default: true)
-record = true                       # Not yet wired
+record = true                       # Default every block to record (block can opt out with `record = false`)
 coverage = "smart"                  # "smart" (default), "min", "full", "one" — see Coverage strategies
 perf = true                         # Performance monitoring (default: true)
 perf_memory_warn_mb = 200.0
@@ -1271,12 +1272,18 @@ The test app's `AndroidManifest.xml` must declare every permission you intend to
 { action = "screenshot", path = "/tmp/dark-mode.png" }
 ```
 
-#### `start_recording`, `stop_recording` — Screen recording
+#### Screen recording — per-block via `record = true`
+
+Recording is configured at the project, flow, or block level — not as a
+step action. Cascade (highest priority wins): `--no-record` >
+`--record` > `[[block]] record` > `[flow.options] record` >
+`[options] record`. Output: `{output_dir}/{flow}/{device}/recordings/{block}_{iter}.mp4`.
 
 ```toml
-{ action = "start_recording", path = "login_flow" }
-# ... test steps ...
-{ action = "stop_recording", path = "/tmp/login.mp4" }
+[[block]]
+name = "login"
+record = true     # record this block only
+steps = [ ... ]
 ```
 
 #### `add_media` — Push media to device

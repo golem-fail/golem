@@ -234,6 +234,11 @@ pub(crate) fn format_flow_toon_anchored(
         out.push('\n');
     }
 
+    // Recordings: one ` rec block:iter path` line per recorded block iteration.
+    for rec in &report.recordings {
+        let _ = writeln!(out, " rec {}:{} {}", rec.block, rec.iteration, rec.path);
+    }
+
     // Result line: R:PASS|FAIL|SKIP passed/warned/failed [skip_reason]
     let status = if report.is_skipped() {
         "SKIP"
@@ -263,6 +268,7 @@ pub fn format_suite_toon(report: &SuiteReport) -> String {
     out.push_str("# F=flow-run B=block R=result(passed/warned/failed) d:N=duration_ms os:N=os_major cov:a,b,c=covered_axes\n");
     out.push_str("# step: +=pass !=fail ~=warn -=skip @x,y=position b=bounds(x,y,w,h) s:N=scroll_attempts t:N/M=trees/nodes\n");
     out.push_str("# perf: P block:app:device:iteration mem=MB cpu=% thr=threads fd=file_descriptors disk=MB net_rx/tx=KB launch=ms\n");
+    out.push_str("# rec: rec block:iteration path-to-recording.mp4\n");
     out.push_str("# install: I app:bundle:device R=ok/fail d:ms os:N (device = `{platform}/{name}`)\n");
     out.push_str("# time: T0:<unix-ms> suite-anchor (once); t0+:<delta-ms> per-line start offset from T0\n");
 
@@ -430,6 +436,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         }
@@ -533,6 +540,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -572,6 +580,7 @@ mod tests {
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 },
@@ -591,6 +600,7 @@ mod tests {
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 },
@@ -625,6 +635,7 @@ mod tests {
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 },
@@ -641,6 +652,7 @@ mod tests {
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 },
@@ -659,6 +671,7 @@ mod tests {
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 },
@@ -830,6 +843,7 @@ mod tests {
             perf_snapshots: vec![sample_perf_snapshot()],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -857,6 +871,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };

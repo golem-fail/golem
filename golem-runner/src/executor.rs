@@ -52,6 +52,8 @@ pub struct FlowResult {
     pub barrier_aborted: bool,
     /// Performance snapshots captured at block boundaries.
     pub perf_snapshots: Vec<golem_report::PerfSnapshot>,
+    /// Screen recordings produced during this flow execution.
+    pub recordings: Vec<golem_report::RecordingEntry>,
 }
 
 /// Execute a parsed FlowFile by traversing blocks in order.
@@ -75,6 +77,16 @@ pub async fn execute_flow<'a>(
     barrier: Option<&FailureBarrier>,
 ) -> Result<FlowResult> {
     let blocks = &flow.block;
+
+    // Refine the inherited record-default for this flow level. The
+    // current flow's `[flow.options].record` wins over what the caller
+    // (parent flow, or top-level resolver) handed in. Project-level
+    // `[options].record` is folded in at the top-level entry so we
+    // don't re-consult it here. CLI overrides (`--record` /
+    // `--no-record`) are applied per-block on top of this.
+    if let Some(v) = flow.flow.options.as_ref().and_then(|o| o.record) {
+        ctx.inherited_record_default = v;
+    }
 
     // App lifecycle management. Defaults to Reset for all flows.
     // When --start is used, skip app lifecycle — caller assumes app is
@@ -162,6 +174,7 @@ pub async fn execute_flow<'a>(
 
     let mut warnings = Vec::new();
     let mut perf_snapshots: Vec<PerfSnapshot> = Vec::new();
+    let mut recordings: Vec<golem_report::RecordingEntry> = Vec::new();
     let mut block_iterations: HashMap<usize, u32> = HashMap::new();
     let perf_enabled = flow
         .flow
@@ -235,6 +248,10 @@ pub async fn execute_flow<'a>(
                 emitter: ctx.emitter,
                 step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
                 rng: std::sync::Mutex::new(child_rng),
+                // Carry parent's effective default in as the child's
+                // starting point — `execute_flow` will refine it from
+                // the child's own `[flow.options].record` if set.
+                inherited_record_default: ctx.inherited_record_default,
             };
 
             let child_result = Box::pin(execute_flow(
@@ -251,6 +268,11 @@ pub async fn execute_flow<'a>(
             let save_to = config.as_ref().map_or(&block.save_to, |c| &c.save_to);
             crate::subflow::propagate_results(&child_vars, vars, save_to)?;
 
+            // Roll subflow recordings up into the parent. The parent's
+            // FlowReport surfaces every recording produced under this
+            // device, regardless of which flow level produced it.
+            recordings.extend(child_result.recordings.iter().cloned());
+
             if !child_result.success {
                 return Ok(FlowResult {
                     success: false,
@@ -261,6 +283,7 @@ pub async fn execute_flow<'a>(
                     failed_reason: child_result.failed_reason,
                     barrier_aborted: child_result.barrier_aborted,
                     perf_snapshots: vec![],
+                    recordings: recordings.clone(),
                 });
             }
 
@@ -287,12 +310,39 @@ pub async fn execute_flow<'a>(
         ctx.block_name = block.name.as_deref();
         let iteration = block_iterations.entry(current_idx).or_insert(0);
         let block_label = block.name.clone().unwrap_or_else(|| format!("block_{current_idx}"));
+        let block_iter_for_recording = *iteration;
         ctx.emit(golem_events::EventKind::BlockStarted {
             block_name: block_label.clone(),
             block_index: current_idx,
             iteration: *iteration,
         });
         *iteration += 1;
+
+        // Effective per-block recording. CLI flags are overrides on
+        // the final effective value, not just defaults:
+        //   --no-record beats everything below (force off).
+        //   --record beats explicit `[[block]] record = false` (force on).
+        //   else `[[block]] record` wins if set.
+        //   else fall through to `ctx.inherited_record_default`
+        //   (resolved at flow entry from this flow's options, the
+        //   parent flow's default, and project [options].record).
+        let record_block = match ctx.capture_config.cli_force_record {
+            Some(force) => force,
+            None => block.record.unwrap_or(ctx.inherited_record_default),
+        };
+        if record_block {
+            if let Err(e) = crate::capture::start_recording(
+                driver,
+                ctx.capture_config,
+                &block_label,
+                block_iter_for_recording,
+            ).await {
+                warnings.push(format!(
+                    "start_recording failed for block '{}' iter {}: {}",
+                    block_label, block_iter_for_recording, e
+                ));
+            }
+        }
         for (step_idx, step) in block.steps.iter().enumerate() {
             ctx.step_index = step_idx;
             ctx.block_iteration = iteration.saturating_sub(1);
@@ -308,6 +358,33 @@ pub async fn execute_flow<'a>(
             // Check failure barrier before executing the step
             if let Some(b) = barrier {
                 if b.should_stop(step_count) {
+                    let recording_path = if record_block {
+                        match crate::capture::stop_recording(
+                            driver,
+                            ctx.capture_config,
+                            &block_label,
+                            block_iter_for_recording,
+                        ).await {
+                            Ok(p) => {
+                                let path_str = p.display().to_string();
+                                recordings.push(golem_report::RecordingEntry {
+                                    block: block_label.clone(),
+                                    iteration: block_iter_for_recording,
+                                    path: path_str.clone(),
+                                });
+                                Some(path_str)
+                            }
+                            Err(_) => None,
+                        }
+                    } else {
+                        None
+                    };
+                    ctx.emit(golem_events::EventKind::BlockFinished {
+                        block_name: block_label.clone(),
+                        block_index: current_idx,
+                        iteration: block_iter_for_recording,
+                        recording_path,
+                    });
                     return Ok(FlowResult {
                         success: false,
                         warnings,
@@ -317,6 +394,7 @@ pub async fn execute_flow<'a>(
                         failed_reason: Some("aborted: another device failed".to_string()),
                         barrier_aborted: true,
                         perf_snapshots: vec![],
+                        recordings: recordings.clone(),
                     });
                 }
             }
@@ -376,6 +454,36 @@ pub async fn execute_flow<'a>(
                     if let Some(b) = barrier {
                         b.report_failure(step_count);
                     }
+                    let recording_path = if record_block {
+                        match crate::capture::stop_recording(
+                            driver,
+                            ctx.capture_config,
+                            &block_label,
+                            block_iter_for_recording,
+                        ).await {
+                            Ok(p) => {
+                                let path_str = p.display().to_string();
+                                recordings.push(golem_report::RecordingEntry {
+                                    block: block_label.clone(),
+                                    iteration: block_iter_for_recording,
+                                    path: path_str.clone(),
+                                });
+                                Some(path_str)
+                            }
+                            Err(_) => None,
+                        }
+                    } else {
+                        None
+                    };
+                    // Emit BlockFinished even on failure so the
+                    // recording-path event reaches stream/accumulator
+                    // before the FlowFinished sweep.
+                    ctx.emit(golem_events::EventKind::BlockFinished {
+                        block_name: block_label.clone(),
+                        block_index: current_idx,
+                        iteration: block_iter_for_recording,
+                        recording_path,
+                    });
                     return Ok(FlowResult {
                         success: false,
                         warnings,
@@ -385,14 +493,45 @@ pub async fn execute_flow<'a>(
                         failed_reason: Some(format!("{e:#}")),
                         barrier_aborted: false,
                         perf_snapshots: vec![],
+                        recordings: recordings.clone(),
                     });
                 }
             }
         }
 
+        let recording_path = if record_block {
+            match crate::capture::stop_recording(
+                driver,
+                ctx.capture_config,
+                &block_label,
+                block_iter_for_recording,
+            ).await {
+                Ok(p) => {
+                    let path_str = p.display().to_string();
+                    recordings.push(golem_report::RecordingEntry {
+                        block: block_label.clone(),
+                        iteration: block_iter_for_recording,
+                        path: path_str.clone(),
+                    });
+                    Some(path_str)
+                }
+                Err(e) => {
+                    warnings.push(format!(
+                        "stop_recording failed for block '{}' iter {}: {}",
+                        block_label, block_iter_for_recording, e
+                    ));
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         ctx.emit(golem_events::EventKind::BlockFinished {
             block_name: block_label.clone(),
             block_index: current_idx,
+            iteration: block_iter_for_recording,
+            recording_path,
         });
 
         // Capture perf snapshot after block completes
@@ -426,6 +565,7 @@ pub async fn execute_flow<'a>(
                             failed_reason: Some(reason),
                             barrier_aborted: false,
                             perf_snapshots,
+                            recordings,
                         });
                     }
                 }
@@ -459,6 +599,7 @@ pub async fn execute_flow<'a>(
         failed_reason: None,
         barrier_aborted: false,
         perf_snapshots,
+        recordings,
     })
 }
 
@@ -655,6 +796,7 @@ pub async fn execute_flow_with_data<'a>(
         failed_reason: None,
         barrier_aborted: false,
         perf_snapshots: vec![],
+        recordings: Vec::new(),
     }))
 }
 
@@ -765,6 +907,7 @@ mod tests {
             max_iterations: None,
             vars: HashMap::new(),
             save_to: HashMap::new(),
+            record: None,
         }
     }
 
@@ -1930,6 +2073,7 @@ action = "screenshot"
             emitter: None,
             step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
             rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::from_entropy()),
+        inherited_record_default: false,
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -1995,6 +2139,7 @@ action = "screenshot"
             emitter: None,
             step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
             rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::from_entropy()),
+        inherited_record_default: false,
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -2069,6 +2214,7 @@ action = "screenshot"
             emitter: None,
             step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
             rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::from_entropy()),
+        inherited_record_default: false,
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -2100,6 +2246,7 @@ action = "screenshot"
             max_iterations: None,
             vars: HashMap::new(),
             save_to: HashMap::new(),
+            record: None,
         }
     }
 

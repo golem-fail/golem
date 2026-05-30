@@ -45,6 +45,7 @@ struct AccumulatedFlow {
     skipped_reason: Option<String>,
     started_at: Option<SystemTime>,
     finished_at: Option<SystemTime>,
+    recordings: Vec<crate::RecordingEntry>,
 }
 
 /// Accumulates events into a hierarchical SuiteReport.
@@ -100,6 +101,7 @@ impl ReportAccumulator {
                     skipped_reason: None,
                     started_at: Some(event.wall_time),
                     finished_at: None,
+                recordings: Vec::new(),
                 });
                 self.current_flow_by_device.insert(dev_key, idx);
             }
@@ -137,10 +139,24 @@ impl ReportAccumulator {
                     skipped_reason: Some(reason.clone()),
                     started_at: Some(event.wall_time),
                     finished_at: Some(event.wall_time),
+                recordings: Vec::new(),
                 });
             }
             EventKind::BlockStarted { iteration, .. } => {
                 self.current_block_iter.insert(dev_key, *iteration);
+            }
+            EventKind::BlockFinished { block_name, iteration, recording_path, .. } => {
+                if let Some(path) = recording_path {
+                    if let Some(&idx) = self.current_flow_by_device.get(&dev_key) {
+                        if let Some(flow) = self.flows.get_mut(idx) {
+                            flow.recordings.push(crate::RecordingEntry {
+                                block: block_name.clone(),
+                                iteration: *iteration,
+                                path: path.clone(),
+                            });
+                        }
+                    }
+                }
             }
             EventKind::StepStarted { global_step_index, block_name, step_index_in_block, action, selector_label } => {
                 self.finish_current_step(&dev_key);
@@ -269,6 +285,7 @@ impl ReportAccumulator {
                 os_major: flow.os_major,
                 perf_snapshots: Vec::new(),
                 covered_axes: Vec::new(),
+                recordings: flow.recordings,
                 started_at: flow.started_at.map(iso8601_utc),
                 finished_at: flow.finished_at.map(iso8601_utc),
             }

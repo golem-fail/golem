@@ -320,6 +320,25 @@ pub async fn stream_human(
                     eprintln!("{ts}  {dp}\u{2500}\u{2500} {block_name}{iter_suffix} \u{2500}\u{2500}");
                 }
             }
+            EventKind::BlockFinished { recording_path: Some(path), .. } => {
+                // Surface the recording path inline under the block.
+                // OSC 8 hyperlink when the terminal supports it; plain
+                // text otherwise. Falls back gracefully if path can't
+                // be canonicalised (e.g. file was moved between
+                // capture and stream).
+                if use_color {
+                    let abs = std::fs::canonicalize(path)
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|_| path.clone());
+                    let uri = format!("file://{abs}");
+                    eprintln!(
+                        "{ts}     {dp}{DIM}\u{2570}\u{2500} rec: \x1b]8;;{uri}\x1b\\{path}\x1b]8;;\x1b\\{RESET}"
+                    );
+                } else {
+                    eprintln!("{ts}     {dp}\u{2570}\u{2500} rec: {path}");
+                }
+            }
+            EventKind::BlockFinished { .. } => {}
             EventKind::StepStarted { global_step_index, step_index_in_block, action, selector_label, .. } => {
                 // Capture action+selector+local-index so StepFinished can render
                 // the full row on one line. Two-line render fragments badly

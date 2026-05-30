@@ -17,7 +17,6 @@ pub struct ProjectOptions {
     pub step_timeout: Option<u64>,
     pub screenshot_on_failure: Option<bool>,
     pub screenshot_dir: Option<String>,
-    pub recording_dir: Option<String>,
     pub record: Option<bool>,
     pub max_steps: Option<u64>,
     pub max_runtime: Option<String>,
@@ -146,10 +145,6 @@ pub fn merge_config(project: &ProjectConfig, flow: &FlowFile) -> FlowFile {
             .screenshot_dir
             .clone()
             .or_else(|| proj_opts.screenshot_dir.clone()),
-        recording_dir: flow_opts
-            .recording_dir
-            .clone()
-            .or_else(|| proj_opts.recording_dir.clone()),
         record: flow_opts.record.or(proj_opts.record),
         max_steps: flow_opts.max_steps.or(proj_opts.max_steps),
         max_runtime: flow_opts
@@ -182,7 +177,6 @@ pub fn merge_config(project: &ProjectConfig, flow: &FlowFile) -> FlowFile {
         || merged_opts.step_timeout.is_some()
         || merged_opts.screenshot_on_failure.is_some()
         || merged_opts.screenshot_dir.is_some()
-        || merged_opts.recording_dir.is_some()
         || merged_opts.record.is_some()
         || merged_opts.max_steps.is_some()
         || merged_opts.max_runtime.is_some()
@@ -287,7 +281,6 @@ ignore_missing_physical = true
 step_timeout = 10000
 screenshot_on_failure = true
 screenshot_dir = ".golem/screenshots"
-recording_dir = ".golem/recordings"
 
 [vars]
 api_token = "sk-test-abc123"
@@ -305,10 +298,6 @@ default_country = "JP"
         assert_eq!(
             config.options.screenshot_dir.as_deref(),
             Some(".golem/screenshots")
-        );
-        assert_eq!(
-            config.options.recording_dir.as_deref(),
-            Some(".golem/recordings")
         );
 
         assert_eq!(config.vars.len(), 3);
@@ -746,7 +735,6 @@ action = "back"
 max_concurrency = 4
 step_timeout = 10000
 screenshot_on_failure = true
-recording_dir = ".golem/recordings"
 "#,
         )
         .expect("project config should parse");
@@ -770,7 +758,6 @@ record = true
         // From project (not overridden)
         assert_eq!(opts.max_concurrency, Some(4));
         assert_eq!(opts.screenshot_on_failure, Some(true));
-        assert_eq!(opts.recording_dir.as_deref(), Some(".golem/recordings"));
         // Overridden by flow
         assert_eq!(opts.step_timeout, Some(5000));
         // Only in flow

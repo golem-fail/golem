@@ -58,6 +58,15 @@ struct JsonFlow {
     perf_snapshots: Vec<JsonPerfSnapshot>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     covered_axes: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    recordings: Vec<JsonRecording>,
+}
+
+#[derive(Serialize)]
+struct JsonRecording {
+    block: String,
+    iteration: u32,
+    path: String,
 }
 
 #[derive(Serialize)]
@@ -181,6 +190,11 @@ fn flow_to_json(report: &FlowReport) -> JsonFlow {
         warnings: report.warnings.clone(),
         perf_snapshots: report.perf_snapshots.iter().map(perf_to_json).collect(),
         covered_axes: report.covered_axes.clone(),
+        recordings: report.recordings.iter().map(|r| JsonRecording {
+            block: r.block.clone(),
+            iteration: r.iteration,
+            path: r.path.clone(),
+        }).collect(),
     }
 }
 
@@ -345,6 +359,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         }
@@ -369,6 +384,7 @@ mod tests {
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 },
@@ -385,6 +401,7 @@ mod tests {
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 },
@@ -401,6 +418,7 @@ mod tests {
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 },
@@ -420,6 +438,7 @@ mod tests {
                     perf_snapshots: vec![],
                     skipped_reason: None,
                     covered_axes: Vec::new(),
+                    recordings: Vec::new(),
                     started_at: None,
                     finished_at: None,
                 },
@@ -512,6 +531,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -600,6 +620,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -655,6 +676,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -712,6 +734,7 @@ mod tests {
             perf_snapshots: vec![sample_perf_snapshot()],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };
@@ -744,6 +767,7 @@ mod tests {
             perf_snapshots: vec![],
             skipped_reason: None,
             covered_axes: Vec::new(),
+            recordings: Vec::new(),
             started_at: None,
             finished_at: None,
         };

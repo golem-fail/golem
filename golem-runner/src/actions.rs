@@ -31,7 +31,7 @@ use interaction::{
     handle_backspace, handle_double_tap, handle_gesture, handle_hide_keyboard, handle_long_press,
     handle_pinch, handle_rotate_gesture, handle_scroll, handle_swipe, handle_tap, handle_type,
 };
-use media::{handle_add_media, handle_screenshot, handle_start_recording, handle_stop_recording};
+use media::{handle_add_media, handle_screenshot};
 
 /// Resolve an element using all step selectors except `text`.
 ///
@@ -73,8 +73,6 @@ pub async fn execute_action(
         "grant_permission" => handle_grant_permission(step, driver).await,
         "revoke_permission" => handle_revoke_permission(step, driver).await,
         "screenshot" => handle_screenshot(step, driver).await,
-        "start_recording" => handle_start_recording(step, driver).await,
-        "stop_recording" => handle_stop_recording(step, driver).await,
         "add_media" => handle_add_media(step, driver).await,
         "open_link" => handle_open_link(step, driver).await,
         "push_notification" => handle_push_notification(step, driver).await,

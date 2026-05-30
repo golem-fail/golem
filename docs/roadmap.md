@@ -1,61 +1,26 @@
 # Roadmap
 
-## Recording: per-block default with cascading config
+## Recording: platform parity follow-ups
 
-Today recording works only via explicit `start_recording` /
-`stop_recording` step actions. The `--record` CLI flag and
-`[flow.options].record` field are parsed but ignored. Replace this
-with a per-block-primary model that cascades from project → flow →
-block, with block-level being the natural unit (record a specific
-test section, skip setup/teardown).
+Cascading per-block recording shipped: `--no-record` > `--record` >
+`[[block]] record` > `[flow.options] record` > `[options] record`,
+output at `{output_dir}/{flow}/{device}/recordings/{block}_{iter}.mp4`.
+Two known gaps before recording reaches platform parity:
 
-**Config layering (highest priority wins; falsy can override truthy):**
+- **Android 3-minute screenrecord cap.** `adb shell screenrecord`
+  truncates output at ~3 min on older Android. Auto-rotate every
+  ~2:55: emit `{block}_{iter}_part1.mp4`, `_part2.mp4`, etc. Modern
+  Android (11+) may have removed the cap — verify before
+  special-casing. Apply the same rotation on iOS for naming
+  uniformity.
+- **iOS `simctl io recordVideo` integration.** `IosDriver::start_recording`
+  still `bail!`s. Wire to `xcrun simctl io <udid> recordVideo
+  <path>` with a stoppable child process handle. Without this, the
+  recording cascade silently no-ops on iOS.
 
-| Priority | Source | Scope |
-|---|---|---|
-| 1 | `--trace` CLI flag | Forces record on every block (plus per-step tree/screenshot dumps) |
-| 2 | `--no-record` CLI flag | Forces record off everywhere (overrides everything below) |
-| 3 | `--record` CLI flag | Defaults every block to record (block can still override `record = false`) |
-| 4 | `[[block]] record = true \| false` | Per-block opt-in / opt-out |
-| 5 | `[flow.options] record = true` | Defaults every block in this flow to record |
-| 6 | `golem.toml [options] record = true` | Project-wide default |
-
-**Drop step-level `start_recording` / `stop_recording` actions.**
-They compose poorly with branching, loops, and multi-device flows.
-Block-level is the right granularity — users wanting sub-block
-control should split the block. Migrate any existing flows.
-
-**Multi-device, iteration, file naming.** When a block runs on
-multiple devices, each records independently:
-`{output_dir}/{flow}/{device}/recordings/{block}_{iter}.mp4`. Loops
-get separate files per iteration so timestamps line up.
-
-**Android 3-minute screenrecord cap.** `adb shell screenrecord`
-truncates output at ~3 min on older Android. Auto-rotate every
-~2:55: emit `{block}_{iter}_part1.mp4`, `_part2.mp4`, etc. Apply
-the same rotation on iOS for consistency even though `simctl io
-recordVideo` has no inherent cap — keeps the file-naming uniform
-across platforms. Modern Android (11+) may have removed the cap;
-verify before special-casing.
-
-**Implementation order:**
-1. Wire `--record` / `[flow.options].record` / `[options].record`
-   through to `CaptureConfig.record` (consolidates two existing
-   "not yet wired" roadmap entries below).
-2. Add block-level `record` field to `Block` in golem-parser; honour
-   in the executor with the cascading priority above.
-3. Add `--no-record` symmetric flag.
-4. Drop `start_recording` / `stop_recording` step actions; migrate
-   any in-tree flows using them.
-5. Implement file naming + Android part-rotation (start as a
-   single-part file; rotate when duration exceeds the cap).
-
-**Files:** `golem-cli/src/cli.rs`, `golem-parser/src/lib.rs`
-(`Block.record`, `FlowOptions.record`), `golem-cli/src/project.rs`
-(project-level record default), `golem-runner/src/capture.rs`
-(rotation logic), `golem-runner/src/executor.rs` (per-block
-start/stop), `golem-runner/src/actions/media.rs` (delete the
-two action handlers).
+**Files:** `golem-runner/src/capture.rs` (rotation),
+`golem-driver/src/ios.rs` (recordVideo), `golem-driver/src/android.rs`
+(rotation hook).
 
 ## `--trace` flag: per-step forensic capture
 
@@ -303,16 +268,6 @@ No app data cleaning logic exists in the execution path. The flag is accepted bu
 ### `--max-concurrency <N>` — Parallel device limit
 
 Flag is defined but never read. `ResourceManager` uses default concurrency config regardless of this value.
-
-## Flow Options: Not Yet Wired
-
-These `[flow.options]` fields are parsed into `FlowOptions` but never read during execution.
-
-The `record` and `recording_dir` cases are covered by the
-"Recording: per-block default with cascading config" entry at the
-top — that's where the actual wiring lands. `screenshot_dir` and
-`recording_dir` are also superseded by the unified output
-directory design.
 
 ## Ethereal Email Integration
 

@@ -23,6 +23,20 @@ pub struct ProjectConfig {
     /// across wipes.
     #[serde(default)]
     pub device_settings: DeviceSettings,
+    /// Project-wide defaults from `[options]`. CLI defines the full
+    /// option surface in golem-parser; here we only pull the fields
+    /// the CLI itself consumes (today: recording cascade).
+    #[serde(default)]
+    pub options: ProjectOptions,
+}
+
+/// Subset of `golem.toml` `[options]` consumed by the CLI.
+#[derive(Deserialize, Debug, Default, Clone)]
+pub struct ProjectOptions {
+    /// Project-wide default for per-block screen recording. Loses
+    /// to flow-level, block-level, and CLI flags.
+    #[serde(default)]
+    pub record: Option<bool>,
 }
 
 /// Per-platform device settings, keyed by namespace.

@@ -9,8 +9,16 @@ use std::path::{Path, PathBuf};
 pub struct CaptureConfig {
     /// When true, automatically capture a screenshot on step failure or warning.
     pub screenshot_on_failure: bool,
-    /// When true, automatically start/stop screen recording per flow.
-    pub record: bool,
+    /// CLI override on the per-block effective record. `Some(true)` =
+    /// `--record` (force on for every block, overriding explicit
+    /// `[[block]] record = false`); `Some(false)` = `--no-record`
+    /// (force off everywhere, beats `--record` if both passed);
+    /// `None` = no CLI override, fall through to block / flow /
+    /// project defaults.
+    pub cli_force_record: Option<bool>,
+    /// `golem.toml` `[options].record` — project-wide fallback for
+    /// blocks where neither flow nor block sets a value.
+    pub project_record: Option<bool>,
     /// When true, write results to disk. When false, skip all file output.
     pub write_to_disk: bool,
     /// Root output directory (default: `.golem/results`).
@@ -25,7 +33,8 @@ impl Default for CaptureConfig {
     fn default() -> Self {
         Self {
             screenshot_on_failure: true,
-            record: false,
+            cli_force_record: None,
+            project_record: None,
             write_to_disk: true,
             output_dir: PathBuf::from(".golem/results"),
             flow_name: String::new(),
@@ -169,38 +178,61 @@ fn recording_dir(config: &CaptureConfig) -> PathBuf {
         .join("recordings")
 }
 
-/// Build the recording path.
-pub fn build_recording_path(config: &CaptureConfig) -> PathBuf {
-    recording_dir(config).join("recording.mp4")
+/// Build the recording path for one block + iteration.
+///
+/// Naming: `{block}_{iter}.mp4`. Loops produce one file per iteration
+/// so timestamps line up with the per-block execution boundary.
+//
+// TODO: Android `screenrecord` truncates at ~3 min. Auto-rotate into
+// `{block}_{iter}_part1.mp4`, `_part2.mp4` once duration crosses 2:55.
+// Tracked in roadmap "Recording: per-block default with cascading config".
+pub fn build_recording_path(
+    config: &CaptureConfig,
+    block_name: &str,
+    iteration: u32,
+) -> PathBuf {
+    let filename = format!("{}_{}.mp4", sanitize_filename(block_name), iteration);
+    recording_dir(config).join(filename)
 }
 
-/// Start screen recording for a device.
+/// Start screen recording for a single block on a device.
 ///
-/// Does nothing (returns `Ok(())`) when `config.record` is `false`.
+/// Caller is responsible for evaluating the cascade (CLI flag, project,
+/// flow, block) and only invoking when the effective value is `true`.
+/// Returns `Ok(())` without driver contact when `write_to_disk` is off.
 pub async fn start_recording(
     driver: &dyn PlatformDriver,
     config: &CaptureConfig,
+    block_name: &str,
+    iteration: u32,
 ) -> Result<()> {
-    if !config.record || !config.write_to_disk {
+    if !config.write_to_disk {
         return Ok(());
     }
     let name = format!(
-        "{}_{}",
+        "{}_{}_{}_{}",
         sanitize_filename(&config.flow_name),
         sanitize_filename(&config.device_name),
+        sanitize_filename(block_name),
+        iteration,
     );
     driver.start_recording(&name).await
 }
 
-/// Stop screen recording, copy the file to the recording directory.
+/// Stop screen recording, copy the file into the per-block recording path.
 pub async fn stop_recording(
     driver: &dyn PlatformDriver,
     config: &CaptureConfig,
+    block_name: &str,
+    iteration: u32,
 ) -> Result<PathBuf> {
     let source_path_str = driver.stop_recording().await?;
+    if source_path_str.is_empty() {
+        anyhow::bail!("driver returned empty recording path — recording was not active");
+    }
     let source = Path::new(&source_path_str);
 
-    let dest = build_recording_path(config);
+    let dest = build_recording_path(config, block_name, iteration);
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -279,7 +311,8 @@ mod tests {
         let config = CaptureConfig::default();
         assert!(config.screenshot_on_failure);
         assert!(config.write_to_disk);
-        assert!(!config.record);
+        assert!(config.cli_force_record.is_none());
+        assert!(config.project_record.is_none());
         assert_eq!(config.output_dir, PathBuf::from(".golem/results"));
     }
 
@@ -345,7 +378,7 @@ mod tests {
     }
 
     // ---------------------------------------------------------------
-    // 7. Recording path uses structured directory
+    // 7. Recording path uses structured directory + per-block naming
     // ---------------------------------------------------------------
     #[test]
     fn recording_path_components() {
@@ -355,23 +388,23 @@ mod tests {
             device_name: "Pixel-6".to_string(),
             ..CaptureConfig::default()
         };
-        let path = build_recording_path(&config);
+        let path = build_recording_path(&config, "login", 0);
 
-        assert_eq!(path, PathBuf::from("/tmp/out/signup/Pixel-6/recordings/recording.mp4"));
+        assert_eq!(path, PathBuf::from("/tmp/out/signup/Pixel-6/recordings/login_0.mp4"));
     }
 
     // ---------------------------------------------------------------
-    // 8. start_recording does nothing when record=false
+    // 8. start_recording skips driver when write_to_disk=false
     // ---------------------------------------------------------------
     #[tokio::test]
-    async fn start_recording_noop_when_disabled() {
+    async fn start_recording_noop_when_no_results() {
         let driver = MockPlatformDriver::new(default_hierarchy());
         let config = CaptureConfig {
-            record: false,
+            write_to_disk: false,
             ..test_config()
         };
 
-        let result = start_recording(&driver, &config).await;
+        let result = start_recording(&driver, &config, "login", 0).await;
         assert!(result.is_ok());
         assert!(
             driver.get_calls().is_empty(),
@@ -380,25 +413,24 @@ mod tests {
     }
 
     // ---------------------------------------------------------------
-    // 9. start_recording calls driver when record=true
+    // 9. start_recording calls driver with structured name
     // ---------------------------------------------------------------
     #[tokio::test]
-    async fn start_recording_calls_driver_when_enabled() {
+    async fn start_recording_calls_driver_with_block_name() {
         let driver = MockPlatformDriver::new(default_hierarchy());
         let config = CaptureConfig {
-            record: true,
             flow_name: "my-flow".to_string(),
             device_name: "iPhone14".to_string(),
             ..CaptureConfig::default()
         };
 
-        let result = start_recording(&driver, &config).await;
+        let result = start_recording(&driver, &config, "login", 2).await;
         assert!(result.is_ok());
 
         let calls = driver.get_calls();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, "start_recording");
-        assert_eq!(calls[0].1, vec!["my-flow_iPhone14"]);
+        assert_eq!(calls[0].1, vec!["my-flow_iPhone14_login_2"]);
     }
 
     // ---------------------------------------------------------------

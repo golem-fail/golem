@@ -73,7 +73,7 @@ fn action_multiplier(step: &Step) -> u64 {
     match step.action.as_str() {
         // 1x — instant actions and capture-only steps that don't go
         // through the element resolver / settle path.
-        "screenshot" | "start_recording" | "stop_recording" | "add_media"
+        "screenshot" | "add_media"
         | "fail" | "load_fixture" | "push_notification" | "set_variable"
         | "log" | "clear_data" | "press" | "rotate" | "dark_mode" | "set_location"
         | "grant_permission" | "revoke_permission" | "hide_keyboard" => 1,

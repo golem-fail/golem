@@ -182,6 +182,10 @@ pub struct Block {
     pub vars: HashMap<String, String>,
     #[serde(default)]
     pub save_to: HashMap<String, String>,
+    /// Per-block override for screen recording. When set, takes
+    /// precedence over flow/project defaults but loses to `--no-record`.
+    /// `None` = inherit; `Some(false)` = explicit opt-out.
+    pub record: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -324,7 +328,6 @@ pub struct FlowOptions {
     pub step_timeout: Option<u64>,
     pub screenshot_on_failure: Option<bool>,
     pub screenshot_dir: Option<String>,
-    pub recording_dir: Option<String>,
     pub record: Option<bool>,
     pub max_steps: Option<u64>,
     pub max_runtime: Option<String>,
@@ -833,7 +836,6 @@ min_free_ram_mb = 512
 step_timeout = 30000
 screenshot_on_failure = true
 screenshot_dir = "/tmp/shots"
-recording_dir = "/tmp/recordings"
 record = true
 max_steps = 200
 max_runtime = "30m"
@@ -849,7 +851,6 @@ ignore_missing_physical = false
         assert_eq!(opts.step_timeout, Some(30000));
         assert_eq!(opts.screenshot_on_failure, Some(true));
         assert_eq!(opts.screenshot_dir.as_deref(), Some("/tmp/shots"));
-        assert_eq!(opts.recording_dir.as_deref(), Some("/tmp/recordings"));
         assert_eq!(opts.record, Some(true));
         assert_eq!(opts.max_steps, Some(200));
         assert_eq!(opts.max_runtime.as_deref(), Some("30m"));

@@ -34,6 +34,12 @@ pub struct ExecutionContext<'a> {
     pub step_tree_stats: Mutex<TreeStats>,
     /// Seeded RNG for deterministic fake data generation.
     pub rng: Mutex<ChaCha8Rng>,
+    /// Resolved record-default visible to blocks in the current flow.
+    /// Computed by `execute_flow` at entry as
+    /// `flow.options.record.or(parent_default).or(project_record)`,
+    /// then combined per block with `capture_config.cli_force_record`
+    /// (overrides) and `block.record` (explicit per-block).
+    pub inherited_record_default: bool,
 }
 
 impl ExecutionContext<'_> {
@@ -102,5 +108,6 @@ pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
         emitter: None,
         step_tree_stats: Mutex::new(TreeStats::default()),
         rng: Mutex::new(ChaCha8Rng::from_entropy()),
+        inherited_record_default: false,
     }
 }

@@ -13,27 +13,6 @@ pub(crate) async fn handle_screenshot(step: &Step, driver: &dyn PlatformDriver) 
     Ok(())
 }
 
-/// Start screen recording. Uses a name from the `path` param or defaults to "recording".
-pub(crate) async fn handle_start_recording(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let name = step
-        .params
-        .get("path")
-        .and_then(|v| v.as_str())
-        .unwrap_or("recording");
-    driver.start_recording(name).await
-}
-
-/// Stop screen recording, optionally copying the result to a given path.
-pub(crate) async fn handle_stop_recording(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let recording_path = driver.stop_recording().await?;
-
-    if let Some(dest) = step.params.get("path").and_then(|v| v.as_str()) {
-        tokio::fs::copy(&recording_path, dest).await?;
-    }
-
-    Ok(())
-}
-
 /// Push a media file to the device.
 pub(crate) async fn handle_add_media(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
     let path = step
@@ -67,44 +46,6 @@ mod tests {
         let calls = driver.get_calls();
         let sc_calls: Vec<_> = calls.iter().filter(|c| c.0 == "screenshot").collect();
         assert_eq!(sc_calls.len(), 1);
-    }
-
-    // ── start_recording calls driver.start_recording ──────────────────
-
-    #[tokio::test]
-    async fn start_recording_calls_driver_start_recording() {
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let driver = MockPlatformDriver::new(root);
-
-        let step = make_step("start_recording");
-
-        handle_start_recording(&step, &driver)
-            .await
-            .expect("start_recording should succeed");
-
-        let calls = driver.get_calls();
-        let sr_calls: Vec<_> = calls.iter().filter(|c| c.0 == "start_recording").collect();
-        assert_eq!(sr_calls.len(), 1);
-        // Default name is "recording"
-        assert_eq!(sr_calls[0].1, vec!["recording"]);
-    }
-
-    // ── stop_recording calls driver.stop_recording ────────────────────
-
-    #[tokio::test]
-    async fn stop_recording_calls_driver_stop_recording() {
-        let root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let driver = MockPlatformDriver::new(root);
-
-        let step = make_step("stop_recording");
-
-        handle_stop_recording(&step, &driver)
-            .await
-            .expect("stop_recording should succeed");
-
-        let calls = driver.get_calls();
-        let sr_calls: Vec<_> = calls.iter().filter(|c| c.0 == "stop_recording").collect();
-        assert_eq!(sr_calls.len(), 1);
     }
 
     // ── add_media calls driver.add_media ──────────────────────────────

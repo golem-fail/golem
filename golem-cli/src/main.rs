@@ -114,6 +114,13 @@ async fn main() -> anyhow::Result<()> {
                 );
             }
 
+            if args.record && args.no_record {
+                eprintln!(
+                    "  [record] both --record and --no-record passed — \
+                     --no-record wins (recording disabled)"
+                );
+            }
+
             let config = SuiteConfig {
                 no_clean: args.no_clean,
                 no_teardown: args.no_teardown,
@@ -134,6 +141,9 @@ async fn main() -> anyhow::Result<()> {
                 rebuild,
                 no_build,
                 device_settings: project_config.device_settings,
+                record: args.record,
+                no_record: args.no_record,
+                project_record: project_config.options.record,
             };
 
             // Check if an orchestrator is already running
@@ -160,6 +170,8 @@ async fn main() -> anyhow::Result<()> {
                     "coverage": args.coverage,
                     "rebuild": config.rebuild,
                     "no_build": config.no_build,
+                    "record": config.record,
+                    "no_record": config.no_record,
                 });
                 let all_passed = orchestrator::submit_and_wait(stream, &flow_paths, &config_json, config.verbose, config.debug).await?;
                 if !all_passed {
