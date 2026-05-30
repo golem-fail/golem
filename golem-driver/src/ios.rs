@@ -64,6 +64,15 @@ pub struct IosDriver {
     physical: bool,
     /// WebKit Inspector lifecycle for WKWebView DOM access.
     webkit: std::sync::Mutex<WebKitLifecycle>,
+    /// Active `simctl io recordVideo` child + output path. Mirrors
+    /// `AndroidDriver.recording` — `start_recording` spawns detached,
+    /// `stop_recording` signals + waits for flush.
+    recording: tokio::sync::Mutex<Option<IosRecordingState>>,
+}
+
+struct IosRecordingState {
+    host_path: String,
+    child: tokio::process::Child,
 }
 
 /// WebKit Inspector connection lifecycle — mirrors `CdpLifecycle` in android.rs.
@@ -96,6 +105,7 @@ impl IosDriver {
             bundle_id,
             physical,
             webkit: std::sync::Mutex::new(WebKitLifecycle::Idle),
+            recording: tokio::sync::Mutex::new(None),
         }
     }
 
@@ -649,18 +659,63 @@ impl PlatformDriver for IosDriver {
         Ok(())
     }
 
-    async fn start_recording(&self, _name: &str) -> Result<()> {
-        // Recording via simctl requires a long-running process; not yet implemented
-        anyhow::bail!("start_recording is not yet supported on iOS")
+    async fn start_recording(&self, name: &str) -> Result<()> {
+        if self.physical {
+            anyhow::bail!(
+                "iOS screen recording only works on simulators today \
+                 — `simctl io recordVideo` is sim-only"
+            );
+        }
+        let mut guard = self.recording.lock().await;
+        if guard.is_some() {
+            anyhow::bail!("start_recording called while a recording is already in progress");
+        }
+        // Reject shell-special chars in the name. Caller-side
+        // `sanitize_filename` already strips these; belt-and-braces.
+        if name.chars().any(|c| c == '\'' || c == '"' || c == '$' || c == '`' || c == '/') {
+            anyhow::bail!("invalid recording name {name:?}");
+        }
+        let host_path = std::env::temp_dir()
+            .join(format!("golem-rec-{}-{}.mp4", self.device_id, name))
+            .to_string_lossy()
+            .to_string();
+        // Best-effort cleanup of any stale file at this path so simctl
+        // doesn't refuse to overwrite.
+        let _ = std::fs::remove_file(&host_path);
+        let child = tokio::process::Command::new("xcrun")
+            .args(["simctl", "io", &self.device_id, "recordVideo", &host_path])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .with_context(|| format!("spawning simctl recordVideo for {host_path}"))?;
+        *guard = Some(IosRecordingState { host_path, child });
+        Ok(())
     }
 
     async fn stop_recording(&self) -> Result<String> {
-        // Recording isn't implemented on iOS, so there's never an active
-        // recording to stop. Return Ok so post-flow cleanup doesn't
-        // surface a spurious "not yet supported" warning every run.
-        // `start_recording` still errors loudly when explicitly invoked
-        // by a step.
-        Ok(String::new())
+        let mut guard = self.recording.lock().await;
+        let Some(mut state) = guard.take() else {
+            // No active recording — `cleanup.rs` calls this as an
+            // idempotent safety net, so absence is not an error.
+            return Ok(String::new());
+        };
+        // simctl listens for SIGINT to flush the mp4 trailer cleanly.
+        // `tokio::process::Child::kill` sends SIGKILL on Unix, which
+        // truncates the file — so signal explicitly via `kill -INT`.
+        if let Some(pid) = state.child.id() {
+            let _ = tokio::process::Command::new("kill")
+                .args(["-INT", &pid.to_string()])
+                .status()
+                .await;
+        }
+        // Wait for simctl to finish writing. `wait` reaps the child.
+        let _ = state.child.wait().await;
+        // simctl can take a moment to flush the moov atom after exit.
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        if !std::path::Path::new(&state.host_path).exists() {
+            anyhow::bail!("simctl recordVideo exited but {} is missing", state.host_path);
+        }
+        Ok(state.host_path)
     }
 
     async fn remove_port_forwards(&self) -> Result<()> {

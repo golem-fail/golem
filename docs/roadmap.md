@@ -1,26 +1,19 @@
 # Roadmap
 
-## Recording: platform parity follow-ups
+## Recording: physical iOS device support
 
-Cascading per-block recording shipped: `--no-record` > `--record` >
-`[[block]] record` > `[flow.options] record` > `[options] record`,
-output at `{output_dir}/{flow}/{device}/recordings/{block}_{iter}.mp4`.
-Two known gaps before recording reaches platform parity:
+Cascading per-block recording is shipped end-to-end on iOS simulator
+and modern Android (API 30+ uses `screenrecord --time-limit 0`, no
+rotation needed). Remaining gap:
 
-- **Android 3-minute screenrecord cap.** `adb shell screenrecord`
-  truncates output at ~3 min on older Android. Auto-rotate every
-  ~2:55: emit `{block}_{iter}_part1.mp4`, `_part2.mp4`, etc. Modern
-  Android (11+) may have removed the cap — verify before
-  special-casing. Apply the same rotation on iOS for naming
-  uniformity.
-- **iOS `simctl io recordVideo` integration.** `IosDriver::start_recording`
-  still `bail!`s. Wire to `xcrun simctl io <udid> recordVideo
-  <path>` with a stoppable child process handle. Without this, the
-  recording cascade silently no-ops on iOS.
+- **Physical iOS recording** — `xcrun simctl io ... recordVideo` is
+  simulator-only. Real-device recording requires a different path:
+  one of (a) `idevicescreenshot` polling + ffmpeg encode (slow), or
+  (b) USB-Mux QuickTime trace pull (Xcode's approach). Today the
+  driver `bail!`s when `physical = true` so the failure mode is
+  loud.
 
-**Files:** `golem-runner/src/capture.rs` (rotation),
-`golem-driver/src/ios.rs` (recordVideo), `golem-driver/src/android.rs`
-(rotation hook).
+**Files:** `golem-driver/src/ios.rs` (physical path).
 
 ## `--trace` flag: per-step forensic capture
 
