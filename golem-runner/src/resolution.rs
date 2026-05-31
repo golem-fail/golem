@@ -500,7 +500,7 @@ pub async fn resolve_element(
         // timeout) before continuing.
         if !tried_hide_keyboard && meta.keyboard_height > 0 {
             let unfiltered_count = find_elements(&root, &selector).len();
-            if golem_driver::is_debug() {
+            if golem_common::is_debug() {
                 eprintln!(
                     "  [resolver] kb={} filtered=0 unfiltered={} for {:?}",
                     meta.keyboard_height,

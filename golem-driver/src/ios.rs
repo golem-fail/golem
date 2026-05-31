@@ -160,7 +160,7 @@ impl IosDriver {
                 Some(s)
             }
             Err(e) => {
-                if crate::is_debug() {
+                if golem_common::is_debug() {
                     eprintln!("  [webkit] eval_in_webview failed: {e}");
                 }
                 *wk = WebKitLifecycle::Failed;
@@ -206,7 +206,7 @@ async fn setup_webkit(target_udid: &str) -> Option<WebKitState> {
     match crate::webkit::WebKitInspector::connect(Some(target_udid)).await {
         Ok(inspector) => Some(WebKitState { inspector }),
         Err(e) => {
-            if crate::is_debug() { eprintln!("  [webkit] setup failed: {e}"); }
+            if golem_common::is_debug() { eprintln!("  [webkit] setup failed: {e}"); }
             None
         }
     }

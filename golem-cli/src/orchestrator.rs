@@ -105,7 +105,7 @@ impl OrchestratorServer {
             // observation, or (b) --debug, or (c) count stays >=1 for
             // more than ~3s (kernel close not finalising — actual hang).
             ticks_with_count += 1;
-            let noisy_enough = count >= 2 || golem_driver::is_debug() || ticks_with_count > 3;
+            let noisy_enough = count >= 2 || golem_common::is_debug() || ticks_with_count > 3;
             if noisy_enough && count != last_logged_count {
                 eprintln!("  [orchestrator] waiting for {count} active client(s)...");
                 last_logged_count = count;
@@ -239,7 +239,7 @@ async fn handle_client(
                 // Client disconnects mid-read are normal (especially
                 // in-process clients drop the socket as soon as
                 // submit_and_wait returns). Stay quiet unless --debug.
-                if golem_driver::is_debug() {
+                if golem_common::is_debug() {
                     eprintln!("  [orchestrator] read error: {e}");
                 }
                 break;

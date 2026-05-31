@@ -472,7 +472,6 @@ wherever the lint lives once added).
 
 Captured during the post-merge audit; none are blocking but each removes a sharp edge.
 
-- **`is_debug` cross-crate coupling.** `golem-runner` reaches into `golem_driver::is_debug()` for a diagnostic eprintln. Move to `golem-common` or give the runner its own debug flag so the runner doesn't depend on the driver for telemetry.
 - **`cssSafeAreaInset` invisible to callers.** Today the WebKit Inspector enrichment subtracts the inset locally and discards it. Adding `css_safe_area_top: i32` to `HierarchyMeta` (default 0) keeps the diagnostic record. Sets up Android once an equivalent surfaces.
 - **`tap()` → `press(forDuration: 0.05)`.** Pages with a long-press distinguisher above ~50ms threshold may classify these as long-presses. Document the boundary or add an explicit `tap-fast` shorthand.
 - **Resolver auto-hide-keyboard fires unconditionally.** Tests that intentionally exercise keyboard-up state will be perturbed. Consider an opt-out flag on the step or scope to specific actions.

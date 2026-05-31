@@ -1,0 +1,9 @@
+[package]
+name = "golem-common"
+version.workspace = true
+edition = "2021"
+
+[dependencies]
+
+[lints]
+workspace = true

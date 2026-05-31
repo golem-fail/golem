@@ -258,7 +258,7 @@ impl AndroidDriver {
         match crate::cdp::evaluate_js(port, &page_id, expression, false).await {
             Ok(s) => Some(s),
             Err(e) => {
-                if crate::is_debug() {
+                if golem_common::is_debug() {
                     eprintln!("  [cdp] eval_in_webview failed: {e}");
                 }
                 None
@@ -317,7 +317,7 @@ async fn setup_cdp(device_serial: &str, package_name: &str) -> Option<CdpState> 
     let page_id = match crate::cdp::get_page_id(port).await {
         Ok(id) => id,
         Err(e) => {
-            if crate::is_debug() { eprintln!("  [cdp] setup failed at get_page_id: {e}"); }
+            if golem_common::is_debug() { eprintln!("  [cdp] setup failed at get_page_id: {e}"); }
             let _ = crate::cdp::remove_forward(device_serial, port).await;
             return None;
         }

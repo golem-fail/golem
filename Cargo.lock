@@ -578,6 +578,7 @@ dependencies = [
  "clap",
  "dialoguer",
  "dirs",
+ "golem-common",
  "golem-devices",
  "golem-driver",
  "golem-element",
@@ -599,6 +600,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "golem-common"
+version = "0.6.16"
+
+[[package]]
 name = "golem-devices"
 version = "0.6.16"
 dependencies = [
@@ -617,6 +622,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures-util",
+ "golem-common",
  "golem-element",
  "minifier",
  "plist",
@@ -706,6 +712,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "golem-common",
  "golem-devices",
  "golem-driver",
  "golem-element",

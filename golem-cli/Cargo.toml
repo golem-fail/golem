@@ -18,6 +18,7 @@ golem-report = { path = "../golem-report" }
 golem-email = { path = "../golem-email" }
 golem-events = { path = "../golem-events" }
 golem-orchestrator = { path = "../golem-orchestrator" }
+golem-common = { path = "../golem-common" }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }

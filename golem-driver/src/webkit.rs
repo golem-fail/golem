@@ -382,7 +382,7 @@ impl WebKitInspector {
             match inspector.handshake().await {
                 Ok(()) => return Ok(inspector),
                 Err(e) => {
-                    if crate::is_debug() { eprintln!("  [webkit] handshake failed on {}: {e}", socket_path.display()); }
+                    if golem_common::is_debug() { eprintln!("  [webkit] handshake failed on {}: {e}", socket_path.display()); }
                     last_err = Some(e);
                     continue;
                 }
@@ -832,7 +832,7 @@ pub(crate) async fn fetch_webview_dom(
     {
         Ok(json) => json,
         Err(e) => {
-            if crate::is_debug() { eprintln!("  [webkit] JS evaluation failed: {e}"); }
+            if golem_common::is_debug() { eprintln!("  [webkit] JS evaluation failed: {e}"); }
             return None;
         }
     };
@@ -840,7 +840,7 @@ pub(crate) async fn fetch_webview_dom(
     let wrapper: serde_json::Value = match serde_json::from_str(&dom_json) {
         Ok(v) => v,
         Err(e) => {
-            if crate::is_debug() { eprintln!("  [webkit] failed to parse DOM JSON: {e}"); }
+            if golem_common::is_debug() { eprintln!("  [webkit] failed to parse DOM JSON: {e}"); }
             return None;
         }
     };

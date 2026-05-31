@@ -434,7 +434,7 @@ impl SuiteRunner {
         let debug = self.config.debug;
         let stream_human_enabled = self.config.stream_human;
         if debug {
-            golem_driver::set_debug(true);
+            golem_common::set_debug(true);
         }
 
         // multi_device=true gives device prefixes — right whenever we have
