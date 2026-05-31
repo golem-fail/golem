@@ -111,49 +111,30 @@ Sweep these files for un-bounded driver calls:
 For each: wrap with `tokio::time::timeout(N_SECONDS, ...)` or
 `golem_runner::resolution::get_hierarchy_bounded`-style helper.
 
-## Install cache: don't poison `FailedScript` on transient errors
+## Install cache: don't persist `FailedScript` on transient errors
 
 `InstallCache::record_failure((udid, bundle), FailedScript)` is a
 one-shot — once set, every subsequent flow targeting that pair
 SKIPs with "install_script failed earlier" until cache is wiped
 (`--rebuild` or `rm .golem/install-cache.json`). Designed to avoid
-wasting 195 install attempts on a permanently broken script.
+wasting hundreds of install attempts on a permanently broken script.
 
-**Problem**: the same poisoning fires for transient errors —
-emulator boot incomplete, package manager service not yet up,
-ADB connection blip — and stays sticky for the whole suite. Real
-sweep hit today: fresh Pixel 7a emu, install fired before
-`pm` service was ready, every one of 190 flows SKIP'd.
+**Gap:** when the transient classifier matches (Mach -308, adb
+device-offline, package-service race) and the retry ALSO fails,
+the cache still persists `FailedScript` as if the script were
+permanently broken. Next flow on the same `(udid, bundle)` SKIPs
+forever. For a flake-investigation sweep that's a suite-killer —
+two transients in a row poison the cache.
 
-**Existing partial mitigation:** `is_transient_install_error`
-(`golem-cli/src/suite.rs::is_transient_install_error`) matches
-known-recoverable patterns and retries once with `install_only=true`
-reusing the already-built artifact. Patterns matched today: Mach
--308 (iOS sim IPC blip), `device offline` / `device not found`
-(adb early-boot races). Need to add: `Can't find service: package`
-(Android package manager boot race).
+**Fix:** when classification says transient and the retry fails,
+DON'T set the cache entry. Leave it empty so the next flow gets a
+fresh preinstall (which may succeed now that whatever was transient
+has cleared). Only persist `FailedScript` when the failure is
+*not* classified transient — i.e. real script breakage.
 
-**Better design:**
-
-1. **Expand the transient classifier** to cover `Can't find
-   service: package` and any other "boot-not-complete" patterns
-   that show up in CI logs.
-2. **Don't persist `FailedScript` for transient classes.** A
-   transient failure already triggers an in-suite retry; if THAT
-   also fails, leave the cache as-is (no entry) so the next
-   FlowRun's preinstall gets a fresh shot. Only persist
-   `FailedScript` when the script returns a non-zero exit with no
-   transient marker.
-3. **Pre-install boot probe.** Before calling install_script,
-   wait for `getprop sys.boot_completed = 1` AND a successful
-   `pm list packages` (cheap, ~50ms). Eliminates the bulk of
-   transient install failures at the source rather than relying
-   on retry-classifier patterns to mop up after.
-
-**Files:** `golem-cli/src/suite.rs` (expand
-`is_transient_install_error`, gate cache persistence on
-classification), `golem-runner/src/installer.rs` (add boot-probe
-helper, call before install_script).
+**Files:** `golem-cli/src/suite.rs::run_install_with_build_coord`
+(gate `install_cache.set(..., FailedScript)` on
+`!is_transient_install_error(err)`).
 
 ## Flake summary respects `--output` format
 

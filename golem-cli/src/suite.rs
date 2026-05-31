@@ -44,7 +44,61 @@ fn is_transient_install_error(err: &str) -> bool {
     if err.contains("error: device offline") || err.contains("error: device not found") {
         return true;
     }
+    // Android package-manager service not yet ready during emu boot.
+    // `adb install` hits the framework before `system_server`'s
+    // `package` service has registered, surfaced as:
+    //   "cmd: Can't find service: package"
+    // Clears as soon as the service binds (a few seconds after
+    // sys.boot_completed). The pre-install boot probe should catch
+    // this at the source, but keep the classifier as a backstop.
+    if err.contains("Can't find service: package") {
+        return true;
+    }
     false
+}
+
+/// Poll the Android emulator until `sys.boot_completed = 1` AND the
+/// `package` service answers a trivial query. Cheap (~50ms per probe),
+/// caps at ~30s — well above the typical 2-5s window between adb
+/// returning `device` state and the package manager registering.
+///
+/// Failure modes targeted:
+/// - `cmd: Can't find service: package` (package manager not yet
+///   registered against `system_server`).
+/// - `adb: device offline` (emu in transition).
+/// Both clear within seconds; without this probe they poison the
+/// install cache as `FailedScript` for the rest of the suite.
+async fn wait_for_android_package_service(udid: &str) -> anyhow::Result<()> {
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        let boot = tokio::process::Command::new("adb")
+            .args(["-s", udid, "shell", "getprop", "sys.boot_completed"])
+            .output()
+            .await;
+        let booted = matches!(&boot, Ok(o) if String::from_utf8_lossy(&o.stdout).trim() == "1");
+        if booted {
+            // `pm list packages -f android` is a tiny query that hits
+            // the package service. Success means `package` service is
+            // bound; failure surfaces the same `Can't find service`
+            // string that would otherwise poison install_script.
+            let pm = tokio::process::Command::new("adb")
+                .args(["-s", udid, "shell", "pm", "list", "packages", "-f", "android"])
+                .output()
+                .await;
+            if let Ok(o) = pm {
+                let stderr = String::from_utf8_lossy(&o.stderr);
+                if o.status.success() && !stderr.contains("Can't find service") {
+                    return Ok(());
+                }
+            }
+        }
+        if tokio::time::Instant::now() >= deadline {
+            anyhow::bail!(
+                "package service / sys.boot_completed not ready for {udid} within 30s"
+            );
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
 }
 
 /// Format the human-readable target string used in install events:
@@ -1527,6 +1581,27 @@ async fn run_install_with_build_coord(
         None => None,
     };
 
+    // Android boot probe: install scripts call `adb install`, which
+    // talks to the device's `package` service. On freshly-booted
+    // emulators, `package` registers a few seconds after
+    // `sys.boot_completed` flips. Installing before that window
+    // surfaces as `cmd: Can't find service: package` from adb. The
+    // transient classifier retries once on this error, but a clean
+    // probe-then-install avoids the failure entirely (and the
+    // FailedScript cache poisoning that comes with it).
+    if matches!(device.platform, Platform::Android) {
+        if let Err(e) = wait_for_android_package_service(&device.udid).await {
+            if let Some(em) = emitter {
+                em.emit(golem_events::EventKind::InstallOutput {
+                    app_name: app_name.to_string(),
+                    line: format!("boot probe warning: {e}"),
+                });
+            }
+            // Fall through — install attempt may still succeed, or the
+            // transient classifier will retry. Probe is best-effort.
+        }
+    }
+
     let mut result = golem_runner::installer::run_install_script(
         script_path,
         project_root,
@@ -2719,6 +2794,17 @@ mod tests {
     fn transient_classifier_matches_adb_device_offline() {
         let err = "install script exited 1: error: device offline";
         assert!(is_transient_install_error(err));
+    }
+
+    #[test]
+    fn transient_classifier_matches_android_package_service_race() {
+        // `adb install` hits `package` before system_server has it
+        // registered, on emulators where adb returns `device` state
+        // a moment before the framework's services are up.
+        let err = "install script exited 1: \
+                   adb: failed to install app.apk: cmd: Can't find service: package";
+        assert!(is_transient_install_error(err),
+            "Android package-service boot race SHALL be classified transient");
     }
 
     #[test]
