@@ -100,9 +100,7 @@ Remaining `driver.*().await` sites outside `execute_step_with_policy`'s
 per-step timeout that can hang if companion is wedged:
 
 - `golem-runner/src/scroll.rs` (`driver.swipe_coords` inside scroll search — could hang mid-scroll).
-- `golem-runner/src/actions/external.rs` (`wait_for_alert_gone` polls `get_hierarchy` in its own loop without bounded helper).
 - `golem-runner/src/actions/interaction.rs` (find-by-text paths in `tap`/`type`/`long_press`/`gesture` — 8 sites, all `driver.get_hierarchy().await`).
-- `golem-runner/src/branch.rs` (branch evaluation hierarchy fetches).
 
 For each: wrap with `tokio::time::timeout(N_SECONDS, ...)` or use
 `golem_runner::resolution::{get_hierarchy_bounded, screenshot_bounded}`.

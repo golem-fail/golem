@@ -392,7 +392,7 @@ pub(crate) async fn handle_accept_alert(
     // left to find them.
     let mut poked = false;
     loop {
-        let (root, _meta) = driver.get_hierarchy().await?;
+        let (root, _meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
         if let Some(alert) = golem_driver::common::find_alert(&root) {
             let buttons = golem_driver::common::find_alert_buttons(&alert);
             if buttons.is_empty() {
@@ -444,7 +444,7 @@ async fn wait_for_alert_gone(driver: &dyn PlatformDriver) -> Result<()> {
     // count it as success.
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(2500);
     while tokio::time::Instant::now() < deadline {
-        match driver.get_hierarchy().await {
+        match crate::resolution::get_hierarchy_bounded(driver).await {
             Ok((root, _meta)) => {
                 if golem_driver::common::find_alert(&root).is_none() {
                     return Ok(());
@@ -479,7 +479,7 @@ pub(crate) async fn handle_dismiss_alert(
     // No internal deadline — the step's timeout governs (see
     // accept_alert for rationale).
     loop {
-        let (root, _meta) = driver.get_hierarchy().await?;
+        let (root, _meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
         if let Some(alert) = golem_driver::common::find_alert(&root) {
             let buttons = golem_driver::common::find_alert_buttons(&alert);
             if buttons.is_empty() {
