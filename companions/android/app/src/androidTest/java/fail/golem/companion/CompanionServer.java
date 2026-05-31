@@ -139,7 +139,7 @@ public class CompanionServer {
                     sendJson(out, 200, new JSONObject()
                         .put("status", "ok")
                         .put("platform", "android")
-                        .put("version", "0.6.12")
+                        .put("version", "0.6.13")
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
@@ -194,9 +194,27 @@ public class CompanionServer {
     }
 
     private void handleHierarchy(OutputStream out) throws Exception {
-        AccessibilityNodeInfo root = uiAutomation.getRootInActiveWindow();
+        // Same transient-null behaviour as `takeScreenshot()`: an
+        // overlay, animation, or accessibility-connection blip can
+        // leave UiAutomation with no active window briefly. Retry
+        // before failing — assert_visible callers poll the endpoint
+        // for visibility anyway, but a hard 500 here can mask
+        // genuinely-visible elements when the companion's snapshot
+        // lags the device by a frame or two.
+        AccessibilityNodeInfo root = null;
+        int rootAttempts = 0;
+        while (rootAttempts < 3) {
+            root = uiAutomation.getRootInActiveWindow();
+            if (root != null) break;
+            rootAttempts++;
+            try { Thread.sleep(100); } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+        }
         if (root == null) {
-            sendJson(out, 500, new JSONObject().put("error", "no active window"));
+            sendJson(out, 500, new JSONObject()
+                .put("error", "no active window")
+                .put("attempts", rootAttempts));
             return;
         }
         try {
@@ -519,9 +537,27 @@ public class CompanionServer {
     }
 
     private void handleScreenshot(OutputStream out) throws Exception {
-        Bitmap bitmap = uiAutomation.takeScreenshot();
+        // UiAutomation.takeScreenshot() can return null transiently
+        // when the WindowManager snapshot pipeline is busy (a system
+        // overlay flashed up, ongoing animation, accessibility
+        // connection blip). Sweep runs surfaced this regularly. Retry
+        // a few times with short sleeps before declaring failure —
+        // happy-path callers add ~0ms; the bad path costs ~200ms
+        // before reporting 500.
+        Bitmap bitmap = null;
+        int attempts = 0;
+        while (attempts < 3) {
+            bitmap = uiAutomation.takeScreenshot();
+            if (bitmap != null) break;
+            attempts++;
+            try { Thread.sleep(100); } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+        }
         if (bitmap == null) {
-            sendJson(out, 500, new JSONObject().put("error", "screenshot failed"));
+            sendJson(out, 500, new JSONObject()
+                .put("error", "screenshot failed")
+                .put("attempts", attempts));
             return;
         }
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
