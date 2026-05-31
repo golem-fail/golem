@@ -16,14 +16,17 @@ use golem_runner::context::ExecutionContext;
 use rand::SeedableRng;
 use golem_runner::executor::{execute_flow, FlowResult};
 
-// Tests use a short per-step timeout — these flows test outcome (error /
-// warn / ignore policies, retry semantics, screenshot paths), not real-clock
-// timing. 1 s is enough for the resolution polling loop to fire the error
-// path on missing elements while staying well under nextest's
-// `terminate-after = 5 × 2s = 10s` slow-test policy. Tighter values
-// (e.g. 200 ms) flake under parallel test load when futures don't get
-// scheduled before the deadline.
-const DEFAULT_TIMEOUT: u64 = 1_000;
+// Tests use a short per-step timeout — these flows test outcome
+// (error / warn / ignore policies, retry semantics, screenshot
+// paths), not real-clock timing. 500ms is enough for resolution's
+// 250ms poll cadence to fire 2-3 attempts before the error-path
+// timeout, even with the tap action's 2× class multiplier (effective
+// 1000ms). Lower values (e.g. 200 ms) flaked under parallel test
+// load when futures don't get scheduled before the deadline. Higher
+// values were unnecessary — most slow tests in this file existed
+// purely because the per-step budget burned a full second waiting
+// for "not found" to time out.
+const DEFAULT_TIMEOUT: u64 = 500;
 
 static DEFAULT_CAPTURE: LazyLock<CaptureConfig> = LazyLock::new(CaptureConfig::default);
 

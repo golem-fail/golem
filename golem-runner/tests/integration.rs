@@ -20,7 +20,12 @@ use rand::SeedableRng;
 // See note on the same constant in policy_tests.rs — short timeout keeps
 // failure-path tests fast (resolution loop hits deadline in ~1 s instead
 // of 10 s) without flaking under parallel scheduling pressure.
-const DEFAULT_TIMEOUT: u64 = 1_000;
+// See note on the same constant in policy_tests.rs — these tests
+// exercise outcome / lifecycle paths, not real-clock timing, and
+// the bulk of their wall-time was the per-step "not found" timeout.
+// 500 ms keeps resolution's 250 ms poll honest while halving the
+// test runtime.
+const DEFAULT_TIMEOUT: u64 = 500;
 
 static DEFAULT_CAPTURE: LazyLock<CaptureConfig> = LazyLock::new(|| CaptureConfig {
     screenshot_on_failure: false,
