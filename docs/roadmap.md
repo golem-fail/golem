@@ -311,40 +311,68 @@ eprintln (logs visible only to daemon admin):
 event — flake summary is purely client-side aggregation of
 already-streamed events.
 
-## Mid-sweep device discovery: close the inner-wait gap
+## Loose-FIFO device queue (multi-tenant orchestrator)
 
-**Shipped 2026-06-03**: atomic pick-and-allocate inside `setup_slot`.
-Each FlowRun's `find_available_device` call re-runs
-`discover_all_devices`, so new devices booted mid-sweep are picked
-up by subsequent FlowRuns. Verified live: booting a second Android
-emulator ~30s after suite start, first new-emu flow assignment
-appeared within ~30s.
+Today blocked FlowRuns are equal-priority — each runs its own poll
+loop and whoever's 2s timer fires first after a device frees wins.
+Order is essentially random (tokio scheduling). Fine for the
+single-client case (all 195 FlowRuns are the same caller), but a
+future server-with-many-clients needs loose FIFO so the first client
+to submit work has a higher chance of finishing first.
 
-**Remaining gap — inner wait loop staleness.** `find_available_device`'s
-step-4 inner wait (`golem-cli/src/suite.rs::~2591`) polls
-`try_pick_free(&booted, ...)` against the `booted` list captured
-at the start of the same `find_available_device` call. If all
-devices are busy at first check, the FlowRun falls into that
-inner loop and is blind to subsequently-booted devices for the
-duration of the wait — only sees a free device when one of the
-*originally-known* devices releases.
+**Design:** on device-release, look up the oldest queued waiter
+whose slot shape matches that device, hand it the device. Per-shape
+FIFO — a queued iOS FlowRun isn't blocked by older Android waiters
+since they couldn't grab an iOS device anyway. Each FlowRun
+registers `(arrival_time, slot)` in ResourceManager on entry to the
+wait loop and deregisters on allocation/exit.
 
-In practice this rarely bites because: (a) my outer atomic-allocate
-loop in `setup_slot` re-calls `find_available_device` after race
-losses, refreshing discovery; (b) new FlowRuns continuously
-entering get fresh discovery. The hole shows up when the queue is
-fully drained into step-4 waiters AND no new FlowRuns are
-spawning — every waiter pins to the original list.
+Combine with **adaptive poll backoff** for the same wait loop:
+`Tpoll = 2s + 100ms × waiting_count(slot)`. Keeps inter-poll
+responsiveness across the waiter population at ~100ms regardless of
+N. Without this, 200 waiters each polling every 2s = ~100 polls/sec
+mutex contention; the adaptive backoff caps it at ~10/sec total
+under load.
 
-**Fix:** inside `find_available_device` step 4, every N seconds
-re-run `discover_all_devices` and replace the `booted` cache.
-~30s cadence keeps it cheap. The slot filter and free-set logic
-stays identical; only the source list updates.
+Both pieces need `ResourceManager.waiting_count(slot)` bookkeeping
+and a sorted-by-arrival queue per slot shape.
 
-**Graceful loss** (separate but related). When `discover_all_devices`
-no longer returns a device we have allocated, mark it unhealthy:
-the active FlowRun aborts with a clean error ("device disconnected,
-retry"), queued FlowRuns shift to other devices.
+**At ~1000-FlowRun scale**, per-task `discover_all_devices` (the
+current mid-sweep-refresh approach) becomes noisy — ~30 adb
+subprocess calls/sec. Three escalating options:
+
+1. **Adaptive TTL** — grow refresh interval with waiter count.
+   Self-balancing, fully decentralised. Easy to bolt onto current
+   per-task loop.
+2. **Shared cached snapshot** — one global discover per 30s in
+   `ResourceManager`, all waiters read the cache. Constant adb
+   load regardless of N. Adds one `tokio::sync::RwLock` field.
+3. **Warm-pool cap with cold queue** — cap the number of tokio
+   tasks actively polling (e.g. ≤200). Excess FlowRuns sit in a
+   `VecDeque` "cold" queue with near-zero per-entry overhead. As
+   warm tasks complete, pull next from cold queue and promote to
+   warm. Natural FIFO. Bounded mutex contention forever.
+
+Picks compound: (1) is a small tweak; (2) replaces per-task with
+shared; (3) bounds the warm pool regardless of both. (3) is the
+right end-state for a long-lived server-style orchestrator with
+many concurrent client submissions.
+
+**Files:** `golem-devices/src/resource_manager.rs` (waiting registry,
+on-release handoff), `golem-cli/src/suite.rs::find_available_device`
+(step-4 wait loop reads adaptive Tpoll, blocks on a per-shape
+signal instead of fixed sleep).
+
+## Device lifecycle: graceful loss
+
+When `discover_all_devices` no longer returns a device we have
+allocated (user shut it down mid-sweep, adb dropped the
+connection, etc), the FlowRun holding it currently has no
+graceful recovery — its driver calls just start failing. Should:
+mark the device unhealthy in `ResourceManager`, abort the active
+FlowRun with a clean "device disconnected, retry" error, free the
+allocation so other queued FlowRuns can shift to alternative
+devices.
 
 **Auto-shutdown race.** Devices golem booted itself are tracked
 for shutdown at suite end (per `--keep-devices`). If we ever add
@@ -353,9 +381,9 @@ in N minutes mid-suite), it must coordinate with the allocator
 (refuse to shut down a device with queued FlowRuns targeting its
 shape).
 
-**Files:** `golem-cli/src/suite.rs::find_available_device` (step-4
-inner wait — periodic re-discover), `golem-devices/src/resource_manager.rs`
-(graceful-loss detection on next discover snapshot).
+**Files:** `golem-devices/src/resource_manager.rs` (unhealthy
+state + graceful-loss handler triggered by next discover snapshot
+showing a previously-allocated device gone).
 
 ## Boot-on-demand for `--repeat` identical device pools
 

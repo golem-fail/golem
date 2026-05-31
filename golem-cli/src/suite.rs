@@ -1661,15 +1661,31 @@ async fn run_install_with_build_coord(
         }
     }
 
-    install_cache
-        .set(
-            key,
-            match err_str {
-                None => InstallOutcome::Succeeded,
-                Some(err) => InstallOutcome::FailedScript(err),
-            },
-        )
-        .await;
+    // Cache writeback. Persist `FailedScript` only for permanent
+    // failures — a transient (Mach -308, package-service race, adb
+    // device-offline blip) that hasn't cleared after the in-suite
+    // retry might still clear by the NEXT FlowRun's preinstall, so
+    // leaving the cache empty gives those a fresh shot. Without
+    // this gate, two consecutive transients poison the cache and
+    // every subsequent flow on this (udid, bundle) SKIPs.
+    match err_str {
+        None => {
+            install_cache.set(key, InstallOutcome::Succeeded).await;
+        }
+        Some(err) if is_transient_install_error(&err) => {
+            if let Some(em) = emitter {
+                em.emit(golem_events::EventKind::InstallOutput {
+                    app_name: app_name.to_string(),
+                    line: "install failed with transient marker — leaving cache empty so next FlowRun retries".into(),
+                });
+            }
+            // Cache stays empty for this (udid, bundle). Next
+            // preinstall_for_device call will re-run the script.
+        }
+        Some(err) => {
+            install_cache.set(key, InstallOutcome::FailedScript(err)).await;
+        }
+    }
 
     result
 }
@@ -2663,9 +2679,20 @@ async fn find_available_device(
         .or_else(|| slot.map(golem_orchestrator::shape_label))
         .unwrap_or_else(|| "any".to_string());
 
+    // Owned snapshot we can refresh inside the loop. Initial copy from
+    // the booted refs we collected at function entry — equivalent
+    // result, but `Vec<DeviceInfo>` so we can replace it after each
+    // periodic re-discover. The 30s TTL means a mid-sweep boot of a
+    // matching device is picked up within ~30s by any waiter in this
+    // loop. Without this, the cached `booted` list stays fixed for
+    // the whole wait — newly-booted devices stay invisible.
+    let mut booted_owned: Vec<DeviceInfo> = booted.iter().map(|d| (*d).clone()).collect();
+    let mut last_refresh = tokio::time::Instant::now();
+
     loop {
+        let booted_refs: Vec<&DeviceInfo> = booted_owned.iter().collect();
         if let Some(pick) =
-            try_pick_free(&booted, platform, slot, resource_mgr, install_cache, install_matrix)
+            try_pick_free(&booted_refs, platform, slot, resource_mgr, install_cache, install_matrix)
                 .await
         {
             return Ok(pick);
@@ -2674,7 +2701,7 @@ async fn find_available_device(
         if tokio::time::Instant::now() >= deadline {
             anyhow::bail!(
                 "Timed out waiting for a free {wait_label} device (all {} are in use)",
-                booted.len()
+                booted_owned.len()
             );
         }
 
@@ -2687,6 +2714,22 @@ async fn find_available_device(
             );
             emitted_waiting = true;
         }
+
+        // Periodic device-list refresh — see comment above.
+        if last_refresh.elapsed() > std::time::Duration::from_secs(30) {
+            if let Ok(refreshed_all) = discover_all_devices(platform).await {
+                booted_owned = refreshed_all
+                    .into_iter()
+                    .filter(|d| platform.map(|p| d.platform == p).unwrap_or(true))
+                    .filter(|d| slot.map(|s| device_matches_slot(d, s)).unwrap_or(true))
+                    .filter(|d| d.state == DeviceState::Booted)
+                    .collect();
+            }
+            // On discover error, keep the prior list — better than
+            // bailing the FlowRun for a transient adb hiccup.
+            last_refresh = tokio::time::Instant::now();
+        }
+
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     }
 }
