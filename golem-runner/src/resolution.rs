@@ -32,7 +32,7 @@ const HIERARCHY_FETCH_TIMEOUT: Duration = Duration::from_millis(2000);
 /// Returns the same shape as the underlying call; treats a timeout
 /// as an error so callers fall through their `Err(_)` arms (which
 /// already exist for transient network/companion failures).
-async fn get_hierarchy_bounded(
+pub(crate) async fn get_hierarchy_bounded(
     driver: &dyn PlatformDriver,
 ) -> anyhow::Result<(Element, golem_driver::common::HierarchyMeta)> {
     match tokio::time::timeout(HIERARCHY_FETCH_TIMEOUT, driver.get_hierarchy()).await {
@@ -40,6 +40,20 @@ async fn get_hierarchy_bounded(
         Err(_) => anyhow::bail!(
             "hierarchy fetch timed out after {}ms (companion likely wedged)",
             HIERARCHY_FETCH_TIMEOUT.as_millis()
+        ),
+    }
+}
+
+const SCREENSHOT_FETCH_TIMEOUT: Duration = Duration::from_millis(5000);
+
+pub(crate) async fn screenshot_bounded(
+    driver: &dyn PlatformDriver,
+) -> anyhow::Result<golem_driver::ScreenshotResult> {
+    match tokio::time::timeout(SCREENSHOT_FETCH_TIMEOUT, driver.screenshot()).await {
+        Ok(r) => r,
+        Err(_) => anyhow::bail!(
+            "screenshot timed out after {}ms (companion likely wedged)",
+            SCREENSHOT_FETCH_TIMEOUT.as_millis()
         ),
     }
 }
@@ -399,7 +413,7 @@ pub async fn resolve_element(
         let group = step.on.as_ref();
         let has_coords = group.is_some_and(|g| g.x.is_some() || g.y.is_some());
         if has_coords {
-            let (root, meta) = driver.get_hierarchy().await?;
+            let (root, meta) = get_hierarchy_bounded(driver).await?;
             crate::record_tree_fetch(meta.node_count);
             let mut vp = Viewport::from_root(&root);
             if meta.keyboard_height > 0 { vp.height -= meta.keyboard_height; }
@@ -422,7 +436,7 @@ pub async fn resolve_element(
     }
 
     let (last_root, last_viewport) = loop {
-        let (root, meta) = match driver.get_hierarchy().await {
+        let (root, meta) = match get_hierarchy_bounded(driver).await {
             Ok((root, meta)) => { crate::record_tree_fetch(meta.node_count); (root, meta) },
             Err(_) if Instant::now() < deadline => {
                 tokio::time::sleep(POLL_INTERVAL).await;
@@ -656,7 +670,7 @@ pub async fn resolve_element_full_tree(
     driver: &dyn PlatformDriver,
 ) -> Result<(Element, (i32, i32))> {
     let selector = build_selector(step);
-    let (root, _meta) = driver.get_hierarchy().await?;
+    let (root, _meta) = get_hierarchy_bounded(driver).await?;
     crate::record_tree_fetch(_meta.node_count);
     let results = find_elements(&root, &selector);
 
@@ -689,7 +703,7 @@ pub async fn poll_for_absence(
     let deadline = Instant::now() + Duration::from_millis(timeout_ms);
 
     loop {
-        let (root, _meta) = match driver.get_hierarchy().await {
+        let (root, _meta) = match get_hierarchy_bounded(driver).await {
             Ok((root, meta)) => { crate::record_tree_fetch(meta.node_count); (root, meta) },
             Err(_) if Instant::now() < deadline => {
                 tokio::time::sleep(POLL_INTERVAL).await;

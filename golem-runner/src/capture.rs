@@ -109,7 +109,7 @@ pub async fn capture_failure_screenshot(
         anyhow::bail!("Screenshot capture is disabled");
     }
 
-    let screenshot = driver.screenshot().await?;
+    let screenshot = crate::resolution::screenshot_bounded(driver).await?;
 
     let path = build_screenshot_path(config, block_name, global_step_index, block_iteration, step_index, failure_type);
 
@@ -164,7 +164,7 @@ pub async fn capture_failure_tree(
         anyhow::bail!("Tree dump is disabled");
     }
 
-    let (root, _meta) = driver.get_hierarchy().await?;
+    let (root, _meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
     let json = serde_json::to_string_pretty(&root)?;
 
     let path = build_tree_path(config, block_name, global_step_index, block_iteration, step_index, failure_type);
@@ -275,7 +275,7 @@ pub async fn capture_trace_boundary(
     // Screenshot + hierarchy fetched in series. They aren't perfectly
     // co-temporal but the gap is sub-100ms — small enough that they
     // describe "the same UI state" for forensic purposes.
-    let shot = driver.screenshot().await?;
+    let shot = crate::resolution::screenshot_bounded(driver).await?;
     let boundary_str = boundary_idx.to_string();
     let after_step_str = meta.after_step.map(|n| n.to_string());
     let mut entries: Vec<(&str, &str)> = vec![
@@ -293,7 +293,7 @@ pub async fn capture_trace_boundary(
     }
     let png_with_meta = embed_png_metadata(&shot.data, &entries);
     std::fs::write(&png_path, &png_with_meta)?;
-    let (root, _meta) = driver.get_hierarchy().await?;
+    let (root, _meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
     let json = serde_json::to_string_pretty(&root)?;
     std::fs::write(&json_path, json)?;
     Ok((png_path, json_path))

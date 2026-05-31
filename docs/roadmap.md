@@ -96,20 +96,17 @@ worked (different IPC path) but the companion's Java call did not.
 
 ## Audit un-bounded driver awaits
 
-`wait_for_settle` was fixed 2026-06-03 (all `get_hierarchy` calls
-now wrapped with `HIERARCHY_FETCH_TIMEOUT`). Same pattern likely
-exists elsewhere — any `driver.*().await?` outside
-`execute_step_with_policy`'s per-step timeout can hang the
-executor if the companion is wedged.
+Remaining `driver.*().await` sites outside `execute_step_with_policy`'s
+per-step timeout that can hang if companion is wedged:
 
-Sweep these files for un-bounded driver calls:
-- `golem-runner/src/cleanup.rs` (post-flow teardown — `driver.stop_recording`, `driver.set_dark_mode`).
-- `golem-runner/src/scroll.rs` (scroll search loop already has settle-level timeout but its own `driver.swipe` etc. could hang).
-- `golem-runner/src/installer.rs` (`driver.launch_app` / `driver.stop_app` during preinstall).
-- Action handlers in `golem-runner/src/actions/*.rs` — most go through `execute_step_with_policy` which bounds them, but check for any internal calls (e.g. `wait_for_alert_gone`) that loop without their own timeout.
+- `golem-runner/src/cleanup.rs` (post-flow teardown — `driver.stop_recording`, `driver.set_dark_mode`, `driver.set_location`).
+- `golem-runner/src/scroll.rs` (`driver.swipe_coords` inside scroll search — could hang mid-scroll).
+- `golem-runner/src/actions/external.rs` (`wait_for_alert_gone` polls `get_hierarchy` in its own loop without bounded helper).
+- `golem-runner/src/actions/interaction.rs` (find-by-text paths in `tap`/`type`/`long_press`/`gesture` — 8 sites, all `driver.get_hierarchy().await`).
+- `golem-runner/src/branch.rs` (branch evaluation hierarchy fetches).
 
-For each: wrap with `tokio::time::timeout(N_SECONDS, ...)` or
-`golem_runner::resolution::get_hierarchy_bounded`-style helper.
+For each: wrap with `tokio::time::timeout(N_SECONDS, ...)` or use
+`golem_runner::resolution::{get_hierarchy_bounded, screenshot_bounded}`.
 
 ## Install cache: don't persist `FailedScript` on transient errors
 
@@ -357,6 +354,24 @@ Picks compound: (1) is a small tweak; (2) replaces per-task with
 shared; (3) bounds the warm pool regardless of both. (3) is the
 right end-state for a long-lived server-style orchestrator with
 many concurrent client submissions.
+
+**Bonus synergy:** (3) also gives partial loose-FIFO for free — the
+cold→warm promotion happens in submission order, so the *entry*
+into the active wait population is FIFO. Once promoted, the warm
+pool's order is still tokio-scheduled (no guarantee), but at large
+N the cold queue dominates the wait time so observed FIFO is
+better than today's pure-random ordering.
+
+**Refinements worth considering:**
+- **Always-cold entry:** route every FlowRun through the cold queue
+  regardless of load (even N=1). Keeps the promotion path exercised
+  under small loads so it can't bitrot, and means there's no
+  threshold-crossing behavioral discontinuity.
+- **Rate-limited promotion:** cap cold→warm at e.g. 1 per 1-2s.
+  Sharpens the FIFO ordering (warm pool churns slower, so arrival
+  order survives longer) and smooths thundering-herd spikes when
+  many waiters arrive at once. Modest benefit on top of the
+  natural FIFO.
 
 **Files:** `golem-devices/src/resource_manager.rs` (waiting registry,
 on-release handoff), `golem-cli/src/suite.rs::find_available_device`
