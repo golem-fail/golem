@@ -219,9 +219,6 @@ so external-daemon users silently miss them. Examples:
 - `[install] cache file ... unknown version / unreadable`
   (`golem-runner/src/installer.rs:194, 202, 212`)
 
-(For the full audit see commit history — three "drop" cases and one
-"--debug gate" already shipped 2026-06-03.)
-
 **The fix.** Replace each `eprintln!` with `ctx.emit(EventKind::XYZ {
 …})` against the suite event channel. Add a matching renderer arm
 in `golem-report/src/stream.rs` so the client's human stream prints
