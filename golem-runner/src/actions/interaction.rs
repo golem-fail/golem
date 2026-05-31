@@ -60,7 +60,7 @@ async fn find_inner_toggle(
     driver: &dyn PlatformDriver,
     outer: &golem_element::Element,
 ) -> Option<golem_element::Bounds> {
-    let (root, _meta) = driver.get_hierarchy().await.ok()?;
+    let (root, _meta) = crate::resolution::get_hierarchy_bounded(driver).await.ok()?;
     let mut candidates = Vec::new();
     collect_toggles(&root, &mut candidates);
 
@@ -202,7 +202,7 @@ pub(crate) async fn handle_long_press(step: &Step, driver: &dyn PlatformDriver, 
 /// Swipe in a direction. May optionally target a specific element (ignored for
 /// the swipe call itself, but element resolution validates the element exists).
 pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
-    let (root, meta) = driver.get_hierarchy().await?;
+    let (root, meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
     let mut vp = golem_element::Viewport::from_root(&root);
     if meta.keyboard_height > 0 { vp.height -= meta.keyboard_height; }
 
@@ -344,7 +344,7 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
     let container_bounds = if let Some(ref within_group) = step.within {
         use crate::resolution::build_selector_from_group;
         use golem_element::selector::find_elements;
-        let (root, meta) = driver.get_hierarchy().await?;
+        let (root, meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
         let mut vp = golem_element::Viewport::from_root(&root);
         if meta.keyboard_height > 0 { vp.height -= meta.keyboard_height; }
         let visible = golem_element::filter_viewport(&root, &vp);
@@ -358,7 +358,7 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
             // Container is visible — but try to get more of it on screen
             nudge_into_view(driver, &b, &vp).await;
             // Re-fetch bounds after nudge
-            let (r, m) = driver.get_hierarchy().await?;
+            let (r, m) = crate::resolution::get_hierarchy_bounded(driver).await?;
             let mut v = golem_element::Viewport::from_root(&r);
             if m.keyboard_height > 0 { v.height -= m.keyboard_height; }
             let vis = golem_element::filter_viewport(&r, &v);
@@ -373,7 +373,7 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
                 None, None, ctx.emitter,
             ).await;
             // Nudge to get more of the container visible
-            let (fresh, fresh_meta) = driver.get_hierarchy().await?;
+            let (fresh, fresh_meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
             let mut fresh_vp = golem_element::Viewport::from_root(&fresh);
             if fresh_meta.keyboard_height > 0 { fresh_vp.height -= fresh_meta.keyboard_height; }
             let fresh_visible = golem_element::filter_viewport(&fresh, &fresh_vp);
@@ -383,7 +383,7 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
             if let Some(ref b) = bounds {
                 nudge_into_view(driver, b, &fresh_vp).await;
                 // Re-fetch after nudge
-                let (r2, m2) = driver.get_hierarchy().await?;
+                let (r2, m2) = crate::resolution::get_hierarchy_bounded(driver).await?;
                 let mut v2 = golem_element::Viewport::from_root(&r2);
                 if m2.keyboard_height > 0 { v2.height -= m2.keyboard_height; }
                 let vis2 = golem_element::filter_viewport(&r2, &v2);
@@ -432,7 +432,7 @@ fn resolve_param_coord(val: Option<&toml::Value>, viewport_size: i32) -> i32 {
 /// Otherwise falls back to x/y params or viewport center.
 /// Uses a single hierarchy fetch for both viewport and element resolution.
 async fn resolve_gesture_center(step: &Step, driver: &dyn PlatformDriver) -> Result<(i32, i32)> {
-    let (root, meta) = driver.get_hierarchy().await?;
+    let (root, meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
     let mut vp = golem_element::Viewport::from_root(&root);
     if meta.keyboard_height > 0 { vp.height -= meta.keyboard_height; }
 
@@ -527,7 +527,7 @@ pub(crate) async fn handle_gesture(step: &Step, driver: &dyn PlatformDriver) -> 
         bail!("gesture requires at least one finger in 'fingers' array");
     }
 
-    let (root, meta) = driver.get_hierarchy().await?;
+    let (root, meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
     let mut vp = golem_element::Viewport::from_root(&root);
     if meta.keyboard_height > 0 { vp.height -= meta.keyboard_height; }
 
