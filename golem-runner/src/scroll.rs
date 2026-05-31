@@ -383,7 +383,7 @@ pub async fn scroll_to_element(
         };
 
         scroll_attempt += 1;
-        driver.swipe_coords(fx, fy, tx, ty).await?;
+        crate::resolution::swipe_coords_bounded(driver, fx, fy, tx, ty).await?;
 
         // Check result
         let settle_meta;

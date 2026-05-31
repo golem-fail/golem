@@ -94,16 +94,6 @@ worked (different IPC path) but the companion's Java call did not.
 (detect persistent "no active window", trigger restart),
 `golem-cli/src/registration.rs` (re-register on companion restart).
 
-## Audit un-bounded driver awaits
-
-Remaining `driver.*().await` sites outside `execute_step_with_policy`'s
-per-step timeout that can hang if companion is wedged:
-
-- `golem-runner/src/scroll.rs` (`driver.swipe_coords` inside scroll search — could hang mid-scroll). Needs a new `swipe_bounded` helper since current ones only cover hierarchy + screenshot.
-
-For each: wrap with `tokio::time::timeout(N_SECONDS, ...)` or use
-`golem_runner::resolution::{get_hierarchy_bounded, screenshot_bounded}`.
-
 ## Install cache: don't persist `FailedScript` on transient errors
 
 `InstallCache::record_failure((udid, bundle), FailedScript)` is a

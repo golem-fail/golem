@@ -45,6 +45,23 @@ pub(crate) async fn get_hierarchy_bounded(
 }
 
 const SCREENSHOT_FETCH_TIMEOUT: Duration = Duration::from_millis(5000);
+const SWIPE_TIMEOUT: Duration = Duration::from_millis(5000);
+
+pub(crate) async fn swipe_coords_bounded(
+    driver: &dyn PlatformDriver,
+    fx: i32,
+    fy: i32,
+    tx: i32,
+    ty: i32,
+) -> anyhow::Result<()> {
+    match tokio::time::timeout(SWIPE_TIMEOUT, driver.swipe_coords(fx, fy, tx, ty)).await {
+        Ok(r) => r,
+        Err(_) => anyhow::bail!(
+            "swipe timed out after {}ms (companion likely wedged)",
+            SWIPE_TIMEOUT.as_millis()
+        ),
+    }
+}
 
 pub(crate) async fn screenshot_bounded(
     driver: &dyn PlatformDriver,
