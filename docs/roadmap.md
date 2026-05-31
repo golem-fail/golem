@@ -155,26 +155,6 @@ reusing the already-built artifact. Patterns matched today: Mach
 classification), `golem-runner/src/installer.rs` (add boot-probe
 helper, call before install_script).
 
-## Stream renderer: replace circled flow-run numbers with padded decimals
-
-`golem-report/src/stream.rs` prefixes each multi-device line with a
-circled glyph (① through ㊿) to disambiguate parallel flows. The
-counter increments on every `FlowStarted`, so a `--repeat 5` sweep
-across 39 tests = 195 FlowRuns blows past ㊿ and starts showing `?`
-for every subsequent run.
-
-Replace with left-padded decimal counters. The total FlowRun count is
-known up front from `SuitePlanned` (`parsed.flow_runs.len()`), so we
-can pick a width once and pad accordingly: e.g. 195 → `001` … `195`.
-Colour scheme stays — re-use `DEVICE_COLORS` indexed by counter
-mod len, so visually distinct runs keep their hue rotation.
-
-Less pretty than the circled glyphs but practical (no `?` fallback,
-no width thrash, copy-pasteable into grep / log filters).
-
-**Files:** `golem-report/src/stream.rs` (drop `CIRCLED_NUMBERS`, take
-total count from `SuitePlanned`, format as zero-padded decimal).
-
 ## Flake summary respects `--output` format
 
 The `--repeat` flake summary is currently rendered in coloured human

@@ -32,14 +32,20 @@ const SLOW_THRESHOLD_MS: u64 = 5_000;
 /// before `{dp}`. The `│` gutter consumes 1, leaving 14 spaces here.
 const TS_CONTINUATION_PAD: &str = "              "; // 14 spaces
 
-/// Circled number symbols ① through ㊿ for device identification.
-const CIRCLED_NUMBERS: &[&str] = &[
-    "①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩",
-    "⑪", "⑫", "⑬", "⑭", "⑮", "⑯", "⑰", "⑱", "⑲", "⑳",
-    "㉑", "㉒", "㉓", "㉔", "㉕", "㉖", "㉗", "㉘", "㉙", "㉚",
-    "㉛", "㉜", "㉝", "㉞", "㉟", "㊱", "㊲", "㊳", "㊴", "㊵",
-    "㊶", "㊷", "㊸", "㊹", "㊺", "㊻", "㊼", "㊽", "㊾", "㊿",
-];
+/// Number of decimal digits needed to represent `total` (≥1 for 0).
+/// Determines the left-padding width for flow-run prefixes; the
+/// renderer learns `total` from `SuitePlanned.flow_runs.len()` so
+/// the column width is fixed at suite start and doesn't reflow
+/// across short / long runs.
+fn flow_index_width(total: usize) -> usize {
+    let mut n = total.max(1);
+    let mut digits = 0;
+    while n > 0 {
+        n /= 10;
+        digits += 1;
+    }
+    digits
+}
 
 /// Dim ANSI colors for device prefixes — subtle, won't clash with status colors.
 const DEVICE_COLORS: &[&str] = &[
@@ -64,12 +70,22 @@ fn format_timestamp(wall_time: SystemTime, use_color: bool) -> String {
     }
 }
 
-/// Get or assign a circled number for a device.
-fn format_circle(idx: usize, multi_device: bool, use_color: bool) -> String {
+/// Format a flow-run prefix. `idx` is 1-based for display; `width`
+/// is decimal digits (e.g. width=3 → "  1", "012", "195"). Returns
+/// an empty string in single-device mode so non-multi-device output
+/// is unchanged. Width comes from `SuitePlanned.flow_runs.len()` so
+/// the column is fixed for the run.
+fn format_flow_prefix(
+    idx: usize,
+    width: usize,
+    multi_device: bool,
+    use_color: bool,
+) -> String {
     if !multi_device {
         return String::new();
     }
-    let num = CIRCLED_NUMBERS.get(idx).unwrap_or(&"?");
+    let display = idx + 1; // 1-based — easier for users to map to logs
+    let num = format!("{display:>width$}");
     if use_color {
         let color = DEVICE_COLORS.get(idx % DEVICE_COLORS.len()).unwrap_or(&"");
         format!("{DIM}{color}{num}{RESET} ")
@@ -207,13 +223,16 @@ pub async fn stream_human(
 ) {
     let use_color = std::io::IsTerminal::is_terminal(&std::io::stderr());
 
-    // Circle-slot allocation: each FlowStarted grabs a fresh slot so two
-    // sequential flows on the same device get distinct circles. Events
-    // between two FlowStarteds on the same device inherit that device's
-    // currently-assigned slot. Pre-FlowStarted events (e.g. install) get
-    // allocated on-demand per device_id.
+    // Flow-prefix slot allocation: each FlowStarted grabs a fresh slot
+    // so two sequential flows on the same device get distinct prefixes.
+    // Events between two FlowStarteds on the same device inherit that
+    // device's currently-assigned slot. Pre-FlowStarted events (e.g.
+    // install) get allocated on-demand per device_id. Width is set on
+    // SuitePlanned from `flow_runs.len()` so the decimal column is
+    // fixed for the run.
     let mut current_slot: HashMap<String, usize> = HashMap::new();
     let mut next_slot: usize = 0;
+    let mut prefix_width: usize = 1;
     // Track current block per device
     let mut current_blocks: HashMap<String, (String, u32)> = HashMap::new();
     // Track in-flight step (action + selector + local index) per device so
@@ -236,12 +255,12 @@ pub async fn stream_human(
             let idx = next_slot;
             next_slot += 1;
             current_slot.insert(event.device_id.0.clone(), idx);
-            format_circle(idx, multi_device, use_color)
+            format_flow_prefix(idx, prefix_width, multi_device, use_color)
         } else if let Some(&slot) = current_slot.get(&event.device_id.0) {
             // Non-flow event on a device that has already entered a flow —
             // inherit that flow's circle (step events, install output
             // during a flow, etc.).
-            format_circle(slot, multi_device, use_color)
+            format_flow_prefix(slot, prefix_width, multi_device, use_color)
         } else {
             // Pre-flow events (installs, etc.) get no circle so they don't
             // consume numbers that should map to flow runs.
@@ -256,6 +275,10 @@ pub async fn stream_human(
                 }
             }
             EventKind::SuitePlanned { flow_runs, install_entries, device_availability } => {
+                // Set the decimal width for flow-prefix lines based on
+                // the total FlowRun count for this suite. Stays fixed
+                // for the whole run so the prefix column doesn't shift.
+                prefix_width = flow_index_width(flow_runs.len());
                 // Top bookend + Starting header — non-verbose, single line.
                 if use_color {
                     eprintln!("{ts}{DIM}{SEPARATOR}{RESET}");
