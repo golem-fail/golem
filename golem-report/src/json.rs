@@ -129,6 +129,17 @@ struct JsonSuite {
     flows: Vec<JsonFlow>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     installs: Vec<JsonInstall>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    flake_summary: Vec<JsonFlakeEntry>,
+}
+
+#[derive(Serialize)]
+struct JsonFlakeEntry {
+    flow: String,
+    passed: u32,
+    failed: u32,
+    skipped: u32,
+    total: u32,
 }
 
 // ── Conversion helpers ──────────────────────────────────────────────
@@ -249,6 +260,16 @@ pub fn format_suite_json(report: &SuiteReport) -> Result<String, serde_json::Err
         },
         flows: report.flows.iter().map(flow_to_json).collect(),
         installs: report.installs.iter().map(install_to_json).collect(),
+        flake_summary: crate::flake::build_summary(&report.flows)
+            .into_iter()
+            .map(|e| JsonFlakeEntry {
+                flow: e.flow,
+                passed: e.passed,
+                failed: e.failed,
+                skipped: e.skipped,
+                total: e.total,
+            })
+            .collect(),
     };
 
     serde_json::to_string_pretty(&json_suite)

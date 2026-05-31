@@ -321,6 +321,16 @@ pub fn format_suite_toon(report: &SuiteReport) -> String {
         })
         .count();
 
+    // Flake summary: per (flow, device) tally when --repeat > 1.
+    // Empty for single-run suites (no `flake:` lines emitted).
+    let flake = crate::flake::build_summary(&report.flows);
+    if !flake.is_empty() {
+        out.push_str("# flake: flake:passed/total flow (sorted flakiest-first)\n");
+        for e in &flake {
+            let _ = writeln!(out, "flake:{}/{} {}", e.passed, e.total, e.flow);
+        }
+    }
+
     let _ = writeln!(
         out,
         "total:{total_passed}×pass,{total_failed}×fail,{total_skipped}×skip d:{}",

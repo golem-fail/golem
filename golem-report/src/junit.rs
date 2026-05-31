@@ -352,6 +352,37 @@ pub fn format_suite_junit(report: &SuiteReport) -> String {
         let _ = write!(out, "{}", format_flow_junit(flow));
     }
 
+    // Flake summary as a synthetic <testsuite>. Empty for single-run.
+    // Each (flow, device) entry becomes one <testcase> with a
+    // <failure> if any of the repeat runs failed; passes are clean.
+    let flake = crate::flake::build_summary(&report.flows);
+    if !flake.is_empty() {
+        let total_entries = flake.len();
+        let failed_entries = flake.iter().filter(|e| e.failed > 0).count();
+        let _ = writeln!(
+            out,
+            "  <testsuite name=\"flake-summary\" tests=\"{total_entries}\" failures=\"{failed_entries}\" errors=\"0\" time=\"0\">"
+        );
+        for e in &flake {
+            let name = xml_escape(&e.flow);
+            let _ = writeln!(
+                out,
+                "    <testcase classname=\"flake\" name=\"{name}\" time=\"0\" passed=\"{}\" failed=\"{}\" skipped=\"{}\" total=\"{}\">",
+                e.passed, e.failed, e.skipped, e.total
+            );
+            if e.failed > 0 {
+                let kind = if e.passed > 0 { "flake" } else { "stable-fail" };
+                let _ = writeln!(
+                    out,
+                    "      <failure message=\"{kind}: {}/{} runs failed\"/>",
+                    e.failed, e.total
+                );
+            }
+            let _ = writeln!(out, "    </testcase>");
+        }
+        let _ = writeln!(out, "  </testsuite>");
+    }
+
     let _ = writeln!(out, "</testsuites>");
     out
 }

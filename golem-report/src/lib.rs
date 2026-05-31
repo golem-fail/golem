@@ -8,6 +8,7 @@ pub mod junit;
 pub mod output;
 pub mod stream;
 pub mod toon;
+pub mod flake;
 
 use serde::Serialize;
 

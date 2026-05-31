@@ -223,9 +223,14 @@ async fn main() -> anyhow::Result<()> {
 
             // `--repeat` flake summary: tally per (flow, device) across
             // all repeat runs. Empty (no-op) for single-run suites.
-            let flake_summary = build_flake_summary(&report.flows);
-            if !flake_summary.is_empty() {
-                eprint!("{}", render_flake_summary(&flake_summary));
+            // Only emit to stderr when human output is active — for
+            // toon/json/junit consumers the flake info is part of the
+            // structured output itself.
+            if has_human_output {
+                let flake_summary = build_flake_summary(&report.flows);
+                if !flake_summary.is_empty() {
+                    eprint!("{}", render_flake_summary(&flake_summary));
+                }
             }
 
             // Exit with appropriate code. Skipped flows (coverage-group
@@ -276,58 +281,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// One flow's pass/fail count across N repeat runs. Sorted by
-/// "flakiest first" — most failed runs at the top, then most warn
-/// runs, then alphabetical for stable output.
-struct FlakeEntry {
-    flow: String,
-    passed: u32,
-    failed: u32,
-    skipped: u32,
-    total: u32,
-}
-
-/// Tally pass/fail per (flow_name, device) across all repeat runs.
-/// `flows` is the flat `SuiteReport.flows` list — each entry already
-/// carries a `repeat: Option<RepeatContext>` populated by the runner
-/// when `--repeat > 1`. Returns empty when no entry has repeat set
-/// (single-run suites — no flake summary needed).
-fn build_flake_summary(flows: &[golem_report::FlowReport]) -> Vec<FlakeEntry> {
-    if !flows.iter().any(|f| f.repeat.is_some()) {
-        return Vec::new();
-    }
-    let mut acc: std::collections::BTreeMap<String, FlakeEntry> = std::collections::BTreeMap::new();
-    for f in flows {
-        let key = match &f.device_name {
-            Some(d) => format!("{} ({})", f.flow_name, d),
-            None => f.flow_name.clone(),
-        };
-        let entry = acc.entry(key.clone()).or_insert_with(|| FlakeEntry {
-            flow: key,
-            passed: 0,
-            failed: 0,
-            skipped: 0,
-            total: 0,
-        });
-        entry.total += 1;
-        if f.is_skipped() {
-            entry.skipped += 1;
-        } else if f.success {
-            entry.passed += 1;
-        } else {
-            entry.failed += 1;
-        }
-    }
-    let mut out: Vec<FlakeEntry> = acc.into_values().collect();
-    out.sort_by(|a, b| {
-        let a_flake = a.passed > 0 && a.failed > 0;
-        let b_flake = b.passed > 0 && b.failed > 0;
-        b_flake.cmp(&a_flake)
-            .then(b.failed.cmp(&a.failed))
-            .then(a.flow.cmp(&b.flow))
-    });
-    out
-}
+use golem_report::flake::{build_summary as build_flake_summary, FlakeEntry};
 
 fn render_flake_summary(entries: &[FlakeEntry]) -> String {
     use std::fmt::Write;

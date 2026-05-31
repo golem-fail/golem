@@ -119,37 +119,6 @@ has cleared). Only persist `FailedScript` when the failure is
 (gate `install_cache.set(..., FailedScript)` on
 `!is_transient_install_error(err)`).
 
-## Flake summary respects `--output` format
-
-The `--repeat` flake summary is currently rendered in coloured human
-form on stderr regardless of `--output`. Looks fine with the default
-human stream but mixes formats when piping:
-
-- `--output toon`: human-style block lands on stderr alongside clean
-  TOON on stdout. TOON consumers (LLMs, scripts) don't see the flake
-  numbers in their feed.
-- `--output json`: same — flake summary not in the JSON document.
-- `--output junit`: same — not in the XML report.
-
-**Fix:** make the flake summary part of each renderer:
-
-- TOON: append `# F=flake-summary ...` schema comment + per-row
-  ` flake:N/M name device` lines after `total:`. Plain text, no
-  ANSI.
-- JSON: add `"flake_summary": [{ "flow", "device", "passed",
-  "failed", "skipped", "total" }, ...]` to the suite object.
-- JUnit: add a `<properties>` block on the top-level testsuite
-  with `repeat.flakes=N`, `repeat.fails=M`, `repeat.runs=N`, plus
-  per-(flow,device) `repeat.flake.<flow>.<device>=passed/total`.
-- Human: keep the current coloured block on stderr (unchanged).
-
-Test all four via stub-device E2E (see roadmap entry above).
-
-**Files:** `golem-cli/src/main.rs` (move build_flake_summary call
-into render path or pass into each renderer),
-`golem-report/src/{toon,json,junit}.rs` (emit flake rows when
-SuiteReport has `repeat: Some(...)` on at least one flow).
-
 ## Stub-device end-to-end tests
 
 **The problem.** Unit tests cover individual modules well, but the
