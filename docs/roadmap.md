@@ -444,7 +444,6 @@ Captured during the post-merge audit; none are blocking but each removes a sharp
 - **`cssSafeAreaInset` invisible to callers.** Today the WebKit Inspector enrichment subtracts the inset locally and discards it. Adding `css_safe_area_top: i32` to `HierarchyMeta` (default 0) keeps the diagnostic record. Sets up Android once an equivalent surfaces.
 - **`tap()` → `press(forDuration: 0.05)`.** Pages with a long-press distinguisher above ~50ms threshold may classify these as long-presses. Document the boundary or add an explicit `tap-fast` shorthand.
 - **Resolver auto-hide-keyboard fires unconditionally.** Tests that intentionally exercise keyboard-up state will be perturbed. Consider an opt-out flag on the step or scope to specific actions.
-- **`find_webview_socket` returns `None` on empty `pidof`.** Previously fell back to first-socket, useful for ad-hoc debugging. If we want to keep the loose path for `golem tree`, add a `--any` flag.
 - **Tests gap.** `find_webview_socket` PID filter, safe-area subtraction, BUTTON/A textContent fallback, `EventLog`, `find_or_allocate_port` Android-only fallback, `ensure_companion_with_reg` UDID cross-check — none have unit coverage.
 - **Docs gap.** `/press` companion endpoint, resolver auto-hide-keyboard — neither externally documented.
 
