@@ -19,6 +19,31 @@ const SETTLE_TIMEOUT: Duration = Duration::from_millis(1500);
 /// Interval between settle comparison checks (250ms).
 const SETTLE_INTERVAL: Duration = Duration::from_millis(250);
 
+/// Per-call deadline for `driver.get_hierarchy()` from inside
+/// `wait_for_settle`. Normal fetches return in 100-300ms; a hung
+/// companion (e.g. UiAutomation lost its accessibility connection
+/// after a focus-changing action) can hang the .await indefinitely
+/// — surfaced as a wedged executor blocking the entire suite. 2s
+/// is well above the happy-path band but well below sweep-deadline
+/// territory.
+const HIERARCHY_FETCH_TIMEOUT: Duration = Duration::from_millis(2000);
+
+/// Wrap `driver.get_hierarchy()` with a hard per-call timeout.
+/// Returns the same shape as the underlying call; treats a timeout
+/// as an error so callers fall through their `Err(_)` arms (which
+/// already exist for transient network/companion failures).
+async fn get_hierarchy_bounded(
+    driver: &dyn PlatformDriver,
+) -> anyhow::Result<(Element, golem_driver::common::HierarchyMeta)> {
+    match tokio::time::timeout(HIERARCHY_FETCH_TIMEOUT, driver.get_hierarchy()).await {
+        Ok(r) => r,
+        Err(_) => anyhow::bail!(
+            "hierarchy fetch timed out after {}ms (companion likely wedged)",
+            HIERARCHY_FETCH_TIMEOUT.as_millis()
+        ),
+    }
+}
+
 /// Build a `Selector` from the fields of a parsed `Step`.
 ///
 /// Maps each optional selector/filter field on the step to the
@@ -267,7 +292,7 @@ pub(crate) async fn wait_for_settle(driver: &dyn PlatformDriver) -> Result<(Elem
     let deadline = Instant::now() + SETTLE_TIMEOUT;
     let mut stats = golem_events::TreeStats::default();
 
-    let (root, meta) = driver.get_hierarchy().await?;
+    let (root, meta) = get_hierarchy_bounded(driver).await?;
     stats.record(meta.node_count);
     crate::record_tree_fetch(meta.node_count);
     let mut prev_fp = bounds_fingerprint(&root);
@@ -282,7 +307,7 @@ pub(crate) async fn wait_for_settle(driver: &dyn PlatformDriver) -> Result<(Elem
                 let enrich_deadline = Instant::now() + ENRICHMENT_TIMEOUT;
                 while Instant::now() < enrich_deadline {
                     tokio::time::sleep(SETTLE_INTERVAL).await;
-                    let (root, meta) = match driver.get_hierarchy().await {
+                    let (root, meta) = match get_hierarchy_bounded(driver).await {
                         Ok(r) => r,
                         Err(_) => break,
                     };
@@ -294,7 +319,7 @@ pub(crate) async fn wait_for_settle(driver: &dyn PlatformDriver) -> Result<(Elem
                         prev_meta = meta;
                         // Quick settle check on enriched tree
                         tokio::time::sleep(SETTLE_INTERVAL).await;
-                        if let Ok((r2, m2)) = driver.get_hierarchy().await {
+                        if let Ok((r2, m2)) = get_hierarchy_bounded(driver).await {
                             stats.record(m2.node_count);
                             crate::record_tree_fetch(m2.node_count);
                             return Ok((r2, m2, stats));
@@ -308,7 +333,7 @@ pub(crate) async fn wait_for_settle(driver: &dyn PlatformDriver) -> Result<(Elem
 
         tokio::time::sleep(SETTLE_INTERVAL).await;
 
-        let (root, meta) = match driver.get_hierarchy().await {
+        let (root, meta) = match get_hierarchy_bounded(driver).await {
             Ok(r) => r,
             Err(_) => return Ok((prev_root, prev_meta, stats)),
         };

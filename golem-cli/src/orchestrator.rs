@@ -441,7 +441,7 @@ async fn handle_submit(
             })
         }
         Err(e) => {
-            serde_json::json!({"type": "error", "message": format!("suite failed: {e}")})
+            serde_json::json!({"type": "error", "message": format!("suite failed: {e:#}")})
         }
     };
     let mut w = writer.lock().await;

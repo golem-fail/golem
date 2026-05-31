@@ -1,5 +1,211 @@
 # Roadmap
 
+## Device-queue scheduling: kill the deadline, separate "stuck" from "queued"
+
+The current hardcoded queue deadline (4 hours after a recent bump
+from 20 min — see `suite.rs::setup_device_with_resources`)
+conflates two distinct failure modes:
+
+- **Stuck flow**: a running flow is holding the device past
+  expectation. Already detectable via the executor's per-flow
+  `max_runtime` option — when that fires, the flow aborts and the
+  device is freed.
+- **Queue wait**: a FlowRun is patiently waiting its turn. A 39-
+  test × `--repeat 5` sweep on a single device legitimately
+  queues hundreds of FlowRuns, with the tail waiting hours. Not
+  a failure — just scheduling.
+
+Today's deadline kills queue-waiters indiscriminately, even when
+the queue is making steady forward progress.
+
+**Design:**
+
+1. **Default: unbounded queue wait.** A FlowRun blocks on a
+   semaphore tied to free-device count for its slot; no deadline.
+   Forward progress is guaranteed by the per-running-flow
+   max_runtime circuit breaker.
+2. **Optional cap:** `--max-wait <duration>` CLI flag +
+   `[options].max_device_wait` in `golem.toml`. Both default to
+   `None` (unbounded). Useful for CI with hard time budgets:
+   `--max-wait 30m` aborts the queue if the suite is still
+   running after 30 min wall-clock.
+3. **Concurrency cap follows device count.** Instead of the static
+   `ConcurrencyConfig.max_concurrency = 4` racing against actual
+   device availability, dynamically cap effective parallelism at
+   `min(max_concurrency, available_matching_devices)` once the
+   plan phase finishes. Each FlowRun only attempts allocation when
+   there's a chance of getting a device — others sleep on the
+   device-count semaphore. Eliminates the busy-spin queue.
+4. **Out-of-order execution preserved.** Current retry-loop already
+   has this property by accident (each retry re-checks all
+   devices). The semaphore needs to be device-pool-shaped, not
+   slot-shaped, so a flow blocked on a busy iPhone grabs the next
+   free iPhone the moment one becomes available regardless of
+   queue order.
+
+Bonus: lays groundwork for "boot N identical devices on demand for
+`--repeat` parallelism" (already roadmapped as "Boot-on-demand for
+`--repeat` identical device pools") — the semaphore expands when
+new devices come online.
+
+**Files:** `golem-devices/src/resource_manager.rs` (device-pool
+semaphore + ordering rework), `golem-cli/src/suite.rs` (drop the
+4-hour deadline, plug into semaphore), `golem-cli/src/cli.rs`
+(`--max-wait` flag), `golem-parser/src/{config,lib}.rs`
+(`[options].max_device_wait` + parsing).
+
+## Companion: detect + recover wedged UiAutomation handle
+
+**Observed 2026-06-03**: when the host-side `am instrument` driver
+process (the one that keeps the companion's `UiAutomation` instance
+alive) is killed but the companion process keeps running, the
+companion enters a permanent zombie state — `getRootInActiveWindow()`
+returns null forever, even though the device and target app are
+fine. Every subsequent `/hierarchy` returns 500 "no active window".
+Sweep diagnosis showed Pixel 7a's `uiautomator dump` shell command
+worked (different IPC path) but the companion's Java call did not.
+
+**Causes that trigger this:**
+- User kills the host-side golem with SIGKILL (instrumentation
+  child process orphaned without proper teardown).
+- `adb` server restart mid-suite (instrumentation channel torn down,
+  companion process survives).
+- Crash + auto-restart of the companion's parent instrumentation.
+
+**Mitigations:**
+1. **Host-side cleanup signal.** When `golem run` exits, send a
+   shutdown POST to every active companion (`/shutdown`) so the
+   companion process exits cleanly rather than orphaning. Next
+   `golem run` re-spawns instrumentation + a fresh companion.
+2. **Companion-side staleness detection.** When
+   `getRootInActiveWindow()` returns null for >N consecutive calls
+   over >M seconds despite the app being foregrounded
+   (`activityManager.getRunningTasks` or similar), the companion
+   should `System.exit(0)` to trigger instrumentation auto-restart.
+   Host re-registers, fresh handle, sweep continues.
+3. **Driver-side detection.** When the Android driver gets 500
+   "no active window" with `attempts: 3` (our retry payload),
+   it could trigger a companion restart via `adb shell am
+   force-stop fail.golem.companion` followed by re-`am instrument`
+   spawn. Heavier hammer; only useful if (2) can't be relied on.
+
+**Files:** `companions/android/app/src/androidTest/java/fail/golem/companion/CompanionServer.java`
+(staleness detector + suicide), `golem-driver/src/android.rs`
+(detect persistent "no active window", trigger restart),
+`golem-cli/src/registration.rs` (re-register on companion restart).
+
+## Audit un-bounded driver awaits
+
+`wait_for_settle` was fixed 2026-06-03 (all `get_hierarchy` calls
+now wrapped with `HIERARCHY_FETCH_TIMEOUT`). Same pattern likely
+exists elsewhere — any `driver.*().await?` outside
+`execute_step_with_policy`'s per-step timeout can hang the
+executor if the companion is wedged.
+
+Sweep these files for un-bounded driver calls:
+- `golem-runner/src/cleanup.rs` (post-flow teardown — `driver.stop_recording`, `driver.set_dark_mode`).
+- `golem-runner/src/scroll.rs` (scroll search loop already has settle-level timeout but its own `driver.swipe` etc. could hang).
+- `golem-runner/src/installer.rs` (`driver.launch_app` / `driver.stop_app` during preinstall).
+- Action handlers in `golem-runner/src/actions/*.rs` — most go through `execute_step_with_policy` which bounds them, but check for any internal calls (e.g. `wait_for_alert_gone`) that loop without their own timeout.
+
+For each: wrap with `tokio::time::timeout(N_SECONDS, ...)` or
+`golem_runner::resolution::get_hierarchy_bounded`-style helper.
+
+## Install cache: don't poison `FailedScript` on transient errors
+
+`InstallCache::record_failure((udid, bundle), FailedScript)` is a
+one-shot — once set, every subsequent flow targeting that pair
+SKIPs with "install_script failed earlier" until cache is wiped
+(`--rebuild` or `rm .golem/install-cache.json`). Designed to avoid
+wasting 195 install attempts on a permanently broken script.
+
+**Problem**: the same poisoning fires for transient errors —
+emulator boot incomplete, package manager service not yet up,
+ADB connection blip — and stays sticky for the whole suite. Real
+sweep hit today: fresh Pixel 7a emu, install fired before
+`pm` service was ready, every one of 190 flows SKIP'd.
+
+**Existing partial mitigation:** `is_transient_install_error`
+(`golem-cli/src/suite.rs::is_transient_install_error`) matches
+known-recoverable patterns and retries once with `install_only=true`
+reusing the already-built artifact. Patterns matched today: Mach
+-308 (iOS sim IPC blip), `device offline` / `device not found`
+(adb early-boot races). Need to add: `Can't find service: package`
+(Android package manager boot race).
+
+**Better design:**
+
+1. **Expand the transient classifier** to cover `Can't find
+   service: package` and any other "boot-not-complete" patterns
+   that show up in CI logs.
+2. **Don't persist `FailedScript` for transient classes.** A
+   transient failure already triggers an in-suite retry; if THAT
+   also fails, leave the cache as-is (no entry) so the next
+   FlowRun's preinstall gets a fresh shot. Only persist
+   `FailedScript` when the script returns a non-zero exit with no
+   transient marker.
+3. **Pre-install boot probe.** Before calling install_script,
+   wait for `getprop sys.boot_completed = 1` AND a successful
+   `pm list packages` (cheap, ~50ms). Eliminates the bulk of
+   transient install failures at the source rather than relying
+   on retry-classifier patterns to mop up after.
+
+**Files:** `golem-cli/src/suite.rs` (expand
+`is_transient_install_error`, gate cache persistence on
+classification), `golem-runner/src/installer.rs` (add boot-probe
+helper, call before install_script).
+
+## Stream renderer: replace circled flow-run numbers with padded decimals
+
+`golem-report/src/stream.rs` prefixes each multi-device line with a
+circled glyph (① through ㊿) to disambiguate parallel flows. The
+counter increments on every `FlowStarted`, so a `--repeat 5` sweep
+across 39 tests = 195 FlowRuns blows past ㊿ and starts showing `?`
+for every subsequent run.
+
+Replace with left-padded decimal counters. The total FlowRun count is
+known up front from `SuitePlanned` (`parsed.flow_runs.len()`), so we
+can pick a width once and pad accordingly: e.g. 195 → `001` … `195`.
+Colour scheme stays — re-use `DEVICE_COLORS` indexed by counter
+mod len, so visually distinct runs keep their hue rotation.
+
+Less pretty than the circled glyphs but practical (no `?` fallback,
+no width thrash, copy-pasteable into grep / log filters).
+
+**Files:** `golem-report/src/stream.rs` (drop `CIRCLED_NUMBERS`, take
+total count from `SuitePlanned`, format as zero-padded decimal).
+
+## Flake summary respects `--output` format
+
+The `--repeat` flake summary is currently rendered in coloured human
+form on stderr regardless of `--output`. Looks fine with the default
+human stream but mixes formats when piping:
+
+- `--output toon`: human-style block lands on stderr alongside clean
+  TOON on stdout. TOON consumers (LLMs, scripts) don't see the flake
+  numbers in their feed.
+- `--output json`: same — flake summary not in the JSON document.
+- `--output junit`: same — not in the XML report.
+
+**Fix:** make the flake summary part of each renderer:
+
+- TOON: append `# F=flake-summary ...` schema comment + per-row
+  ` flake:N/M name device` lines after `total:`. Plain text, no
+  ANSI.
+- JSON: add `"flake_summary": [{ "flow", "device", "passed",
+  "failed", "skipped", "total" }, ...]` to the suite object.
+- JUnit: add a `<properties>` block on the top-level testsuite
+  with `repeat.flakes=N`, `repeat.fails=M`, `repeat.runs=N`, plus
+  per-(flow,device) `repeat.flake.<flow>.<device>=passed/total`.
+- Human: keep the current coloured block on stderr (unchanged).
+
+Test all four via stub-device E2E (see roadmap entry above).
+
+**Files:** `golem-cli/src/main.rs` (move build_flake_summary call
+into render path or pass into each renderer),
+`golem-report/src/{toon,json,junit}.rs` (emit flake rows when
+SuiteReport has `repeat: Some(...)` on at least one flow).
+
 ## Stub-device end-to-end tests
 
 **The problem.** Unit tests cover individual modules well, but the
@@ -143,6 +349,52 @@ eprintln (logs visible only to daemon admin):
 **Out of scope:** turning the persistent flake-summary tally into an
 event — flake summary is purely client-side aggregation of
 already-streamed events.
+
+## Mid-sweep device discovery: close the inner-wait gap
+
+**Shipped 2026-06-03**: atomic pick-and-allocate inside `setup_slot`.
+Each FlowRun's `find_available_device` call re-runs
+`discover_all_devices`, so new devices booted mid-sweep are picked
+up by subsequent FlowRuns. Verified live: booting a second Android
+emulator ~30s after suite start, first new-emu flow assignment
+appeared within ~30s.
+
+**Remaining gap — inner wait loop staleness.** `find_available_device`'s
+step-4 inner wait (`golem-cli/src/suite.rs::~2591`) polls
+`try_pick_free(&booted, ...)` against the `booted` list captured
+at the start of the same `find_available_device` call. If all
+devices are busy at first check, the FlowRun falls into that
+inner loop and is blind to subsequently-booted devices for the
+duration of the wait — only sees a free device when one of the
+*originally-known* devices releases.
+
+In practice this rarely bites because: (a) my outer atomic-allocate
+loop in `setup_slot` re-calls `find_available_device` after race
+losses, refreshing discovery; (b) new FlowRuns continuously
+entering get fresh discovery. The hole shows up when the queue is
+fully drained into step-4 waiters AND no new FlowRuns are
+spawning — every waiter pins to the original list.
+
+**Fix:** inside `find_available_device` step 4, every N seconds
+re-run `discover_all_devices` and replace the `booted` cache.
+~30s cadence keeps it cheap. The slot filter and free-set logic
+stays identical; only the source list updates.
+
+**Graceful loss** (separate but related). When `discover_all_devices`
+no longer returns a device we have allocated, mark it unhealthy:
+the active FlowRun aborts with a clean error ("device disconnected,
+retry"), queued FlowRuns shift to other devices.
+
+**Auto-shutdown race.** Devices golem booted itself are tracked
+for shutdown at suite end (per `--keep-devices`). If we ever add
+an "idle device reaper" (shut down golem-booted devices not used
+in N minutes mid-suite), it must coordinate with the allocator
+(refuse to shut down a device with queued FlowRuns targeting its
+shape).
+
+**Files:** `golem-cli/src/suite.rs::find_available_device` (step-4
+inner wait — periodic re-discover), `golem-devices/src/resource_manager.rs`
+(graceful-loss detection on next discover snapshot).
 
 ## Boot-on-demand for `--repeat` identical device pools
 

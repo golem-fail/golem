@@ -1160,15 +1160,43 @@ async fn setup_slot(
     no_build: bool,
     device_settings: &crate::project::DeviceSettings,
 ) -> Result<(DeviceInfo, u16)> {
-    let device = find_available_device(
-        slot.platform,
-        Some(slot),
-        resource_mgr,
-        create_if_missing,
-        event_tx,
-        Some(install_cache),
-        install_matrix,
-    ).await?;
+    // Atomic pick-and-allocate: re-find on race so two FlowRuns can't
+    // both pick the same device. Each iteration calls find_available_device
+    // (which filters out devices already allocated via `port_for`) and
+    // try_allocate (which atomically reserves the device). Without this
+    // loop, all FlowRuns funnel onto the first matching device because
+    // find_available_device returns the same pick deterministically and
+    // try_allocate happens way later (after preinstall + companion
+    // ensure) — leaving a huge race window where every FlowRun "picks"
+    // the same device and only one actually allocates.
+    let device = loop {
+        let candidate = find_available_device(
+            slot.platform,
+            Some(slot),
+            resource_mgr,
+            create_if_missing,
+            event_tx,
+            Some(install_cache),
+            install_matrix,
+        ).await?;
+        // try_allocate with placeholder port=0 — the real companion
+        // port is resolved later via reg_state.ensure_companion_port,
+        // but allocation only needs the udid to mark "in use" for
+        // port_for's `is_none()` filter. Updating the stored port
+        // later would require a release+re-allocate which races with
+        // the next FlowRun. Cheaper to keep port=0 and treat the map
+        // as a presence index.
+        match resource_mgr.try_allocate(&candidate, 0) {
+            Ok(()) => break candidate,
+            Err(_) => {
+                // Lost the race — re-discover. The just-allocated
+                // device is now filtered out by port_for, so the
+                // next find returns a different one (or fails out
+                // if no devices remain matching the slot).
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+        }
+    };
     let platform = device.platform;
 
     if debug {
@@ -1237,33 +1265,13 @@ async fn setup_slot(
         }).await?
     };
 
-    // Wait for a free allocation slot. The cap here is RAM + concurrency
-    // from `ConcurrencyConfig`; if we're at the limit another FlowRun's
-    // device release will unblock us. 20-min deadline is a safety net, not
-    // an expected path.
-    let alloc_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(1200);
-    let mut emitted_waiting = false;
+    // Device already allocated atomically above (in the pick+allocate
+    // loop) with placeholder port=0. The companion port is now known,
+    // but resource_mgr only treats the allocation map as a presence
+    // index (`port_for(udid).is_none()` is the only consumer), so we
+    // don't bother updating the stored port — saves a release/re-allocate
+    // race window.
     let device_label = format!("{platform}/{}", device.name);
-    loop {
-        match resource_mgr.try_allocate(&device, port) {
-            Ok(()) => break,
-            Err(e) => {
-                if tokio::time::Instant::now() >= alloc_deadline {
-                    anyhow::bail!("timed out waiting for resources: {e:#}");
-                }
-                if !emitted_waiting {
-                    event_tx.emit(
-                        golem_events::DeviceId(device_label.clone()),
-                        golem_events::EventKind::ResourcesWaiting {
-                            platform: platform.to_string(),
-                        },
-                    );
-                    emitted_waiting = true;
-                }
-                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-            }
-        }
-    }
 
     // Android: re-establish adb forward idempotently. Per-flow cleanup's
     // shutdown attempt against a user-booted (or otherwise persistent)
