@@ -537,7 +537,6 @@ The persistent install cache is shipped (`.golem/install-cache.json`, three inte
 
 - **Surface skipped installs in JSON / JUnit / TOON reports.** Today the live stream prints `[install] ... — skipped (cache hit ...)` but the persistent reports list cached installs as silent — they don't appear in `installs[]`. Add `skipped: bool` + `skip_reason: Option<String>` to `InstallReport` and wire it through the four serialisers. Useful for CI artifacts where reviewers want to confirm nothing was rebuilt.
 - **`golem cache clear` subcommand** — only if shared-CI long-running orchestrator surfaces a real workflow. Today `rm .golem/install-cache.json` is enough.
-- **Cache size diagnostics** — `golem cache info` (or under `--verbose`) printing entry count + last-updated dates. Low-priority debugging aid.
 
 ## Migrate SuiteRunner + IPC into `golem-orchestrator`
 

@@ -22,6 +22,20 @@ pub enum Commands {
     Create(CreateArgs),
     /// Interactively scaffold an app install script
     InstallScript,
+    /// Inspect the persistent install cache
+    Cache(CacheArgs),
+}
+
+#[derive(clap::Args, Debug)]
+pub struct CacheArgs {
+    #[command(subcommand)]
+    pub command: CacheCommands,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CacheCommands {
+    /// Show entry count, status breakdown, and recency stats
+    Info,
 }
 
 #[derive(clap::Args, Debug)]

@@ -1,3 +1,4 @@
+pub mod cache;
 pub mod cli;
 pub mod companion_paths;
 pub mod companions;
@@ -275,6 +276,12 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::InstallScript => {
             install_script_cmd::run()?;
+        }
+
+        Commands::Cache(args) => {
+            match args.command {
+                cli::CacheCommands::Info => cache::info()?,
+            }
         }
     }
 
