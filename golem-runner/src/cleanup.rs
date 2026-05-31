@@ -6,6 +6,9 @@
 
 use golem_devices::DeviceInfo;
 use golem_driver::PlatformDriver;
+use std::time::Duration;
+
+const CLEANUP_STEP_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Options controlling what cleanup actions to perform.
 #[derive(Default)]
@@ -42,13 +45,17 @@ pub async fn auto_cleanup(
     let mut warnings = Vec::new();
 
     // Reset dark mode to disabled
-    if let Err(e) = driver.set_dark_mode(false).await {
-        warnings.push(format!("Failed to reset dark mode: {e}"));
+    match tokio::time::timeout(CLEANUP_STEP_TIMEOUT, driver.set_dark_mode(false)).await {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => warnings.push(format!("Failed to reset dark mode: {e}")),
+        Err(_) => warnings.push("Timed out resetting dark mode (companion likely wedged)".into()),
     }
 
     // 3. Clear mocked location (reset to 0,0)
-    if let Err(e) = driver.set_location(0.0, 0.0).await {
-        warnings.push(format!("Failed to reset location: {e}"));
+    match tokio::time::timeout(CLEANUP_STEP_TIMEOUT, driver.set_location(0.0, 0.0)).await {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => warnings.push(format!("Failed to reset location: {e}")),
+        Err(_) => warnings.push("Timed out resetting location (companion likely wedged)".into()),
     }
 
     // Port forwards are scoped to the device session, not the flow.
@@ -58,8 +65,10 @@ pub async fn auto_cleanup(
     // it; an explicit teardown earlier is wrong, not just redundant.
 
     // 5. Stop recording if running (ignore the result path or error)
-    if let Err(e) = driver.stop_recording().await {
-        warnings.push(format!("Failed to stop recording: {e}"));
+    match tokio::time::timeout(CLEANUP_STEP_TIMEOUT, driver.stop_recording()).await {
+        Ok(Ok(_)) => {}
+        Ok(Err(e)) => warnings.push(format!("Failed to stop recording: {e}")),
+        Err(_) => warnings.push("Timed out stopping recording (companion likely wedged)".into()),
     }
 
     // 6. Shutdown device (unless keep_devices is set)

@@ -99,7 +99,6 @@ worked (different IPC path) but the companion's Java call did not.
 Remaining `driver.*().await` sites outside `execute_step_with_policy`'s
 per-step timeout that can hang if companion is wedged:
 
-- `golem-runner/src/cleanup.rs` (post-flow teardown — `driver.stop_recording`, `driver.set_dark_mode`, `driver.set_location`).
 - `golem-runner/src/scroll.rs` (`driver.swipe_coords` inside scroll search — could hang mid-scroll).
 - `golem-runner/src/actions/external.rs` (`wait_for_alert_gone` polls `get_hierarchy` in its own loop without bounded helper).
 - `golem-runner/src/actions/interaction.rs` (find-by-text paths in `tap`/`type`/`long_press`/`gesture` — 8 sites, all `driver.get_hierarchy().await`).
