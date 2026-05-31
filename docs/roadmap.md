@@ -1,51 +1,174 @@
 # Roadmap
 
-## Parallel `--repeat` across identical device pool
+## Stub-device end-to-end tests
 
-`--repeat N` ships today: the planner fans every FlowRun out N times,
-each tagged with `repeat_index`. The ResourceManager scheduler runs
-all FlowRuns concurrently when devices are free, so N identical
-booted devices = N parallel runs for free. No special code path
-required.
+**The problem.** Unit tests cover individual modules well, but the
+end-to-end composition (CLI args → SuiteConfig → in-process server
+spawn → client `submit_and_wait` → event stream → renderer → result
+files → exit code) has no automated coverage. Real bugs slipping
+through:
 
-Remaining polish:
+- `--output toon` silently produced human output (shipped, fixed)
+  because `submit_and_wait` always spawned the stream renderer
+  regardless of the requested format. Pure composition bug —
+  every individual unit was fine.
+- Daemon-mode silently skipped writing top-level `results.json` /
+  `results.toon` for months (shipped, fixed by routing through the
+  same write path). Composition gap: server- vs daemon-mode had
+  diverged handlers.
 
-- **Boot-on-demand for identical pools**: today golem boots one
-  device per platform/shape to satisfy the slot, then reuses it
-  across all N repeats sequentially. To get the "5 identical
-  devices = 5 parallel runs" USP without manual pre-booting, the
-  `ResourceManager` would need to boot N matching sims/emulators
-  on demand when free RAM permits, capped by `--max-concurrency`.
-  Already roadmapped under "True Parallel Flow × Device
-  Concurrency" — that entry covers this case.
+**What stub-device E2E catches that unit tests don't.** Anything that
+spans multiple modules:
+- CLI flag → wire format → server reconstruction → execution path.
+- Per-run output_dir layout under `--repeat`.
+- Plan→execute pipeline.
+- Coverage strategy fan-out + adaptive stop logic.
+- Flake-summary aggregation across `--repeat` boundaries.
+- Renderer selection based on `--output`.
+- Exit codes for various flow outcomes.
+- IPC client↔server contract (config_json field threading, done
+  message shape).
+- `--trace` boundary capture + sidecar JSON shape.
 
-## Recording: physical iOS device support
+**Approach.**
 
-Cascading per-block recording is shipped end-to-end on iOS simulator
-and modern Android (API 30+ uses `screenrecord --time-limit 0`, no
-rotation needed). Remaining gap:
+1. **Stub driver.** `golem-driver/src/stub.rs` (new) implements
+   `PlatformDriver` with deterministic, scripted responses. Extend
+   the existing `MockPlatformDriver` (used in unit tests) into a
+   fixture that can be driven by a YAML/TOML script:
+   ```toml
+   [responses]
+   "tap on_text=\"Submit\"" = "success"
+   "type on_text=\"email\"" = "fail: simulated timeout"
+   ```
+2. **`--stub` CLI flag.** Hidden behind `#[cfg(any(test, debug_assertions))]`
+   or a `stub` feature flag. When set, `SuiteRunner` uses the stub
+   driver instead of `IosDriver` / `AndroidDriver`. Bypasses the
+   ResourceManager device-boot logic too — stub flows don't need
+   real devices.
+3. **Test harness** at `golem-cli/tests/e2e/`. Each test:
+   - Spawns `golem run` as a subprocess with `--stub`.
+   - Captures stdout + stderr separately.
+   - Asserts output shape (TOON schema header, JSON structure,
+     "Results:" line, flake summary block, exit code).
+4. **First test suite to write:**
+   - `output_formats.rs` — `--output toon` produces TOON on stdout,
+     `--output json` produces JSON, etc. (would have caught today's
+     bug).
+   - `repeat_flake_detection.rs` — `--repeat 3` with deterministic
+     flake script (one pass + one fail + one pass) produces
+     "FLAKE 2/3" in summary.
+   - `daemon_vs_inproc_parity.rs` — same input via in-process
+     orchestrator vs explicit daemon produces identical stdout +
+     identical results.json content.
 
-- **Physical iOS recording** — `xcrun simctl io ... recordVideo` is
-  simulator-only. Real-device recording requires a different path:
-  one of (a) `idevicescreenshot` polling + ffmpeg encode (slow), or
-  (b) USB-Mux QuickTime trace pull (Xcode's approach). Today the
-  driver `bail!`s when `physical = true` so the failure mode is
-  loud.
+**Out of scope:** anything that needs real device behaviour (HID
+injection latency, hierarchy snapshot timing, OS overlays). Those
+stay on the real-device sweep path.
+
+**Files:** `golem-driver/src/stub.rs` (new), `golem-driver/src/lib.rs`
+(re-export + feature gate), `golem-cli/src/cli.rs` (hidden `--stub`),
+`golem-cli/src/suite.rs` (route to stub driver when flag set),
+`golem-cli/tests/e2e/*.rs` (new test suite).
+
+## Event-ify remaining server-side eprintlns
+
+**The problem.** Golem runs in two topologies:
+
+- **In-process** (default `golem run` with no daemon): the orchestrator
+  server runs inside the same process as the client CLI. Server-side
+  `eprintln!(...)` writes to that process's stderr, which IS the
+  user's terminal, so messages appear naturally.
+- **External daemon** (long-running daemon at `~/.golem/golem.sock`):
+  the server is a separate process. Its stderr goes wherever the
+  daemon was launched from (background shell, tmux pane, launchd
+  log file). The client process's terminal does NOT see those
+  messages — they're effectively lost.
+
+Today ~14 setup/diagnostic messages still use server-side `eprintln`,
+so external-daemon users silently miss them. Examples:
+- `[install] cache load failed ({e}) — continuing with empty cache`
+  (`golem-cli/src/suite.rs:360`)
+- `[device_settings] {w}` (`golem-cli/src/suite.rs:1217`)
+- `[install] failed to write cache: {e}` (`golem-cli/src/suite.rs:1449`)
+- `[companion] startup timed out for {platform}` (`golem-cli/src/suite.rs:1760`)
+- `[device] Cleanup: {w}` (`golem-cli/src/suite.rs:2337`)
+- `[devices] no {target_platform} device found — creating one...`
+  (`golem-cli/src/suite.rs:2549`)
+- `[registration] error: {e}` / `... registered on port {port}`
+  (`golem-cli/src/registration.rs:207, 263`)
+- `[install] cache file ... unknown version / unreadable`
+  (`golem-runner/src/installer.rs:194, 202, 212`)
+
+(For the full audit see commit history — three "drop" cases and one
+"--debug gate" already shipped 2026-06-03.)
+
+**The fix.** Replace each `eprintln!` with `ctx.emit(EventKind::XYZ {
+…})` against the suite event channel. Add a matching renderer arm
+in `golem-report/src/stream.rs` so the client's human stream prints
+the same string. Existing event flow already serialises over the
+unix socket to the client, so both topologies produce identical
+output.
+
+**Suggested event variants** (one per category, payload tailored):
+- `InstallCacheLoaded { ok: bool, message: Option<String> }`
+- `InstallCacheWriteFailed { error: String }`
+- `DeviceSettingsApplied { warnings: Vec<String> }`
+- `CompanionTimedOut { platform: String }`
+- `DeviceCleanupWarning { device_id: DeviceId, message: String }`
+- `DeviceBootRequested { platform: String, name: String }`
+- `RegistrationError { error: String }`
+- `RegistrationCompleted { device: String, platform: String, port: u16 }`
+- `InstallCacheFileBroken { path: String, reason: String }`
+
+**Exclude from this work** — these intentionally stay as server-side
+eprintln (logs visible only to daemon admin):
+- `[orchestrator] server — listening on ...` (startup banner)
+- `[orchestrator] accept error: ...` (rare server socket error)
+- `[orchestrator] read error: ...` (already gated behind `--debug`)
+- `[orchestrator] waiting for N active client(s)...` (drain spinner,
+  already suppressed for the in-process self-loopback case)
+
+**Files to touch:**
+- `golem-events/src/lib.rs` — add new `EventKind` variants.
+- `golem-report/src/stream.rs` — add match arms that format each
+  variant identical to the current eprintln text (preserve user-
+  visible string).
+- `golem-cli/src/suite.rs`, `golem-cli/src/registration.rs`,
+  `golem-runner/src/installer.rs` — replace each listed eprintln
+  with `ctx.emit(...)`. Many sites have an `ExecutionContext` or
+  `event_tx` already in scope; for those that don't, thread a
+  sender or use `golem_events::channel::EventSender` directly.
+
+**Out of scope:** turning the persistent flake-summary tally into an
+event — flake summary is purely client-side aggregation of
+already-streamed events.
+
+## Boot-on-demand for `--repeat` identical device pools
+
+`--repeat N` parallelises across devices for free when N matching
+sims/emulators are pre-booted, but today golem boots a single device
+per platform/shape and serialises repeats on it. To deliver the "5
+identical devices = 5 parallel runs" USP without manual pre-booting,
+`ResourceManager` would boot N matching sims/emulators on demand when
+free RAM permits, capped by `--max-concurrency`. Covered by the
+broader "True Parallel Flow × Device Concurrency" entry below.
+
+## Physical iOS screen recording
+
+`xcrun simctl io ... recordVideo` is simulator-only. Real-device
+recording requires a different transport — either
+(a) `idevicescreenshot` polling + ffmpeg encode (slow), or
+(b) USB-Mux QuickTime trace pull (Xcode's approach). Today the
+driver `bail!`s when `physical = true` so the failure mode is loud.
 
 **Files:** `golem-driver/src/ios.rs` (physical path).
 
 ## `golem trace-extract` subcommand
 
-`--trace` is shipped: forces recording on, captures a screenshot +
-accessibility-tree at every step boundary, writes a per-block sidecar
-mapping each boundary to its ms offset within the block recording.
-PNGs carry self-describing `tEXt` metadata
-(flow/device/block/boundary/wall-clock/version) so a single file can
-travel without context.
-
-Remaining follow-up: a `golem trace-extract <flow> <step>` (or
-`<flow> <boundary_ms>`) subcommand that pulls a video frame at the
-sidecar offset. Two impls considered:
+Subcommand `golem trace-extract <flow> <step>` (or `<flow>
+<boundary_ms>`) that pulls a single video frame from a per-block
+recording at the matching sidecar-offset. Two impls considered:
 
 - **Shell ffmpeg**: simplest, zero build deps. Fails if ffmpeg
   isn't installed (~not preinstalled on macOS or minimal Linux).

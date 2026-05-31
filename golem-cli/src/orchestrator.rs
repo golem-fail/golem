@@ -85,17 +85,30 @@ pub struct OrchestratorServer {
 
 impl OrchestratorServer {
     /// Wait for all active client handlers to complete, then clean up.
+    ///
+    /// In-process callers (own server + own submit-and-wait) typically
+    /// see a count of 1 for ~hundreds of ms while the kernel finalises
+    /// the unix-socket peer close. Stay quiet until either the count
+    /// stays >1 for a while (real concurrent clients), or `--debug` is
+    /// set — the historical "waiting for 1 active client(s)..." noise
+    /// on every successful run was just the self-loopback.
     pub async fn wait_for_clients(&self) {
         use std::sync::atomic::Ordering;
-        let mut last_count = 0u32;
+        let mut last_logged_count = 0u32;
+        let mut ticks_with_count = 0u32;
         loop {
             let count = self.active_clients.load(Ordering::Acquire);
             if count == 0 {
                 break;
             }
-            if count != last_count {
+            // Only emit if (a) genuinely multi-client (>=2) on first
+            // observation, or (b) --debug, or (c) count stays >=1 for
+            // more than ~3s (kernel close not finalising — actual hang).
+            ticks_with_count += 1;
+            let noisy_enough = count >= 2 || golem_driver::is_debug() || ticks_with_count > 3;
+            if noisy_enough && count != last_logged_count {
                 eprintln!("  [orchestrator] waiting for {count} active client(s)...");
-                last_count = count;
+                last_logged_count = count;
             }
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
@@ -223,7 +236,12 @@ async fn handle_client(
                 }
             }
             Err(e) => {
-                eprintln!("  [orchestrator] read error: {e}");
+                // Client disconnects mid-read are normal (especially
+                // in-process clients drop the socket as soon as
+                // submit_and_wait returns). Stay quiet unless --debug.
+                if golem_driver::is_debug() {
+                    eprintln!("  [orchestrator] read error: {e}");
+                }
                 break;
             }
         }
@@ -373,14 +391,36 @@ async fn handle_submit(
         SuiteRunner::with_resource_manager(config, resource_mgr.clone(), install_cache.clone());
     runner.event_forwarder = Some(fwd_tx);
 
+    // `no_results` is already in scope (consumed by SuiteConfig
+    // above). Re-read from cfg avoids ordering coupling with the
+    // SuiteConfig construction site.
+    let no_results_for_write = cfg["no_results"].as_bool().unwrap_or(false);
+    let include_junit = cfg["include_junit"].as_bool().unwrap_or(false);
+
     let result = runner.run_suite(&paths).await;
     // Drop the runner (and its forwarder sender) to close the event stream.
     drop(runner);
     let _ = stream_handle.await;
 
-    // Send final result.
+    // Server-side result-file writing. The daemon owns the FS (it
+    // knows the client's output_dir and runs alongside the device
+    // pool). Files written here include results.json / results.toon
+    // / optionally results.xml, plus everything per-flow already
+    // written under run_*/. Mirrors `main.rs`'s server-mode write
+    // so daemon + standalone parity is preserved.
+    let server_output_dir: PathBuf = cfg["output_dir"]
+        .as_str()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(".golem/results"));
     let resp = match result {
         Ok(report) => {
+            if !no_results_for_write {
+                if let Err(e) = golem_report::output::write_results_to_dir(
+                    &report, &server_output_dir, include_junit,
+                ) {
+                    eprintln!("  [orchestrator] result-file write failed: {e:#}");
+                }
+            }
             serde_json::json!({
                 "type": "done",
                 "report": {
@@ -395,6 +435,8 @@ async fn handle_submit(
                             "seed": f.seed,
                         })
                     }).collect::<Vec<_>>(),
+                    "output_dir": server_output_dir.display().to_string(),
+                    "include_junit": include_junit,
                 }
             })
         }
@@ -411,13 +453,22 @@ async fn handle_submit(
 /// Sends the flow paths and config, then reads a stream of events
 /// followed by a final "done" message. Events are fed to a local
 /// human renderer so the client controls its own output format.
+/// Tuple-shaped return so callers can both inspect the materialised
+/// suite report (for stdout-format rendering, flake tally, etc.) and
+/// branch on overall pass/fail.
+pub struct SubmitOutcome {
+    pub report: golem_report::SuiteReport,
+    pub all_passed: bool,
+}
+
 pub async fn submit_and_wait(
     mut stream: UnixStream,
     flow_paths: &[PathBuf],
     config: &serde_json::Value,
     verbose: bool,
     debug: bool,
-) -> Result<bool> {
+    stream_human: bool,
+) -> Result<SubmitOutcome> {
     let repeat = config["repeat"].as_u64().unwrap_or(1).max(1);
     let repeat_suffix = if repeat > 1 {
         format!(", {repeat} times")
@@ -444,11 +495,18 @@ pub async fn submit_and_wait(
     // Create local event channel for rendering.
     let (local_tx, local_rx) = golem_events::channel::event_channel();
 
-    // Spawn local human renderer.
-    let human_rx = local_rx.subscribe();
-    let human_handle = tokio::spawn(async move {
-        golem_report::stream::stream_human(human_rx, verbose, true, debug).await;
-    });
+    // Spawn local human renderer only when the user wants human
+    // output. With `--output toon` (etc.) we skip the stream so
+    // stderr stays quiet and the chosen non-human format lands on
+    // stdout cleanly.
+    let human_handle = if stream_human {
+        let human_rx = local_rx.subscribe();
+        Some(tokio::spawn(async move {
+            golem_report::stream::stream_human(human_rx, verbose, true, debug).await;
+        }))
+    } else {
+        None
+    };
 
     // Spawn local accumulator.
     let accumulator = std::sync::Arc::new(tokio::sync::Mutex::new(
@@ -499,6 +557,26 @@ pub async fn submit_and_wait(
                         }
                     }
                 }
+                // Mirror server-mode's `Results: ...` line so clients
+                // running against a daemon get the same UX.
+                let report = &response["report"];
+                let server_output_dir = report["output_dir"].as_str().unwrap_or("");
+                if !server_output_dir.is_empty() {
+                    let include_junit = report["include_junit"].as_bool().unwrap_or(false);
+                    let formats = if include_junit { "json, toon, xml" } else { "json, toon" };
+                    let use_color = std::io::IsTerminal::is_terminal(&std::io::stderr());
+                    if use_color {
+                        let abs = std::fs::canonicalize(server_output_dir)
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_else(|_| server_output_dir.to_string());
+                        let uri = file_uri_str(&abs);
+                        eprintln!(
+                            "             \x1b[2mResults: \x1b]8;;{uri}\x1b\\{server_output_dir}/\x1b]8;;\x1b\\  ({formats})\x1b[0m"
+                        );
+                    } else {
+                        eprintln!("             Results: {server_output_dir}/  ({formats})");
+                    }
+                }
                 break;
             }
             Some("error") => {
@@ -513,8 +591,38 @@ pub async fn submit_and_wait(
 
     // Close event channel and wait for renderers.
     drop(local_tx);
-    let _ = human_handle.await;
+    if let Some(h) = human_handle {
+        let _ = h.await;
+    }
     let _ = acc_handle.await;
 
-    Ok(all_passed)
+    // Now safe to consume the accumulator: both readers above have
+    // exited (broadcast channel closed when `local_tx` dropped). The
+    // outer caller uses this report for stdout-format rendering and
+    // exit-code logic — server-side file writes already happened
+    // before the daemon emitted `done`.
+    let acc = std::sync::Arc::try_unwrap(accumulator)
+        .map_err(|_| anyhow::anyhow!("accumulator still has live refs"))?
+        .into_inner();
+    let report = acc.into_suite_report();
+    Ok(SubmitOutcome { report, all_passed })
+}
+
+/// Build a `file://` URI from a string path with percent-encoding so
+/// spaces and non-ASCII characters don't break OSC 8 hyperlinks.
+/// Mirror of `main.rs::file_uri` for a string input — kept duplicate
+/// rather than re-extracting because both crates avoid taking on a
+/// utility module just for this two-callsite helper.
+fn file_uri_str(path: &str) -> String {
+    let mut out = String::from("file://");
+    for &c in path.as_bytes() {
+        let unreserved = c.is_ascii_alphanumeric()
+            || matches!(c, b'-' | b'.' | b'_' | b'~' | b'/');
+        if unreserved {
+            out.push(c as char);
+        } else {
+            out.push_str(&format!("%{c:02X}"));
+        }
+    }
+    out
 }

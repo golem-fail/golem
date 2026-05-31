@@ -2256,12 +2256,11 @@ async fn run_flow_on_device(
         .unwrap_or(golem_runner::policy::DEFAULT_BASE_TIMEOUT_MS);
     let mut report = match execute_flow(&flow, driver.as_ref(), &mut vars, effective_start, base_timeout, &mut ctx, Some(&barrier)).await {
         Ok(result) => {
-            if !result.success && result.barrier_aborted {
-                eprintln!("  [{device_label}] Aborted: another device failed at this point");
-            }
-            for w in &result.warnings {
-                eprintln!("  [{device_label}] Warning: {w}");
-            }
+            // Barrier-abort and warning eprintlns removed here: the
+            // FlowFinished event carries success+barrier_aborted, the
+            // stream renderer surfaces a FAIL line, and the warnings
+            // are already in FlowReport.warnings for downstream
+            // formatters (json/junit/toon/human) to render.
             let duration_ms = start.elapsed().as_millis() as u64;
             ctx.emit(golem_events::EventKind::FlowFinished {
                 flow_name: flow_name.clone(),
@@ -2291,7 +2290,10 @@ async fn run_flow_on_device(
             }
         }
         Err(e) => {
-            eprintln!("  [{device_label}] Error: {e:#}");
+            // Flow execution error: surface as FlowFinished + warning
+            // in FlowReport (consumed by client renderers). The
+            // server-side eprintln was redundant with the stream FAIL
+            // line and lost when running against an external daemon.
             let duration_ms = start.elapsed().as_millis() as u64;
             ctx.emit(golem_events::EventKind::FlowFinished {
                 flow_name: flow_name.clone(),

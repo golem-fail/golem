@@ -16,9 +16,11 @@ use std::path::{Path, PathBuf};
 
 use clap::Parser;
 
+use anyhow::Context;
+
 use cli::{Cli, Commands};
 use discovery::TagFilter;
-use suite::{SuiteConfig, SuiteRunner};
+use suite::SuiteConfig;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -148,91 +150,70 @@ async fn main() -> anyhow::Result<()> {
                 repeat: args.repeat,
             };
 
-            // Check if an orchestrator is already running
-            if let Ok(stream) = orchestrator::try_connect().await {
-                // Client mode: submit to existing orchestrator. The
-                // server reloads golem.toml from `project_root` so app
-                // bundle IDs and device defaults match what the CLI saw
-                // locally (ProjectAppConfig isn't Serialize, so we pass
-                // the path and let the server re-parse).
-                let config_json = serde_json::json!({
-                    "platform": args.platform,
-                    "seed": args.seed,
-                    "verbose": config.verbose,
-                    "debug": config.debug,
-                    "no_perf": config.no_perf,
-                    "no_clean": config.no_clean,
-                    "no_teardown": config.no_teardown,
-                    "keep_devices": config.keep_devices,
-                    "no_results": config.no_results,
-                    "start": config.start,
-                    "vars": config.vars,
-                    "output_dir": config.output_dir.display().to_string(),
-                    "project_root": config.project_root.display().to_string(),
-                    "coverage": args.coverage,
-                    "rebuild": config.rebuild,
-                    "no_build": config.no_build,
-                    "record": config.record,
-                    "no_record": config.no_record,
-                    "trace": config.trace,
-                    "repeat": config.repeat,
-                });
-                let all_passed = orchestrator::submit_and_wait(stream, &flow_paths, &config_json, config.verbose, config.debug).await?;
-                if !all_passed {
-                    std::process::exit(1);
+            // Wire shape (always identical, whether we're talking to
+            // an in-process orchestrator we just started or to an
+            // existing daemon): config_json carries everything the
+            // server needs to reconstruct SuiteConfig. ProjectAppConfig
+            // isn't Serialize, so the server re-parses golem.toml from
+            // `project_root`.
+            let config_json = serde_json::json!({
+                "platform": args.platform,
+                "seed": args.seed,
+                "verbose": config.verbose,
+                "debug": config.debug,
+                "no_perf": config.no_perf,
+                "no_clean": config.no_clean,
+                "no_teardown": config.no_teardown,
+                "keep_devices": config.keep_devices,
+                "no_results": config.no_results,
+                "start": config.start,
+                "vars": config.vars,
+                "output_dir": config.output_dir.display().to_string(),
+                "project_root": config.project_root.display().to_string(),
+                "coverage": args.coverage,
+                "rebuild": config.rebuild,
+                "no_build": config.no_build,
+                "record": config.record,
+                "no_record": config.no_record,
+                "trace": config.trace,
+                "repeat": config.repeat,
+                "include_junit": include_junit,
+            });
+
+            // Unified submit path: connect to an existing daemon if
+            // there is one, otherwise spin up an in-process server and
+            // self-connect. `local_server` is `Some(...)` only in the
+            // in-process case — that's the marker for "I own the
+            // device pool, I must clean it up afterwards." External
+            // daemons own their own device lifecycle.
+            let (stream, local_server) = match orchestrator::try_connect().await {
+                Ok(s) => (s, None),
+                Err(_) => {
+                    let server = orchestrator::start_server().await?;
+                    let s = orchestrator::try_connect().await
+                        .context("failed to connect to in-process orchestrator")?;
+                    (s, Some(server))
                 }
-                return Ok(());
-            }
+            };
 
-            // Server mode: start orchestrator + run suite with shared ResourceManager
-            let server = orchestrator::start_server().await?;
+            let outcome = orchestrator::submit_and_wait(
+                stream, &flow_paths, &config_json,
+                config.verbose, config.debug, has_human_output,
+            ).await?;
+            let report = outcome.report;
 
-            let mut runner = SuiteRunner::with_resource_manager(
-                config,
-                server.resource_mgr.clone(),
-                server.install_cache.clone(),
-            );
-            let report = runner.run_suite(&flow_paths).await?;
-
-            // Wait for any active client connections to finish before exiting
-            server.wait_for_clients().await;
-
-            // Shut down any sims/emulators golem booted this run (unless
-            // --keep-devices). User-booted devices are not tracked, so never
-            // shut down.
-            let shutdown_warnings = server
-                .resource_mgr
-                .shutdown_golem_booted(args.keep_devices)
-                .await;
-            for w in &shutdown_warnings {
-                eprintln!("  [devices] {w}");
-            }
-
-            // Write results to output dir (json + toon always, junit if requested).
-            if !args.no_results {
-                golem_report::output::write_results_to_dir(&report, &output_dir, include_junit)?;
-                if has_human_output {
-                    let formats = if include_junit { "json, toon, xml" } else { "json, toon" };
-                    let display_dir = output_dir.display().to_string();
-                    let abs_dir = std::fs::canonicalize(&output_dir)
-                        .unwrap_or_else(|_| output_dir.clone());
-                    let use_color = std::io::IsTerminal::is_terminal(&std::io::stderr());
-                    if use_color {
-                        // OSC 8 hyperlink — clickable in iTerm2, Terminal.app,
-                        // vscode integrated terminal, etc. Falls back to plain
-                        // text on unsupported terminals. Path is percent-encoded
-                        // so spaces/non-ASCII don't break the URI.
-                        let uri = file_uri(&abs_dir);
-                        eprintln!(
-                            "             \x1b[2mResults: \x1b]8;;{uri}\x1b\\{display_dir}/\x1b]8;;\x1b\\  ({formats})\x1b[0m"
-                        );
-                    } else {
-                        eprintln!("             Results: {display_dir}/  ({formats})");
-                    }
+            // Drain in-process server: wait for any other clients, then
+            // shut down sims/emulators we booted (respects --keep-devices).
+            if let Some(server) = local_server {
+                server.wait_for_clients().await;
+                let warnings = server.resource_mgr.shutdown_golem_booted(args.keep_devices).await;
+                for w in &warnings {
+                    eprintln!("  [devices] {w}");
                 }
             }
 
-            // Write to stdout (non-human formats only — human streams live to stderr).
+            // Stdout non-human formats from the accumulated report
+            // (human formats stream live to stderr via stream renderer).
             for fmt in &stdout_formats {
                 if !matches!(fmt, golem_report::output::OutputFormat::Human) {
                     let content = golem_report::output::render(&report, fmt)?;
@@ -249,11 +230,19 @@ async fn main() -> anyhow::Result<()> {
 
             // Exit with appropriate code. Skipped flows (coverage-group
             // reclassify + install preconditions) don't fail the suite;
-            // only genuine failures do.
+            // only genuine failures do. Use `is_failed` (not the
+            // simpler `all_passed` from the submit-wire) so install-
+            // precondition skips are correctly fatal and coverage-group
+            // skips are correctly tolerated.
             let any_failed = report.flows.iter().any(|f| f.is_failed());
             if any_failed {
                 std::process::exit(1);
             }
+            // Quiet the unused-binding warnings for variables now only
+            // used in the in-process path. `has_human_output` had been
+            // shaping the legacy server-mode "Results:" line; the
+            // server side now owns that print.
+            let _ = (has_human_output, &output_dir);
         }
 
         Commands::Tree(args) => {
@@ -495,21 +484,3 @@ mod tests {
     }
 }
 
-/// Build a `file://` URI from an absolute path with percent-encoding so
-/// spaces and non-ASCII characters don't break OSC 8 hyperlinks. Encodes
-/// every byte that isn't unreserved per RFC 3986 (`A-Z a-z 0-9 - . _ ~`)
-/// or a path delimiter (`/`).
-fn file_uri(path: &Path) -> String {
-    let mut out = String::from("file://");
-    for byte in path.to_string_lossy().as_bytes() {
-        let c = *byte;
-        let unreserved = c.is_ascii_alphanumeric()
-            || matches!(c, b'-' | b'.' | b'_' | b'~' | b'/');
-        if unreserved {
-            out.push(c as char);
-        } else {
-            out.push_str(&format!("%{c:02X}"));
-        }
-    }
-    out
-}
