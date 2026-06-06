@@ -1,47 +1,25 @@
 # Roadmap
 
-## Device-queue scheduling: kill the deadline, separate "stuck" from "queued"
+## Device-queue scheduling: semaphore + concurrency-cap-follows-device-count
 
-The current hardcoded queue deadline (4 hours after a recent bump
-from 20 min — see `suite.rs::setup_device_with_resources`)
-conflates two distinct failure modes:
+Queue wait is now unbounded by default; `--max-wait` opts into a
+hard cap. Remaining items from the original scheduling rework:
 
-- **Stuck flow**: a running flow is holding the device past
-  expectation. Already detectable via the executor's per-flow
-  `max_runtime` option — when that fires, the flow aborts and the
-  device is freed.
-- **Queue wait**: a FlowRun is patiently waiting its turn. A 39-
-  test × `--repeat 5` sweep on a single device legitimately
-  queues hundreds of FlowRuns, with the tail waiting hours. Not
-  a failure — just scheduling.
-
-Today's deadline kills queue-waiters indiscriminately, even when
-the queue is making steady forward progress.
-
-**Design:**
-
-1. **Default: unbounded queue wait.** A FlowRun blocks on a
-   semaphore tied to free-device count for its slot; no deadline.
-   Forward progress is guaranteed by the per-running-flow
-   max_runtime circuit breaker.
-2. **Optional cap:** `--max-wait <duration>` CLI flag +
-   `[options].max_device_wait` in `golem.toml`. Both default to
-   `None` (unbounded). Useful for CI with hard time budgets:
-   `--max-wait 30m` aborts the queue if the suite is still
-   running after 30 min wall-clock.
-3. **Concurrency cap follows device count.** Instead of the static
+1. **Concurrency cap follows device count.** Instead of the static
    `ConcurrencyConfig.max_concurrency = 4` racing against actual
    device availability, dynamically cap effective parallelism at
    `min(max_concurrency, available_matching_devices)` once the
    plan phase finishes. Each FlowRun only attempts allocation when
    there's a chance of getting a device — others sleep on the
    device-count semaphore. Eliminates the busy-spin queue.
-4. **Out-of-order execution preserved.** Current retry-loop already
-   has this property by accident (each retry re-checks all
-   devices). The semaphore needs to be device-pool-shaped, not
-   slot-shaped, so a flow blocked on a busy iPhone grabs the next
-   free iPhone the moment one becomes available regardless of
-   queue order.
+2. **Semaphore-based wait, device-pool-shaped.** Replace the 2s
+   retry loop with a per-pool semaphore so a flow blocked on a
+   busy iPhone grabs the next free iPhone the moment one becomes
+   available, no polling, no mutex thrash. Out-of-order execution
+   is preserved (a queued iOS FlowRun isn't blocked by older
+   Android waiters).
+3. **`[options].max_device_wait` in `golem.toml`** to complement
+   the CLI `--max-wait` flag.
 
 Bonus: lays groundwork for "boot N identical devices on demand for
 `--repeat` parallelism" (already roadmapped as "Boot-on-demand for
@@ -49,9 +27,8 @@ Bonus: lays groundwork for "boot N identical devices on demand for
 new devices come online.
 
 **Files:** `golem-devices/src/resource_manager.rs` (device-pool
-semaphore + ordering rework), `golem-cli/src/suite.rs` (drop the
-4-hour deadline, plug into semaphore), `golem-cli/src/cli.rs`
-(`--max-wait` flag), `golem-parser/src/{config,lib}.rs`
+semaphore + ordering rework), `golem-cli/src/suite.rs` (plug into
+semaphore), `golem-parser/src/{config,lib}.rs`
 (`[options].max_device_wait` + parsing).
 
 ## Companion: detect + recover wedged UiAutomation handle

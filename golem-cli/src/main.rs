@@ -149,6 +149,9 @@ async fn main() -> anyhow::Result<()> {
                 project_record: project_config.options.record,
                 trace: args.trace,
                 repeat: args.repeat,
+                max_device_wait: args.max_wait
+                    .as_deref()
+                    .and_then(golem_runner::executor::parse_duration),
             };
 
             // Wire shape (always identical, whether we're talking to
@@ -178,6 +181,13 @@ async fn main() -> anyhow::Result<()> {
                 "no_record": config.no_record,
                 "trace": config.trace,
                 "repeat": config.repeat,
+                "max_device_wait_ms": args.max_wait.as_deref().and_then(|s| {
+                    let d = golem_runner::executor::parse_duration(s);
+                    if d.is_none() {
+                        eprintln!("warning: ignoring --max-wait '{s}' (expected e.g. 30m, 1h, 90s)");
+                    }
+                    d.map(|d| d.as_millis() as u64)
+                }),
                 "include_junit": include_junit,
             });
 

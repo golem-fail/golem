@@ -320,6 +320,9 @@ async fn handle_submit(
     let no_record = cfg["no_record"].as_bool().unwrap_or(false);
     let trace = cfg["trace"].as_bool().unwrap_or(false);
     let repeat = cfg["repeat"].as_u64().map(|n| n.clamp(1, 100) as u32).unwrap_or(1);
+    let max_device_wait = cfg["max_device_wait_ms"]
+        .as_u64()
+        .map(std::time::Duration::from_millis);
 
     // Re-read the project's golem.toml from the client's project_root so
     // apps pick up bundle IDs, install scripts, and device defaults the
@@ -383,6 +386,7 @@ async fn handle_submit(
         project_record: project_config.options.record,
         trace,
         repeat,
+        max_device_wait,
         // Server doesn't do its own human streaming — client handles output.
         stream_human: false,
     };

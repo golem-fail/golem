@@ -232,6 +232,12 @@ pub struct SuiteConfig {
     /// Each repeat writes to `{output_dir}/run_{i}/`. Capped 1..=100
     /// at the CLI layer.
     pub repeat: u32,
+    /// `--max-wait`: optional hard cap on how long any single FlowRun
+    /// will block in the device queue before bailing with a
+    /// "no device available" failure. `None` (default) means
+    /// unbounded — the per-flow `max_runtime` circuit breaker
+    /// guarantees forward progress by freeing wedged devices.
+    pub max_device_wait: Option<std::time::Duration>,
 }
 
 impl Default for SuiteConfig {
@@ -261,6 +267,7 @@ impl Default for SuiteConfig {
             project_record: None,
             trace: false,
             repeat: 1,
+            max_device_wait: None,
         }
     }
 }
@@ -612,6 +619,7 @@ impl SuiteRunner {
             let no_record = self.config.no_record;
             let project_record = self.config.project_record;
             let trace = self.config.trace;
+            let max_device_wait = self.config.max_device_wait;
             // RepeatContext only attached when --repeat > 1 so default
             // event payloads are unchanged for single-run suites.
             let repeat_ctx = if total_repeats > 1 {
@@ -659,6 +667,7 @@ impl SuiteRunner {
                         project_record,
                         trace,
                         repeat_ctx,
+                        max_device_wait,
                     },
                     CoverageCtx {
                         groups: coverage_groups_c,
@@ -848,6 +857,8 @@ struct FlowRunConfig {
     trace: bool,
     /// `--repeat` context for this FlowRun. `None` at N=1.
     repeat_ctx: Option<golem_events::RepeatContext>,
+    /// `--max-wait` cap on queue-wait. `None` = unbounded.
+    max_device_wait: Option<std::time::Duration>,
 }
 
 /// Build a synthetic `FlowReport` for a FlowRun short-circuited by the
@@ -1002,6 +1013,7 @@ async fn execute_flow_run(
             cfg.rebuild,
             cfg.no_build,
             &cfg.device_settings,
+            cfg.max_device_wait,
         )
         .await
         {
@@ -1221,6 +1233,7 @@ async fn setup_slot(
     rebuild: bool,
     no_build: bool,
     device_settings: &crate::project::DeviceSettings,
+    max_device_wait: Option<std::time::Duration>,
 ) -> Result<(DeviceInfo, u16)> {
     // Atomic pick-and-allocate: re-find on race so two FlowRuns can't
     // both pick the same device. Each iteration calls find_available_device
@@ -1240,6 +1253,7 @@ async fn setup_slot(
             event_tx,
             Some(install_cache),
             install_matrix,
+            max_device_wait,
         ).await?;
         // try_allocate with placeholder port=0 — the real companion
         // port is resolved later via reg_state.ensure_companion_port,
@@ -2598,6 +2612,7 @@ async fn find_available_device(
     event_tx: &golem_events::channel::EventSender,
     install_cache: Option<&golem_runner::installer::InstallCache>,
     install_matrix: &[InstallEntry],
+    max_wait: Option<std::time::Duration>,
 ) -> Result<DeviceInfo> {
     let all_devices = discover_all_devices(platform).await?;
 
@@ -2742,9 +2757,11 @@ async fn find_available_device(
         }
     }
 
-    // Step 4: All booted devices are busy — wait for one to free up
-    let timeout = std::time::Duration::from_secs(1200); // 20 minutes
-    let deadline = tokio::time::Instant::now() + timeout;
+    // Step 4: All booted devices are busy — wait for one to free up.
+    // Unbounded by default — per-flow `max_runtime` guarantees forward
+    // progress by freeing wedged devices. `--max-wait` opts into a
+    // hard cap (CI usage where the whole suite has a wall-clock budget).
+    let deadline = max_wait.map(|d| tokio::time::Instant::now() + d);
     let mut emitted_waiting = false;
 
     let wait_label = platform
@@ -2771,11 +2788,13 @@ async fn find_available_device(
             return Ok(pick);
         }
 
-        if tokio::time::Instant::now() >= deadline {
-            anyhow::bail!(
-                "Timed out waiting for a free {wait_label} device (all {} are in use)",
-                booted_owned.len()
-            );
+        if let Some(d) = deadline {
+            if tokio::time::Instant::now() >= d {
+                anyhow::bail!(
+                    "Timed out waiting for a free {wait_label} device after --max-wait ({} in use)",
+                    booted_owned.len()
+                );
+            }
         }
 
         if !emitted_waiting {

@@ -685,7 +685,7 @@ pub async fn execute_flow<'a>(
 ///
 /// Supported suffixes: `ms` (milliseconds), `s` (seconds), `m` (minutes), `h` (hours).
 /// Returns `None` if the format is not recognised.
-fn parse_duration(s: &str) -> Option<Duration> {
+pub fn parse_duration(s: &str) -> Option<Duration> {
     let s = s.trim();
     if let Some(n) = s.strip_suffix("ms") {
         return n.trim().parse::<u64>().ok().map(Duration::from_millis);

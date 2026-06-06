@@ -174,6 +174,14 @@ pub struct RunArgs {
     /// loudly with an actionable message. The cache is left untouched.
     #[arg(long = "no-build")]
     pub no_build: bool,
+
+    /// Hard cap on how long a FlowRun blocks in the device queue before
+    /// failing with "no device available". Format: `30m`, `1h`, `90s`,
+    /// `1h30m`. Default: unbounded — the per-flow `max_runtime` breaker
+    /// guarantees forward progress by freeing wedged devices. Set for
+    /// CI usage with a wall-clock budget.
+    #[arg(long = "max-wait")]
+    pub max_wait: Option<String>,
 }
 
 #[derive(clap::Args, Debug)]
