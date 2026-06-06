@@ -69,10 +69,12 @@ pub fn root_with_button(text: &str) -> Element {
 
 pub fn root_with_input(id: &str) -> Element {
     let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
-    root.children.push(make_element_with_id(
-        "TextField",
-        id,
-        Bounds::new(20, 100, 300, 44),
-    ));
+    let mut input = make_element_with_id("TextField", id, Bounds::new(20, 100, 300, 44));
+    // Mark the input as focused so handle_type's post-tap focus check
+    // passes without forcing a retry. Real devices set `focused=true`
+    // on the tapped input; the mock driver doesn't simulate state
+    // changes, so the fixture pre-sets it for happy-path tests.
+    input.focused = true;
+    root.children.push(input);
     root
 }

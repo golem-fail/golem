@@ -155,14 +155,36 @@ pub(crate) async fn handle_double_tap(step: &Step, driver: &dyn PlatformDriver, 
 /// The `input` field holds the string to type. The `text` field (and other
 /// selectors) identify which element to type into.
 pub(crate) async fn handle_type(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
-    let (_elem, (x, y)) = resolve_element(step, driver, ctx.emitter).await?;
-    driver.tap(x, y).await?;
-
     let value = step
         .input
         .as_deref()
         .or(step.on_text.as_deref())
         .unwrap_or("");
+
+    // Tap to focus, then verify focus before typing. Under heavy load
+    // or mid-animation (keyboard opening from a prior step), the tap
+    // can land on the keyboard's top edge → field loses focus → the
+    // keystrokes drop into nothing. Re-resolve + retry once if the
+    // element isn't focused after the tap.
+    let selector = build_selector(step);
+    let mut attempts = 0;
+    loop {
+        let (_elem, (x, y)) = resolve_element(step, driver, ctx.emitter).await?;
+        driver.tap(x, y).await?;
+
+        // Give the keyboard a moment to finish opening before checking
+        // focus. Keyboard animations on Android are typically 200-400ms.
+        sleep(Duration::from_millis(400)).await;
+
+        let (root, _meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
+        let matches = golem_element::selector::find_elements(&root, &selector);
+        let now_focused = matches.iter().any(|r| r.element.focused);
+        if now_focused || attempts >= 1 {
+            break;
+        }
+        attempts += 1;
+    }
+
     ctx.substep(golem_events::SubstepEvent::TextInput {
         text: value.to_string(),
         field_bounds: None,
@@ -916,11 +938,13 @@ mod tests {
     #[tokio::test]
     async fn multiple_actions_in_sequence() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
-        root.children.push(make_element_with_id(
+        let mut input = make_element_with_id(
             "TextField",
             "username",
             Bounds::new(20, 100, 300, 44),
-        ));
+        );
+        input.focused = true;
+        root.children.push(input);
         root.children.push(make_element_with_text(
             "Button",
             "Login",
@@ -955,7 +979,8 @@ mod tests {
         let method_names: Vec<&str> = calls.iter().map(|c| c.0.as_str()).collect();
         // execute_action bypasses execute_step_with_policy, so the
         // out-of-band post-settle (added in policy.rs) doesn't run here.
-        // type: get_hierarchy (resolve), tap (focus), type_text
+        // type: get_hierarchy (resolve), tap (focus), get_hierarchy
+        //   (post-tap focus check), type_text
         // hide_keyboard: hide_keyboard
         // tap: get_hierarchy (resolve), tap
         assert_eq!(
@@ -963,6 +988,7 @@ mod tests {
             vec![
                 "get_hierarchy",
                 "tap",
+                "get_hierarchy",
                 "type_text",
                 "hide_keyboard",
                 "get_hierarchy",
