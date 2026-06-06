@@ -19,14 +19,14 @@ const SETTLE_TIMEOUT: Duration = Duration::from_millis(1500);
 /// Interval between settle comparison checks (250ms).
 const SETTLE_INTERVAL: Duration = Duration::from_millis(250);
 
-/// Per-call deadline for `driver.get_hierarchy()` from inside
-/// `wait_for_settle`. Normal fetches return in 100-300ms; a hung
-/// companion (e.g. UiAutomation lost its accessibility connection
-/// after a focus-changing action) can hang the .await indefinitely
-/// — surfaced as a wedged executor blocking the entire suite. 2s
-/// is well above the happy-path band but well below sweep-deadline
-/// territory.
-const HIERARCHY_FETCH_TIMEOUT: Duration = Duration::from_millis(2000);
+/// Per-call deadline for `driver.get_hierarchy()`. Normal fetches
+/// return in 100-300ms; under sweep load with large hierarchies a
+/// slow-tail fetch can reach 2-4s. A true wedge (e.g. UiAutomation
+/// lost its accessibility handle after a focus-changing action)
+/// hangs the .await indefinitely. The ceiling separates "slow but
+/// recovering" from "wedged forever" — high enough to absorb slow
+/// tails, low enough to fail fast on real wedges.
+const HIERARCHY_FETCH_TIMEOUT: Duration = Duration::from_millis(5000);
 
 /// Wrap `driver.get_hierarchy()` with a hard per-call timeout.
 /// Returns the same shape as the underlying call; treats a timeout
