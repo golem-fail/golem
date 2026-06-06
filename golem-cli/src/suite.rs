@@ -1075,10 +1075,20 @@ async fn execute_flow_run(
         return vec![coverage_skip_report(flow_name, &slots, cfg.seed, start)];
     }
 
-    // Clone the picked devices so we can compute bonus ticks after the
-    // flow finishes (`device_setups` is moved into the spawn loop below).
+    // Clone the picked devices so we can compute bonus ticks + run ANR
+    // recovery after the flow finishes (`device_setups` is moved into
+    // the spawn loop below; we need (device, port) post-flow to probe
+    // the device's hierarchy for ANR signals on failure).
     let picked_devices: Vec<DeviceInfo> =
         device_setups.iter().map(|(d, _)| d.clone()).collect();
+    let picked_with_ports: Vec<(DeviceInfo, u16)> =
+        device_setups.iter().map(|(d, p)| (d.clone(), *p)).collect();
+    let recovery_bundle_id = flow
+        .flow
+        .apps
+        .first()
+        .and_then(|a| a.bundle.clone())
+        .unwrap_or_else(|| "fail.golem.test".to_string());
 
     // Per-FlowRun barrier: a device failing at step N aborts the other
     // slot(s) at step ≥ N. MUST stay per-FlowRun — step counts only compare
@@ -1159,6 +1169,82 @@ async fn execute_flow_run(
                 });
             }
         }
+    }
+
+    // ANR detection + reboot recovery. When any FlowReport failed,
+    // probe the device's current hierarchy for the "isn't responding"
+    // system dialog. On hit: annotate the last failed step, mark the
+    // device unhealthy so no further FlowRuns get allocated to it,
+    // and fire-and-forget a background reboot task that clears the
+    // flag once the device is back. Cheap on success: never probes.
+    for (idx, report) in reports.iter_mut().enumerate() {
+        if report.success {
+            continue;
+        }
+        let Some((device, port)) = picked_with_ports.get(idx) else { continue };
+        let driver: Box<dyn golem_driver::PlatformDriver> = match device.platform {
+            golem_devices::Platform::Ios => Box::new(golem_driver::ios::IosDriver::new(
+                device.udid.clone(),
+                recovery_bundle_id.clone(),
+                *port,
+                device.physical,
+            )),
+            golem_devices::Platform::Android => Box::new(golem_driver::android::AndroidDriver::new(
+                device.udid.clone(),
+                recovery_bundle_id.clone(),
+                *port,
+                device.physical,
+            )),
+        };
+        let anr = match driver.get_hierarchy().await {
+            Ok((root, _)) => golem_driver::common::detect_anr(&root),
+            Err(_) => false,
+        };
+        if !anr {
+            continue;
+        }
+        // Annotate the last failed step's error message so the JSON /
+        // TOON / JUnit artifact carries the hint. Live stream already
+        // emitted by this point; future improvement is to plumb the
+        // annotation through the event stream.
+        if let Some(last_failed) = report
+            .step_results
+            .iter_mut()
+            .rev()
+            .find(|s| matches!(s.outcome, golem_report::StepOutcome::Failed(_)))
+        {
+            if let golem_report::StepOutcome::Failed(ref mut msg) = last_failed.outcome {
+                msg.push_str(" — hint: possible ANR (system dialog detected); rebooting device");
+            }
+        }
+        report.warnings.push(format!(
+            "possible ANR on {} — rebooting in background",
+            device.udid
+        ));
+        let rm = resource_mgr.clone();
+        let udid = device.udid.clone();
+        rm.mark_unhealthy(&udid);
+        let event_tx = event_tx.clone();
+        let reg_state = reg_state.clone();
+        tokio::spawn(async move {
+            event_tx.emit(
+                golem_events::DeviceId("suite".into()),
+                golem_events::EventKind::FlowSkipped {
+                    flow_name: format!("reboot:{udid}"),
+                    reason: "ANR recovery: rebooting device".to_string(),
+                },
+            );
+            if let Err(e) = reboot_android_device(&udid).await {
+                eprintln!("  [recovery] reboot failed on {udid}: {e}");
+            }
+            // Drop the stale registration — after reboot the companion
+            // is gone and adb forwards are reset, so the cached port
+            // is dead. The next setup_slot must do a fresh
+            // `am instrument` spawn rather than reuse the cached port.
+            reg_state.invalidate_companion(&udid);
+            reg_state.remove(&udid);
+            rm.mark_healthy(&udid);
+        });
     }
 
     for udid in &allocated_udids {
@@ -1712,6 +1798,39 @@ async fn run_install_with_build_coord(
     result
 }
 
+
+/// Reboot an Android emulator/device and wait for it to become ready.
+/// Used by the ANR recovery path. iOS recovery is not implemented yet
+/// (system-dialog ANRs are an Android phenomenon).
+///
+/// Best-effort: success returns `Ok`, any adb error bubbles up.
+async fn reboot_android_device(udid: &str) -> anyhow::Result<()> {
+    let _ = tokio::process::Command::new("adb")
+        .args(["-s", udid, "reboot"])
+        .output()
+        .await?;
+    // Wait for sys.boot_completed=1 (cap ~3 min to avoid hanging the
+    // background task forever if the emulator is fully wedged).
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(180);
+    loop {
+        if tokio::time::Instant::now() > deadline {
+            anyhow::bail!("reboot timeout: {udid} did not finish booting in 180s");
+        }
+        let out = tokio::process::Command::new("adb")
+            .args(["-s", udid, "shell", "getprop", "sys.boot_completed"])
+            .output()
+            .await;
+        if let Ok(o) = out {
+            if String::from_utf8_lossy(&o.stdout).trim() == "1" {
+                // Extra grace period for the package manager + companion
+                // services to come up cleanly before any new flow lands.
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                return Ok(());
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    }
+}
 
 /// Persist the planned FlowRun list to `<output_dir>/plan.json` for
 /// post-hoc auditing. Always called under `--trace`. The file is the
@@ -2579,6 +2698,7 @@ async fn try_pick_free(
         .iter()
         .copied()
         .filter(|d| resource_mgr.port_for(&d.udid).is_none())
+        .filter(|d| !resource_mgr.is_unhealthy(&d.udid))
         .collect();
     if free.is_empty() {
         return None;

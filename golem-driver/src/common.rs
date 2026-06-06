@@ -463,6 +463,31 @@ fn parse_corners_json(val: Option<&serde_json::Value>) -> Vec<RoundedCorner> {
         .collect()
 }
 
+/// Heuristic detection of an Android ANR ("isn't responding") system
+/// dialog occluding the test app. Looks for the dialog's title text
+/// — case-insensitive substring match on "isn't responding". Combines
+/// well with a `Close app` / `Wait` button check but title alone is
+/// sufficient (those button labels localise; the title pattern is
+/// the most stable cross-locale signal we can rely on without
+/// shipping a translation matrix).
+///
+/// Not exact — false negatives are acceptable (we just don't auto-
+/// recover in that case). False positives would auto-reboot a healthy
+/// device unnecessarily, which is more expensive than missing a real
+/// ANR, so the matcher is conservative.
+pub fn detect_anr(el: &Element) -> bool {
+    fn has_anr_text(el: &Element) -> bool {
+        if let Some(ref t) = el.text {
+            let lower = t.to_lowercase();
+            if lower.contains("isn't responding") || lower.contains("isn’t responding") {
+                return true;
+            }
+        }
+        el.children.iter().any(has_anr_text)
+    }
+    has_anr_text(el)
+}
+
 /// Walk an element tree looking for an alert-type element.
 /// Find an alert dialog in the hierarchy.
 /// iOS: element_type == "alert". Android: detects the dialog pattern

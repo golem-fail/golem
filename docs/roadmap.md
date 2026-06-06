@@ -71,6 +71,36 @@ worked (different IPC path) but the companion's Java call did not.
 (detect persistent "no active window", trigger restart),
 `golem-cli/src/registration.rs` (re-register on companion restart).
 
+## ANR recovery: iOS + post-recovery validation
+
+Android ANR detection + reboot recovery is shipped. Outstanding:
+
+- **iOS recovery.** System dialog detection is Android-specific
+  (`isn't responding` text match). iOS has different system-dialog
+  shapes (Touch ID prompt, location prompt, etc) and recovery is
+  `xcrun simctl shutdown && boot` instead of `adb reboot`. Wire
+  parallel path under `detect_anr` when iOS-side patterns surface.
+- **Post-reboot validation.** After the reboot task clears
+  unhealthy, the first flow assigned to the device may hit an
+  uninitialised state. Add a sanity probe (single hierarchy fetch,
+  expect non-trivial node count, retry once) before marking healthy.
+- **Recovery telemetry.** Emit a dedicated `EventKind::DeviceRecovered`
+  with the duration + reason so renderers can surface it (currently
+  piggybacked on `FlowSkipped`).
+
+## `--trace` should imply per-block perf snapshots
+
+`--trace` already captures per-step screenshot + hierarchy for
+forensic review. Perf snapshots (cpu/mem/threads/fd) are opt-in per
+block today, so most flows have an empty `perf_snapshots[]` in the
+trace. When investigating intermittents, knowing CPU was at 95%
+when a step timed out is invaluable. `--trace` should automatically
+enable perf-snapshot capture at every block boundary, regardless of
+the flow's per-block opt-in.
+
+**Files:** `golem-runner/src/executor.rs` (perf-capture gate at
+block boundary), config plumbing through `--trace`.
+
 ## Install cache: don't persist `FailedScript` on transient errors
 
 `InstallCache::record_failure((udid, bundle), FailedScript)` is a

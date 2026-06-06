@@ -37,6 +37,10 @@ pub struct ResourceManager {
     /// at suite end. UDID → DeviceInfo so shutdown has what it needs without
     /// a second discovery pass.
     golem_booted: Mutex<HashMap<String, DeviceInfo>>,
+    /// Devices currently unavailable — typically rebooting after an ANR
+    /// recovery. `find_available_device` filters these out so no new
+    /// FlowRun gets allocated while the device is mid-reboot.
+    unhealthy: Mutex<std::collections::HashSet<String>>,
 }
 
 impl ResourceManager {
@@ -47,6 +51,7 @@ impl ResourceManager {
             ram_provider: Box::new(SystemRamProvider),
             allocations: Mutex::new(HashMap::new()),
             golem_booted: Mutex::new(HashMap::new()),
+            unhealthy: Mutex::new(std::collections::HashSet::new()),
         }
     }
 
@@ -57,7 +62,24 @@ impl ResourceManager {
             ram_provider,
             allocations: Mutex::new(HashMap::new()),
             golem_booted: Mutex::new(HashMap::new()),
+            unhealthy: Mutex::new(std::collections::HashSet::new()),
         }
+    }
+
+    /// Mark a device unhealthy (e.g. mid-reboot after ANR recovery).
+    /// `find_available_device` callers should filter via [`is_unhealthy`].
+    pub fn mark_unhealthy(&self, udid: &str) {
+        self.unhealthy.lock().expect("lock poisoned").insert(udid.to_string());
+    }
+
+    /// Mark a previously-unhealthy device as healthy again.
+    pub fn mark_healthy(&self, udid: &str) {
+        self.unhealthy.lock().expect("lock poisoned").remove(udid);
+    }
+
+    /// Whether a device is currently flagged unhealthy.
+    pub fn is_unhealthy(&self, udid: &str) -> bool {
+        self.unhealthy.lock().expect("lock poisoned").contains(udid)
     }
 
     /// Find the first port in range not in `used_ports` or already allocated.
@@ -325,5 +347,30 @@ mod tests {
         assert_eq!(rm.port_for("uid-1"), Some(8222));
         assert_eq!(rm.port_for("uid-2"), Some(8225));
         assert_eq!(rm.active_count(), 2);
+    }
+
+    #[test]
+    fn mark_unhealthy_sets_and_clears_flag() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        assert!(!rm.is_unhealthy("uid-1"));
+        rm.mark_unhealthy("uid-1");
+        assert!(rm.is_unhealthy("uid-1"));
+        assert!(!rm.is_unhealthy("uid-2"));
+        rm.mark_healthy("uid-1");
+        assert!(!rm.is_unhealthy("uid-1"));
+    }
+
+    #[test]
+    fn unhealthy_persists_across_arc_clones() {
+        let rm = std::sync::Arc::new(ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        ));
+        let clone = rm.clone();
+        clone.mark_unhealthy("uid-1");
+        assert!(rm.is_unhealthy("uid-1"));
     }
 }
