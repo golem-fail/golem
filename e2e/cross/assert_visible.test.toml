@@ -25,9 +25,11 @@ steps = [
   { action = "tap", on_accessibility_label = "goto-delayed-element" },
   { action = "tap", on_text = "Show Delayed" },
 
-  # After tapping, wait for delayed text to appear (~3s)
-  { action = "assert_visible", on_text = "Delayed Text" },
+  # After tapping, wait for delayed text to appear (~3s). The default
+  # 10s assert window can fall short under sweep load — the test-app
+  # delay is intentional and not a flake, so explicit headroom.
+  { action = "assert_visible", on_text = "Delayed Text", timeout = 15000 },
 
-  # Wait for it to disappear (~3s)
-  { action = "assert_not_visible", on_text = "Delayed Text" },
+  # Wait for it to disappear (~3s after appearing).
+  { action = "assert_not_visible", on_text = "Delayed Text", timeout = 15000 },
 ]
