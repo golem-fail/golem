@@ -1196,11 +1196,23 @@ async fn execute_flow_run(
                 device.physical,
             )),
         };
-        let anr = match driver.get_hierarchy().await {
-            Ok((root, _)) => golem_driver::common::detect_anr(&root),
-            Err(_) => false,
+        // Two recovery triggers, both indicating the device needs a reboot:
+        // 1. ANR dialog visible in the hierarchy (system_ui "isn't responding")
+        // 2. Hierarchy fetch itself errors at recovery time — the flow
+        //    has already failed and now the companion isn't responsive
+        //    either (HTTP timeout, connection refused, etc). Even without
+        //    a visible ANR dialog, that's a strong companion-wedge signal.
+        let (recover, recovery_reason) = match driver.get_hierarchy().await {
+            Ok((root, _)) => {
+                if golem_driver::common::detect_anr(&root) {
+                    (true, "possible ANR (system dialog detected)")
+                } else {
+                    (false, "")
+                }
+            }
+            Err(_) => (true, "companion unresponsive at recovery time"),
         };
-        if !anr {
+        if !recover {
             continue;
         }
         // Annotate the last failed step's error message so the JSON /
@@ -1214,11 +1226,11 @@ async fn execute_flow_run(
             .find(|s| matches!(s.outcome, golem_report::StepOutcome::Failed(_)))
         {
             if let golem_report::StepOutcome::Failed(ref mut msg) = last_failed.outcome {
-                msg.push_str(" — hint: possible ANR (system dialog detected); rebooting device");
+                msg.push_str(&format!(" — hint: {recovery_reason}; rebooting device"));
             }
         }
         report.warnings.push(format!(
-            "possible ANR on {} — rebooting in background",
+            "{recovery_reason} on {} — rebooting in background",
             device.udid
         ));
         let rm = resource_mgr.clone();
