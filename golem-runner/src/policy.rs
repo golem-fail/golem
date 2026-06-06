@@ -88,8 +88,15 @@ fn action_multiplier(step: &Step) -> u64 {
         | "assert_alert" | "accept_alert" | "dismiss_alert"
         | "read" => 2,
 
-        // 3x — app lifecycle (cold start)
-        "launch" | "stop" => 3,
+        // 5x — app lifecycle. Stop is fast (~1-2s) but its post-settle
+        // animation can drag, leaving the next launch racing against a
+        // not-fully-quiesced emulator. Cold launch itself can take
+        // 10-15s on slower API 36 Android emulators. The previous 3x
+        // = 15s budget left no headroom when a slow stop was followed
+        // by a slow launch in the same flow (observed in
+        // app_lifecycle.test on Pixel 7a: app loaded ~25s after stop,
+        // but step timed out at 15s).
+        "launch" | "stop" => 5,
 
         // 4x — external scripts (unknown duration)
         "bash" | "run" => 4,
@@ -148,19 +155,23 @@ fn intrinsic_duration_ms(step: &Step) -> u64 {
             }
         }
         "type" => {
-            // ~200ms per character (iOS WebView is slow through JS bridge)
+            // ~500ms per character. iOS WebView routes keys via JS bridge,
+            // Android emulators on API 36 + IME autocorrect add per-key
+            // delay. For a 20-char email the 2x base = 10s alone
+            // underflows (observed mid-paste timeouts leaving partial
+            // text); per-char dominance kicks in around 17 chars.
             let char_count = step.input.as_deref()
                 .or(step.on_text.as_deref())
                 .map(|s| s.len())
                 .unwrap_or(0);
-            (char_count as u64) * 200
+            (char_count as u64) * 500
         }
         "backspace" => {
             let count = step.params.get("count")
                 .and_then(|v| v.as_integer())
                 .map(|n| n.max(0) as u64)
                 .unwrap_or(1);
-            count * 200
+            count * 500
         }
         _ => 0,
     }
@@ -654,7 +665,7 @@ mod tests {
         assert_eq!(effective_timeout(&scroll, 5_000), 30_000);
 
         let launch = Step { action: "launch".into(), ..Default::default() };
-        assert_eq!(effective_timeout(&launch, 5_000), 15_000);
+        assert_eq!(effective_timeout(&launch, 5_000), 25_000);
 
         let bash = Step { action: "bash".into(), ..Default::default() };
         assert_eq!(effective_timeout(&bash, 5_000), 20_000);
@@ -752,13 +763,15 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn type_scales_with_input_length() {
-        // Short input: 5 chars * 200ms = 1000ms intrinsic, under 2x (10000), no effect
+        // Short input: 5 chars * 500ms = 2500ms intrinsic + 2s = 4500ms,
+        // under 2x base (10000), no effect.
         let mut step = Step { action: "type".into(), ..Default::default() };
         step.input = Some("hello".to_string());
         assert_eq!(effective_timeout(&step, 5_000), 10_000); // 2x base
 
-        // Long input: 80 chars * 200ms = 16000ms intrinsic + 2s = 18000, exceeds 2x (10000)
+        // Long input: 80 chars * 500ms = 40000ms intrinsic + 2s = 42000,
+        // exceeds 2x base (10000) — per-char dominates.
         step.input = Some("ab".repeat(40));
-        assert_eq!(effective_timeout(&step, 5_000), 18_000);
+        assert_eq!(effective_timeout(&step, 5_000), 42_000);
     }
 }
