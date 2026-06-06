@@ -21,12 +21,43 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class CompanionServer {
 
     private static final int DEFAULT_PORT = 8223;
     /** Inactivity timeout — server exits after this duration with no requests. */
     private static final long INACTIVITY_TIMEOUT_MS = 5 * 60 * 60 * 1000L; // 5 hours
+    /** Per-call deadline on UiAutomation operations. Normal returns are
+     *  100-300ms; if the internal IPC wedges the call CAN hang forever.
+     *  3s separates "slow tail under load" from "permanently stuck". */
+    private static final long UI_CALL_TIMEOUT_MS = 3_000L;
+    /** Self-suicide threshold. Persistent null returns over a sustained
+     *  window indicate the UiAutomation handle is wedged (singleton can
+     *  survive but lose its accessibility connection). Exiting triggers
+     *  instrumentation auto-restart — the host's recovery sees the
+     *  companion-unresponsive signal and re-registers with a fresh
+     *  handle. Conservative thresholds — false-positive suicide costs
+     *  ~10s reboot vs forever-wedged. */
+    private static final int STALENESS_NULL_THRESHOLD = 20;
+    private static final long STALENESS_WINDOW_MS = 60_000L;
+
+    /** Single-thread executor for UiAutomation calls with timeout.
+     *  Daemon so it doesn't keep the JVM alive at shutdown. */
+    private static final ExecutorService UI_EXECUTOR =
+        Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "golem-ui-bounded");
+            t.setDaemon(true);
+            return t;
+        });
+    private static final AtomicInteger CONSECUTIVE_NULLS = new AtomicInteger(0);
+    private static volatile long LAST_UI_SUCCESS_MS = System.currentTimeMillis();
+
     private final UiAutomation uiAutomation;
     private final int port;
     /** ADB serial passed from the host (e.g. "emulator-5554"). */
@@ -139,7 +170,7 @@ public class CompanionServer {
                     sendJson(out, 200, new JSONObject()
                         .put("status", "ok")
                         .put("platform", "android")
-                        .put("version", "0.6.16")
+                        .put("version", "0.6.17")
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
@@ -193,6 +224,37 @@ public class CompanionServer {
         }
     }
 
+    /** Call a UiAutomation operation with a hard per-call deadline and
+     *  staleness tracking. Returns null on timeout or null-result.
+     *  Persistent nulls trigger {@link System#exit} to force
+     *  instrumentation restart — the host re-registers with a fresh
+     *  UiAutomation handle. */
+    private <T> T callBounded(Callable<T> op, String label) {
+        Future<T> f = UI_EXECUTOR.submit(op);
+        T result = null;
+        try {
+            result = f.get(UI_CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            // timeout, interrupted, or execution error — treat as null;
+            // cancel so the worker isn't stuck on the wedged call.
+            f.cancel(true);
+        }
+        if (result != null) {
+            CONSECUTIVE_NULLS.set(0);
+            LAST_UI_SUCCESS_MS = System.currentTimeMillis();
+            return result;
+        }
+        int nulls = CONSECUTIVE_NULLS.incrementAndGet();
+        long sinceSuccessMs = System.currentTimeMillis() - LAST_UI_SUCCESS_MS;
+        if (nulls >= STALENESS_NULL_THRESHOLD && sinceSuccessMs > STALENESS_WINDOW_MS) {
+            System.err.println(
+                "[companion] UiAutomation wedged (" + nulls + " consecutive nulls on " +
+                label + ", " + (sinceSuccessMs / 1000) + "s since last success) — exiting");
+            System.exit(0);
+        }
+        return null;
+    }
+
     private void handleHierarchy(OutputStream out) throws Exception {
         // Same transient-null behaviour as `takeScreenshot()`: an
         // overlay, animation, or accessibility-connection blip can
@@ -204,7 +266,7 @@ public class CompanionServer {
         AccessibilityNodeInfo root = null;
         int rootAttempts = 0;
         while (rootAttempts < 3) {
-            root = uiAutomation.getRootInActiveWindow();
+            root = callBounded(uiAutomation::getRootInActiveWindow, "getRootInActiveWindow");
             if (root != null) break;
             rootAttempts++;
             try { Thread.sleep(100); } catch (InterruptedException ignored) {
@@ -547,7 +609,7 @@ public class CompanionServer {
         Bitmap bitmap = null;
         int attempts = 0;
         while (attempts < 3) {
-            bitmap = uiAutomation.takeScreenshot();
+            bitmap = callBounded(uiAutomation::takeScreenshot, "takeScreenshot");
             if (bitmap != null) break;
             attempts++;
             try { Thread.sleep(100); } catch (InterruptedException ignored) {
