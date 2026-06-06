@@ -391,6 +391,14 @@ impl SuiteRunner {
         // uses it for the non-verbose `Starting N flows…` header. Verbose
         // additionally renders the per-line plan + install matrix dump.
         self.plan_event = Some(build_suite_planned_event(&parsed));
+
+        // Under `--trace`, also persist the plan to disk so non-human
+        // output modes (toon/json/junit) can audit what got planned vs
+        // what actually ran. Useful for diffing "expected N flows" against
+        // the final flake summary when `--coverage` + `--repeat` prune.
+        if self.config.trace {
+            write_plan_artifact(&self.config.output_dir, &parsed);
+        }
         // SuiteLint goes out before SuitePlanned so warnings appear above
         // the `Starting N flows…` banner. Empty findings → no event.
         if !parsed.lint_warnings.is_empty() {
@@ -1690,6 +1698,71 @@ async fn run_install_with_build_coord(
     result
 }
 
+
+/// Persist the planned FlowRun list to `<output_dir>/plan.json` for
+/// post-hoc auditing. Always called under `--trace`. The file is the
+/// orchestrator's view of intent — what was scheduled before any flow
+/// started. Compare against the run reports (results.json) to see
+/// which planned runs actually executed vs. were pruned / cascade-
+/// skipped. Best-effort: errors print a warning but never fail the
+/// suite.
+fn write_plan_artifact(
+    output_dir: &std::path::Path,
+    parsed: &golem_orchestrator::ParsedSuite,
+) {
+    use serde_json::json;
+
+    let runs: Vec<_> = parsed
+        .flow_runs
+        .iter()
+        .enumerate()
+        .map(|(i, run)| {
+            let flow_name = parsed
+                .flows
+                .get(run.flow_idx)
+                .map(|f| f.flow.flow.name.as_str())
+                .unwrap_or("?");
+            let slots: Vec<String> = run
+                .slots
+                .iter()
+                .map(golem_orchestrator::describe_slot)
+                .collect();
+            json!({
+                "index": i + 1,
+                "flow_name": flow_name,
+                "flow_idx": run.flow_idx,
+                "repeat_index": run.repeat_index,
+                "coverage_group": run.coverage_group,
+                "slots": slots,
+            })
+        })
+        .collect();
+
+    let payload = json!({
+        "total_flow_runs": parsed.flow_runs.len(),
+        "flow_runs": runs,
+        "device_availability": parsed.device_availability,
+        "install_entries": parsed
+            .install_matrix
+            .iter()
+            .map(|e| format!("{} {} → {}", e.platform, e.app_name, e.bundle_id))
+            .collect::<Vec<_>>(),
+    });
+
+    if let Err(e) = std::fs::create_dir_all(output_dir) {
+        eprintln!("  [trace] could not create output dir for plan.json: {e}");
+        return;
+    }
+    let path = output_dir.join("plan.json");
+    match serde_json::to_string_pretty(&payload) {
+        Ok(s) => {
+            if let Err(e) = std::fs::write(&path, s) {
+                eprintln!("  [trace] could not write plan.json: {e}");
+            }
+        }
+        Err(e) => eprintln!("  [trace] could not serialize plan.json: {e}"),
+    }
+}
 
 /// Build a `SuitePlanned` event payload from the parsed suite. Pre-formats
 /// the per-run lines, install entries, and device availability as
