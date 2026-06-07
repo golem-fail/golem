@@ -1,5 +1,50 @@
 # Roadmap
 
+## Investigate wedge-prone test cluster
+
+Four tests cause Android companion / SystemUI wedges at much higher
+rates than the rest of the suite:
+
+- `e2e/cross/deep_link.test.toml`
+- `e2e/cross/gestures.test.toml`
+- `e2e/cross/alerts.test.toml`
+- `e2e/cross/scroll_search.test.toml`
+
+In a 40-flow targeted sweep (4 tests × `--repeat 10`), these
+collectively triggered 7-12 wedge events (hierarchy / HTTP
+timeouts) per run — vs ~2 wedge events in a 130-flow full sweep
+that doesn't emphasise these. Per-flow wedge rate is ~10-25x
+higher.
+
+**Suspected common patterns:**
+
+- **Heavy SystemUI involvement** — `alerts.test` triggers native
+  dialogs, `deep_link.test` uses `am start -d <uri>` (intent
+  dispatch through system_server)
+- **High companion request rate** — `scroll_search.test` polls
+  hierarchy aggressively in horizontal-carousel scroll search;
+  `gestures.test` synthesises complex multi-finger gestures
+  (pinch + rotate) that take longer to settle
+- **Complex gesture synthesis** — multi-finger paths in
+  `gestures.test` exercise UiAutomation's gesture controller
+  more than typical taps/swipes
+
+**Possible mitigations to investigate:**
+
+1. **Rate-limit companion requests** — explicit small delay between
+   hierarchy fetches in `wait_for_settle` / auto-scroll loops
+2. **Backoff after observed slow companion** — if recent fetches
+   exceed 1s, slow polling to give SystemUI breathing room
+3. **Test-app changes** — restructure gesture-area widget so
+   swipes from outside it aren't intercepted; simplify horizontal
+   carousel snap mechanic
+4. **Per-test wedge budget** — track wedge events per test,
+   surface in CI report so flake hotspots are visible
+
+Use the 4-test × repeat-N sweep as the **stress test** for any
+future companion / scroll-engine changes — pass-rate delta on
+these four tests is a much sharper signal than full-suite runs.
+
 ## Device-queue scheduling: semaphore + concurrency-cap-follows-device-count
 
 Queue wait is now unbounded by default; `--max-wait` opts into a
