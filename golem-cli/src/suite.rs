@@ -3191,10 +3191,13 @@ mod tests {
         let mut runner = SuiteRunner::new(SuiteConfig::default());
         let paths = vec![PathBuf::from("a.test.toml")];
         let report = runner.run_suite(&paths).await.expect("run_suite");
-        // Duration should be a non-negative value (stub flows are instant,
-        // so total_duration_ms will be 0 or very small).
-        // We just verify the field is populated and the report succeeds.
-        assert!(report.total_duration_ms < 1000);
+        // The suite ran and produced a report for the requested flow.
+        assert_eq!(report.flows.len(), 1);
+        // `total_duration_ms` is wall-clock — assert only a generous sanity
+        // ceiling, never a tight bound. run_suite does real setup (plan +
+        // registration server), so under parallel test load this can take
+        // well over a second; a tight ceiling flakes (observed at ~1.8s).
+        assert!(report.total_duration_ms < 600_000);
     }
 
     // ---------------------------------------------------------------
