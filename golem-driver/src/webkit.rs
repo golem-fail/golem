@@ -14,7 +14,7 @@
 //! Physical device support (usbmuxd + lockdown TLS) is a future extension —
 //! the transport is behind a trait to allow swapping the underlying stream.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use std::path::PathBuf;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
@@ -266,10 +266,16 @@ impl SimulatorTransport {
         let len = u32::from_be_bytes(len_buf) as usize;
 
         if len == 0 {
-            bail!("WebKit Inspector: received zero-length message");
+            return Err(golem_events::coded(
+                golem_events::FailureCode::DeviceWebviewComms,
+                anyhow::anyhow!("WebKit Inspector: received zero-length message"),
+            ));
         }
         if len > 64 * 1024 * 1024 {
-            bail!("WebKit Inspector message too large: {len} bytes");
+            return Err(golem_events::coded(
+                golem_events::FailureCode::DeviceWebviewComms,
+                anyhow::anyhow!("WebKit Inspector message too large: {len} bytes"),
+            ));
         }
 
         let mut buf = vec![0u8; len];
@@ -357,7 +363,10 @@ impl WebKitInspector {
             None => find_inspector_sockets().await,
         };
         if candidates.is_empty() {
-            bail!("no WebKit Inspector socket found — is a simulator running?");
+            return Err(golem_events::coded(
+                golem_events::FailureCode::DeviceWebviewComms,
+                anyhow::anyhow!("no WebKit Inspector socket found — is a simulator running?"),
+            ));
         }
 
         let mut last_err = None;
@@ -389,9 +398,12 @@ impl WebKitInspector {
             }
         }
 
-        Err(last_err.unwrap_or_else(|| {
-            anyhow::anyhow!("all {} inspector sockets failed to connect", candidates.len())
-        }))
+        Err(golem_events::coded(
+            golem_events::FailureCode::DeviceWebviewComms,
+            last_err.unwrap_or_else(|| {
+                anyhow::anyhow!("all {} inspector sockets failed to connect", candidates.len())
+            }),
+        ))
     }
 
     /// Perform the full RPC handshake:
@@ -438,12 +450,20 @@ impl WebKitInspector {
             .await
             {
                 Ok(Ok(msg)) => msg,
-                Ok(Err(e)) => bail!("handshake recv failed: {e:#}"),
+                Ok(Err(e)) => {
+                    return Err(golem_events::coded(
+                        golem_events::FailureCode::DeviceWebviewComms,
+                        anyhow::anyhow!("handshake recv failed: {e:#}"),
+                    ))
+                }
                 Err(_) => {
                     if pages_received {
                         break; // Timeout is OK after we got pages
                     }
-                    bail!("timeout (15s) waiting for WebKit Inspector handshake");
+                    return Err(golem_events::coded(
+                        golem_events::FailureCode::DeviceWebviewComms,
+                        anyhow::anyhow!("timeout (15s) waiting for WebKit Inspector handshake"),
+                    ));
                 }
             };
 
@@ -522,7 +542,10 @@ impl WebKitInspector {
                         }
                     }
                     "_rpc_applicationDisconnected:" => {
-                        bail!("application disconnected during handshake");
+                        return Err(golem_events::coded(
+                            golem_events::FailureCode::DeviceWebviewComms,
+                            anyhow::anyhow!("application disconnected during handshake"),
+                        ));
                     }
                     _ => {}
                 }
@@ -540,10 +563,16 @@ impl WebKitInspector {
         }
 
         if self.app_id.is_empty() {
-            bail!("no inspectable application found — does the WKWebView have isInspectable = true?");
+            return Err(golem_events::coded(
+                golem_events::FailureCode::DeviceWebviewComms,
+                anyhow::anyhow!("no inspectable application found — does the WKWebView have isInspectable = true?"),
+            ));
         }
         if !pages_received {
-            bail!("no inspectable pages found in application {}", self.app_id);
+            return Err(golem_events::coded(
+                golem_events::FailureCode::DeviceWebviewComms,
+                anyhow::anyhow!("no inspectable pages found in application {}", self.app_id),
+            ));
         }
 
         // Step 3: Open inspector channel for the selected page
@@ -667,8 +696,18 @@ impl WebKitInspector {
             .await
             {
                 Ok(Ok(msg)) => msg,
-                Ok(Err(e)) => bail!("recv failed: {e:#}"),
-                Err(_) => bail!("timeout (15s) waiting for inspector response"),
+                Ok(Err(e)) => {
+                    return Err(golem_events::coded(
+                        golem_events::FailureCode::DeviceWebviewComms,
+                        anyhow::anyhow!("recv failed: {e:#}"),
+                    ))
+                }
+                Err(_) => {
+                    return Err(golem_events::coded(
+                        golem_events::FailureCode::DeviceWebviewComms,
+                        anyhow::anyhow!("timeout (15s) waiting for inspector response"),
+                    ))
+                }
             };
 
             let json_str = match extract_message_data(&msg, &self.sender_id) {
@@ -702,7 +741,10 @@ impl WebKitInspector {
                 return Ok(inner);
             }
         }
-        bail!("timeout waiting for inspector response (cmd_id={cmd_id})")
+        Err(golem_events::coded(
+            golem_events::FailureCode::DeviceWebviewComms,
+            anyhow::anyhow!("timeout waiting for inspector response (cmd_id={cmd_id})"),
+        ))
     }
 
     /// Evaluate JavaScript in the connected WKWebView page.
@@ -728,7 +770,10 @@ impl WebKitInspector {
 
         // Check for exception
         if let Some(err) = eval_resp.get("result").and_then(|r| r.get("exceptionDetails")) {
-            bail!("WebKit JS evaluation error: {err}");
+            return Err(golem_events::coded(
+                golem_events::FailureCode::DeviceWebviewComms,
+                anyhow::anyhow!("WebKit JS evaluation error: {err}"),
+            ));
         }
 
         let result_obj = eval_resp
@@ -775,7 +820,10 @@ impl WebKitInspector {
             let await_resp = self.recv_inspector_response(await_id).await?;
 
             if let Some(err) = await_resp.get("result").and_then(|r| r.get("exceptionDetails")) {
-                bail!("WebKit JS await error: {err}");
+                return Err(golem_events::coded(
+                    golem_events::FailureCode::DeviceWebviewComms,
+                    anyhow::anyhow!("WebKit JS await error: {err}"),
+                ));
             }
 
             if let Some(value) = await_resp
@@ -787,10 +835,13 @@ impl WebKitInspector {
                 return Ok(value.to_string());
             }
 
-            bail!(
-                "WebKit awaitPromise missing string value: {}",
-                serde_json::to_string_pretty(&await_resp).unwrap_or_default()
-            );
+            return Err(golem_events::coded(
+                golem_events::FailureCode::DeviceWebviewComms,
+                anyhow::anyhow!(
+                    "WebKit awaitPromise missing string value: {}",
+                    serde_json::to_string_pretty(&await_resp).unwrap_or_default()
+                ),
+            ));
         }
 
         // For other types, try to get value directly
@@ -798,11 +849,14 @@ impl WebKitInspector {
             return Ok(value.to_string());
         }
 
-        bail!(
-            "WebKit unexpected result type '{}': {}",
-            result_type,
-            serde_json::to_string_pretty(&eval_resp).unwrap_or_default()
-        )
+        Err(golem_events::coded(
+            golem_events::FailureCode::DeviceWebviewComms,
+            anyhow::anyhow!(
+                "WebKit unexpected result type '{}': {}",
+                result_type,
+                serde_json::to_string_pretty(&eval_resp).unwrap_or_default()
+            ),
+        ))
     }
 }
 

@@ -544,6 +544,7 @@ impl SuiteRunner {
                 repeat: None,
                 started_at: None,
                 finished_at: None,
+                first_failure_code: Some(golem_events::FailureCode::ParseFlowFile),
             });
         }
 
@@ -711,6 +712,7 @@ impl SuiteRunner {
                         repeat: None,
                         started_at: None,
                         finished_at: None,
+                        first_failure_code: Some(golem_events::FailureCode::Uncoded),
                     }, None));
                 }
             }
@@ -799,8 +801,8 @@ impl SuiteRunner {
                             target: s.target.clone(),
                             outcome: match &s.outcome {
                                 golem_report::StepOutcome::Success => golem_report::StepOutcome::Success,
-                                golem_report::StepOutcome::Warning(m) => golem_report::StepOutcome::Warning(m.clone()),
-                                golem_report::StepOutcome::Failed(m) => golem_report::StepOutcome::Failed(m.clone()),
+                                golem_report::StepOutcome::Warning { message, code } => golem_report::StepOutcome::Warning { message: message.clone(), code: *code },
+                                golem_report::StepOutcome::Failed { message, code } => golem_report::StepOutcome::Failed { message: message.clone(), code: *code },
                                 golem_report::StepOutcome::Skipped => golem_report::StepOutcome::Skipped,
                             },
                             duration_ms: s.duration_ms,
@@ -897,6 +899,7 @@ fn coverage_skip_report(
         covered_axes,
         started_at: None,
         finished_at: None,
+        first_failure_code: None,
         recordings: Vec::new(),
         repeat: None,
     }
@@ -1046,6 +1049,7 @@ async fn execute_flow_run(
             covered_axes: Vec::new(),
             recordings: Vec::new(),
             repeat: None,
+            first_failure_code: Some(golem_events::FailureCode::DeviceNotFound),
             started_at: None,
             finished_at: None,
         }];
@@ -1166,6 +1170,7 @@ async fn execute_flow_run(
                     repeat: None,
                     started_at: None,
                     finished_at: None,
+                    first_failure_code: Some(golem_events::FailureCode::Uncoded),
                 });
             }
         }
@@ -1223,10 +1228,10 @@ async fn execute_flow_run(
             .step_results
             .iter_mut()
             .rev()
-            .find(|s| matches!(s.outcome, golem_report::StepOutcome::Failed(_)))
+            .find(|s| matches!(s.outcome, golem_report::StepOutcome::Failed { .. }))
         {
-            if let golem_report::StepOutcome::Failed(ref mut msg) = last_failed.outcome {
-                msg.push_str(&format!(" — hint: {recovery_reason}; rebooting device"));
+            if let golem_report::StepOutcome::Failed { ref mut message, .. } = last_failed.outcome {
+                message.push_str(&format!(" — hint: {recovery_reason}; rebooting device"));
             }
         }
         report.warnings.push(format!(
@@ -2236,7 +2241,10 @@ async fn ensure_companion_with_reg(
                 }
             }
             _ = tokio::time::sleep_until(deadline) => {
-                anyhow::bail!("Companion did not register within 60 seconds");
+                return Err(golem_events::coded(
+                    golem_events::FailureCode::DeviceRegistrationTimeout,
+                    anyhow::anyhow!("Companion did not register within 60 seconds"),
+                ));
             }
         }
     }
@@ -2438,6 +2446,7 @@ async fn run_flow_on_device(
                     repeat: None,
                     started_at: None,
                     finished_at: None,
+                    first_failure_code: Some(golem_events::FailureCode::ParseMissingParam),
                 };
             }
         };
@@ -2470,6 +2479,7 @@ async fn run_flow_on_device(
                     repeat: None,
                     started_at: None,
                     finished_at: None,
+                    first_failure_code: Some(golem_events::FailureCode::AppInstallFailed),
                 };
             }
             Some(golem_runner::installer::InstallOutcome::FailedNoScript) => {
@@ -2499,6 +2509,7 @@ async fn run_flow_on_device(
                     repeat: None,
                     started_at: None,
                     finished_at: None,
+                    first_failure_code: Some(golem_events::FailureCode::AppInstallScriptNotFound),
                 };
             }
             None => {}
@@ -2556,6 +2567,7 @@ async fn run_flow_on_device(
                     repeat: None,
                     started_at: None,
                     finished_at: None,
+                    first_failure_code: Some(golem_events::FailureCode::AppInstallFailed),
                 };
             }
         }
@@ -2604,6 +2616,7 @@ async fn run_flow_on_device(
                 repeat: repeat_ctx,
                 started_at: None,
                 finished_at: None,
+                first_failure_code: result.failed_code,
             }
         }
         Err(e) => {
@@ -2637,6 +2650,9 @@ async fn run_flow_on_device(
                 repeat: None,
                 started_at: None,
                 finished_at: None,
+                first_failure_code: Some(
+                    golem_events::extract_code(&e).unwrap_or(golem_events::FailureCode::Uncoded),
+                ),
             }
         }
     };
@@ -3000,6 +3016,7 @@ mod tests {
             repeat: None,
             started_at: None,
             finished_at: None,
+            first_failure_code: None,
         }
     }
 
@@ -3022,6 +3039,7 @@ mod tests {
             repeat: None,
             started_at: None,
             finished_at: None,
+            first_failure_code: Some(golem_events::FailureCode::Uncoded),
         }
     }
 

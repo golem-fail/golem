@@ -69,8 +69,14 @@ fn format_perf_snapshot(snap: &PerfSnapshot) -> String {
 pub fn format_step(step: &StepReport) -> String {
     let (symbol, suffix) = match &step.outcome {
         StepOutcome::Success => (SYM_SUCCESS, String::new()),
-        StepOutcome::Warning(msg) => (SYM_WARNING, format!("  ({msg})")),
-        StepOutcome::Failed(msg) => (SYM_FAILED, format!("  ({msg})")),
+        StepOutcome::Warning { message, code } => (
+            SYM_WARNING,
+            format!("  {} ({message})", code.render(golem_events::Severity::Warning)),
+        ),
+        StepOutcome::Failed { message, code } => (
+            SYM_FAILED,
+            format!("  {} ({message})", code.render(golem_events::Severity::Error)),
+        ),
         StepOutcome::Skipped => (SYM_SKIPPED, "  (skipped)".to_string()),
     };
 
@@ -123,8 +129,8 @@ pub fn format_flow(report: &FlowReport) -> String {
     for step in &report.step_results {
         match &step.outcome {
             StepOutcome::Success => passed += 1,
-            StepOutcome::Warning(_) => warned += 1,
-            StepOutcome::Failed(_) => failed += 1,
+            StepOutcome::Warning { .. } => warned += 1,
+            StepOutcome::Failed { .. } => failed += 1,
             StepOutcome::Skipped => skipped += 1,
         }
     }
@@ -255,7 +261,7 @@ mod tests {
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
-            outcome: StepOutcome::Failed(msg.to_string()),
+            outcome: StepOutcome::Failed { message: msg.to_string(), code: golem_events::FailureCode::Uncoded },
             duration_ms: ms,
             retry_count: 0,
             screenshot_path: None,
@@ -274,7 +280,7 @@ mod tests {
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
-            outcome: StepOutcome::Warning(msg.to_string()),
+            outcome: StepOutcome::Warning { message: msg.to_string(), code: golem_events::FailureCode::Uncoded },
             duration_ms: ms,
             retry_count: 0,
             screenshot_path: None,
@@ -327,6 +333,18 @@ mod tests {
         assert!(out.contains("(timed out)"), "SHALL contain error message");
     }
 
+    #[test]
+    fn step_failed_includes_failure_code_token() {
+        let mut step = failed_step("assert_visible", "Welcome", 10012, "timed out");
+        step.outcome = StepOutcome::Failed {
+            message: "timed out".to_string(),
+            code: golem_events::FailureCode::FlowStepTimeout,
+        };
+        let out = format_step(&step);
+        assert!(out.contains("EF408"), "SHALL surface the failure code token");
+        assert!(out.contains("(timed out)"), "SHALL keep the message");
+    }
+
     // 3. format_step warning shows ⚠ with message --------------------
 
     #[test]
@@ -346,6 +364,7 @@ mod tests {
     #[test]
     fn flow_shows_steps_in_order() {
         let report = FlowReport {
+            first_failure_code: None,
             flow_name: "login_flow".to_string(),
             success: true,
             step_results: vec![
@@ -388,6 +407,7 @@ mod tests {
     #[test]
     fn flow_failed_shows_seed_and_screenshot() {
         let report = FlowReport {
+            first_failure_code: None,
             flow_name: "login_flow".to_string(),
             success: false,
             step_results: vec![
@@ -425,6 +445,7 @@ mod tests {
     #[test]
     fn flow_summary_counts() {
         let report = FlowReport {
+            first_failure_code: None,
             flow_name: "login_flow".to_string(),
             success: false,
             step_results: vec![
@@ -464,6 +485,7 @@ mod tests {
         let suite = SuiteReport {
             flows: vec![
                 FlowReport {
+                    first_failure_code: None,
                     flow_name: "login_flow".to_string(),
                     success: true,
                     step_results: vec![
@@ -485,6 +507,7 @@ mod tests {
                     finished_at: None,
                 },
                 FlowReport {
+                    first_failure_code: None,
                     flow_name: "signup_flow".to_string(),
                     success: false,
                     step_results: vec![
@@ -524,6 +547,7 @@ mod tests {
     fn suite_total_duration() {
         let suite = SuiteReport {
             flows: vec![FlowReport {
+                first_failure_code: None,
                 flow_name: "quick_flow".to_string(),
                 success: true,
                 step_results: vec![success_step("launch", "", 100)],
@@ -567,6 +591,7 @@ mod tests {
     #[test]
     fn empty_flow_formats_correctly() {
         let report = FlowReport {
+            first_failure_code: None,
             flow_name: "empty_flow".to_string(),
             success: true,
             step_results: vec![],
@@ -615,6 +640,7 @@ mod tests {
     #[test]
     fn perf_section_renders_when_snapshots_present() {
         let report = FlowReport {
+            first_failure_code: None,
             flow_name: "perf_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],
@@ -644,6 +670,7 @@ mod tests {
     #[test]
     fn perf_section_omitted_when_empty() {
         let report = FlowReport {
+            first_failure_code: None,
             flow_name: "no_perf_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],

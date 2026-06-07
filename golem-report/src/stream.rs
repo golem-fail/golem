@@ -243,6 +243,9 @@ pub async fn stream_human(
     // under the FAIL line as post-mortem context. Verbose streams them live
     // and never reads this map.
     let mut pending_substeps: HashMap<String, Vec<(SystemTime, SubstepEvent)>> = HashMap::new();
+    // First failed/warned step's code per device, surfaced on the FlowFinished
+    // FAIL line. Set once per flow; cleared when the flow finishes.
+    let mut first_fail_code: HashMap<String, golem_events::FailureCode> = HashMap::new();
 
     while let Ok(event) = rx.recv().await {
         let ts = format_timestamp(event.wall_time, use_color);
@@ -320,6 +323,9 @@ pub async fn stream_human(
                 }
             }
             EventKind::FlowStarted { flow_name, repeat, .. } => {
+                // Reset any stale code from a prior flow on this device so it
+                // can't leak onto this flow's FAIL line.
+                first_fail_code.remove(&event.device_id.0);
                 let name = fmt_flow_name(flow_name, use_color);
                 let repeat_suffix = repeat
                     .as_ref()
@@ -459,7 +465,7 @@ pub async fn stream_human(
                         eprintln!("{ts}  {dp}{kw} {dur}  {action_target}{tag_str}{block_suffix}{stats_str}");
                         pending_substeps.remove(&event.device_id.0);
                     }
-                    golem_events::StepOutcome::Failed(msg) => {
+                    golem_events::StepOutcome::Failed { message, code } => {
                         let tag_str = if tags.is_empty() {
                             String::new()
                         } else {
@@ -468,9 +474,13 @@ pub async fn stream_human(
                         let kw = keyword("FAIL", BOLD_RED, use_color);
                         eprintln!("{ts}  {dp}{kw} {dur}  {action_target}{tag_str}{block_suffix}");
                         let pending = pending_substeps.remove(&event.device_id.0).unwrap_or_default();
-                        print_failure_block(msg, BOLD_RED, &dp, &pending, use_color);
+                        first_fail_code.entry(event.device_id.0.clone()).or_insert(*code);
+                        let rendered = code.render(golem_events::Severity::Error);
+                        print_failure_block(&rendered, message, BOLD_RED, &dp, &pending, use_color);
+                        // NB: only Failed populates first_fail_code — a warning
+                        // doesn't fail the flow, so it must not own the FAIL line.
                     }
-                    golem_events::StepOutcome::Warning(msg) => {
+                    golem_events::StepOutcome::Warning { message, code } => {
                         let tag_str = if tags.is_empty() {
                             String::new()
                         } else {
@@ -479,7 +489,8 @@ pub async fn stream_human(
                         let kw = keyword("WARN", BOLD_YELLOW, use_color);
                         eprintln!("{ts}  {dp}{kw} {dur}  {action_target}{tag_str}{block_suffix}");
                         let pending = pending_substeps.remove(&event.device_id.0).unwrap_or_default();
-                        print_failure_block(msg, YELLOW, &dp, &pending, use_color);
+                        let rendered = code.render(golem_events::Severity::Warning);
+                        print_failure_block(&rendered, message, YELLOW, &dp, &pending, use_color);
                     }
                     golem_events::StepOutcome::Skipped | golem_events::StepOutcome::Ignored => {
                         let kw = keyword("SKIP", DIM, use_color);
@@ -507,10 +518,20 @@ pub async fn stream_human(
                 } else {
                     keyword("FAIL", BOLD_RED, use_color)
                 };
+                // Surface the first failing step's code between flow name and
+                // seed (only on failure; severity is Error at the flow level).
+                let failed_code = first_fail_code.remove(&event.device_id.0);
+                let code_str = match failed_code {
+                    Some(c) if !*success => {
+                        let r = c.render(golem_events::Severity::Error);
+                        if use_color { format!("{BOLD_RED}{r}{RESET}  ") } else { format!("{r}  ") }
+                    }
+                    _ => String::new(),
+                };
                 if use_color {
-                    eprintln!("{ts}  {dp}{kw} {dur}  {name}  {DIM}seed:{seed}{RESET}");
+                    eprintln!("{ts}  {dp}{kw} {dur}  {name}  {code_str}{DIM}seed:{seed}{RESET}");
                 } else {
-                    eprintln!("{ts}  {dp}{kw} {dur}  {name}  seed:{seed}");
+                    eprintln!("{ts}  {dp}{kw} {dur}  {name}  {code_str}seed:{seed}");
                 }
             }
             EventKind::SuiteFinished { duration_ms, passed, failed, skipped } => {
@@ -601,10 +622,12 @@ pub async fn stream_human(
                 }
             }
             EventKind::FlowParseFailed { path, error } => {
+                let code = golem_events::FailureCode::ParseFlowFile
+                    .render(golem_events::Severity::Error);
                 if use_color {
-                    eprintln!("{ts}  {BOLD_RED}Parse error{RESET} ({path}): {error}");
+                    eprintln!("{ts}  {BOLD_RED}Parse error{RESET} {code} ({path}): {error}");
                 } else {
-                    eprintln!("{ts}  Parse error ({path}): {error}");
+                    eprintln!("{ts}  Parse error {code} ({path}): {error}");
                 }
             }
             EventKind::DeviceAutoBoot { device_name, slot_shape } => {
@@ -671,6 +694,7 @@ pub async fn stream_human(
 /// own original wall_time — the user sees timestamps "go back" then forward
 /// again, which is the cue that this is post-mortem context.
 fn print_failure_block(
+    code: &str,
     msg: &str,
     msg_color: &str,
     dp: &str,
@@ -688,9 +712,9 @@ fn print_failure_block(
         pipe_glyph.to_string()
     };
     if use_color {
-        eprintln!("{gutter_pipe}{TS_CONTINUATION_PAD}{dp}       {msg_color}{msg}{RESET}");
+        eprintln!("{gutter_pipe}{TS_CONTINUATION_PAD}{dp}       {msg_color}{code} {msg}{RESET}");
     } else {
-        eprintln!("{gutter_pipe}{TS_CONTINUATION_PAD}{dp}       {msg}");
+        eprintln!("{gutter_pipe}{TS_CONTINUATION_PAD}{dp}       {code} {msg}");
     }
     // Replayed substeps with ├/╰ rope.
     let total = pending.len();

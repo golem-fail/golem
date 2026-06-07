@@ -2,6 +2,19 @@
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
+/// Return early from a function with a [`golem_events::FailureCode`]-tagged
+/// `anyhow` error. Drop-in for `anyhow::bail!` at sites whose cause maps to a
+/// registry code — the tag rides the error chain to the capture site, where
+/// `extract_code` surfaces it in output.
+#[macro_export]
+macro_rules! fail_code {
+    ($code:expr, $($arg:tt)*) => {
+        return ::core::result::Result::Err(
+            ::golem_events::coded($code, ::anyhow::anyhow!($($arg)*))
+        )
+    };
+}
+
 /// Per-step tree fetch counter. Reset by executor before each step,
 /// incremented by wait_for_settle on each get_hierarchy call.
 static TREE_FETCH_COUNT: AtomicU32 = AtomicU32::new(0);

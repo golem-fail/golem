@@ -278,7 +278,10 @@ impl AndroidDriver {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("adb -s {} {args:?} failed: {stderr}", self.device_serial);
+            return Err(golem_events::coded(
+                golem_events::FailureCode::DeviceDriverOpFailed,
+                anyhow::anyhow!("adb -s {} {args:?} failed: {stderr}", self.device_serial),
+            ));
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
@@ -609,7 +612,10 @@ impl PlatformDriver for AndroidDriver {
             "volume_up" => "VOLUME_UP",
             "volume_down" => "VOLUME_DOWN",
             other => {
-                anyhow::bail!("unsupported button on Android: {other}");
+                return Err(golem_events::coded(
+                    golem_events::FailureCode::ParseMissingParam,
+                    anyhow::anyhow!("unsupported button on Android: {other}"),
+                ));
             }
         };
         self.adb(&["shell", "input", "keyevent", keyevent]).await?;
@@ -826,7 +832,10 @@ impl PlatformDriver for AndroidDriver {
             .await?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("adb forward --remove-all failed: {stderr}");
+            return Err(golem_events::coded(
+                golem_events::FailureCode::DeviceDriverOpFailed,
+                anyhow::anyhow!("adb forward --remove-all failed: {stderr}"),
+            ));
         }
         Ok(())
     }

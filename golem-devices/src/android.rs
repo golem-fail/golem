@@ -303,7 +303,12 @@ pub struct DeviceProfileInfo {
 pub async fn discover_android_system_images() -> anyhow::Result<Vec<SystemImageInfo>> {
     let android_home = std::env::var("ANDROID_HOME")
         .or_else(|_| std::env::var("ANDROID_SDK_ROOT"))
-        .map_err(|_| anyhow::anyhow!("ANDROID_HOME not set"))?;
+        .map_err(|_| {
+            golem_events::coded(
+                golem_events::FailureCode::HostToolchainMissing,
+                anyhow::anyhow!("ANDROID_HOME not set"),
+            )
+        })?;
 
     let images_dir = std::path::PathBuf::from(&android_home).join("system-images");
     if !images_dir.exists() {
@@ -359,13 +364,21 @@ pub async fn discover_android_system_images() -> anyhow::Result<Vec<SystemImageI
 pub async fn discover_android_device_profiles() -> anyhow::Result<Vec<DeviceProfileInfo>> {
     let android_home = std::env::var("ANDROID_HOME")
         .or_else(|_| std::env::var("ANDROID_SDK_ROOT"))
-        .map_err(|_| anyhow::anyhow!("ANDROID_HOME not set"))?;
+        .map_err(|_| {
+            golem_events::coded(
+                golem_events::FailureCode::HostToolchainMissing,
+                anyhow::anyhow!("ANDROID_HOME not set"),
+            )
+        })?;
 
     let avdmanager = std::path::PathBuf::from(&android_home)
         .join("cmdline-tools/latest/bin/avdmanager");
 
     if !avdmanager.exists() {
-        anyhow::bail!("avdmanager not found at {}", avdmanager.display());
+        return Err(golem_events::coded(
+            golem_events::FailureCode::HostToolchainMissing,
+            anyhow::anyhow!("avdmanager not found at {}", avdmanager.display()),
+        ));
     }
 
     let output = tokio::process::Command::new(&avdmanager)

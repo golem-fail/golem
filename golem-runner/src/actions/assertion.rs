@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use golem_driver::PlatformDriver;
 use golem_element::glob::glob_match;
 use golem_parser::Step;
@@ -38,7 +38,8 @@ pub(crate) async fn handle_assert_alert(step: &Step, driver: &dyn PlatformDriver
             if let Some(ref expected_pattern) = step.on_text {
                 let alert_text = alert.text.as_deref().unwrap_or("");
                 if !glob_match(expected_pattern, alert_text) {
-                    bail!(
+                    crate::fail_code!(
+                        golem_events::FailureCode::FlowAssertionMismatch,
                         "assert_alert failed: alert text {:?} does not match pattern {:?}",
                         alert_text,
                         expected_pattern,

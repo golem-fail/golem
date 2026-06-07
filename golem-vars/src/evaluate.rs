@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use rand::Rng;
 
 use crate::generators::generate_simple;
@@ -70,7 +70,10 @@ fn resolve_references(template: &str, vars: &HashMap<String, VarValue>) -> Resul
             }
 
             if !found_close {
-                bail!("unclosed variable reference: ${{{ref_name}");
+                return Err(golem_events::coded(
+                    golem_events::FailureCode::ParseVariable,
+                    anyhow!("unclosed variable reference: ${{{ref_name}"),
+                ));
             }
 
             // Resolve the reference: split on first '.' to get var name and optional path
@@ -96,25 +99,37 @@ fn resolve_var_path(ref_path: &str, vars: &HashMap<String, VarValue>) -> Result<
 
     let var_value = vars
         .get(var_name)
-        .ok_or_else(|| anyhow!("undefined variable: {var_name}"))?;
+        .ok_or_else(|| golem_events::coded(
+            golem_events::FailureCode::ParseVariable,
+            anyhow!("undefined variable: {var_name}"),
+        ))?;
 
     match field_path {
         Some(path) => {
             // Navigate the dot-path within the variable value
             let target = var_value
                 .get_path(path)
-                .ok_or_else(|| anyhow!("path \"{path}\" not found on variable \"{var_name}\""))?;
+                .ok_or_else(|| golem_events::coded(
+                    golem_events::FailureCode::ParseVariable,
+                    anyhow!("path \"{path}\" not found on variable \"{var_name}\""),
+                ))?;
             match target {
                 VarValue::String(s) => Ok(s.clone()),
                 VarValue::Object(_) => {
-                    bail!("path \"{path}\" on variable \"{var_name}\" resolved to an object, not a string")
+                    return Err(golem_events::coded(
+                        golem_events::FailureCode::ParseVariable,
+                        anyhow!("path \"{path}\" on variable \"{var_name}\" resolved to an object, not a string"),
+                    ))
                 }
             }
         }
         None => match var_value {
             VarValue::String(s) => Ok(s.clone()),
             VarValue::Object(_) => {
-                bail!("variable \"{var_name}\" is an object; use dot-path syntax like ${{{var_name}.field}}")
+                return Err(golem_events::coded(
+                    golem_events::FailureCode::ParseVariable,
+                    anyhow!("variable \"{var_name}\" is an object; use dot-path syntax like ${{{var_name}.field}}"),
+                ))
             }
         },
     }
@@ -362,9 +377,10 @@ mod tests {
 
         assert!(result.is_err());
         let err = result.expect_err("should be error");
+        let msg = golem_events::clean_msg(&err);
         assert!(
-            err.to_string().contains("unclosed variable reference"),
-            "expected 'unclosed variable reference' error, got: {err}"
+            msg.contains("unclosed variable reference"),
+            "expected 'unclosed variable reference' error, got: {msg}"
         );
     }
 
@@ -416,9 +432,10 @@ mod tests {
 
         assert!(result.is_err());
         let err = result.expect_err("should be error");
+        let msg = golem_events::clean_msg(&err);
         assert!(
-            err.to_string().contains("is an object"),
-            "expected 'is an object' error, got: {err}"
+            msg.contains("is an object"),
+            "expected 'is an object' error, got: {msg}"
         );
     }
 }

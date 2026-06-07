@@ -190,10 +190,10 @@ impl ReportAccumulator {
                     step.tree_stats = *tree_stats;
                     step.finished_at = Some(event.wall_time);
 
-                    if let golem_events::StepOutcome::Warning(msg) = outcome {
+                    if let golem_events::StepOutcome::Warning { message, .. } = outcome {
                         if let Some(&idx) = self.current_flow_by_device.get(&dev_key) {
                             if let Some(flow) = self.flows.get_mut(idx) {
-                                flow.warnings.push(msg.clone());
+                                flow.warnings.push(message.clone());
                             }
                         }
                     }
@@ -209,7 +209,7 @@ impl ReportAccumulator {
                 self.install_starts
                     .insert((dev_key.clone(), bundle_id.clone()), event.wall_time);
             }
-            EventKind::InstallFinished { app_name, bundle_id, success, duration_ms, exit_code, error, target: _, os_major } => {
+            EventKind::InstallFinished { app_name, bundle_id, success, duration_ms, exit_code, error, code: _, target: _, os_major } => {
                 let started_at = self
                     .install_starts
                     .remove(&(dev_key.clone(), bundle_id.clone()))
@@ -248,11 +248,20 @@ impl ReportAccumulator {
     /// Convert accumulated data into a SuiteReport.
     pub fn into_suite_report(self) -> SuiteReport {
         let flows = self.flows.into_iter().map(|flow| {
+            // First *failed* step's code surfaces on the flow FAIL line. A
+            // warning doesn't fail the flow, so its code must not pre-empt the
+            // fatal step's code on the summary line.
+            let mut first_failure_code: Option<golem_events::FailureCode> = None;
             let step_results = flow.steps.into_iter().map(|s| {
                 let outcome = match s.outcome {
                     Some(golem_events::StepOutcome::Success) => StepOutcome::Success,
-                    Some(golem_events::StepOutcome::Warning(msg)) => StepOutcome::Warning(msg),
-                    Some(golem_events::StepOutcome::Failed(msg)) => StepOutcome::Failed(msg),
+                    Some(golem_events::StepOutcome::Warning { message, code }) => {
+                        StepOutcome::Warning { message, code }
+                    }
+                    Some(golem_events::StepOutcome::Failed { message, code }) => {
+                        first_failure_code.get_or_insert(code);
+                        StepOutcome::Failed { message, code }
+                    }
                     Some(golem_events::StepOutcome::Skipped) => StepOutcome::Skipped,
                     Some(golem_events::StepOutcome::Ignored) => StepOutcome::Skipped,
                     None => StepOutcome::Skipped,
@@ -292,6 +301,7 @@ impl ReportAccumulator {
                 started_at: flow.started_at.map(iso8601_utc),
                 finished_at: flow.finished_at.map(iso8601_utc),
                 repeat: flow.repeat,
+                first_failure_code,
             }
         }).collect();
 
@@ -485,7 +495,7 @@ mod tests {
         }));
         acc.process(&make_event(4, dev, EventKind::StepFinished {
             global_step_index: 1,
-            outcome: golem_events::StepOutcome::Failed("not found".into()),
+            outcome: golem_events::StepOutcome::Failed { message: "not found".into(), code: golem_events::FailureCode::FlowElementNotFound },
             duration_ms: 10000,
             retry_count: 3,
             screenshot_path: Some("/tmp/fail.png".into()),
@@ -508,7 +518,7 @@ mod tests {
         assert_eq!(flow.step_results[0].action, "tap");
         assert_eq!(flow.step_results[1].action, "assert_visible");
         assert!(
-            matches!(flow.step_results[1].outcome, ReportStepOutcome::Failed(ref m) if m == "not found"),
+            matches!(flow.step_results[1].outcome, ReportStepOutcome::Failed { ref message, .. } if message == "not found"),
             "SHALL preserve failure message"
         );
         assert_eq!(flow.step_results[1].retry_count, 3, "SHALL preserve retry_count");
@@ -555,7 +565,7 @@ mod tests {
         }));
         acc.process(&make_event(5, "android", EventKind::StepFinished {
             global_step_index: 0,
-            outcome: golem_events::StepOutcome::Warning("slow".into()),
+            outcome: golem_events::StepOutcome::Warning { message: "slow".into(), code: golem_events::FailureCode::Uncoded },
             duration_ms: 200,
             retry_count: 1,
             screenshot_path: None,
@@ -597,7 +607,7 @@ mod tests {
         }));
         acc.process(&make_event(2, dev, EventKind::StepFinished {
             global_step_index: 0,
-            outcome: golem_events::StepOutcome::Warning("flaky element".into()),
+            outcome: golem_events::StepOutcome::Warning { message: "flaky element".into(), code: golem_events::FailureCode::Uncoded },
             duration_ms: 50,
             retry_count: 0,
             screenshot_path: None,

@@ -16,7 +16,7 @@ pub(crate) async fn handle_open_link(step: &Step, driver: &dyn PlatformDriver) -
         .params
         .get("url")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("open_link action requires 'url' param"))?;
+        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("open_link action requires 'url' param")))?;
     driver.open_url(url).await
 }
 
@@ -47,7 +47,7 @@ pub(crate) async fn handle_bash(step: &Step, vars: &mut VariableStore) -> Result
         .params
         .get("run")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("bash action requires 'run' param"))?;
+        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("bash action requires 'run' param")))?;
 
     let output = tokio::process::Command::new("sh")
         .arg("-c")
@@ -57,7 +57,8 @@ pub(crate) async fn handle_bash(step: &Step, vars: &mut VariableStore) -> Result
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!(
+        crate::fail_code!(
+            golem_events::FailureCode::FlowExternalFailed,
             "Command failed with exit code {}: {}",
             output.status.code().unwrap_or(-1),
             stderr.trim()
@@ -89,11 +90,11 @@ pub(crate) async fn handle_run(
         .params
         .get("script")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("run action requires 'script' param"))?;
+        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("run action requires 'script' param")))?;
 
     // Reject path traversal
     if script.contains("..") {
-        bail!("run action: path traversal ('..') is not allowed in script path");
+        crate::fail_code!(golem_events::FailureCode::ParseMissingParam, "run action: path traversal ('..') is not allowed in script path");
     }
 
     // Resolve the script path
@@ -105,7 +106,8 @@ pub(crate) async fn handle_run(
 
     // Check file exists
     if !script_path.exists() {
-        bail!(
+        crate::fail_code!(
+            golem_events::FailureCode::ParseMissingParam,
             "run action: script not found: {}",
             script_path.display()
         );
@@ -141,7 +143,8 @@ pub(crate) async fn handle_run(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!(
+        crate::fail_code!(
+            golem_events::FailureCode::FlowExternalFailed,
             "Script failed with exit code {}: {}",
             exit_code,
             stderr.trim()
@@ -162,15 +165,15 @@ pub(crate) async fn handle_await_email(step: &Step, vars: &mut VariableStore) ->
         .params
         .get("inbox")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("await_email action requires 'inbox' param"))?;
+        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("await_email action requires 'inbox' param")))?;
 
     // Look up inbox credentials from variable store
     let inbox_val = vars
         .resolve(inbox_name)
         .map_err(|_| {
-            anyhow::anyhow!(
-                "await_email: inbox '{}' not found in variables",
-                inbox_name
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("await_email: inbox '{}' not found in variables", inbox_name),
             )
         })?
         .clone();
@@ -178,24 +181,24 @@ pub(crate) async fn handle_await_email(step: &Step, vars: &mut VariableStore) ->
     let imap_host = inbox_val
         .get_path("imap_host")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("await_email: {inbox_name}.imap_host not found"))?
+        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("await_email: {inbox_name}.imap_host not found")))?
         .to_string();
     let imap_port = inbox_val
         .get_path("imap_port")
         .and_then(|v| v.as_str())
         .and_then(|s| s.parse::<u16>().ok())
         .ok_or_else(|| {
-            anyhow::anyhow!("await_email: {inbox_name}.imap_port not found or invalid")
+            golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("await_email: {inbox_name}.imap_port not found or invalid"))
         })?;
     let user = inbox_val
         .get_path("user")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("await_email: {inbox_name}.user not found"))?
+        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("await_email: {inbox_name}.user not found")))?
         .to_string();
     let pass = inbox_val
         .get_path("pass")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("await_email: {inbox_name}.pass not found"))?
+        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("await_email: {inbox_name}.pass not found")))?
         .to_string();
 
     let to_filter = step.params.get("to").and_then(|v| v.as_str());
@@ -213,7 +216,8 @@ pub(crate) async fn handle_await_email(step: &Step, vars: &mut VariableStore) ->
     // Filter by `to` if specified
     if let Some(to) = to_filter {
         if !glob_match(to, &email.to) {
-            bail!(
+            crate::fail_code!(
+                golem_events::FailureCode::FlowExternalFailed,
                 "await_email: email 'to' field {:?} does not match filter {:?}",
                 email.to,
                 to,
@@ -227,7 +231,7 @@ pub(crate) async fn handle_await_email(step: &Step, vars: &mut VariableStore) ->
         for (key, pattern_val) in extract_table {
             if let Some(pattern_str) = pattern_val.as_str() {
                 let re = Regex::new(pattern_str).map_err(|e| {
-                    anyhow::anyhow!("await_email: invalid regex for '{key}': {e}")
+                    golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("await_email: invalid regex for '{key}': {e}"))
                 })?;
                 if let Some(caps) = re.captures(&email.body) {
                     let captured = caps
@@ -270,13 +274,13 @@ pub(crate) async fn handle_load_fixture(
         .params
         .get("fixture")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("load_fixture action requires 'fixture' param"))?;
+        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("load_fixture action requires 'fixture' param")))?;
 
     let namespace = step
         .params
         .get("as")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("load_fixture action requires 'as' param"))?;
+        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("load_fixture action requires 'as' param")))?;
 
     let mut rng = ctx.rng.lock().map_err(|e| anyhow::anyhow!("rng lock: {e}"))?;
 
@@ -296,7 +300,7 @@ pub(crate) async fn handle_http(step: &Step, vars: &mut VariableStore, method: &
         .params
         .get("url")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("{} action requires 'url' param", step.action))?;
+        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("{} action requires 'url' param", step.action)))?;
 
     let client = reqwest::Client::new();
 
@@ -332,7 +336,8 @@ pub(crate) async fn handle_http(step: &Step, vars: &mut VariableStore, method: &
     let body = response.text().await?;
 
     if !status.is_success() {
-        bail!(
+        crate::fail_code!(
+            golem_events::FailureCode::FlowExternalFailed,
             "HTTP {} {} returned status {}: {}",
             method,
             url,
@@ -354,7 +359,7 @@ pub(crate) fn handle_fail(step: &Step) -> Result<()> {
         .on_text
         .as_deref()
         .unwrap_or("Flow failed (no message provided)");
-    bail!("{}", message)
+    crate::fail_code!(golem_events::FailureCode::FlowExplicitFail, "{}", message)
 }
 
 /// Dismiss the current alert/dialog.
@@ -396,7 +401,7 @@ pub(crate) async fn handle_accept_alert(
         if let Some(alert) = golem_driver::common::find_alert(&root) {
             let buttons = golem_driver::common::find_alert_buttons(&alert);
             if buttons.is_empty() {
-                bail!("accept_alert failed: no buttons found in alert");
+                crate::fail_code!(golem_events::FailureCode::FlowAlertInteraction, "accept_alert failed: no buttons found in alert");
             }
             // Last button is the positive action (OK, Yes, Open).
             let btn = &buttons[buttons.len() - 1];
@@ -483,7 +488,7 @@ pub(crate) async fn handle_dismiss_alert(
         if let Some(alert) = golem_driver::common::find_alert(&root) {
             let buttons = golem_driver::common::find_alert_buttons(&alert);
             if buttons.is_empty() {
-                bail!("dismiss_alert failed: no buttons found in alert");
+                crate::fail_code!(golem_events::FailureCode::FlowAlertInteraction, "dismiss_alert failed: no buttons found in alert");
             }
             // First button is the negative action (Cancel, No).
             let btn = &buttons[0];

@@ -31,7 +31,10 @@ fn socket_path() -> PathBuf {
 pub async fn try_connect() -> Result<UnixStream> {
     let path = socket_path();
     if !path.exists() {
-        anyhow::bail!("no socket at {}", path.display());
+        return Err(golem_events::coded(
+            golem_events::FailureCode::HostOrchestratorIpc,
+            anyhow::anyhow!("no socket at {}", path.display()),
+        ));
     }
 
     let stream = UnixStream::connect(&path)
@@ -54,7 +57,10 @@ pub async fn try_connect() -> Result<UnixStream> {
         .context("failed to read pong")?;
 
     if !line.contains("pong") {
-        anyhow::bail!("unexpected response to ping: {line}");
+        return Err(golem_events::coded(
+            golem_events::FailureCode::HostOrchestratorIpc,
+            anyhow::anyhow!("unexpected response to ping: {line}"),
+        ));
     }
 
     // Reconnect since we consumed the stream in the ping check
@@ -536,7 +542,10 @@ pub async fn submit_and_wait(
             .context("lost connection to orchestrator")?;
 
         if line.is_empty() {
-            anyhow::bail!("orchestrator disconnected unexpectedly");
+            return Err(golem_events::coded(
+                golem_events::FailureCode::HostOrchestratorIpc,
+                anyhow::anyhow!("orchestrator disconnected unexpectedly"),
+            ));
         }
 
         let response: serde_json::Value = serde_json::from_str(line.trim())
@@ -585,7 +594,10 @@ pub async fn submit_and_wait(
             }
             Some("error") => {
                 let msg = response["message"].as_str().unwrap_or("unknown error");
-                anyhow::bail!("Orchestrator error: {msg}");
+                return Err(golem_events::coded(
+                    golem_events::FailureCode::HostOrchestratorIpc,
+                    anyhow::anyhow!("Orchestrator error: {msg}"),
+                ));
             }
             _ => {
                 // Ignore unknown message types for forward compatibility.

@@ -9,7 +9,7 @@ mod media;
 #[cfg(test)]
 mod test_helpers;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use golem_driver::PlatformDriver;
 use golem_parser::{AppConfig, Step};
 use golem_vars::VariableStore;
@@ -85,7 +85,7 @@ pub async fn execute_action(
         "http_put" => handle_http(step, vars, "PUT").await,
         "http_patch" => handle_http(step, vars, "PATCH").await,
         "http_delete" => handle_http(step, vars, "DELETE").await,
-        _ => bail!("Unknown action: {}", action),
+        _ => crate::fail_code!(golem_events::FailureCode::ParseUnknownAction, "Unknown action: {}", action),
     }
 }
 
@@ -110,8 +110,8 @@ mod tests {
         let step = make_step("fly_to_moon");
 
         let result = execute_action(&step, &driver, &mut vars, &ctx, &[]).await;
-        assert!(result.is_err());
-        let err_msg = format!("{}", result.expect_err("should be error"));
+        let err = result.expect_err("should be error");
+        let err_msg = format!("{err}");
         assert!(
             err_msg.contains("Unknown action"),
             "error should mention unknown action, got: {err_msg}"
@@ -119,6 +119,11 @@ mod tests {
         assert!(
             err_msg.contains("fly_to_moon"),
             "error should mention the action name, got: {err_msg}"
+        );
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::ParseUnknownAction),
+            "unknown action SHALL carry P400"
         );
     }
 

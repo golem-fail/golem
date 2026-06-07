@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener as AsyncTcpListener;
 
@@ -284,5 +284,8 @@ fn find_free_port_in_range(start: u16, end: u16) -> Result<(std::net::TcpListene
             return Ok((listener, port));
         }
     }
-    bail!("No free port in range {start}-{end}")
+    Err(golem_events::coded(
+        golem_events::FailureCode::HostPortsExhausted,
+        anyhow::anyhow!("No free port in range {start}-{end}"),
+    ))
 }

@@ -131,7 +131,7 @@ mod tests {
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
-            outcome: StepOutcome::Failed(msg.to_string()),
+            outcome: StepOutcome::Failed { message: msg.to_string(), code: golem_events::FailureCode::Uncoded },
             duration_ms: ms,
             retry_count: 0,
             screenshot_path: None,
@@ -146,6 +146,7 @@ mod tests {
         SuiteReport {
             flows: vec![
                 FlowReport {
+                    first_failure_code: None,
                     flow_name: "login_flow".to_string(),
                     success: true,
                     step_results: vec![
@@ -167,6 +168,7 @@ mod tests {
                     finished_at: None,
                 },
                 FlowReport {
+                    first_failure_code: None,
                     flow_name: "signup_flow".to_string(),
                     success: false,
                     step_results: vec![

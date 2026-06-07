@@ -236,9 +236,9 @@ pub enum StepOutcome {
     /// Step completed successfully.
     Success,
     /// Step completed with a warning.
-    Warning(String),
+    Warning { message: String, code: golem_events::FailureCode },
     /// Step failed with an error message.
-    Failed(String),
+    Failed { message: String, code: golem_events::FailureCode },
     /// Step was skipped.
     Skipped,
 }
@@ -313,6 +313,9 @@ pub struct FlowReport {
     /// when the suite was fanned out across multiple runs. Renderers
     /// and the flake-summary tally use this to partition flows by run.
     pub repeat: Option<golem_events::RepeatContext>,
+    /// Failure code of the first failed/warned step, surfaced on the
+    /// flow-level FAIL line. `None` for passing flows.
+    pub first_failure_code: Option<golem_events::FailureCode>,
 }
 
 /// One screen recording produced by a recorded block iteration.
@@ -392,6 +395,7 @@ mod tests {
 
     fn flow_with(success: bool, skipped_reason: Option<String>) -> FlowReport {
         FlowReport {
+            first_failure_code: None,
             flow_name: "f".into(),
             success,
             step_results: Vec::new(),

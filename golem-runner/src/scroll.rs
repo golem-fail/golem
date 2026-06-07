@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use golem_driver::{Direction, PlatformDriver};
 use golem_element::selector::{find_elements, Selector};
 use golem_element::{filter_viewport, Element, FindResult, Viewport};
@@ -503,7 +503,8 @@ pub async fn scroll_to_element(
 
     loop {
         if deadline.is_some_and(|d| Instant::now() >= d) {
-            bail!(
+            crate::fail_code!(
+                golem_events::FailureCode::FlowElementOffscreen,
                 "Scroll timed out after {}ms ({scroll_attempt} swipes attempted): \
                  text={:?}, id={:?}",
                 timeout_ms.unwrap_or(0),

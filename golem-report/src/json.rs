@@ -18,6 +18,8 @@ struct JsonStep {
     target: String,
     outcome: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     warning: Option<String>,
@@ -37,6 +39,8 @@ struct JsonStep {
 struct JsonFlow {
     name: String,
     success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    code: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     skipped_reason: Option<String>,
     duration_ms: u64,
@@ -145,11 +149,21 @@ struct JsonFlakeEntry {
 // ── Conversion helpers ──────────────────────────────────────────────
 
 fn step_to_json(step: &StepReport) -> JsonStep {
-    let (outcome, error, warning) = match &step.outcome {
-        StepOutcome::Success => ("success".to_string(), None, None),
-        StepOutcome::Warning(msg) => ("warning".to_string(), None, Some(msg.clone())),
-        StepOutcome::Failed(msg) => ("failed".to_string(), Some(msg.clone()), None),
-        StepOutcome::Skipped => ("skipped".to_string(), None, None),
+    let (outcome, code, error, warning) = match &step.outcome {
+        StepOutcome::Success => ("success".to_string(), None, None, None),
+        StepOutcome::Warning { message, code } => (
+            "warning".to_string(),
+            Some(code.render(golem_events::Severity::Warning)),
+            None,
+            Some(message.clone()),
+        ),
+        StepOutcome::Failed { message, code } => (
+            "failed".to_string(),
+            Some(code.render(golem_events::Severity::Error)),
+            Some(message.clone()),
+            None,
+        ),
+        StepOutcome::Skipped => ("skipped".to_string(), None, None, None),
     };
 
     JsonStep {
@@ -158,6 +172,7 @@ fn step_to_json(step: &StepReport) -> JsonStep {
         action: step.action.clone(),
         target: step.target.clone(),
         outcome,
+        code,
         error,
         warning,
         duration_ms: step.duration_ms,
@@ -189,6 +204,10 @@ fn flow_to_json(report: &FlowReport) -> JsonFlow {
     JsonFlow {
         name: report.flow_name.clone(),
         success: report.success,
+        code: report
+            .first_failure_code
+            .filter(|_| !report.success)
+            .map(|c| c.render(golem_events::Severity::Error)),
         skipped_reason: report.skipped_reason.clone(),
         duration_ms: report.duration_ms,
         started_at: report.started_at.clone(),
@@ -311,7 +330,7 @@ mod tests {
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
-            outcome: StepOutcome::Failed(msg.to_string()),
+            outcome: StepOutcome::Failed { message: msg.to_string(), code: golem_events::FailureCode::Uncoded },
             duration_ms: ms,
             retry_count: 0,
             screenshot_path: None,
@@ -330,7 +349,7 @@ mod tests {
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
-            outcome: StepOutcome::Warning(msg.to_string()),
+            outcome: StepOutcome::Warning { message: msg.to_string(), code: golem_events::FailureCode::Uncoded },
             duration_ms: ms,
             retry_count: 0,
             screenshot_path: None,
@@ -362,6 +381,7 @@ mod tests {
 
     fn sample_flow() -> FlowReport {
         FlowReport {
+            first_failure_code: None,
             flow_name: "login_flow".to_string(),
             success: false,
             step_results: vec![
@@ -391,6 +411,7 @@ mod tests {
         SuiteReport {
             flows: vec![
                 FlowReport {
+                    first_failure_code: None,
                     flow_name: "login_flow".to_string(),
                     success: true,
                     step_results: vec![
@@ -412,6 +433,7 @@ mod tests {
                     finished_at: None,
                 },
                 FlowReport {
+                    first_failure_code: None,
                     flow_name: "signup_flow".to_string(),
                     success: true,
                     step_results: vec![success_step("launch", "", 80)],
@@ -430,6 +452,7 @@ mod tests {
                     finished_at: None,
                 },
                 FlowReport {
+                    first_failure_code: None,
                     flow_name: "checkout_flow".to_string(),
                     success: true,
                     step_results: vec![success_step("launch", "", 90)],
@@ -448,6 +471,7 @@ mod tests {
                     finished_at: None,
                 },
                 FlowReport {
+                    first_failure_code: None,
                     flow_name: "broken_flow".to_string(),
                     success: false,
                     step_results: vec![
@@ -535,11 +559,45 @@ mod tests {
         assert!(failed.get("warning").is_none(), "failed step has no warning field");
     }
 
+    #[test]
+    fn failed_step_and_flow_serialize_failure_code() {
+        let mut step = failed_step("assert_visible", "Welcome", 10012, "timed out");
+        step.outcome = StepOutcome::Failed {
+            message: "timed out".to_string(),
+            code: golem_events::FailureCode::FlowStepTimeout,
+        };
+        let report = FlowReport {
+            first_failure_code: Some(golem_events::FailureCode::FlowStepTimeout),
+            flow_name: "timeout_flow".to_string(),
+            success: false,
+            step_results: vec![step],
+            warnings: vec![],
+            duration_ms: 10012,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            os_major: None,
+            perf_snapshots: vec![],
+            skipped_reason: None,
+            covered_axes: Vec::new(),
+            recordings: Vec::new(),
+            repeat: None,
+            started_at: None,
+            finished_at: None,
+        };
+        let json_str = format_flow_json(&report).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        assert_eq!(v["steps"][0]["code"], "EF408", "step SHALL carry its failure code");
+        assert_eq!(v["code"], "EF408", "flow SHALL carry first failure code");
+    }
+
     // 5. Warning step includes warning message ------------------------
 
     #[test]
     fn warning_step_includes_warning() {
         let report = FlowReport {
+            first_failure_code: None,
             flow_name: "warn_flow".to_string(),
             success: true,
             step_results: vec![warning_step(
@@ -635,6 +693,7 @@ mod tests {
     #[test]
     fn none_fields_omitted() {
         let report = FlowReport {
+            first_failure_code: None,
             flow_name: "minimal_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 50)],
@@ -692,6 +751,7 @@ mod tests {
     #[test]
     fn skipped_step_outcome() {
         let report = FlowReport {
+            first_failure_code: None,
             flow_name: "skip_flow".to_string(),
             success: true,
             step_results: vec![skipped_step("tap", "Cancel")],
@@ -751,6 +811,7 @@ mod tests {
     #[test]
     fn json_includes_perf_snapshots() {
         let report = FlowReport {
+            first_failure_code: None,
             flow_name: "perf_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],
@@ -785,6 +846,7 @@ mod tests {
     #[test]
     fn json_omits_perf_when_empty() {
         let report = FlowReport {
+            first_failure_code: None,
             flow_name: "no_perf_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],

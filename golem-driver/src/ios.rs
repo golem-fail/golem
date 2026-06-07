@@ -180,7 +180,10 @@ impl IosDriver {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("xcrun simctl {args:?} failed: {stderr}");
+            return Err(golem_events::coded(
+                golem_events::FailureCode::DeviceDriverOpFailed,
+                anyhow::anyhow!("xcrun simctl {args:?} failed: {stderr}"),
+            ));
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())

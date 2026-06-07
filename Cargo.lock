@@ -571,7 +571,7 @@ dependencies = [
 
 [[package]]
 name = "golem-cli"
-version = "0.6.23"
+version = "0.6.24"
 dependencies = [
  "anyhow",
  "chrono",
@@ -601,13 +601,14 @@ dependencies = [
 
 [[package]]
 name = "golem-common"
-version = "0.6.23"
+version = "0.6.24"
 
 [[package]]
 name = "golem-devices"
-version = "0.6.23"
+version = "0.6.24"
 dependencies = [
  "anyhow",
+ "golem-events",
  "libc",
  "serde",
  "serde_json",
@@ -617,13 +618,14 @@ dependencies = [
 
 [[package]]
 name = "golem-driver"
-version = "0.6.23"
+version = "0.6.24"
 dependencies = [
  "anyhow",
  "async-trait",
  "futures-util",
  "golem-common",
  "golem-element",
+ "golem-events",
  "minifier",
  "plist",
  "reqwest",
@@ -638,7 +640,7 @@ dependencies = [
 
 [[package]]
 name = "golem-element"
-version = "0.6.23"
+version = "0.6.24"
 dependencies = [
  "serde",
  "serde_json",
@@ -647,7 +649,7 @@ dependencies = [
 
 [[package]]
 name = "golem-email"
-version = "0.6.23"
+version = "0.6.24"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -661,8 +663,9 @@ dependencies = [
 
 [[package]]
 name = "golem-events"
-version = "0.6.23"
+version = "0.6.24"
 dependencies = [
+ "anyhow",
  "serde",
  "serde_json",
  "tokio",
@@ -670,10 +673,11 @@ dependencies = [
 
 [[package]]
 name = "golem-orchestrator"
-version = "0.6.23"
+version = "0.6.24"
 dependencies = [
  "anyhow",
  "golem-devices",
+ "golem-events",
  "golem-parser",
  "golem-runner",
  "serde",
@@ -683,7 +687,7 @@ dependencies = [
 
 [[package]]
 name = "golem-parser"
-version = "0.6.23"
+version = "0.6.24"
 dependencies = [
  "anyhow",
  "serde",
@@ -694,7 +698,7 @@ dependencies = [
 
 [[package]]
 name = "golem-report"
-version = "0.6.23"
+version = "0.6.24"
 dependencies = [
  "anyhow",
  "chrono",
@@ -707,7 +711,7 @@ dependencies = [
 
 [[package]]
 name = "golem-runner"
-version = "0.6.23"
+version = "0.6.24"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -736,10 +740,11 @@ dependencies = [
 
 [[package]]
 name = "golem-vars"
-version = "0.6.23"
+version = "0.6.24"
 dependencies = [
  "anyhow",
  "chrono",
+ "golem-events",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "serde",

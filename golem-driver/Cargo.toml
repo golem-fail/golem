@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 golem-element = { path = "../golem-element" }
 golem-common = { path = "../golem-common" }
+golem-events = { path = "../golem-events" }
 reqwest = { workspace = true, features = ["json"] }
 anyhow = { workspace = true }
 thiserror = { workspace = true }

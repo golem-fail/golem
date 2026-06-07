@@ -2,7 +2,10 @@
 #![deny(clippy::unwrap_used)]
 
 pub mod channel;
+pub mod code;
 pub mod emitter;
+
+pub use code::{clean_msg, coded, extract_code, CodeExt, CodedError, Domain, FailureCode, Severity};
 
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
@@ -134,8 +137,8 @@ fn unix_nanos_to_system_time(nanos: u128) -> SystemTime {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StepOutcome {
     Success,
-    Warning(String),
-    Failed(String),
+    Warning { message: String, code: FailureCode },
+    Failed { message: String, code: FailureCode },
     Skipped,
     Ignored,
 }
@@ -284,6 +287,8 @@ pub enum EventKind {
         exit_code: Option<i32>,
         /// Error detail when failed (timeout reason, exit code, or tail of stderr).
         error: Option<String>,
+        /// Failure code when failed (A-domain).
+        code: Option<FailureCode>,
         /// Pre-formatted target (same as InstallStarted.target).
         target: String,
         /// OS major version (same as InstallStarted.os_major).

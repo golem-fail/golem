@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use golem_driver::PlatformDriver;
 use golem_parser::{Block, FlowFile, FlowOptions};
 use rand::SeedableRng;
@@ -48,6 +48,8 @@ pub struct FlowResult {
     pub failed_action: Option<String>,
     /// The error message from the failed step.
     pub failed_reason: Option<String>,
+    /// The failure code of the failed step.
+    pub failed_code: Option<golem_events::FailureCode>,
     /// True if this flow was aborted because another device failed (barrier).
     pub barrier_aborted: bool,
     /// Performance snapshots captured at block boundaries.
@@ -305,6 +307,7 @@ pub async fn execute_flow<'a>(
                     failed_block: block.name.clone(),
                     failed_action: child_result.failed_action,
                     failed_reason: child_result.failed_reason,
+                    failed_code: child_result.failed_code,
                     barrier_aborted: child_result.barrier_aborted,
                     perf_snapshots: vec![],
                     recordings: recordings.clone(),
@@ -387,10 +390,16 @@ pub async fn execute_flow<'a>(
             step_count += 1;
             ctx.global_step_index = step_count;
             if step_count > max_steps {
-                bail!("max_steps ({max_steps}) exceeded at step {step_count}");
+                return Err(golem_events::coded(
+                    golem_events::FailureCode::FlowMaxSteps,
+                    anyhow::anyhow!("max_steps ({max_steps}) exceeded at step {step_count}"),
+                ));
             }
             if start_time.elapsed() > max_runtime {
-                bail!("max_runtime exceeded after {:?}", start_time.elapsed());
+                return Err(golem_events::coded(
+                    golem_events::FailureCode::FlowMaxRuntime,
+                    anyhow::anyhow!("max_runtime exceeded after {:?}", start_time.elapsed()),
+                ));
             }
             // Check failure barrier before executing the step
             if let Some(b) = barrier {
@@ -430,6 +439,7 @@ pub async fn execute_flow<'a>(
                         failed_block: block.name.clone(),
                         failed_action: Some(step.action.clone()),
                         failed_reason: Some("aborted: another device failed".to_string()),
+                        failed_code: None,
                         barrier_aborted: true,
                         perf_snapshots: vec![],
                         recordings: recordings.clone(),
@@ -496,16 +506,19 @@ pub async fn execute_flow<'a>(
                         tree_stats: crate::take_step_tree_stats(),
                     });
                 }
-                Ok(StepOutcome::Warning(msg)) => {
+                Ok(StepOutcome::Warning { message, code }) => {
                     ctx.emit(golem_events::EventKind::StepFinished {
                         global_step_index: step_count,
-                        outcome: golem_events::StepOutcome::Warning(msg.clone()),
+                        outcome: golem_events::StepOutcome::Warning {
+                            message: message.clone(),
+                            code,
+                        },
                         duration_ms: step_start.elapsed().as_millis() as u64,
                         retry_count: 0,
                         screenshot_path: None,
                         tree_stats: crate::take_step_tree_stats(),
                     });
-                    warnings.push(msg);
+                    warnings.push(message);
                 }
                 Ok(StepOutcome::Ignored) => {
                     ctx.emit(golem_events::EventKind::StepFinished {
@@ -518,9 +531,15 @@ pub async fn execute_flow<'a>(
                     });
                 }
                 Err(e) => {
+                    let code = golem_events::extract_code(&e)
+                        .unwrap_or(golem_events::FailureCode::Uncoded);
+                    let message = golem_events::clean_msg(&e);
                     ctx.emit(golem_events::EventKind::StepFinished {
                         global_step_index: step_count,
-                        outcome: golem_events::StepOutcome::Failed(format!("{e:#}")),
+                        outcome: golem_events::StepOutcome::Failed {
+                            message: message.clone(),
+                            code,
+                        },
                         duration_ms: step_start.elapsed().as_millis() as u64,
                         retry_count: 0,
                         screenshot_path: None,
@@ -567,7 +586,8 @@ pub async fn execute_flow<'a>(
                         failed_step: Some(step_idx),
                         failed_block: block.name.clone(),
                         failed_action: Some(step.action.clone()),
-                        failed_reason: Some(format!("{e:#}")),
+                        failed_reason: Some(message),
+                        failed_code: Some(code),
                         barrier_aborted: false,
                         perf_snapshots: vec![],
                         recordings: recordings.clone(),
@@ -641,6 +661,7 @@ pub async fn execute_flow<'a>(
                             failed_block: block.name.clone(),
                             failed_action: None,
                             failed_reason: Some(reason),
+                            failed_code: None,
                             barrier_aborted: false,
                             perf_snapshots,
                             recordings,
@@ -675,6 +696,7 @@ pub async fn execute_flow<'a>(
         failed_block: None,
         failed_action: None,
         failed_reason: None,
+        failed_code: None,
         barrier_aborted: false,
         perf_snapshots,
         recordings,
@@ -921,6 +943,7 @@ pub async fn execute_flow_with_data<'a>(
         failed_block: None,
         failed_action: None,
         failed_reason: None,
+        failed_code: None,
         barrier_aborted: false,
         perf_snapshots: vec![],
         recordings: Vec::new(),
@@ -934,7 +957,10 @@ fn find_block_index(blocks: &[Block], name: &str) -> Result<usize> {
             return Ok(i);
         }
     }
-    bail!("Block not found: {name}");
+    Err(golem_events::coded(
+        golem_events::FailureCode::ParseMissingReference,
+        anyhow::anyhow!("Block not found: {name}"),
+    ))
 }
 
 #[cfg(test)]

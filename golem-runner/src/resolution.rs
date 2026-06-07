@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use golem_driver::PlatformDriver;
 use golem_element::selector::{find_elements, AnchorSelector, Selector};
 use golem_element::{filter_viewport, Element, Viewport};
@@ -37,7 +37,8 @@ pub(crate) async fn get_hierarchy_bounded(
 ) -> anyhow::Result<(Element, golem_driver::common::HierarchyMeta)> {
     match tokio::time::timeout(HIERARCHY_FETCH_TIMEOUT, driver.get_hierarchy()).await {
         Ok(r) => r,
-        Err(_) => anyhow::bail!(
+        Err(_) => crate::fail_code!(
+            golem_events::FailureCode::DeviceCompanionWedged,
             "hierarchy fetch timed out after {}ms (companion likely wedged)",
             HIERARCHY_FETCH_TIMEOUT.as_millis()
         ),
@@ -56,7 +57,8 @@ pub(crate) async fn swipe_coords_bounded(
 ) -> anyhow::Result<()> {
     match tokio::time::timeout(SWIPE_TIMEOUT, driver.swipe_coords(fx, fy, tx, ty)).await {
         Ok(r) => r,
-        Err(_) => anyhow::bail!(
+        Err(_) => crate::fail_code!(
+            golem_events::FailureCode::DeviceCompanionWedged,
             "swipe timed out after {}ms (companion likely wedged)",
             SWIPE_TIMEOUT.as_millis()
         ),
@@ -68,7 +70,8 @@ pub(crate) async fn screenshot_bounded(
 ) -> anyhow::Result<golem_driver::ScreenshotResult> {
     match tokio::time::timeout(SCREENSHOT_FETCH_TIMEOUT, driver.screenshot()).await {
         Ok(r) => r,
-        Err(_) => anyhow::bail!(
+        Err(_) => crate::fail_code!(
+            golem_events::FailureCode::DeviceCompanionWedged,
             "screenshot timed out after {}ms (companion likely wedged)",
             SCREENSHOT_FETCH_TIMEOUT.as_millis()
         ),
@@ -659,7 +662,8 @@ pub async fn resolve_element(
     if !full_results.is_empty() {
         let offscreen = &full_results[0].element;
         let b = &offscreen.bounds;
-        bail!(
+        crate::fail_code!(
+            golem_events::FailureCode::FlowElementOffscreen,
             "Element not in viewport after {elapsed_secs:.1}s (text={:?}, id={:?}): \
              found off-screen at ({}, {}), viewport {}x{}. \
              Use auto_scroll = true to scroll to off-screen elements.",
@@ -672,7 +676,8 @@ pub async fn resolve_element(
         );
     }
 
-    bail!(
+    crate::fail_code!(
+        golem_events::FailureCode::FlowElementNotFound,
         "No element found after {elapsed_secs:.1}s: text={:?}, id={:?}",
         selector.text,
         selector.accessibility_label,
@@ -692,7 +697,8 @@ pub async fn resolve_element_full_tree(
     let results = find_elements(&root, &selector);
 
     if results.is_empty() {
-        bail!(
+        crate::fail_code!(
+            golem_events::FailureCode::FlowElementNotFound,
             "No element found matching selector: text={:?}, id={:?}",
             selector.text,
             selector.accessibility_label,
@@ -736,7 +742,8 @@ pub async fn poll_for_absence(
 
         if Instant::now() >= deadline {
             let elapsed_secs = timeout_ms as f64 / 1000.0;
-            bail!(
+            crate::fail_code!(
+                golem_events::FailureCode::FlowUnexpectedlyPresent,
                 "Expected no element matching selector after {elapsed_secs:.1}s, \
                  but found {}: text={:?}, id={:?}",
                 results.len(),

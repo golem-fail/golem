@@ -2,7 +2,7 @@ mod address;
 mod credit_card;
 mod person;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use rand::Rng;
 
 use crate::{GeneratorDef, VarValue};
@@ -19,7 +19,10 @@ pub fn generate_structured(def: &GeneratorDef, rng: &mut impl Rng) -> Result<Var
         "person" => person::generate_person(&def.params, rng),
         "address" => address::generate_address(&def.params, rng),
         "credit_card" => credit_card::generate_credit_card(&def.params, rng),
-        _ => bail!("Unknown structured generator: {}", def.name),
+        _ => Err(golem_events::coded(
+            golem_events::FailureCode::ParseVariable,
+            anyhow::anyhow!("Unknown structured generator: {}", def.name),
+        )),
     }
 }
 
@@ -52,9 +55,10 @@ mod tests {
         let result = generate_structured(&def("nonexistent"), &mut rng);
         assert!(result.is_err());
         let err = result.expect_err("should be error");
+        let msg = golem_events::clean_msg(&err);
         assert!(
-            err.to_string().contains("Unknown structured generator"),
-            "expected 'Unknown structured generator' error, got: {err}"
+            msg.contains("Unknown structured generator"),
+            "expected 'Unknown structured generator' error, got: {msg}"
         );
     }
 }

@@ -107,7 +107,7 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
     let failures = report
         .step_results
         .iter()
-        .filter(|s| matches!(s.outcome, StepOutcome::Failed(_)))
+        .filter(|s| matches!(s.outcome, StepOutcome::Failed { .. }))
         .count();
     let errors = 0;
     let time = ms_to_secs(report.duration_ms);
@@ -152,8 +152,9 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
                     let _ = writeln!(out, "    </testcase>");
                 }
             }
-            StepOutcome::Warning(msg) => {
-                let escaped_msg = xml_escape(msg);
+            StepOutcome::Warning { message, code } => {
+                let rendered = code.render(golem_events::Severity::Warning);
+                let escaped_msg = xml_escape(&format!("[{rendered}] {message}"));
                 let _ = writeln!(
                     out,
                     "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\"{step_ts}>"
@@ -166,8 +167,9 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
                 let _ = writeln!(out, "      <system-out>{combined}</system-out>");
                 let _ = writeln!(out, "    </testcase>");
             }
-            StepOutcome::Failed(msg) => {
-                let escaped_msg = xml_escape(msg);
+            StepOutcome::Failed { message, code } => {
+                let rendered = code.render(golem_events::Severity::Error);
+                let escaped_msg = xml_escape(message);
                 let _ = writeln!(
                     out,
                     "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\"{step_ts}>"
@@ -179,7 +181,7 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
                 };
                 let _ = writeln!(
                     out,
-                    "      <failure message=\"{escaped_msg}\" type=\"AssertionError\">"
+                    "      <failure message=\"{escaped_msg}\" type=\"{rendered}\">"
                 );
                 let _ = writeln!(out, "{failure_detail}");
                 let _ = writeln!(out, "      </failure>");
@@ -285,7 +287,7 @@ pub fn format_suite_junit(report: &SuiteReport) -> String {
         .map(|f| {
             f.step_results
                 .iter()
-                .filter(|s| matches!(s.outcome, StepOutcome::Failed(_)))
+                .filter(|s| matches!(s.outcome, StepOutcome::Failed { .. }))
                 .count()
         })
         .sum();
@@ -423,7 +425,7 @@ mod tests {
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
-            outcome: StepOutcome::Failed(msg.to_string()),
+            outcome: StepOutcome::Failed { message: msg.to_string(), code: golem_events::FailureCode::Uncoded },
             duration_ms: ms,
             retry_count: 0,
             screenshot_path: None,
@@ -442,7 +444,7 @@ mod tests {
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
-            outcome: StepOutcome::Warning(msg.to_string()),
+            outcome: StepOutcome::Warning { message: msg.to_string(), code: golem_events::FailureCode::Uncoded },
             duration_ms: ms,
             retry_count: 0,
             screenshot_path: None,
@@ -474,6 +476,7 @@ mod tests {
 
     fn sample_flow() -> FlowReport {
         FlowReport {
+            first_failure_code: None,
             flow_name: "login_flow".to_string(),
             success: false,
             step_results: vec![
@@ -504,6 +507,7 @@ mod tests {
         SuiteReport {
             flows: vec![
                 FlowReport {
+                    first_failure_code: None,
                     flow_name: "login_flow".to_string(),
                     success: true,
                     step_results: vec![
@@ -525,6 +529,7 @@ mod tests {
                     finished_at: None,
                 },
                 FlowReport {
+                    first_failure_code: None,
                     flow_name: "signup_flow".to_string(),
                     success: false,
                     step_results: vec![
@@ -628,8 +633,8 @@ mod tests {
             "failure should have message attribute"
         );
         assert!(
-            xml.contains("type=\"AssertionError\""),
-            "failure should have type attribute"
+            xml.contains("type=\"EF000\""),
+            "failure should have type attribute carrying the failure code"
         );
         assert!(
             xml.contains("Step failed:"),
@@ -641,6 +646,39 @@ mod tests {
         );
     }
 
+    #[test]
+    fn failed_step_failure_type_carries_code() {
+        let mut step = failed_step("assert_visible", "Welcome", 10012, "timed out");
+        step.outcome = StepOutcome::Failed {
+            message: "timed out".to_string(),
+            code: golem_events::FailureCode::FlowStepTimeout,
+        };
+        let flow = FlowReport {
+            first_failure_code: Some(golem_events::FailureCode::FlowStepTimeout),
+            flow_name: "timeout_flow".to_string(),
+            success: false,
+            step_results: vec![step],
+            warnings: vec![],
+            duration_ms: 10012,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            os_major: None,
+            perf_snapshots: vec![],
+            skipped_reason: None,
+            covered_axes: Vec::new(),
+            recordings: Vec::new(),
+            repeat: None,
+            started_at: None,
+            finished_at: None,
+        };
+        let xml = format_flow_junit(&flow);
+        assert!(
+            xml.contains("type=\"EF408\""),
+            "failure type SHALL carry the failure code"
+        );
+    }
+
     // 5. Warning step has system-out with message ---------------------
 
     #[test]
@@ -648,7 +686,7 @@ mod tests {
         let flow = sample_flow();
         let xml = format_flow_junit(&flow);
         assert!(
-            xml.contains("<system-out>element not found</system-out>"),
+            xml.contains("<system-out>[WF000] element not found</system-out>"),
             "warning step should have <system-out> with message"
         );
     }
@@ -658,6 +696,7 @@ mod tests {
     #[test]
     fn skipped_step_has_skipped_element() {
         let flow = FlowReport {
+            first_failure_code: None,
             flow_name: "skip_flow".to_string(),
             success: true,
             step_results: vec![skipped_step("tap", "Cancel")],
@@ -687,6 +726,7 @@ mod tests {
     #[test]
     fn time_is_in_seconds() {
         let flow = FlowReport {
+            first_failure_code: None,
             flow_name: "time_test".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 120)],
@@ -724,6 +764,7 @@ mod tests {
     #[test]
     fn xml_entities_are_escaped() {
         let flow = FlowReport {
+            first_failure_code: None,
             flow_name: "flow & <friends>".to_string(),
             success: false,
             step_results: vec![failed_step(
@@ -853,6 +894,7 @@ mod tests {
     #[test]
     fn junit_includes_perf_properties() {
         let flow = FlowReport {
+            first_failure_code: None,
             flow_name: "perf_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],
@@ -883,6 +925,7 @@ mod tests {
     #[test]
     fn junit_includes_covered_axes_property() {
         let flow = FlowReport {
+            first_failure_code: None,
             flow_name: "cov_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],
@@ -912,6 +955,7 @@ mod tests {
     #[test]
     fn junit_omits_properties_when_no_perf() {
         let flow = FlowReport {
+            first_failure_code: None,
             flow_name: "no_perf_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],

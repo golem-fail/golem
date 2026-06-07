@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use golem_parser::Block;
 use golem_vars::{Scope, ScopeLevel, VarValue, VariableStore};
 
@@ -60,7 +60,7 @@ pub fn propagate_results(
     for (child_var, parent_var) in save_to {
         let value = match child.get(child_var) {
             Some(v) => v.clone(),
-            None => bail!("sub-flow variable \"{child_var}\" not found for propagation"),
+            None => crate::fail_code!(golem_events::FailureCode::ParseMissingReference, "sub-flow variable \"{child_var}\" not found for propagation"),
         };
         parent.set_in_scope(ScopeLevel::Flow, parent_var.clone(), value);
     }

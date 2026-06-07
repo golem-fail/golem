@@ -19,7 +19,7 @@ pub(crate) async fn handle_add_media(step: &Step, driver: &dyn PlatformDriver) -
         .params
         .get("path")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("add_media action requires 'path' param"))?;
+        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("add_media action requires 'path' param")))?;
     driver.add_media(path).await
 }
 

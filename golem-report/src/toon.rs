@@ -65,11 +65,13 @@ pub fn format_step_toon(step: &StepReport) -> String {
         StepOutcome::Success => {
             format!(" +{label} d:{}{substep_suffix}{tree_suffix}", step.duration_ms)
         }
-        StepOutcome::Warning(msg) => {
-            format!(" ~{label} d:{} {msg}{substep_suffix}", step.duration_ms)
+        StepOutcome::Warning { message, code } => {
+            let c = code.render(golem_events::Severity::Warning);
+            format!(" ~{label} d:{} {c} {message}{substep_suffix}", step.duration_ms)
         }
-        StepOutcome::Failed(msg) => {
-            format!(" !{label} d:{} {msg}{substep_suffix}", step.duration_ms)
+        StepOutcome::Failed { message, code } => {
+            let c = code.render(golem_events::Severity::Error);
+            format!(" !{label} d:{} {c} {message}{substep_suffix}", step.duration_ms)
         }
         StepOutcome::Skipped => {
             format!(" -{label}{substep_suffix}")
@@ -198,8 +200,8 @@ pub(crate) fn format_flow_toon_anchored(
     for step in &report.step_results {
         match &step.outcome {
             StepOutcome::Success => passed += 1,
-            StepOutcome::Warning(_) => warned += 1,
-            StepOutcome::Failed(_) => failed += 1,
+            StepOutcome::Warning { .. } => warned += 1,
+            StepOutcome::Failed { .. } => failed += 1,
             StepOutcome::Skipped => {}
         }
     }
@@ -248,6 +250,12 @@ pub(crate) fn format_flow_toon_anchored(
         "FAIL"
     };
     let _ = write!(out, "R:{status} {passed}/{warned}/{failed}");
+    // Flow-level failure code, mirroring the other formats' flow-summary code.
+    if !report.success {
+        if let Some(code) = report.first_failure_code {
+            let _ = write!(out, " {}", code.render(golem_events::Severity::Error));
+        }
+    }
     if let Some(ref reason) = report.skipped_reason {
         let _ = write!(out, " {reason}");
     }
@@ -376,7 +384,7 @@ mod tests {
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
-            outcome: StepOutcome::Failed(msg.to_string()),
+            outcome: StepOutcome::Failed { message: msg.to_string(), code: golem_events::FailureCode::Uncoded },
             duration_ms: ms,
             retry_count: 0,
             screenshot_path: None,
@@ -395,7 +403,7 @@ mod tests {
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
-            outcome: StepOutcome::Warning(msg.to_string()),
+            outcome: StepOutcome::Warning { message: msg.to_string(), code: golem_events::FailureCode::Uncoded },
             duration_ms: ms,
             retry_count: 0,
             screenshot_path: None,
@@ -427,6 +435,7 @@ mod tests {
 
     fn sample_flow(success: bool, seed: Option<u64>) -> FlowReport {
         FlowReport {
+            first_failure_code: None,
             flow_name: "login_flow".to_string(),
             success,
             step_results: vec![
@@ -468,7 +477,18 @@ mod tests {
     fn step_failure_format() {
         let step = failed_step("assert_visible", "Welcome", 10012, "timed out");
         let out = format_step_toon(&step);
-        assert_eq!(out, " !assert_visible:Welcome d:10012 timed out");
+        assert_eq!(out, " !assert_visible:Welcome d:10012 EF000 timed out");
+    }
+
+    #[test]
+    fn step_failure_line_carries_code_token() {
+        let mut step = failed_step("assert_visible", "Welcome", 10012, "timed out");
+        step.outcome = StepOutcome::Failed {
+            message: "timed out".to_string(),
+            code: golem_events::FailureCode::FlowStepTimeout,
+        };
+        let out = format_step_toon(&step);
+        assert_eq!(out, " !assert_visible:Welcome d:10012 EF408 timed out");
     }
 
     // 3. Step warning format: ` ~action:target d:duration message` -----
@@ -477,7 +497,7 @@ mod tests {
     fn step_warning_format() {
         let step = warning_step("assert_visible", "Promo", 15, "element not found");
         let out = format_step_toon(&step);
-        assert_eq!(out, " ~assert_visible:Promo d:15 element not found");
+        assert_eq!(out, " ~assert_visible:Promo d:15 WF000 element not found");
     }
 
     // 4. Step skipped format: ` -action:target` ------------------------
@@ -536,6 +556,7 @@ mod tests {
     #[test]
     fn flow_result_line_pass_with_counts() {
         let report = FlowReport {
+            first_failure_code: None,
             flow_name: "simple".to_string(),
             success: true,
             step_results: vec![
@@ -577,6 +598,7 @@ mod tests {
         let suite = SuiteReport {
             flows: vec![
                 FlowReport {
+                    first_failure_code: None,
                     flow_name: "login_flow".to_string(),
                     success: true,
                     step_results: vec![
@@ -598,6 +620,7 @@ mod tests {
                     finished_at: None,
                 },
                 FlowReport {
+                    first_failure_code: None,
                     flow_name: "signup_flow".to_string(),
                     success: false,
                     step_results: vec![
@@ -637,6 +660,7 @@ mod tests {
         let suite = SuiteReport {
             flows: vec![
                 FlowReport {
+                    first_failure_code: None,
                     flow_name: "flow_a".to_string(),
                     success: true,
                     step_results: vec![success_step("launch", "", 100)],
@@ -655,6 +679,7 @@ mod tests {
                     finished_at: None,
                 },
                 FlowReport {
+                    first_failure_code: None,
                     flow_name: "flow_b".to_string(),
                     success: true,
                     step_results: vec![success_step("launch", "", 200)],
@@ -673,6 +698,7 @@ mod tests {
                     finished_at: None,
                 },
                 FlowReport {
+                    first_failure_code: None,
                     flow_name: "flow_c".to_string(),
                     success: false,
                     step_results: vec![
@@ -848,6 +874,7 @@ mod tests {
     #[test]
     fn toon_includes_perf_lines() {
         let report = FlowReport {
+            first_failure_code: None,
             flow_name: "perf_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],
@@ -877,6 +904,7 @@ mod tests {
     #[test]
     fn toon_omits_perf_when_empty() {
         let report = FlowReport {
+            first_failure_code: None,
             flow_name: "no_perf_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],

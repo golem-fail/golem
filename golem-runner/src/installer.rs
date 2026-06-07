@@ -388,11 +388,12 @@ pub async fn run_install_script(
                     duration_ms: start.elapsed().as_millis() as u64,
                     exit_code: None,
                     error: Some(err.clone()),
+                    code: Some(golem_events::FailureCode::AppInstallScriptNotFound),
                     target: target.to_string(),
                     os_major,
                 });
             }
-            return Err(anyhow!(err));
+            return Err(golem_events::coded(golem_events::FailureCode::AppInstallScriptNotFound, anyhow!(err)));
         }
     };
 
@@ -423,11 +424,11 @@ pub async fn run_install_script(
         child.wait(),
     ).await;
 
-    let (success, exit_code, error_msg) = match wait_result {
+    let (success, exit_code, error_msg, fail_code) = match wait_result {
         Ok(Ok(status)) => {
             let tail = stderr_task.await.unwrap_or_default();
             if status.success() {
-                (true, status.code(), None)
+                (true, status.code(), None, golem_events::FailureCode::AppInstallFailed)
             } else {
                 let tail_str = tail.join("\n");
                 let code = status.code();
@@ -435,12 +436,12 @@ pub async fn run_install_script(
                     "install script exited {} for {app_name} on {device_udid}:\n{tail_str}",
                     code.map(|c| c.to_string()).unwrap_or_else(|| "signal".into()),
                 );
-                (false, code, Some(msg))
+                (false, code, Some(msg), golem_events::FailureCode::AppInstallFailed)
             }
         }
         Ok(Err(e)) => {
             let _ = stderr_task.await;
-            (false, None, Some(format!("install script wait failed: {e}")))
+            (false, None, Some(format!("install script wait failed: {e}")), golem_events::FailureCode::AppInstallFailed)
         }
         Err(_elapsed) => {
             let _ = child.kill().await;
@@ -448,7 +449,7 @@ pub async fn run_install_script(
             (false, None, Some(format!(
                 "install script timed out after {}ms for {app_name} on {device_udid}",
                 timeout_ms
-            )))
+            )), golem_events::FailureCode::AppInstallTimeout)
         }
     };
 
@@ -460,6 +461,7 @@ pub async fn run_install_script(
             duration_ms: start.elapsed().as_millis() as u64,
             exit_code,
             error: error_msg.clone(),
+            code: if success { None } else { Some(fail_code) },
             target: target.to_string(),
             os_major,
         });
@@ -468,7 +470,7 @@ pub async fn run_install_script(
     if success {
         Ok(())
     } else {
-        Err(anyhow!(error_msg.unwrap_or_else(|| "install failed".into())))
+        Err(golem_events::coded(fail_code, anyhow!(error_msg.unwrap_or_else(|| "install failed".into()))))
     }
 }
 

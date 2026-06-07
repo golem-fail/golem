@@ -44,7 +44,7 @@ pub async fn execute_teardown(
             match execute_step_with_policy(&effective_step, driver, vars, default_timeout_ms, ctx, &[]).await
             {
                 Ok(StepOutcome::Success) => {}
-                Ok(StepOutcome::Warning(msg)) => result.warnings.push(msg),
+                Ok(StepOutcome::Warning { message, .. }) => result.warnings.push(message),
                 Ok(StepOutcome::Ignored) => {}
                 Err(e) => {
                     // Collect error but DON'T propagate — teardown never fails the test

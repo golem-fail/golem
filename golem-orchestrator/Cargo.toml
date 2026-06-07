@@ -7,6 +7,7 @@ edition = "2021"
 golem-parser = { path = "../golem-parser" }
 golem-devices = { path = "../golem-devices" }
 golem-runner = { path = "../golem-runner" }
+golem-events = { path = "../golem-events" }
 anyhow = { workspace = true }
 serde = { workspace = true }
 

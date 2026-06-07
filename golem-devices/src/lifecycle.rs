@@ -8,6 +8,7 @@ use std::path::Path;
 
 use crate::{DeviceInfo, Platform};
 use anyhow::{bail, Context, Result};
+use golem_events::CodeExt;
 
 /// Find the .xctestrun file in a directory of extracted iOS companion products.
 fn find_xctestrun(dir: &Path) -> Option<String> {
@@ -206,7 +207,10 @@ pub async fn setup_adb_reverse(device: &DeviceInfo, host_port: u16) -> Result<()
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("ADB reverse failed: {stderr}");
+        return Err(golem_events::coded(
+            golem_events::FailureCode::DeviceDriverOpFailed,
+            anyhow::anyhow!("ADB reverse failed: {stderr}"),
+        ));
     }
     Ok(())
 }
@@ -450,10 +454,13 @@ async fn boot_android_and_wait(device: &DeviceInfo) -> Result<DeviceInfo> {
     // unrelated emulator booting concurrently.
     let serial: String = 'find_serial: loop {
         if tokio::time::Instant::now() >= deadline {
-            bail!(
-                "boot {}: timed out waiting for emulator to appear in adb devices",
-                device.name
-            );
+            return Err(golem_events::coded(
+                golem_events::FailureCode::DeviceBootTimeout,
+                anyhow::anyhow!(
+                    "boot {}: timed out waiting for emulator to appear in adb devices",
+                    device.name
+                ),
+            ));
         }
         let current = list_running_emulator_serials().await;
         for s in &current {
@@ -475,10 +482,13 @@ async fn boot_android_and_wait(device: &DeviceInfo) -> Result<DeviceInfo> {
     // Phase 2: poll sys.boot_completed on the resolved serial.
     loop {
         if tokio::time::Instant::now() >= deadline {
-            bail!(
-                "boot {}: timed out waiting for sys.boot_completed on {serial}",
-                device.name
-            );
+            return Err(golem_events::coded(
+                golem_events::FailureCode::DeviceBootTimeout,
+                anyhow::anyhow!(
+                    "boot {}: timed out waiting for sys.boot_completed on {serial}",
+                    device.name
+                ),
+            ));
         }
         let probe = vec![
             "adb".into(),
@@ -675,7 +685,9 @@ pub async fn create_simulator(
     runtime_or_device: &str,
 ) -> Result<String> {
     let args = create_device_command(platform, name, type_or_image, runtime_or_device);
-    run_command(&args, &format!("create device {name}")).await
+    run_command(&args, &format!("create device {name}"))
+        .await
+        .code(golem_events::FailureCode::DeviceCreateFailed)
 }
 
 // ---------------------------------------------------------------------------
@@ -737,7 +749,10 @@ async fn auto_create_ios(
 
     let runtimes = discover_ios_runtimes().await?;
     if runtimes.is_empty() {
-        bail!("No iOS runtimes installed. Install one via Xcode.");
+        return Err(golem_events::coded(
+            golem_events::FailureCode::HostToolchainMissing,
+            anyhow::anyhow!("No iOS runtimes installed. Install one via Xcode."),
+        ));
     }
     let runtime = pick_runtime_for_spec(&runtimes, os_version)
         .ok_or_else(|| {
@@ -746,18 +761,24 @@ async fn auto_create_ios(
                 _ => "any iOS".to_string(),
             };
             let installed: Vec<String> = runtimes.iter().map(|r| format!("iOS {}", r.major)).collect();
-            anyhow::anyhow!(
-                "Requested {requested} runtime is not installed. Installed: {}. \
-                 Add via Xcode > Settings > Platforms.",
-                installed.join(", ")
+            golem_events::coded(
+                golem_events::FailureCode::HostToolchainMissing,
+                anyhow::anyhow!(
+                    "Requested {requested} runtime is not installed. Installed: {}. \
+                     Add via Xcode > Settings > Platforms.",
+                    installed.join(", ")
+                ),
             )
         })?;
 
     let device_types = discover_ios_device_types().await?;
     let device_type = pick_device_type(&device_types, want_phone)
-        .ok_or_else(|| anyhow::anyhow!(
-            "No {} device type found. Install Xcode device support.",
-            if want_phone { "iPhone" } else { "iPad" }
+        .ok_or_else(|| golem_events::coded(
+            golem_events::FailureCode::HostToolchainMissing,
+            anyhow::anyhow!(
+                "No {} device type found. Install Xcode device support.",
+                if want_phone { "iPhone" } else { "iPad" }
+            ),
         ))?;
 
     let name = format!("golem-{}-ios{}", device_type.name.replace(' ', "-"), runtime.major);
@@ -773,7 +794,10 @@ async fn auto_create_ios(
     // xcrun simctl create returns the UDID on stdout
     let udid = output.trim().to_string();
     if udid.is_empty() {
-        bail!("Failed to create simulator: no UDID returned");
+        return Err(golem_events::coded(
+            golem_events::FailureCode::DeviceCreateFailed,
+            anyhow::anyhow!("Failed to create simulator: no UDID returned"),
+        ));
     }
 
     let device = crate::DeviceInfo {
@@ -828,19 +852,25 @@ async fn auto_create_android(
                 .iter()
                 .map(|i| format!("API {} ({})", i.api_level, i.target))
                 .collect();
-            anyhow::anyhow!(
-                "Requested {requested}{store_hint} system image is not installed. \
-                 Installed: {}. \
-                 Add via: sdkmanager 'system-images;android-<N>;<target>;arm64-v8a'",
-                installed.join(", ")
+            golem_events::coded(
+                golem_events::FailureCode::HostToolchainMissing,
+                anyhow::anyhow!(
+                    "Requested {requested}{store_hint} system image is not installed. \
+                     Installed: {}. \
+                     Add via: sdkmanager 'system-images;android-<N>;<target>;arm64-v8a'",
+                    installed.join(", ")
+                ),
             )
         })?;
 
     let profiles = discover_android_device_profiles().await?;
     let profile = pick_device_profile(&profiles, want_phone)
-        .ok_or_else(|| anyhow::anyhow!(
-            "No {} device profile found.",
-            if want_phone { "phone" } else { "tablet" }
+        .ok_or_else(|| golem_events::coded(
+            golem_events::FailureCode::HostToolchainMissing,
+            anyhow::anyhow!(
+                "No {} device profile found.",
+                if want_phone { "phone" } else { "tablet" }
+            ),
         ))?;
 
     let name = format!("golem-{}-api{}", profile.id, image.api_level);

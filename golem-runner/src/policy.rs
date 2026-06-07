@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use golem_driver::PlatformDriver;
+use golem_events::{clean_msg, coded, extract_code, FailureCode};
 use golem_parser::Step;
 use golem_vars::VariableStore;
 
@@ -17,7 +18,7 @@ pub enum StepOutcome {
     /// Step completed successfully (possibly after retries)
     Success,
     /// if_fail = "warn": step failed but execution continues
-    Warning(String),
+    Warning { message: String, code: FailureCode },
     /// if_fail = "ignore": step failed, silently continue
     Ignored,
 }
@@ -279,8 +280,10 @@ pub async fn execute_step_with_policy(
                 continue;
             }
             Err(_elapsed) => {
-                last_error =
-                    Some(anyhow::anyhow!("Step timed out after {}ms", timeout_ms));
+                last_error = Some(coded(
+                    FailureCode::FlowStepTimeout,
+                    anyhow::anyhow!("Step timed out after {}ms", timeout_ms),
+                ));
                 continue;
             }
         }
@@ -316,7 +319,10 @@ pub async fn execute_step_with_policy(
     let error =
         last_error.unwrap_or_else(|| anyhow::anyhow!("step failed with no error details"));
     match if_fail {
-        "warn" => Ok(StepOutcome::Warning(error.to_string())),
+        "warn" => Ok(StepOutcome::Warning {
+            code: extract_code(&error).unwrap_or(FailureCode::Uncoded),
+            message: clean_msg(&error),
+        }),
         "ignore" => Ok(StepOutcome::Ignored),
         _ => Err(error), // "error" (default) — propagate
     }
@@ -355,8 +361,10 @@ where
                 continue;
             }
             Err(_elapsed) => {
-                last_error =
-                    Some(anyhow::anyhow!("Step timed out after {}ms", timeout_ms));
+                last_error = Some(coded(
+                    FailureCode::FlowStepTimeout,
+                    anyhow::anyhow!("Step timed out after {}ms", timeout_ms),
+                ));
                 continue;
             }
         }
@@ -365,7 +373,10 @@ where
     let error =
         last_error.unwrap_or_else(|| anyhow::anyhow!("step failed with no error details"));
     match if_fail {
-        "warn" => Ok(StepOutcome::Warning(error.to_string())),
+        "warn" => Ok(StepOutcome::Warning {
+            code: extract_code(&error).unwrap_or(FailureCode::Uncoded),
+            message: clean_msg(&error),
+        }),
         "ignore" => Ok(StepOutcome::Ignored),
         _ => Err(error),
     }
@@ -436,11 +447,12 @@ mod tests {
 
         assert!(result.is_ok());
         match result.expect("should be ok") {
-            StepOutcome::Warning(msg) => {
+            StepOutcome::Warning { message, code } => {
                 assert!(
-                    msg.contains("something went wrong"),
-                    "warning message should contain error: {msg}"
+                    message.contains("something went wrong"),
+                    "warning message should contain error: {message}"
                 );
+                assert_eq!(code, FailureCode::Uncoded, "untagged error SHALL fall back to Uncoded");
             }
             other => panic!("expected Warning, got {other:?}"),
         }
@@ -544,8 +556,8 @@ mod tests {
 
         assert!(result.is_ok());
         match result.expect("should be ok") {
-            StepOutcome::Warning(msg) => {
-                assert!(msg.contains("persistent failure"));
+            StepOutcome::Warning { message, .. } => {
+                assert!(message.contains("persistent failure"));
             }
             other => panic!("expected Warning, got {other:?}"),
         }
@@ -619,8 +631,9 @@ mod tests {
 
         assert!(result.is_ok());
         match result.expect("should be ok") {
-            StepOutcome::Warning(msg) => {
-                assert!(msg.contains("timed out"));
+            StepOutcome::Warning { message, code } => {
+                assert!(message.contains("timed out"));
+                assert_eq!(code, FailureCode::FlowStepTimeout, "timeout warn SHALL carry F408");
             }
             other => panic!("expected Warning, got {other:?}"),
         }

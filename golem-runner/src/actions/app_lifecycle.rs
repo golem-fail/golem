@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use anyhow::Result;
 use golem_driver::PlatformDriver;
+use golem_events::CodeExt;
 use golem_parser::{AppConfig, Step};
 
 use crate::context::ExecutionContext;
@@ -17,14 +18,14 @@ pub fn resolve_app_bundle<'a>(step: &'a Step, apps: &'a [AppConfig]) -> Result<&
     let app_ref = step
         .app
         .as_deref()
-        .ok_or_else(|| anyhow::anyhow!("No app specified for {} action", step.action))?;
+        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("No app specified for {} action", step.action)))?;
 
     // Try to resolve as a friendly name first.
     if let Some(config) = apps.iter().find(|a| a.name == app_ref) {
         return config.bundle.as_deref()
-            .ok_or_else(|| anyhow::anyhow!(
+            .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!(
                 "app '{}' has no bundle id — add one to [[flow.apps]] or to [[apps]] in golem.toml",
-                config.name));
+                config.name)));
     }
 
     // Fall back to treating it as a direct bundle ID.
@@ -52,7 +53,7 @@ pub(crate) async fn handle_launch(
     // runs out-of-band after this step returns (see policy.rs's
     // `needs_post_settle`), not inline — otherwise the launch step's
     // own timeout would absorb the wait.
-    let warning = driver.launch_app(bundle_id).await?;
+    let warning = driver.launch_app(bundle_id).await.code(golem_events::FailureCode::AppLifecycleFailed)?;
     let launch_ms = start.elapsed().as_millis() as u64;
     ctx.substep(golem_events::SubstepEvent::AppLaunch {
         bundle: bundle_id.to_string(),
@@ -76,7 +77,7 @@ pub(crate) async fn handle_stop(
     ctx: &ExecutionContext<'_>,
 ) -> Result<()> {
     let bundle_id = resolve_app_bundle(step, apps)?;
-    driver.stop_app(bundle_id).await?;
+    driver.stop_app(bundle_id).await.code(golem_events::FailureCode::AppLifecycleFailed)?;
     ctx.substep(golem_events::SubstepEvent::AppStop {
         bundle: bundle_id.to_string(),
     });

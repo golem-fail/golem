@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 
 use crate::concurrency::{can_launch_device, ConcurrencyConfig, RamProvider, SystemRamProvider};
 use crate::DeviceInfo;
@@ -94,7 +94,10 @@ impl ResourceManager {
             }
         }
 
-        bail!("No free ports in range {PORT_RANGE_START}-{PORT_RANGE_END}")
+        Err(golem_events::coded(
+            golem_events::FailureCode::HostPortsExhausted,
+            anyhow::anyhow!("No free ports in range {PORT_RANGE_START}-{PORT_RANGE_END}"),
+        ))
     }
 
     /// Try to allocate a device. Checks that the device isn't already
@@ -104,20 +107,26 @@ impl ResourceManager {
 
         // Check if device is already allocated (another flow is using it)
         if allocations.contains_key(&device.udid) {
-            bail!(
-                "Device {} ({}) is already in use by another flow",
-                device.name,
-                device.udid,
-            );
+            return Err(golem_events::coded(
+                golem_events::FailureCode::DeviceBusy,
+                anyhow::anyhow!(
+                    "Device {} ({}) is already in use by another flow",
+                    device.name,
+                    device.udid,
+                ),
+            ));
         }
 
         if !can_launch_device(&self.config, allocations.len(), self.ram_provider.as_ref())? {
-            bail!(
-                "Cannot allocate device {}: concurrency or RAM limit reached ({} active, min_free_ram={}MB)",
-                device.name,
-                allocations.len(),
-                self.config.min_free_ram_mb,
-            );
+            return Err(golem_events::coded(
+                golem_events::FailureCode::DeviceBusy,
+                anyhow::anyhow!(
+                    "Cannot allocate device {}: concurrency or RAM limit reached ({} active, min_free_ram={}MB)",
+                    device.name,
+                    allocations.len(),
+                    self.config.min_free_ram_mb,
+                ),
+            ));
         }
 
         allocations.insert(device.udid.clone(), port);

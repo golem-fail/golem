@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use golem_driver::{Direction, PlatformDriver};
 use golem_parser::Step;
 use tokio::time::{sleep, Instant};
@@ -288,7 +288,7 @@ pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver, ctx: 
             "down" => Direction::Down,
             "left" => Direction::Left,
             "right" => Direction::Right,
-            other => bail!("Invalid swipe direction: \"{}\"", other),
+            other => crate::fail_code!(golem_events::FailureCode::ParseMissingParam, "Invalid swipe direction: \"{}\"", other),
         };
         let safe_vp = crate::scroll::make_safe_viewport(&vp, &meta);
         let (sx, sy) = crate::scroll::default_swipe_start(&safe_vp, direction);
@@ -306,13 +306,13 @@ pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver, ctx: 
             "down" => (sx, sy + dist),
             "left" => (sx - dist, sy),
             "right" => (sx + dist, sy),
-            _ => bail!("swipe with one point requires direction"),
+            _ => crate::fail_code!(golem_events::FailureCode::ParseMissingParam, "swipe with one point requires direction"),
         };
         points.push(end);
     }
 
     if points.len() < 2 {
-        bail!("swipe requires at least 2 points (start + end, or direction)");
+        crate::fail_code!(golem_events::FailureCode::ParseMissingParam, "swipe requires at least 2 points (start + end, or direction)");
     }
 
     // Execute the swipe
@@ -355,7 +355,7 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
         "down" => Direction::Down,
         "left" => Direction::Left,
         "right" => Direction::Right,
-        other => bail!("Invalid scroll direction: \"{}\"", other),
+        other => crate::fail_code!(golem_events::FailureCode::ParseMissingParam, "Invalid scroll direction: \"{}\"", other),
     };
 
     let selector = build_selector(step);
@@ -467,7 +467,7 @@ async fn resolve_gesture_center(step: &Step, driver: &dyn PlatformDriver) -> Res
             let eb = first.element.effective_bounds();
             Ok((eb.center_x(), eb.center_y()))
         } else {
-            bail!("No element found matching selector");
+            crate::fail_code!(golem_events::FailureCode::FlowElementNotFound, "No element found matching selector");
         }
     } else {
         let x = resolve_param_coord(step.params.get("x"), vp.width);
@@ -483,7 +483,7 @@ async fn resolve_gesture_center(step: &Step, driver: &dyn PlatformDriver) -> Res
 /// - `velocity` (optional, default 5.0): scale factor per second
 /// - Element selector or x/y coordinates for center point
 pub(crate) async fn handle_pinch(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let scale = step.scale.ok_or_else(|| anyhow::anyhow!("pinch requires 'scale' parameter"))?;
+    let scale = step.scale.ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("pinch requires 'scale' parameter")))?;
     let velocity = step.velocity.unwrap_or(5.0);
     let (cx, cy) = resolve_gesture_center(step, driver).await?;
 
@@ -501,7 +501,7 @@ pub(crate) async fn handle_pinch(step: &Step, driver: &dyn PlatformDriver) -> Re
 /// - `velocity` (optional, default 180.0): degrees per second
 /// - Element selector or x/y coordinates for center point
 pub(crate) async fn handle_rotate_gesture(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let degrees = step.rotation.ok_or_else(|| anyhow::anyhow!("rotate requires 'rotation' parameter"))?;
+    let degrees = step.rotation.ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("rotate requires 'rotation' parameter")))?;
     let velocity = step.velocity.unwrap_or(180.0);
     let (cx, cy) = resolve_gesture_center(step, driver).await?;
 
@@ -544,7 +544,7 @@ pub(crate) async fn handle_rotate_gesture(step: &Step, driver: &dyn PlatformDriv
 /// Each finger in step.fingers has `points` (Vec<SelectorGroup>) resolved to coordinates.
 pub(crate) async fn handle_gesture(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
     if step.fingers.is_empty() {
-        bail!("gesture requires at least one finger in 'fingers' array");
+        crate::fail_code!(golem_events::FailureCode::ParseMissingParam, "gesture requires at least one finger in 'fingers' array");
     }
 
     let (root, meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
@@ -556,7 +556,7 @@ pub(crate) async fn handle_gesture(step: &Step, driver: &dyn PlatformDriver) -> 
     let mut gesture_fingers = Vec::new();
     for finger in &step.fingers {
         if finger.points.len() < 2 {
-            bail!("each finger needs at least 2 points");
+            crate::fail_code!(golem_events::FailureCode::ParseMissingParam, "each finger needs at least 2 points");
         }
         let mut points = Vec::new();
         for group in &finger.points {

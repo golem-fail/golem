@@ -47,9 +47,10 @@ pub(crate) fn find_companion_path(platform: Platform) -> Result<String> {
         }
     }
 
-    anyhow::bail!(
-        "Companion not found. Embedded companions may not have been built."
-    )
+    Err(golem_events::coded(
+        golem_events::FailureCode::HostToolchainMissing,
+        anyhow::anyhow!("Companion not found. Embedded companions may not have been built."),
+    ))
 }
 
 /// Find the Android companion test APK.
@@ -66,7 +67,10 @@ pub(crate) fn find_android_apk() -> Result<String> {
     if std::path::Path::new(relative).exists() {
         return Ok(relative.to_string());
     }
-    anyhow::bail!("Android companion test APK not found.")
+    Err(golem_events::coded(
+        golem_events::FailureCode::HostToolchainMissing,
+        anyhow::anyhow!("Android companion test APK not found."),
+    ))
 }
 
 /// Find the Android companion main APK (optional, needed for fresh installs).

@@ -11,7 +11,7 @@
 //! 4. WebSocket upgrade + `Runtime.evaluate` with DOM traversal JS
 //! 5. Returns JSON tree matching our Android companion format
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use futures_util::{SinkExt, StreamExt};
 use tokio_tungstenite::tungstenite::Message;
 
@@ -86,10 +86,13 @@ pub async fn setup_forward(device_serial: &str, socket_name: &str) -> Result<u16
         .context("failed to set up ADB forward for CDP")?;
 
     if !output.status.success() {
-        bail!(
-            "ADB forward failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        return Err(golem_events::coded(
+            golem_events::FailureCode::DeviceDriverOpFailed,
+            anyhow::anyhow!(
+                "ADB forward failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        ));
     }
     Ok(port)
 }
@@ -146,7 +149,10 @@ pub async fn get_page_id(port: u16) -> Result<String> {
 
     let arr = targets.as_array().context("CDP /json not an array")?;
     if arr.is_empty() {
-        bail!("No CDP page targets found");
+        return Err(golem_events::coded(
+            golem_events::FailureCode::DeviceWebviewComms,
+            anyhow::anyhow!("No CDP page targets found"),
+        ));
     }
 
     arr[0]
@@ -199,7 +205,10 @@ pub async fn evaluate_js(
 
             if resp.get("id").and_then(|v| v.as_i64()) == Some(1) {
                 if let Some(err) = resp.get("result").and_then(|r| r.get("exceptionDetails")) {
-                    bail!("CDP evaluation error: {err}");
+                    return Err(golem_events::coded(
+                        golem_events::FailureCode::DeviceWebviewComms,
+                        anyhow::anyhow!("CDP evaluation error: {err}"),
+                    ));
                 }
                 let value = resp
                     .get("result")
@@ -215,7 +224,10 @@ pub async fn evaluate_js(
         }
     }
 
-    bail!("CDP WebSocket closed without response")
+    Err(golem_events::coded(
+        golem_events::FailureCode::DeviceWebviewComms,
+        anyhow::anyhow!("CDP WebSocket closed without response"),
+    ))
 }
 
 /// Evaluate the DOM traversal JavaScript via CDP and return the raw JSON string.

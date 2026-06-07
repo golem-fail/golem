@@ -640,10 +640,13 @@ fn reduce_app_reqs_via_cover(
 ) -> Result<Vec<AppRequirement>> {
     let (reduced, uncovered) = cover_and_union(reqs, snapshot);
     if !uncovered.is_empty() {
-        anyhow::bail!(
-            "coverage = \"min\" cannot be satisfied — no devices match: {}",
-            uncovered.join(", ")
-        );
+        return Err(golem_events::coded(
+            golem_events::FailureCode::ParseDeviceConstraint,
+            anyhow::anyhow!(
+                "coverage = \"min\" cannot be satisfied — no devices match: {}",
+                uncovered.join(", ")
+            ),
+        ));
     }
     Ok(reduced)
 }
@@ -713,14 +716,17 @@ fn expand_jit(
         .collect::<Result<_>>()?;
 
     if reduced.iter().all(|(_, r)| r.is_empty()) {
-        anyhow::bail!(
-            "coverage = \"{}\" found no device matching any tick box for this flow",
-            match strategy {
-                CoverageStrategy::One => "one",
-                CoverageStrategy::Smart => "smart",
-                _ => "jit",
-            }
-        );
+        return Err(golem_events::coded(
+            golem_events::FailureCode::ParseDeviceConstraint,
+            anyhow::anyhow!(
+                "coverage = \"{}\" found no device matching any tick box for this flow",
+                match strategy {
+                    CoverageStrategy::One => "one",
+                    CoverageStrategy::Smart => "smart",
+                    _ => "jit",
+                }
+            ),
+        ));
     }
 
     // Pool = flat concat of each app's reduced AppRequirements as tick
@@ -994,10 +1000,13 @@ fn default_any_booted_requirements(
     // defensively — the filter iterates the static [Ios, Android] list.
     platforms.dedup_by(|a, b| a == b);
     if platforms.is_empty() {
-        anyhow::bail!(
-            "No `[[flow.apps.devices]]` block and no booted device found. \
-             Boot a simulator/emulator or add a device constraint."
-        );
+        return Err(golem_events::coded(
+            golem_events::FailureCode::ParseDeviceConstraint,
+            anyhow::anyhow!(
+                "No `[[flow.apps.devices]]` block and no booted device found. \
+                 Boot a simulator/emulator or add a device constraint."
+            ),
+        ));
     }
     Ok(platforms
         .into_iter()
@@ -1062,16 +1071,19 @@ fn expand_os_pairs(
                         Some(OsVersionSpec::Latest { platform, count }),
                     ));
                 } else if (tops.len() as u32) < count && strategy != CoverageStrategy::One {
-                    anyhow::bail!(
-                        "`os = \"{s}\"` requested {count} versions but only {} \
-                         available in snapshot ({}). Boot another runtime or \
-                         use coverage = \"one\" for local smoke testing.",
-                        tops.len(),
-                        tops.iter()
-                            .map(|m| format!("v{m}"))
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                    );
+                    return Err(golem_events::coded(
+                        golem_events::FailureCode::ParseDeviceConstraint,
+                        anyhow::anyhow!(
+                            "`os = \"{s}\"` requested {count} versions but only {} \
+                             available in snapshot ({}). Boot another runtime or \
+                             use coverage = \"one\" for local smoke testing.",
+                            tops.len(),
+                            tops.iter()
+                                .map(|m| format!("v{m}"))
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                        ),
+                    ));
                 } else {
                     for m in tops {
                         pairs.push((
@@ -1096,7 +1108,10 @@ fn expand_os_pairs(
                 } else if s.starts_with("ios") {
                     Platform::Ios
                 } else {
-                    anyhow::bail!("unrecognised os constraint: {s}");
+                    return Err(golem_events::coded(
+                        golem_events::FailureCode::ParseDeviceConstraint,
+                        anyhow::anyhow!("unrecognised os constraint: {s}"),
+                    ));
                 };
                 pairs.push((platform, None));
             }
@@ -1120,9 +1135,12 @@ fn expand_type_entries(
         .map(|s| match s.as_str() {
             "phone" => Ok(Some(DeviceType::Phone)),
             "tablet" => Ok(Some(DeviceType::Tablet)),
-            other => anyhow::bail!(
-                "unrecognised `type` value: {other:?}. Expected \"phone\" or \"tablet\"."
-            ),
+            other => Err(golem_events::coded(
+                golem_events::FailureCode::ParseDeviceConstraint,
+                anyhow::anyhow!(
+                    "unrecognised `type` value: {other:?}. Expected \"phone\" or \"tablet\"."
+                ),
+            )),
         })
         .collect()
 }
@@ -1139,20 +1157,26 @@ fn expand_hardware_entries(
     };
     let values = hw_sv.to_vec();
     if values.is_empty() {
-        anyhow::bail!(
-            "`hardware = []` matches no device — omit the field for the \
-             virtual-only default, or list at least one value."
-        );
+        return Err(golem_events::coded(
+            golem_events::FailureCode::ParseDeviceConstraint,
+            anyhow::anyhow!(
+                "`hardware = []` matches no device — omit the field for the \
+                 virtual-only default, or list at least one value."
+            ),
+        ));
     }
     values
         .iter()
         .map(|s| match s.as_str() {
             "virtual" => Ok(Some(false)),
             "real" => Ok(Some(true)),
-            other => anyhow::bail!(
-                "unrecognised `hardware` value: {other:?}. \
-                 Expected \"virtual\" (sim/emulator) or \"real\" (physical device)."
-            ),
+            other => Err(golem_events::coded(
+                golem_events::FailureCode::ParseDeviceConstraint,
+                anyhow::anyhow!(
+                    "unrecognised `hardware` value: {other:?}. \
+                     Expected \"virtual\" (sim/emulator) or \"real\" (physical device)."
+                ),
+            )),
         })
         .collect()
 }
