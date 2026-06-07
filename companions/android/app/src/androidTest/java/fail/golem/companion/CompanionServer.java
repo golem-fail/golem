@@ -170,7 +170,7 @@ public class CompanionServer {
                     sendJson(out, 200, new JSONObject()
                         .put("status", "ok")
                         .put("platform", "android")
-                        .put("version", "0.6.24")
+                        .put("version", "0.6.25")
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
@@ -462,19 +462,12 @@ public class CompanionServer {
             }
         }
 
-        if (fingers.length() == 1) {
-            // Single finger: chain input swipe through segments for continuous path
-            int[] xs = allX[0];
-            int[] ys = allY[0];
-            long segDuration = durations[0] / (xs.length - 1);
-            for (int i = 0; i < xs.length - 1; i++) {
-                executeShell("input swipe " + xs[i] + " " + ys[i] + " " +
-                    xs[i + 1] + " " + ys[i + 1] + " " + segDuration);
-            }
-        } else {
-            // Multi-finger: inject MotionEvents via Instrumentation
-            injectMultiTouchGesture(allX, allY, durations);
-        }
+        // Chained `input swipe` lifts/downs between segments, breaking
+        // the continuous path that gesture-tracking widgets (drawing,
+        // L-swipe grids, drag handles) require. Always inject raw
+        // MotionEvents so DOWN → multi-MOVE → UP stays a single
+        // gesture for any finger count.
+        injectMultiTouchGesture(allX, allY, durations);
 
         sendJson(out, 200, new JSONObject().put("status", "ok"));
     }

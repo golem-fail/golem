@@ -76,7 +76,7 @@ fn action_multiplier(step: &Step) -> u64 {
         // through the element resolver / settle path.
         "screenshot" | "add_media"
         | "fail" | "load_fixture" | "push_notification" | "set_variable"
-        | "log" | "clear_data" | "press" | "rotate" | "dark_mode" | "set_location"
+        | "log" | "clear_data" | "press" | "dark_mode" | "set_location"
         | "grant_permission" | "revoke_permission" | "hide_keyboard" => 1,
 
         // 2x — interactions that include element resolution + post-action
@@ -84,7 +84,7 @@ fn action_multiplier(step: &Step) -> u64 {
         // multiple seconds on WebKit Inspector enrichment + tree
         // stabilisation; a 1x = 5s budget consistently underflows).
         "tap" | "doubleTap" | "backspace" | "long_press" | "swipe"
-        | "pinch" | "gesture"
+        | "pinch" | "gesture" | "rotate"
         | "type" | "assert_visible" | "assert_checked" | "assert_not_visible"
         | "assert_alert" | "accept_alert" | "dismiss_alert"
         | "read" => 2,
@@ -150,7 +150,14 @@ fn intrinsic_duration_ms(step: &Step) -> u64 {
         "rotate" => {
             if let Some(degrees) = step.rotation {
                 let velocity = step.velocity.unwrap_or(180.0);
-                ((degrees.abs() / velocity) * 1000.0) as u64
+                let path_ms = (degrees.abs() / velocity) * 1000.0;
+                // Two-finger rotate dispatches ~1 interpolation point per
+                // 10°. Each point is two sync injectInputEvent calls;
+                // under load these run ~50ms each, so budget 100ms per
+                // step for injection overhead.
+                let steps = (degrees.abs() / 10.0).ceil().max(3.0);
+                let inject_ms = steps * 100.0;
+                (path_ms + inject_ms) as u64
             } else {
                 0
             }
@@ -746,9 +753,10 @@ mod tests {
         let mut step = Step { action: "rotate".into(), ..Default::default() };
         step.rotation = Some(720.0);
         step.velocity = Some(45.0);
-        // 720/45 * 1000 = 16000ms intrinsic. floor = 18000
-        // Multiplied = 5000 (1x). max(5000, 18000) = 18000
-        assert_eq!(effective_timeout(&step, 5_000), 18_000);
+        // 720/45 * 1000 = 16000 path + 72 steps * 100 = 7200 inject = 23200 intrinsic.
+        // Floor = 25200 (intrinsic + 2000 settle).
+        // Multiplied = 10000 (2x). max(10000, 25200) = 25200.
+        assert_eq!(effective_timeout(&step, 5_000), 25_200);
     }
 
     // -----------------------------------------------------------------
