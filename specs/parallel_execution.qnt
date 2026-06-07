@@ -111,8 +111,8 @@ module parallel_execution {
     val targeted = devices_for_block(devs, blk)
     targeted.filter(did =>
       val d = devs.get(did)
-      (blk.where_type == "" or d.vars.has("_type") and d.vars.get("_type") == blk.where_type) and
-      (blk.where_os == "" or d.vars.has("_os") and d.vars.get("_os") == blk.where_os)
+      (blk.where_type == "" or d.vars.keys().contains("_type") and d.vars.get("_type") == blk.where_type) and
+      (blk.where_os == "" or d.vars.keys().contains("_os") and d.vars.get("_os") == blk.where_os)
     )
   }
 
@@ -179,7 +179,7 @@ module parallel_execution {
   // Add a device to the execution.
   action add_device(
     id: str, app: str, initial_vars: str -> str
-  ) = all {
+  ): bool = all {
     val dev: DeviceState = {
       id: id, app: app, block_index: 0, step_index: 0,
       status: Idle, vars: initial_vars, loop_counter: 0,
@@ -195,7 +195,7 @@ module parallel_execution {
   }
 
   // Add a block to the flow graph.
-  action add_block(blk: Block) = all {
+  action add_block(blk: Block): bool = all {
     blocks'             = blocks.append(blk),
     devices'            = devices,
     for_each_cursor'    = for_each_cursor,
@@ -211,12 +211,10 @@ module parallel_execution {
 
   // Begin a block: snapshot device vars for step isolation, set devices to
   // Executing or Skipped based on app targeting and where filter.
-  action begin_block(block_idx: int) = all {
+  action begin_block(block_idx: int): bool = all {
+    flow_result == Running,
     block_idx >= 0,
     block_idx < blocks.length(),
-    val blk = blocks[block_idx]
-    val targeted = devices_for_block(devices, blk)
-    val matching = devices_matching_where(devices, blk)
     // Snapshot all device vars at block start for step isolation.
     block_start_snapshot' = devices.keys().fold(Map(), (acc, did) =>
       acc.put(did, devices.get(did).vars)
@@ -226,20 +224,26 @@ module parallel_execution {
       acc.put(did, Map())
     ),
     // Update device statuses.
+    val blk = blocks[block_idx]
+    val targeted = devices_for_block(devices, blk)
+    val matching = devices_matching_where(devices, blk)
     devices' = devices.keys().fold(devices, (acc, did) =>
       val d = acc.get(did)
+      // Per-block counters reset when a device enters a different block.
+      val lc = if (d.block_index == block_idx) d.loop_counter else 0
+      val iu = if (d.block_index == block_idx) d.iterations_used else 0
       if (not(targeted.contains(did))) {
         // Not targeted by this block's app — skip.
-        acc.put(did, { ...d, status: Skipped, block_index: block_idx, step_index: 0 })
+        acc.put(did, { ...d, status: Skipped, block_index: block_idx, step_index: 0, loop_counter: lc, iterations_used: iu })
       } else if (not(matching.contains(did))) {
         // Targeted but doesn't match where filter — skip.
-        acc.put(did, { ...d, status: Skipped, block_index: block_idx, step_index: 0 })
+        acc.put(did, { ...d, status: Skipped, block_index: block_idx, step_index: 0, loop_counter: lc, iterations_used: iu })
       } else if (step_count(blk) == 0) {
         // Block has no steps — immediately completed.
-        acc.put(did, { ...d, status: Completed, block_index: block_idx, step_index: 0 })
+        acc.put(did, { ...d, status: Completed, block_index: block_idx, step_index: 0, loop_counter: lc, iterations_used: iu })
       } else {
         // Begin executing.
-        acc.put(did, { ...d, status: Executing, block_index: block_idx, step_index: 0 })
+        acc.put(did, { ...d, status: Executing, block_index: block_idx, step_index: 0, loop_counter: lc, iterations_used: iu })
       }
     ),
     blocks'             = blocks,
@@ -250,20 +254,29 @@ module parallel_execution {
 
   // A device executes its current step (advances step_index).
   // The device reads from block_start_snapshot (not other devices' live vars).
-  action execute_step(device_id: str) = all {
-    devices.has(device_id),
-    val d = devices.get(device_id)
-    d.status == Executing,
-    d.block_index >= 0,
-    d.block_index < blocks.length(),
-    val blk = blocks[d.block_index]
-    d.step_index < step_count(blk),
-    // Advance step index. If this was the last step, mark Completed.
-    val next_step = d.step_index + 1
-    val new_status = if (next_step >= step_count(blk)) Completed else Executing
-    devices' = devices.put(device_id,
-      { ...d, step_index: next_step, status: new_status }
-    ),
+  action execute_step(device_id: str): bool = all {
+    flow_result == Running,
+    devices.keys().contains(device_id),
+    {
+      val d = devices.get(device_id)
+      all {
+        d.status == Executing,
+        d.block_index >= 0,
+        d.block_index < blocks.length(),
+        {
+          val blk = blocks[d.block_index]
+          // Advance step index. If this was the last step, mark Completed.
+          val next_step = d.step_index + 1
+          val new_status = if (next_step >= step_count(blk)) Completed else Executing
+          all {
+            d.step_index < step_count(blk),
+            devices' = devices.put(device_id,
+              { ...d, step_index: next_step, status: new_status }
+            ),
+          }
+        },
+      }
+    },
     blocks'             = blocks,
     for_each_cursor'    = for_each_cursor,
     block_start_snapshot' = block_start_snapshot,
@@ -274,17 +287,22 @@ module parallel_execution {
 
   // A device writes a variable during step execution (save_to).
   // The write goes to pending_writes, not immediately visible to other devices.
-  action device_save_var(device_id: str, var_name: str, var_value: str) = all {
-    devices.has(device_id),
-    val d = devices.get(device_id)
-    d.status == Executing,
-    // Write to pending_writes for this device.
-    val existing = if (pending_writes.has(device_id)) pending_writes.get(device_id) else Map()
-    pending_writes' = pending_writes.put(device_id, existing.put(var_name, var_value)),
-    // Also update the device's own vars (visible to itself in subsequent steps).
-    devices' = devices.put(device_id,
-      { ...d, vars: d.vars.put(var_name, var_value) }
-    ),
+  action device_save_var(device_id: str, var_name: str, var_value: str): bool = all {
+    flow_result == Running,
+    devices.keys().contains(device_id),
+    {
+      val d = devices.get(device_id)
+      all {
+        d.status == Executing,
+        // Write to pending_writes for this device.
+        val existing = if (pending_writes.keys().contains(device_id)) pending_writes.get(device_id) else Map()
+        pending_writes' = pending_writes.put(device_id, existing.put(var_name, var_value)),
+        // Also update the device's own vars (visible to itself in subsequent steps).
+        devices' = devices.put(device_id,
+          { ...d, vars: d.vars.put(var_name, var_value) }
+        ),
+      }
+    },
     blocks'             = blocks,
     for_each_cursor'    = for_each_cursor,
     block_start_snapshot' = block_start_snapshot,
@@ -293,13 +311,18 @@ module parallel_execution {
   }
 
   // A device fails during step execution.
-  action device_fail(device_id: str, policy: OnFailPolicy) = all {
-    devices.has(device_id),
-    val d = devices.get(device_id)
-    d.status == Executing,
-    devices' = devices.put(device_id,
-      { ...d, status: Failed, on_fail_policy: policy }
-    ),
+  action device_fail(device_id: str, policy: OnFailPolicy): bool = all {
+    flow_result == Running,
+    devices.keys().contains(device_id),
+    {
+      val d = devices.get(device_id)
+      all {
+        d.status == Executing,
+        devices' = devices.put(device_id,
+          { ...d, status: Failed, on_fail_policy: policy }
+        ),
+      }
+    },
     blocks'             = blocks,
     for_each_cursor'    = for_each_cursor,
     block_start_snapshot' = block_start_snapshot,
@@ -310,12 +333,12 @@ module parallel_execution {
 
   // Barrier synchronization: all targeted devices have finished the current block.
   // Commit pending writes to device vars, advance to next block.
-  action barrier_sync(block_idx: int) = all {
+  action barrier_sync(block_idx: int): bool = all {
+    flow_result == Running,
     block_idx >= 0,
     block_idx < blocks.length(),
+    {
     val blk = blocks[block_idx]
-    // All targeted devices must be at the barrier (completed, skipped, or failed).
-    all_devices_at_barrier(devices, blk),
     // Check for error failures.
     val has_error = any_error_failure(devices, blk)
     // Determine next block index.
@@ -327,15 +350,20 @@ module parallel_execution {
       d.block_index == block_idx and
       blk.max_iterations > 0 and d.iterations_used >= blk.max_iterations
     )
+    all {
+    // The barrier belongs to the block the devices are currently at.
+    devices.keys().forall(did => devices.get(did).block_index == block_idx),
+    // All targeted devices must be at the barrier (completed, skipped, or failed).
+    all_devices_at_barrier(devices, blk),
     if (has_error) all {
       // Failure propagation: any device fail with on_fail="error" fails the flow.
       flow_result' = FlowFailed("device_error_at_barrier"),
       // Commit pending writes even on failure (vars persist).
       devices' = devices.keys().fold(devices, (acc, did) =>
         val d = acc.get(did)
-        val pw = if (pending_writes.has(did)) pending_writes.get(did) else Map()
+        val pw = if (pending_writes.keys().contains(did)) pending_writes.get(did) else Map()
         val merged = d.vars.keys().fold(d.vars, (v, k) => v).keys().fold(d.vars, (v, k) =>
-          if (pw.has(k)) v.put(k, pw.get(k)) else v
+          if (pw.keys().contains(k)) v.put(k, pw.get(k)) else v
         )
         // Also merge any pending write keys not in existing vars.
         val fully_merged = pw.keys().fold(merged, (v, k) => v.put(k, pw.get(k)))
@@ -350,12 +378,14 @@ module parallel_execution {
       // Success: commit pending writes and advance devices to next block.
       devices' = devices.keys().fold(devices, (acc, did) =>
         val d = acc.get(did)
-        val pw = if (pending_writes.has(did)) pending_writes.get(did) else Map()
+        val pw = if (pending_writes.keys().contains(did)) pending_writes.get(did) else Map()
         val fully_merged = pw.keys().fold(d.vars, (v, k) => v.put(k, pw.get(k)))
-        val is_looping = next_idx == block_idx
+        // at_max forces the loop to exit: the device moves on, so its
+        // per-block counters reset just like any other block change.
+        val is_looping = next_idx == block_idx and not(at_max)
         val new_loop = if (is_looping) d.loop_counter + 1 else 0
         val new_iters = if (is_looping) d.iterations_used + 1 else 0
-        val effective_next = if (at_max and is_looping) block_idx + 1 else next_idx
+        val effective_next = if (at_max and next_idx == block_idx) block_idx + 1 else next_idx
         acc.put(did, { ...d,
           vars: fully_merged,
           status: Idle,
@@ -374,17 +404,24 @@ module parallel_execution {
       pending_writes'     = Map(),
       barrier_epoch'      = barrier_epoch + 1,
     }
+    }
+    },
   }
 
   // Begin a for_each iteration on a block.
   // Creates an ordered cursor over the devices belonging to the for_each app.
-  action begin_for_each(block_idx: int, device_order: List[str]) = all {
+  action begin_for_each(block_idx: int, device_order: List[str]): bool = all {
+    flow_result == Running,
     block_idx >= 0,
     block_idx < blocks.length(),
+    {
     val blk = blocks[block_idx]
-    blk.for_each != "",
-    // device_order contains exactly the devices for the for_each app.
     val target_set = devices_for_app(devices, blk.for_each)
+    all {
+    blk.for_each != "",
+    // Zero-target for_each is handled by for_each_empty, not an active cursor.
+    device_order.length() > 0,
+    // device_order contains exactly the devices for the for_each app.
     device_order.length() == target_set.size(),
     // All devices in device_order must be in the target set.
     device_order.indices().forall(i => target_set.contains(device_order[i])),
@@ -393,6 +430,8 @@ module parallel_execution {
       target_devices: device_order,
       current_index: 0,
       active: true,
+    },
+    }
     },
     devices'            = devices,
     blocks'             = blocks,
@@ -404,6 +443,7 @@ module parallel_execution {
 
   // Advance the for_each cursor to the next device.
   action advance_for_each = all {
+    flow_result == Running,
     for_each_cursor.active,
     for_each_cursor.current_index < for_each_cursor.target_devices.length(),
     val next_idx = for_each_cursor.current_index + 1
@@ -421,19 +461,27 @@ module parallel_execution {
   }
 
   // End for_each when there are zero target devices (empty iteration, no-op).
-  action for_each_empty(block_idx: int) = all {
+  action for_each_empty(block_idx: int): bool = all {
+    flow_result == Running,
     block_idx >= 0,
     block_idx < blocks.length(),
+    {
     val blk = blocks[block_idx]
-    blk.for_each != "",
     val target_set = devices_for_app(devices, blk.for_each)
+    all {
+    blk.for_each != "",
     target_set.size() == 0,
     // Block is a no-op: all devices skip.
     devices' = devices.keys().fold(devices, (acc, did) =>
       val d = acc.get(did)
-      acc.put(did, { ...d, status: Skipped, block_index: block_idx })
+      // Per-block counters reset when a device enters a different block.
+      val lc = if (d.block_index == block_idx) d.loop_counter else 0
+      val iu = if (d.block_index == block_idx) d.iterations_used else 0
+      acc.put(did, { ...d, status: Skipped, block_index: block_idx, step_index: 0, loop_counter: lc, iterations_used: iu })
     ),
     for_each_cursor' = { block_id: blk.id, target_devices: List(), current_index: 0, active: false },
+    }
+    },
     blocks'             = blocks,
     block_start_snapshot' = block_start_snapshot,
     pending_writes'     = pending_writes,
@@ -493,7 +541,7 @@ module parallel_execution {
     any_executing implies
       devices.keys().forall(did =>
         devices.get(did).status == Executing implies
-          block_start_snapshot.has(did)
+          block_start_snapshot.keys().contains(did)
       )
   }
 
@@ -501,26 +549,16 @@ module parallel_execution {
   // device A's pending writes are not in device B's snapshot.
 
   val inv_cross_device_writes_invisible_mid_block: bool = {
-    devices.keys().forall(did_a =>
-      devices.keys().forall(did_b =>
-        val da = devices.get(did_a)
-        val db = devices.get(did_b)
-        (did_a != did_b and
-         da.status == Executing and db.status == Executing and
-         da.block_index == db.block_index and
-         block_start_snapshot.has(did_b) and
-         pending_writes.has(did_a)) implies
-          // B's snapshot does not contain A's pending writes.
-          pending_writes.get(did_a).keys().forall(var_name =>
-            not(block_start_snapshot.get(did_b).has(var_name)) or
-            block_start_snapshot.get(did_b).get(var_name) !=
-              pending_writes.get(did_a).get(var_name) or
-            // Unless B already had that value before the block started
-            // (i.e., it was in the snapshot from before).
-            block_start_snapshot.get(did_a).has(var_name) and
-            block_start_snapshot.get(did_a).get(var_name) ==
-              block_start_snapshot.get(did_b).get(var_name)
-          )
+    devices.keys().forall(did =>
+      val d = devices.get(did)
+      (d.status == Executing and
+       block_start_snapshot.keys().contains(did) and
+       pending_writes.keys().contains(did)) implies (
+        val snap = block_start_snapshot.get(did)
+        val pw = pending_writes.get(did)
+        // A device's live vars are exactly its block-start snapshot plus its
+        // OWN pending writes — no other device's mid-block writes can appear.
+        d.vars == pw.keys().fold(snap, (v, k) => v.put(k, pw.get(k)))
       )
     )
   }
@@ -551,7 +589,7 @@ module parallel_execution {
       // The current iteration device must exist in the devices map.
       for_each_cursor.current_index < for_each_cursor.target_devices.length() and
       val current_dev_id = for_each_cursor.target_devices[for_each_cursor.current_index]
-      devices.has(current_dev_id)
+      devices.keys().contains(current_dev_id)
     )
   }
 
@@ -685,7 +723,7 @@ module parallel_execution {
     // We verify pending_writes are a subset of what will be committed.
     devices.keys().forall(did =>
       val d = devices.get(did)
-      (d.status == Completed and pending_writes.has(did)) implies
+      (d.status == Completed and pending_writes.keys().contains(did)) implies
         pending_writes.get(did).keys().forall(k =>
           // The pending write key is either already in vars (overwrite)
           // or will be added. In both cases, it will persist.
@@ -701,28 +739,12 @@ module parallel_execution {
     // During execution (not at barrier), a device cannot directly read
     // another device's pending writes. Cross-device access requires
     // either for_each (${_each.*}) or explicit prefix (${device_name:var}).
-    // This is enforced by step isolation: mid-block reads go to snapshot.
-    devices.keys().forall(did_a =>
-      devices.keys().forall(did_b =>
-        val da = devices.get(did_a)
-        val db = devices.get(did_b)
-        (did_a != did_b and da.status == Executing and db.status == Executing and
-         da.block_index == db.block_index) implies
-          // Device A's snapshot does not include B's pending writes.
-          (pending_writes.has(did_b) implies
-            pending_writes.get(did_b).keys().forall(k =>
-              not(block_start_snapshot.has(did_a)) or
-              not(block_start_snapshot.get(did_a).has(k)) or
-              // The value in A's snapshot is from before the block, not B's write.
-              block_start_snapshot.get(did_a).get(k) != pending_writes.get(did_b).get(k) or
-              // Unless both had the same pre-existing value.
-              (block_start_snapshot.has(did_b) and
-               block_start_snapshot.get(did_b).has(k) and
-               block_start_snapshot.get(did_b).get(k) == block_start_snapshot.get(did_a).get(k))
-            )
-          )
-      )
-    )
+    // Mid-block reads go to the snapshot, which only begin_block/barrier_sync
+    // write; a value-comparison check cannot distinguish a leak from two
+    // devices legitimately holding equal values, so the checkable statement
+    // is the derivation property: live vars come only from the device's own
+    // snapshot plus its own pending writes.
+    inv_cross_device_writes_invisible_mid_block
   }
 
   // ── 13. Block targeting — block with app="X" runs only on app X's devices ──
@@ -781,10 +803,10 @@ module parallel_execution {
       for_each_cursor.current_index < for_each_cursor.target_devices.length() implies (
         val current_dev_id = for_each_cursor.target_devices[for_each_cursor.current_index]
         // The device exists and its vars are accessible.
-        devices.has(current_dev_id) and
+        devices.keys().contains(current_dev_id) and
         // Any var in the iteration device's store is the value _each would resolve to.
         devices.get(current_dev_id).vars.keys().forall(k =>
-          devices.get(current_dev_id).vars.has(k)
+          devices.get(current_dev_id).vars.keys().contains(k)
         )
       )
     )
@@ -920,6 +942,10 @@ module parallel_execution {
     nondet fe_empty_bi = Set(0, 1, 2, 3).oneOf()
     for_each_empty(fe_empty_bi),
   }
+
+  // Witness for sanity-checking runs: a flow actually completes, so the
+  // end-to-end execution path is exercised, not vacuous.
+  val witness_finished: bool = flow_result == FlowCompleted
 
   // ──────────────────────────────────────────────────────────────────────
   // Temporal property: invariants hold in every reachable state

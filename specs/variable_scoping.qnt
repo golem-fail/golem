@@ -13,10 +13,13 @@ module variable_scoping {
   // Scope levels in strict priority order (lower number = higher priority).
   type ScopeLevel = Cli | Flow | Fixture | Project | Generator
 
-  // A variable value is either a string, an object (nested map), or undefined.
+  // A variable value is either a string, an object (map of string leaves),
+  // or undefined. Quint forbids recursive types, so objects are modeled as
+  // one level of string-keyed string leaves — enough to express dot-path
+  // traversal and its stop conditions.
   type VarValue =
     | Str(str)
-    | Obj(str -> VarValue)
+    | Obj(str -> str)
     | Undefined
 
   // A variable reference can be unqualified or prefixed.
@@ -24,8 +27,8 @@ module variable_scoping {
     | Plain(str)                         // ${x}
     | SelfRef(str)                       // ${self:x}
     | GlobalRef(str)                     // ${global:x}
-    | CrossDeviceRef(str, str)           // ${device_name:x}
-    | DotPath(str, List[str])            // ${obj.prop.subprop}
+    | CrossDeviceRef((str, str))         // ${device_name:x}
+    | DotPath((str, List[str]))          // ${obj.prop.subprop}
 
   // An action result: either a resolved value or an error.
   type ResolveResult =
@@ -50,9 +53,9 @@ module variable_scoping {
   // Built-in variables (immutable): _device, _os, _browser, etc.
   var builtins: str -> VarValue
 
-  // Fixture stores: fixture_alias -> (var_name -> value).
+  // Fixture stores: fixture_alias -> (field_name -> leaf value).
   // Each load_fixture with a unique alias creates an independent copy.
-  var fixture_stores: str -> (str -> VarValue)
+  var fixture_stores: str -> (str -> str)
 
   // Generator definitions: ordered list of (var_name, generator_expression).
   // Evaluated top-to-bottom; later generators can reference earlier ones.
@@ -123,11 +126,11 @@ module variable_scoping {
                                 fixture: str -> VarValue,
                                 project: str -> VarValue,
                                 generator: str -> VarValue): VarValue = {
-    if (cli.has(name))       cli.get(name)
-    else if (flow.has(name))      flow.get(name)
-    else if (fixture.has(name))   fixture.get(name)
-    else if (project.has(name))   project.get(name)
-    else if (generator.has(name)) generator.get(name)
+    if (cli.keys().contains(name))       cli.get(name)
+    else if (flow.keys().contains(name))      flow.get(name)
+    else if (fixture.keys().contains(name))   fixture.get(name)
+    else if (project.keys().contains(name))   project.get(name)
+    else if (generator.keys().contains(name)) generator.get(name)
     else Undefined
   }
 
@@ -142,9 +145,9 @@ module variable_scoping {
                           project: str -> VarValue,
                           generator: str -> VarValue): VarValue = {
     // Built-ins take highest precedence
-    if (blt.has(name)) blt.get(name)
+    if (blt.keys().contains(name)) blt.get(name)
     // Then device scope
-    else if (dev_scopes.has(device) and dev_scopes.get(device).has(name))
+    else if (dev_scopes.keys().contains(device) and dev_scopes.get(device).keys().contains(name))
       dev_scopes.get(device).get(name)
     // Then global layers by priority
     else resolve_from_global(name, cli, flow, fixture, project, generator)
@@ -158,7 +161,7 @@ module variable_scoping {
   pure def resolve_self(name: str,
                          device: str,
                          dev_scopes: str -> (str -> VarValue)): VarValue = {
-    if (dev_scopes.has(device) and dev_scopes.get(device).has(name))
+    if (dev_scopes.keys().contains(device) and dev_scopes.get(device).keys().contains(name))
       dev_scopes.get(device).get(name)
     else Undefined
   }
@@ -177,7 +180,7 @@ module variable_scoping {
   pure def resolve_cross_device(target_device: str,
                                  name: str,
                                  dev_scopes: str -> (str -> VarValue)): VarValue = {
-    if (dev_scopes.has(target_device) and dev_scopes.get(target_device).has(name))
+    if (dev_scopes.keys().contains(target_device) and dev_scopes.get(target_device).keys().contains(name))
       dev_scopes.get(target_device).get(name)
     else Undefined
   }
@@ -186,13 +189,15 @@ module variable_scoping {
   // Core: dot-path traversal
   // ──────────────────────────────────────────────────────────────────────
 
-  // Traverse a dot path through nested VarValue objects.
+  // Traverse a dot path through a VarValue object. A single segment selects
+  // a leaf from an Obj; any further segments hit a string leaf and stop with
+  // Undefined, as does any traversal into a non-object.
   pure def traverse_path(root: VarValue, segments: List[str]): VarValue = {
     if (segments.length() == 0) root
     else match root {
       | Obj(m) =>
-          if (m.has(segments.head()))
-            traverse_path(m.get(segments.head()), segments.tail())
+          if (segments.length() == 1 and m.keys().contains(segments.head()))
+            Str(m.get(segments.head()))
           else Undefined
       | Str(_)     => Undefined
       | Undefined  => Undefined
@@ -203,7 +208,7 @@ module variable_scoping {
   // Action: set_variable — write to a scope layer
   // ──────────────────────────────────────────────────────────────────────
 
-  action set_variable(level: ScopeLevel, name: str, value: VarValue) = all {
+  action set_variable(level: ScopeLevel, name: str, value: VarValue): bool = all {
     // Cannot overwrite built-in variables.
     BUILTIN_NAMES.forall(bn => bn != name),
     match level {
@@ -258,11 +263,11 @@ module variable_scoping {
   // Action: save_to — writes to the executing device's scope, not global
   // ──────────────────────────────────────────────────────────────────────
 
-  action save_to(name: str, value: VarValue) = all {
+  action save_to(name: str, value: VarValue): bool = all {
     // Cannot overwrite built-in variables.
     BUILTIN_NAMES.forall(bn => bn != name),
     val device = current_device
-    val existing = if (device_scopes.has(device)) device_scopes.get(device)
+    val existing = if (device_scopes.keys().contains(device)) device_scopes.get(device)
                    else Map()
     all {
       device_scopes'  = device_scopes.put(device, existing.put(name, value)),
@@ -287,7 +292,7 @@ module variable_scoping {
   // ──────────────────────────────────────────────────────────────────────
 
   // load_fixture("users.json", "user") scopes all fixture fields under ${user.*}
-  action load_fixture(alias: str, data: str -> VarValue) = all {
+  action load_fixture(alias: str, data: str -> str): bool = all {
     // Each alias creates an independent copy in fixture_stores.
     fixture_stores' = fixture_stores.put(alias, data),
     // Also register as an Obj in fixture_vars so ${user.name} resolves via dot-path.
@@ -310,10 +315,10 @@ module variable_scoping {
   // Action: switch_device — change the current device context
   // ──────────────────────────────────────────────────────────────────────
 
-  action switch_device(device: str) = all {
+  action switch_device(device: str): bool = all {
     current_device' = device,
     // Initialize device scope if not present.
-    device_scopes'  = if (device_scopes.has(device)) device_scopes
+    device_scopes'  = if (device_scopes.keys().contains(device)) device_scopes
                       else device_scopes.put(device, Map()),
     cli_vars'       = cli_vars,
     flow_vars'      = flow_vars,
@@ -333,7 +338,7 @@ module variable_scoping {
   // Action: switch_block — change the current block, resetting _loop
   // ──────────────────────────────────────────────────────────────────────
 
-  action switch_block(block: str) = all {
+  action switch_block(block: str): bool = all {
     current_block' = block,
     // _loop is reset on block change: per device, per block.
     loop_index'    = loop_index.put((current_device, block), 0),
@@ -355,7 +360,9 @@ module variable_scoping {
   // Action: register_generator — add a generator definition
   // ──────────────────────────────────────────────────────────────────────
 
-  action register_generator(name: str, expr: str) = all {
+  action register_generator(name: str, expr: str): bool = all {
+    // Generator names are unique (project config is a map).
+    generator_defs.indices().forall(i => generator_defs[i]._1 != name),
     generator_defs'      = generator_defs.append((name, expr)),
     generator_evaluated' = generator_evaluated.put(name, false),
     cli_vars'       = cli_vars,
@@ -377,22 +384,25 @@ module variable_scoping {
   //         (models top-to-bottom evaluation order)
   // ──────────────────────────────────────────────────────────────────────
 
-  action evaluate_generator(index: int, generated_value: VarValue) = all {
+  action evaluate_generator(index: int, generated_value: VarValue): bool = all {
     // Must evaluate in order: index must be the first unevaluated.
     index >= 0,
     index < generator_defs.length(),
-    val entry = generator_defs[index]
-    val name  = entry._1
+    {
+    val name = generator_defs[index]._1
+    all {
     // All generators before this index must already be evaluated.
-    0.to(index).forall(i => generator_evaluated.get(generator_defs[i]._1)),
+    0.to(index - 1).forall(i => generator_evaluated.get(generator_defs[i]._1)),
     // If CLI already defines this variable, skip the generator.
-    if (cli_vars.has(name)) all {
+    if (cli_vars.keys().contains(name)) all {
       generator_evaluated' = generator_evaluated.put(name, true),
       generator_vars'      = generator_vars,
     }
     else all {
       generator_vars'      = generator_vars.put(name, generated_value),
       generator_evaluated' = generator_evaluated.put(name, true),
+    },
+    }
     },
     cli_vars'       = cli_vars,
     flow_vars'      = flow_vars,
@@ -412,7 +422,7 @@ module variable_scoping {
   // Action: set_builtin — initialize a built-in variable (during setup only)
   // ──────────────────────────────────────────────────────────────────────
 
-  action set_builtin(name: str, value: VarValue) = all {
+  action set_builtin(name: str, value: VarValue): bool = all {
     BUILTIN_NAMES.contains(name),
     builtins'       = builtins.put(name, value),
     cli_vars'       = cli_vars,
@@ -448,7 +458,7 @@ module variable_scoping {
 
   val inv_flow_overrides_lower: bool = {
     flow_vars.keys().forall(name =>
-      not(cli_vars.has(name)) implies
+      not(cli_vars.keys().contains(name)) implies
         resolve_from_global(name, cli_vars, flow_vars, fixture_vars, project_vars, generator_vars)
           == flow_vars.get(name)
     )
@@ -456,7 +466,7 @@ module variable_scoping {
 
   val inv_fixture_overrides_lower: bool = {
     fixture_vars.keys().forall(name =>
-      (not(cli_vars.has(name)) and not(flow_vars.has(name))) implies
+      (not(cli_vars.keys().contains(name)) and not(flow_vars.keys().contains(name))) implies
         resolve_from_global(name, cli_vars, flow_vars, fixture_vars, project_vars, generator_vars)
           == fixture_vars.get(name)
     )
@@ -464,7 +474,7 @@ module variable_scoping {
 
   val inv_project_overrides_generator: bool = {
     project_vars.keys().forall(name =>
-      (not(cli_vars.has(name)) and not(flow_vars.has(name)) and not(fixture_vars.has(name))) implies
+      (not(cli_vars.keys().contains(name)) and not(flow_vars.keys().contains(name)) and not(fixture_vars.keys().contains(name))) implies
         resolve_from_global(name, cli_vars, flow_vars, fixture_vars, project_vars, generator_vars)
           == project_vars.get(name)
     )
@@ -478,7 +488,7 @@ module variable_scoping {
         (d1 != d2) implies
           device_scopes.get(d1).keys().forall(name =>
             // If d2 doesn't have this var, d1's value doesn't appear in d2's scope
-            not(device_scopes.get(d2).has(name)) implies
+            not(device_scopes.get(d2).keys().contains(name)) implies
               resolve_cross_device(d2, name, device_scopes) == Undefined
           )
       )
@@ -491,7 +501,7 @@ module variable_scoping {
 
   val inv_self_never_falls_through: bool = {
     device_scopes.keys().forall(device =>
-      not(device_scopes.get(device).has("__test_var__")) implies
+      not(device_scopes.get(device).keys().contains("__test_var__")) implies
         resolve_self("__test_var__", device, device_scopes) == Undefined
     )
   }
@@ -501,7 +511,7 @@ module variable_scoping {
   val inv_self_ignores_global: bool = {
     cli_vars.keys().forall(name =>
       device_scopes.keys().forall(device =>
-        not(device_scopes.get(device).has(name)) implies
+        not(device_scopes.get(device).keys().contains(name)) implies
           resolve_self(name, device, device_scopes) == Undefined
       )
     )
@@ -526,9 +536,9 @@ module variable_scoping {
   val inv_global_prefix_device_only_var: bool = {
     device_scopes.keys().forall(device =>
       device_scopes.get(device).keys().forall(name =>
-        (not(cli_vars.has(name)) and not(flow_vars.has(name)) and
-         not(fixture_vars.has(name)) and not(project_vars.has(name)) and
-         not(generator_vars.has(name))) implies
+        (not(cli_vars.keys().contains(name)) and not(flow_vars.keys().contains(name)) and
+         not(fixture_vars.keys().contains(name)) and not(project_vars.keys().contains(name)) and
+         not(generator_vars.keys().contains(name))) implies
           resolve_global_only(name, cli_vars, flow_vars, fixture_vars, project_vars, generator_vars)
             == Undefined
       )
@@ -550,9 +560,9 @@ module variable_scoping {
 
   val inv_fixture_namespaced: bool = {
     fixture_stores.keys().forall(alias =>
-      fixture_vars.has(alias) and
+      fixture_vars.keys().contains(alias) and
       match fixture_vars.get(alias) {
-        | Obj(m) => fixture_stores.get(alias).keys().forall(k => m.has(k))
+        | Obj(m) => fixture_stores.get(alias).keys().forall(k => m.keys().contains(k))
         | _      => false
       }
     )
@@ -581,7 +591,7 @@ module variable_scoping {
     fixture_vars.keys().forall(alias =>
       match fixture_vars.get(alias) {
         | Obj(m) => m.keys().forall(k =>
-            traverse_path(fixture_vars.get(alias), [k]) == m.get(k)
+            traverse_path(fixture_vars.get(alias), [k]) == Str(m.get(k))
           )
         | _ => true
       }
@@ -609,9 +619,9 @@ module variable_scoping {
   val inv_unresolvable_is_undefined: bool = {
     // If "__nonexistent__" is not in any scope, resolution returns Undefined.
     val name = "__nonexistent__"
-    (not(cli_vars.has(name)) and not(flow_vars.has(name)) and
-     not(fixture_vars.has(name)) and not(project_vars.has(name)) and
-     not(generator_vars.has(name)) and not(builtins.has(name))) implies
+    (not(cli_vars.keys().contains(name)) and not(flow_vars.keys().contains(name)) and
+     not(fixture_vars.keys().contains(name)) and not(project_vars.keys().contains(name)) and
+     not(generator_vars.keys().contains(name)) and not(builtins.keys().contains(name))) implies
       resolve_from_global(name, cli_vars, flow_vars, fixture_vars, project_vars, generator_vars)
         == Undefined
   }
@@ -643,10 +653,10 @@ module variable_scoping {
   val inv_generator_order: bool = {
     // For all generators, if index i is evaluated, all indices < i are also evaluated.
     0.to(generator_defs.length()).forall(i =>
-      (i < generator_defs.length() and generator_evaluated.has(generator_defs[i]._1)
+      (i < generator_defs.length() and generator_evaluated.keys().contains(generator_defs[i]._1)
         and generator_evaluated.get(generator_defs[i]._1)) implies
         0.to(i).forall(j =>
-          generator_evaluated.has(generator_defs[j]._1) and
+          generator_evaluated.keys().contains(generator_defs[j]._1) and
           generator_evaluated.get(generator_defs[j]._1)
         )
     )
@@ -660,8 +670,8 @@ module variable_scoping {
     // the write when cli_vars already has the name.
     generator_defs.indices().forall(i =>
       val name = generator_defs[i]._1
-      (cli_vars.has(name) and generator_evaluated.has(name) and generator_evaluated.get(name)) implies
-        not(generator_vars.has(name))
+      cli_vars.keys().contains(name) and generator_evaluated.keys().contains(name) and generator_evaluated.get(name) implies
+        not(generator_vars.keys().contains(name))
     )
   }
 
@@ -673,12 +683,12 @@ module variable_scoping {
 
   val inv_builtins_not_in_mutable_scopes: bool = {
     BUILTIN_NAMES.forall(bn =>
-      not(cli_vars.has(bn)) and
-      not(flow_vars.has(bn)) and
-      not(fixture_vars.has(bn)) and
-      not(project_vars.has(bn)) and
-      not(generator_vars.has(bn)) and
-      device_scopes.keys().forall(d => not(device_scopes.get(d).has(bn)))
+      not(cli_vars.keys().contains(bn)) and
+      not(flow_vars.keys().contains(bn)) and
+      not(fixture_vars.keys().contains(bn)) and
+      not(project_vars.keys().contains(bn)) and
+      not(generator_vars.keys().contains(bn)) and
+      device_scopes.keys().forall(d => not(device_scopes.get(d).keys().contains(bn)))
     )
   }
 
@@ -704,7 +714,7 @@ module variable_scoping {
   // If both fixture_vars and flow_vars define "x", flow wins (higher priority).
   val inv_flow_beats_fixture: bool = {
     fixture_vars.keys().forall(name =>
-      flow_vars.has(name) implies
+      (flow_vars.keys().contains(name) and not(cli_vars.keys().contains(name))) implies
         resolve_from_global(name, cli_vars, flow_vars, fixture_vars, project_vars, generator_vars)
           == flow_vars.get(name)
     )
@@ -723,10 +733,10 @@ module variable_scoping {
     // then when j is being evaluated, i must already be evaluated.
     // This is a consequence of inv_generator_order, restated for clarity.
     generator_defs.indices().forall(j =>
-      (generator_evaluated.has(generator_defs[j]._1) and
+      (generator_evaluated.keys().contains(generator_defs[j]._1) and
        generator_evaluated.get(generator_defs[j]._1)) implies
         0.to(j).forall(i =>
-          generator_evaluated.has(generator_defs[i]._1) and
+          generator_evaluated.keys().contains(generator_defs[i]._1) and
           generator_evaluated.get(generator_defs[i]._1)
         )
     )
@@ -771,7 +781,7 @@ module variable_scoping {
 
   action step = any {
     nondet name  = Set("x", "y", "z", "email", "url").oneOf()
-    nondet value = Set(Str("a"), Str("b"), Str(""), Obj(Map("k" -> Str("v")))).oneOf()
+    nondet value = Set(Str("a"), Str("b"), Str(""), Obj(Map("k" -> "v"))).oneOf()
     nondet level = Set(Cli, Flow, Fixture, Project, Generator).oneOf()
     set_variable(level, name, value),
 
@@ -781,8 +791,8 @@ module variable_scoping {
 
     nondet alias = Set("user", "admin", "config").oneOf()
     nondet data  = Set(
-      Map("name" -> Str("Alice"), "email" -> Str("alice@test.com")),
-      Map("name" -> Str("Bob"), "role" -> Str("admin"))
+      Map("name" -> "Alice", "email" -> "alice@test.com"),
+      Map("name" -> "Bob", "role" -> "admin")
     ).oneOf()
     load_fixture(alias, data),
 
@@ -804,6 +814,11 @@ module variable_scoping {
     nondet expr = Set("fake:email", "fake:name", "fake:phone").oneOf()
     register_generator(name, expr),
   }
+
+  // Witness for sanity-checking runs: generator evaluation is reachable,
+  // so the evaluation-order invariants are exercised, not vacuous.
+  val witness_finished: bool =
+    generator_evaluated.keys().exists(k => generator_evaluated.get(k))
 
   // ──────────────────────────────────────────────────────────────────────
   // Temporal property: invariants hold in every reachable state

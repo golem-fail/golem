@@ -173,12 +173,20 @@ module device_resolution {
     resolution_result' = Resolved(Set()),
   }
 
+  // A resolution is pending while the result still holds the initial
+  // Resolved(Set()) marker; finish_resolution or fail_resolution end it.
+  def resolution_pending: bool = match resolution_result {
+    | Resolved(sel) => sel.size() == 0
+    | Failed(_) => false
+  }
+
   // ──────────────────────────────────────────────────────────────────────
   // Actions: setup (configure the problem)
   // ──────────────────────────────────────────────────────────────────────
 
   // Add a device to the available pool.
-  action add_available_device(d: Device) = all {
+  action add_available_device(d: Device): bool = all {
+    resolution_pending,
     available_devices' = available_devices.union(Set(d)),
     requirements'      = requirements,
     selected'          = selected,
@@ -189,7 +197,8 @@ module device_resolution {
   }
 
   // Add a coverage requirement.
-  action add_requirement(req: CoverageReq) = all {
+  action add_requirement(req: CoverageReq): bool = all {
+    resolution_pending,
     requirements'      = requirements.union(Set(req)),
     available_devices' = available_devices,
     selected'          = selected,
@@ -200,7 +209,11 @@ module device_resolution {
   }
 
   // Set global options.
-  action set_options(cim: bool, imp: bool) = all {
+  action set_options(cim: bool, imp: bool): bool = all {
+    // Options are fixed before any solving work happens.
+    resolution_pending,
+    selected.size() == 0,
+    created_devices.size() == 0,
     create_if_missing' = cim,
     ignore_missing_physical' = imp,
     available_devices' = available_devices,
@@ -216,27 +229,46 @@ module device_resolution {
 
   // Select a device to satisfy coverage. The solver nondeterministically
   // picks a valid selection; invariants constrain it to correct ones.
-  action select_device(d: Device, app: str, origin: SelectionOrigin, was_created: bool) = all {
+  action select_device(d: Device, app: str, origin: SelectionOrigin, was_created: bool): bool = {
+    val sd: SelectedDevice = { device: d, apps: Set(app), origin: origin, created: was_created }
+    all {
+    resolution_pending,
     // The device must be in the available pool or be a created device.
     available_devices.contains(d) or (was_created and create_if_missing),
+    // A device id is selected at most once (apps merge via share_device).
+    not(selected.exists(sd2 => sd2.device.id == d.id)),
     // If created, record it.
     created_devices' = if (was_created) created_devices.union(Set(d)) else created_devices,
     // If created, it must only happen when create_if_missing is true.
     was_created implies create_if_missing,
+    // Only devices that need creation can be created.
+    was_created implies d.state == NeedsCreation,
     // Add to selected set.
-    val sd: SelectedDevice = { device: d, apps: Set(app), origin: origin, created: was_created }
     selected' = selected.union(Set(sd)),
     available_devices' = available_devices,
     requirements'      = requirements,
     create_if_missing' = create_if_missing,
     ignore_missing_physical' = ignore_missing_physical,
-    resolution_result' = Resolved(selected.union(Set(sd))),
+    // The result stays pending until finish_resolution commits it.
+    resolution_result' = resolution_result,
+    }
   }
 
   // Merge apps onto an already-selected device (two apps share one device).
-  action share_device(existing_id: str, new_app: str) = all {
-    // Must find a selected device with this id.
-    selected.exists(sd => sd.device.id == existing_id),
+  action share_device(existing_id: str, new_app: str): bool = all {
+    resolution_pending,
+    // Must find a selected device with this id, compatible with every app it
+    // would then serve (including the new one).
+    selected.exists(sd =>
+      sd.device.id == existing_id and
+      sd.apps.union(Set(new_app)).forall(app =>
+        requirements.exists(req =>
+          req.app == app and
+          (req.os_values.size() == 0 or req.os_values.contains(sd.device.os)) and
+          (req.type_values.size() == 0 or req.type_values.contains(sd.device.dtype))
+        )
+      )
+    ),
     // Update the selected set: add the new app to the matching device.
     selected' = selected.map(sd =>
       if (sd.device.id == existing_id)
@@ -248,20 +280,56 @@ module device_resolution {
     created_devices'   = created_devices,
     create_if_missing' = create_if_missing,
     ignore_missing_physical' = ignore_missing_physical,
-    resolution_result' = Resolved(selected.map(sd =>
-      if (sd.device.id == existing_id)
-        { device: sd.device, apps: sd.apps.union(Set(new_app)), origin: sd.origin, created: sd.created }
-      else sd
-    )),
+    resolution_result' = resolution_result,
   }
 
   // Fail resolution when requirements are impossible to satisfy.
-  action fail_resolution(reason: str) = all {
+  action fail_resolution(reason: str): bool = all {
+    resolution_pending,
     resolution_result' = Failed(reason),
     available_devices' = available_devices,
     requirements'      = requirements,
     selected'          = selected,
     created_devices'   = created_devices,
+    create_if_missing' = create_if_missing,
+    ignore_missing_physical' = ignore_missing_physical,
+  }
+
+  // The solver returns: commit the current selection as the result.
+  // Guards encode the solver's postconditions; the invariants check the
+  // committed result against the same predicates.
+  action finish_resolution: bool = all {
+    resolution_pending,
+    selected.size() > 0,
+    q_coverage_completeness(selected),
+    q_minimality(selected),
+    q_preference_ordering(selected),
+    q_explicit_inclusion(selected),
+    q_explicit_coverage_credit(selected),
+    q_no_waste(selected),
+    q_full_expansion(selected),
+    q_full_expansion_count(selected),
+    q_physical_ok,
+    q_single_device_sufficient(selected),
+    q_explicit_shutdown_still_selected(selected),
+    resolution_result' = Resolved(selected),
+    available_devices' = available_devices,
+    requirements'      = requirements,
+    selected'          = selected,
+    created_devices'   = created_devices,
+    create_if_missing' = create_if_missing,
+    ignore_missing_physical' = ignore_missing_physical,
+  }
+
+  // Start a fresh resolution round (a new golem invocation): the previous
+  // outcome is discarded so setup actions can fire again.
+  action restart_resolution: bool = all {
+    not(resolution_pending),
+    selected'          = Set(),
+    created_devices'   = Set(),
+    requirements'      = Set(),
+    resolution_result' = Resolved(Set()),
+    available_devices' = available_devices,
     create_if_missing' = create_if_missing,
     ignore_missing_physical' = ignore_missing_physical,
   }
@@ -274,11 +342,7 @@ module device_resolution {
   // Every value in every requirement array appears in at least one selected device.
   // Only checked when resolution succeeded.
 
-  val inv_coverage_completeness: bool = {
-    match resolution_result {
-      | Failed(_) => true
-      | Resolved(sel) =>
-          sel.size() > 0 implies
+  def q_coverage_completeness(sel: Set[SelectedDevice]): bool = {
             requirements.forall(req =>
               // Every required OS value is covered.
               req.os_values.forall(os =>
@@ -289,6 +353,12 @@ module device_resolution {
                 sel.exists(sd => sd.device.dtype == dt and sd.apps.contains(req.app))
               )
             )
+  }
+
+  val inv_coverage_completeness: bool = {
+    match resolution_result {
+      | Failed(_) => true
+      | Resolved(sel) => sel.size() > 0 implies q_coverage_completeness(sel)
     }
   }
 
@@ -296,10 +366,7 @@ module device_resolution {
   // No selected device can be removed without breaking coverage.
   // (Only applies to auto-selected devices; explicit devices are always kept.)
 
-  val inv_minimality: bool = {
-    match resolution_result {
-      | Failed(_) => true
-      | Resolved(sel) =>
+  def q_minimality(sel: Set[SelectedDevice]): bool = {
           sel.forall(sd =>
             is_explicit(sd) or
             // Removing this device would lose at least one required value.
@@ -319,6 +386,12 @@ module device_resolution {
               )
             )
           )
+  }
+
+  val inv_minimality: bool = {
+    match resolution_result {
+      | Failed(_) => true
+      | Resolved(sel) => sel.size() > 0 implies q_minimality(sel)
     }
   }
 
@@ -329,10 +402,7 @@ module device_resolution {
   // Stated as: no auto-selected device in a worse state when an unused
   // available device in a better state would cover the same values.
 
-  val inv_preference_ordering: bool = {
-    match resolution_result {
-      | Failed(_) => true
-      | Resolved(sel) =>
+  def q_preference_ordering(sel: Set[SelectedDevice]): bool = {
           sel.forall(sd =>
             is_explicit(sd) or
             // No available device that is not selected, has a better state,
@@ -345,16 +415,19 @@ module device_resolution {
               alt.physical == sd.device.physical
             ))
           )
+  }
+
+  val inv_preference_ordering: bool = {
+    match resolution_result {
+      | Failed(_) => true
+      | Resolved(sel) => sel.size() > 0 implies q_preference_ordering(sel)
     }
   }
 
   // ── 4. Explicit inclusion ──
   // Devices specified by id or name in requirements are always selected.
 
-  val inv_explicit_inclusion: bool = {
-    match resolution_result {
-      | Failed(_) => true
-      | Resolved(sel) =>
+  def q_explicit_inclusion(sel: Set[SelectedDevice]): bool = {
           requirements.forall(req =>
             // Every explicit id must appear in selection.
             req.explicit_ids.forall(eid =>
@@ -365,6 +438,12 @@ module device_resolution {
               sel.exists(sd => sd.device.name == ename and sd.apps.contains(req.app))
             )
           )
+  }
+
+  val inv_explicit_inclusion: bool = {
+    match resolution_result {
+      | Failed(_) => true
+      | Resolved(sel) => sel.size() > 0 implies q_explicit_inclusion(sel)
     }
   }
 
@@ -372,10 +451,7 @@ module device_resolution {
   // Explicit devices count toward coverage; the solver does not ignore their
   // attribute values when computing remaining requirements.
 
-  val inv_explicit_coverage_credit: bool = {
-    match resolution_result {
-      | Failed(_) => true
-      | Resolved(sel) =>
+  def q_explicit_coverage_credit(sel: Set[SelectedDevice]): bool = {
           requirements.forall(req =>
             val explicits = sel.filter(sd =>
               is_explicit(sd) and sd.apps.contains(req.app)
@@ -406,6 +482,12 @@ module device_resolution {
               )
             )
           )
+  }
+
+  val inv_explicit_coverage_credit: bool = {
+    match resolution_result {
+      | Failed(_) => true
+      | Resolved(sel) => sel.size() > 0 implies q_explicit_coverage_credit(sel)
     }
   }
 
@@ -413,10 +495,7 @@ module device_resolution {
   // No auto-selected device contributes zero uncovered values.
   // (Explicit devices are exempt from this rule.)
 
-  val inv_no_waste: bool = {
-    match resolution_result {
-      | Failed(_) => true
-      | Resolved(sel) =>
+  def q_no_waste(sel: Set[SelectedDevice]): bool = {
           sel.forall(sd =>
             is_explicit(sd) or
             // This device must contribute at least one required value
@@ -441,6 +520,12 @@ module device_resolution {
               )
             )
           )
+  }
+
+  val inv_no_waste: bool = {
+    match resolution_result {
+      | Failed(_) => true
+      | Resolved(sel) => sel.size() > 0 implies q_no_waste(sel)
     }
   }
 
@@ -462,10 +547,7 @@ module device_resolution {
   // When expand = "full", the selection must include one device for every
   // combination in the cartesian product of os_values x type_values.
 
-  val inv_full_expansion: bool = {
-    match resolution_result {
-      | Failed(_) => true
-      | Resolved(sel) =>
+  def q_full_expansion(sel: Set[SelectedDevice]): bool = {
           requirements.forall(req =>
             req.expand != FullExpand or
             // For full expansion, every (os, type) pair must have a selected device.
@@ -479,20 +561,29 @@ module device_resolution {
               )
             )
           )
+  }
+
+  val inv_full_expansion: bool = {
+    match resolution_result {
+      | Failed(_) => true
+      | Resolved(sel) => sel.size() > 0 implies q_full_expansion(sel)
     }
   }
 
   // Full expansion produces exactly the cartesian product size (per app).
-  val inv_full_expansion_count: bool = {
-    match resolution_result {
-      | Failed(_) => true
-      | Resolved(sel) =>
+  def q_full_expansion_count(sel: Set[SelectedDevice]): bool = {
           requirements.forall(req =>
             req.expand != FullExpand or
             // The number of devices for this app must be at least the cartesian size.
             val app_devices = sel.filter(sd => sd.apps.contains(req.app))
             app_devices.size() >= cartesian_size(req)
           )
+  }
+
+  val inv_full_expansion_count: bool = {
+    match resolution_result {
+      | Failed(_) => true
+      | Resolved(sel) => sel.size() > 0 implies q_full_expansion_count(sel)
     }
   }
 
@@ -502,7 +593,9 @@ module device_resolution {
   // rather than failing.
   // When ignore_missing_physical = false, missing physical devices cause failure.
 
-  val inv_physical_skip: bool = {
+  // Every physical requirement either has an available physical match or is
+  // being skipped via ignore_missing_physical.
+  def q_physical_ok: bool = {
     requirements.forall(req =>
       req.require_physical implies (
         val has_physical_match = available_devices.exists(d =>
@@ -510,14 +603,18 @@ module device_resolution {
           (req.os_values.size() == 0 or req.os_values.contains(d.os)) and
           (req.type_values.size() == 0 or req.type_values.contains(d.dtype))
         )
-        // If no physical match and ignore is false, must fail.
-        (not(has_physical_match) and not(ignore_missing_physical)) implies
-          match resolution_result {
-            | Failed(_) => true
-            | Resolved(_) => false
-          }
+        has_physical_match or ignore_missing_physical
       )
     )
+  }
+
+  val inv_physical_skip: bool = {
+    // If a physical requirement is unmatched and not ignored, no nonempty
+    // resolution may succeed. (Resolved(Set()) means "not yet resolved".)
+    match resolution_result {
+      | Failed(_) => true
+      | Resolved(sel) => sel.size() > 0 implies q_physical_ok
+    }
   }
 
   // ── 10. Impossible coverage ──
@@ -568,10 +665,7 @@ module device_resolution {
   // Edge case: Single device covers all requirements.
   // When one device satisfies all OS and type requirements for all apps,
   // only that one device should be selected (minimality ensures this).
-  val inv_single_device_sufficient: bool = {
-    match resolution_result {
-      | Failed(_) => true
-      | Resolved(sel) =>
+  def q_single_device_sufficient(sel: Set[SelectedDevice]): bool = {
           // If any single device covers everything, selection size is 1
           // (for the non-expand case).
           val all_no_expand = requirements.forall(r => r.expand != FullExpand)
@@ -587,6 +681,12 @@ module device_resolution {
           (all_no_expand and single_covers_all and
            requirements.forall(r => r.explicit_ids.size() == 0 and r.explicit_names.size() == 0))
             implies sel.size() == 1
+  }
+
+  val inv_single_device_sufficient: bool = {
+    match resolution_result {
+      | Failed(_) => true
+      | Resolved(sel) => sel.size() > 0 implies q_single_device_sufficient(sel)
     }
   }
 
@@ -643,10 +743,7 @@ module device_resolution {
   // The explicit device must still be selected (explicit inclusion rule).
   // The running device may or may not be selected depending on whether it
   // covers additional requirements.
-  val inv_explicit_shutdown_still_selected: bool = {
-    match resolution_result {
-      | Failed(_) => true
-      | Resolved(sel) =>
+  def q_explicit_shutdown_still_selected(sel: Set[SelectedDevice]): bool = {
           requirements.forall(req =>
             req.explicit_ids.forall(eid =>
               // Even if the explicit device is shutdown, it must be selected.
@@ -654,6 +751,12 @@ module device_resolution {
                 sel.exists(sd => sd.device.id == eid)
             )
           )
+  }
+
+  val inv_explicit_shutdown_still_selected: bool = {
+    match resolution_result {
+      | Failed(_) => true
+      | Resolved(sel) => sel.size() > 0 implies q_explicit_shutdown_still_selected(sel)
     }
   }
 
@@ -770,6 +873,17 @@ module device_resolution {
       "cannot create device: create_if_missing is false"
     ).oneOf()
     fail_resolution(reason),
+
+    // Commit or restart a resolution round.
+    finish_resolution,
+    restart_resolution,
+  }
+
+  // Witness for sanity-checking runs: a committed (nonempty) resolution is
+  // reachable, so the result invariants are exercised, not vacuous.
+  val witness_finished: bool = match resolution_result {
+    | Resolved(sel) => sel.size() > 0
+    | Failed(_) => false
   }
 
   // ──────────────────────────────────────────────────────────────────────
