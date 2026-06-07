@@ -278,14 +278,14 @@ mod tests {
         assert_eq!(run.start.as_deref(), Some("block_name"));
     }
 
-    // 7. `run --output json:report.json`
+    // 7. `run --output json`
     #[test]
     fn run_output() {
-        let cli = parse(&["run", "--output", "json:report.json"]);
+        let cli = parse(&["run", "--output", "json"]);
         let Commands::Run(run) = cli.command else {
             panic!("expected Run");
         };
-        assert_eq!(run.outputs, vec!["json:report.json"]);
+        assert_eq!(run.outputs, vec!["json"]);
     }
 
     // 8. `run --no-teardown --keep-devices`
@@ -360,17 +360,14 @@ mod tests {
             "--output",
             "human",
             "--output",
-            "json:report.json",
+            "json",
             "--output",
-            "junit:results.xml",
+            "junit",
         ]);
         let Commands::Run(run) = cli.command else {
             panic!("expected Run");
         };
-        assert_eq!(
-            run.outputs,
-            vec!["human", "json:report.json", "junit:results.xml"]
-        );
+        assert_eq!(run.outputs, vec!["human", "json", "junit"]);
     }
 
     // 15. `run --no-perf`

@@ -365,6 +365,8 @@ pub struct InstallReport {
     pub duration_ms: u64,
     pub exit_code: Option<i32>,
     pub error: Option<String>,
+    /// Failure code when the install failed (A-domain). `None` on success.
+    pub code: Option<golem_events::FailureCode>,
     /// ISO-8601 UTC wall-clock when the install started.
     pub started_at: Option<String>,
     /// ISO-8601 UTC wall-clock when the install finished.

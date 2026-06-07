@@ -2425,9 +2425,10 @@ async fn run_flow_on_device(
                     "app '{}' has no bundle id — add one to [[flow.apps]] or [[apps]] in golem.toml",
                     app.name
                 );
-                ctx.emit(golem_events::EventKind::FlowSkipped {
+                ctx.emit(golem_events::EventKind::FlowCouldNotRun {
                     flow_name: flow_name.clone(),
                     reason: reason.clone(),
+                    code: golem_events::FailureCode::ParseMissingParam,
                 });
                 return FlowReport {
                     flow_name,
@@ -2458,9 +2459,10 @@ async fn run_flow_on_device(
                     "install_script failed earlier for {} on {device_name}: {err}",
                     bundle_for_install
                 );
-                ctx.emit(golem_events::EventKind::FlowSkipped {
+                ctx.emit(golem_events::EventKind::FlowCouldNotRun {
                     flow_name: flow_name.clone(),
                     reason: reason.clone(),
+                    code: golem_events::FailureCode::AppInstallFailed,
                 });
                 return FlowReport {
                     flow_name,
@@ -2488,9 +2490,10 @@ async fn run_flow_on_device(
                      Add install_script to [[flow.apps]] or [install] in golem.toml.",
                     bundle_for_install
                 );
-                ctx.emit(golem_events::EventKind::FlowSkipped {
+                ctx.emit(golem_events::EventKind::FlowCouldNotRun {
                     flow_name: flow_name.clone(),
                     reason: reason.clone(),
+                    code: golem_events::FailureCode::AppInstallScriptNotFound,
                 });
                 return FlowReport {
                     flow_name,
@@ -2546,9 +2549,10 @@ async fn run_flow_on_device(
                     "install_script failed for {} on {device_name}: {err_str}",
                     bundle_for_install
                 );
-                ctx.emit(golem_events::EventKind::FlowSkipped {
+                ctx.emit(golem_events::EventKind::FlowCouldNotRun {
                     flow_name: flow_name.clone(),
                     reason: reason.clone(),
+                    code: golem_events::FailureCode::AppInstallFailed,
                 });
                 return FlowReport {
                     flow_name,

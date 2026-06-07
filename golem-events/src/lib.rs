@@ -294,10 +294,22 @@ pub enum EventKind {
         /// OS major version (same as InstallStarted.os_major).
         os_major: u32,
     },
-    /// A flow was skipped on a device because a prior install failed.
+    /// A flow did not run, and that is *not* a failure — a deliberate skip
+    /// or an informational notice. Examples: a peer run satisfied a coverage
+    /// group, or a device is being rebooted in the background for ANR
+    /// recovery (the triggering flow's own failure is reported separately).
+    /// Counts as success (exit 0).
     FlowSkipped {
         flow_name: String,
         reason: String,
+    },
+    /// A flow could not run because a precondition failed (missing bundle id,
+    /// failed or absent install script). The flow never executed a step, so
+    /// it counts as a failure (exit 1) and carries the responsible code.
+    FlowCouldNotRun {
+        flow_name: String,
+        reason: String,
+        code: FailureCode,
     },
     /// The persistent install cache decided no install was needed for
     /// this `(device, bundle)`. Emitted once per skipped install. Lets

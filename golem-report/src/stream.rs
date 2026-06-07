@@ -608,6 +608,7 @@ pub async fn stream_human(
                 }
             }
             EventKind::FlowSkipped { flow_name, reason } => {
+                // Deliberate skip / informational notice — never a failure.
                 let kw = keyword("SKIP", BOLD_YELLOW, use_color);
                 let name = fmt_flow_name(flow_name, use_color);
                 let dur_blank = if use_color {
@@ -619,6 +620,23 @@ pub async fn stream_human(
                     eprintln!("{ts}  {dp}{kw} {dur_blank}  {name}  {DIM}{reason}{RESET}");
                 } else {
                     eprintln!("{ts}  {dp}{kw} {dur_blank}  {name}  {reason}");
+                }
+            }
+            EventKind::FlowCouldNotRun { flow_name, reason, code } => {
+                // The flow never ran — render FAIL with its code, matching the
+                // report files and exit code.
+                let kw = keyword("FAIL", BOLD_RED, use_color);
+                let name = fmt_flow_name(flow_name, use_color);
+                let rendered = code.render(golem_events::Severity::Error);
+                let dur_blank = if use_color {
+                    format!("{DIM}[       --]{RESET}")
+                } else {
+                    "[       --]".to_string()
+                };
+                if use_color {
+                    eprintln!("{ts}  {dp}{kw} {dur_blank}  {name}  {BOLD_RED}{rendered}{RESET}  {DIM}{reason}{RESET}");
+                } else {
+                    eprintln!("{ts}  {dp}{kw} {dur_blank}  {name}  {rendered}  {reason}");
                 }
             }
             EventKind::FlowParseFailed { path, error } => {

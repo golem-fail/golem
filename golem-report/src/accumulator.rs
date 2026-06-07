@@ -47,6 +47,9 @@ struct AccumulatedFlow {
     finished_at: Option<SystemTime>,
     recordings: Vec<crate::RecordingEntry>,
     repeat: Option<golem_events::RepeatContext>,
+    /// Set directly for flows that never ran a step (FlowCouldNotRun);
+    /// otherwise derived from the first failed step in `into_suite_report`.
+    first_failure_code: Option<golem_events::FailureCode>,
 }
 
 /// Accumulates events into a hierarchical SuiteReport.
@@ -104,6 +107,7 @@ impl ReportAccumulator {
                     finished_at: None,
                     recordings: Vec::new(),
                     repeat: *repeat,
+                    first_failure_code: None,
                 });
                 self.current_flow_by_device.insert(dev_key, idx);
             }
@@ -121,15 +125,10 @@ impl ReportAccumulator {
                 self.current_flow_by_device.remove(&dev_key);
             }
             EventKind::FlowSkipped { flow_name, reason } => {
-                // Record a synthetic flow entry so the skip shows up in
-                // reports. `success` depends on the reason:
-                // - Install / bundle / setup skips should fail the suite
-                //   (exit 1) → success=false.
-                // - Coverage-group skips (a peer run met the group goal)
-                //   are deliberate and shouldn't fail the suite → success=true.
-                // Kept in one place so both local-path and IPC-path
-                // reports agree.
-                let is_coverage_skip = reason.starts_with("coverage group");
+                // A deliberate skip or informational notice — never a failure
+                // (coverage group satisfied, ANR-recovery reboot, etc.).
+                // Recorded as a synthetic success=true flow so it shows in
+                // reports without affecting the exit code.
                 self.flows.push(AccumulatedFlow {
                     flow_name: flow_name.clone(),
                     device_id: event.device_id.clone(),
@@ -137,8 +136,29 @@ impl ReportAccumulator {
                     steps: Vec::new(),
                     warnings: Vec::new(),
                     duration_ms: 0,
-                    success: is_coverage_skip,
+                    success: true,
                     skipped_reason: Some(reason.clone()),
+                    started_at: Some(event.wall_time),
+                    finished_at: Some(event.wall_time),
+                    recordings: Vec::new(),
+                    repeat: None,
+                    first_failure_code: None,
+                });
+            }
+            EventKind::FlowCouldNotRun { flow_name, reason, code } => {
+                // A precondition stopped the flow from running at all — it
+                // executed no steps, so it counts as a failure (exit 1) and
+                // carries the responsible code for the summary line.
+                self.flows.push(AccumulatedFlow {
+                    flow_name: flow_name.clone(),
+                    device_id: event.device_id.clone(),
+                    os_major: None,
+                    steps: Vec::new(),
+                    warnings: Vec::new(),
+                    duration_ms: 0,
+                    success: false,
+                    skipped_reason: Some(reason.clone()),
+                    first_failure_code: Some(*code),
                     started_at: Some(event.wall_time),
                     finished_at: Some(event.wall_time),
                     recordings: Vec::new(),
@@ -209,7 +229,7 @@ impl ReportAccumulator {
                 self.install_starts
                     .insert((dev_key.clone(), bundle_id.clone()), event.wall_time);
             }
-            EventKind::InstallFinished { app_name, bundle_id, success, duration_ms, exit_code, error, code: _, target: _, os_major } => {
+            EventKind::InstallFinished { app_name, bundle_id, success, duration_ms, exit_code, error, code, target: _, os_major } => {
                 let started_at = self
                     .install_starts
                     .remove(&(dev_key.clone(), bundle_id.clone()))
@@ -223,6 +243,7 @@ impl ReportAccumulator {
                     duration_ms: *duration_ms,
                     exit_code: *exit_code,
                     error: error.clone(),
+                    code: *code,
                     started_at,
                     finished_at: Some(iso8601_utc(event.wall_time)),
                 });
@@ -250,7 +271,9 @@ impl ReportAccumulator {
         let flows = self.flows.into_iter().map(|flow| {
             // First *failed* step's code surfaces on the flow FAIL line. A
             // warning doesn't fail the flow, so its code must not pre-empt the
-            // fatal step's code on the summary line.
+            // fatal step's code on the summary line. A flow that never ran
+            // (FlowCouldNotRun) carries its code explicitly — that wins.
+            let explicit_code = flow.first_failure_code;
             let mut first_failure_code: Option<golem_events::FailureCode> = None;
             let step_results = flow.steps.into_iter().map(|s| {
                 let outcome = match s.outcome {
@@ -301,7 +324,7 @@ impl ReportAccumulator {
                 started_at: flow.started_at.map(iso8601_utc),
                 finished_at: flow.finished_at.map(iso8601_utc),
                 repeat: flow.repeat,
-                first_failure_code,
+                first_failure_code: explicit_code.or(first_failure_code),
             }
         }).collect();
 
@@ -358,6 +381,41 @@ mod tests {
             report.flows[0].device_name.as_deref(),
             Some("dev1"),
             "SHALL set device name from DeviceId"
+        );
+    }
+
+    // -- FlowSkipped is a non-failing notice; FlowCouldNotRun is a failure --
+
+    #[test]
+    fn flow_skipped_is_success_not_a_failure() {
+        let mut acc = ReportAccumulator::new();
+        acc.process(&make_event(0, "dev1", EventKind::FlowSkipped {
+            flow_name: "spared".into(),
+            reason: "coverage group satisfied by peer run".into(),
+        }));
+        let report = acc.into_suite_report();
+        let flow = &report.flows[0];
+        assert!(flow.is_skipped(), "FlowSkipped SHALL be a skip (success)");
+        assert!(!flow.is_failed(), "FlowSkipped SHALL NOT count as a failure");
+        assert_eq!(flow.first_failure_code, None);
+    }
+
+    #[test]
+    fn flow_could_not_run_is_a_failure_with_code() {
+        let mut acc = ReportAccumulator::new();
+        acc.process(&make_event(0, "dev1", EventKind::FlowCouldNotRun {
+            flow_name: "needs_app".into(),
+            reason: "install_script failed".into(),
+            code: golem_events::FailureCode::AppInstallFailed,
+        }));
+        let report = acc.into_suite_report();
+        let flow = &report.flows[0];
+        assert!(flow.is_failed(), "FlowCouldNotRun SHALL count as a failure");
+        assert!(!flow.is_skipped(), "FlowCouldNotRun SHALL NOT be a skip");
+        assert_eq!(
+            flow.first_failure_code,
+            Some(golem_events::FailureCode::AppInstallFailed),
+            "FlowCouldNotRun SHALL carry its code onto the flow"
         );
     }
 

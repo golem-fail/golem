@@ -35,6 +35,15 @@ impl Domain {
             Self::Parsing => 'P',
         }
     }
+
+    /// Whether this domain is an environment/infrastructure problem rather
+    /// than a fault in the test or its spec. Host, Device, and App failures
+    /// mean the test couldn't run properly (the environment broke); Flow and
+    /// Parsing failures mean the test logic or its definition is wrong. Used
+    /// by JUnit to map onto `<error>` (infrastructure) vs `<failure>` (test).
+    pub fn is_infrastructure(self) -> bool {
+        matches!(self, Self::Host | Self::Device | Self::App)
+    }
 }
 
 /// Severity — char 1 of the rendered code. Derived from the outcome

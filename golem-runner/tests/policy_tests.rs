@@ -5,7 +5,7 @@
 //! `golem_runner::capture`, and `golem_runner::executor` modules through their
 //! public APIs, using full TOML-parsed flows and the mock driver.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::LazyLock;
 
 use golem_driver::MockPlatformDriver;

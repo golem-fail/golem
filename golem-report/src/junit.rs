@@ -39,6 +39,43 @@ fn step_name(action: &str, target: &str) -> String {
     }
 }
 
+/// Did this flow fail before running any step (precondition failure)? Such a
+/// flow has no step-level testcase, so JUnit synthesizes one.
+fn has_synthetic_failure(flow: &FlowReport) -> bool {
+    flow.step_results.is_empty() && flow.is_failed()
+}
+
+/// `(failures, errors)` a flow contributes to JUnit counts. Failed steps split
+/// by domain — Flow/Parsing faults are `<failure>`, Host/Device/App faults are
+/// `<error>` — plus a synthetic entry when the flow never ran. Shared by the
+/// per-flow `<testsuite>` and the suite-level `<testsuites>` so they agree.
+fn flow_failure_counts(flow: &FlowReport) -> (usize, usize) {
+    let mut failures = flow
+        .step_results
+        .iter()
+        .filter(|s| matches!(&s.outcome, StepOutcome::Failed { code, .. } if !code.domain().is_infrastructure()))
+        .count();
+    let mut errors = flow
+        .step_results
+        .iter()
+        .filter(|s| matches!(&s.outcome, StepOutcome::Failed { code, .. } if code.domain().is_infrastructure()))
+        .count();
+    if has_synthetic_failure(flow) {
+        let infra = flow
+            .first_failure_code
+            .map(|c| c.domain().is_infrastructure())
+            .unwrap_or(false);
+        if infra { errors += 1; } else { failures += 1; }
+    }
+    (failures, errors)
+}
+
+/// Number of JUnit testcases a flow emits: one per step, plus a synthetic one
+/// when the flow failed before running any step.
+fn flow_test_count(flow: &FlowReport) -> usize {
+    flow.step_results.len() + usize::from(has_synthetic_failure(flow))
+}
+
 // ── Public API ──────────────────────────────────────────────────────
 
 /// Format substeps as plain text for JUnit system-out.
@@ -103,13 +140,17 @@ fn format_substeps_text(substeps: &[SubstepDetail]) -> String {
 pub fn format_flow_junit(report: &FlowReport) -> String {
     let mut out = String::new();
 
-    let total_tests = report.step_results.len();
-    let failures = report
-        .step_results
-        .iter()
-        .filter(|s| matches!(s.outcome, StepOutcome::Failed { .. }))
-        .count();
-    let errors = 0;
+    // A failed step maps to a JUnit <failure> when the fault is in the test or
+    // its spec (Flow/Parsing domains), and to an <error> when the environment
+    // broke (Host/Device/App domains). A flow that failed without running any
+    // step gets a synthetic entry so the failure isn't invisible in JUnit.
+    let (failures, errors) = flow_failure_counts(report);
+    let synthetic_fail = has_synthetic_failure(report);
+    let synthetic_infra = report
+        .first_failure_code
+        .map(|c| c.domain().is_infrastructure())
+        .unwrap_or(false);
+    let total_tests = flow_test_count(report);
     let time = ms_to_secs(report.duration_ms);
     let flow_name = xml_escape(&report.flow_name);
     // `timestamp` on <testsuite> is standard (surefire/ant-junit schema);
@@ -170,6 +211,9 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
             StepOutcome::Failed { message, code } => {
                 let rendered = code.render(golem_events::Severity::Error);
                 let escaped_msg = xml_escape(message);
+                // Infrastructure-domain faults (Host/Device/App) are JUnit
+                // <error>s; test/spec faults (Flow/Parsing) are <failure>s.
+                let elem = if code.domain().is_infrastructure() { "error" } else { "failure" };
                 let _ = writeln!(
                     out,
                     "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\"{step_ts}>"
@@ -181,10 +225,10 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
                 };
                 let _ = writeln!(
                     out,
-                    "      <failure message=\"{escaped_msg}\" type=\"{rendered}\">"
+                    "      <{elem} message=\"{escaped_msg}\" type=\"{rendered}\">"
                 );
                 let _ = writeln!(out, "{failure_detail}");
-                let _ = writeln!(out, "      </failure>");
+                let _ = writeln!(out, "      </{elem}>");
                 let _ = writeln!(out, "    </testcase>");
             }
             StepOutcome::Skipped => {
@@ -196,6 +240,27 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
                 let _ = writeln!(out, "    </testcase>");
             }
         }
+    }
+
+    // Synthetic testcase for a flow that failed before running any step.
+    if synthetic_fail {
+        let elem = if synthetic_infra { "error" } else { "failure" };
+        let msg = xml_escape(
+            report
+                .skipped_reason
+                .as_deref()
+                .unwrap_or("flow could not run"),
+        );
+        let type_attr = report
+            .first_failure_code
+            .map(|c| format!(" type=\"{}\"", c.render(golem_events::Severity::Error)))
+            .unwrap_or_default();
+        let _ = writeln!(
+            out,
+            "    <testcase name=\"flow could not run\" classname=\"{flow_name}\" time=\"0\">"
+        );
+        let _ = writeln!(out, "      <{elem} message=\"{msg}\"{type_attr}/>");
+        let _ = writeln!(out, "    </testcase>");
     }
 
     // Properties: os_major (when known) + perf snapshots + covered axes.
@@ -277,23 +342,17 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
 pub fn format_suite_junit(report: &SuiteReport) -> String {
     let mut out = String::new();
 
-    let flow_tests: usize = report.flows.iter().map(|f| f.step_results.len()).sum();
+    let flow_tests: usize = report.flows.iter().map(flow_test_count).sum();
     let install_tests = report.installs.len();
     let total_tests = flow_tests + install_tests;
 
-    let flow_failures: usize = report
-        .flows
-        .iter()
-        .map(|f| {
-            f.step_results
-                .iter()
-                .filter(|s| matches!(s.outcome, StepOutcome::Failed { .. }))
-                .count()
-        })
-        .sum();
+    let flow_failures: usize = report.flows.iter().map(|f| flow_failure_counts(f).0).sum();
+    let flow_errors: usize = report.flows.iter().map(|f| flow_failure_counts(f).1).sum();
+    // A failed install is an environment/app problem, not a test-logic
+    // failure — count it as a JUnit error.
     let install_failures: usize = report.installs.iter().filter(|i| !i.success).count();
-    let total_failures = flow_failures + install_failures;
-    let total_errors = 0;
+    let total_failures = flow_failures;
+    let total_errors = flow_errors + install_failures;
     let time = ms_to_secs(report.total_duration_ms);
 
     let _ = writeln!(out, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
@@ -317,7 +376,7 @@ pub fn format_suite_junit(report: &SuiteReport) -> String {
             .unwrap_or_default();
         let _ = writeln!(
             out,
-            "  <testsuite name=\"install\" tests=\"{}\" failures=\"{}\" errors=\"0\" time=\"{}\"{install_suite_ts}>",
+            "  <testsuite name=\"install\" tests=\"{}\" failures=\"0\" errors=\"{}\" time=\"{}\"{install_suite_ts}>",
             install_tests, install_failures, ms_to_secs(install_time)
         );
         for inst in &report.installs {
@@ -339,9 +398,13 @@ pub fn format_suite_junit(report: &SuiteReport) -> String {
             );
             if !inst.success {
                 let msg = inst.error.as_deref().unwrap_or("install failed");
+                let type_attr = inst
+                    .code
+                    .map(|c| format!(" type=\"{}\"", c.render(golem_events::Severity::Error)))
+                    .unwrap_or_default();
                 let _ = writeln!(
                     out,
-                    "      <failure message=\"install script failed\">{}</failure>",
+                    "      <error message=\"install script failed\"{type_attr}>{}</error>",
                     xml_escape(msg)
                 );
             }
@@ -677,6 +740,56 @@ mod tests {
             xml.contains("type=\"EF408\""),
             "failure type SHALL carry the failure code"
         );
+    }
+
+    // 4b. Infrastructure-domain failure maps to <error>, flow-domain to
+    //     <failure>, and the testsuite counts split accordingly.
+    #[test]
+    fn infrastructure_failure_maps_to_error_element() {
+        let mut flow_fault = failed_step("assert_visible", "Welcome", 10012, "timed out");
+        flow_fault.outcome = StepOutcome::Failed {
+            message: "timed out".to_string(),
+            code: golem_events::FailureCode::FlowStepTimeout, // F → <failure>
+        };
+        let mut infra_fault = failed_step("tap", "Submit", 5000, "companion wedged");
+        infra_fault.outcome = StepOutcome::Failed {
+            message: "companion wedged".to_string(),
+            code: golem_events::FailureCode::DeviceCompanionWedged, // D → <error>
+        };
+        let flow = FlowReport {
+            flow_name: "mixed".to_string(),
+            success: false,
+            step_results: vec![flow_fault, infra_fault],
+            first_failure_code: Some(golem_events::FailureCode::FlowStepTimeout),
+            ..sample_flow()
+        };
+        let xml = format_flow_junit(&flow);
+        assert!(xml.contains("<failure message=\"timed out\" type=\"EF408\""),
+            "flow-domain fault SHALL be a <failure>");
+        assert!(xml.contains("<error message=\"companion wedged\" type=\"ED503\""),
+            "infrastructure-domain fault SHALL be an <error>");
+        assert!(xml.contains("failures=\"1\" errors=\"1\""),
+            "testsuite SHALL count one failure and one error, got: {xml}");
+    }
+
+    // 4c. A flow that failed without running any step gets a synthetic
+    //     testcase so the failure is visible in JUnit (not an empty suite).
+    #[test]
+    fn no_step_failure_synthesizes_testcase() {
+        let flow = FlowReport {
+            flow_name: "needs_app".to_string(),
+            success: false,
+            step_results: vec![],
+            skipped_reason: Some("install_script failed".to_string()),
+            first_failure_code: Some(golem_events::FailureCode::AppInstallFailed),
+            ..sample_flow()
+        };
+        let xml = format_flow_junit(&flow);
+        // AppInstallFailed is App-domain (infrastructure) → <error>, EA500.
+        assert!(xml.contains("tests=\"1\" failures=\"0\" errors=\"1\""),
+            "no-step failure SHALL surface as one error, got: {xml}");
+        assert!(xml.contains("<error message=\"install_script failed\" type=\"EA500\"/>"),
+            "synthetic testcase SHALL carry the reason and code, got: {xml}");
     }
 
     // 5. Warning step has system-out with message ---------------------

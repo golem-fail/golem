@@ -136,7 +136,10 @@ See [App Install](#app-install) below for the full resolution and execution mode
 
 *How the golem reports back.*
 
-Specify with `--output FORMAT[:FILE]`. Multiple formats can run simultaneously.
+Specify with `--output FORMAT`. Multiple formats can run simultaneously. Result
+files are always written to `--output-dir` (default `.golem/results/`):
+`results.json` and `results.toon` always, plus `results.xml` when `junit` is
+requested.
 
 ### `human` (default)
 
@@ -170,13 +173,13 @@ Scroll substeps show the strategy number (1-5 per direction), swipe coordinates,
       ✓  [8234ms] {3 trees, 187~188 nodes}
 ```
 
-### `json` or `json:<file>`
+### `json`
 
-Structured JSON with suite summary, per-flow results, step details, substeps, and performance snapshots. Without a file path, outputs to stdout.
+Structured JSON with suite summary, per-flow results, step details, substeps, and performance snapshots. Printed to stdout (also written to `{output-dir}/results.json`).
 
-### `junit` or `junit:<file>`
+### `junit`
 
-JUnit XML for CI systems (Jenkins, GitHub Actions, GitLab CI). Each flow maps to a `<testsuite>`, each step to a `<testcase>`. Without a file path, outputs to stdout.
+JUnit XML for CI systems (Jenkins, GitHub Actions, GitLab CI). Each flow maps to a `<testsuite>`, each step to a `<testcase>`. Printed to stdout (also written to `{output-dir}/results.xml`).
 
 ### `toon`
 
