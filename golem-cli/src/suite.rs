@@ -1201,21 +1201,36 @@ async fn execute_flow_run(
                 device.physical,
             )),
         };
-        // Two recovery triggers, both indicating the device needs a reboot:
-        // 1. ANR dialog visible in the hierarchy (system_ui "isn't responding")
-        // 2. Hierarchy fetch itself errors at recovery time — the flow
-        //    has already failed and now the companion isn't responsive
-        //    either (HTTP timeout, connection refused, etc). Even without
-        //    a visible ANR dialog, that's a strong companion-wedge signal.
-        let (recover, recovery_reason) = match driver.get_hierarchy().await {
-            Ok((root, _)) => {
-                if golem_driver::common::detect_anr(&root) {
-                    (true, "possible ANR (system dialog detected)")
-                } else {
-                    (false, "")
+        // Three recovery triggers, all indicating the device needs a reboot:
+        // 1. A failed step already carried `DeviceCompanionWedged` — the
+        //    in-step probe already saw the wedge, so probing again here
+        //    can race the companion back to a transient OK and miss the
+        //    underlying instability. Trust the code on the step.
+        // 2. ANR dialog visible in the hierarchy (system_ui "isn't
+        //    responding").
+        // 3. Hierarchy fetch itself errors at recovery time — companion
+        //    unresponsive even outside the step (HTTP timeout, refused).
+        // `step_results` is populated by the suite-level merger after
+        // execute_flow_run returns, so it's still empty here. The
+        // `first_failure_code` field IS set on the report at this point
+        // (run_flow_on_device populates it from result.failed_code).
+        let wedge_already_seen = matches!(
+            report.first_failure_code,
+            Some(golem_events::FailureCode::DeviceCompanionWedged)
+        );
+        let (recover, recovery_reason) = if wedge_already_seen {
+            (true, "companion wedged during step")
+        } else {
+            match driver.get_hierarchy().await {
+                Ok((root, _)) => {
+                    if golem_driver::common::detect_anr(&root) {
+                        (true, "possible ANR (system dialog detected)")
+                    } else {
+                        (false, "")
+                    }
                 }
+                Err(_) => (true, "companion unresponsive at recovery time"),
             }
-            Err(_) => (true, "companion unresponsive at recovery time"),
         };
         if !recover {
             continue;
