@@ -2,7 +2,7 @@
 
 [package]
 name = "golem-test-app"
-version = "0.6.17"
+version = "0.6.18"
 description = "GOLEM E2E Test App"
 edition = "2021"
 

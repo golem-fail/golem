@@ -159,41 +159,29 @@ fn swipe_strategies(viewport: &Viewport, direction: Direction) -> Vec<Strategy> 
 
 // ── Swipe coordinate computation ────────────────────────────────────
 
-/// Compute swipe coordinates: the swipe starts at `(start_x, start_y)` and
-/// travels `swipe_pct`% of the screen in the given direction.
+/// Compute swipe start/end coordinates within a safe viewport.
 ///
-/// Clamps all coordinates to 10%-90% of the screen (or safe area insets)
-/// to avoid system gesture areas (notification bar, home indicator).
+/// `safe_vp` is the rectangle returned by [`make_safe_viewport`] —
+/// already accounts for system safe-area insets, keyboard, and any
+/// edge-abutting display cutouts. Swipe distance is `pct`% of the
+/// safe viewport's dimension on the swipe axis; the start/end points
+/// are clamped to a 10% inner margin so the finger never grazes the
+/// safe-area edge (where Android can interpret the gesture as a system
+/// pull-down / pull-up).
 pub fn swipe_from(
-    viewport: &Viewport,
+    safe_vp: &Viewport,
     direction: Direction,
     start_x: i32,
     start_y: i32,
     swipe_pct: u32,
 ) -> (i32, i32, i32, i32) {
-    swipe_from_with_insets(viewport, direction, start_x, start_y, swipe_pct, 0, 0)
-}
+    let dy = safe_vp.height * swipe_pct as i32 / 100;
+    let dx = safe_vp.width * swipe_pct as i32 / 100;
 
-/// Like `swipe_from` but uses safe area insets to avoid system gesture zones.
-pub fn swipe_from_with_insets(
-    viewport: &Viewport,
-    direction: Direction,
-    start_x: i32,
-    start_y: i32,
-    swipe_pct: u32,
-    safe_area_top: i32,
-    safe_area_bottom: i32,
-) -> (i32, i32, i32, i32) {
-    let dy = viewport.height * swipe_pct as i32 / 100;
-    let dx = viewport.width * swipe_pct as i32 / 100;
-
-    let min_x = viewport.width / 10;
-    let max_x = viewport.width * 9 / 10;
-    // Add margin above safe area to avoid accidentally triggering system gestures
-    // (e.g. Android notification shade) when swiping near the status bar.
-    let safe_margin = viewport.height / 20; // 5% margin
-    let min_y = (viewport.height / 10).max(safe_area_top + safe_margin);
-    let max_y = (viewport.height * 9 / 10).min(viewport.height - safe_area_bottom - safe_margin);
+    let min_x = safe_vp.x + safe_vp.width / 10;
+    let max_x = safe_vp.x + safe_vp.width * 9 / 10;
+    let min_y = safe_vp.y + safe_vp.height / 10;
+    let max_y = safe_vp.y + safe_vp.height * 9 / 10;
 
     let clamp = |v: i32, lo: i32, hi: i32| v.max(lo).min(hi);
 
@@ -216,19 +204,180 @@ pub fn swipe_from_with_insets(
 
 // ── Safe viewport helper ────────────────────────────────────────────
 
-fn make_safe_viewport(
+/// Compute the safe viewport — the rectangle in which it's reasonable
+/// to start/end a swipe gesture. Subtracts:
+///
+/// - `safe_area_top` (status bar / notch margin)
+/// - `safe_area_bottom` or `keyboard_height` (whichever is larger)
+/// - Display cutouts that abut a viewport edge (camera punch-hole at
+///   top, dynamic island, notches). Middle-screen cutouts don't
+///   reduce the rectangle — a user can swipe around them.
+///
+/// Single source of truth for "scroll-safe area" — every swipe helper
+/// in the runner derives its bounds from this function so notch /
+/// cutout handling stays consistent across the action layer and the
+/// scroll engine.
+pub fn make_safe_viewport(
     vp: &Viewport,
     meta: &golem_driver::common::HierarchyMeta,
 ) -> Viewport {
-    let mut safe = *vp;
-    if meta.safe_area_top > 0 {
-        safe.y += meta.safe_area_top;
-        safe.height -= meta.safe_area_top;
+    let mut top = vp.y + meta.safe_area_top;
+    let bottom_inset = meta.safe_area_bottom.max(meta.keyboard_height);
+    let mut bottom = vp.y + vp.height - bottom_inset;
+    let mut left = vp.x;
+    let mut right = vp.x + vp.width;
+
+    // Edge tolerance — a cutout whose edge sits within `tol` of the
+    // viewport edge counts as edge-abutting. Real-world cutouts may
+    // be reported at exact viewport coords or with a 1-2px gap; 30px
+    // covers reasonable margin without picking up mid-screen overlays.
+    let tol: i32 = 30;
+    for c in &meta.cutouts {
+        let c_top = c.y;
+        let c_bottom = c.y + c.height;
+        let c_left = c.x;
+        let c_right = c.x + c.width;
+
+        if c_top <= vp.y + tol {
+            top = top.max(c_bottom);
+        }
+        if c_bottom >= vp.y + vp.height - tol {
+            bottom = bottom.min(c_top);
+        }
+        if c_left <= vp.x + tol {
+            left = left.max(c_right);
+        }
+        if c_right >= vp.x + vp.width - tol {
+            right = right.min(c_left);
+        }
     }
-    if meta.safe_area_bottom > meta.keyboard_height {
-        safe.height -= meta.safe_area_bottom - meta.keyboard_height;
+
+    Viewport {
+        x: left,
+        y: top,
+        width: (right - left).max(1),
+        height: (bottom - top).max(1),
     }
-    safe
+}
+
+/// Walk the tree, collecting every element whose absolute bounds contain
+/// the point (x, y). Used to find the visual "stack" at a swipe-start
+/// position — the deepest element is the visible top, while shallower
+/// elements are its ancestors (frame, scrollable, etc).
+fn elements_containing_point(root: &Element, x: i32, y: i32) -> Vec<golem_element::Bounds> {
+    fn walk(el: &Element, x: i32, y: i32, out: &mut Vec<golem_element::Bounds>) {
+        let b = &el.bounds;
+        let inside = b.x <= x && x < b.x + b.width && b.y <= y && y < b.y + b.height;
+        if !inside { return; }
+        out.push(*b);
+        for child in &el.children {
+            walk(child, x, y, out);
+        }
+    }
+    let mut result = Vec::new();
+    walk(root, x, y, &mut result);
+    result
+}
+
+/// When a swipe at (x, y) produced no scroll movement, the most likely
+/// cause is a sibling/widget at that point absorbing the gesture (e.g. a
+/// gesture-area pad, a draggable card, an `onpointerdown` handler with
+/// `touch-action: none`). Find the largest non-root element under the
+/// point that's big enough to plausibly be the absorber — heuristic
+/// threshold ≥20% of viewport area, but smaller than the full viewport
+/// (excludes root-like wrappers).
+fn find_absorbing_bounds(
+    root: &Element,
+    x: i32,
+    y: i32,
+    safe_vp: &Viewport,
+) -> Option<golem_element::Bounds> {
+    // Min area: ≥20% of safe viewport. Smaller elements are more
+    // likely a button or label than a gesture-trap.
+    let min_area = (safe_vp.width as i64 * safe_vp.height as i64) / 5;
+    let svp_right = safe_vp.x + safe_vp.width;
+    let svp_bottom = safe_vp.y + safe_vp.height;
+    elements_containing_point(root, x, y)
+        .into_iter()
+        .filter(|b| (b.width as i64 * b.height as i64) >= min_area)
+        // Exclude elements that cover the entire safe viewport (or
+        // more) in every direction — wrappers (FrameLayout/WebView
+        // matching the viewport), HTML `<body>` (taller than viewport,
+        // width matching), full-screen overlays. None of these are
+        // avoidable "absorbers"; if one of them really does swallow the
+        // swipe, that's a UX issue in the app, not something a smarter
+        // swipe origin can route around.
+        .filter(|b| !(b.x <= safe_vp.x
+            && b.x + b.width >= svp_right
+            && b.y <= safe_vp.y
+            && b.y + b.height >= svp_bottom))
+        .max_by_key(|b| b.width as i64 * b.height as i64)
+}
+
+/// Given an absorbing element's bounds and a swipe direction, pick a new
+/// swipe start point that avoids the absorber while still letting the
+/// swipe travel in the requested direction. Returns `None` when no such
+/// point exists in the safe viewport (absorber covers the only useful
+/// region for this direction).
+///
+/// Strategy: for Up/Down scrolls, swap to the OTHER side of the absorber
+/// vertically if there's room; otherwise try a side-edge with cross-axis
+/// at the absorber's center y. For Left/Right, mirror horizontally.
+fn pick_outside_absorber(
+    absorber: golem_element::Bounds,
+    direction: Direction,
+    safe_vp: &Viewport,
+) -> Option<(i32, i32)> {
+    let margin = 24;
+    let above_abs = (absorber.y - safe_vp.y).saturating_sub(margin as i32);
+    let below_abs = (safe_vp.y + safe_vp.height)
+        .saturating_sub(absorber.y + absorber.height)
+        .saturating_sub(margin as i32);
+    let left_abs = (absorber.x - safe_vp.x).saturating_sub(margin as i32);
+    let right_abs = (safe_vp.x + safe_vp.width)
+        .saturating_sub(absorber.x + absorber.width)
+        .saturating_sub(margin as i32);
+
+    let cx = safe_vp.x + safe_vp.width / 2;
+    let cy = safe_vp.y + safe_vp.height / 2;
+
+    match direction {
+        Direction::Down | Direction::Up => {
+            // Prefer side strip with the most room. Pick the cross-axis (x)
+            // at the side's midline.
+            if left_abs >= 80 && left_abs >= right_abs {
+                let x = safe_vp.x + left_abs / 2;
+                Some((x, cy))
+            } else if right_abs >= 80 {
+                let x = absorber.x + absorber.width + right_abs / 2;
+                Some((x, cy))
+            } else if direction == Direction::Down && above_abs >= 80 {
+                // Swipe Down means the finger moves UP from the start; for
+                // that we need start ABOVE the absorber so the upward
+                // motion stays clear.
+                let y = safe_vp.y + above_abs / 2;
+                Some((cx, y))
+            } else if direction == Direction::Up && below_abs >= 80 {
+                let y = absorber.y + absorber.height + below_abs / 2;
+                Some((cx, y))
+            } else {
+                None
+            }
+        }
+        Direction::Left | Direction::Right => {
+            if above_abs >= 80 && above_abs >= below_abs {
+                Some((cx, safe_vp.y + above_abs / 2))
+            } else if below_abs >= 80 {
+                Some((cx, absorber.y + absorber.height + below_abs / 2))
+            } else if direction == Direction::Left && right_abs >= 80 {
+                Some((absorber.x + absorber.width + right_abs / 2, cy))
+            } else if direction == Direction::Right && left_abs >= 80 {
+                Some((safe_vp.x + left_abs / 2, cy))
+            } else {
+                None
+            }
+        }
+    }
 }
 
 /// Default swipe start position for a direction-based swipe (no target element).
@@ -313,6 +462,12 @@ pub async fn scroll_to_element(
     let mut strategies = swipe_strategies(&viewport, direction);
     let mut strategy_idx: usize = 0;
     let mut stall_count: u32 = 0;
+    // Dynamic-start: when a strategy's preset position lands inside an
+    // absorbing widget, try one swipe from an inferred safe spot before
+    // falling through to the next preset. Resets on strategy switch /
+    // direction reversal.
+    let mut dynamic_start_tried: bool = false;
+    let mut dynamic_start_override: Option<(i32, i32)> = None;
 
     // Container swipe start position
     let mut container_start = container.as_ref().map(|cb| {
@@ -376,10 +531,8 @@ pub async fn scroll_to_element(
             (clamp_x(fx), clamp_y(fy), clamp_x(tx), clamp_y(ty))
         } else {
             let strat = &strategies[strategy_idx];
-            swipe_from_with_insets(
-                &viewport, direction, strat.start.0, strat.start.1, strat.pct,
-                meta.safe_area_top, meta.safe_area_bottom.max(meta.keyboard_height),
-            )
+            let (sx, sy) = dynamic_start_override.unwrap_or(strat.start);
+            swipe_from(&safe_vp, direction, sx, sy, strat.pct)
         };
 
         scroll_attempt += 1;
@@ -424,6 +577,11 @@ pub async fn scroll_to_element(
             prev_full_fp = new_full_fp;
             prev_horizon_fp = new_horizon_fp;
             stall_count = 0;
+            // A swipe that worked invalidates any pinned dynamic-start —
+            // the page has moved, so the absorber-at-(fx,fy) inference
+            // we made on a previous stall may no longer hold.
+            dynamic_start_tried = false;
+            dynamic_start_override = None;
             continue;
         }
 
@@ -481,6 +639,36 @@ pub async fn scroll_to_element(
             continue;
         }
 
+        // Before falling through to the next preset strategy, try one
+        // dynamic-start swipe at a point inferred to avoid whatever
+        // absorbed the previous swipe. Cheap (re-uses the just-fetched
+        // tree) and frequently sufficient on pages with a large
+        // gesture-trapping widget where the preset strategy positions
+        // all happen to land inside the same absorber.
+        if container.is_none() && !dynamic_start_tried {
+            dynamic_start_tried = true;
+            if let Some(absorber) = find_absorbing_bounds(&root, fx, fy, &safe_vp) {
+                if let Some(new_start) = pick_outside_absorber(absorber, direction, &safe_vp) {
+                    dynamic_start_override = Some(new_start);
+                    if let Some(e) = emitter {
+                        e.substep(golem_events::SubstepEvent::ScrollStrategySwitch {
+                            to_index: strategy_idx,
+                            reason: format!(
+                                "dynamic start ({},{}) — preset landed inside absorber bounds=({},{},{},{})",
+                                new_start.0, new_start.1,
+                                absorber.x, absorber.y, absorber.width, absorber.height,
+                            ),
+                        });
+                    }
+                    // Reset stall count so the dynamic-start gets its
+                    // own retry budget; if it also stalls we fall
+                    // through to the preset strategy switch below.
+                    stall_count = 0;
+                    continue;
+                }
+            }
+        }
+
         // Stall limit reached on this strategy. Try the next strategy
         // before declaring a boundary — strategies 4/5 swipe off the
         // center column, which is what unsticks pages where an
@@ -496,6 +684,8 @@ pub async fn scroll_to_element(
         // strategies 2–5 = 7 swipes before reversing.
         if container.is_none() && strategy_idx + 1 < strategies.len() {
             strategy_idx += 1;
+            dynamic_start_tried = false;
+            dynamic_start_override = None;
             if let Some(e) = emitter {
                 e.substep(golem_events::SubstepEvent::ScrollStrategySwitch {
                     to_index: strategy_idx,
@@ -1001,5 +1191,137 @@ mod tests {
         page2.children.push(make_element_with_text("Section", "New Content", Bounds::new(0, 0, 375, 50)));
 
         assert_ne!(horizon_fingerprint(&page1, &vp), horizon_fingerprint(&page2, &vp));
+    }
+
+    // ── make_safe_viewport ─────────────────────────────────────────
+
+    fn meta_with(
+        safe_top: i32,
+        safe_bottom: i32,
+        keyboard: i32,
+        cutouts: Vec<golem_driver::common::CutoutRect>,
+    ) -> golem_driver::common::HierarchyMeta {
+        golem_driver::common::HierarchyMeta {
+            safe_area_top: safe_top,
+            safe_area_bottom: safe_bottom,
+            keyboard_height: keyboard,
+            cutouts,
+            ..Default::default()
+        }
+    }
+
+    fn cutout(x: i32, y: i32, w: i32, h: i32) -> golem_driver::common::CutoutRect {
+        golem_driver::common::CutoutRect { x, y, width: w, height: h }
+    }
+
+    #[test]
+    fn safe_viewport_subtracts_safe_area_insets() {
+        let vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        let meta = meta_with(120, 80, 0, vec![]);
+        let s = make_safe_viewport(&vp, &meta);
+        assert_eq!(s.y, 120);
+        assert_eq!(s.height, 2400 - 120 - 80);
+    }
+
+    #[test]
+    fn safe_viewport_keyboard_overrides_safe_bottom() {
+        // Keyboard taller than safe-bottom inset wins.
+        let vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        let meta = meta_with(120, 80, 900, vec![]);
+        let s = make_safe_viewport(&vp, &meta);
+        assert_eq!(s.height, 2400 - 120 - 900);
+    }
+
+    #[test]
+    fn safe_viewport_subtracts_top_edge_cutout() {
+        // Punch-hole camera at top: x=480, y=0, 100x100.
+        let vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        let meta = meta_with(40, 0, 0, vec![cutout(480, 0, 100, 100)]);
+        let s = make_safe_viewport(&vp, &meta);
+        // Cutout extends to y=100; safe_top was 40. Max wins.
+        assert_eq!(s.y, 100, "top edge should be max of safe_top and cutout bottom");
+    }
+
+    #[test]
+    fn safe_viewport_ignores_mid_screen_cutout() {
+        // Hypothetical mid-screen cutout (not realistic but tests the
+        // edge-tolerance logic — middle cutouts shouldn't shrink vp).
+        let vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        let meta = meta_with(40, 0, 0, vec![cutout(500, 1000, 80, 80)]);
+        let s = make_safe_viewport(&vp, &meta);
+        // No edge match — only safe_top applies.
+        assert_eq!(s.y, 40);
+        assert_eq!(s.height, 2360);
+    }
+
+    // ── find_absorbing_bounds ──────────────────────────────────────
+
+    #[test]
+    fn absorber_excludes_full_viewport_wrapper() {
+        // A FrameLayout matching the viewport exactly should be
+        // excluded — it's a wrapper, not an absorber.
+        let vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        let mut root = make_element("View", Bounds::new(0, 0, 1080, 2400));
+        root.children.push(make_element("FrameLayout", Bounds::new(0, 0, 1080, 2400)));
+        assert!(find_absorbing_bounds(&root, 500, 1000, &vp).is_none());
+    }
+
+    #[test]
+    fn absorber_excludes_taller_than_viewport_body() {
+        // HTML body taller than viewport (scrollable content) should
+        // not be picked as the absorber.
+        let vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        let mut root = make_element("View", Bounds::new(0, 0, 1080, 2400));
+        root.children.push(make_element("body", Bounds::new(0, 0, 1080, 9000)));
+        assert!(find_absorbing_bounds(&root, 500, 1000, &vp).is_none());
+    }
+
+    #[test]
+    fn absorber_picks_largest_sub_viewport_element() {
+        // A widget covering 1000×1000 at (40, 800) is the plausible
+        // absorber when the point lands inside it.
+        let vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        let mut root = make_element("View", Bounds::new(0, 0, 1080, 2400));
+        let mut wrapper = make_element("FrameLayout", Bounds::new(0, 0, 1080, 2400));
+        let widget = make_element("div", Bounds::new(40, 800, 1000, 1000));
+        wrapper.children.push(widget);
+        root.children.push(wrapper);
+        let absorber = find_absorbing_bounds(&root, 500, 1200, &vp)
+            .expect("widget should be picked");
+        assert_eq!(absorber.x, 40);
+        assert_eq!(absorber.y, 800);
+        assert_eq!(absorber.width, 1000);
+        assert_eq!(absorber.height, 1000);
+    }
+
+    // ── pick_outside_absorber ──────────────────────────────────────
+
+    #[test]
+    fn pick_outside_absorber_returns_side_when_room() {
+        // Absorber spans middle 60% of width — prefer side strips
+        // for vertical scrolls.
+        let safe_vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        let absorber = golem_element::Bounds::new(216, 600, 648, 1200);
+        let p = pick_outside_absorber(absorber, Direction::Down, &safe_vp)
+            .expect("side strip exists");
+        // Should be either left strip (x < 216) or right strip (x > 864).
+        assert!(p.0 < 216 || p.0 > 864, "expected side strip, got x={}", p.0);
+    }
+
+    #[test]
+    fn pick_outside_absorber_falls_back_to_above_when_no_sides() {
+        // Absorber spans full width but only bottom half.
+        let safe_vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        let absorber = golem_element::Bounds::new(0, 1200, 1080, 1200);
+        let p = pick_outside_absorber(absorber, Direction::Down, &safe_vp)
+            .expect("above strip exists");
+        assert!(p.1 < 1200, "expected above strip, got y={}", p.1);
+    }
+
+    #[test]
+    fn pick_outside_absorber_none_when_full_cover() {
+        let safe_vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        let absorber = golem_element::Bounds::new(0, 0, 1080, 2400);
+        assert!(pick_outside_absorber(absorber, Direction::Down, &safe_vp).is_none());
     }
 }

@@ -290,11 +290,9 @@ pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver, ctx: 
             "right" => Direction::Right,
             other => bail!("Invalid swipe direction: \"{}\"", other),
         };
-        let (sx, sy) = crate::scroll::default_swipe_start(&vp, direction);
-        let (fx, fy, tx, ty) = crate::scroll::swipe_from_with_insets(
-            &vp, direction, sx, sy, 40,
-            meta.safe_area_top, meta.safe_area_bottom.max(meta.keyboard_height),
-        );
+        let safe_vp = crate::scroll::make_safe_viewport(&vp, &meta);
+        let (sx, sy) = crate::scroll::default_swipe_start(&safe_vp, direction);
+        let (fx, fy, tx, ty) = crate::scroll::swipe_from(&safe_vp, direction, sx, sy, 40);
         points = vec![(fx, fy), (tx, ty)];
     }
 
