@@ -17,6 +17,13 @@ struct DisplayEntry {
     /// Cutout y offset (0 for notch, 11 for Dynamic Island).
     cutout_y: i32,
     corner_radius: i32,
+    /// System-gesture inset from the left edge (back-from-edge swipe zone).
+    /// Defaults to 0 when not specified. iPhones with home indicator
+    /// typically reserve 10-20pt for the swipe-back gesture.
+    gesture_inset_left: i32,
+    /// System-gesture inset from the right edge (control-center pull-down
+    /// on some models, app-switcher on iPad).
+    gesture_inset_right: i32,
 }
 
 /// All entries sorted by key length descending (longest prefix first).
@@ -47,7 +54,21 @@ fn load() -> &'static DisplayEntries {
                 .get("corner_radius")
                 .and_then(|v| v.as_integer())
                 .unwrap_or(0) as i32;
-            entries.push((key.clone(), DisplayEntry { cutout_size, cutout_y, corner_radius }));
+            let gesture_inset_left = tbl
+                .get("gesture_inset_left")
+                .and_then(|v| v.as_integer())
+                .unwrap_or(0) as i32;
+            let gesture_inset_right = tbl
+                .get("gesture_inset_right")
+                .and_then(|v| v.as_integer())
+                .unwrap_or(0) as i32;
+            entries.push((key.clone(), DisplayEntry {
+                cutout_size,
+                cutout_y,
+                corner_radius,
+                gesture_inset_left,
+                gesture_inset_right,
+            }));
         }
         // Sort by key length descending so longest prefix matches first
         entries.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
@@ -59,6 +80,8 @@ fn load() -> &'static DisplayEntries {
 pub struct DisplayLookup {
     pub cutouts: Vec<CutoutRect>,
     pub rounded_corners: Vec<RoundedCorner>,
+    pub gesture_inset_left: i32,
+    pub gesture_inset_right: i32,
 }
 
 /// Look up display data for an iOS device model identifier.
@@ -118,6 +141,8 @@ pub fn lookup(model: &str, screen_width: i32, screen_height: i32) -> Option<Disp
     Some(DisplayLookup {
         cutouts,
         rounded_corners: corners,
+        gesture_inset_left: entry.gesture_inset_left,
+        gesture_inset_right: entry.gesture_inset_right,
     })
 }
 

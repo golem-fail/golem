@@ -56,6 +56,11 @@ pub struct HierarchyMeta {
     pub safe_area_top: i32,
     /// Safe area inset from bottom (navigation bar / home indicator, in device units).
     pub safe_area_bottom: i32,
+    /// Safe area inset from left (Android back-from-edge gesture, iOS swipe-from-edge zones).
+    /// Default 0 until the companion populates it.
+    pub safe_area_left: i32,
+    /// Safe area inset from right (mirror of left).
+    pub safe_area_right: i32,
     /// Display cutout regions where physical pixels don't exist (notch, punch-hole).
     pub cutouts: Vec<CutoutRect>,
     /// Rounded display corners where physical pixels don't exist.
@@ -119,6 +124,14 @@ pub fn parse_hierarchy(json: &str) -> Result<(Element, HierarchyMeta)> {
                 .get("safe_area_bottom")
                 .and_then(|v| v.as_i64())
                 .unwrap_or(0) as i32;
+            meta.safe_area_left = obj
+                .get("safe_area_left")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
+            meta.safe_area_right = obj
+                .get("safe_area_right")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0) as i32;
             meta.cutouts = parse_cutouts_json(obj.get("cutouts"));
             meta.rounded_corners = parse_corners_json(obj.get("rounded_corners"));
             device_model = obj.get("device_model").and_then(|v| v.as_str()).map(String::from);
@@ -180,6 +193,14 @@ pub fn parse_hierarchy(json: &str) -> Result<(Element, HierarchyMeta)> {
             }
             if meta.rounded_corners.is_empty() {
                 meta.rounded_corners = display.rounded_corners;
+            }
+            // Companion doesn't probe gesture insets — populate from the
+            // static toml only when the parsed response didn't include them.
+            if meta.safe_area_left == 0 {
+                meta.safe_area_left = display.gesture_inset_left;
+            }
+            if meta.safe_area_right == 0 {
+                meta.safe_area_right = display.gesture_inset_right;
             }
         }
     }

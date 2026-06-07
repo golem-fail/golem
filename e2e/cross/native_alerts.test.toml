@@ -17,7 +17,9 @@ steps = [
   { action = "assert_alert" },
   { action = "assert_alert", on_text = "This is a test alert" },
   { action = "accept_alert" },
-  { action = "assert_visible", on_text = "Alert dismissed" },
+  # Alert close animation + state update + re-render — default 10s
+  # can underflow under sweep load on slower Android emulators.
+  { action = "assert_visible", on_text = "Alert dismissed", timeout = 15000 },
 ]
 
 # Confirm dialog: OK and Cancel buttons

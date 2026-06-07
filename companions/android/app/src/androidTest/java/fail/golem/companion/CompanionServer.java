@@ -170,7 +170,7 @@ public class CompanionServer {
                     sendJson(out, 200, new JSONObject()
                         .put("status", "ok")
                         .put("platform", "android")
-                        .put("version", "0.6.18")
+                        .put("version", "0.6.19")
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
@@ -284,6 +284,8 @@ public class CompanionServer {
             int keyboardHeight = 0;
             int safeAreaTop = 0;
             int safeAreaBottom = 0;
+            int safeAreaLeft = 0;
+            int safeAreaRight = 0;
             JSONArray cutouts = new JSONArray();
             JSONArray roundedCorners = new JSONArray();
             try {
@@ -318,6 +320,27 @@ public class CompanionServer {
                             safeAreaBottom = frame[3] - frame[1]; // height of nav bar
                         }
                     }
+                    // System gesture zones (back-from-edge, swipe-from-top, etc).
+                    // Reported per-side via sideHint=LEFT/RIGHT. Width of the
+                    // inset = how far the gesture band extends from that edge —
+                    // touches in this band may be interpreted as system gestures
+                    // rather than app input. Auto-scroll swipes need to avoid
+                    // them, especially the LEFT band where back-from-edge would
+                    // intercept a horizontal swipe.
+                    if (safeAreaLeft == 0 && line.contains("type=systemGestures")
+                            && line.contains("sideHint=LEFT") && line.contains("frame=[")) {
+                        int[] frame = parseInsetsFrame(line);
+                        if (frame != null && frame[2] > frame[0]) {
+                            safeAreaLeft = frame[2] - frame[0];
+                        }
+                    }
+                    if (safeAreaRight == 0 && line.contains("type=systemGestures")
+                            && line.contains("sideHint=RIGHT") && line.contains("frame=[")) {
+                        int[] frame = parseInsetsFrame(line);
+                        if (frame != null && frame[2] > frame[0]) {
+                            safeAreaRight = frame[2] - frame[0];
+                        }
+                    }
                     // Cutouts: mDisplayCutout=DisplayCutout{...boundingRect={Bounds=[Rect(...), ...]}}
                     if (line.contains("mDisplayCutout=") && line.contains("boundingRect=")) {
                         cutouts = parseCutoutBounds(line);
@@ -336,6 +359,8 @@ public class CompanionServer {
             response.put("keyboard_height", keyboardHeight);
             response.put("safe_area_top", safeAreaTop);
             response.put("safe_area_bottom", safeAreaBottom);
+            response.put("safe_area_left", safeAreaLeft);
+            response.put("safe_area_right", safeAreaRight);
             response.put("cutouts", cutouts);
             response.put("rounded_corners", roundedCorners);
             sendJson(out, 200, response);

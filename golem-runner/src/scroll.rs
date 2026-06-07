@@ -224,8 +224,8 @@ pub fn make_safe_viewport(
     let mut top = vp.y + meta.safe_area_top;
     let bottom_inset = meta.safe_area_bottom.max(meta.keyboard_height);
     let mut bottom = vp.y + vp.height - bottom_inset;
-    let mut left = vp.x;
-    let mut right = vp.x + vp.width;
+    let mut left = vp.x + meta.safe_area_left;
+    let mut right = vp.x + vp.width - meta.safe_area_right;
 
     // Edge tolerance — a cutout whose edge sits within `tol` of the
     // viewport edge counts as edge-abutting. Real-world cutouts may
@@ -292,21 +292,32 @@ fn find_absorbing_bounds(
     y: i32,
     safe_vp: &Viewport,
 ) -> Option<golem_element::Bounds> {
+    let svp_area = safe_vp.width as i64 * safe_vp.height as i64;
     // Min area: ≥20% of safe viewport. Smaller elements are more
     // likely a button or label than a gesture-trap.
-    let min_area = (safe_vp.width as i64 * safe_vp.height as i64) / 5;
+    let min_area = svp_area / 5;
+    // Max area: ≤120% of safe viewport. Anything bigger is overflowing
+    // scrollable content (HTML `<body>` at 998×8734 on a 1080×2400
+    // viewport — 3x area). That's the legitimate scroll container,
+    // NOT the absorber. Picking it would degenerate
+    // `pick_outside_absorber` because the body wraps almost everything;
+    // we want the next-largest sub-element that's plausibly something a
+    // finger can route around.
+    let max_area = svp_area * 6 / 5;
     let svp_right = safe_vp.x + safe_vp.width;
     let svp_bottom = safe_vp.y + safe_vp.height;
     elements_containing_point(root, x, y)
         .into_iter()
-        .filter(|b| (b.width as i64 * b.height as i64) >= min_area)
+        .filter(|b| {
+            let area = b.width as i64 * b.height as i64;
+            area >= min_area && area <= max_area
+        })
         // Exclude elements that cover the entire safe viewport (or
         // more) in every direction — wrappers (FrameLayout/WebView
-        // matching the viewport), HTML `<body>` (taller than viewport,
-        // width matching), full-screen overlays. None of these are
-        // avoidable "absorbers"; if one of them really does swallow the
-        // swipe, that's a UX issue in the app, not something a smarter
-        // swipe origin can route around.
+        // matching the viewport), full-screen overlays. None of these
+        // are avoidable "absorbers"; if one of them really does
+        // swallow the swipe, that's a UX issue in the app, not
+        // something a smarter swipe origin can route around.
         .filter(|b| !(b.x <= safe_vp.x
             && b.x + b.width >= svp_right
             && b.y <= safe_vp.y
@@ -1274,6 +1285,37 @@ mod tests {
         let mut root = make_element("View", Bounds::new(0, 0, 1080, 2400));
         root.children.push(make_element("body", Bounds::new(0, 0, 1080, 9000)));
         assert!(find_absorbing_bounds(&root, 500, 1000, &vp).is_none());
+    }
+
+    #[test]
+    fn absorber_excludes_overflowing_body_with_horizontal_margin() {
+        // Real case from sweep recover4: HTML body at (42,-3397,998,8734)
+        // on Pixel 7a (1080x2400 viewport). Doesn't reach left/right
+        // edges but overflows top + bottom dramatically. Area cap
+        // should exclude it (8.7M area vs 2.6M viewport area).
+        let vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        let mut root = make_element("View", Bounds::new(0, 0, 1080, 2400));
+        root.children.push(make_element("body", Bounds::new(42, -3397, 998, 8734)));
+        assert!(
+            find_absorbing_bounds(&root, 540, 2115, &vp).is_none(),
+            "overflowing body should not be picked as absorber"
+        );
+    }
+
+    #[test]
+    fn safe_viewport_subtracts_left_right_insets() {
+        let vp = Viewport { x: 0, y: 0, width: 1344, height: 2992 };
+        let meta = meta_with(187, 96, 0, vec![]);
+        // Build a meta with all four sides populated. meta_with only
+        // covers top/bottom/kb/cutouts, so construct directly here.
+        let mut meta = meta;
+        meta.safe_area_left = 90;
+        meta.safe_area_right = 90;
+        let s = make_safe_viewport(&vp, &meta);
+        assert_eq!(s.x, 90);
+        assert_eq!(s.width, 1344 - 90 - 90);
+        assert_eq!(s.y, 187);
+        assert_eq!(s.height, 2992 - 187 - 96);
     }
 
     #[test]
