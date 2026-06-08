@@ -1188,7 +1188,7 @@ dependencies = [
 
 [[package]]
 name = "golem-test-app"
-version = "0.6.25"
+version = "0.6.26"
 dependencies = [
  "serde",
  "serde_json",
