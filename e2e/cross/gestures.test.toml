@@ -14,10 +14,12 @@ name = "find_gesture_target"
 steps = [
   { action = "tap", on_text = "Reset Gesture", auto_scroll = true },
   # Reset Gesture sits at the bottom of the gesture widget — after auto_scroll
-  # brings it into view, the state labels above are off-screen on some devices.
+  # brings it into view, the state labels are off-screen on some devices.
+  # Each label sits at a different y inside the widget, so each assert
+  # needs its own auto_scroll.
   { action = "assert_visible", on_text = "Not zoomed", auto_scroll = true },
-  { action = "assert_visible", on_text = "Grid: 000-000-000" },
-  { action = "assert_visible", on_text = "*Max: 0" },
+  { action = "assert_visible", on_text = "Grid: 000-000-000", auto_scroll = true },
+  { action = "assert_visible", on_text = "*Max: 0", auto_scroll = true },
 ]
 
 # Pinch centered on the gesture area
