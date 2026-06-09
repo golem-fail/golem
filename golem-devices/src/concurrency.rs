@@ -172,6 +172,81 @@ pub fn has_sufficient_disk(config: &ConcurrencyConfig, estimated_device_size_mb:
 }
 
 // ---------------------------------------------------------------------------
+// Resource snapshot
+// ---------------------------------------------------------------------------
+
+/// System-resource availability at a point in time. Distinct from
+/// `PerfSnapshot` (which measures *app footprint* — how much RAM/disk
+/// the app under test is consuming). `ResourceSnapshot` measures *system
+/// headroom* — how much capacity remains on the host and on the device.
+///
+/// Used by:
+/// - Pre-boot gating (do we have room for another sim/emu?)
+/// - Recovery messaging (was low disk a contributing cause?)
+/// - On-failure capture (host pressure when a step timed out?)
+///
+/// All fields are `Option` so partial captures (e.g. host-only, device
+/// unreachable) still record the data we *can* get.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ResourceSnapshot {
+    pub host_free_disk_mb: Option<u64>,
+    pub host_free_ram_mb: Option<u64>,
+    /// `/data` free space on a specific Android device when udid passed.
+    /// None for host-only captures or unreachable devices.
+    pub device_free_disk_mb: Option<u64>,
+}
+
+impl ResourceSnapshot {
+    /// Capture host metrics only. Used pre-boot and at host-level failure
+    /// points (no device context).
+    pub async fn capture_host() -> Self {
+        Self {
+            host_free_disk_mb: get_available_disk_mb().ok(),
+            host_free_ram_mb: get_available_ram_mb().ok(),
+            device_free_disk_mb: None,
+        }
+    }
+
+    /// Capture host + the given device's `/data` partition free space.
+    /// Android-only for now; iOS recovery can extend with a separate path
+    /// (`xcrun simctl` doesn't expose free space directly).
+    pub async fn capture_with_android_device(udid: &str) -> Self {
+        let mut snap = Self::capture_host().await;
+        snap.device_free_disk_mb = android_device_free_disk_mb(udid).await;
+        snap
+    }
+
+    /// iOS simulator data lives on the host filesystem (under
+    /// `~/Library/Developer/CoreSimulator/Devices/<UDID>/data`), so the
+    /// simulator's "free space" equals the host's. Mirror the host
+    /// value into `device_free_disk_mb` so consumers can read the same
+    /// field regardless of platform. Physical iOS is a different story
+    /// (needs `xcrun devicectl device info storage` or similar) and is
+    /// roadmapped separately.
+    pub async fn capture_with_ios_simulator() -> Self {
+        let snap = Self::capture_host().await;
+        Self {
+            device_free_disk_mb: snap.host_free_disk_mb,
+            ..snap
+        }
+    }
+}
+
+/// Free MiB on `/data` on the given Android device, via `adb shell df`.
+/// Returns None if the device is unreachable or output unparseable.
+async fn android_device_free_disk_mb(udid: &str) -> Option<u64> {
+    let out = tokio::process::Command::new("adb")
+        .args(["-s", udid, "shell", "df", "-k", "/data"])
+        .output()
+        .await
+        .ok()?;
+    let s = String::from_utf8_lossy(&out.stdout);
+    let line = s.lines().nth(1)?;
+    let avail_kb: u64 = line.split_whitespace().nth(3)?.parse().ok()?;
+    Some(avail_kb / 1024)
+}
+
+// ---------------------------------------------------------------------------
 // Decision logic
 // ---------------------------------------------------------------------------
 

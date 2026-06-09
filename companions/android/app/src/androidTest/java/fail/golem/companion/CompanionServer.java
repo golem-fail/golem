@@ -57,6 +57,12 @@ public class CompanionServer {
         });
     private static final AtomicInteger CONSECUTIVE_NULLS = new AtomicInteger(0);
     private static volatile long LAST_UI_SUCCESS_MS = System.currentTimeMillis();
+    /** Latched once UiAutomation returns a non-null tree at least once.
+     *  /health returns 503 until this flips, so the host's
+     *  wait_for_health blocks until the accessibility-service binding
+     *  is actually warm — not just until the HTTP socket is bound. */
+    private static final java.util.concurrent.atomic.AtomicBoolean UI_READY =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
 
     private final UiAutomation uiAutomation;
     private final int port;
@@ -166,16 +172,30 @@ public class CompanionServer {
 
         try {
             switch (path) {
-                case "/health":
-                    sendJson(out, 200, new JSONObject()
-                        .put("status", "ok")
+                case "/health": {
+                    // HTTP server is up well before UiAutomation's
+                    // accessibility-service binding actually works on
+                    // the device. If we reply 200 immediately, the host
+                    // declares us ready and the next /hierarchy wedges
+                    // (5s timeout → ED503 → reboot recovery). Probe the
+                    // real UiAutomation path once per /health so the
+                    // host's wait_for_health blocks until the binding
+                    // is warm. After the first OK probe we cache that
+                    // and short-circuit subsequent /health hits — only
+                    // the warm-up race matters; once warm, /health is
+                    // a hot-path liveness check.
+                    boolean uiReady = UI_READY.get() || probeUiReady();
+                    JSONObject respBody = new JSONObject()
+                        .put("status", uiReady ? "ok" : "warming_up")
                         .put("platform", "android")
-                        .put("version", "0.6.26")
+                        .put("version", "0.6.27")
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
-                        .put("device_id", deviceSerial));
+                        .put("device_id", deviceSerial);
+                    sendJson(out, uiReady ? 200 : 503, respBody);
                     break;
+                }
                 case "/hierarchy":
                     handleHierarchy(out);
                     break;
@@ -222,6 +242,21 @@ public class CompanionServer {
         } catch (Exception e) {
             sendJson(out, 500, new JSONObject().put("error", e.getMessage()));
         }
+    }
+
+    /** Probe UiAutomation by fetching the active-window root. Latches
+     *  {@link #UI_READY} on first non-null result. Used by /health to
+     *  refuse readiness until the accessibility-service binding works.
+     *  Idempotent and cheap once warm — UI_READY short-circuits. */
+    private boolean probeUiReady() {
+        if (UI_READY.get()) return true;
+        AccessibilityNodeInfo root = callBounded(uiAutomation::getRootInActiveWindow, "health-probe");
+        if (root != null) {
+            try { root.recycle(); } catch (Exception ignored) {}
+            UI_READY.set(true);
+            return true;
+        }
+        return false;
     }
 
     /** Call a UiAutomation operation with a hard per-call deadline and

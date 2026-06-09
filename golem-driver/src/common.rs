@@ -759,7 +759,15 @@ impl CompanionClient {
                 self.base_url
             ))?;
 
+        // 503 = companion is up but its UiAutomation accessibility-
+        // service binding hasn't warmed up yet (Android first-flow
+        // race). Treat as not-ready so `wait_for_health` keeps polling
+        // instead of declaring readiness on the HTTP socket alone.
+        let status = resp.status();
         let text = resp.text().await.context("reading health response")?;
+        if !status.is_success() {
+            anyhow::bail!("companion /health returned {}: {}", status.as_u16(), text);
+        }
         let json: serde_json::Value =
             serde_json::from_str(&text).context("parsing health response")?;
 

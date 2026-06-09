@@ -88,19 +88,6 @@ Android ANR detection + reboot recovery is shipped. Outstanding:
   with the duration + reason so renderers can surface it (currently
   piggybacked on `FlowSkipped`).
 
-## `--trace` should imply per-block perf snapshots
-
-`--trace` already captures per-step screenshot + hierarchy for
-forensic review. Perf snapshots (cpu/mem/threads/fd) are opt-in per
-block today, so most flows have an empty `perf_snapshots[]` in the
-trace. When investigating intermittents, knowing CPU was at 95%
-when a step timed out is invaluable. `--trace` should automatically
-enable perf-snapshot capture at every block boundary, regardless of
-the flow's per-block opt-in.
-
-**Files:** `golem-runner/src/executor.rs` (perf-capture gate at
-block boundary), config plumbing through `--trace`.
-
 ## Install cache: don't persist `FailedScript` on transient errors
 
 `InstallCache::record_failure((udid, bundle), FailedScript)` is a
@@ -378,6 +365,29 @@ recording requires a different transport — either
 driver `bail!`s when `physical = true` so the failure mode is loud.
 
 **Files:** `golem-driver/src/ios.rs` (physical path).
+
+## Physical iOS device free-disk capture
+
+`ResourceSnapshot::capture_with_ios_simulator` mirrors the host free
+disk into `device_free_disk_mb` because the sim's data dir lives on
+the host filesystem. Physical iOS has its own storage — for the
+recovery / disk-pressure diagnostic to be accurate, we need a real
+device-side query. Options:
+
+- `xcrun devicectl device info storage --device <udid>` — Xcode 15+,
+  Apple-shipped, returns JSON with capacity + available.
+- `idevicediskusage` (libimobiledevice) — external dep, broader OS
+  coverage.
+
+Until a physical iOS flow exists in CI, `capture_with_ios_physical`
+should be added and wired in for symmetry with the Android path. Today
+recovery messages on physical iOS would silently fall back to host-only
+disk info (mirrored to `device_free_disk_mb`) which is wrong for
+physical hardware.
+
+**Files:** `golem-devices/src/concurrency.rs` (add
+`capture_with_ios_physical`), `golem-cli/src/suite.rs` (dispatch
+based on `device.physical`).
 
 ## `golem trace-extract` subcommand
 

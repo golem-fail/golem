@@ -760,6 +760,36 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
+    // 15b. Typical rotate (90° default velocity): 2x bucket floor wins
+    // -----------------------------------------------------------------
+    #[test]
+    fn typical_rotate_uses_2x_bucket_floor() {
+        let mut step = Step { action: "rotate".into(), ..Default::default() };
+        step.rotation = Some(90.0);
+        // velocity defaults to 180°/s
+        // path = 90/180 * 1000 = 500ms; steps = max(9, 3) = 9; inject = 900ms.
+        // intrinsic = 1400ms → +2000 settle = 3400ms.
+        // 2x bucket floor = 10_000ms. max(10_000, 3400) = 10_000.
+        assert_eq!(effective_timeout(&step, 5_000), 10_000);
+    }
+
+    // -----------------------------------------------------------------
+    // 15c. -270° rotate (the case that was failing at 5s pre-fix)
+    // -----------------------------------------------------------------
+    #[test]
+    fn rotate_270_clears_old_5s_failure() {
+        let mut step = Step { action: "rotate".into(), ..Default::default() };
+        step.rotation = Some(-270.0);
+        // path = 270/180 * 1000 = 1500ms; steps = 27; inject = 2700ms.
+        // intrinsic = 4200ms → +2000 = 6200ms.
+        // 2x floor = 10_000ms. max = 10_000ms.
+        // Pre-fix: 1x floor = 5_000ms → request_timeout 4500ms → companion's
+        // 27-step sync injection blew past it → EF408 timeout. With 2x +
+        // injection-aware intrinsic, the budget covers worst-case load.
+        assert_eq!(effective_timeout(&step, 5_000), 10_000);
+    }
+
+    // -----------------------------------------------------------------
     // 16. Per-step timeout always wins over multiplier
     // -----------------------------------------------------------------
     #[test]

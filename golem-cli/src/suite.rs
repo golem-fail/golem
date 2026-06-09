@@ -1266,9 +1266,14 @@ async fn execute_flow_run(
                     reason: "ANR recovery: rebooting device".to_string(),
                 },
             );
-            if let Err(e) = reboot_android_device(&udid).await {
-                eprintln!("  [recovery] reboot failed on {udid}: {e}");
-            }
+            // Capture host + device resource state up front: low disk
+            // is a top silent cause of slow am instrument / slow reboot
+            // symptoms that look like an internal recovery bug.
+            // Surfacing it inline saves chasing the wrong cause.
+            let resources = golem_devices::concurrency::ResourceSnapshot::
+                capture_with_android_device(&udid).await;
+            let reboot_started = std::time::Instant::now();
+            let reboot_ok = reboot_android_device(&udid).await;
             // Drop the stale registration — after reboot the companion
             // is gone and adb forwards are reset, so the cached port
             // is dead. The next setup_slot must do a fresh
@@ -1276,6 +1281,24 @@ async fn execute_flow_run(
             reg_state.invalidate_companion(&udid);
             reg_state.remove(&udid);
             rm.mark_healthy(&udid);
+
+            let elapsed_ms = reboot_started.elapsed().as_millis();
+            let disk_tail = format_disk_summary(&resources);
+            let outcome_msg = match reboot_ok {
+                Ok(()) => format!("rebooted in {elapsed_ms}ms"),
+                Err(e) => format!("reboot failed after {elapsed_ms}ms: {e}"),
+            };
+            // Surface through the event channel rather than eprintln so
+            // clients running against an external daemon see it too.
+            // Use a distinct flow_name from the start-of-recovery event
+            // so the stream renders both as separate SKIP lines.
+            event_tx.emit(
+                golem_events::DeviceId("suite".into()),
+                golem_events::EventKind::FlowSkipped {
+                    flow_name: format!("recovery-done:{udid}"),
+                    reason: format!("{outcome_msg}{disk_tail}"),
+                },
+            );
         });
     }
 
@@ -1836,6 +1859,50 @@ async fn run_install_with_build_coord(
 /// (system-dialog ANRs are an Android phenomenon).
 ///
 /// Best-effort: success returns `Ok`, any adb error bubbles up.
+/// Host: low if under 10240 MiB (10 GiB) free (CI runs many tests + caches).
+const HOST_LOW_FREE_MIB: u64 = 10 * 1024;
+/// Device: low if under 500 MiB free (an emulator is mostly idle aside
+/// from our app + companion).
+const DEVICE_LOW_FREE_MIB: u64 = 500;
+
+/// Format a free-space figure (MiB) as a human string + low-flag tag.
+/// Uses binary units (GiB above 1024 MiB, MiB below). Used for
+/// recovery / setup messages: returns `("85.0GiB", false)` or
+/// `("300MiB", true)`.
+fn format_free_space_mib(mib: u64, low_threshold_mib: u64) -> (String, bool) {
+    let s = if mib >= 1024 {
+        let gib = mib as f64 / 1024.0;
+        format!("{gib:.1}GiB")
+    } else {
+        format!("{mib}MiB")
+    };
+    (s, mib < low_threshold_mib)
+}
+
+/// Build the ` disk[host=X device=Y] — low disk may be contributing`
+/// suffix from a captured snapshot. Empty when both readings failed
+/// (don't pollute the message with no signal). Surfaces disk pressure
+/// as a potential cause of slow installs / am instrument / reboots.
+fn format_disk_summary(snap: &golem_devices::concurrency::ResourceSnapshot) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    let mut any_low = false;
+    if let Some(mib) = snap.host_free_disk_mb {
+        let (s, low) = format_free_space_mib(mib, HOST_LOW_FREE_MIB);
+        parts.push(format!("host={s}{}", if low { " LOW" } else { "" }));
+        any_low |= low;
+    }
+    if let Some(mib) = snap.device_free_disk_mb {
+        let (s, low) = format_free_space_mib(mib, DEVICE_LOW_FREE_MIB);
+        parts.push(format!("device={s}{}", if low { " LOW" } else { "" }));
+        any_low |= low;
+    }
+    if parts.is_empty() {
+        return String::new();
+    }
+    let low_hint = if any_low { " — low disk may be contributing" } else { "" };
+    format!(" disk[{}]{low_hint}", parts.join(" "))
+}
+
 async fn reboot_android_device(udid: &str) -> anyhow::Result<()> {
     let _ = tokio::process::Command::new("adb")
         .args(["-s", udid, "reboot"])
@@ -2202,11 +2269,11 @@ async fn ensure_companion_with_reg(
     // the explicit `device_serial` env var, iOS via `UIDevice.current
     // .identifierForVendor`.)
     let mut rx = reg_state.subscribe();
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(90);
     // Concurrent flows all hit this path simultaneously when launching a
     // fresh companion — only one XCUITest harness can run per UDID, so
     // only one registration fires. Without this pre-check, every flow
-    // after the winner waits 60s for its own (never-arriving) event
+    // after the winner waits for its own (never-arriving) event
     // (broadcast doesn't replay events to late subscribers, and the
     // event already fired before this flow subscribed).
     //
@@ -2256,9 +2323,19 @@ async fn ensure_companion_with_reg(
                 }
             }
             _ = tokio::time::sleep_until(deadline) => {
+                // Slow am instrument / instrumentation startup is often
+                // disk-pressure-driven; surface free space so the reader
+                // doesn't chase the wrong root cause.
+                let resources = match platform {
+                    Platform::Android => golem_devices::concurrency::ResourceSnapshot::
+                        capture_with_android_device(&device.udid).await,
+                    Platform::Ios => golem_devices::concurrency::ResourceSnapshot::
+                        capture_with_ios_simulator().await,
+                };
+                let disk_tail = format_disk_summary(&resources);
                 return Err(golem_events::coded(
                     golem_events::FailureCode::DeviceRegistrationTimeout,
-                    anyhow::anyhow!("Companion did not register within 60 seconds"),
+                    anyhow::anyhow!("Companion did not register within 90 seconds{disk_tail}"),
                 ));
             }
         }
@@ -2319,9 +2396,14 @@ async fn run_flow_on_device(
         )),
     };
 
-    // Resolve perf setting: CLI --no-perf overrides flow perf option (default: true)
+    // Resolve perf setting:
+    // - `--trace` forces perf on for forensic capture (overrides
+    //   `--no-perf` and `flow.options.perf = false`). The whole point
+    //   of trace mode is to never lose diagnostics; silently dropping
+    //   perf because some flow said `perf = false` defeats that.
+    // - Otherwise CLI `--no-perf` wins over flow option (default true).
     let flow_perf = flow.flow.options.as_ref().and_then(|o| o.perf).unwrap_or(true);
-    let perf_enabled = !no_perf && flow_perf;
+    let perf_enabled = trace || (!no_perf && flow_perf);
 
     let companion_port = if platform == Platform::Android { Some(port) } else { None };
     let apps: Vec<(String, String)> = flow
@@ -3418,5 +3500,60 @@ mod tests {
         for flow in &report.flows {
             assert!(!flow.success);
         }
+    }
+
+    use golem_devices::concurrency::ResourceSnapshot;
+
+    #[test]
+    fn format_free_space_mib_uses_gib_above_one() {
+        let (s, low) = format_free_space_mib(85 * 1024, HOST_LOW_FREE_MIB);
+        assert_eq!(s, "85.0GiB");
+        assert!(!low);
+    }
+
+    #[test]
+    fn format_free_space_mib_uses_mib_below_one_gib() {
+        let (s, low) = format_free_space_mib(300, DEVICE_LOW_FREE_MIB);
+        assert_eq!(s, "300MiB");
+        assert!(low, "300MiB SHALL trip the 500MiB device threshold");
+    }
+
+    #[test]
+    fn format_free_space_mib_flags_low_host_below_10gib() {
+        let (s, low) = format_free_space_mib(3 * 1024, HOST_LOW_FREE_MIB);
+        assert_eq!(s, "3.0GiB");
+        assert!(low, "3GiB SHALL trip the 10GiB host threshold");
+    }
+
+    #[test]
+    fn format_disk_summary_empty_when_both_unknown() {
+        let snap = ResourceSnapshot::default();
+        assert_eq!(format_disk_summary(&snap), "");
+    }
+
+    #[test]
+    fn format_disk_summary_includes_low_hint_when_either_low() {
+        let snap = ResourceSnapshot {
+            host_free_disk_mb: Some(3 * 1024),
+            host_free_ram_mb: None,
+            device_free_disk_mb: Some(2 * 1024),
+        };
+        let s = format_disk_summary(&snap);
+        assert!(s.contains("host=3.0GiB LOW"), "got: {s}");
+        assert!(s.contains("device=2.0GiB"), "got: {s}");
+        assert!(s.contains("low disk may be contributing"), "got: {s}");
+    }
+
+    #[test]
+    fn format_disk_summary_no_hint_when_all_healthy() {
+        let snap = ResourceSnapshot {
+            host_free_disk_mb: Some(85 * 1024),
+            host_free_ram_mb: None,
+            device_free_disk_mb: Some(20 * 1024),
+        };
+        let s = format_disk_summary(&snap);
+        assert!(s.contains("host=85.0GiB"), "got: {s}");
+        assert!(!s.contains("LOW"), "got: {s}");
+        assert!(!s.contains("low disk"), "got: {s}");
     }
 }
