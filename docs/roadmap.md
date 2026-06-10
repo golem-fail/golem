@@ -1,5 +1,102 @@
 # Roadmap
 
+## "Save on failure" for recordings + --trace screenshots
+
+Today `--no-record` is all-or-nothing and `--trace` always saves every
+per-step screenshot + tree, pass or fail. The block-end `adb pull
+video` and per-step trace file writes are the I/O bursts hurting
+concurrent-emu sweeps. A "save on failure" mode would keep
+instrumentation on (cheap on the device side) but only persist the
+artifacts that actually carry signal.
+
+**Partial infra exists:**
+- `capture_failure_screenshot` (per-step failure path, already
+  shipped) — only fires when a step fails.
+- `--trace` always saves every boundary regardless of outcome.
+- Recording: `stop_recording` always pulls; no discard path.
+
+**Proposed mode** (e.g. `--save-on-failure` or `--trace=on-fail`):
+- Record continuously per block (cheap; HW H.264 encoder).
+- At block end: if the block passed AND all its steps passed, **discard
+  the video on-device** without pulling (`adb shell rm`); else pull
+  as today.
+- For `--trace` screenshots + trees: keep the per-step capture path
+  but write to a ring buffer (last N steps in memory). On step fail,
+  flush the buffer + a few subsequent steps to disk. On block-pass,
+  discard.
+
+**Why it matters at scale:**
+- CI default usage = recording on, perf on per block, --trace off.
+  Today's `--trace` mode is debug-only; the next CI-readiness gap is
+  making non-trace runs lighter so they scale to 10+ emus.
+- The discard path eliminates the dominant I/O burst on the happy
+  path (>95% of blocks in a healthy suite). Bad-block bursts remain
+  for forensics — which is the only time you needed the data anyway.
+
+**Caveats:**
+- Ring buffer + delayed flush makes the "capture cost is per-step"
+  intuition fuzzier — pre-failure steps' captures still happen but
+  don't hit disk. CPU cost on device side stays; only host I/O is
+  saved.
+- For `--trace`-mode forensics where you DO want every step, keep an
+  opt-in flag (`--trace=always`) so the current behavior is still
+  available when needed.
+
+**Files:** `golem-runner/src/executor.rs` (boundary hook for
+discard-on-pass), `golem-runner/src/capture.rs` (ring buffer
+implementation), `golem-driver/src/{android,ios}.rs` (`discard_recording`
+verb that just `rm`s the device-side file).
+
+## Selective host-wide queue for heavy device ops
+
+Two-emu --trace sweep is ~30pp worse than 1-emu --trace (48% vs 85%
+pass). Per-emu wedge rate is identical between configs (~9.3
+reboots/hr), so the regression isn't per-emu cost — it's bursts at
+block boundaries when both emus simultaneously do heavy I/O ops
+(`adb pull` video, screenshot encode/transfer, `dumpsys cpuinfo`).
+These bursts push otherwise-fast hierarchy calls past the 5s
+wedge-detection ceiling → false-positive recovery → cascade.
+
+The cheap fix: a **per-operation-class semaphore**, host-wide. Only
+heavy ops queue; light ops stay parallel.
+
+**Queued (Semaphore(1) per host):**
+- `adb pull` (video at block end — biggest I/O burst)
+- `/screenshot` companion call (large PNG payload)
+- Possibly `dumpsys cpuinfo` / `dumpsys meminfo` (slow device walks)
+
+**Not queued (parallelism preserved):**
+- `/tap`, `/swipe`, `/type` — light, must stay concurrent for
+  throughput
+- `/hierarchy` — small payload, single-emu cost dominates
+- `/perf` companion endpoint — already small
+
+**Semantics:**
+- Acquire-permit time is excluded from step timeout (separate
+  `acquire_then_run(timeout, op)` helper) so a flow waiting its turn
+  doesn't burn its budget.
+- Optional `reuse_recent` hint: if N flows want the same data
+  within X ms, the queue can cache + share (rarely useful today —
+  one-flow-per-device — but enables future shared-data patterns).
+
+**Why not host-wide queue for ALL ops:** would defeat per-device
+parallelism. Cross-device taps are independent and should run
+concurrently; only the I/O-burst class actually contends.
+
+**Validation criteria for keep-or-delete:**
+- Re-run the 2-emu --trace sweep with this queue active. If pass rate
+  recovers from 48% to ≥80%, queue is justified.
+- If it doesn't help meaningfully, the regression has a different
+  source — delete this entry and look elsewhere.
+
+**Files:** new `golem-driver/src/host_queue.rs` (per-op semaphores +
+acquire_then_run); call-site wrapping in `golem-driver/src/android.rs`
+for the queued ops; `golem-runner/src/capture.rs` for screenshot path.
+
+**Becomes load-bearing when**: CI needs 10+ concurrent emus. At that
+point uncontended bursts would saturate the host fork/IO budget and
+this queue becomes necessary, not just optimisation.
+
 ## Device-queue scheduling: semaphore + concurrency-cap-follows-device-count
 
 Queue wait is now unbounded by default; `--max-wait` opts into a

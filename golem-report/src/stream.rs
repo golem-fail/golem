@@ -106,14 +106,14 @@ fn fmt_dur(ms: u64, use_color: bool) -> String {
     }
 }
 
-/// 6-char left-aligned bold status keyword. The keyword + color carries the
-/// status — no leading symbol needed. PASS/FAIL/SKIP/WARN render in the same
-/// fixed column so the eye can scan the left margin for failures.
+/// 4-char left-aligned bold status keyword. Sized to fit the widest
+/// labels (`PASS`/`FAIL`/`WARN`/`SKIP`); step-level `ok`/`NG` pad to
+/// the same column so the eye can scan the left margin for failures.
 fn keyword(label: &str, color: &str, use_color: bool) -> String {
     if use_color {
-        format!("{color}{label:<6}{RESET}")
+        format!("{color}{label:<4}{RESET}")
     } else {
-        format!("{label:<6}")
+        format!("{label:<4}")
     }
 }
 
@@ -461,7 +461,11 @@ pub async fn stream_human(
                         } else {
                             format!("  {}", tags.join(" "))
                         };
-                        let kw = keyword("PASS", BOLD_GREEN, use_color);
+                        // Step-level uses `ok`/`NG` so `grep " PASS "`
+                        // and `grep " FAIL "` reliably match flow-level
+                        // only. `NG` stays uppercase so errors still
+                        // visually stand out at a glance.
+                        let kw = keyword("ok", BOLD_GREEN, use_color);
                         eprintln!("{ts}  {dp}{kw} {dur}  {action_target}{tag_str}{block_suffix}{stats_str}");
                         pending_substeps.remove(&event.device_id.0);
                     }
@@ -471,7 +475,7 @@ pub async fn stream_human(
                         } else {
                             format!("  {}", tags.join(" "))
                         };
-                        let kw = keyword("FAIL", BOLD_RED, use_color);
+                        let kw = keyword("NG", BOLD_RED, use_color);
                         eprintln!("{ts}  {dp}{kw} {dur}  {action_target}{tag_str}{block_suffix}");
                         let pending = pending_substeps.remove(&event.device_id.0).unwrap_or_default();
                         first_fail_code.entry(event.device_id.0.clone()).or_insert(*code);

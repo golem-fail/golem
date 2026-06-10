@@ -225,7 +225,8 @@ pub struct SuiteConfig {
     /// `[options].record` from `golem.toml` — project-wide default.
     pub project_record: Option<bool>,
     /// `--trace`: per-step forensic capture (screenshot + tree at
-    /// every boundary). Implies recording, beats `--no-record`.
+    /// every boundary). Implies recording, but explicit `--no-record`
+    /// still wins.
     pub trace: bool,
     /// `--repeat N`: run the whole suite N times. Plan-phase fans
     /// every FlowRun out N times, each tagged with a `repeat_index`.
@@ -2397,13 +2398,13 @@ async fn run_flow_on_device(
     };
 
     // Resolve perf setting:
-    // - `--trace` forces perf on for forensic capture (overrides
-    //   `--no-perf` and `flow.options.perf = false`). The whole point
-    //   of trace mode is to never lose diagnostics; silently dropping
-    //   perf because some flow said `perf = false` defeats that.
-    // - Otherwise CLI `--no-perf` wins over flow option (default true).
+    // - Explicit CLI `--no-perf` always wins. The user opted out;
+    //   don't sneak it back on under `--trace`.
+    // - Otherwise `--trace` forces perf on (overrides `flow.options.perf
+    //   = false`) so trace-mode never silently loses forensic data.
+    // - Otherwise the flow's option wins (default true).
     let flow_perf = flow.flow.options.as_ref().and_then(|o| o.perf).unwrap_or(true);
-    let perf_enabled = trace || (!no_perf && flow_perf);
+    let perf_enabled = !no_perf && (trace || flow_perf);
 
     let companion_port = if platform == Platform::Android { Some(port) } else { None };
     let apps: Vec<(String, String)> = flow
@@ -2454,13 +2455,13 @@ async fn run_flow_on_device(
     //     true/false regardless of explicit block opts).
     //   * `project_record` is folded into the seed default below;
     //     `execute_flow` then refines per-flow + per-subflow.
-    // `--trace` beats everything (forces on). `--no-record` beats
-    // `--record` when both are passed.
-    let cli_force_record = if trace {
-        Some(true)
-    } else if no_record {
+    // Explicit `--no-record` always wins (mirrors `--no-perf`): the
+    // user opted out, don't sneak it back on under `--trace`.
+    // Otherwise `--trace` forces on, then explicit `--record`, then
+    // unset.
+    let cli_force_record = if no_record {
         Some(false)
-    } else if record {
+    } else if trace || record {
         Some(true)
     } else {
         None
