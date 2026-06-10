@@ -1,5 +1,32 @@
 # Roadmap
 
+## Suite summary rendering
+
+The end-of-suite block mixes metrics at different granularity without
+clear separation:
+
+```
+Summary [  73.715s]  1 passed, 1 failed             ← flow-level counts
+Results: .golem/results/  (json, toon)
+
+── 0 flakes, 1 fail, 1 stable across 1 runs ──      ← test-aggregate over repeats
+FAIL     0/1    webview.test (android/Pixel 7a API 36)
+PASS     1/1    webview.test (android/Pixel 8 Pro API 36)
+```
+
+`1 passed, 1 failed` is flow-level, but `0 flakes / 1 fail / 1 stable`
+is test-level aggregated across repeats. Same line height, no visual
+cue that they're different things. The trailing per-(test, device)
+table is yet another granularity. The reader has to parse three
+different "what does this number mean" contexts in adjacent lines.
+
+Rework for clarity — keep all the info but make levels distinct,
+e.g. label sections, indent, or use a divider. Worth a design pass
+when there's spare cycles. Not blocking.
+
+**Files:** `golem-report/src/stream.rs` (suite-summary block), maybe
+`golem-report/src/human.rs`.
+
 ## "Save on failure" for recordings + --trace screenshots
 
 Today `--no-record` is all-or-nothing and `--trace` always saves every
