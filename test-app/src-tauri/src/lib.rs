@@ -11,12 +11,27 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 /// alive, so the rendered "lastResult" row always updates.
 fn deliver_dialog_result(app: &tauri::AppHandle, payload: &'static str) {
     let _ = app.emit("dialog-result", payload);
-    if let Some(window) = app.get_webview_window("main") {
+    let script = if let Some(window) = app.get_webview_window("main") {
         let script = format!(
             "window.__golemSetDialogResult && window.__golemSetDialogResult({})",
             serde_json::to_string(payload).unwrap_or_else(|_| "''".to_string())
         );
         let _ = window.eval(&script);
+        Some(script)
+    } else {
+        None
+    };
+    // Slow WebViews on busy emulators can drop both the event AND the
+    // first eval (the WebView's JS context may be reloading or mid-GC
+    // when our delivery lands). Schedule a second eval 500ms later as
+    // belt + braces. Cheap on the happy path (the first eval already
+    // set `lastResult` so the setter is a no-op rerender).
+    if let (Some(window), Some(script)) = (app.get_webview_window("main"), script) {
+        let window_clone = window.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            let _ = window_clone.eval(&script);
+        });
     }
 }
 

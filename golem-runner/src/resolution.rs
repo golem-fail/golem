@@ -26,7 +26,7 @@ const SETTLE_INTERVAL: Duration = Duration::from_millis(250);
 /// hangs the .await indefinitely. The ceiling separates "slow but
 /// recovering" from "wedged forever" — high enough to absorb slow
 /// tails, low enough to fail fast on real wedges.
-const HIERARCHY_FETCH_TIMEOUT: Duration = Duration::from_millis(5000);
+const HIERARCHY_FETCH_TIMEOUT: Duration = Duration::from_millis(6000);
 
 /// Wrap `driver.get_hierarchy()` with a hard per-call timeout.
 /// Returns the same shape as the underlying call; treats a timeout
@@ -45,8 +45,8 @@ pub(crate) async fn get_hierarchy_bounded(
     }
 }
 
-const SCREENSHOT_FETCH_TIMEOUT: Duration = Duration::from_millis(5000);
-const SWIPE_TIMEOUT: Duration = Duration::from_millis(5000);
+const SCREENSHOT_FETCH_TIMEOUT: Duration = Duration::from_millis(6000);
+const SWIPE_TIMEOUT: Duration = Duration::from_millis(6000);
 
 pub(crate) async fn swipe_coords_bounded(
     driver: &dyn PlatformDriver,

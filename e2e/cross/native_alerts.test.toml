@@ -18,8 +18,11 @@ steps = [
   { action = "assert_alert", on_text = "This is a test alert" },
   { action = "accept_alert" },
   # Alert close animation + state update + re-render — default 10s
-  # can underflow under sweep load on slower Android emulators.
-  { action = "assert_visible", on_text = "Alert dismissed", timeout = 15000 },
+  # can underflow under sweep load on slower Android emulators. The
+  # 500ms-delayed second eval in `deliver_dialog_result` covers slow
+  # WebViews that drop the first delivery; auto_scroll guards against
+  # a state change that scrolled the lastResult row off-screen.
+  { action = "assert_visible", on_text = "Alert dismissed", timeout = 15000, auto_scroll = true },
 ]
 
 # Confirm dialog: OK and Cancel buttons
