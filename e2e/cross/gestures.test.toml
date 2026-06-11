@@ -36,7 +36,7 @@ steps = [
 [[block]]
 name = "continuous_path"
 steps = [
-  { action = "tap", on_text = "Reset Gesture" },
+  { action = "tap", on_text = "Reset Gesture", auto_scroll = true },
   { action = "assert_visible", on_text = "Grid: 000-000-000" },
   { action = "swipe", points = [
     { accessibility_label = "gesture-area", x = "-33%", y = "0" },
@@ -53,7 +53,7 @@ steps = [
 [[block]]
 name = "rotate_cw"
 steps = [
-  { action = "tap", on_text = "Reset Gesture" },
+  { action = "tap", on_text = "Reset Gesture", auto_scroll = true },
   { action = "assert_visible", on_text = "Rot: 0" },
   { action = "rotate", on = { accessibility_label = "gesture-area" }, rotation = 90.0 },
   { action = "assert_visible", on_text = "Rot: 90 CW" },
@@ -64,7 +64,7 @@ steps = [
 [[block]]
 name = "rotate_ccw"
 steps = [
-  { action = "tap", on_text = "Reset Gesture" },
+  { action = "tap", on_text = "Reset Gesture", auto_scroll = true },
   { action = "assert_visible", on_text = "Rot: 0" },
   { action = "rotate", on = { accessibility_label = "gesture-area" }, rotation = -270.0 },
   { action = "assert_visible", on_text = "Rot: -270 CCW" },

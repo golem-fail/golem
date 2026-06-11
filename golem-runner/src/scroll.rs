@@ -548,7 +548,7 @@ pub async fn scroll_to_element(
         };
 
         scroll_attempt += 1;
-        crate::resolution::swipe_coords_bounded(driver, fx, fy, tx, ty).await?;
+        crate::resolution::scroll_swipe_bounded(driver, fx, fy, tx, ty).await?;
 
         // Check result
         let settle_meta;
@@ -568,6 +568,53 @@ pub async fn scroll_to_element(
                 });
             }
             return Ok(found);
+        }
+
+        // Overshoot guard: the target may have passed through the viewport
+        // between this iteration and the previous one. Even with the
+        // dwell-before-lift scroll swipe suppressing fling, a large stride
+        // can step past a small target that briefly occupied only a few
+        // pixels of the viewport mid-frame. The unfiltered `root` carries
+        // the target's document-absolute bounds — if those sit beyond the
+        // viewport in the current scroll direction, we've overshot, and
+        // continuing in the same direction wastes the remaining budget on
+        // ground we already covered. Reverse once and let the next iter
+        // catch the target on the way back.
+        //
+        // Container scrolls (`within`) are excluded — the bounds frame of
+        // reference for an inner scrollable carousel doesn't map to the
+        // outer viewport the same way, and an explicit `within` already
+        // narrows the search to a single container.
+        if scroll_attempt > 0 && container.is_none() && !reversed {
+            let full_results = find_elements(&root, selector);
+            if let Some(found) = full_results.into_iter().next() {
+                let b = found.element.bounds;
+                let passed = match direction {
+                    Direction::Down => b.y + b.height < safe_vp.y,
+                    Direction::Up => b.y > safe_vp.y + safe_vp.height,
+                    Direction::Left => b.x > safe_vp.x + safe_vp.width,
+                    Direction::Right => b.x + b.width < safe_vp.x,
+                };
+                if passed {
+                    if let Some(e) = emitter {
+                        e.substep(golem_events::SubstepEvent::ScrollDirectionReversed {
+                            to_direction: format!("{:?}", reverse_direction(direction)),
+                            reason: format!(
+                                "overshoot: target at bounds=({},{},{},{}) past viewport in {direction:?}",
+                                b.x, b.y, b.width, b.height,
+                            ),
+                        });
+                    }
+                    direction = reverse_direction(direction);
+                    strategies = swipe_strategies(&viewport, direction);
+                    strategy_idx = 0;
+                    stall_count = 0;
+                    dynamic_start_tried = false;
+                    dynamic_start_override = None;
+                    reversed = true;
+                    continue;
+                }
+            }
         }
 
         // Two-tier fingerprint analysis
@@ -950,7 +997,23 @@ mod tests {
         async fn remove_port_forwards(&self) -> anyhow::Result<()> { Ok(()) }
         async fn pinch(&self, _x: i32, _y: i32, _scale: f64, _velocity: f64) -> anyhow::Result<()> { Ok(()) }
         async fn gesture(&self, fingers: Vec<golem_driver::GestureFinger>) -> anyhow::Result<()> {
-            self.record_call("gesture", vec![format!("{} fingers", fingers.len())]); Ok(())
+            // Scroll swipes route through gesture() with a single finger
+            // and a (from, to, to) point sequence — record from + to as
+            // the canonical swipe so test helpers can reason about
+            // direction without caring about the dwell duplicate.
+            if fingers.len() == 1 && fingers[0].points.len() >= 2 {
+                let pts = &fingers[0].points;
+                self.record_call(
+                    "gesture_swipe",
+                    vec![
+                        pts[0].0.to_string(), pts[0].1.to_string(),
+                        pts[1].0.to_string(), pts[1].1.to_string(),
+                    ],
+                );
+            } else {
+                self.record_call("gesture", vec![format!("{} fingers", fingers.len())]);
+            }
+            Ok(())
         }
     }
 
@@ -969,7 +1032,7 @@ mod tests {
             .expect("should find element without scrolling");
 
         assert_eq!(result.element.text.as_deref(), Some("Target"));
-        let swipe_calls: Vec<_> = driver.get_calls().into_iter().filter(|(m, _)| m == "swipe_coords").collect();
+        let swipe_calls: Vec<_> = driver.get_calls().into_iter().filter(|(m, _)| m == "gesture_swipe").collect();
         assert!(swipe_calls.is_empty(), "no swipes SHALL occur");
     }
 
@@ -996,7 +1059,7 @@ mod tests {
             .expect("should find element after one scroll");
 
         assert_eq!(result.element.text.as_deref(), Some("Target"));
-        let swipe_calls: Vec<_> = driver.get_calls().into_iter().filter(|(m, _)| m == "swipe_coords").collect();
+        let swipe_calls: Vec<_> = driver.get_calls().into_iter().filter(|(m, _)| m == "gesture_swipe").collect();
         assert_eq!(swipe_calls.len(), 1);
         assert_eq!(scroll_intent(&swipe_calls[0].1), "Down");
     }
@@ -1058,7 +1121,7 @@ mod tests {
         // retries before bailing.
         let _ = scroll_to_element(&selector, &driver, Direction::Down, Some(3000), None, None).await;
 
-        let swipe_calls: Vec<_> = driver.get_calls().into_iter().filter(|(m, _)| m == "swipe_coords").collect();
+        let swipe_calls: Vec<_> = driver.get_calls().into_iter().filter(|(m, _)| m == "gesture_swipe").collect();
         let directions: Vec<&str> = swipe_calls.iter().map(|c| scroll_intent(&c.1)).collect();
         assert!(
             directions.contains(&"Up"),
@@ -1102,7 +1165,7 @@ mod tests {
 
         assert_eq!(result.element.text.as_deref(), Some("Target"));
 
-        let swipe_calls: Vec<_> = driver.get_calls().into_iter().filter(|(m, _)| m == "swipe_coords").collect();
+        let swipe_calls: Vec<_> = driver.get_calls().into_iter().filter(|(m, _)| m == "gesture_swipe").collect();
         let directions: Vec<&str> = swipe_calls.iter().map(|c| scroll_intent(&c.1)).collect();
         assert!(
             directions.contains(&"Up"),
@@ -1146,7 +1209,7 @@ mod tests {
             .await
             .expect("should find element");
 
-        let swipe_calls: Vec<_> = driver.get_calls().into_iter().filter(|(m, _)| m == "swipe_coords").collect();
+        let swipe_calls: Vec<_> = driver.get_calls().into_iter().filter(|(m, _)| m == "gesture_swipe").collect();
         assert_eq!(swipe_calls.len(), 1);
         assert_eq!(scroll_intent(&swipe_calls[0].1), expected);
     }

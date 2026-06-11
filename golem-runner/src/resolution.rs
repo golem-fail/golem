@@ -48,18 +48,34 @@ pub(crate) async fn get_hierarchy_bounded(
 const SCREENSHOT_FETCH_TIMEOUT: Duration = Duration::from_millis(6000);
 const SWIPE_TIMEOUT: Duration = Duration::from_millis(6000);
 
-pub(crate) async fn swipe_coords_bounded(
+/// Scroll/auto_scroll swipe with dwell-before-lift to suppress fling
+/// momentum. A regular `swipe` (finger down → move → lift) leaves the
+/// velocity tracker with a non-zero release velocity, and Android adds
+/// momentum scroll on top of the gesture — frequently overshooting the
+/// target by 2-3× the swipe distance, so the resolver scrolls past the
+/// element before the next hierarchy sample can see it in the viewport.
+///
+/// Implemented via the multi-touch gesture endpoint with a single-finger
+/// 3-point path `(from, to, to)`: the interpolator splits the duration
+/// evenly across the two segments, so the finger holds still at the
+/// end for ~half the duration. The velocity tracker reads near-zero
+/// at UP → no fling → page scrolls exactly the swipe distance.
+pub(crate) async fn scroll_swipe_bounded(
     driver: &dyn PlatformDriver,
     fx: i32,
     fy: i32,
     tx: i32,
     ty: i32,
 ) -> anyhow::Result<()> {
-    match tokio::time::timeout(SWIPE_TIMEOUT, driver.swipe_coords(fx, fy, tx, ty)).await {
+    let finger = golem_driver::GestureFinger {
+        points: vec![(fx, fy), (tx, ty), (tx, ty)],
+        duration_ms: 600,
+    };
+    match tokio::time::timeout(SWIPE_TIMEOUT, driver.gesture(vec![finger])).await {
         Ok(r) => r,
         Err(_) => crate::fail_code!(
             golem_events::FailureCode::DeviceCompanionWedged,
-            "swipe timed out after {}ms (companion likely wedged)",
+            "scroll swipe timed out after {}ms (companion likely wedged)",
             SWIPE_TIMEOUT.as_millis()
         ),
     }

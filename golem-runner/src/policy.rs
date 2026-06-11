@@ -66,9 +66,14 @@ fn action_multiplier(step: &Step) -> u64 {
     // phase starved. Add 4x (=20s on the 5s base) when both apply.
     let within_bump = if step.within.is_some() { 4 } else { 0 };
 
-    // auto_scroll forces 6x minimum regardless of action.
+    // auto_scroll forces 8x minimum regardless of action.
+    // Per-iteration cost on slow devices under multi-flow load is
+    // dominated by hierarchy fetch + settle (~5-7s each), so the
+    // previous 30s (6x) budget allowed only 3-5 iterations — not
+    // enough to reach a target ~2-3 viewports down. 8x = 40s gives
+    // 1-2 more iterations on slow paths without overpaying on fast ones.
     if step.auto_scroll == Some(true) {
-        return 6 + within_bump;
+        return 8 + within_bump;
     }
 
     match step.action.as_str() {
@@ -102,9 +107,9 @@ fn action_multiplier(step: &Step) -> u64 {
         // 4x — external scripts (unknown duration)
         "bash" | "run" => 4,
 
-        // 6x — scroll (the within_bump above bumps to 10x when a
+        // 8x — scroll (the within_bump above bumps to 12x when a
         // container is set), network I/O.
-        "scroll" => 6 + within_bump,
+        "scroll" => 8 + within_bump,
         "http_get" | "http_post" | "http_put" | "http_patch"
         | "http_delete" | "open_link" => 6,
 
@@ -682,7 +687,7 @@ mod tests {
         assert_eq!(effective_timeout(&assert_vis, 5_000), 10_000);
 
         let scroll = Step { action: "scroll".into(), ..Default::default() };
-        assert_eq!(effective_timeout(&scroll, 5_000), 30_000);
+        assert_eq!(effective_timeout(&scroll, 5_000), 40_000);
 
         let launch = Step { action: "launch".into(), ..Default::default() };
         assert_eq!(effective_timeout(&launch, 5_000), 25_000);
@@ -695,14 +700,14 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // 13. auto_scroll forces 6x minimum
+    // 13. auto_scroll forces 8x minimum
     // -----------------------------------------------------------------
     #[test]
-    fn auto_scroll_forces_6x() {
+    fn auto_scroll_forces_8x() {
         let mut step = Step { action: "tap".into(), ..Default::default() };
         step.auto_scroll = Some(true);
-        // tap is normally 1x (5s), but auto_scroll forces 6x (30s)
-        assert_eq!(effective_timeout(&step, 5_000), 30_000);
+        // tap is normally 1x (5s), but auto_scroll forces 8x (40s)
+        assert_eq!(effective_timeout(&step, 5_000), 40_000);
     }
 
     // -----------------------------------------------------------------
@@ -712,21 +717,21 @@ mod tests {
     fn within_adds_to_scroll_timeout() {
         let within = golem_parser::SelectorGroup { text: Some("Carousel".into()), ..Default::default() };
 
-        // scroll without within stays at 6x = 30s.
+        // scroll without within stays at 8x = 40s.
         let scroll = Step { action: "scroll".into(), ..Default::default() };
-        assert_eq!(effective_timeout(&scroll, 5_000), 30_000);
+        assert_eq!(effective_timeout(&scroll, 5_000), 40_000);
 
-        // scroll with within bumps to 10x = 50s.
+        // scroll with within bumps to 12x = 60s.
         let scroll_within = Step { action: "scroll".into(), within: Some(within.clone()), ..Default::default() };
-        assert_eq!(effective_timeout(&scroll_within, 5_000), 50_000);
+        assert_eq!(effective_timeout(&scroll_within, 5_000), 60_000);
 
-        // auto_scroll alone stays at 6x = 30s.
+        // auto_scroll alone stays at 8x = 40s.
         let auto = Step { action: "tap".into(), auto_scroll: Some(true), ..Default::default() };
-        assert_eq!(effective_timeout(&auto, 5_000), 30_000);
+        assert_eq!(effective_timeout(&auto, 5_000), 40_000);
 
-        // auto_scroll + within bumps to 10x = 50s.
+        // auto_scroll + within bumps to 12x = 60s.
         let auto_within = Step { action: "tap".into(), auto_scroll: Some(true), within: Some(within), ..Default::default() };
-        assert_eq!(effective_timeout(&auto_within, 5_000), 50_000);
+        assert_eq!(effective_timeout(&auto_within, 5_000), 60_000);
     }
 
     // -----------------------------------------------------------------

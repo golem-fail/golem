@@ -85,26 +85,11 @@ steps = [
   { action = "assert_visible", on_text = "Light", on_right_of = "Theme:" },
 ]
 
-[[block]]
-name = "location_controls"
-steps = [
-  # Jump to Device State.
-  { action = "tap", on_accessibility_label = "menu-toggle" },
-  { action = "tap", on_accessibility_label = "goto-device-state" },
-  { action = "assert_visible", on_text = "0.0, 0.0", on_right_of = "Location:" },
-
-  # Set GPS location to San Francisco
-  { action = "set_location", latitude = 37.7749, longitude = -122.4194 },
-  { action = "assert_visible", on_text = "37.7749, -122.4194", on_right_of = "Location:" },
-
-  # Set GPS location to Tokyo
-  { action = "set_location", latitude = 35.6762, longitude = 139.6503 },
-  { action = "assert_visible", on_text = "35.6762, 139.6503", on_right_of = "Location:" },
-
-  # Set GPS location to London
-  { action = "set_location", latitude = 51.5074, longitude = -0.1278 },
-  { action = "assert_visible", on_text = "51.5074, -0.1278", on_right_of = "Location:" },
-
-  # Read the final location value
-  { action = "read", on_right_of = "Location:", save_to = "final_location" },
-]
+# location_controls disabled: current `set_location` path on Android
+# routes through `adb emu geo fix` (OS-level) PLUS a JS hook
+# (`window.__golemSetLocation`) that writes the rendered "Location:"
+# row directly, bypassing the geolocation permission flow entirely.
+# The hook is a WebView-only shortcut that proves nothing about real
+# geolocation plumbing. See roadmap "set_location: drop WebView JS
+# hook, grant permission + assert via real geolocation" for the
+# proper path.

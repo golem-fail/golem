@@ -1,5 +1,153 @@
 # Roadmap
 
+## Input-mutation verify for `/type` and `/backspace`
+
+Slow IMEs (some Android devices under multi-flow load) return ok from
+`input text` / `input keyevent DEL` before the keystroke has actually
+propagated to the focused EditText. Step's `post_settle` then sees the
+hierarchy fingerprint is stable (no animation in flight) and returns
+fast, so the next `assert_visible` runs against a not-yet-updated field
+and times out (EF408). Pattern observed on form_fill, type_text — see
+e.g. sweep prior to revert of 0.6.28.
+
+A first attempt added per-50ms polling on `getRootInActiveWindow` inside
+the companion's `/type` and `/backspace` handlers, which catastrophically
+contended on the companion's single-threaded UI_EXECUTOR and produced
+null-bursts that tripped the staleness counter → `System.exit(0)` →
+reboot cascade. See `[[feedback_companion_a11y_contention.md]]`.
+
+**Correct shape (sleep + single poll + hint to engine):**
+
+1. **Companion:** in `handleType` / `handleBackspace`, after dispatching
+   keystrokes, sleep ~150ms (mimics a human pause; long enough for most
+   IMEs to land the change). Then **one** `getRootInActiveWindow` →
+   `findFocus(FOCUS_INPUT)` → text compare against pre-recorded value.
+   Respond with `{"status":"ok"}` on verified mutation, or
+   `{"status":"ok", "text_unchanged": true}` when the single check
+   didn't see a change. One a11y call max per handler — won't accumulate
+   nulls.
+
+2. **Driver:** parse the optional `text_unchanged` flag from the
+   response; surface as `Option<String>` or similar from `type_text` /
+   `backspace`.
+
+3. **Runner:** when the hint is set, route the next `wait_for_settle`
+   through an extended-budget variant: `SETTLE_TIMEOUT 1500 → 3000ms`,
+   `SETTLE_INTERVAL 250 → 500ms`. One-shot: only the immediately
+   following settle is extended.
+
+**Why this works:** the IME latency is real and small (typically
+50-300ms on healthy devices, occasionally up to 1.5s on slow ones).
+A fixed 150ms sleep + 1-call check is enough on the happy path and
+under 200ms of wasted wall-clock; the extended settle on the hint
+path gives the IME another up-to-3s without burning more a11y calls.
+
+**Files:** `companions/android/app/src/androidTest/java/fail/golem/companion/CompanionServer.java`
+(`handleType`, `handleBackspace`); `golem-driver/src/lib.rs`, `android.rs`,
+`ios.rs` (trait + impls); `golem-runner/src/actions/interaction.rs`
+(handlers surface the hint), `golem-runner/src/resolution.rs`
+(`wait_for_settle` variants).
+
+iOS analogue worth considering: XCUITest's `value` property on the
+focused element is synchronous against the field, so the race we see
+on Android doesn't manifest the same way — iOS impl can stay as-is.
+
+## Companion `/hide-keyboard` resilience + Pixel-class reboot escalation
+
+Pixel 7a-class devices under multi-flow load occasionally wedge on
+`/hide-keyboard` — the companion's `dumpsys input_method` shell call
+hangs past the driver's HTTP timeout (~11-12s), returning EF000 and
+sometimes propagating the wedge to the next flow (the underlying
+UiAutomation handle stays stuck even after the HTTP request times out).
+
+**Shape:**
+
+1. **Companion:** wrap the `dumpsys input_method` shell call (and the
+   subsequent `input keyevent KEYCODE_BACK`) in a bounded executor with
+   a ~5s internal deadline. Return `{"status":"ok", "wedged": true}`
+   instead of hanging the HTTP handler when the internal deadline
+   fires. Frees the request thread so the response returns; underlying
+   IME poll may still be queued in a background thread but doesn't
+   block the next request.
+
+2. **Driver:** treat HTTP timeout OR `wedged: true` as a transient
+   error; retry once with a short backoff (e.g. 1s).
+
+3. **Driver/runner recovery layer:** on second timeout, escalate to
+   `adb reboot` recovery per existing wedge-recovery path
+   (see `[[project_pixel_7a_wedge.md]]`).
+
+Combined effect: `/hide-keyboard` EF000s become a single-flow soft
+failure rather than a multi-flow cascade. Reboot becomes the rare
+escalation, not the routine fix.
+
+**Files:** `companions/android/app/src/androidTest/java/fail/golem/companion/CompanionServer.java`
+(`handleHideKeyboard`); `golem-driver/src/android.rs::hide_keyboard`;
+recovery glue in `golem-runner` if not already in place.
+
+## Inner-list inertial scroll suppression
+
+The dwell-before-lift scroll swipe (in `golem-runner/src/scroll.rs` via
+the multi-touch gesture endpoint) successfully kills *native* fling
+momentum for page-level scrolls — visually confirmed: 0 overshoot
+events on the post-fix sweep. But scrolling INSIDE an
+`overflow-y:auto` inner container still hitches/flings: JS-level
+inertial scroll computes velocity from move events independent of
+release. Even with the finger held still at release, the inner list's
+JS scroll code reads the move-phase velocity and applies its own
+momentum.
+
+Affects `scroll within=<inner list>` flows — `scroll.test
+scroll_within_list` (Item 45) is the canonical example.
+
+**Shape:** for `within` scrolls, also slow the move phase (not just
+the dwell), e.g. stretch the gesture's move portion to 600ms instead
+of 300ms while keeping the total around 900-1200ms with dwell. Lower
+move velocity → JS-side inertial scroll either doesn't trigger or
+adds less momentum.
+
+Alternative: chunk a target scroll distance into several smaller
+swipes back-to-back. Each gesture is short enough that JS-inertial
+adds little, but accumulated effect reaches the target.
+
+**Files:** `golem-runner/src/resolution.rs::scroll_swipe_bounded`
+(maybe add a `within_inner_list` variant or a duration multiplier),
+`golem-runner/src/scroll.rs` (caller passes the hint when `container`
+is set).
+
+## set_location: drop WebView JS hook, grant permission + real geolocation
+
+`golem-driver/src/android.rs::set_location` currently does two things:
+1. `adb emu geo fix lon lat` — sets OS-level emulator location.
+2. `eval_in_webview("window.__golemSetLocation(lat, lon)")` — pokes a
+   Svelte reactive var in the test app's `DeviceState.svelte` to drive
+   the rendered "Location:" row directly, bypassing the geolocation
+   permission flow entirely.
+
+The eval path is a WebView-only shortcut. It proves nothing about real
+geolocation plumbing (navigator.geolocation, runtime permission, OS
+LocationManager → app) and only works for Tauri-style WebView apps.
+For native apps the hook silently no-ops, so `set_location` falsely
+appears to succeed.
+
+Correct path:
+- Companion / driver grants `ACCESS_FINE_LOCATION` at install/launch
+  (depends on `AndroidManifest.xml` permission persistence — see the
+  separate roadmap entry on that).
+- Test app's `DeviceState.svelte` reads `navigator.geolocation.watchPosition`
+  (or equivalent) and renders the result.
+- Drop the `__golemSetLocation` hook entirely.
+- iOS: equivalent — set location via simctl, app reads CLLocationManager.
+
+Once those land, re-enable the `location_controls` block in
+`e2e/cross/device_controls.test.toml` (currently disabled with a
+pointer to this entry).
+
+**Files:** `golem-driver/src/android.rs::set_location`,
+`golem-driver/src/ios.rs::set_location`, `test-app/src/lib/DeviceState.svelte`
+(remove `window.__golemSetLocation` hook), `e2e/cross/device_controls.test.toml`
+(re-enable location_controls block).
+
 ## Suite summary rendering
 
 The end-of-suite block mixes metrics at different granularity without
@@ -26,6 +174,95 @@ when there's spare cycles. Not blocking.
 
 **Files:** `golem-report/src/stream.rs` (suite-summary block), maybe
 `golem-report/src/human.rs`.
+
+## Human output drops flow-level error codes
+
+Step failures render their code (`✗ … EF404`), but a *flow-level* abort —
+`EF508` (max_steps) or `EF504` (max_runtime) — prints a bare `FAIL` with no
+code or reason in the human stream. The code IS captured: `results.json`
+carries `"code": "EF508"` and TOON carries `EF508` for the same run; only the
+human renderer omits it. A human-output reader sees a flow fail with no "why".
+
+Observed (a flow that looped on an unterminated branch, hit `max_steps`):
+
+```
+FAIL [26.225s]  loop-test.test  seed:...
+Summary [...]  0 passed, 1 failed
+```
+
+— no `EF508`, no "max_steps exceeded" line.
+
+**Fix:** render the flow result's `code` (+ short reason) on the human FAIL
+line, the same way step failures show theirs. The flow-level failure code is
+already populated (it reaches json/toon).
+
+**Files:** `golem-report/src/human.rs` (flow FAIL line),
+`golem-report/src/stream.rs` (suite summary).
+
+## Branch loops can't terminate on a counter (`_loop` not wired)
+
+GOTO-style looping via branches is meant to work — a block can `goto` itself
+(or another) and the executor re-enters it correctly: block re-entry and
+per-block iteration tracking already function, and the human stream even
+labels `loop_body (iteration N)`. What's missing is a way to *bound* such a
+loop — there's no working loop counter to branch on. (A bare `repeat = N`
+block field was never the plan; loops are expressed via branches. The gap is
+purely the missing bounded counter.)
+
+- The per-block `_loop` counter (`golem-runner/src/loops.rs` `LoopTracker`)
+  is never called by the executor, and `_loop` is never injected into the
+  variable store — so `[[block.branch]] if_var = "_loop", gte = N` reads
+  nothing, never matches, and the loop falls through to its fallback `goto`
+  forever (until `max_steps`/`max_runtime` aborts it). Confirmed live: a
+  3-iteration branch loop ran until the `max_steps` guard.
+- `set_variable` is listed in `policy.rs` but has no arm in the
+  `actions.rs` dispatch, so a counter can't be incremented manually either.
+
+**Fix:** inject the per-block iteration count into the var store as `_loop`
+before branch evaluation (wire `block_iterations` / `LoopTracker` → vars), so
+`if_var = "_loop", gte = N` works. Optionally wire `set_variable` into the
+action dispatch for general-purpose counters. Add an e2e flow for a bounded
+branch loop — none exists today (`for_each` is the only loop with coverage,
+and it iterates an app's devices, not a count).
+
+**Files:** `golem-runner/src/executor.rs` (inject `_loop` into vars before
+`evaluate_branch`), `golem-runner/src/loops.rs` (use `LoopTracker` or fold
+into the executor), optionally `golem-runner/src/actions.rs`
+(`set_variable` dispatch).
+
+## `fake:` generators only evaluated in fixtures, not flow/block vars
+
+`fake:*` generators (email, person, address, credit_card, geo, …) are wired
+into exactly one runtime path: `fixture_loader.rs`, which calls
+`golem_vars::evaluate::evaluate_generators` with the seeded RNG when a
+`load_fixture` step pulls a `__fixtures__/*.toml`. There they work and are
+seed-deterministic.
+
+But variables declared directly in `[flow.vars]` / `[block.vars]` are seeded
+as the **raw string** — the executor does:
+
+```rust
+child_vars.set_in_scope(ScopeLevel::Flow, key, VarValue::String(value.clone()))
+```
+
+with no generator evaluation. So `[flow.vars] email = "fake:email"` stores the
+literal text `"fake:email"`, and `${email}` interpolates to `"fake:email"`,
+not a generated address. This contradicts `evaluate.rs`'s own docstring
+("values starting with `fake:` are treated as generator definitions") — reads
+as a wiring gap, not a fixtures-only design choice.
+
+No e2e flow uses `fake:` at all, so neither path has end-to-end coverage
+(generators + fixture loader have unit/integration tests only).
+
+**Fix:** run `[flow.vars]` and `[block.vars]` through `evaluate_generators`
+(seeded from the flow's RNG, same as fixtures) when seeding the store, so
+`fake:` works wherever vars are declared. Then add an e2e flow that declares a
+`fake:` var, types it into a field, and asserts a non-literal value — and
+verify `--seed` replay reproduces it.
+
+**Files:** `golem-runner/src/executor.rs` (flow/block var seeding — call
+`evaluate_generators` instead of storing raw), `golem-runner/src/subflow.rs`
+(`prepare_child_vars` path), `e2e/` (new fake-data coverage flow).
 
 ## "Save on failure" for recordings + --trace screenshots
 
