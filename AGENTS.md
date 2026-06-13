@@ -3,7 +3,7 @@
 `CLAUDE.md` symlinks here. CLI: `README.md` · versions: `docs/versioning.md` · todo: `docs/roadmap.md`.
 
 ## Gate before every commit (after coding)
-- Unit: `cargo t` (nextest; NOT `cargo test --release`).
+- Unit: `cargo t` (nextest; NOT `cargo test --release`). Output shows only fail/retry/slow by default (no tailing needed); `--status-level pass` for full output.
 - Lint: `cargo clippy --workspace --all-targets` (workspace denies `unwrap_used`).
 - E2E per matrix, live on sim/emu.
 - New features SHALL add/amend Rust tests. Goal = full unit + e2e coverage.

@@ -5,6 +5,11 @@
 # without paused-time, or otherwise mis-shaped for a unit test.
 
 [profile.default]
+# Per-test output during a run: only show none/fail/retry/slow — passing
+# tests are not printed, so failures and SLOW markers surface without
+# tailing/grepping. Final summary still lists failures (final-status-level
+# defaults to "fail"). Override with `--status-level pass` when debugging.
+status-level = "slow"
 # Tests slower than `period` get a SLOW marker (repeating every period).
 # After `terminate-after` markers, the test is killed so a stuck test
 # can't hold up the whole run. Real wall-clock kill = 2s × 5 = 10s.
