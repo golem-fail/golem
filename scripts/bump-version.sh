@@ -2,13 +2,25 @@
 set -euo pipefail
 
 if [ $# -ne 1 ]; then
-    echo "Usage: $0 <new-version>"
+    echo "Usage: $0 <new-version|--patch>"
     echo "Example: $0 0.5.0"
+    echo "         $0 --patch   # read current version, bump Z (X.Y.Z -> X.Y.Z+1)"
     exit 1
 fi
 
-NEW_VERSION="$1"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+if [ "$1" = "--patch" ]; then
+    CURRENT="$(grep -m1 '^version = "[0-9]*\.[0-9]*\.[0-9]*"' "$ROOT/Cargo.toml" | sed -E 's/^version = "(.*)"/\1/')"
+    if ! [[ "$CURRENT" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+        echo "Error: could not read current version from $ROOT/Cargo.toml"
+        exit 1
+    fi
+    NEW_VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))"
+    echo "Current version $CURRENT -> $NEW_VERSION"
+else
+    NEW_VERSION="$1"
+fi
 
 # Validate version format
 if ! [[ "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then

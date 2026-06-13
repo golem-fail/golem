@@ -5,7 +5,8 @@ All golem components share a single version number.
 Prefer the bump script for simplicity:
 
 ```bash
-./scripts/bump-version.sh 0.5.0
+./scripts/bump-version.sh --patch   # read current version, bump X.Y.Z -> X.Y.Z+1
+./scripts/bump-version.sh 0.5.0      # or set an explicit version
 ```
 
 It updates all locations listed below and verifies the result. The manual list is kept here for reference.
