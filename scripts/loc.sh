@@ -31,9 +31,9 @@ fmt_pct() {
 fmt_size() {
   local bytes=$1
   if [[ "$bytes" -ge 1048576 ]]; then
-    awk "BEGIN { printf \"%.1f MB\", $bytes / 1048576 }"
+    awk "BEGIN { printf \"%.1f MiB\", $bytes / 1048576 }"
   elif [[ "$bytes" -ge 1024 ]]; then
-    awk "BEGIN { printf \"%.1f KB\", $bytes / 1024 }"
+    awk "BEGIN { printf \"%.1f KiB\", $bytes / 1024 }"
   else
     echo "${bytes} B"
   fi
@@ -213,6 +213,62 @@ if [[ -n "${PROG_FILES["Rust"]:-}" ]]; then
   LANG_EXTS["Rust (test)"]=".rs"
 fi
 
+# ── Per-row facts ───────────────────────────────────────────────────
+# One cheap, relevant fact per row (blank where none fits). All greps run
+# over file lists already built above, so cost is negligible.
+declare -A ROW_FACT=()
+
+# Sum per-file `grep -c` counts over a newline-separated file list.
+sum_grep() {
+  local pattern="$1" list="$2"
+  echo -n "$list" | xargs grep -hcE "$pattern" 2>/dev/null \
+    | awk '{ s += $1 } END { print s + 0 }'
+}
+
+if [[ -n "${PROG_FILES["Rust"]:-}" ]]; then
+  n=$(sum_grep '\bfn ' "${PROG_FILES["Rust"]}")
+  ROW_FACT["Rust"]="$(fmt_num "$n") fn"
+  n=$(sum_grep '#\[(tokio::)?test\]' "${PROG_FILES["Rust"]}")
+  ROW_FACT["Rust (test)"]="$(fmt_num "$n") tests"
+fi
+
+if [[ -n "${PROG_FILES["Swift"]:-}" ]]; then
+  n=$(sum_grep '\bfunc ' "${PROG_FILES["Swift"]}")
+  ROW_FACT["Swift"]="$(fmt_num "$n") func"
+fi
+
+if [[ -n "${PROG_FILES["Java"]:-}" ]]; then
+  n=$(sum_grep '\b(public|private|protected)\b.*\(' "${PROG_FILES["Java"]}")
+  ROW_FACT["Java"]="$(fmt_num "$n") methods"
+fi
+
+if [[ -n "${PROG_FILES["Shell"]:-}" ]]; then
+  n=$(sum_grep '^[a-zA-Z_][a-zA-Z0-9_]*\(\) *\{' "${PROG_FILES["Shell"]}")
+  ROW_FACT["Shell"]="$(fmt_num "$n") funcs"
+fi
+
+if [[ -n "${TEST_FILES["Golem (flow)"]:-}" ]]; then
+  n=$(sum_grep 'assert' "${TEST_FILES["Golem (flow)"]}")
+  ROW_FACT["Golem (flow)"]="$(fmt_num "$n") asserts"
+fi
+
+if [[ -n "${DOC_FILES["Markdown"]:-}" ]]; then
+  n=$(sum_grep '^#{1,6} ' "${DOC_FILES["Markdown"]}")
+  ROW_FACT["Markdown"]="$(fmt_num "$n") headings"
+fi
+
+# Generated lock files: dependency count (pattern depends on lock format)
+for label in "${!GEN_FILES[@]}"; do
+  case "$label" in
+    package-lock.json) pat='"node_modules/' ;;
+    *.lock)            pat='^\[\[package\]\]' ;;
+    *)                 continue ;;
+  esac
+  n=$(echo -n "${GEN_FILES[$label]}" | xargs grep -hcE "$pat" 2>/dev/null \
+    | awk '{ s += $1 } END { print s + 0 }')
+  ROW_FACT["$label"]="$(fmt_num "$n") deps"
+done
+
 # ── Binary file stats ───────────────────────────────────────────────
 declare -A BIN_COUNT=()
 declare -A BIN_SIZE=()
@@ -260,6 +316,7 @@ WIDTH=75
 NAME_COL=30   # name + extensions column width
 NUM_W=10      # number column width
 PCT_W=6       # percentage column width
+FACT_W=13     # per-row fact column width (fits "2,467 tests")
 
 # ── Print helpers ───────────────────────────────────────────────────
 print_header() {
@@ -305,12 +362,12 @@ fmt_name_col() {
 }
 
 print_row() {
-  local name="$1" lines="$2" group_total="$3" exts="${4:-}"
+  local name="$1" lines="$2" group_total="$3" exts="${4:-}" fact="${5:-}"
   local pct num_str
   pct=$(fmt_pct "$lines" "$group_total")
   num_str=$(fmt_num "$lines")
-  # Right side: "  num_str  pct%" — fixed width
-  local right_len=$((NUM_W + 2 + PCT_W + 1))  # number + gap + pct + %
+  # Right side: "  fact   num_str  pct%" — fixed width
+  local right_len=$((FACT_W + 2 + NUM_W + 2 + PCT_W + 1))
   # Left side: "  name exts" — variable, pad to fill
   local left_text="$name${exts:+ $exts}"
   local left_len=$((2 + ${#left_text}))  # 2 for indent
@@ -318,8 +375,8 @@ print_row() {
   [[ "$pad_len" -lt 1 ]] && pad_len=1
   local padding
   padding=$(printf '%*s' "$pad_len" "")
-  printf "  ${GREEN}%s${RESET}${DIM}%s${RESET}%s${WHITE}%${NUM_W}s${RESET}  ${DIM}%${PCT_W}s%%${RESET}\n" \
-    "$name" "${exts:+ $exts}" "$padding" "$num_str" "$pct"
+  printf "  ${GREEN}%s${RESET}${DIM}%s${RESET}%s${DIM}%${FACT_W}s${RESET}  ${WHITE}%${NUM_W}s${RESET}  ${DIM}%${PCT_W}s%%${RESET}\n" \
+    "$name" "${exts:+ $exts}" "$padding" "$fact" "$num_str" "$pct"
 }
 
 print_bin_row() {
@@ -358,7 +415,8 @@ print_sorted_group() {
       "Rust (test)"|"Quint (spec)")
         exts="" ;;
     esac
-    print_row "$key" "$val" "$group_total" "$exts"
+    local fact="${ROW_FACT[$key]:-}"
+    print_row "$key" "$val" "$group_total" "$exts" "$fact"
   done
 }
 
