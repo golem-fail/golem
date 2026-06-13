@@ -46,12 +46,27 @@ public class CompanionServer {
      *  ~10s reboot vs forever-wedged. */
     private static final int STALENESS_NULL_THRESHOLD = 20;
     private static final long STALENESS_WINDOW_MS = 60_000L;
+    /** Hard deadline on shell-command output drains. Normal commands
+     *  (`input tap`, `am start`) finish in well under a second, but a
+     *  shell command CAN hang forever — `input text` does exactly that
+     *  on non-ASCII input — leaving the handler thread and the host
+     *  request stuck with it. 10s is far above any legitimate call. */
+    private static final long SHELL_CALL_TIMEOUT_MS = 10_000L;
 
     /** Single-thread executor for UiAutomation calls with timeout.
      *  Daemon so it doesn't keep the JVM alive at shutdown. */
     private static final ExecutorService UI_EXECUTOR =
         Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "golem-ui-bounded");
+            t.setDaemon(true);
+            return t;
+        });
+    /** Cached pool for bounded shell-output drains. Separate from
+     *  UI_EXECUTOR — a hung drain must not block UiAutomation calls,
+     *  and concurrent handlers each need their own drain thread. */
+    private static final ExecutorService SHELL_EXECUTOR =
+        Executors.newCachedThreadPool(r -> {
+            Thread t = new Thread(r, "golem-shell-drain");
             t.setDaemon(true);
             return t;
         });
@@ -130,9 +145,13 @@ public class CompanionServer {
     }
 
     private void handleClient(Socket client) throws Exception {
-        BufferedReader reader = new BufferedReader(
-                new InputStreamReader(client.getInputStream(), StandardCharsets.UTF_8));
-        String requestLine = reader.readLine();
+        // Read the request head byte-wise, NOT through a Reader:
+        // Content-Length counts BYTES, but Reader.read counts CHARS.
+        // A multibyte UTF-8 body has fewer chars than bytes, so a
+        // char-based read loop waits for input that never arrives and
+        // blocks until the host gives up at its request timeout.
+        InputStream in = new java.io.BufferedInputStream(client.getInputStream());
+        String requestLine = readHttpLine(in);
         if (requestLine == null) return;
 
         String[] parts = requestLine.split(" ");
@@ -146,7 +165,7 @@ public class CompanionServer {
         // Read headers
         Map<String, String> headers = new HashMap<>();
         String headerLine;
-        while ((headerLine = reader.readLine()) != null && !headerLine.isEmpty()) {
+        while ((headerLine = readHttpLine(in)) != null && !headerLine.isEmpty()) {
             int colon = headerLine.indexOf(':');
             if (colon > 0) {
                 headers.put(headerLine.substring(0, colon).trim().toLowerCase(),
@@ -154,18 +173,18 @@ public class CompanionServer {
             }
         }
 
-        // Read body if present
+        // Read body if present — exact byte count, then decode UTF-8.
         String body = "";
         if (headers.containsKey("content-length")) {
             int len = Integer.parseInt(headers.get("content-length"));
-            char[] buf = new char[len];
+            byte[] buf = new byte[len];
             int read = 0;
             while (read < len) {
-                int n = reader.read(buf, read, len - read);
+                int n = in.read(buf, read, len - read);
                 if (n == -1) break;
                 read += n;
             }
-            body = new String(buf, 0, read);
+            body = new String(buf, 0, read, StandardCharsets.UTF_8);
         }
 
         OutputStream out = client.getOutputStream();
@@ -188,7 +207,7 @@ public class CompanionServer {
                     JSONObject respBody = new JSONObject()
                         .put("status", uiReady ? "ok" : "warming_up")
                         .put("platform", "android")
-                        .put("version", "0.6.29")
+                        .put("version", "0.6.31")
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
@@ -628,12 +647,31 @@ public class CompanionServer {
     private void handleType(OutputStream out, String body) throws Exception {
         JSONObject req = new JSONObject(body);
         String text = req.getString("text");
+        // `input text` is ASCII-only — non-ASCII input makes the shell
+        // call hang instead of failing. Reject up-front so the host
+        // fails the step immediately with a clear reason. (Real Unicode
+        // typing needs an IME-based path — roadmapped.)
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c != '\n' && (c < 0x20 || c > 0x7E)) {
+                sendJson(out, 400, new JSONObject().put("error",
+                    "Android `input text` is ASCII-only; cannot type U+"
+                    + String.format("%04X", (int) c) + " at index " + i));
+                return;
+            }
+        }
         // Split on newlines — type each line separately with Enter between them.
         // Android's `input text` doesn't support newline characters.
         String[] lines = text.split("\n", -1);
         for (int i = 0; i < lines.length; i++) {
             if (!lines[i].isEmpty()) {
-                executeShell("input text " + escapeForInputText(lines[i]));
+                // `input text` types char-by-char, so its legitimate
+                // runtime scales with line length. 500ms/char matches
+                // the host's per-char budget (policy.rs) — this bound
+                // must never fire before the host's step timeout, so
+                // it only trips on a genuine hang.
+                executeShell("input text " + escapeForInputText(lines[i]),
+                    SHELL_CALL_TIMEOUT_MS + lines[i].length() * 500L);
             }
             if (i < lines.length - 1) {
                 executeShell("input keyevent KEYCODE_ENTER");
@@ -894,23 +932,54 @@ public class CompanionServer {
     }
 
     private void executeShell(String command) throws IOException {
-        ParcelFileDescriptor pfd = uiAutomation.executeShellCommand(command);
-        try (InputStream is = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
-            byte[] buf = new byte[1024];
-            while (is.read(buf) != -1) { /* drain */ }
-        }
+        runShellBounded(command, false, SHELL_CALL_TIMEOUT_MS);
+    }
+
+    /** Variant with caller-supplied deadline, for commands whose
+     *  legitimate runtime scales with input (e.g. `input text` types
+     *  char-by-char — longer strings genuinely take longer). */
+    private void executeShell(String command, long timeoutMs) throws IOException {
+        runShellBounded(command, false, timeoutMs);
     }
 
     private String executeShellAndRead(String command) throws Exception {
+        return runShellBounded(command, true, SHELL_CALL_TIMEOUT_MS);
+    }
+
+    /** Run a shell command and drain its output under
+     *  {@link #SHELL_CALL_TIMEOUT_MS}. The drain runs on
+     *  {@link #SHELL_EXECUTOR}; on timeout the pfd is closed to
+     *  unblock the drain thread and the caller gets an IOException —
+     *  handlers surface it as a 500 instead of hanging the host
+     *  request until its much longer step timeout. */
+    private String runShellBounded(String command, boolean captureOutput, long timeoutMs)
+            throws IOException {
         ParcelFileDescriptor pfd = uiAutomation.executeShellCommand(command);
-        try (InputStream is = new ParcelFileDescriptor.AutoCloseInputStream(pfd);
-             BufferedReader reader = new BufferedReader(new InputStreamReader(is))) {
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                sb.append(line).append("\n");
+        Future<String> drain = SHELL_EXECUTOR.submit(() -> {
+            try (InputStream is = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
+                if (!captureOutput) {
+                    byte[] buf = new byte[1024];
+                    while (is.read(buf) != -1) { /* drain */ }
+                    return "";
+                }
+                BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    sb.append(line).append("\n");
+                }
+                return sb.toString();
             }
-            return sb.toString();
+        });
+        try {
+            return drain.get(timeoutMs, TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException e) {
+            drain.cancel(true);
+            try { pfd.close(); } catch (IOException ignored) {}
+            throw new IOException(
+                "shell command timed out after " + timeoutMs + "ms: " + command);
+        } catch (Exception e) {
+            throw new IOException("shell command failed: " + command, e);
         }
     }
 
@@ -946,12 +1015,8 @@ public class CompanionServer {
         }
         // Use am start with LAUNCHER category to bring app to foreground.
         // If already running, this activates it without restart. If not running, launches it.
-        String cmd = "am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p " + packageName;
-        ParcelFileDescriptor pfd = uiAutomation.executeShellCommand(cmd);
-        try (InputStream is = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
-            byte[] buf = new byte[4096];
-            while (is.read(buf) != -1) { /* drain */ }
-        }
+        executeShell("am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p "
+            + packageName);
         sendJson(out, 200, new JSONObject().put("status", "ok"));
     }
 
@@ -962,12 +1027,22 @@ public class CompanionServer {
             sendJson(out, 400, new JSONObject().put("error", "missing bundle_id"));
             return;
         }
-        ParcelFileDescriptor pfd = uiAutomation.executeShellCommand("am force-stop " + packageName);
-        try (InputStream is = new ParcelFileDescriptor.AutoCloseInputStream(pfd)) {
-            byte[] buf = new byte[4096];
-            while (is.read(buf) != -1) { /* drain */ }
-        }
+        executeShell("am force-stop " + packageName);
         sendJson(out, 200, new JSONObject().put("status", "ok"));
+    }
+
+    /** Read one CRLF-terminated line from the request head. The HTTP
+     *  request line and headers are ASCII; body bytes stay untouched
+     *  in the stream for the byte-exact Content-Length read. */
+    private static String readHttpLine(InputStream in) throws IOException {
+        ByteArrayOutputStream line = new ByteArrayOutputStream();
+        int b;
+        while ((b = in.read()) != -1) {
+            if (b == '\n') break;
+            if (b != '\r') line.write(b);
+        }
+        if (b == -1 && line.size() == 0) return null;
+        return line.toString("ISO-8859-1");
     }
 
     private Map<String, String> parseQueryParams(String fullPath) {

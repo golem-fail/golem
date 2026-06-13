@@ -1,19 +1,15 @@
 # Roadmap
 
-## Android type can't do Unicode — and HANGS on it (uses `input text`)
+## Android type can't do Unicode (uses `input text`)
 
 `CompanionServer.handleType` types via `executeShell("input text <line>")`
 (splitting on `\n`, KEYCODE_ENTER between lines). `adb shell input text` is
-**ASCII-only** — the same mechanism behind Maestro's #146. Worse than Maestro,
-though: a non-ASCII line doesn't drop quietly, the shell call **hangs**, so the
-`/type` HTTP request never returns and the driver times out. Verified: typing
-`hello\nこんにちは`, the ASCII "hello" + Enter went through, then `input text
-こんにちは` hung → 80s `EF408`. So golem has **no Unicode advantage on Android**
-— it's a parity limitation with Maestro, not a differentiator. (No talk claim
-should say otherwise.)
-
-First, regardless of the fix: **bound the shell call** so a non-ASCII `input
-text` can't hang the handler (the 80s timeout is the worst symptom).
+**ASCII-only** — the same mechanism behind Maestro's #146. Non-ASCII input is
+rejected up-front with `EP422` ("Android `input text` is ASCII-only; cannot
+type …") — host-side in `android.rs::type_text` (`first_untypeable_char`),
+with a companion-side 400 as backstop. So golem has **no Unicode advantage on
+Android** — it's a parity limitation with Maestro, not a differentiator. (No
+talk claim should say otherwise.)
 
 **Recommended fix — bundle a Unicode IME (set-once + broadcast).** This is how
 Appium does Android Unicode (`unicodeKeyboard` / `io.appium.settings`), and it's
@@ -31,7 +27,9 @@ Design:
 - **Activate (set-once per session):** record the current default IME, switch to
   golem's (`ime enable` + `ime set`), then route all `/type` through a broadcast
   (`am broadcast -a GOLEM_INPUT --es text "…"`). Keep `input text` only as an
-  ASCII fast-path if desired.
+  ASCII fast-path if desired — `first_untypeable_char` in `android.rs::type_text`
+  is the natural routing point (ASCII → `input text`, non-ASCII → IME broadcast
+  instead of today's reject).
 - **Teardown — layered, so the device's keyboard is always restored:**
   1. **Primary (host):** golem restores the original IME at flow/session teardown
      (incl. on SIGINT/Ctrl-C if caught). Host owns the **durable** record.
@@ -56,15 +54,15 @@ it doesn't cover native); `UiObject2.setText()` / `ACTION_SET_TEXT` for native
 fields (Unicode-capable but unreliable on WebView virtual nodes); clipboard +
 `KEYCODE_PASTE` (Android 10+ blocks background clipboard writes — brittle).
 
-iOS note: XCUITest `typeText` is Unicode-capable, so iOS likely already works —
-verify, then any "Unicode" claim is iOS-scoped until the Android IME lands (after
-which it's a genuine cross-platform differentiator vs Maestro's #146).
+iOS note: XCUITest `typeText` is Unicode-capable — verified live (typed
+`こんにちは` into the test app and asserted it visible, iPhone 17/iOS 26). Any
+"Unicode" claim is iOS-scoped until the Android IME lands (after which it's a
+genuine cross-platform differentiator vs Maestro's #146).
 
 **Files:** `companions/android/app/src/main/…` (new `InputMethodService` +
 `BroadcastReceiver` + manifest), `golem-driver/src/android.rs` (IME
 enable/set/restore + broadcast type path), `golem-cli/src/suite.rs` (session
-teardown restore + next-run self-heal from `.golem/`), and bound the existing
-`executeShell("input text …")` in `CompanionServer.java::handleType`.
+teardown restore + next-run self-heal from `.golem/`).
 
 ## Input-mutation verify for `/type` and `/backspace`
 
@@ -1174,7 +1172,8 @@ underlying drop needs fixing, not just recovering.
 solo iOS demo run; inspect the iOS companion HTTP server / request router for a
 lifecycle/threading regression that closes the socket under load (the
 `type`/keyboard path is a recurring trigger). Capture the companion-side log at
-the drop.
+the drop. Ruled out: the Android companion's Content-Length char-vs-byte body
+bug has no iOS counterpart — `HTTPServer.swift` reads the body as raw bytes.
 
 **Files:** `companions/ios/GolemRunnerUITests/` (HTTP server + `RequestRouter.swift`),
 `golem-driver/src/ios.rs`.

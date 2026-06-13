@@ -116,6 +116,17 @@ fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', r"'\''"))
 }
 
+/// First character `input text` cannot type, with its char index.
+///
+/// `input text` handles printable ASCII only; newlines are fine because
+/// the companion splits on them and presses Enter between lines. Anything
+/// else (other control chars, non-ASCII) must be rejected before typing.
+fn first_untypeable_char(text: &str) -> Option<(usize, char)> {
+    text.chars()
+        .enumerate()
+        .find(|&(_, c)| c != '\n' && !(' '..='~').contains(&c))
+}
+
 /// Build the adb command arguments for launching an app via monkey.
 #[cfg(test)]
 fn build_launch_app_args(serial: &str, package: &str) -> Vec<String> {
@@ -487,6 +498,20 @@ impl PlatformDriver for AndroidDriver {
     }
 
     async fn type_text(&self, text: &str) -> Result<()> {
+        // Android types via `input text`, which is ASCII-only. Reject
+        // up-front with a coded authoring error — the companion has the
+        // same check as a backstop, but failing host-side attaches a
+        // proper failure code instead of a bare HTTP 400. (Real Unicode
+        // typing needs an IME-based path — roadmapped.)
+        if let Some((i, c)) = first_untypeable_char(text) {
+            return Err(golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!(
+                    "Android `input text` is ASCII-only; cannot type {c:?} (U+{:04X}) at index {i}",
+                    c as u32
+                ),
+            ));
+        }
         let body = build_type_body(text)?;
         self.client.post_json("/type", &body).await?;
         Ok(())
@@ -1221,5 +1246,57 @@ mod tests {
         // names the canonical shorthand instead.
         assert!(normalize_android_permission("location-when-in-use", 34).is_err());
         assert!(normalize_android_permission("photo-library", 34).is_err());
+    }
+
+    // -----------------------------------------------------------------------
+    // first_untypeable_char — `input text` ASCII-only guard
+    // -----------------------------------------------------------------------
+    #[test]
+    fn untypeable_printable_ascii_passes() {
+        assert_eq!(
+            first_untypeable_char("demo@golem.fail Pa$$w0rd!~ (x|y)"),
+            None,
+            "printable ASCII SHALL be typeable"
+        );
+    }
+
+    #[test]
+    fn untypeable_newlines_allowed() {
+        // The companion splits on \n and presses Enter between lines.
+        assert_eq!(
+            first_untypeable_char("line one\nline two"),
+            None,
+            "newlines SHALL be typeable via the Enter keyevent"
+        );
+    }
+
+    #[test]
+    fn untypeable_non_ascii_rejected_with_position() {
+        assert_eq!(
+            first_untypeable_char("abこ"),
+            Some((2, 'こ')),
+            "first non-ASCII char SHALL be reported with its char index"
+        );
+    }
+
+    #[test]
+    fn untypeable_emoji_rejected() {
+        assert_eq!(first_untypeable_char("ok 👍"), Some((3, '👍')));
+    }
+
+    #[test]
+    fn untypeable_control_chars_rejected() {
+        assert_eq!(
+            first_untypeable_char("a\tb"),
+            Some((1, '\t')),
+            "control chars other than newline SHALL be rejected"
+        );
+    }
+
+    #[test]
+    fn untypeable_index_is_char_based_not_byte_based() {
+        // Two 3-byte chars: byte index of the second is 3, char index is 1.
+        assert_eq!(first_untypeable_char("こん"), Some((0, 'こ')));
+        assert_eq!(first_untypeable_char("aこ"), Some((1, 'こ')));
     }
 }
