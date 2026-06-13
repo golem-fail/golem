@@ -1,5 +1,71 @@
 # Roadmap
 
+## Android type can't do Unicode — and HANGS on it (uses `input text`)
+
+`CompanionServer.handleType` types via `executeShell("input text <line>")`
+(splitting on `\n`, KEYCODE_ENTER between lines). `adb shell input text` is
+**ASCII-only** — the same mechanism behind Maestro's #146. Worse than Maestro,
+though: a non-ASCII line doesn't drop quietly, the shell call **hangs**, so the
+`/type` HTTP request never returns and the driver times out. Verified: typing
+`hello\nこんにちは`, the ASCII "hello" + Enter went through, then `input text
+こんにちは` hung → 80s `EF408`. So golem has **no Unicode advantage on Android**
+— it's a parity limitation with Maestro, not a differentiator. (No talk claim
+should say otherwise.)
+
+First, regardless of the fix: **bound the shell call** so a non-ASCII `input
+text` can't hang the handler (the 80s timeout is the worst symptom).
+
+**Recommended fix — bundle a Unicode IME (set-once + broadcast).** This is how
+Appium does Android Unicode (`unicodeKeyboard` / `io.appium.settings`), and it's
+the only option that works **universally** — native *and* WebView — because the
+IME commits text via `InputConnection.commitText()` (the standard input path),
+so a focused HTML input in a WebView or a native EditText both receive it. Full
+Unicode + emoji. Bundling it gives golem a real "just works, even Unicode" edge
+over Maestro (whose users wire ADBKeyBoard by hand).
+
+Design:
+- **Where:** add an `InputMethodService` + `BroadcastReceiver` to the companion's
+  **main** app (`companions/android/app/src/main`) — already installed alongside
+  the instrumentation, so no extra APK. IMEs must live in a normal (non-test)
+  package to be discoverable.
+- **Activate (set-once per session):** record the current default IME, switch to
+  golem's (`ime enable` + `ime set`), then route all `/type` through a broadcast
+  (`am broadcast -a GOLEM_INPUT --es text "…"`). Keep `input text` only as an
+  ASCII fast-path if desired.
+- **Teardown — layered, so the device's keyboard is always restored:**
+  1. **Primary (host):** golem restores the original IME at flow/session teardown
+     (incl. on SIGINT/Ctrl-C if caught). Host owns the **durable** record.
+  2. **Fallback A (companion):** golem passes the original IME id to the companion
+     when it switches; the companion holds it **in memory** and restores on its
+     graceful self-shutdown (the 5h-inactivity exit and the `/shutdown` POST).
+     Covers "host died but companion still alive." No companion-side persistence
+     needed (it'd be wiped on the version-bump reinstall anyway).
+  3. **Fallback B (next-run self-heal):** golem persists the original host-side
+     (`.golem/`). On the next run, if the current default IME *is* golem's
+     keyboard and a stored original exists, restore immediately — covers the
+     hard-kill gap (SIGKILL / device reboot / adb restart run no companion code).
+- **Corruption guard + backstop:** never record golem's own IME as "original"
+  (`if current != golem_ime { capture }`), so a leftover can't poison the record.
+  Whenever the original is unknown/corrupt, **`adb shell ime reset`** restores the
+  system default — no need to know the user's specific IME. This is the universal
+  safety valve.
+
+**Alternatives** (narrower; keep as fallbacks, not the primary): CDP
+`Input.insertText` for WebView fields only (golem already has the transport, but
+it doesn't cover native); `UiObject2.setText()` / `ACTION_SET_TEXT` for native
+fields (Unicode-capable but unreliable on WebView virtual nodes); clipboard +
+`KEYCODE_PASTE` (Android 10+ blocks background clipboard writes — brittle).
+
+iOS note: XCUITest `typeText` is Unicode-capable, so iOS likely already works —
+verify, then any "Unicode" claim is iOS-scoped until the Android IME lands (after
+which it's a genuine cross-platform differentiator vs Maestro's #146).
+
+**Files:** `companions/android/app/src/main/…` (new `InputMethodService` +
+`BroadcastReceiver` + manifest), `golem-driver/src/android.rs` (IME
+enable/set/restore + broadcast type path), `golem-cli/src/suite.rs` (session
+teardown restore + next-run self-heal from `.golem/`), and bound the existing
+`executeShell("input text …")` in `CompanionServer.java::handleType`.
+
 ## Input-mutation verify for `/type` and `/backspace`
 
 Slow IMEs (some Android devices under multi-flow load) return ok from
