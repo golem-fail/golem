@@ -85,6 +85,33 @@ escalation, not the routine fix.
 (`handleHideKeyboard`); `golem-driver/src/android.rs::hide_keyboard`;
 recovery glue in `golem-runner` if not already in place.
 
+## ANR recovery over-triggers on ordinary flow failures (e.g. EF408 assert timeout)
+
+The post-flow recovery sweep (`golem-cli/src/suite.rs` ~line 1186) runs for
+**every** failed flow (`if report.success { continue }`), then probes
+`driver.get_hierarchy()`; if that probe errors it concludes "companion
+unresponsive at recovery time" and schedules a device reboot. So a perfectly
+normal test failure — e.g. `assert_visible` on a deliberately-absent element
+timing out (`EF408`) — engages the recovery path, and on a slow/struggling
+device the recovery-time probe times out → spurious `ANR recovery: rebooting
+device`. Observed on an iOS-solo demo run: the intentional-failure block's
+`EF408` printed the reboot line (the reboot didn't even execute — the
+single-flow suite was already finishing).
+
+The recovery probe should only engage for failure codes that plausibly indicate
+a device/companion health problem — `DeviceCompanionWedged`, transport/HTTP
+errors (`EF000`), hierarchy-fetch timeouts — NOT ordinary flow-logic codes
+(`EF408` step timeout, `EF404` not-found, `EF412` assertion mismatch, `EF400`
+explicit fail). A test asserting something absent is a normal failure, not a wedge.
+
+**Fix:** gate the recovery loop on the failure *class*: skip the hierarchy probe
++ reboot unless `report.first_failure_code` is in the device-health set (or the
+step already carried `DeviceCompanionWedged`). Keep trigger (1) wedge-already-seen
+and (2) ANR-dialog-detected; drop the blanket "any failure → probe → reboot-if-
+probe-fails".
+
+**Files:** `golem-cli/src/suite.rs` (recovery loop gate ~1186-1235).
+
 ## Inner-container scroll: absorber thrash locating container + no forward progress inside it
 
 A demo run hit this hard on both platforms. `scroll to "Item 25" within {below
@@ -480,11 +507,12 @@ worked (different IPC path) but the companion's Java call did not.
 
 Android ANR detection + reboot recovery is shipped. Outstanding:
 
-- **iOS recovery.** System dialog detection is Android-specific
-  (`isn't responding` text match). iOS has different system-dialog
-  shapes (Touch ID prompt, location prompt, etc) and recovery is
-  `xcrun simctl shutdown && boot` instead of `adb reboot`. Wire
-  parallel path under `detect_anr` when iOS-side patterns surface.
+- **iOS ANR-dialog detection.** `detect_anr` matches Android's "isn't
+  responding" text; iOS system dialogs have different shapes (Touch ID,
+  location prompts, etc). Wire an iOS-side detection path. (The iOS reboot
+  *mechanism* is done — `reboot_ios_device` does `simctl shutdown && boot`
+  + `bootstatus`, verified ~17s live.) See also
+  [[ANR recovery over-triggers on ordinary flow failures (e.g. EF408 assert timeout)]].
 - **Post-reboot validation.** After the reboot task clears
   unhealthy, the first flow assigned to the device may hit an
   uninitialised state. Add a sanity probe (single hierarchy fetch,
@@ -1060,6 +1088,30 @@ Also roadmap-adjacent: consider whether `golem_events::StepOutcome::Skipped` sho
 **What's left:**
 - Add an iOS-side grace probe after `bootstatus -b` (e.g. `xcrun simctl getenv <udid> HOME` until fast) to potentially eliminate the Mach -308 case at source rather than retrying after.
 - Expand the classifier as new transient patterns surface in CI logs. Conservative — adding patterns that aren't actually recoverable just masks real errors behind a 3s delay.
+
+## iOS companion drops connection mid-flow, SOLO (EF000) — suspected regression
+
+Seen on iPhone 17e (iOS 26) running the demo flow **solo** (`--platform ios`,
+one device, no Android concurrency): the companion's HTTP server closed the
+connection mid-request during `type on_text="Search"` — `EF000 … connection
+closed before message completed`. Because it's solo, this is NOT the cross-device
+contention of [[iOS concurrent flows: cross-flow focus / state corruption]] — the
+companion is dropping on its own. iOS runs are also markedly slow (per-step 2-5s;
+`auto_scroll` 7-50s). Intermittent: reproduced once in two solo runs (the other
+completed cleanly in ~98s).
+
+Suspected **regression** from the recent Android-focused work (companion /
+off-main / a11y changes). ANR recovery now reboots it correctly (~17s), but the
+underlying drop needs fixing, not just recovering.
+
+**Investigate:** bisect the last ~2 weeks of companion / driver changes against a
+solo iOS demo run; inspect the iOS companion HTTP server / request router for a
+lifecycle/threading regression that closes the socket under load (the
+`type`/keyboard path is a recurring trigger). Capture the companion-side log at
+the drop.
+
+**Files:** `companions/ios/GolemRunnerUITests/` (HTTP server + `RequestRouter.swift`),
+`golem-driver/src/ios.rs`.
 
 ## iOS concurrent flows: cross-flow focus / state corruption
 
