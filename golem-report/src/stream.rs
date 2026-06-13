@@ -513,7 +513,7 @@ pub async fn stream_human(
                         .push((event.wall_time, sub.clone()));
                 }
             }
-            EventKind::FlowFinished { flow_name, success, duration_ms, seed, .. } => {
+            EventKind::FlowFinished { flow_name, success, duration_ms, seed, code, .. } => {
                 eprintln!();
                 let dur = fmt_dur(*duration_ms, use_color);
                 let name = fmt_flow_name(flow_name, use_color);
@@ -524,7 +524,10 @@ pub async fn stream_human(
                 };
                 // Surface the first failing step's code between flow name and
                 // seed (only on failure; severity is Error at the flow level).
-                let failed_code = first_fail_code.remove(&event.device_id.0);
+                // Prefer the first failing step's code; fall back to the
+                // flow-level abort code (e.g. EF504 max_runtime / EF508 max_steps),
+                // which has no owning step to carry it.
+                let failed_code = first_fail_code.remove(&event.device_id.0).or(*code);
                 let code_str = match failed_code {
                     Some(c) if !*success => {
                         let r = c.render(golem_events::Severity::Error);

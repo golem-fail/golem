@@ -221,6 +221,11 @@ pub enum EventKind {
         duration_ms: u64,
         seed: u64,
         os_major: u32,
+        /// Flow-level failure code (e.g. max_runtime EF504 / max_steps EF508).
+        /// `None` on success, or when a failing step already carries the code
+        /// (the stream surfaces that). Lets the human FAIL line show a code for
+        /// flow-level aborts that have no owning step.
+        code: Option<FailureCode>,
         repeat: Option<RepeatContext>,
     },
 

@@ -514,7 +514,7 @@ mod tests {
         let dev = "dev";
 
         acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0 , repeat: None}));
-        acc.process(&make_event(1, dev, EventKind::FlowFinished { flow_name: "f".into(), success: false, duration_ms: 5000, seed: 0, os_major: 0 , repeat: None}));
+        acc.process(&make_event(1, dev, EventKind::FlowFinished { flow_name: "f".into(), success: false, duration_ms: 5000, seed: 0, os_major: 0 , code: None, repeat: None}));
 
         let report = acc.into_suite_report();
         assert!(!report.flows[0].success, "SHALL set success=false from FlowFinished");
@@ -559,7 +559,7 @@ mod tests {
             screenshot_path: Some("/tmp/fail.png".into()),
             tree_stats: golem_events::TreeStats::default(),
         }));
-        acc.process(&make_event(5, dev, EventKind::FlowFinished { flow_name: "checkout".into(), success: false, duration_ms: 10020, seed: 0, os_major: 0 , repeat: None}));
+        acc.process(&make_event(5, dev, EventKind::FlowFinished { flow_name: "checkout".into(), success: false, duration_ms: 10020, seed: 0, os_major: 0 , code: None, repeat: None}));
         acc.process(&make_event(6, dev, EventKind::SuiteFinished {
             duration_ms: 10020,
             passed: 0,
@@ -630,8 +630,8 @@ mod tests {
             tree_stats: golem_events::TreeStats::default(),
         }));
 
-        acc.process(&make_event(6, "ios", EventKind::FlowFinished { flow_name: "login_ios".into(), success: true, duration_ms: 30, seed: 0, os_major: 0 , repeat: None}));
-        acc.process(&make_event(7, "android", EventKind::FlowFinished { flow_name: "login_android".into(), success: true, duration_ms: 200, seed: 0, os_major: 0 , repeat: None}));
+        acc.process(&make_event(6, "ios", EventKind::FlowFinished { flow_name: "login_ios".into(), success: true, duration_ms: 30, seed: 0, os_major: 0 , code: None, repeat: None}));
+        acc.process(&make_event(7, "android", EventKind::FlowFinished { flow_name: "login_android".into(), success: true, duration_ms: 200, seed: 0, os_major: 0 , code: None, repeat: None}));
 
         let suite = acc.into_suite_report();
         assert_eq!(suite.flows.len(), 2, "SHALL have two separate flows");

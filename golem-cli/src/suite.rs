@@ -2699,6 +2699,7 @@ async fn run_flow_on_device(
                 duration_ms,
                 seed: actual_seed,
                 os_major: device.os_major,
+                code: result.failed_code,
                 repeat: repeat_ctx,
             });
             FlowReport {
@@ -2727,12 +2728,15 @@ async fn run_flow_on_device(
             // server-side eprintln was redundant with the stream FAIL
             // line and lost when running against an external daemon.
             let duration_ms = start.elapsed().as_millis() as u64;
+            let flow_code = golem_events::extract_code(&e)
+                .unwrap_or(golem_events::FailureCode::Uncoded);
             ctx.emit(golem_events::EventKind::FlowFinished {
                 flow_name: flow_name.clone(),
                 success: false,
                 duration_ms,
                 seed: actual_seed,
                 os_major: device.os_major,
+                code: Some(flow_code),
                 repeat: repeat_ctx,
             });
             FlowReport {
@@ -2752,9 +2756,7 @@ async fn run_flow_on_device(
                 repeat: None,
                 started_at: None,
                 finished_at: None,
-                first_failure_code: Some(
-                    golem_events::extract_code(&e).unwrap_or(golem_events::FailureCode::Uncoded),
-                ),
+                first_failure_code: Some(flow_code),
             }
         }
     };

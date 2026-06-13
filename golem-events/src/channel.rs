@@ -122,7 +122,7 @@ mod tests {
         );
         sender.emit(
             DeviceId("dev".into()),
-            EventKind::FlowFinished { flow_name: "f1".into(), success: true, duration_ms: 50, seed: 0, os_major: 0 , repeat: None},
+            EventKind::FlowFinished { flow_name: "f1".into(), success: true, duration_ms: 50, seed: 0, os_major: 0 , code: None, repeat: None},
         );
 
         // Both subscribers SHALL receive both events
