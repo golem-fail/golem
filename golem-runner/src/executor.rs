@@ -27,7 +27,12 @@ fn step_target(step: &golem_parser::Step) -> String {
     if let Some(ref b) = step.on_below { parts.push(format!("on_below=\"{b}\"")); }
     if let Some(ref r) = step.on_right_of { parts.push(format!("on_right_of=\"{r}\"")); }
     if let Some(ref a) = step.app { parts.push(format!("app=\"{a}\"")); }
-    if let Some(ref i) = step.input { parts.push(format!("input=\"{}\"", if i.len() > 20 { &i[..20] } else { i })); }
+    if let Some(ref i) = step.input {
+        // Truncate by CHARS, not bytes — `&i[..20]` panics when byte 20 lands
+        // inside a multibyte char (e.g. typing Japanese / emoji).
+        let shown: String = i.chars().take(20).collect();
+        parts.push(format!("input=\"{shown}\""));
+    }
     if step.auto_scroll == Some(true) { parts.push("auto_scroll".to_string()); }
     if let Some(t) = step.timeout { parts.push(format!("timeout={t}")); }
     parts.join(" ")
