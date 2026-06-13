@@ -1256,6 +1256,7 @@ async fn execute_flow_run(
         ));
         let rm = resource_mgr.clone();
         let udid = device.udid.clone();
+        let platform = device.platform;
         rm.mark_unhealthy(&udid);
         let event_tx = event_tx.clone();
         let reg_state = reg_state.clone();
@@ -1274,7 +1275,10 @@ async fn execute_flow_run(
             let resources = golem_devices::concurrency::ResourceSnapshot::
                 capture_with_android_device(&udid).await;
             let reboot_started = std::time::Instant::now();
-            let reboot_ok = reboot_android_device(&udid).await;
+            let reboot_ok = match platform {
+                golem_devices::Platform::Ios => reboot_ios_device(&udid).await,
+                golem_devices::Platform::Android => reboot_android_device(&udid).await,
+            };
             // Drop the stale registration — after reboot the companion
             // is gone and adb forwards are reset, so the cached port
             // is dead. The next setup_slot must do a fresh
@@ -1930,6 +1934,40 @@ async fn reboot_android_device(udid: &str) -> anyhow::Result<()> {
         }
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     }
+}
+
+/// Reboot an iOS simulator: `simctl shutdown` then `boot`, blocking on
+/// `bootstatus -b` until services are up. Capped so a wedged sim can't hang
+/// the background recovery task forever. A healthy sim reboots in well under
+/// 30s — unlike the Android path, which no-ops on an iOS UUID and then waits
+/// out its full deadline.
+async fn reboot_ios_device(udid: &str) -> anyhow::Result<()> {
+    // Shutdown (tolerate already-shutdown — exit code ignored).
+    let _ = tokio::process::Command::new("xcrun")
+        .args(["simctl", "shutdown", udid])
+        .output()
+        .await?;
+    // Boot (tolerate already-booted races — bootstatus below confirms ready).
+    let _ = tokio::process::Command::new("xcrun")
+        .args(["simctl", "boot", udid])
+        .output()
+        .await?;
+    // `bootstatus -b` blocks until the sim is fully booted; cap at 120s so a
+    // wedged sim surfaces as an error rather than hanging the task.
+    let status = tokio::time::timeout(
+        std::time::Duration::from_secs(120),
+        tokio::process::Command::new("xcrun")
+            .args(["simctl", "bootstatus", udid, "-b"])
+            .output(),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!("reboot timeout: {udid} bootstatus did not complete in 120s"))??;
+    if !status.status.success() {
+        anyhow::bail!("reboot: simctl bootstatus failed for {udid}");
+    }
+    // Grace for services + companion host to settle before a new flow lands.
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    Ok(())
 }
 
 /// Persist the planned FlowRun list to `<output_dir>/plan.json` for
