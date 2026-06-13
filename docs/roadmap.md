@@ -85,6 +85,44 @@ escalation, not the routine fix.
 (`handleHideKeyboard`); `golem-driver/src/android.rs::hide_keyboard`;
 recovery glue in `golem-runner` if not already in place.
 
+## Inner-container scroll: absorber thrash locating container + no forward progress inside it
+
+A demo run hit this hard on both platforms. `scroll to "Item 25" within {below
+"Scroll List"}` (an `overflow-y:auto` inner list):
+
+- **Android: timed out (EF408, 120s).** Two pathological phases in the verbose log:
+  1. *Locating the "Scroll List" container* took **33 swipe attempts** — nearly
+     every dynamic-start logged "preset landed inside absorber bounds", cycling
+     `scroll_strategy_switch →1/2/3/4/5` and a direction reversal before the
+     container was finally found.
+  2. *Scrolling inside the container* never progressed — an endless run of
+     `inner scrollable → strategy 2` with intermittent stalls, until the step
+     timed out.
+- **iOS: succeeded but took ~73s for one inner scroll** (and ~50s for an
+  `auto_scroll` assert against the gesture widget's off-screen state labels) —
+  same root area, slow rather than stuck.
+
+This compounds the existing inertial-momentum issue (below) with two further
+problems. **Suspected cause (from the log + a read of `scroll.rs`, not yet
+confirmed):** (a) the dynamic-start / absorber-routing path loops when a `within`
+target's container must first be located — each retry re-lands in an absorber and
+resets progress; (b) container-scroll stall handling resets the stall counter on
+every full-hierarchy change without advancing strategy, then eventually falls
+through to a boundary reversal that scrolls the wrong way.
+
+**Shape to investigate:** cap dynamic-start retries before falling through to a
+strategy switch (kill the 33-attempt thrash); for `container.is_some()` scrolls,
+don't zero the stall counter on every full-fp change (let it accumulate so the
+exit/strategy logic fires), and don't reverse direction while the container is
+still making forward progress. Pair with the move-phase slowdown from the
+inertial entry below.
+
+**Files:** `golem-runner/src/scroll.rs` (dynamic-start retry cap; container
+stall + reversal logic), `golem-runner/src/resolution.rs` (`scroll_swipe_bounded`).
+
+**Coverage gap:** no e2e flow reliably exercises a deep inner-container scroll —
+the demo flow had to drop its `Scroll List` / `Carousel` blocks because of this.
+
 ## Inner-list inertial scroll suppression
 
 The dwell-before-lift scroll swipe (in `golem-runner/src/scroll.rs` via
@@ -175,29 +213,22 @@ when there's spare cycles. Not blocking.
 **Files:** `golem-report/src/stream.rs` (suite-summary block), maybe
 `golem-report/src/human.rs`.
 
-## Human output drops flow-level error codes
+## Human output: flow-level code in non-stream formatter + regression test
 
-Step failures render their code (`✗ … EF404`), but a *flow-level* abort —
-`EF508` (max_steps) or `EF504` (max_runtime) — prints a bare `FAIL` with no
-code or reason in the human stream. The code IS captured: `results.json`
-carries `"code": "EF508"` and TOON carries `EF508` for the same run; only the
-human renderer omits it. A human-output reader sees a flow fail with no "why".
+The live **stream** renderer now shows flow-level abort codes on the human FAIL
+line (`FAIL … EF508` / `EF504`): `FlowFinished` carries a `code` and `stream.rs`
+falls back to it when no step owns the failure. Remaining:
 
-Observed (a flow that looped on an unterminated branch, hit `max_steps`):
+- **Non-stream path:** `golem-report/src/human.rs::format_flow` (operates on
+  `FlowReport`, which already has `first_failure_code`) still omits the code on
+  its `FAILED` line. Render it there too for parity.
+- **Regression test:** extract the stream FAIL-line string-building into a pure
+  helper and assert the flow-level code is shown (and a step-level code still
+  wins) — guards against regression. Stream output is `eprintln!`, so it needs
+  the small extract-to-helper refactor to be unit-testable.
 
-```
-FAIL [26.225s]  loop-test.test  seed:...
-Summary [...]  0 passed, 1 failed
-```
-
-— no `EF508`, no "max_steps exceeded" line.
-
-**Fix:** render the flow result's `code` (+ short reason) on the human FAIL
-line, the same way step failures show theirs. The flow-level failure code is
-already populated (it reaches json/toon).
-
-**Files:** `golem-report/src/human.rs` (flow FAIL line),
-`golem-report/src/stream.rs` (suite summary).
+**Files:** `golem-report/src/human.rs` (`format_flow`),
+`golem-report/src/stream.rs` (extract FAIL-line helper + test).
 
 ## Branch loops can't terminate on a counter (`_loop` not wired)
 
@@ -360,6 +391,19 @@ for the queued ops; `golem-runner/src/capture.rs` for screenshot path.
 **Becomes load-bearing when**: CI needs 10+ concurrent emus. At that
 point uncontended bursts would saturate the host fork/IO budget and
 this queue becomes necessary, not just optimisation.
+
+**Cross-platform extension (iOS):** the same mechanism is the natural fix for
+the iOS concurrent-flow wedges in **[[iOS concurrent flows: cross-flow focus /
+state corruption]]**. There the contended class isn't I/O bursts but the
+process-global XCUITest plumbing (`simctl` / HID synthesis / window-snapshot).
+Adding those to the queued op-classes (a host-wide `Semaphore(1)` around
+tap-synthesis + snapshot probes) would serialise exactly the operations that
+corrupt when two sims drive XCUITest at once — the EF000 companion drop observed
+running `ios:latest:2`. The failure *character* differs (iOS-concurrent is
+deterministic/structural — process-global XCUITest; Android multi-emu is
+stochastic/load-driven — host RAM/CPU/GPU + shared adb server), but one host-wide
+queue abstraction mitigates both: serialise the colliding iOS ops; cap the
+concurrent Android burst.
 
 ## Device-queue scheduling: semaphore + concurrency-cap-follows-device-count
 
@@ -1024,12 +1068,15 @@ When iPhone + iPad run flows in parallel, occasional state leaks between sims:
 - **Wrong-field type:** observed once on iPhone 17 — typing for `Password` landed in the `Search` input. The next field's focus snapshot apparently lagged by one step, so `typeText` delivered keystrokes to the previously-focused field instead.
 - **Step-6 backspace flake:** one of the two flows occasionally times out at `backspace on_text="golem testt"` — element resolves but the action stalls past the step deadline. Solo runs never trigger.
 - **Step-19 auto_scroll for Submit:** scroll loop enters strategy 2 stalls under concurrent load even after our scroll-strategy fix.
+- **Companion connection dropped on startup under concurrent load (EF000):** running two iOS *versions* concurrently (`os = "ios:latest:2"` → e.g. iPhone 17e/iOS 26 + iPhone 16/iOS 18) plus an Android emulator, the iPhone 17e companion reported `ready` then its first `/hierarchy` returned `EF000 — connection closed before message completed` (companion HTTP server dropped mid-response during the concurrent install+launch burst). ANR recovery correctly fired and rebooted the sim. **Reproducible** — recurred on a second run, including with `--no-build` (so not an install-race artifact). Two concurrent iOS sims is the most fragile config; one iOS + one Android is stable.
 
 The companion-side off-main fix (commit on this entry's removal) prevents one wedge from cascading into all later requests, but doesn't address the underlying issue: XCUITest's HID injection and accessibility-snapshot paths are process-global. When two sims drive XCUITest concurrently from the same host, they interleave on shared `simctl` / `usbmuxd` / `IOHIDEvent` plumbing. Apple's official guidance is one XCUITest run per host process — we're stretching that.
 
-Likely shape of the real fix: serialise the host-side simctl-touching operations (mainly tap synthesis + window-snapshot probes) behind a host-wide mutex, or run each sim's companion in a separate XCUITest process so OS-level state is per-process.
+Likely shape of the real fix: serialise the host-side simctl-touching operations (mainly tap synthesis + window-snapshot probes) behind a host-wide mutex, or run each sim's companion in a separate XCUITest process so OS-level state is per-process. The **[[Selective host-wide queue for heavy device ops]]** entry is the natural vehicle — extend it to gate the contended iOS startup/HID/snapshot ops, not just the Android I/O-heavy ones.
 
-Not blocking — single-device runs are stable, multi-device retry-flaky.
+Determinism contrast (observed): the iOS-concurrent wedge is **highly reproducible / near-deterministic** — it's structural (process-global XCUITest HID + snapshot plumbing), so two concurrent iOS sims reliably trip it (it recurred every run, incl. `--no-build`). Android multi-emu failures are **stochastic / load-driven** — `adb` is per-device so there's no structural collision; the trigger is host RAM/CPU/GPU saturation (plus the shared `adb` server) during heavy bursts, hence probabilistic and worse with more emus. Different root *character*, but a host-wide queue/serialisation mitigates both: iOS by serialising the colliding process-global ops, Android by capping the concurrent resource burst.
+
+Not blocking — single-device runs are stable, multi-device retry-flaky. **This is the talk's "multi-device is still flaky" caveat, reproduced.**
 
 **Files:** `companions/ios/GolemRunnerUITests/RequestRouter.swift`, `golem-driver/src/ios.rs` (a host-wide mutex would live here).
 
