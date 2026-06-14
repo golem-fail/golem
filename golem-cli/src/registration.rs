@@ -162,6 +162,23 @@ impl RegistrationState {
         port
     }
 
+    /// Test-only: seed the next port to allocate. Used to drive the
+    /// allocator to the top of the companion range so the wrap-around
+    /// branch in `allocate_port` is exercisable without binding hundreds
+    /// of real ports. Reads/writes existing state only — no new behavior.
+    #[cfg(test)]
+    fn seed_next_port(&self, port: u16) {
+        let mut inner = self.inner.lock().expect("lock poisoned");
+        inner.next_port = port;
+    }
+
+    /// Test-only: read the current next-port cursor.
+    #[cfg(test)]
+    fn next_port(&self) -> u16 {
+        let inner = self.inner.lock().expect("lock poisoned");
+        inner.next_port
+    }
+
     /// Get a registered companion by device_id.
     pub fn get(&self, device_id: &str) -> Option<RegisteredCompanion> {
         let inner = self.inner.lock().expect("lock poisoned");
@@ -574,7 +591,56 @@ mod tests {
         assert!(g2.is_ok(), "distinct UDID SHALL acquire its guard without blocking");
     }
 
-    // 16. find_free_port_in_range returns the first bindable port in range.
+    // 16. Seeding next_port at COMPANION_PORT_END drives the allocator's
+    //     wrap-around branch: after allocating the top port, the cursor
+    //     resets to COMPANION_PORT_START rather than running past the range.
+    #[test]
+    fn allocate_port_wraps_cursor_at_range_end() {
+        let (state, _rx) = RegistrationState::new();
+
+        // 1. Park the cursor at the very top of the companion range.
+        state.seed_next_port(COMPANION_PORT_END);
+        assert_eq!(
+            state.next_port(),
+            COMPANION_PORT_END,
+            "seed SHALL place the cursor at the range end"
+        );
+
+        // 2. Probe whether the range-end port is bindable right now: that
+        //    decides which allocator branch we exercise.
+        let end_is_free =
+            TcpListener::bind(format!("127.0.0.1:{COMPANION_PORT_END}")).is_ok();
+
+        // 3. Allocate from the top. The returned port always stays in range.
+        let port = state.allocate_port("wrap-dev", "ios", "Top", "1");
+        assert!(
+            (COMPANION_PORT_START..=COMPANION_PORT_END).contains(&port),
+            "allocated port SHALL stay within the companion range"
+        );
+
+        // 4. When the range-end port was free it gets handed out, and
+        //    next_port = port + 1 would exceed the end, so the cursor wraps
+        //    to COMPANION_PORT_START. When it was busy the allocator wrapped
+        //    forward to find a free port lower in the range; either way the
+        //    cursor SHALL never escape the range.
+        if end_is_free {
+            assert_eq!(
+                port, COMPANION_PORT_END,
+                "a free range-end port SHALL be the one allocated"
+            );
+            assert_eq!(
+                state.next_port(),
+                COMPANION_PORT_START,
+                "cursor SHALL wrap to COMPANION_PORT_START after allocating the range end"
+            );
+        }
+        assert!(
+            (COMPANION_PORT_START..=COMPANION_PORT_END).contains(&state.next_port()),
+            "cursor SHALL stay within the companion range after wrap-around"
+        );
+    }
+
+    // 17. find_free_port_in_range returns the first bindable port in range.
     #[test]
     fn find_free_port_returns_port_in_range() {
         let (listener, port) =
@@ -591,7 +657,7 @@ mod tests {
         );
     }
 
-    // 17. When the whole range is occupied, find_free_port_in_range fails
+    // 18. When the whole range is occupied, find_free_port_in_range fails
     //    with the HostPortsExhausted failure code.
     #[test]
     fn find_free_port_exhausted_yields_coded_error() {
@@ -635,7 +701,7 @@ mod tests {
         );
     }
 
-    // 18. End-to-end: a real /register POST against a started server returns
+    // 19. End-to-end: a real /register POST against a started server returns
     //    the allocated port and records the companion in shared state.
     #[tokio::test]
     async fn register_post_allocates_and_records() {
@@ -675,7 +741,7 @@ mod tests {
         assert_eq!(got.device_name, "SimPhone", "recorded device_name SHALL match the request");
     }
 
-    // 19. An unknown route returns 404 and records nothing.
+    // 20. An unknown route returns 404 and records nothing.
     #[tokio::test]
     async fn unknown_route_returns_404() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -697,7 +763,7 @@ mod tests {
         assert!(state.all().is_empty(), "non-register request SHALL record nothing");
     }
 
-    // 20. A /register POST with missing fields falls back to the defaults
+    // 21. A /register POST with missing fields falls back to the defaults
     //    (device_id "unknown", empty platform/name/version).
     #[tokio::test]
     async fn register_post_applies_field_defaults() {

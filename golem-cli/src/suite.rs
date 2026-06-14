@@ -928,6 +928,51 @@ struct CoverageCtx {
     dispatch_lock: Option<Arc<tokio::sync::Mutex<()>>>,
 }
 
+/// Outcome of the post-flow hierarchy probe used for ANR recovery.
+/// Pure summary of the I/O result so the recovery decision can be
+/// computed (and tested) without touching a driver.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HierarchyProbe {
+    /// Hierarchy fetched; `detect_anr` returned this value.
+    Fetched { anr_detected: bool },
+    /// Hierarchy fetch errored — companion unresponsive at recovery time.
+    FetchError,
+}
+
+/// Decide whether a failed `FlowReport` warrants a device reboot, and the
+/// human-readable reason to surface. Pure: takes the report's
+/// `first_failure_code` and the (lazily computed) hierarchy probe.
+///
+/// `hierarchy` is `None` when the caller skipped the probe because the
+/// wedge was already seen on the step — mirroring the short-circuit in
+/// `execute_flow_run` (a wedged companion can race back to a transient
+/// OK, so we trust the step's code rather than re-probing).
+///
+/// Three recovery triggers, all indicating the device needs a reboot:
+/// 1. A failed step already carried `DeviceCompanionWedged`.
+/// 2. ANR dialog visible in the hierarchy (system_ui "isn't responding").
+/// 3. Hierarchy fetch itself errors at recovery time.
+fn anr_recovery_decision(
+    first_failure_code: Option<golem_events::FailureCode>,
+    hierarchy: Option<HierarchyProbe>,
+) -> (bool, &'static str) {
+    let wedge_already_seen = matches!(
+        first_failure_code,
+        Some(golem_events::FailureCode::DeviceCompanionWedged)
+    );
+    if wedge_already_seen {
+        return (true, "companion wedged during step");
+    }
+    match hierarchy {
+        Some(HierarchyProbe::Fetched { anr_detected: true }) => {
+            (true, "possible ANR (system dialog detected)")
+        }
+        Some(HierarchyProbe::Fetched { anr_detected: false }) => (false, ""),
+        Some(HierarchyProbe::FetchError) => (true, "companion unresponsive at recovery time"),
+        None => (false, ""),
+    }
+}
+
 /// Execute a single `FlowRun`: set up each slot (device + preinstall +
 /// companion + allocation), then spawn per-slot runners sharing a
 /// `FailureBarrier`. Releases every device back to the `ResourceManager`
@@ -1202,37 +1247,30 @@ async fn execute_flow_run(
                 device.physical,
             )),
         };
-        // Three recovery triggers, all indicating the device needs a reboot:
-        // 1. A failed step already carried `DeviceCompanionWedged` — the
-        //    in-step probe already saw the wedge, so probing again here
-        //    can race the companion back to a transient OK and miss the
-        //    underlying instability. Trust the code on the step.
-        // 2. ANR dialog visible in the hierarchy (system_ui "isn't
-        //    responding").
-        // 3. Hierarchy fetch itself errors at recovery time — companion
-        //    unresponsive even outside the step (HTTP timeout, refused).
         // `step_results` is populated by the suite-level merger after
         // execute_flow_run returns, so it's still empty here. The
         // `first_failure_code` field IS set on the report at this point
         // (run_flow_on_device populates it from result.failed_code).
+        //
+        // Probe the hierarchy only when the wedge wasn't already seen on
+        // the step: a wedged companion can race back to a transient OK and
+        // miss the underlying instability, so we trust the step's code.
         let wedge_already_seen = matches!(
             report.first_failure_code,
             Some(golem_events::FailureCode::DeviceCompanionWedged)
         );
-        let (recover, recovery_reason) = if wedge_already_seen {
-            (true, "companion wedged during step")
+        let hierarchy = if wedge_already_seen {
+            None
         } else {
-            match driver.get_hierarchy().await {
-                Ok((root, _)) => {
-                    if golem_driver::common::detect_anr(&root) {
-                        (true, "possible ANR (system dialog detected)")
-                    } else {
-                        (false, "")
-                    }
-                }
-                Err(_) => (true, "companion unresponsive at recovery time"),
-            }
+            Some(match driver.get_hierarchy().await {
+                Ok((root, _)) => HierarchyProbe::Fetched {
+                    anr_detected: golem_driver::common::detect_anr(&root),
+                },
+                Err(_) => HierarchyProbe::FetchError,
+            })
         };
+        let (recover, recovery_reason) =
+            anr_recovery_decision(report.first_failure_code, hierarchy);
         if !recover {
             continue;
         }
@@ -3967,5 +4005,85 @@ mod tests {
             }
             other => panic!("SHALL build a SuitePlanned event, got {other:?}"),
         }
+    }
+
+    // ---------------------------------------------------------------
+    // anr_recovery_decision — pure ANR-recovery decision
+    // ---------------------------------------------------------------
+
+    // 1. A wedge already seen on the step recovers without probing.
+    #[test]
+    fn anr_recovery_wedge_already_seen_recovers_without_probe() {
+        // hierarchy is None: the caller SHALL NOT probe when wedged.
+        let (recover, reason) = anr_recovery_decision(
+            Some(golem_events::FailureCode::DeviceCompanionWedged),
+            None,
+        );
+        assert!(recover, "SHALL recover when the step already saw a wedge");
+        assert_eq!(reason, "companion wedged during step");
+    }
+
+    // 2. An ANR dialog detected in the fetched hierarchy recovers.
+    #[test]
+    fn anr_recovery_anr_dialog_detected_recovers() {
+        let (recover, reason) = anr_recovery_decision(
+            Some(golem_events::FailureCode::Uncoded),
+            Some(HierarchyProbe::Fetched { anr_detected: true }),
+        );
+        assert!(recover, "SHALL recover when an ANR dialog is detected");
+        assert_eq!(reason, "possible ANR (system dialog detected)");
+    }
+
+    // 3. A clean fetched hierarchy with no ANR does not recover.
+    #[test]
+    fn anr_recovery_clean_hierarchy_does_not_recover() {
+        let (recover, reason) = anr_recovery_decision(
+            Some(golem_events::FailureCode::Uncoded),
+            Some(HierarchyProbe::Fetched { anr_detected: false }),
+        );
+        assert!(
+            !recover,
+            "SHALL NOT recover when the hierarchy is clean of ANR signals"
+        );
+        assert_eq!(reason, "");
+    }
+
+    // 4. A hierarchy fetch error recovers — companion unresponsive.
+    #[test]
+    fn anr_recovery_fetch_error_recovers() {
+        let (recover, reason) = anr_recovery_decision(
+            Some(golem_events::FailureCode::Uncoded),
+            Some(HierarchyProbe::FetchError),
+        );
+        assert!(
+            recover,
+            "SHALL recover when the hierarchy fetch errors at recovery time"
+        );
+        assert_eq!(reason, "companion unresponsive at recovery time");
+    }
+
+    // 5. The wedge code wins over the hierarchy probe even if a probe
+    //    was somehow supplied (wedge check is first).
+    #[test]
+    fn anr_recovery_wedge_code_takes_priority_over_probe() {
+        let (recover, reason) = anr_recovery_decision(
+            Some(golem_events::FailureCode::DeviceCompanionWedged),
+            Some(HierarchyProbe::Fetched { anr_detected: false }),
+        );
+        assert!(recover, "SHALL recover on a wedge code regardless of probe");
+        assert_eq!(reason, "companion wedged during step");
+    }
+
+    // 6. A non-wedge failure with no probe (None) does not recover —
+    //    nothing signalled the need for a reboot.
+    #[test]
+    fn anr_recovery_non_wedge_without_probe_does_not_recover() {
+        let (recover, reason) =
+            anr_recovery_decision(Some(golem_events::FailureCode::Uncoded), None);
+        assert!(
+            !recover,
+            "SHALL NOT recover for a non-wedge failure with no probe result"
+        );
+        assert_eq!(reason, "");
     }
 }

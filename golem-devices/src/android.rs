@@ -315,21 +315,11 @@ pub async fn discover_android_system_images() -> anyhow::Result<Vec<SystemImageI
         return Ok(Vec::new());
     }
 
-    let mut images = Vec::new();
-
     // Structure: system-images/android-{api}/{target}/{abi}/
+    let mut entries = Vec::new();
     if let Ok(api_dirs) = std::fs::read_dir(&images_dir) {
         for api_entry in api_dirs.flatten() {
             let api_name = api_entry.file_name().to_string_lossy().to_string();
-            let api_level: u32 = api_name
-                .strip_prefix("android-")
-                .and_then(|s| s.split('-').next()) // handle "android-34-ext8"
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(0);
-
-            if api_level == 0 {
-                continue;
-            }
 
             if let Ok(target_dirs) = std::fs::read_dir(api_entry.path()) {
                 for target_entry in target_dirs.flatten() {
@@ -338,17 +328,44 @@ pub async fn discover_android_system_images() -> anyhow::Result<Vec<SystemImageI
                     if let Ok(abi_dirs) = std::fs::read_dir(target_entry.path()) {
                         for abi_entry in abi_dirs.flatten() {
                             let abi = abi_entry.file_name().to_string_lossy().to_string();
-                            images.push(SystemImageInfo {
-                                api_level,
-                                abi: abi.clone(),
-                                target: target.clone(),
-                                path: format!("system-images;{api_name};{target};{abi}"),
-                            });
+                            entries.push((api_name.clone(), target.clone(), abi));
                         }
                     }
                 }
             }
         }
+    }
+
+    Ok(build_system_images(&entries))
+}
+
+/// Parse pre-collected `(api_name, target, abi)` directory triples into a
+/// sorted `Vec<SystemImageInfo>`.
+///
+/// `api_name` is the `system-images/android-{api}` directory name. The API
+/// level is stripped from it, handling extension suffixes (`android-34-ext8`).
+/// Entries whose api_name does not parse to a nonzero API level are dropped.
+/// Results are sorted by API level descending (latest first), then by target
+/// ascending (so `google_apis` sorts before `google_apis_playstore`).
+fn build_system_images(entries: &[(String, String, String)]) -> Vec<SystemImageInfo> {
+    let mut images = Vec::new();
+    for (api_name, target, abi) in entries {
+        let api_level: u32 = api_name
+            .strip_prefix("android-")
+            .and_then(|s| s.split('-').next()) // handle "android-34-ext8"
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
+
+        if api_level == 0 {
+            continue;
+        }
+
+        images.push(SystemImageInfo {
+            api_level,
+            abi: abi.clone(),
+            target: target.clone(),
+            path: format!("system-images;{api_name};{target};{abi}"),
+        });
     }
 
     // Sort by API level descending (latest first), prefer google_apis
@@ -357,7 +374,7 @@ pub async fn discover_android_system_images() -> anyhow::Result<Vec<SystemImageI
             .then(a.target.cmp(&b.target)) // google_apis before google_apis_playstore
     });
 
-    Ok(images)
+    images
 }
 
 /// Discover available Android device profiles via avdmanager.
@@ -387,9 +404,19 @@ pub async fn discover_android_device_profiles() -> anyhow::Result<Vec<DeviceProf
         .await?;
 
     let text = String::from_utf8_lossy(&output.stdout);
+
+    Ok(parse_device_profiles(&text))
+}
+
+/// Parse the stdout of `avdmanager list device` into device profiles.
+///
+/// Output has lines like `id: 44 or "pixel_8"` followed by `    Name: Pixel 8`.
+/// The quoted portion of the id line is the profile ID; the following Name
+/// line provides the human-readable name. A profile is emitted only once both
+/// an id and its Name have been seen.
+fn parse_device_profiles(text: &str) -> Vec<DeviceProfileInfo> {
     let mut profiles = Vec::new();
 
-    // Parse output: lines like 'id: 44 or "pixel_8"' followed by '    Name: Pixel 8'
     let mut current_id: Option<String> = None;
     for line in text.lines() {
         if let Some(rest) = line.strip_prefix("id: ") {
@@ -409,7 +436,7 @@ pub async fn discover_android_device_profiles() -> anyhow::Result<Vec<DeviceProf
         }
     }
 
-    Ok(profiles)
+    profiles
 }
 
 /// Pick the best system image for the given API level (or latest if 0)
@@ -874,5 +901,99 @@ mod tests {
     fn pick_device_profile_empty_is_none() {
         assert!(pick_device_profile(&[], true).is_none(),
             "empty profile list SHALL yield None");
+    }
+
+    // parse_device_profiles — avdmanager `list device` stdout parsing ─────
+
+    // 32. A complete id/Name pair produces one profile with the quoted id
+    #[test]
+    fn parse_device_profiles_extracts_quoted_id_and_name() {
+        let text = "id: 44 or \"pixel_8\"\n    Name: Pixel 8\n";
+        let profiles = parse_device_profiles(text);
+        assert_eq!(profiles.len(), 1, "one id/Name pair SHALL yield one profile");
+        assert_eq!(profiles[0].id, "pixel_8",
+            "the quoted portion SHALL be the profile id");
+        assert_eq!(profiles[0].name, "Pixel 8");
+        assert!(profiles[0].is_phone, "Pixel 8 SHALL be classified as a phone");
+    }
+
+    // 33. Tablet/Fold names are not classified as phones
+    #[test]
+    fn parse_device_profiles_tablet_and_fold_not_phone() {
+        let text = "id: 1 or \"pixel_tablet\"\n    Name: Pixel Tablet\n\
+                    id: 2 or \"pixel_fold\"\n    Name: Pixel Fold\n";
+        let profiles = parse_device_profiles(text);
+        assert_eq!(profiles.len(), 2);
+        assert!(!profiles[0].is_phone, "Pixel Tablet SHALL NOT be a phone");
+        assert!(!profiles[1].is_phone, "Pixel Fold SHALL NOT be a phone");
+    }
+
+    // 34. An id with no following Name line emits nothing
+    #[test]
+    fn parse_device_profiles_id_without_name_is_dropped() {
+        let text = "id: 44 or \"pixel_8\"\n";
+        assert!(parse_device_profiles(text).is_empty(),
+            "an id with no Name line SHALL NOT emit a profile");
+    }
+
+    // 35. Empty input yields no profiles
+    #[test]
+    fn parse_device_profiles_empty_input_is_empty() {
+        assert!(parse_device_profiles("").is_empty(),
+            "empty output SHALL yield no profiles");
+    }
+
+    // build_system_images — pre-collected dir triples -> sorted images ────
+
+    // 36. API level is stripped from android-NN, ext suffix handled
+    #[test]
+    fn build_system_images_strips_api_level_with_ext_suffix() {
+        let entries = vec![
+            ("android-34-ext8".to_string(), "google_apis".to_string(), "arm64-v8a".to_string()),
+        ];
+        let images = build_system_images(&entries);
+        assert_eq!(images.len(), 1);
+        assert_eq!(images[0].api_level, 34,
+            "android-34-ext8 SHALL strip to api_level 34");
+        assert_eq!(images[0].path, "system-images;android-34-ext8;google_apis;arm64-v8a",
+            "path SHALL retain the original api_name directory");
+    }
+
+    // 37. Entries whose api_name does not parse to a level are dropped
+    #[test]
+    fn build_system_images_drops_unparseable_api_name() {
+        let entries = vec![
+            ("garbage".to_string(), "google_apis".to_string(), "arm64-v8a".to_string()),
+            ("android-".to_string(), "google_apis".to_string(), "arm64-v8a".to_string()),
+        ];
+        assert!(build_system_images(&entries).is_empty(),
+            "api_names not parsing to a nonzero level SHALL be dropped");
+    }
+
+    // 38. Results sort by API level descending, then target ascending
+    #[test]
+    fn build_system_images_sorts_api_desc_target_asc() {
+        let entries = vec![
+            ("android-33".to_string(), "google_apis".to_string(), "arm64-v8a".to_string()),
+            ("android-34".to_string(), "google_apis_playstore".to_string(), "arm64-v8a".to_string()),
+            ("android-34".to_string(), "google_apis".to_string(), "arm64-v8a".to_string()),
+        ];
+        let images = build_system_images(&entries);
+        assert_eq!(images.len(), 3);
+        // Highest API first.
+        assert_eq!(images[0].api_level, 34);
+        assert_eq!(images[1].api_level, 34);
+        assert_eq!(images[2].api_level, 33);
+        // Within api 34, google_apis SHALL sort before google_apis_playstore.
+        assert_eq!(images[0].target, "google_apis",
+            "google_apis SHALL sort before google_apis_playstore");
+        assert_eq!(images[1].target, "google_apis_playstore");
+    }
+
+    // 39. Empty entries yield no images
+    #[test]
+    fn build_system_images_empty_is_empty() {
+        assert!(build_system_images(&[]).is_empty(),
+            "no directory entries SHALL yield no images");
     }
 }

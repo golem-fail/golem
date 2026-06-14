@@ -523,6 +523,16 @@ async fn list_running_emulator_serials() -> Vec<String> {
         _ => return Vec::new(),
     };
     let stdout = String::from_utf8_lossy(&out.stdout);
+    parse_emulator_serials(&stdout)
+}
+
+/// Parse the serials of running emulators out of `adb devices` stdout.
+///
+/// The first line is the `List of devices attached` header and is skipped.
+/// Each subsequent line is `<serial>\t<state>`; only `emulator-NNNN`
+/// serials in the `device` state are returned (physical devices and
+/// offline/unauthorized entries are excluded).
+fn parse_emulator_serials(stdout: &str) -> Vec<String> {
     stdout
         .lines()
         .skip(1)
@@ -1438,6 +1448,58 @@ mod tests {
             .await
             .expect("echo SHALL succeed");
         assert_eq!(out.trim(), "hello", "stdout SHALL be captured verbatim");
+    }
+
+    // 29. parse_emulator_serials extracts only emulator serials in the
+    //     `device` state, skipping the header line and excluding physical
+    //     devices and non-`device` states.
+    #[test]
+    fn parse_emulator_serials_extracts_device_state_emulators() {
+        let stdout = "List of devices attached\n\
+                      emulator-5554\tdevice\n\
+                      emulator-5556\tdevice\n";
+        let serials = parse_emulator_serials(stdout);
+        assert_eq!(
+            serials,
+            vec!["emulator-5554", "emulator-5556"],
+            "both booted emulator serials SHALL be returned"
+        );
+    }
+
+    // 30. parse_emulator_serials skips the header line — a serial that
+    //     looked like the header SHALL not leak through (skip(1)).
+    #[test]
+    fn parse_emulator_serials_skips_header() {
+        // The header is always line 1; with no devices the result is empty.
+        let serials = parse_emulator_serials("List of devices attached\n");
+        assert!(serials.is_empty(), "header-only output SHALL yield no serials");
+    }
+
+    // 31. parse_emulator_serials excludes physical devices (serials that
+    //     do not start with `emulator-`) and non-`device` states.
+    #[test]
+    fn parse_emulator_serials_excludes_physical_and_offline() {
+        let stdout = "List of devices attached\n\
+                      emulator-5554\tdevice\n\
+                      R5CT70ABCDE\tdevice\n\
+                      emulator-5556\toffline\n\
+                      emulator-5558\tunauthorized\n";
+        let serials = parse_emulator_serials(stdout);
+        assert_eq!(
+            serials,
+            vec!["emulator-5554"],
+            "only emulator serials in the device state SHALL be returned"
+        );
+    }
+
+    // 32. parse_emulator_serials on empty input yields no serials (no
+    //     header, nothing to skip past, no panic).
+    #[test]
+    fn parse_emulator_serials_empty_input() {
+        assert!(
+            parse_emulator_serials("").is_empty(),
+            "empty stdout SHALL yield no serials"
+        );
     }
 
     // Helper: a process-unique temp directory path under the system temp

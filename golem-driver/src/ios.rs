@@ -190,6 +190,82 @@ impl IosDriver {
     }
 }
 
+/// Build the APNS payload JSON for `simctl push`.
+///
+/// With a `payload`, the caller-supplied JSON is spliced in verbatim
+/// under a `custom` key alongside the `aps.alert`; without it, only the
+/// `aps.alert` envelope is produced. `title`/`body` are interpolated raw
+/// (callers pass test-controlled values; simctl reads this as a file).
+fn build_apns_payload(title: &str, body: &str, payload: Option<&str>) -> String {
+    if let Some(custom) = payload {
+        format!(
+            r#"{{"aps":{{"alert":{{"title":"{title}","body":"{body}"}}}},"custom":{custom}}}"#
+        )
+    } else {
+        format!(r#"{{"aps":{{"alert":{{"title":"{title}","body":"{body}"}}}}}}"#)
+    }
+}
+
+/// Escape a string for embedding inside a double-quoted JS string literal.
+///
+/// Backslashes first (so the quote-escape's added backslashes aren't
+/// re-escaped), then double quotes. Used to splice the notification body
+/// into a `__golemSetNotification("...")` eval expression.
+fn escape_js_string(body: &str) -> String {
+    body.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Reject recording names containing shell-special characters.
+///
+/// The name is interpolated into a host filesystem path that `simctl`
+/// consumes; caller-side `sanitize_filename` already strips these, so
+/// this is belt-and-braces.
+fn validate_recording_name(name: &str) -> Result<()> {
+    if name
+        .chars()
+        .any(|c| c == '\'' || c == '"' || c == '$' || c == '`' || c == '/')
+    {
+        anyhow::bail!("invalid recording name {name:?}");
+    }
+    Ok(())
+}
+
+/// Read `safe_area_top` from the companion hierarchy wrapper as an `i32`,
+/// defaulting to 0 when absent or non-integer.
+fn safe_area_top_from_wrapper(wrapper: &serde_json::Value) -> i32 {
+    wrapper
+        .get("safe_area_top")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32
+}
+
+/// Reconstruct the hierarchy wrapper around the (possibly enriched) tree
+/// for `parse_hierarchy`.
+///
+/// Builds `{"tree": <raw>}` and copies the device-context keys
+/// (`keyboard_height`, `safe_area_top`, `safe_area_bottom`,
+/// `device_model`) from `original` when present. Returns the serialized
+/// JSON string.
+fn build_enriched_hierarchy(
+    original: &serde_json::Value,
+    raw: &serde_json::Value,
+) -> Result<String> {
+    let mut response = serde_json::json!({ "tree": raw });
+    if let Some(obj) = original.as_object() {
+        for key in [
+            "keyboard_height",
+            "safe_area_top",
+            "safe_area_bottom",
+            "device_model",
+        ] {
+            if let Some(val) = obj.get(key) {
+                response[key] = val.clone();
+            }
+        }
+    }
+    serde_json::to_string(&response).context("failed to serialize hierarchy")
+}
+
 /// What to do with WebKit Inspector on this hierarchy call.
 enum WebKitAction {
     Skip,
@@ -250,10 +326,7 @@ impl PlatformDriver for IosDriver {
         // CSS getBoundingClientRect() returns coordinates relative to the web
         // viewport, which starts below the safe area. Add safe_area_top so DOM
         // coordinates match the native accessibility tree (screen coordinates).
-        let safe_area_top = wrapper
-            .get("safe_area_top")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0) as i32;
+        let safe_area_top = safe_area_top_from_wrapper(&wrapper);
         if let Some((wv_x, wv_y)) = find_webview_bounds(&raw) {
             let wv_y = wv_y + safe_area_top;
             // Check WebKit state (short lock, no async while held)
@@ -360,21 +433,7 @@ impl PlatformDriver for IosDriver {
 
         // Reconstruct wrapper with enriched tree for parse_hierarchy
         let original: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
-        let mut response = serde_json::json!({ "tree": raw });
-        if let Some(obj) = original.as_object() {
-            for key in [
-                "keyboard_height",
-                "safe_area_top",
-                "safe_area_bottom",
-                "device_model",
-            ] {
-                if let Some(val) = obj.get(key) {
-                    response[key] = val.clone();
-                }
-            }
-        }
-        let enriched_str =
-            serde_json::to_string(&response).context("failed to serialize hierarchy")?;
+        let enriched_str = build_enriched_hierarchy(&original, &raw)?;
         parse_hierarchy(&enriched_str)
     }
 
@@ -576,13 +635,7 @@ impl PlatformDriver for IosDriver {
             );
         }
         // Build an APNS payload JSON and push via simctl
-        let apns_payload = if let Some(custom) = payload {
-            format!(
-                r#"{{"aps":{{"alert":{{"title":"{title}","body":"{body}"}}}},"custom":{custom}}}"#
-            )
-        } else {
-            format!(r#"{{"aps":{{"alert":{{"title":"{title}","body":"{body}"}}}}}}"#)
-        };
+        let apns_payload = build_apns_payload(title, body, payload);
 
         // Write payload to a temp file, then push
         let tmp = std::env::temp_dir().join(format!("golem_push_{}.json", std::process::id()));
@@ -612,7 +665,7 @@ impl PlatformDriver for IosDriver {
         // text appears. Best-effort: native screens / apps without
         // the hook quietly no-op. Pass the body — that's what the
         // test asserts on with `right_of "Notification:"`.
-        let body_escaped = body.replace('\\', "\\\\").replace('"', "\\\"");
+        let body_escaped = escape_js_string(body);
         let _ = self
             .eval_in_webview(&format!(
                 r#"window.__golemSetNotification && window.__golemSetNotification("{body_escaped}")"#
@@ -675,9 +728,7 @@ impl PlatformDriver for IosDriver {
         }
         // Reject shell-special chars in the name. Caller-side
         // `sanitize_filename` already strips these; belt-and-braces.
-        if name.chars().any(|c| c == '\'' || c == '"' || c == '$' || c == '`' || c == '/') {
-            anyhow::bail!("invalid recording name {name:?}");
-        }
+        validate_recording_name(name)?;
         let host_path = std::env::temp_dir()
             .join(format!("golem-rec-{}-{}.mp4", self.device_id, name))
             .to_string_lossy()
@@ -1087,5 +1138,194 @@ mod tests {
             "post-stop grace SHALL stay under 1s to keep stop+launch cycles \
              cheap (got {IOS_POST_STOP_GRACE:?})",
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // build_apns_payload — APNS JSON envelope for `simctl push`
+    // -----------------------------------------------------------------------
+
+    // 1. Without a custom payload, only the `aps.alert` envelope is built,
+    //    and the result SHALL be valid JSON carrying title + body.
+    #[test]
+    fn apns_payload_without_custom_is_alert_only() {
+        let s = build_apns_payload("Hi", "Body text", None);
+        let parsed: serde_json::Value =
+            serde_json::from_str(&s).expect("payload SHALL be valid JSON");
+        assert_eq!(parsed["aps"]["alert"]["title"], "Hi");
+        assert_eq!(parsed["aps"]["alert"]["body"], "Body text");
+        assert!(
+            parsed.get("custom").is_none(),
+            "no `custom` key SHALL be present without a payload, got: {s}",
+        );
+    }
+
+    // 2. With a custom payload, the caller JSON is spliced in verbatim under
+    //    `custom` alongside the alert envelope.
+    #[test]
+    fn apns_payload_with_custom_splices_payload() {
+        let s = build_apns_payload("T", "B", Some(r#"{"k":42}"#));
+        let parsed: serde_json::Value =
+            serde_json::from_str(&s).expect("payload SHALL be valid JSON");
+        assert_eq!(parsed["aps"]["alert"]["title"], "T");
+        assert_eq!(parsed["aps"]["alert"]["body"], "B");
+        assert_eq!(
+            parsed["custom"]["k"], 42,
+            "custom payload SHALL be spliced under `custom`, got: {s}",
+        );
+    }
+
+    // 3. A non-object custom payload (e.g. an array) is still spliced raw —
+    //    the builder does no validation, it just interpolates.
+    #[test]
+    fn apns_payload_custom_is_interpolated_raw() {
+        let s = build_apns_payload("T", "B", Some("[1,2,3]"));
+        let parsed: serde_json::Value =
+            serde_json::from_str(&s).expect("payload SHALL be valid JSON");
+        assert_eq!(parsed["custom"], serde_json::json!([1, 2, 3]));
+    }
+
+    // -----------------------------------------------------------------------
+    // escape_js_string — embed into a double-quoted JS string literal
+    // -----------------------------------------------------------------------
+
+    // 1. A plain body with no special characters SHALL pass through unchanged.
+    #[test]
+    fn escape_js_string_plain_unchanged() {
+        assert_eq!(escape_js_string("hello world"), "hello world");
+    }
+
+    // 2. Double quotes SHALL be backslash-escaped.
+    #[test]
+    fn escape_js_string_escapes_double_quote() {
+        assert_eq!(escape_js_string(r#"say "hi""#), r#"say \"hi\""#);
+    }
+
+    // 3. Backslashes SHALL be doubled, and SHALL be escaped before quotes so
+    //    a quote-escape's added backslash is not itself re-escaped.
+    #[test]
+    fn escape_js_string_escapes_backslash_before_quote() {
+        // Input: backslash then quote -> backslash doubled, quote escaped.
+        assert_eq!(escape_js_string("a\\\"b"), "a\\\\\\\"b");
+    }
+
+    // -----------------------------------------------------------------------
+    // validate_recording_name — reject shell-special chars
+    // -----------------------------------------------------------------------
+
+    // 1. A clean alphanumeric/dash/underscore name SHALL be accepted.
+    #[test]
+    fn validate_recording_name_accepts_clean_name() {
+        validate_recording_name("flow_tap-01")
+            .expect("clean recording name SHALL be accepted");
+    }
+
+    // 2. Each shell-special character SHALL be rejected, and the error SHALL
+    //    echo the offending name (debug-quoted).
+    #[test]
+    fn validate_recording_name_rejects_each_special_char() {
+        for bad in ["a'b", "a\"b", "a$b", "a`b", "a/b"] {
+            let err = validate_recording_name(bad)
+                .expect_err("shell-special char SHALL be rejected");
+            let msg = format!("{err}");
+            assert!(
+                msg.contains("invalid recording name"),
+                "error SHALL name the failure for {bad:?}, got: {msg}",
+            );
+        }
+    }
+
+    // 3. An empty name has no special chars and SHALL be accepted (the
+    //    validation only screens for shell-special characters).
+    #[test]
+    fn validate_recording_name_accepts_empty() {
+        validate_recording_name("").expect("empty name has no special chars");
+    }
+
+    // -----------------------------------------------------------------------
+    // safe_area_top_from_wrapper — i64 -> i32 with default 0
+    // -----------------------------------------------------------------------
+
+    // 1. A present integer SHALL be read and narrowed to i32.
+    #[test]
+    fn safe_area_top_reads_integer() {
+        let w = serde_json::json!({ "safe_area_top": 47 });
+        assert_eq!(safe_area_top_from_wrapper(&w), 47);
+    }
+
+    // 2. A missing key SHALL default to 0.
+    #[test]
+    fn safe_area_top_missing_defaults_zero() {
+        let w = serde_json::json!({ "other": 1 });
+        assert_eq!(safe_area_top_from_wrapper(&w), 0);
+    }
+
+    // 3. A non-integer value (e.g. a float or string) SHALL default to 0
+    //    rather than coercing — `as_i64` returns None for those.
+    #[test]
+    fn safe_area_top_non_integer_defaults_zero() {
+        let w_float = serde_json::json!({ "safe_area_top": 12.5 });
+        assert_eq!(safe_area_top_from_wrapper(&w_float), 0);
+        let w_str = serde_json::json!({ "safe_area_top": "10" });
+        assert_eq!(safe_area_top_from_wrapper(&w_str), 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // build_enriched_hierarchy — wrap tree + copy device-context keys
+    // -----------------------------------------------------------------------
+
+    // 1. The raw tree SHALL be nested under `tree`, and present device-context
+    //    keys SHALL be copied from the original wrapper.
+    #[test]
+    fn build_enriched_hierarchy_copies_context_keys() {
+        let original = serde_json::json!({
+            "tree": [],
+            "keyboard_height": 300,
+            "safe_area_top": 47,
+            "safe_area_bottom": 34,
+            "device_model": "iPhone17,1",
+            "extraneous": "ignored",
+        });
+        let raw = serde_json::json!({ "element_type": "View" });
+        let s = build_enriched_hierarchy(&original, &raw)
+            .expect("serialization SHALL succeed");
+        let parsed: serde_json::Value =
+            serde_json::from_str(&s).expect("result SHALL be valid JSON");
+        assert_eq!(parsed["tree"]["element_type"], "View");
+        assert_eq!(parsed["keyboard_height"], 300);
+        assert_eq!(parsed["safe_area_top"], 47);
+        assert_eq!(parsed["safe_area_bottom"], 34);
+        assert_eq!(parsed["device_model"], "iPhone17,1");
+        assert!(
+            parsed.get("extraneous").is_none(),
+            "only the whitelisted device-context keys SHALL be copied, got: {s}",
+        );
+    }
+
+    // 2. Missing context keys SHALL simply be absent — no defaults injected.
+    #[test]
+    fn build_enriched_hierarchy_omits_missing_keys() {
+        let original = serde_json::json!({ "tree": [] });
+        let raw = serde_json::json!({ "element_type": "Window" });
+        let s = build_enriched_hierarchy(&original, &raw)
+            .expect("serialization SHALL succeed");
+        let parsed: serde_json::Value =
+            serde_json::from_str(&s).expect("result SHALL be valid JSON");
+        assert_eq!(parsed["tree"]["element_type"], "Window");
+        assert!(parsed.get("keyboard_height").is_none());
+        assert!(parsed.get("safe_area_top").is_none());
+    }
+
+    // 3. A non-object `original` (e.g. the default Null from a parse failure)
+    //    SHALL still produce a valid `{"tree": ...}` wrapper with no context.
+    #[test]
+    fn build_enriched_hierarchy_non_object_original() {
+        let original = serde_json::Value::Null;
+        let raw = serde_json::json!([{ "element_type": "Leaf" }]);
+        let s = build_enriched_hierarchy(&original, &raw)
+            .expect("serialization SHALL succeed");
+        let parsed: serde_json::Value =
+            serde_json::from_str(&s).expect("result SHALL be valid JSON");
+        assert_eq!(parsed["tree"][0]["element_type"], "Leaf");
+        assert!(parsed.get("safe_area_top").is_none());
     }
 }

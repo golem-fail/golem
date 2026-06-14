@@ -57,30 +57,25 @@ async fn main() -> anyhow::Result<()> {
             }
 
             // Build suite config
-            let platform_override = args.platform.as_deref().map(|p| match p {
-                "android" => golem_devices::Platform::Android,
-                "ios" => golem_devices::Platform::Ios,
-                other => {
-                    eprintln!("Unknown platform: {other}. Use 'ios' or 'android'.");
+            let platform_override = match parse_platform_override(args.platform.as_deref()) {
+                Ok(p) => p,
+                Err(msg) => {
+                    eprintln!("{msg}");
                     std::process::exit(1);
                 }
-            });
+            };
 
-            let coverage_override = args.coverage.as_deref().map(|c| match c {
-                "one" => golem_parser::CoverageStrategy::One,
-                "min" => golem_parser::CoverageStrategy::Min,
-                "smart" => golem_parser::CoverageStrategy::Smart,
-                "full" => golem_parser::CoverageStrategy::Full,
-                other => {
-                    eprintln!("Unknown coverage: {other}. Use 'one', 'min', 'smart', or 'full'.");
+            let coverage_override = match parse_coverage_override(args.coverage.as_deref()) {
+                Ok(c) => c,
+                Err(msg) => {
+                    eprintln!("{msg}");
                     std::process::exit(1);
                 }
-            });
+            };
 
             // Stream human output unless user explicitly chose non-human format.
             // Default (no --output) = human, so stream is on.
-            let has_human_output = args.outputs.is_empty()
-                || args.outputs.iter().any(|s| s == "human" || s.starts_with("human:"));
+            let has_human_output = detect_human_output(&args.outputs);
 
             let cli_vars = cli::parse_var_args(&args.vars)?;
 
@@ -110,18 +105,12 @@ async fn main() -> anyhow::Result<()> {
             // loudly so the user knows their --rebuild was ignored.
             let rebuild = args.rebuild;
             let no_build = args.no_build;
-            if rebuild && no_build {
-                eprintln!(
-                    "  [install] both --rebuild and --no-build passed — \
-                     --no-build wins (skipping build+install)"
-                );
+            if let Some(msg) = rebuild_no_build_conflict_warning(rebuild, no_build) {
+                eprintln!("{msg}");
             }
 
-            if args.record && args.no_record {
-                eprintln!(
-                    "  [record] both --record and --no-record passed — \
-                     --no-record wins (recording disabled)"
-                );
+            if let Some(msg) = record_no_record_conflict_warning(args.record, args.no_record) {
+                eprintln!("{msg}");
             }
 
             let config = SuiteConfig {
@@ -154,42 +143,30 @@ async fn main() -> anyhow::Result<()> {
                     .and_then(golem_runner::executor::parse_duration),
             };
 
+            // Parse `--max-wait` into milliseconds for the wire. An
+            // unparseable value is dropped (None) with a loud warning so
+            // the user knows their flag was ignored.
+            let max_device_wait_ms = args.max_wait.as_deref().and_then(|s| {
+                let d = golem_runner::executor::parse_duration(s);
+                if d.is_none() {
+                    eprintln!("warning: ignoring --max-wait '{s}' (expected e.g. 30m, 1h, 90s)");
+                }
+                d.map(|d| d.as_millis() as u64)
+            });
+
             // Wire shape (always identical, whether we're talking to
             // an in-process orchestrator we just started or to an
             // existing daemon): config_json carries everything the
             // server needs to reconstruct SuiteConfig. ProjectAppConfig
             // isn't Serialize, so the server re-parses golem.toml from
             // `project_root`.
-            let config_json = serde_json::json!({
-                "platform": args.platform,
-                "seed": args.seed,
-                "verbose": config.verbose,
-                "debug": config.debug,
-                "no_perf": config.no_perf,
-                "no_clean": config.no_clean,
-                "no_teardown": config.no_teardown,
-                "keep_devices": config.keep_devices,
-                "no_results": config.no_results,
-                "start": config.start,
-                "vars": config.vars,
-                "output_dir": config.output_dir.display().to_string(),
-                "project_root": config.project_root.display().to_string(),
-                "coverage": args.coverage,
-                "rebuild": config.rebuild,
-                "no_build": config.no_build,
-                "record": config.record,
-                "no_record": config.no_record,
-                "trace": config.trace,
-                "repeat": config.repeat,
-                "max_device_wait_ms": args.max_wait.as_deref().and_then(|s| {
-                    let d = golem_runner::executor::parse_duration(s);
-                    if d.is_none() {
-                        eprintln!("warning: ignoring --max-wait '{s}' (expected e.g. 30m, 1h, 90s)");
-                    }
-                    d.map(|d| d.as_millis() as u64)
-                }),
-                "include_junit": include_junit,
-            });
+            let config_json = build_config_json(
+                &config,
+                args.platform.as_deref(),
+                args.coverage.as_deref(),
+                max_device_wait_ms,
+                include_junit,
+            );
 
             // Unified submit path: connect to an existing daemon if
             // there is one, otherwise spin up an in-process server and
@@ -296,6 +273,111 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Map the raw `--platform` string to a [`Platform`]. `None` (flag
+/// absent) maps to `Ok(None)`; an unrecognized value is reported as an
+/// error message for the caller to print before exiting.
+fn parse_platform_override(
+    platform: Option<&str>,
+) -> Result<Option<golem_devices::Platform>, String> {
+    match platform {
+        None => Ok(None),
+        Some("android") => Ok(Some(golem_devices::Platform::Android)),
+        Some("ios") => Ok(Some(golem_devices::Platform::Ios)),
+        Some(other) => Err(format!("Unknown platform: {other}. Use 'ios' or 'android'.")),
+    }
+}
+
+/// Map the raw `--coverage` string to a [`CoverageStrategy`]. `None`
+/// (flag absent) maps to `Ok(None)`; an unrecognized value is reported
+/// as an error message for the caller to print before exiting.
+fn parse_coverage_override(
+    coverage: Option<&str>,
+) -> Result<Option<golem_parser::CoverageStrategy>, String> {
+    match coverage {
+        None => Ok(None),
+        Some("one") => Ok(Some(golem_parser::CoverageStrategy::One)),
+        Some("min") => Ok(Some(golem_parser::CoverageStrategy::Min)),
+        Some("smart") => Ok(Some(golem_parser::CoverageStrategy::Smart)),
+        Some("full") => Ok(Some(golem_parser::CoverageStrategy::Full)),
+        Some(other) => Err(format!(
+            "Unknown coverage: {other}. Use 'one', 'min', 'smart', or 'full'."
+        )),
+    }
+}
+
+/// Whether human (streamed) output is active. Default (no `--output`)
+/// is human, so an empty list streams; an explicit list streams only
+/// if it contains a `human` or `human:`-prefixed format.
+fn detect_human_output(outputs: &[String]) -> bool {
+    outputs.is_empty()
+        || outputs
+            .iter()
+            .any(|s| s == "human" || s.starts_with("human:"))
+}
+
+/// The conflict warning shown when both `--rebuild` and `--no-build`
+/// are passed. `--no-build` wins; `None` when there is no conflict.
+fn rebuild_no_build_conflict_warning(rebuild: bool, no_build: bool) -> Option<&'static str> {
+    if rebuild && no_build {
+        Some(
+            "  [install] both --rebuild and --no-build passed — \
+             --no-build wins (skipping build+install)",
+        )
+    } else {
+        None
+    }
+}
+
+/// The conflict warning shown when both `--record` and `--no-record`
+/// are passed. `--no-record` wins; `None` when there is no conflict.
+fn record_no_record_conflict_warning(record: bool, no_record: bool) -> Option<&'static str> {
+    if record && no_record {
+        Some(
+            "  [record] both --record and --no-record passed — \
+             --no-record wins (recording disabled)",
+        )
+    } else {
+        None
+    }
+}
+
+/// Build the wire `config_json` from a resolved [`SuiteConfig`] plus the
+/// raw `--platform` / `--coverage` strings (carried verbatim for the
+/// server to re-derive), the already-parsed `--max-wait` milliseconds,
+/// and whether JUnit output is requested.
+fn build_config_json(
+    config: &SuiteConfig,
+    platform: Option<&str>,
+    coverage: Option<&str>,
+    max_device_wait_ms: Option<u64>,
+    include_junit: bool,
+) -> serde_json::Value {
+    serde_json::json!({
+        "platform": platform,
+        "seed": config.seed,
+        "verbose": config.verbose,
+        "debug": config.debug,
+        "no_perf": config.no_perf,
+        "no_clean": config.no_clean,
+        "no_teardown": config.no_teardown,
+        "keep_devices": config.keep_devices,
+        "no_results": config.no_results,
+        "start": config.start,
+        "vars": config.vars,
+        "output_dir": config.output_dir.display().to_string(),
+        "project_root": config.project_root.display().to_string(),
+        "coverage": coverage,
+        "rebuild": config.rebuild,
+        "no_build": config.no_build,
+        "record": config.record,
+        "no_record": config.no_record,
+        "trace": config.trace,
+        "repeat": config.repeat,
+        "max_device_wait_ms": max_device_wait_ms,
+        "include_junit": include_junit,
+    })
 }
 
 use golem_report::flake::{build_summary as build_flake_summary, FlakeEntry};
@@ -557,6 +639,181 @@ mod tests {
         // skip row: passed==0 && failed==0 → else branch → PASS label.
         assert!(out.contains("PASS     0/3    skip (dev)"), "a fully-skipped entry SHALL fall to the PASS label branch, got: {out}");
         assert!(out.contains("FLAKE    1/3    flaky (dev)"), "flake row SHALL render, got: {out}");
+    }
+
+    // 7. parse_platform_override: absent flag → None; known values map to
+    //    the matching Platform; an unknown value SHALL be an error message.
+    #[test]
+    fn parse_platform_override_maps_known_and_rejects_unknown() {
+        // 1. Absent flag SHALL be None (no override).
+        assert_eq!(parse_platform_override(None).expect("none SHALL be Ok"), None);
+        // 2. Known values SHALL map to the matching Platform.
+        assert_eq!(
+            parse_platform_override(Some("android")).expect("android SHALL be Ok"),
+            Some(golem_devices::Platform::Android),
+        );
+        assert_eq!(
+            parse_platform_override(Some("ios")).expect("ios SHALL be Ok"),
+            Some(golem_devices::Platform::Ios),
+        );
+        // 3. Unknown value (incl. wrong case) SHALL be a descriptive error.
+        let err = parse_platform_override(Some("IOS")).expect_err("uppercase SHALL be rejected");
+        assert!(
+            err.contains("Unknown platform: IOS") && err.contains("'ios' or 'android'"),
+            "error SHALL name the bad value and the valid options, got: {err}",
+        );
+    }
+
+    // 8. parse_coverage_override: absent flag → None; each strategy maps;
+    //    an unknown value SHALL be an error message.
+    #[test]
+    fn parse_coverage_override_maps_known_and_rejects_unknown() {
+        use golem_parser::CoverageStrategy;
+        // 1. Absent flag SHALL be None.
+        assert_eq!(parse_coverage_override(None).expect("none SHALL be Ok"), None);
+        // 2. Each known strategy SHALL map to its variant.
+        for (s, want) in [
+            ("one", CoverageStrategy::One),
+            ("min", CoverageStrategy::Min),
+            ("smart", CoverageStrategy::Smart),
+            ("full", CoverageStrategy::Full),
+        ] {
+            assert_eq!(
+                parse_coverage_override(Some(s)).expect("known coverage SHALL be Ok"),
+                Some(want),
+                "{s} SHALL map to {want:?}",
+            );
+        }
+        // 3. Unknown value SHALL be a descriptive error.
+        let err = parse_coverage_override(Some("none")).expect_err("bad coverage SHALL be rejected");
+        assert!(
+            err.contains("Unknown coverage: none")
+                && err.contains("'one', 'min', 'smart', or 'full'"),
+            "error SHALL name the bad value and the valid options, got: {err}",
+        );
+    }
+
+    // 9. detect_human_output: empty list defaults to human; explicit list
+    //    streams only when a human (or human:-prefixed) format is present.
+    #[test]
+    fn detect_human_output_default_and_explicit() {
+        // 1. Empty (no --output) SHALL default to human streaming.
+        assert!(detect_human_output(&[]), "empty outputs SHALL stream human");
+        // 2. Explicit human (bare or with suboptions) SHALL stream.
+        assert!(detect_human_output(&["human".to_string()]), "bare human SHALL stream");
+        assert!(
+            detect_human_output(&["human:color".to_string()]),
+            "human: prefixed SHALL stream",
+        );
+        assert!(
+            detect_human_output(&["json".to_string(), "human".to_string()]),
+            "human alongside others SHALL stream",
+        );
+        // 3. Explicit non-human-only SHALL NOT stream.
+        assert!(
+            !detect_human_output(&["json".to_string()]),
+            "json-only SHALL NOT stream human",
+        );
+        assert!(
+            !detect_human_output(&["toon".to_string(), "junit".to_string()]),
+            "no human format SHALL NOT stream human",
+        );
+        // 4. A format that merely contains 'human' but is not 'human' nor
+        //    'human:'-prefixed SHALL NOT stream (prefix match, not substring).
+        assert!(
+            !detect_human_output(&["nonhuman".to_string()]),
+            "substring 'human' SHALL NOT count as human output",
+        );
+    }
+
+    // 10. Conflict warnings: present only when BOTH opposing flags are set,
+    //     and absent otherwise.
+    #[test]
+    fn conflict_warnings_only_when_both_flags_set() {
+        // 1. rebuild + no_build SHALL warn that --no-build wins.
+        let w = rebuild_no_build_conflict_warning(true, true)
+            .expect("both build flags SHALL warn");
+        assert!(
+            w.contains("--no-build wins") && w.contains("[install]"),
+            "rebuild/no-build warning SHALL state --no-build wins, got: {w}",
+        );
+        // 2. No conflict for any single/neither flag.
+        assert!(rebuild_no_build_conflict_warning(true, false).is_none());
+        assert!(rebuild_no_build_conflict_warning(false, true).is_none());
+        assert!(rebuild_no_build_conflict_warning(false, false).is_none());
+        // 3. record + no_record SHALL warn that --no-record wins.
+        let r = record_no_record_conflict_warning(true, true)
+            .expect("both record flags SHALL warn");
+        assert!(
+            r.contains("--no-record wins") && r.contains("[record]"),
+            "record/no-record warning SHALL state --no-record wins, got: {r}",
+        );
+        // 4. No conflict for any single/neither flag.
+        assert!(record_no_record_conflict_warning(true, false).is_none());
+        assert!(record_no_record_conflict_warning(false, true).is_none());
+        assert!(record_no_record_conflict_warning(false, false).is_none());
+    }
+
+    // 11. build_config_json: every wire key carries the resolved value;
+    //     raw platform/coverage strings and the parsed max-wait pass through.
+    #[test]
+    fn build_config_json_carries_resolved_values() {
+        let config = SuiteConfig {
+            seed: Some(42),
+            verbose: true,
+            debug: false,
+            no_perf: true,
+            no_clean: false,
+            no_teardown: true,
+            keep_devices: false,
+            no_results: true,
+            start: Some("home".to_string()),
+            rebuild: true,
+            no_build: false,
+            record: false,
+            no_record: true,
+            trace: true,
+            repeat: 3,
+            output_dir: std::path::PathBuf::from(".golem/results"),
+            project_root: std::path::PathBuf::from("/proj"),
+            ..SuiteConfig::default()
+        };
+        let json = build_config_json(&config, Some("ios"), Some("smart"), Some(1800000), true);
+
+        // 1. Raw flag strings SHALL pass through verbatim.
+        assert_eq!(json["platform"], "ios", "platform SHALL be the raw string");
+        assert_eq!(json["coverage"], "smart", "coverage SHALL be the raw string");
+        // 2. Scalar config fields SHALL be mirrored onto the wire.
+        assert_eq!(json["seed"], 42);
+        assert_eq!(json["verbose"], true);
+        assert_eq!(json["no_perf"], true);
+        assert_eq!(json["no_teardown"], true);
+        assert_eq!(json["no_results"], true);
+        assert_eq!(json["start"], "home");
+        assert_eq!(json["rebuild"], true);
+        assert_eq!(json["no_record"], true);
+        assert_eq!(json["trace"], true);
+        assert_eq!(json["repeat"], 3);
+        // 3. Paths SHALL be rendered as display strings.
+        assert_eq!(json["project_root"], "/proj");
+        assert_eq!(json["output_dir"], ".golem/results");
+        // 4. Parsed max-wait and JUnit flag SHALL pass through.
+        assert_eq!(json["max_device_wait_ms"], 1800000u64);
+        assert_eq!(json["include_junit"], true);
+    }
+
+    // 12. build_config_json: absent optional inputs serialize to JSON null.
+    #[test]
+    fn build_config_json_absent_options_are_null() {
+        let config = SuiteConfig::default();
+        let json = build_config_json(&config, None, None, None, false);
+        assert!(json["platform"].is_null(), "absent --platform SHALL be null");
+        assert!(json["coverage"].is_null(), "absent --coverage SHALL be null");
+        assert!(
+            json["max_device_wait_ms"].is_null(),
+            "absent --max-wait SHALL be null",
+        );
+        assert_eq!(json["include_junit"], false);
     }
 }
 

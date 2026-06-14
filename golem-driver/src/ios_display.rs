@@ -29,51 +29,60 @@ struct DisplayEntry {
 /// All entries sorted by key length descending (longest prefix first).
 type DisplayEntries = Vec<(String, DisplayEntry)>;
 
+/// Parse a TOML display-data string into the sorted entry list.
+///
+/// Each top-level table becomes one entry keyed by its name. Missing or
+/// malformed fields fall back to their defaults (the same behavior the
+/// embedded `ios_display.toml` relies on), and a string that fails to parse
+/// as TOML yields an empty entry list. Entries are sorted by key length
+/// descending so the longest prefix matches first during lookup.
+fn parse_entries(s: &str) -> DisplayEntries {
+    let table: toml::Table = s.parse().unwrap_or_default();
+    let mut entries: Vec<(String, DisplayEntry)> = Vec::new();
+    for (key, value) in &table {
+        let Some(tbl) = value.as_table() else { continue };
+        let cutout_size = tbl
+            .get("cutout_size")
+            .and_then(|v| v.as_array())
+            .and_then(|a| {
+                if a.len() == 2 {
+                    Some([a[0].as_integer()? as i32, a[1].as_integer()? as i32])
+                } else {
+                    None
+                }
+            });
+        let cutout_y = tbl
+            .get("cutout_y")
+            .and_then(|v| v.as_integer())
+            .unwrap_or(0) as i32;
+        let corner_radius = tbl
+            .get("corner_radius")
+            .and_then(|v| v.as_integer())
+            .unwrap_or(0) as i32;
+        let gesture_inset_left = tbl
+            .get("gesture_inset_left")
+            .and_then(|v| v.as_integer())
+            .unwrap_or(0) as i32;
+        let gesture_inset_right = tbl
+            .get("gesture_inset_right")
+            .and_then(|v| v.as_integer())
+            .unwrap_or(0) as i32;
+        entries.push((key.clone(), DisplayEntry {
+            cutout_size,
+            cutout_y,
+            corner_radius,
+            gesture_inset_left,
+            gesture_inset_right,
+        }));
+    }
+    // Sort by key length descending so longest prefix matches first
+    entries.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    entries
+}
+
 fn load() -> &'static DisplayEntries {
     static ENTRIES: OnceLock<DisplayEntries> = OnceLock::new();
-    ENTRIES.get_or_init(|| {
-        let table: toml::Table = DISPLAY_DATA.parse().unwrap_or_default();
-        let mut entries: Vec<(String, DisplayEntry)> = Vec::new();
-        for (key, value) in &table {
-            let Some(tbl) = value.as_table() else { continue };
-            let cutout_size = tbl
-                .get("cutout_size")
-                .and_then(|v| v.as_array())
-                .and_then(|a| {
-                    if a.len() == 2 {
-                        Some([a[0].as_integer()? as i32, a[1].as_integer()? as i32])
-                    } else {
-                        None
-                    }
-                });
-            let cutout_y = tbl
-                .get("cutout_y")
-                .and_then(|v| v.as_integer())
-                .unwrap_or(0) as i32;
-            let corner_radius = tbl
-                .get("corner_radius")
-                .and_then(|v| v.as_integer())
-                .unwrap_or(0) as i32;
-            let gesture_inset_left = tbl
-                .get("gesture_inset_left")
-                .and_then(|v| v.as_integer())
-                .unwrap_or(0) as i32;
-            let gesture_inset_right = tbl
-                .get("gesture_inset_right")
-                .and_then(|v| v.as_integer())
-                .unwrap_or(0) as i32;
-            entries.push((key.clone(), DisplayEntry {
-                cutout_size,
-                cutout_y,
-                corner_radius,
-                gesture_inset_left,
-                gesture_inset_right,
-            }));
-        }
-        // Sort by key length descending so longest prefix matches first
-        entries.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
-        entries
-    })
+    ENTRIES.get_or_init(|| parse_entries(DISPLAY_DATA))
 }
 
 /// Result of an iOS device display data lookup.
@@ -321,5 +330,103 @@ mod tests {
         assert_eq!(d.cutouts[0].height, 32, "iPhone 12 notch SHALL be 32pt tall");
         assert_eq!(d.cutouts[0].width, 209, "iPhone 12 notch SHALL be 209pt wide");
         assert_eq!(d.cutouts[0].y, 0, "a notch SHALL sit at the very top");
+    }
+
+    // 10. parse_entries SHALL read every field verbatim from a well-formed
+    //     table, defaulting nothing that was supplied.
+    #[test]
+    fn parse_entries_reads_all_fields() {
+        let src = r#"
+            [Foo1]
+            cutout_size = [120, 30]
+            cutout_y = 11
+            corner_radius = 55
+            gesture_inset_left = 12
+            gesture_inset_right = 8
+        "#;
+        let entries = parse_entries(src);
+        assert_eq!(entries.len(), 1, "one table SHALL yield one entry");
+        let (key, e) = &entries[0];
+        assert_eq!(key, "Foo1", "key SHALL be the table name");
+        assert_eq!(e.cutout_size, Some([120i32, 30]), "cutout_size SHALL parse both ints");
+        assert_eq!(e.cutout_y, 11, "cutout_y SHALL be read verbatim");
+        assert_eq!(e.corner_radius, 55, "corner_radius SHALL be read verbatim");
+        assert_eq!(e.gesture_inset_left, 12, "left inset SHALL be read verbatim");
+        assert_eq!(e.gesture_inset_right, 8, "right inset SHALL be read verbatim");
+    }
+
+    // 11. Absent integer fields SHALL default to 0 and an absent cutout_size
+    //     SHALL be None, exactly as the embedded iPad entries rely upon.
+    #[test]
+    fn parse_entries_defaults_missing_fields() {
+        let src = r#"
+            [Bar2]
+            corner_radius = 18
+        "#;
+        let entries = parse_entries(src);
+        let (_, e) = &entries[0];
+        assert_eq!(e.cutout_size, None, "absent cutout_size SHALL be None");
+        assert_eq!(e.cutout_y, 0, "absent cutout_y SHALL default to 0");
+        assert_eq!(e.corner_radius, 18, "present corner_radius SHALL survive");
+        assert_eq!(e.gesture_inset_left, 0, "absent left inset SHALL default to 0");
+        assert_eq!(e.gesture_inset_right, 0, "absent right inset SHALL default to 0");
+    }
+
+    // 12. A cutout_size array whose length is not exactly 2 SHALL be rejected
+    //     (yielding None) rather than partially parsed.
+    #[test]
+    fn parse_entries_rejects_wrong_arity_cutout_size() {
+        let src = r#"
+            [One]
+            cutout_size = [120]
+
+            [Three]
+            cutout_size = [1, 2, 3]
+        "#;
+        let entries = parse_entries(src);
+        assert_eq!(entries.len(), 2, "both tables SHALL still produce entries");
+        for (_, e) in &entries {
+            assert_eq!(e.cutout_size, None, "non-pair cutout_size SHALL be None");
+        }
+    }
+
+    // 13. Entries SHALL be sorted by key length descending so the longest
+    //     prefix matches first during lookup.
+    #[test]
+    fn parse_entries_sorts_by_key_length_descending() {
+        let src = r#"
+            [iPhone]
+            corner_radius = 1
+
+            ["iPhone15,2"]
+            corner_radius = 2
+
+            [iPhone15]
+            corner_radius = 3
+        "#;
+        let keys: Vec<String> = parse_entries(src).into_iter().map(|(k, _)| k).collect();
+        assert_eq!(
+            keys,
+            vec!["iPhone15,2".to_string(), "iPhone15".to_string(), "iPhone".to_string()],
+            "keys SHALL be ordered longest first"
+        );
+    }
+
+    // 14. Top-level values that are not tables SHALL be skipped, and malformed
+    //     TOML SHALL yield an empty entry list rather than panicking.
+    #[test]
+    fn parse_entries_skips_non_tables_and_tolerates_garbage() {
+        let with_scalar = r#"
+            not_a_table = 7
+
+            [Real]
+            corner_radius = 4
+        "#;
+        let entries = parse_entries(with_scalar);
+        assert_eq!(entries.len(), 1, "scalar top-level keys SHALL be skipped");
+        assert_eq!(entries[0].0, "Real", "only the table SHALL remain");
+
+        let garbage = parse_entries("this is not = = valid toml [[[");
+        assert!(garbage.is_empty(), "unparseable TOML SHALL yield no entries");
     }
 }

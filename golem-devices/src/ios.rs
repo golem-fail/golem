@@ -160,31 +160,28 @@ pub struct DeviceTypeInfo {
     pub is_phone: bool,
 }
 
-/// Discover available iOS runtimes via `xcrun simctl list runtimes -j`.
-pub async fn discover_ios_runtimes() -> anyhow::Result<Vec<RuntimeInfo>> {
-    let output = tokio::process::Command::new("xcrun")
-        .args(["simctl", "list", "runtimes", "-j"])
-        .output()
-        .await?;
+/// Top-level structure for parsing `xcrun simctl list runtimes -j` output.
+#[derive(Deserialize)]
+struct RuntimesOutput {
+    runtimes: Vec<RuntimeEntry>,
+}
 
-    anyhow::ensure!(output.status.success(), "xcrun simctl list runtimes failed");
+/// A single runtime entry as reported by simctl.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeEntry {
+    identifier: String,
+    name: String,
+    version: String,
+    is_available: bool,
+}
 
-    let text = String::from_utf8_lossy(&output.stdout);
-
-    #[derive(Deserialize)]
-    struct RuntimesOutput {
-        runtimes: Vec<RuntimeEntry>,
-    }
-    #[derive(Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct RuntimeEntry {
-        identifier: String,
-        name: String,
-        version: String,
-        is_available: bool,
-    }
-
-    let parsed: RuntimesOutput = serde_json::from_str(&text)?;
+/// Parse `xcrun simctl list runtimes -j` JSON into a sorted list of `RuntimeInfo`.
+///
+/// Keeps only available iOS runtimes, parses their major version, and sorts by
+/// major version descending (latest first).
+fn parse_runtimes_output(json: &str) -> anyhow::Result<Vec<RuntimeInfo>> {
+    let parsed: RuntimesOutput = serde_json::from_str(json)?;
 
     let mut runtimes: Vec<RuntimeInfo> = parsed
         .runtimes
@@ -206,28 +203,24 @@ pub async fn discover_ios_runtimes() -> anyhow::Result<Vec<RuntimeInfo>> {
     Ok(runtimes)
 }
 
-/// Discover available iOS device types via `xcrun simctl list devicetypes -j`.
-pub async fn discover_ios_device_types() -> anyhow::Result<Vec<DeviceTypeInfo>> {
-    let output = tokio::process::Command::new("xcrun")
-        .args(["simctl", "list", "devicetypes", "-j"])
-        .output()
-        .await?;
+/// Top-level structure for parsing `xcrun simctl list devicetypes -j` output.
+#[derive(Deserialize)]
+struct DeviceTypesOutput {
+    devicetypes: Vec<DeviceTypeEntry>,
+}
 
-    anyhow::ensure!(output.status.success(), "xcrun simctl list devicetypes failed");
+/// A single device type entry as reported by simctl.
+#[derive(Deserialize)]
+struct DeviceTypeEntry {
+    identifier: String,
+    name: String,
+}
 
-    let text = String::from_utf8_lossy(&output.stdout);
-
-    #[derive(Deserialize)]
-    struct DeviceTypesOutput {
-        devicetypes: Vec<DeviceTypeEntry>,
-    }
-    #[derive(Deserialize)]
-    struct DeviceTypeEntry {
-        identifier: String,
-        name: String,
-    }
-
-    let parsed: DeviceTypesOutput = serde_json::from_str(&text)?;
+/// Parse `xcrun simctl list devicetypes -j` JSON into a list of `DeviceTypeInfo`.
+///
+/// Marks each entry as a phone when its name contains "iPhone".
+fn parse_device_types_output(json: &str) -> anyhow::Result<Vec<DeviceTypeInfo>> {
+    let parsed: DeviceTypesOutput = serde_json::from_str(json)?;
 
     Ok(parsed
         .devicetypes
@@ -241,6 +234,32 @@ pub async fn discover_ios_device_types() -> anyhow::Result<Vec<DeviceTypeInfo>> 
             }
         })
         .collect())
+}
+
+/// Discover available iOS runtimes via `xcrun simctl list runtimes -j`.
+pub async fn discover_ios_runtimes() -> anyhow::Result<Vec<RuntimeInfo>> {
+    let output = tokio::process::Command::new("xcrun")
+        .args(["simctl", "list", "runtimes", "-j"])
+        .output()
+        .await?;
+
+    anyhow::ensure!(output.status.success(), "xcrun simctl list runtimes failed");
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    parse_runtimes_output(&text)
+}
+
+/// Discover available iOS device types via `xcrun simctl list devicetypes -j`.
+pub async fn discover_ios_device_types() -> anyhow::Result<Vec<DeviceTypeInfo>> {
+    let output = tokio::process::Command::new("xcrun")
+        .args(["simctl", "list", "devicetypes", "-j"])
+        .output()
+        .await?;
+
+    anyhow::ensure!(output.status.success(), "xcrun simctl list devicetypes failed");
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    parse_device_types_output(&text)
 }
 
 /// Pick an iOS runtime matching the requested OS-version spec.
@@ -888,6 +907,99 @@ mod tests {
         let json = r#"{ "devices": {} }"#;
         let devices = parse_simctl_output(json).expect("should parse empty map");
         assert!(devices.is_empty());
+    }
+
+    // 25. parse_runtimes_output: only available iOS runtimes survive and are sorted major-descending
+    #[test]
+    fn parse_runtimes_output_filters_and_sorts() {
+        let json = r#"{
+            "runtimes": [
+                { "identifier": "iOS-17", "name": "iOS 17.5", "version": "17.5", "isAvailable": true },
+                { "identifier": "iOS-26", "name": "iOS 26.0", "version": "26.0", "isAvailable": true },
+                { "identifier": "iOS-18", "name": "iOS 18.4", "version": "18.4", "isAvailable": true }
+            ]
+        }"#;
+        let runtimes = parse_runtimes_output(json).expect("SHALL parse runtimes JSON");
+        // 1. All three iOS runtimes survive.
+        assert_eq!(runtimes.len(), 3, "three available iOS runtimes SHALL be kept");
+        // 2. They are sorted by major descending (latest first).
+        assert_eq!(runtimes[0].major, 26, "latest major SHALL sort first");
+        assert_eq!(runtimes[1].major, 18);
+        assert_eq!(runtimes[2].major, 17);
+        // 3. Fields propagate verbatim.
+        assert_eq!(runtimes[0].identifier, "iOS-26");
+        assert_eq!(runtimes[0].name, "iOS 26.0");
+        assert_eq!(runtimes[0].version, "26.0");
+    }
+
+    // 26. parse_runtimes_output: unavailable and non-iOS runtimes are filtered out
+    #[test]
+    fn parse_runtimes_output_drops_unavailable_and_non_ios() {
+        let json = r#"{
+            "runtimes": [
+                { "identifier": "iOS-18", "name": "iOS 18.4", "version": "18.4", "isAvailable": false },
+                { "identifier": "tvOS-18", "name": "tvOS 18.0", "version": "18.0", "isAvailable": true },
+                { "identifier": "iOS-17", "name": "iOS 17.5", "version": "17.5", "isAvailable": true }
+            ]
+        }"#;
+        let runtimes = parse_runtimes_output(json).expect("SHALL parse runtimes JSON");
+        // 1. Only the available iOS runtime remains.
+        assert_eq!(runtimes.len(), 1, "unavailable and non-iOS runtimes SHALL be dropped");
+        assert_eq!(runtimes[0].major, 17);
+    }
+
+    // 27. parse_runtimes_output: runtime with an unparseable major is filtered out
+    #[test]
+    fn parse_runtimes_output_drops_unparseable_major() {
+        let json = r#"{
+            "runtimes": [
+                { "identifier": "iOS-beta", "name": "iOS beta", "version": "beta", "isAvailable": true },
+                { "identifier": "iOS-18", "name": "iOS 18.4", "version": "18.4", "isAvailable": true }
+            ]
+        }"#;
+        let runtimes = parse_runtimes_output(json).expect("SHALL parse runtimes JSON");
+        // 1. The entry with a non-numeric major is silently dropped.
+        assert_eq!(runtimes.len(), 1, "unparseable major SHALL be filtered out");
+        assert_eq!(runtimes[0].major, 18);
+    }
+
+    // 28. parse_runtimes_output: malformed JSON yields an Err
+    #[test]
+    fn parse_runtimes_output_invalid_json_err() {
+        let result = parse_runtimes_output("{ not valid json ]");
+        assert!(result.is_err(), "malformed runtimes JSON SHALL yield an Err");
+    }
+
+    // 29. parse_device_types_output: iPhone names flagged as phone, others not
+    #[test]
+    fn parse_device_types_output_flags_phones() {
+        let json = r#"{
+            "devicetypes": [
+                { "identifier": "id.iPhone-16", "name": "iPhone 16" },
+                { "identifier": "id.iPad-Pro", "name": "iPad Pro 13-inch (M4)" },
+                { "identifier": "id.AppleTV", "name": "Apple TV 4K" }
+            ]
+        }"#;
+        let types = parse_device_types_output(json).expect("SHALL parse devicetypes JSON");
+        // 1. All entries are preserved in order.
+        assert_eq!(types.len(), 3, "all device types SHALL be returned");
+        assert_eq!(types[0].identifier, "id.iPhone-16");
+        assert_eq!(types[0].name, "iPhone 16");
+        // 2. Only the iPhone-named entry is flagged as a phone.
+        assert!(types[0].is_phone, "iPhone name SHALL set is_phone=true");
+        assert!(!types[1].is_phone, "iPad name SHALL set is_phone=false");
+        assert!(!types[2].is_phone, "non-iPhone name SHALL set is_phone=false");
+    }
+
+    // 30. parse_device_types_output: empty list yields empty vec, malformed yields Err
+    #[test]
+    fn parse_device_types_output_empty_and_invalid() {
+        let empty = parse_device_types_output(r#"{ "devicetypes": [] }"#)
+            .expect("SHALL parse empty devicetypes JSON");
+        assert!(empty.is_empty(), "empty devicetypes SHALL yield an empty vec");
+
+        let result = parse_device_types_output("{ not valid json ]");
+        assert!(result.is_err(), "malformed devicetypes JSON SHALL yield an Err");
     }
 
     // 24. parse_simctl_output: every input-derived DeviceInfo field is wired from the source JSON

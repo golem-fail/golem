@@ -186,6 +186,13 @@ impl ResourceManager {
     pub fn golem_booted_count(&self) -> usize {
         self.golem_booted.lock().expect("lock poisoned").len()
     }
+
+    /// Read-only snapshot of the retained golem-booted [`DeviceInfo`] for a
+    /// UDID, or `None` if that device is not tracked. Testing only.
+    #[cfg(test)]
+    fn golem_booted_device(&self, udid: &str) -> Option<DeviceInfo> {
+        self.golem_booted.lock().expect("lock poisoned").get(udid).cloned()
+    }
 }
 
 #[cfg(test)]
@@ -545,6 +552,72 @@ mod tests {
         assert!(
             !rm.is_unhealthy("never-seen"),
             "unknown device SHALL remain healthy",
+        );
+    }
+
+    // 13. golem_booted_device returns the retained DeviceInfo for a tracked udid.
+    #[test]
+    fn golem_booted_device_returns_retained_info() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        rm.mark_golem_booted(test_device("sim", "uid-1", Platform::Ios));
+        let retained = rm
+            .golem_booted_device("uid-1")
+            .expect("tracked device SHALL be retrievable");
+        assert_eq!(retained.udid, "uid-1", "retained udid SHALL match");
+        assert_eq!(retained.name, "sim", "retained name SHALL match");
+        assert_eq!(retained.platform, Platform::Ios, "retained platform SHALL match");
+    }
+
+    // 14. golem_booted_device returns None for a udid that was never booted.
+    #[test]
+    fn golem_booted_device_unknown_udid_is_none() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        rm.mark_golem_booted(test_device("sim", "uid-1", Platform::Ios));
+        assert!(
+            rm.golem_booted_device("nope").is_none(),
+            "untracked udid SHALL have no retained DeviceInfo",
+        );
+    }
+
+    // 15. golem_booted_device reflects overwrite semantics for a repeated udid.
+    #[test]
+    fn golem_booted_device_reflects_overwrite() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        rm.mark_golem_booted(test_device("sim-a", "uid-1", Platform::Ios));
+        rm.mark_golem_booted(test_device("sim-b", "uid-1", Platform::Android));
+        let retained = rm
+            .golem_booted_device("uid-1")
+            .expect("tracked device SHALL be retrievable");
+        assert_eq!(retained.name, "sim-b", "overwrite SHALL return the latest DeviceInfo");
+        assert_eq!(
+            retained.platform,
+            Platform::Android,
+            "overwrite SHALL return the latest platform",
+        );
+    }
+
+    // 16. shutdown_golem_booted drains the map so the accessor reports None after.
+    #[tokio::test]
+    async fn golem_booted_device_none_after_drain() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        rm.mark_golem_booted(test_device("sim", "uid-1", Platform::Ios));
+        assert!(rm.golem_booted_device("uid-1").is_some(), "device SHALL be tracked pre-drain");
+        let _ = rm.shutdown_golem_booted(true).await;
+        assert!(
+            rm.golem_booted_device("uid-1").is_none(),
+            "drained map SHALL retain no DeviceInfo",
         );
     }
 

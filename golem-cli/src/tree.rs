@@ -199,11 +199,8 @@ async fn find_device_id(platform: &str, device_name: &str) -> String {
                 .await
             {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                for line in stdout.lines().skip(1) {
-                    let parts: Vec<&str> = line.split_whitespace().collect();
-                    if parts.len() >= 2 && parts[1] == "device" {
-                        return parts[0].to_string();
-                    }
+                if let Some(serial) = first_online_android_serial(&stdout) {
+                    return serial;
                 }
             }
             "emulator-5554".to_string() // fallback
@@ -225,6 +222,19 @@ async fn find_device_id(platform: &str, device_name: &str) -> String {
     }
 }
 
+/// Parse `adb devices` stdout and return the serial of the first device whose
+/// state column is exactly `device` (online). The leading header line is
+/// skipped. Returns `None` if no online device line is present.
+fn first_online_android_serial(stdout: &str) -> Option<String> {
+    for line in stdout.lines().skip(1) {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 2 && parts[1] == "device" {
+            return Some(parts[0].to_string());
+        }
+    }
+    None
+}
+
 fn has_webview_element(root: &Element) -> bool {
     if root.element_type.to_lowercase().contains("webview")
         || root.element_type.to_lowercase().contains("web_view")
@@ -243,6 +253,14 @@ fn print_tree_debug(element: &Element, depth: usize) {
 }
 
 fn print_tree_inner(element: &Element, depth: usize, debug: bool) {
+    println!("{}", format_tree_line(element, depth, debug));
+    for child in &element.children {
+        print_tree_inner(child, depth + 1, debug);
+    }
+}
+
+/// Render a single element's tree line (no trailing newline, no children).
+fn format_tree_line(element: &Element, depth: usize, debug: bool) -> String {
     let indent = "  ".repeat(depth);
     let text = element.text.as_deref().unwrap_or("");
     let label = element
@@ -290,19 +308,15 @@ fn print_tree_inner(element: &Element, depth: usize, debug: bool) {
     let traits_part = if traits.is_empty() { String::new() } else { format!("  {traits}") };
 
     if !text.is_empty() || !label.is_empty() {
-        println!(
+        format!(
             "{indent}{et} \"{text}\"{label} ({},{} {}x{}){bounds_extra}{traits_part}{state}",
             b.x, b.y, b.width, b.height
-        );
+        )
     } else {
-        println!(
+        format!(
             "{indent}{et} ({},{} {}x{}){bounds_extra}{traits_part}{state}",
             b.x, b.y, b.width, b.height
-        );
-    }
-
-    for child in &element.children {
-        print_tree_inner(child, depth + 1, debug);
+        )
     }
 }
 
@@ -343,48 +357,61 @@ fn format_traits(e: &Element) -> String {
     }
 }
 
-fn print_selectable_list(root: &Element) {
+/// Render a single selectable-list entry. `idx` is the 1-based display index.
+fn format_selectable_line(idx: usize, e: &Element) -> String {
+    let b = e.effective_bounds();
+    let bounds = format!("({},{} {}x{})", b.x, b.y, b.width, b.height);
+
+    let text = e.text.as_deref().unwrap_or("");
+    let text_part = if text.is_empty() {
+        String::new()
+    } else {
+        format!(" \"{text}\"")
+    };
+
+    let label_part = e
+        .accessibility_label
+        .as_deref()
+        .filter(|s| !s.is_empty() && Some(*s) != e.text.as_deref())
+        .map(|s| format!(" label={s}"))
+        .unwrap_or_default();
+
+    let traits = format_traits(e);
+    let traits_part = if traits.is_empty() { String::new() } else { format!("  {traits}") };
+
+    let mut state_parts = Vec::new();
+    if !e.enabled { state_parts.push("disabled"); }
+    if e.checked { state_parts.push("checked"); }
+    if e.focused { state_parts.push("focused"); }
+    let state = if state_parts.is_empty() {
+        String::new()
+    } else {
+        format!(" [{}]", state_parts.join(", "))
+    };
+
+    format!("[{idx}] {bounds}{text_part}{label_part}{traits_part}{state}")
+}
+
+/// Render the full selectable list for a tree as lines. Returns a single
+/// `(no selectable elements — try --full)` line when nothing is selectable.
+fn render_selectable_list(root: &Element) -> Vec<String> {
     let mut nodes: Vec<&Element> = Vec::new();
     collect_selectable(root, &mut nodes);
 
     if nodes.is_empty() {
-        println!("(no selectable elements — try --full)");
-        return;
+        return vec!["(no selectable elements — try --full)".to_string()];
     }
 
-    for (i, e) in nodes.iter().enumerate() {
-        let idx = i + 1;
-        let b = e.effective_bounds();
-        let bounds = format!("({},{} {}x{})", b.x, b.y, b.width, b.height);
+    nodes
+        .iter()
+        .enumerate()
+        .map(|(i, e)| format_selectable_line(i + 1, e))
+        .collect()
+}
 
-        let text = e.text.as_deref().unwrap_or("");
-        let text_part = if text.is_empty() {
-            String::new()
-        } else {
-            format!(" \"{text}\"")
-        };
-
-        let label_part = e
-            .accessibility_label
-            .as_deref()
-            .filter(|s| !s.is_empty() && Some(*s) != e.text.as_deref())
-            .map(|s| format!(" label={s}"))
-            .unwrap_or_default();
-
-        let traits = format_traits(e);
-        let traits_part = if traits.is_empty() { String::new() } else { format!("  {traits}") };
-
-        let mut state_parts = Vec::new();
-        if !e.enabled { state_parts.push("disabled"); }
-        if e.checked { state_parts.push("checked"); }
-        if e.focused { state_parts.push("focused"); }
-        let state = if state_parts.is_empty() {
-            String::new()
-        } else {
-            format!(" [{}]", state_parts.join(", "))
-        };
-
-        println!("[{idx}] {bounds}{text_part}{label_part}{traits_part}{state}");
+fn print_selectable_list(root: &Element) {
+    for line in render_selectable_list(root) {
+        println!("{line}");
     }
 }
 
@@ -686,5 +713,139 @@ mod tests {
         // Empty-selectable branch.
         let empty = elem("View");
         print_selectable_list(&empty);
+    }
+
+    // ── first_online_android_serial ───────────────────────────────────
+
+    // 21. The first line with state column `device` is returned, header skipped.
+    #[test]
+    fn first_online_serial_returns_first_device() {
+        let stdout = "List of devices attached\nemulator-5554\tdevice\nemulator-5556\tdevice\n";
+        assert_eq!(
+            first_online_android_serial(stdout).as_deref(),
+            Some("emulator-5554"),
+            "first online device serial SHALL be returned"
+        );
+    }
+
+    // 22. Lines whose state is not exactly `device` (e.g. offline, unauthorized)
+    //     are skipped; the first true `device` line wins.
+    #[test]
+    fn first_online_serial_skips_non_device_states() {
+        let stdout =
+            "List of devices attached\nABCD1234\toffline\nEFGH5678\tunauthorized\nPHONE99\tdevice\n";
+        assert_eq!(
+            first_online_android_serial(stdout).as_deref(),
+            Some("PHONE99"),
+            "non-`device` states SHALL be skipped"
+        );
+    }
+
+    // 23. Empty / header-only output yields None (caller applies its fallback).
+    #[test]
+    fn first_online_serial_none_when_no_devices() {
+        assert!(
+            first_online_android_serial("List of devices attached\n\n").is_none(),
+            "header-only output SHALL yield None"
+        );
+        assert!(
+            first_online_android_serial("").is_none(),
+            "empty output SHALL yield None"
+        );
+    }
+
+    // ── format_tree_line ──────────────────────────────────────────────
+
+    // 24. A text+label element renders the quoted text, label, bounds and traits;
+    //     indentation is two spaces per depth level.
+    #[test]
+    fn format_tree_line_with_text_and_label() {
+        let mut e = elem_with_text("button", "Go");
+        e.accessibility_label = Some("Go button".to_string());
+        e.bounds = Bounds::new(1, 2, 100, 40);
+        let line = format_tree_line(&e, 2, false);
+        assert_eq!(
+            line,
+            "    button \"Go\" label=Go button (1,2 100x40)  ·button·has_text·short_text·wide·",
+            "tree line SHALL render indent, type, text, label, bounds and traits"
+        );
+    }
+
+    // 25. A text-less element omits the quoted-text segment and renders state.
+    #[test]
+    fn format_tree_line_textless_with_state() {
+        let mut e = elem("View");
+        e.bounds = Bounds::new(0, 0, 0, 0); // suppress shape/size traits
+        e.enabled = false;
+        e.checked = true;
+        let line = format_tree_line(&e, 0, false);
+        assert_eq!(
+            line,
+            "View (0,0 0x0)  ·no_text· [disabled, checked]",
+            "text-less element SHALL omit quoted text and render state suffix"
+        );
+    }
+
+    // 26. Debug mode appends `(full: ...)` only when visible_bounds differ from
+    //     bounds; non-debug never shows the extra even when they differ.
+    #[test]
+    fn format_tree_line_debug_bounds_extra() {
+        let mut e = elem("View");
+        e.bounds = Bounds::new(0, 0, 100, 40);
+        e.visible_bounds = Some(Bounds::new(5, 5, 10, 10));
+        let debug = format_tree_line(&e, 0, true);
+        assert!(
+            debug.contains("(full: 0,0 100x40)"),
+            "debug mode SHALL show full bounds when visible_bounds differ"
+        );
+        let plain = format_tree_line(&e, 0, false);
+        assert!(
+            !plain.contains("full:"),
+            "non-debug mode SHALL NOT show full bounds extra"
+        );
+    }
+
+    // ── format_selectable_line / render_selectable_list ───────────────
+
+    // 27. A selectable line renders the 1-based index, bounds and quoted text.
+    #[test]
+    fn format_selectable_line_renders_index_and_text() {
+        let mut e = elem_with_text("button", "Tap");
+        e.bounds = Bounds::new(3, 4, 100, 40);
+        let line = format_selectable_line(1, &e);
+        assert_eq!(
+            line,
+            "[1] (3,4 100x40) \"Tap\"  ·button·has_text·short_text·wide·",
+            "selectable line SHALL render index, bounds, text and traits"
+        );
+    }
+
+    // 28. render_selectable_list numbers entries 1..N in pre-order.
+    #[test]
+    fn render_selectable_list_numbers_in_preorder() {
+        let mut root = elem("View"); // not selectable
+        root.children.push(elem_with_text("button", "First"));
+        root.children.push(elem_with_text("button", "Second"));
+        let lines = render_selectable_list(&root);
+        assert_eq!(lines.len(), 2, "two selectable entries SHALL be rendered");
+        assert!(
+            lines[0].starts_with("[1] ") && lines[0].contains("\"First\""),
+            "first entry SHALL be index 1 in pre-order"
+        );
+        assert!(
+            lines[1].starts_with("[2] ") && lines[1].contains("\"Second\""),
+            "second entry SHALL be index 2"
+        );
+    }
+
+    // 29. An empty tree renders the single guidance line.
+    #[test]
+    fn render_selectable_list_empty_guidance() {
+        let lines = render_selectable_list(&elem("View"));
+        assert_eq!(
+            lines,
+            vec!["(no selectable elements — try --full)".to_string()],
+            "empty tree SHALL render the guidance line"
+        );
     }
 }

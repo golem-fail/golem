@@ -104,6 +104,84 @@ pub(crate) struct GeoPostcode {
 }
 
 // ---------------------------------------------------------------------------
+// Test-only constructors
+// ---------------------------------------------------------------------------
+//
+// These let in-crate tests (here and in `geo.rs`) hand-build geo structures
+// without depending on the embedded database. They only assemble existing
+// fields — no parsing, no I/O, no behavior.
+
+#[cfg(test)]
+impl GeoData {
+    /// Build a `GeoData` from a country and its states (test fixtures only).
+    pub(crate) fn for_test(country: GeoCountry, states: Vec<GeoState>) -> Self {
+        Self { country, states }
+    }
+}
+
+#[cfg(test)]
+impl GeoCountry {
+    /// Build a `GeoCountry` with the given ISO code and phone formats; the
+    /// remaining descriptive fields are filled with neutral placeholders.
+    pub(crate) fn for_test(iso_code: &str, phone_formats: Vec<String>) -> Self {
+        Self {
+            name_en: "Testland".to_string(),
+            iso_code: iso_code.to_string(),
+            phone_prefix: String::new(),
+            phone_formats,
+            postcode_format: String::new(),
+            name_order: "western".to_string(),
+        }
+    }
+}
+
+#[cfg(test)]
+impl GeoState {
+    /// Build a `GeoState` with the given region tags and cities (test fixtures).
+    pub(crate) fn for_test(region_tags: Vec<String>, cities: Vec<GeoCity>) -> Self {
+        Self {
+            name: "Region".to_string(),
+            name_en: "Region".to_string(),
+            region_tags,
+            cities,
+        }
+    }
+}
+
+#[cfg(test)]
+impl GeoCity {
+    /// Build a `GeoCity` with the given English name and postcodes (test fixtures).
+    pub(crate) fn for_test(name_en: &str, postcodes: Vec<GeoPostcode>) -> Self {
+        Self {
+            name: name_en.to_string(),
+            name_en: name_en.to_string(),
+            lat: 0.0,
+            lon: 0.0,
+            postcodes,
+        }
+    }
+}
+
+#[cfg(test)]
+impl GeoPostcode {
+    /// Build a `GeoPostcode` from the address-shaping fields (test fixtures).
+    pub(crate) fn for_test(
+        code: &str,
+        street_en: &str,
+        pattern: Option<&str>,
+        fixed: Option<Vec<String>>,
+    ) -> Self {
+        Self {
+            code: code.to_string(),
+            street: String::new(),
+            street_en: street_en.to_string(),
+            pattern: pattern.map(|s| s.to_string()),
+            fixed,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // GeoDatabase
 // ---------------------------------------------------------------------------
 
@@ -116,8 +194,14 @@ pub(crate) struct GeoDatabase {
 impl GeoDatabase {
     /// Parse every embedded JSON blob and index by ISO code.
     fn new() -> Self {
+        Self::from_entries(RAW_ENTRIES)
+    }
+
+    /// Parse each `(filename, json_str)` entry and index by uppercase ISO code.
+    /// The `filename` is used only for panic context on parse failure.
+    fn from_entries(entries: &[(&str, &str)]) -> Self {
         let mut map = HashMap::new();
-        for (filename, json) in RAW_ENTRIES {
+        for (filename, json) in entries {
             let data: GeoData = serde_json::from_str(json).unwrap_or_else(|e| {
                 panic!("failed to parse geo data from {filename}: {e}");
             });
@@ -403,5 +487,113 @@ mod tests {
             geo_database().get("").is_none(),
             "empty code SHALL resolve to None"
         );
+    }
+
+    // A minimal, self-contained geo JSON blob for the given lowercase ISO code,
+    // used to exercise GeoDatabase::from_entries() without the embedded data.
+    fn fixture_json(iso_code: &str) -> String {
+        // Built via concatenation rather than a raw string so the JSON can carry
+        // literal '#' placeholders (phone/postcode formats) without colliding
+        // with the raw-string hash delimiter.
+        let mut json = String::from("{\n");
+        json.push_str("  \"country\": {\n");
+        json.push_str("    \"name_en\": \"Testland\",\n");
+        json.push_str(&format!("    \"iso_code\": \"{iso_code}\",\n"));
+        json.push_str("    \"phone_prefix\": \"+99\",\n");
+        json.push_str("    \"phone_formats\": [\"+99 ### ####\"],\n");
+        json.push_str("    \"postcode_format\": \"#####\",\n");
+        json.push_str("    \"name_order\": \"western\"\n");
+        json.push_str("  },\n");
+        json.push_str("  \"states\": [{\n");
+        json.push_str("    \"name\": \"Region\",\n");
+        json.push_str("    \"name_en\": \"Region\",\n");
+        json.push_str("    \"region_tags\": [\"r1\"],\n");
+        json.push_str("    \"cities\": [{\n");
+        json.push_str("      \"name\": \"City\",\n");
+        json.push_str("      \"name_en\": \"City\",\n");
+        json.push_str("      \"lat\": 1.0,\n");
+        json.push_str("      \"lon\": 2.0,\n");
+        json.push_str("      \"postcodes\": [{\n");
+        json.push_str("        \"code\": \"00000\",\n");
+        json.push_str("        \"street\": \"Street\",\n");
+        json.push_str("        \"street_en\": \"Street\",\n");
+        json.push_str("        \"pattern\": null,\n");
+        json.push_str("        \"fixed\": null\n");
+        json.push_str("      }]\n");
+        json.push_str("    }]\n");
+        json.push_str("  }]\n");
+        json.push_str("}\n");
+        json
+    }
+
+    // 22. from_entries() SHALL parse each blob and key it by uppercase ISO code.
+    #[test]
+    fn from_entries_indexes_by_uppercase_iso_code() {
+        // 1. Provide a lowercase iso_code to confirm the key is upper-cased.
+        let json = fixture_json("zz");
+        let entries = [("zz.json", json.as_str())];
+        let db = GeoDatabase::from_entries(&entries);
+        // 2. Lookup SHALL succeed via the upper-cased key.
+        assert!(
+            db.get("ZZ").is_some(),
+            "from_entries SHALL index by upper-cased ISO code"
+        );
+        // 3. And only that one entry SHALL be present.
+        assert_eq!(
+            db.countries(),
+            vec!["ZZ"],
+            "from_entries SHALL load exactly the supplied entries"
+        );
+    }
+
+    // 23. from_entries() with an empty slice SHALL yield an empty database.
+    #[test]
+    fn from_entries_empty_slice_yields_empty_db() {
+        let db = GeoDatabase::from_entries(&[]);
+        assert!(
+            db.countries().is_empty(),
+            "empty input SHALL produce no countries"
+        );
+        assert_eq!(db.all().count(), 0, "empty input SHALL yield no entries");
+    }
+
+    // 24. from_entries() SHALL preserve the parsed nested data verbatim.
+    #[test]
+    fn from_entries_preserves_parsed_fields() {
+        let json = fixture_json("zz");
+        let entries = [("zz.json", json.as_str())];
+        let db = GeoDatabase::from_entries(&entries);
+        let data = db.get("ZZ").expect("ZZ SHALL be loaded");
+        // 1. Country-level fields round-trip from the JSON.
+        assert_eq!(data.country.iso_code, "zz");
+        assert_eq!(data.country.phone_formats, vec!["+99 ### ####"]);
+        // 2. Nested state/city/postcode structure round-trips.
+        let postcode = &data.states[0].cities[0].postcodes[0];
+        assert_eq!(postcode.code, "00000");
+        assert_eq!(postcode.street_en, "Street");
+        assert!(postcode.pattern.is_none());
+    }
+
+    // 25. A later entry with a duplicate ISO code SHALL overwrite the earlier one
+    //     (HashMap::insert semantics — documents existing behavior).
+    #[test]
+    fn from_entries_duplicate_iso_code_last_wins() {
+        let first = fixture_json("zz");
+        let second = fixture_json("zz");
+        let entries = [("a.json", first.as_str()), ("b.json", second.as_str())];
+        let db = GeoDatabase::from_entries(&entries);
+        assert_eq!(
+            db.countries(),
+            vec!["ZZ"],
+            "duplicate ISO codes SHALL collapse to a single keyed entry"
+        );
+    }
+
+    // 26. A malformed blob SHALL panic with the filename for context.
+    #[test]
+    #[should_panic(expected = "bad.json")]
+    fn from_entries_malformed_json_panics_with_filename() {
+        let entries = [("bad.json", "{ not valid json ")];
+        let _ = GeoDatabase::from_entries(&entries);
     }
 }

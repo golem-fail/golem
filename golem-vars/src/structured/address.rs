@@ -475,4 +475,152 @@ mod tests {
         assert!(!field(&result, "city").is_empty());
         assert!(!field(&result, "postcode").is_empty());
     }
+
+    use crate::geo_loader::{GeoCity, GeoCountry, GeoData, GeoPostcode, GeoState};
+
+    /// Build a single-state, single-city `GeoData` whose one postcode carries
+    /// the supplied street-shaping fields. Lets the street-generation branches
+    /// of `generate_address_from_state` be exercised in isolation, with no
+    /// dependence on the embedded geo database.
+    fn synthetic_geo(
+        iso: &str,
+        code: &str,
+        street_en: &str,
+        pattern: Option<&str>,
+        fixed: Option<Vec<String>>,
+    ) -> GeoData {
+        let postcode = GeoPostcode::for_test(code, street_en, pattern, fixed);
+        let city = GeoCity::for_test("Testville", vec![postcode]);
+        let state = GeoState::for_test(vec!["r1".to_string()], vec![city]);
+        GeoData::for_test(GeoCountry::for_test(iso, vec![]), vec![state])
+    }
+
+    // 32. generate_address_from_state maps every geo field straight onto the
+    //     output object (state name, city name, postcode code, country name and
+    //     ISO code all round-trip verbatim).
+    #[test]
+    fn from_state_maps_all_geo_fields_onto_output() {
+        let mut rng = seeded_rng();
+        let geo = synthetic_geo("ZZ", "12345", "Main St", None, None);
+        let state = &geo.states[0];
+        let result = super::generate_address_from_state(&geo, state, &mut rng)
+            .expect("SHALL generate from synthetic state");
+
+        // 1. Geographic fields come straight from the synthetic fixture.
+        assert_eq!(field(&result, "city"), "Testville", "city SHALL round-trip");
+        assert_eq!(field(&result, "state"), "Region", "state SHALL round-trip");
+        assert_eq!(field(&result, "postcode"), "12345", "postcode SHALL round-trip");
+        assert_eq!(field(&result, "country"), "Testland", "country SHALL round-trip");
+        assert_eq!(
+            field(&result, "country_code"),
+            "ZZ",
+            "country_code SHALL round-trip"
+        );
+    }
+
+    // 33. With no pattern and no fixed list, the street SHALL be "<num> <street_en>"
+    //     where num is in the documented 1..200 range.
+    #[test]
+    fn from_state_default_street_is_number_plus_street_en() {
+        let mut rng = seeded_rng();
+        let geo = synthetic_geo("ZZ", "00000", "Cherry Lane", None, None);
+        let state = &geo.states[0];
+        let result = super::generate_address_from_state(&geo, state, &mut rng)
+            .expect("SHALL generate default street");
+        let street = field(&result, "street");
+
+        // 1. Format SHALL be "<num> Cherry Lane".
+        assert!(
+            street.ends_with(" Cherry Lane"),
+            "default street SHALL end with the street name, got: {street}"
+        );
+        let num: u32 = street
+            .split_whitespace()
+            .next()
+            .expect("SHALL have a leading token")
+            .parse()
+            .expect("leading token SHALL be a number");
+        assert!(
+            (1..200).contains(&num),
+            "default street number SHALL be in 1..200, got: {num}"
+        );
+    }
+
+    // 34. An empty fixed list SHALL produce exactly "1 <street_en>" (the
+    //     documented empty-fixed fallback), not a random number.
+    #[test]
+    fn from_state_empty_fixed_yields_one_plus_street_en() {
+        let mut rng = seeded_rng();
+        let geo = synthetic_geo("ZZ", "00000", "Oak Road", None, Some(vec![]));
+        let state = &geo.states[0];
+        let result = super::generate_address_from_state(&geo, state, &mut rng)
+            .expect("SHALL generate from empty fixed list");
+        assert_eq!(
+            field(&result, "street"),
+            "1 Oak Road",
+            "empty fixed list SHALL yield '1 <street_en>'"
+        );
+    }
+
+    // 35. A non-empty fixed list SHALL pick one of its verbatim entries as the
+    //     street (no numbering applied).
+    #[test]
+    fn from_state_nonempty_fixed_picks_a_listed_entry() {
+        let mut rng = seeded_rng();
+        let entries = vec!["10 Downing Street".to_string(), "221B Baker Street".to_string()];
+        let geo = synthetic_geo("ZZ", "00000", "Ignored", None, Some(entries.clone()));
+        let state = &geo.states[0];
+        let result = super::generate_address_from_state(&geo, state, &mut rng)
+            .expect("SHALL generate from fixed list");
+        let street = field(&result, "street");
+        assert!(
+            entries.contains(&street),
+            "fixed street SHALL be one of the listed entries, got: {street}"
+        );
+    }
+
+    // 36. A pattern delegates to expand_street_pattern: an n{min,max} token SHALL
+    //     be replaced by a number in range and the street_en SHALL be present.
+    #[test]
+    fn from_state_pattern_expands_token_and_includes_street_en() {
+        let mut rng = seeded_rng();
+        let geo = synthetic_geo("ZZ", "00000", "Elm Avenue", Some("n{1,9} Elm Avenue"), None);
+        let state = &geo.states[0];
+        let result = super::generate_address_from_state(&geo, state, &mut rng)
+            .expect("SHALL generate from pattern");
+        let street = field(&result, "street");
+
+        // 1. The literal street name SHALL survive expansion.
+        assert!(
+            street.ends_with(" Elm Avenue"),
+            "pattern street SHALL retain the street name, got: {street}"
+        );
+        // 2. The n{1,9} token SHALL be replaced by a single-digit number in range.
+        let num: u32 = street
+            .split_whitespace()
+            .next()
+            .expect("SHALL have a leading token")
+            .parse()
+            .expect("leading token SHALL be a number");
+        assert!(
+            (1..=9).contains(&num),
+            "expanded n{{1,9}} number SHALL be in 1..=9, got: {num}"
+        );
+    }
+
+    // 37. generate_address_from_state is deterministic for a fixed seed and the
+    //     same synthetic state (same street, same all-derived fields).
+    #[test]
+    fn from_state_is_deterministic_for_same_seed() {
+        let geo = synthetic_geo("ZZ", "00000", "Pine Street", Some("n{1,200} Pine Street"), None);
+        let state = &geo.states[0];
+
+        let mut rng1 = seeded_rng();
+        let mut rng2 = seeded_rng();
+        let a = super::generate_address_from_state(&geo, state, &mut rng1)
+            .expect("SHALL generate (run 1)");
+        let b = super::generate_address_from_state(&geo, state, &mut rng2)
+            .expect("SHALL generate (run 2)");
+        assert_eq!(a, b, "same seed + same state SHALL produce identical address");
+    }
 }

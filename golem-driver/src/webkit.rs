@@ -112,6 +112,14 @@ async fn enumerate_live_inspector_sockets() -> Vec<(u32, PathBuf)> {
         _ => return Vec::new(),
     };
     let text = String::from_utf8_lossy(&output.stdout);
+    parse_lsof_inspector_lines(&text)
+}
+
+/// Parse `(launchd_sim PID, socket path)` pairs out of `lsof -U +c 0` output.
+///
+/// Pure helper extracted from [`enumerate_live_inspector_sockets`] so the
+/// column/marker parsing can be unit-tested without spawning `lsof`.
+fn parse_lsof_inspector_lines(text: &str) -> Vec<(u32, PathBuf)> {
     let mut pairs: Vec<(u32, PathBuf)> = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for line in text.lines() {
@@ -1236,6 +1244,72 @@ mod tests {
         assert!(
             extract_message_data(&msg, "SENDER-1").is_none(),
             "extract_message_data SHALL return None for a non-RPC message"
+        );
+    }
+
+    // 16. parse_lsof_inspector_lines pulls (pid, path) from a matching row and
+    //     skips rows that do not name both launchd_sim and the inspector socket.
+    #[test]
+    fn parse_lsof_inspector_lines_extracts_matching_rows() {
+        let text = "\
+launchd_sim 4321 user 5u unix 0x0 0t0 /private/var/tmp/com.apple.launchd.ABC/com.apple.webinspectord_sim.socket
+sshd 99 user 3u unix 0x0 0t0 /private/var/tmp/other.socket
+launchd_sim 7777 user 6u unix 0x0 0t0 /private/tmp/com.apple.webinspectord_sim.socket\n";
+        let pairs = parse_lsof_inspector_lines(text);
+        assert_eq!(
+            pairs,
+            vec![
+                (
+                    4321u32,
+                    PathBuf::from(
+                        "/private/var/tmp/com.apple.launchd.ABC/com.apple.webinspectord_sim.socket"
+                    )
+                ),
+                (
+                    7777u32,
+                    PathBuf::from("/private/tmp/com.apple.webinspectord_sim.socket")
+                ),
+            ],
+            "parse_lsof_inspector_lines SHALL keep only launchd_sim inspector-socket rows"
+        );
+    }
+
+    // 17. parse_lsof_inspector_lines de-duplicates identical (pid, path) pairs.
+    #[test]
+    fn parse_lsof_inspector_lines_dedups_repeated_pairs() {
+        let row =
+            "launchd_sim 5555 user 5u unix 0x0 0t0 /private/var/tmp/com.apple.webinspectord_sim.socket";
+        let text = format!("{row}\n{row}\n");
+        let pairs = parse_lsof_inspector_lines(&text);
+        assert_eq!(
+            pairs,
+            vec![(
+                5555u32,
+                PathBuf::from("/private/var/tmp/com.apple.webinspectord_sim.socket")
+            )],
+            "parse_lsof_inspector_lines SHALL emit each (pid, path) pair once"
+        );
+    }
+
+    // 18. parse_lsof_inspector_lines skips matching rows whose PID column does
+    //     not parse, and rows with no /private/ socket-path marker.
+    #[test]
+    fn parse_lsof_inspector_lines_skips_unparseable_rows() {
+        let text = "\
+launchd_sim notapid user 5u unix 0x0 0t0 /private/var/tmp/com.apple.webinspectord_sim.socket
+launchd_sim 8888 user 6u unix 0x0 0t0 some-non-private-path-with-webinspectord_sim.socket\n";
+        assert!(
+            parse_lsof_inspector_lines(text).is_empty(),
+            "parse_lsof_inspector_lines SHALL skip rows with a bad PID or no /private/ path"
+        );
+    }
+
+    // 19. parse_lsof_inspector_lines returns an empty vec for empty input.
+    #[test]
+    fn parse_lsof_inspector_lines_empty_input() {
+        assert!(
+            parse_lsof_inspector_lines("").is_empty(),
+            "parse_lsof_inspector_lines SHALL return no pairs for empty input"
         );
     }
 }

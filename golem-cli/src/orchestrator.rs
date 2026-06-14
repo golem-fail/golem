@@ -120,6 +120,25 @@ impl OrchestratorServer {
         }
     }
 
+    /// Test-only constructor: build a server with a caller-supplied
+    /// `active_clients` counter and a no-op background handle, so tests
+    /// can exercise `wait_for_clients` without binding a real socket or
+    /// spawning the accept loop. Reads only the supplied counter; adds
+    /// no behaviour beyond what `start_server` already wires up.
+    #[cfg(test)]
+    fn for_test(active_clients: std::sync::Arc<std::sync::atomic::AtomicU32>) -> Self {
+        OrchestratorServer {
+            _handle: tokio::spawn(async {}),
+            resource_mgr: std::sync::Arc::new(
+                golem_devices::resource_manager::ResourceManager::new(
+                    golem_devices::concurrency::ConcurrencyConfig::default(),
+                ),
+            ),
+            install_cache: golem_runner::installer::InstallCache::new(),
+            active_clients,
+        }
+    }
+
     /// Clean up the socket file.
     fn cleanup() {
         let path = socket_path();
@@ -254,30 +273,39 @@ async fn handle_client(
     }
 }
 
-/// Handle a "submit" message: run the suite and stream events to the client.
-async fn handle_submit(
-    json: &serde_json::Value,
-    resource_mgr: &std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
-    install_cache: &golem_runner::installer::InstallCache,
-    writer: &std::sync::Arc<tokio::sync::Mutex<tokio::net::unix::OwnedWriteHalf>>,
-) {
-    let paths: Vec<PathBuf> = json["flow_paths"]
-        .as_array()
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(PathBuf::from))
-                .collect()
-        })
-        .unwrap_or_default();
+/// The subset of `SuiteConfig` fields that are decoded purely from the
+/// submit message's JSON `config` object. The remaining `SuiteConfig`
+/// fields (project_apps, device_settings, project_record, stream_human)
+/// come from non-JSON sources and are assembled at the call site.
+struct SubmitConfigFields {
+    platform_override: Option<golem_devices::Platform>,
+    seed: Option<u64>,
+    verbose: bool,
+    debug: bool,
+    no_perf: bool,
+    no_clean: bool,
+    no_teardown: bool,
+    keep_devices: bool,
+    no_results: bool,
+    start: Option<String>,
+    output_dir: PathBuf,
+    project_root: PathBuf,
+    vars: Vec<(String, String)>,
+    coverage_override: Option<golem_parser::CoverageStrategy>,
+    rebuild: bool,
+    no_build: bool,
+    record: bool,
+    no_record: bool,
+    trace: bool,
+    repeat: u32,
+    max_device_wait: Option<std::time::Duration>,
+}
 
-    if paths.is_empty() {
-        let resp = serde_json::json!({"type": "error", "message": "no flow_paths provided"});
-        let mut w = writer.lock().await;
-        let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
-        return;
-    }
-
-    let cfg = &json["config"];
+/// Parse the submit message's `config` JSON object into the
+/// JSON-derived `SuiteConfig` fields. Pure: no I/O except the
+/// `project_root` default which reads `current_dir` when the field is
+/// absent (mirroring the original inline logic exactly).
+fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
     let platform_override = cfg["platform"].as_str().and_then(|p| match p {
         "ios" => Some(golem_devices::Platform::Ios),
         "android" => Some(golem_devices::Platform::Android),
@@ -329,6 +357,79 @@ async fn handle_submit(
     let max_device_wait = cfg["max_device_wait_ms"]
         .as_u64()
         .map(std::time::Duration::from_millis);
+
+    SubmitConfigFields {
+        platform_override,
+        seed,
+        verbose,
+        debug,
+        no_perf,
+        no_clean,
+        no_teardown,
+        keep_devices,
+        no_results,
+        start,
+        output_dir,
+        project_root,
+        vars,
+        coverage_override,
+        rebuild,
+        no_build,
+        record,
+        no_record,
+        trace,
+        repeat,
+        max_device_wait,
+    }
+}
+
+/// Handle a "submit" message: run the suite and stream events to the client.
+async fn handle_submit(
+    json: &serde_json::Value,
+    resource_mgr: &std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
+    install_cache: &golem_runner::installer::InstallCache,
+    writer: &std::sync::Arc<tokio::sync::Mutex<tokio::net::unix::OwnedWriteHalf>>,
+) {
+    let paths: Vec<PathBuf> = json["flow_paths"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(PathBuf::from))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if paths.is_empty() {
+        let resp = serde_json::json!({"type": "error", "message": "no flow_paths provided"});
+        let mut w = writer.lock().await;
+        let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
+        return;
+    }
+
+    let cfg = &json["config"];
+    let SubmitConfigFields {
+        platform_override,
+        seed,
+        verbose,
+        debug,
+        no_perf,
+        no_clean,
+        no_teardown,
+        keep_devices,
+        no_results,
+        start,
+        output_dir,
+        project_root,
+        vars,
+        coverage_override,
+        rebuild,
+        no_build,
+        record,
+        no_record,
+        trace,
+        repeat,
+        max_device_wait,
+    } = parse_submit_config(cfg);
 
     // Re-read the project's golem.toml from the client's project_root so
     // apps pick up bundle IDs, install scripts, and device defaults the
@@ -702,5 +803,169 @@ mod tests {
     fn file_uri_str_empty_path_is_scheme_only() {
         let uri = file_uri_str("");
         assert_eq!(uri, "file://", "empty input SHALL produce just the scheme");
+    }
+
+    // 7. An empty config object SHALL produce all defaults (bools false,
+    //    repeat 1, default output dir, current dir as project root, no overrides).
+    #[test]
+    fn parse_submit_config_empty_object_uses_defaults() {
+        let cfg = serde_json::json!({});
+        let f = parse_submit_config(&cfg);
+        assert!(f.platform_override.is_none(), "absent platform SHALL be None");
+        assert!(f.seed.is_none(), "absent seed SHALL be None");
+        assert!(!f.verbose && !f.debug && !f.no_perf, "absent bools SHALL default false");
+        assert!(
+            !f.no_clean && !f.no_teardown && !f.keep_devices && !f.no_results,
+            "absent bools SHALL default false"
+        );
+        assert!(f.start.is_none(), "absent start SHALL be None");
+        assert_eq!(
+            f.output_dir,
+            PathBuf::from(".golem/results"),
+            "absent output_dir SHALL default to .golem/results"
+        );
+        assert!(f.vars.is_empty(), "absent vars SHALL be empty");
+        assert!(f.coverage_override.is_none(), "absent coverage SHALL be None");
+        assert!(!f.rebuild && !f.no_build && !f.record && !f.no_record && !f.trace);
+        assert_eq!(f.repeat, 1, "absent repeat SHALL default to 1");
+        assert!(f.max_device_wait.is_none(), "absent max_device_wait SHALL be None");
+    }
+
+    // 8. Platform strings map to the matching enum; unknown strings map to None.
+    #[test]
+    fn parse_submit_config_platform_enum_mapping() {
+        let ios = parse_submit_config(&serde_json::json!({"platform": "ios"}));
+        assert_eq!(
+            ios.platform_override,
+            Some(golem_devices::Platform::Ios),
+            "\"ios\" SHALL map to Platform::Ios"
+        );
+        let android = parse_submit_config(&serde_json::json!({"platform": "android"}));
+        assert_eq!(
+            android.platform_override,
+            Some(golem_devices::Platform::Android),
+            "\"android\" SHALL map to Platform::Android"
+        );
+        let bogus = parse_submit_config(&serde_json::json!({"platform": "web"}));
+        assert!(
+            bogus.platform_override.is_none(),
+            "an unknown platform string SHALL map to None"
+        );
+    }
+
+    // 9. Coverage strings map to each strategy; unknown strings map to None.
+    #[test]
+    fn parse_submit_config_coverage_enum_mapping() {
+        use golem_parser::CoverageStrategy;
+        let cases = [
+            ("one", CoverageStrategy::One),
+            ("min", CoverageStrategy::Min),
+            ("smart", CoverageStrategy::Smart),
+            ("full", CoverageStrategy::Full),
+        ];
+        for (s, expected) in cases {
+            let f = parse_submit_config(&serde_json::json!({ "coverage": s }));
+            assert_eq!(
+                f.coverage_override,
+                Some(expected),
+                "coverage \"{s}\" SHALL map to its strategy"
+            );
+        }
+        let bogus = parse_submit_config(&serde_json::json!({"coverage": "none"}));
+        assert!(
+            bogus.coverage_override.is_none(),
+            "an unknown coverage string SHALL map to None"
+        );
+    }
+
+    // 10. repeat is clamped into [1, 100]: 0 -> 1, in-range passes through, >100 -> 100.
+    #[test]
+    fn parse_submit_config_repeat_is_clamped() {
+        let zero = parse_submit_config(&serde_json::json!({"repeat": 0}));
+        assert_eq!(zero.repeat, 1, "repeat 0 SHALL clamp up to 1");
+        let mid = parse_submit_config(&serde_json::json!({"repeat": 42}));
+        assert_eq!(mid.repeat, 42, "an in-range repeat SHALL pass through");
+        let over = parse_submit_config(&serde_json::json!({"repeat": 9999}));
+        assert_eq!(over.repeat, 100, "repeat above 100 SHALL clamp down to 100");
+    }
+
+    // 11. max_device_wait_ms becomes a Duration of that many milliseconds.
+    #[test]
+    fn parse_submit_config_max_device_wait_is_millis() {
+        let f = parse_submit_config(&serde_json::json!({"max_device_wait_ms": 2500}));
+        assert_eq!(
+            f.max_device_wait,
+            Some(std::time::Duration::from_millis(2500)),
+            "max_device_wait_ms SHALL be read as milliseconds"
+        );
+    }
+
+    // 12. vars decode only well-formed [k, v] string pairs; malformed entries are dropped.
+    #[test]
+    fn parse_submit_config_vars_keep_only_string_pairs() {
+        let cfg = serde_json::json!({
+            "vars": [
+                ["KEY", "VALUE"],
+                ["ONLY_KEY"],
+                [1, 2],
+                "not-an-array",
+                ["K2", "V2"]
+            ]
+        });
+        let f = parse_submit_config(&cfg);
+        assert_eq!(
+            f.vars,
+            vec![
+                ("KEY".to_string(), "VALUE".to_string()),
+                ("K2".to_string(), "V2".to_string())
+            ],
+            "only well-formed [string, string] pairs SHALL be kept"
+        );
+    }
+
+    // 13. output_dir and project_root honour explicit string values from the config.
+    #[test]
+    fn parse_submit_config_paths_honour_explicit_values() {
+        let cfg = serde_json::json!({
+            "output_dir": "/tmp/out",
+            "project_root": "/tmp/proj"
+        });
+        let f = parse_submit_config(&cfg);
+        assert_eq!(
+            f.output_dir,
+            PathBuf::from("/tmp/out"),
+            "explicit output_dir SHALL be used verbatim"
+        );
+        assert_eq!(
+            f.project_root,
+            PathBuf::from("/tmp/proj"),
+            "explicit project_root SHALL be used verbatim"
+        );
+    }
+
+    // 14. for_test exposes the caller's active_clients counter, and
+    //     wait_for_clients returns once that counter reaches zero.
+    #[tokio::test]
+    async fn for_test_wait_for_clients_returns_when_counter_drains() {
+        use std::sync::atomic::Ordering;
+        // Point HOME at a throwaway dir so the Drop-time socket cleanup
+        // can't touch a real ~/.golem/golem.sock.
+        let tmp = std::env::temp_dir().join(format!("golem-orch-test-{}", std::process::id()));
+        std::env::set_var("HOME", &tmp);
+
+        let counter = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(1));
+        let server = OrchestratorServer::for_test(counter.clone());
+
+        // With a live client the wait SHALL not complete; drain it then wait.
+        let drainer = counter.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            drainer.store(0, Ordering::Release);
+        });
+
+        // SHALL return promptly once the counter the constructor stored hits 0.
+        tokio::time::timeout(std::time::Duration::from_secs(5), server.wait_for_clients())
+            .await
+            .expect("wait_for_clients SHALL return once active_clients reaches 0");
     }
 }

@@ -14,6 +14,48 @@ struct CacheFileView {
     entries: HashMap<String, PersistedInstall>,
 }
 
+/// Pure, structured summary of a parsed install cache. Holds exactly the
+/// figures `info()` renders, computed with no I/O so it can be unit-tested.
+struct CacheSummary {
+    total: usize,
+    /// `(key, installed_at)` of the oldest/newest entries; `None` when empty.
+    oldest: Option<(String, DateTime<Utc>)>,
+    newest: Option<(String, DateTime<Utc>)>,
+    with_install_time: usize,
+}
+
+impl CacheSummary {
+    /// Compute the summary from a parsed cache view. Mirrors exactly what
+    /// `info()` derives: entry count, oldest/newest by `installed_at`, and the
+    /// number of entries carrying a `device_install_time`.
+    fn from_view(view: &CacheFileView) -> Self {
+        let total = view.entries.len();
+
+        let mut times: Vec<(String, DateTime<Utc>)> = view
+            .entries
+            .iter()
+            .map(|(k, v)| (k.clone(), v.installed_at))
+            .collect();
+        times.sort_by_key(|(_, t)| *t);
+
+        let oldest = times.first().cloned();
+        let newest = times.last().cloned();
+
+        let with_install_time = view
+            .entries
+            .values()
+            .filter(|e| e.device_install_time.is_some())
+            .count();
+
+        CacheSummary {
+            total,
+            oldest,
+            newest,
+            with_install_time,
+        }
+    }
+}
+
 pub fn info() -> Result<()> {
     let path = PathBuf::from(CACHE_PATH);
     if !path.exists() {
@@ -27,33 +69,22 @@ pub fn info() -> Result<()> {
     let view: CacheFileView = serde_json::from_str(&raw)
         .with_context(|| format!("parsing {}", path.display()))?;
 
-    let total = view.entries.len();
+    let summary = CacheSummary::from_view(&view);
+
     println!("Install cache: {}", path.display());
     println!("  Size:    {} bytes", bytes_len);
-    println!("  Entries: {total}");
+    println!("  Entries: {}", summary.total);
 
-    if total == 0 {
+    if summary.total == 0 {
         return Ok(());
     }
 
-    let mut times: Vec<(String, DateTime<Utc>)> = view
-        .entries
-        .iter()
-        .map(|(k, v)| (k.clone(), v.installed_at))
-        .collect();
-    times.sort_by_key(|(_, t)| *t);
+    if let (Some(oldest), Some(newest)) = (&summary.oldest, &summary.newest) {
+        println!("  Oldest:  {}  {}", oldest.1.format("%Y-%m-%d %H:%M:%SZ"), oldest.0);
+        println!("  Newest:  {}  {}", newest.1.format("%Y-%m-%d %H:%M:%SZ"), newest.0);
+    }
 
-    let oldest = &times[0];
-    let newest = &times[times.len() - 1];
-    println!("  Oldest:  {}  {}", oldest.1.format("%Y-%m-%d %H:%M:%SZ"), oldest.0);
-    println!("  Newest:  {}  {}", newest.1.format("%Y-%m-%d %H:%M:%SZ"), newest.0);
-
-    let with_install_time = view
-        .entries
-        .values()
-        .filter(|e| e.device_install_time.is_some())
-        .count();
-    println!("  With device install-time: {with_install_time}/{total}");
+    println!("  With device install-time: {}/{}", summary.with_install_time, summary.total);
 
     Ok(())
 }
@@ -168,4 +199,67 @@ mod tests {
         assert!(result.is_err(), "missing entries field SHALL fail to parse");
     }
 
+    fn view(entries: HashMap<String, PersistedInstall>) -> CacheFileView {
+        CacheFileView { version: 1, entries }
+    }
+
+    // 6. An empty cache summarizes to zero totals with no oldest/newest — the
+    //    `total == 0` early-return path info() takes.
+    #[test]
+    fn summary_empty_cache_has_no_extremes() {
+        let summary = CacheSummary::from_view(&view(HashMap::new()));
+
+        assert_eq!(summary.total, 0, "empty cache SHALL report zero entries");
+        assert!(summary.oldest.is_none(), "empty cache SHALL have no oldest");
+        assert!(summary.newest.is_none(), "empty cache SHALL have no newest");
+        assert_eq!(
+            summary.with_install_time, 0,
+            "empty cache SHALL count zero device install-times"
+        );
+    }
+
+    // 7. A single-entry cache reports that entry as both oldest and newest.
+    #[test]
+    fn summary_single_entry_is_both_extremes() {
+        let mut entries = HashMap::new();
+        entries.insert("only:bundle".to_string(), entry(500, Some(400)));
+
+        let summary = CacheSummary::from_view(&view(entries));
+
+        assert_eq!(summary.total, 1, "single entry SHALL report total of 1");
+        let (oldest_key, oldest_t) = summary.oldest.expect("oldest present");
+        let (newest_key, newest_t) = summary.newest.expect("newest present");
+        assert_eq!(oldest_key, "only:bundle", "sole entry SHALL be the oldest");
+        assert_eq!(newest_key, "only:bundle", "sole entry SHALL be the newest");
+        assert_eq!(oldest_t, ts(500), "oldest time SHALL match the entry");
+        assert_eq!(newest_t, ts(500), "newest time SHALL match the entry");
+        assert_eq!(
+            summary.with_install_time, 1,
+            "the entry's device install-time SHALL be counted"
+        );
+    }
+
+    // 8. With several entries, oldest/newest are picked by installed_at (not
+    //    insertion or key order), and device-install-time presence is counted.
+    #[test]
+    fn summary_picks_extremes_by_installed_at() {
+        let mut entries = HashMap::new();
+        entries.insert("mid".to_string(), entry(200, Some(1)));
+        entries.insert("late".to_string(), entry(300, None));
+        entries.insert("early".to_string(), entry(100, Some(2)));
+
+        let summary = CacheSummary::from_view(&view(entries));
+
+        assert_eq!(summary.total, 3, "all three entries SHALL be counted");
+        let (oldest_key, oldest_t) = summary.oldest.expect("oldest present");
+        let (newest_key, newest_t) = summary.newest.expect("newest present");
+        assert_eq!(oldest_key, "early", "oldest SHALL be the earliest installed_at");
+        assert_eq!(oldest_t, ts(100), "oldest time SHALL be the earliest");
+        assert_eq!(newest_key, "late", "newest SHALL be the latest installed_at");
+        assert_eq!(newest_t, ts(300), "newest time SHALL be the latest");
+        assert_eq!(
+            summary.with_install_time, 2,
+            "only entries with a device install-time SHALL be counted"
+        );
+    }
 }

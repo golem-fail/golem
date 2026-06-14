@@ -1,5 +1,30 @@
 # Roadmap
 
+## Scroll: `center` + `visibility_percentage` for edge/partial targets (Maestro parity)
+
+`e2e/cross/scroll_search.test.toml` `horizontal_carousel_scroll` fails (EF408)
+**on HEAD** (pre-existing, not a regression): the carousel sits at the bottom edge
+of the screen (swipe band ~y=2317). The horizontal swipe stalls — hierarchy node
+count doesn't change (`stall 2/2`), `boundary reached`, reverses, stalls again.
+Likely causes: the swipe lands in/near the Android system-gesture zone at the
+screen edge, and/or the target card is only partially visible so scroll either
+can't engage the carousel or prematurely treats a partially-visible match as the
+stop condition.
+
+Maestro's `scrollUntilVisible` has two knobs we lack:
+- **`centerElement`** — keep scrolling until the target is centered, not merely
+  edge-visible. Fixes "found but unusably at the screen edge" and gives the swipe
+  a safe interaction band away from system-gesture insets.
+- **`visibilityPercentage`** — require N% of the target visible before declaring
+  it found, so a sliver peeking at the edge doesn't count as success.
+
+Proposed: add optional `center = true` and `visibility_percentage = N` to the
+`scroll` action. `center` scrolls until the matched element's center is within a
+tolerance of the container/viewport center; `visibility_percentage` gates the
+match. Both default off (current behavior preserved). Also consider insetting the
+swipe band away from the system-gesture zone for edge-adjacent containers. Add
+unit tests for the centering/visibility math and an e2e once implemented.
+
 ## Parked behavior questions (from coverage sweep)
 
 Two low-impact ambiguities surfaced while adding test coverage; parked pending a decision:

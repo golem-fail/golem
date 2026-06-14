@@ -405,6 +405,72 @@ pub fn default_swipe_start(viewport: &Viewport, direction: Direction) -> (i32, i
     }
 }
 
+// ── Container swipe geometry ─────────────────────────────────────────
+
+/// Compute the swipe START point for an inner-scrollable (`within`)
+/// container, clipped to the visible portion of the container bounds.
+///
+/// The container's bounds may extend beyond the viewport; this clips to
+/// the visible intersection and starts the finger near the trailing edge
+/// (70%) on the swipe axis, centered on the cross-axis. Pure geometry —
+/// the same value is recomputed on every direction reversal.
+fn container_swipe_start(
+    cb: &golem_element::Bounds,
+    viewport: &Viewport,
+    direction: Direction,
+) -> (i32, i32) {
+    let vis_top = cb.y.max(0);
+    let vis_bot = (cb.y + cb.height).min(viewport.height);
+    let vis_cx = (cb.x.max(0) + (cb.x + cb.width).min(viewport.width)) / 2;
+    match direction {
+        Direction::Down => (vis_cx, vis_top + (vis_bot - vis_top) * 70 / 100),
+        Direction::Up => (vis_cx, vis_top + (vis_bot - vis_top) * 30 / 100),
+        Direction::Left => {
+            let vis_left = cb.x.max(0);
+            let vis_right = (cb.x + cb.width).min(viewport.width);
+            (vis_left + (vis_right - vis_left) * 30 / 100, (vis_top + vis_bot) / 2)
+        }
+        Direction::Right => {
+            let vis_left = cb.x.max(0);
+            let vis_right = (cb.x + cb.width).min(viewport.width);
+            (vis_left + (vis_right - vis_left) * 70 / 100, (vis_top + vis_bot) / 2)
+        }
+    }
+}
+
+/// Compute the full swipe coordinates (from, to) for one container
+/// gesture, given the precomputed `start` point.
+///
+/// Swipe distance is 80% of the visible container height on the vertical
+/// axis and 50% of the visible width on the horizontal axis (the moderate
+/// horizontal stride avoids overshooting `scroll-snap` carousels). Both
+/// the start and end points are clamped 5px inside the visible container
+/// so the gesture never grazes the container edge.
+fn container_swipe_coords(
+    cb: &golem_element::Bounds,
+    viewport: &Viewport,
+    direction: Direction,
+    start: (i32, i32),
+) -> (i32, i32, i32, i32) {
+    let vis_top = cb.y.max(0);
+    let vis_bot = (cb.y + cb.height).min(viewport.height);
+    let vis_left = cb.x.max(0);
+    let vis_right = (cb.x + cb.width).min(viewport.width);
+    let vis_h = vis_bot - vis_top;
+    let vis_w = vis_right - vis_left;
+    let dy = vis_h * 80 / 100;
+    let dx = vis_w * 50 / 100;
+    let clamp_x = |v: i32| v.max(vis_left + 5).min(vis_right - 5);
+    let clamp_y = |v: i32| v.max(vis_top + 5).min(vis_bot - 5);
+    let (fx, fy, tx, ty) = match direction {
+        Direction::Down => (start.0, start.1, start.0, start.1 - dy),
+        Direction::Up => (start.0, start.1, start.0, start.1 + dy),
+        Direction::Left => (start.0, start.1, start.0 + dx, start.1),
+        Direction::Right => (start.0, start.1, start.0 - dx, start.1),
+    };
+    (clamp_x(fx), clamp_y(fy), clamp_x(tx), clamp_y(ty))
+}
+
 // ── Main scroll algorithm ───────────────────────────────────────────
 
 /// Scroll through a view to find an element matching the given selector.
@@ -481,25 +547,9 @@ pub async fn scroll_to_element(
     let mut dynamic_start_override: Option<(i32, i32)> = None;
 
     // Container swipe start position
-    let mut container_start = container.as_ref().map(|cb| {
-        let vis_top = cb.y.max(0);
-        let vis_bot = (cb.y + cb.height).min(viewport.height);
-        let vis_cx = (cb.x.max(0) + (cb.x + cb.width).min(viewport.width)) / 2;
-        match direction {
-            Direction::Down => (vis_cx, vis_top + (vis_bot - vis_top) * 70 / 100),
-            Direction::Up => (vis_cx, vis_top + (vis_bot - vis_top) * 30 / 100),
-            Direction::Left => {
-                let vis_left = cb.x.max(0);
-                let vis_right = (cb.x + cb.width).min(viewport.width);
-                (vis_left + (vis_right - vis_left) * 30 / 100, (vis_top + vis_bot) / 2)
-            }
-            Direction::Right => {
-                let vis_left = cb.x.max(0);
-                let vis_right = (cb.x + cb.width).min(viewport.width);
-                (vis_left + (vis_right - vis_left) * 70 / 100, (vis_top + vis_bot) / 2)
-            }
-        }
-    });
+    let mut container_start = container
+        .as_ref()
+        .map(|cb| container_swipe_start(cb, &viewport, direction));
 
     loop {
         if deadline.is_some_and(|d| Instant::now() >= d) {
@@ -515,13 +565,6 @@ pub async fn scroll_to_element(
 
         // Compute swipe coordinates
         let (fx, fy, tx, ty) = if let Some(ref cb) = container {
-            let start = container_start.as_ref().expect("container_start set");
-            let vis_top = cb.y.max(0);
-            let vis_bot = (cb.y + cb.height).min(viewport.height);
-            let vis_left = cb.x.max(0);
-            let vis_right = (cb.x + cb.width).min(viewport.width);
-            let vis_h = vis_bot - vis_top;
-            let vis_w = vis_right - vis_left;
             // Inner-scrollable swipe distance — kept moderate on the
             // horizontal axis because `scroll-snap-type: x mandatory`
             // carousels with finite snap stops will glide past the
@@ -530,17 +573,8 @@ pub async fn scroll_to_element(
             // on Pixel 8 Pro). 50% advances ~1 snap point per swipe
             // on common card widths (~200 CSS px in a ~400 CSS px
             // viewport) so the engine can re-check between gestures.
-            let dy = vis_h * 80 / 100;
-            let dx = vis_w * 50 / 100;
-            let clamp_x = |v: i32| v.max(vis_left + 5).min(vis_right - 5);
-            let clamp_y = |v: i32| v.max(vis_top + 5).min(vis_bot - 5);
-            let (fx, fy, tx, ty) = match direction {
-                Direction::Down => (start.0, start.1, start.0, start.1 - dy),
-                Direction::Up => (start.0, start.1, start.0, start.1 + dy),
-                Direction::Left => (start.0, start.1, start.0 + dx, start.1),
-                Direction::Right => (start.0, start.1, start.0 - dx, start.1),
-            };
-            (clamp_x(fx), clamp_y(fy), clamp_x(tx), clamp_y(ty))
+            let start = *container_start.as_ref().expect("container_start set");
+            container_swipe_coords(cb, &viewport, direction, start)
         } else {
             let strat = &strategies[strategy_idx];
             let (sx, sy) = dynamic_start_override.unwrap_or(strat.start);
@@ -768,23 +802,7 @@ pub async fn scroll_to_element(
             direction = reverse_direction(direction);
             strategies = swipe_strategies(&viewport, direction);
             if let Some(ref cb) = container {
-                let vis_top = cb.y.max(0);
-                let vis_bot = (cb.y + cb.height).min(viewport.height);
-                let vis_cx = (cb.x.max(0) + (cb.x + cb.width).min(viewport.width)) / 2;
-                container_start = Some(match direction {
-                    Direction::Down => (vis_cx, vis_top + (vis_bot - vis_top) * 70 / 100),
-                    Direction::Up => (vis_cx, vis_top + (vis_bot - vis_top) * 30 / 100),
-                    Direction::Left => {
-                        let vis_left = cb.x.max(0);
-                        let vis_right = (cb.x + cb.width).min(viewport.width);
-                        (vis_left + (vis_right - vis_left) * 30 / 100, (vis_top + vis_bot) / 2)
-                    }
-                    Direction::Right => {
-                        let vis_left = cb.x.max(0);
-                        let vis_right = (cb.x + cb.width).min(viewport.width);
-                        (vis_left + (vis_right - vis_left) * 70 / 100, (vis_top + vis_bot) / 2)
-                    }
-                });
+                container_start = Some(container_swipe_start(cb, &viewport, direction));
             }
             continue;
         }
@@ -801,23 +819,7 @@ pub async fn scroll_to_element(
         }
         strategies = swipe_strategies(&viewport, direction);
         if let Some(ref cb) = container {
-            let vis_top = cb.y.max(0);
-            let vis_bot = (cb.y + cb.height).min(viewport.height);
-            let vis_cx = (cb.x.max(0) + (cb.x + cb.width).min(viewport.width)) / 2;
-            container_start = Some(match direction {
-                Direction::Down => (vis_cx, vis_top + (vis_bot - vis_top) * 70 / 100),
-                Direction::Up => (vis_cx, vis_top + (vis_bot - vis_top) * 30 / 100),
-                Direction::Left => {
-                    let vis_left = cb.x.max(0);
-                    let vis_right = (cb.x + cb.width).min(viewport.width);
-                    (vis_left + (vis_right - vis_left) * 30 / 100, (vis_top + vis_bot) / 2)
-                }
-                Direction::Right => {
-                    let vis_left = cb.x.max(0);
-                    let vis_right = (cb.x + cb.width).min(viewport.width);
-                    (vis_left + (vis_right - vis_left) * 70 / 100, (vis_top + vis_bot) / 2)
-                }
-            });
+            container_start = Some(container_swipe_start(cb, &viewport, direction));
         }
     }
 }
@@ -1684,5 +1686,86 @@ mod tests {
             horizon_fingerprint(&p2, &vp),
             "center-only differences SHALL NOT affect the horizon fingerprint"
         );
+    }
+
+    // ── container_swipe_start ──────────────────────────────────────
+
+    // 19. A fully-visible container starts the finger near the trailing
+    //     edge on the swipe axis (70% for Down, 30% for Up) at the
+    //     container's horizontal center.
+    #[test]
+    fn container_swipe_start_vertical_geometry() {
+        let vp = Viewport { x: 0, y: 0, width: 400, height: 1000 };
+        // Container occupies y=200..600 (visible height 400), x=50..350.
+        let cb = Bounds::new(50, 200, 300, 400);
+        // 1. Down starts at 70% of the visible height from its top edge.
+        let down = container_swipe_start(&cb, &vp, Direction::Down);
+        assert_eq!(down, (200, 200 + 400 * 70 / 100), "Down SHALL start at center x, 70% down the container");
+        // 2. Up starts at 30% from the top so the finger has room to move down.
+        let up = container_swipe_start(&cb, &vp, Direction::Up);
+        assert_eq!(up, (200, 200 + 400 * 30 / 100), "Up SHALL start at center x, 30% down the container");
+    }
+
+    // 20. Horizontal scrolls start near the trailing horizontal edge
+    //     (30% for Left, 70% for Right) at the container's vertical center.
+    #[test]
+    fn container_swipe_start_horizontal_geometry() {
+        let vp = Viewport { x: 0, y: 0, width: 400, height: 1000 };
+        let cb = Bounds::new(50, 200, 300, 400);
+        let cy = (200 + 600) / 2;
+        let left = container_swipe_start(&cb, &vp, Direction::Left);
+        assert_eq!(left, (50 + 300 * 30 / 100, cy), "Left SHALL start at 30% across, center y");
+        let right = container_swipe_start(&cb, &vp, Direction::Right);
+        assert_eq!(right, (50 + 300 * 70 / 100, cy), "Right SHALL start at 70% across, center y");
+    }
+
+    // 21. A container extending beyond the viewport is clipped to the
+    //     visible intersection before the geometry is computed.
+    #[test]
+    fn container_swipe_start_clips_to_visible() {
+        let vp = Viewport { x: 0, y: 0, width: 400, height: 1000 };
+        // Container starts above the top edge (y=-300) and runs past the
+        // bottom — visible band is y=0..1000.
+        let cb = Bounds::new(0, -300, 400, 2000);
+        let down = container_swipe_start(&cb, &vp, Direction::Down);
+        // vis_top=0, vis_bot=1000 → 70% of 1000 = 700.
+        assert_eq!(down.1, 700, "start SHALL use the clipped visible band, not raw bounds");
+        assert!(down.1 < vp.height, "start y SHALL stay within the viewport");
+    }
+
+    // ── container_swipe_coords ─────────────────────────────────────
+
+    // 22. A Down container swipe keeps x fixed and moves the finger up by
+    //     80% of the visible container height; both points clamp 5px
+    //     inside the visible band.
+    #[test]
+    fn container_swipe_coords_down_moves_up_and_clamps() {
+        let vp = Viewport { x: 0, y: 0, width: 400, height: 1000 };
+        let cb = Bounds::new(0, 100, 400, 400); // visible y=100..500
+        let start = container_swipe_start(&cb, &vp, Direction::Down);
+        let (fx, fy, tx, ty) = container_swipe_coords(&cb, &vp, Direction::Down, start);
+        assert_eq!(fx, tx, "x SHALL stay fixed on a vertical container swipe");
+        assert!(ty < fy, "Down (finger up) SHALL produce a smaller end y");
+        // Every coordinate SHALL be clamped 5px inside the visible band.
+        for (label, v) in [("fy", fy), ("ty", ty)] {
+            assert!((105..=495).contains(&v), "{label}={v} SHALL clamp 5px inside the visible container");
+        }
+    }
+
+    // 23. Left/Right container swipes move along x by 50% of the visible
+    //     width (the moderate snap-carousel stride) with y fixed.
+    #[test]
+    fn container_swipe_coords_horizontal_half_stride() {
+        let vp = Viewport { x: 0, y: 0, width: 1000, height: 600 };
+        let cb = Bounds::new(0, 0, 1000, 600);
+        // Left: finger moves right (end x larger), y fixed.
+        let lstart = container_swipe_start(&cb, &vp, Direction::Left);
+        let (lfx, lfy, ltx, lty) = container_swipe_coords(&cb, &vp, Direction::Left, lstart);
+        assert!(ltx > lfx, "Left (finger right) SHALL produce a larger end x");
+        assert_eq!(lfy, lty, "Left SHALL keep y fixed");
+        // Right: finger moves left (end x smaller).
+        let rstart = container_swipe_start(&cb, &vp, Direction::Right);
+        let (rfx, _, rtx, _) = container_swipe_coords(&cb, &vp, Direction::Right, rstart);
+        assert!(rtx < rfx, "Right (finger left) SHALL produce a smaller end x");
     }
 }

@@ -14,6 +14,19 @@ fn iso8601_utc(t: SystemTime) -> String {
     dt.to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
+/// Resolve the failure code that surfaces on a flow's summary line.
+///
+/// An explicit code (set for flows that never ran a step, e.g.
+/// `FlowCouldNotRun`) always wins; otherwise the code derived from the
+/// first failed step is used. A `None` explicit code falls back to the
+/// derived code, which may itself be `None` for an all-success flow.
+fn resolve_flow_failure_code(
+    explicit: Option<golem_events::FailureCode>,
+    derived: Option<golem_events::FailureCode>,
+) -> Option<golem_events::FailureCode> {
+    explicit.or(derived)
+}
+
 struct AccumulatedStep {
     global_index: u64,
     block_name: String,
@@ -324,7 +337,7 @@ impl ReportAccumulator {
                 started_at: flow.started_at.map(iso8601_utc),
                 finished_at: flow.finished_at.map(iso8601_utc),
                 repeat: flow.repeat,
-                first_failure_code: explicit_code.or(first_failure_code),
+                first_failure_code: resolve_flow_failure_code(explicit_code, first_failure_code),
             }
         }).collect();
 
@@ -1081,6 +1094,43 @@ mod tests {
         assert!(
             suite.flows[0].step_results.is_empty(),
             "StepFinished with no current step SHALL add no step"
+        );
+    }
+
+    // 17. An explicit code (FlowCouldNotRun) SHALL win over a co-present
+    //     derived step code — the precedence the side-effecting accumulator
+    //     cannot exercise directly (a synthetic FlowCouldNotRun flow carries
+    //     no steps). The extracted pure helper lets us assert it head-on.
+    #[test]
+    fn explicit_failure_code_wins_over_derived() {
+        let explicit = Some(golem_events::FailureCode::AppInstallFailed);
+        let derived = Some(golem_events::FailureCode::FlowElementNotFound);
+        assert_eq!(
+            resolve_flow_failure_code(explicit, derived),
+            Some(golem_events::FailureCode::AppInstallFailed),
+            "an explicit code SHALL win over a co-present derived code"
+        );
+    }
+
+    // 18. Absent an explicit code, the derived step code SHALL surface.
+    #[test]
+    fn derived_failure_code_used_when_no_explicit() {
+        let derived = Some(golem_events::FailureCode::FlowElementNotFound);
+        assert_eq!(
+            resolve_flow_failure_code(None, derived),
+            Some(golem_events::FailureCode::FlowElementNotFound),
+            "the derived code SHALL surface when no explicit code is set"
+        );
+    }
+
+    // 19. With neither an explicit nor a derived code the result SHALL be None
+    //     (an all-success flow carries no failure code).
+    #[test]
+    fn no_failure_code_resolves_to_none() {
+        assert_eq!(
+            resolve_flow_failure_code(None, None),
+            None,
+            "absent both codes the flow SHALL carry no failure code"
         );
     }
 

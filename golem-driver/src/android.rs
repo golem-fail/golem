@@ -52,6 +52,26 @@ struct CdpState {
 }
 
 
+/// Decide the swipe gesture duration (ms) for the given coordinates.
+///
+/// Horizontal swipes get a longer duration so the gesture velocity stays
+/// below Chromium's fling threshold (~400 CSS px/sec). Above that,
+/// `scroll-snap-type: x mandatory` carousels glide past several snap points
+/// per swipe, making it impossible to land on a specific intermediate card.
+/// Vertical swipes keep the snappier 300ms since the page and non-snap inner
+/// lists scroll deterministically by gesture distance, and a slower swipe
+/// just adds latency.
+fn swipe_duration_ms(from_x: i32, from_y: i32, to_x: i32, to_y: i32) -> u64 {
+    let dx_abs = (to_x - from_x).abs();
+    let dy_abs = (to_y - from_y).abs();
+    if dx_abs > dy_abs {
+        700
+    } else {
+        300
+    }
+}
+
+
 /// Map a cross-platform permission shorthand (e.g. `camera`, `location`)
 /// to the Android `pm grant` permission constant. Pass-through anything
 /// already starting with `android.permission.`.
@@ -524,17 +544,7 @@ impl PlatformDriver for AndroidDriver {
     }
 
     async fn swipe_coords(&self, from_x: i32, from_y: i32, to_x: i32, to_y: i32) -> Result<()> {
-        // Horizontal swipes get a longer duration so the gesture
-        // velocity stays below Chromium's fling threshold (~400 CSS
-        // px/sec). Above that, `scroll-snap-type: x mandatory`
-        // carousels glide past several snap points per swipe, making
-        // it impossible to land on a specific intermediate card.
-        // Vertical swipes keep the snappier 300ms since the page and
-        // non-snap inner lists scroll deterministically by gesture
-        // distance, and a slower swipe just adds latency.
-        let dx_abs = (to_x - from_x).abs();
-        let dy_abs = (to_y - from_y).abs();
-        let duration = if dx_abs > dy_abs { 700 } else { 300 };
+        let duration = swipe_duration_ms(from_x, from_y, to_x, to_y);
         let body = build_swipe_body(from_x, from_y, to_x, to_y, duration)?;
         self.client.post_json("/swipe", &body).await?;
         Ok(())
@@ -1047,6 +1057,62 @@ mod tests {
         assert_eq!(parsed["to_x"], 30);
         assert_eq!(parsed["to_y"], 40);
         assert_eq!(parsed["duration_ms"], 500);
+    }
+
+    // -----------------------------------------------------------------------
+    // 7b. Swipe duration decision
+    // -----------------------------------------------------------------------
+    #[test]
+    fn swipe_duration_horizontal_is_slower() {
+        // 1. A dominantly-horizontal swipe SHALL use the slower 700ms
+        //    so velocity stays under Chromium's fling threshold.
+        assert_eq!(
+            swipe_duration_ms(100, 500, 900, 520),
+            700,
+            "horizontal swipe SHALL use the 700ms duration"
+        );
+    }
+
+    #[test]
+    fn swipe_duration_vertical_is_faster() {
+        // 1. A dominantly-vertical swipe SHALL use the snappier 300ms.
+        assert_eq!(
+            swipe_duration_ms(500, 100, 520, 900),
+            300,
+            "vertical swipe SHALL use the 300ms duration"
+        );
+    }
+
+    #[test]
+    fn swipe_duration_equal_deltas_is_vertical() {
+        // 1. Equal horizontal/vertical deltas SHALL fall through to the
+        //    vertical 300ms branch (strict `>` means ties are not horizontal).
+        assert_eq!(
+            swipe_duration_ms(0, 0, 100, 100),
+            300,
+            "equal deltas SHALL use the 300ms duration"
+        );
+    }
+
+    #[test]
+    fn swipe_duration_uses_absolute_distance() {
+        // 1. Direction SHALL NOT matter — a swipe with a larger negative
+        //    horizontal delta is still horizontal-dominant.
+        assert_eq!(
+            swipe_duration_ms(900, 500, 100, 480),
+            700,
+            "right-to-left horizontal swipe SHALL use the 700ms duration"
+        );
+    }
+
+    #[test]
+    fn swipe_duration_zero_distance_is_vertical_branch() {
+        // 1. A degenerate zero-distance swipe SHALL take the 300ms branch.
+        assert_eq!(
+            swipe_duration_ms(50, 50, 50, 50),
+            300,
+            "zero-distance swipe SHALL use the 300ms duration"
+        );
     }
 
     // -----------------------------------------------------------------------

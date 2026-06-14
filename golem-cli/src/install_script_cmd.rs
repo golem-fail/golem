@@ -196,14 +196,7 @@ pub fn run() -> Result<()> {
 
     // For native-{ios,android}, include platform in default filename so the
     // same app can have separate scripts. Cross-platform frameworks don't.
-    let default_output = match framework {
-        InstallFramework::NativeIos => format!(
-            "scripts/install-{}-ios.sh", sanitize_app_name_for_path(&app_name)),
-        InstallFramework::NativeAndroid => format!(
-            "scripts/install-{}-android.sh", sanitize_app_name_for_path(&app_name)),
-        InstallFramework::Tauri => format!(
-            "scripts/install-{}.sh", sanitize_app_name_for_path(&app_name)),
-    };
+    let default_output = default_output_path(framework, &app_name);
     let output_path_str: String = Input::with_theme(&theme)
         .with_prompt("Output path")
         .default(default_output)
@@ -239,11 +232,7 @@ pub fn run() -> Result<()> {
                     .unwrap_or_else(|| output_path.clone());
                 let rel_str = rel.to_string_lossy().to_string();
                 // Platform-specific for native, cross-platform for Tauri/Expo.
-                let platform_key = match framework {
-                    InstallFramework::NativeIos => Some("ios"),
-                    InstallFramework::NativeAndroid => Some("android"),
-                    InstallFramework::Tauri => None,
-                };
+                let platform_key = platform_key_for(framework);
                 update_golem_toml_install_script(
                     &path,
                     &app_name,
@@ -258,15 +247,7 @@ pub fn run() -> Result<()> {
                         display_path.display(), app_name, rel_str),
                 }
             } else {
-                let platform_key = match framework {
-                    InstallFramework::NativeIos => Some("ios"),
-                    InstallFramework::NativeAndroid => Some("android"),
-                    InstallFramework::Tauri => None,
-                };
-                let snippet = match platform_key {
-                    Some(p) => format!("install_script = {{ {p} = \"{}\" }}", output_path.display()),
-                    None => format!("install_script = \"{}\"", output_path.display()),
-                };
+                let snippet = install_script_snippet(framework, &output_path.display().to_string());
                 println!(
                     "\nAdd to [[apps]] in golem.toml (or [[flow.apps]] in a flow file):\n  [[apps]]\n  name = \"{}\"\n  {}",
                     app_name, snippet
@@ -378,6 +359,12 @@ fn discover_xcode_schemes(project_path: &str) -> Vec<String> {
     let Ok(out) = output else { return Vec::new() };
     if !out.status.success() { return Vec::new(); }
     let text = String::from_utf8_lossy(&out.stdout);
+    parse_xcode_schemes(&text)
+}
+
+/// Parse scheme names out of `xcodebuild -list` output. Schemes are listed
+/// one-per-line under a `Schemes:` header, terminated by a blank line.
+fn parse_xcode_schemes(text: &str) -> Vec<String> {
     let mut schemes = Vec::new();
     let mut in_schemes = false;
     for line in text.lines() {
@@ -459,6 +446,38 @@ fn detect_tauri_command(tauri_dir: &Path, pm_items: &[(&str, &str)]) -> usize {
 
 fn sanitize_app_name_for_path(name: &str) -> String {
     name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).collect()
+}
+
+/// Default suggested output path for the install script. Native frameworks
+/// embed the platform so an app can keep separate ios/android scripts;
+/// cross-platform frameworks (Tauri) use a single filename.
+fn default_output_path(framework: InstallFramework, app_name: &str) -> String {
+    let slug = sanitize_app_name_for_path(app_name);
+    match framework {
+        InstallFramework::NativeIos => format!("scripts/install-{slug}-ios.sh"),
+        InstallFramework::NativeAndroid => format!("scripts/install-{slug}-android.sh"),
+        InstallFramework::Tauri => format!("scripts/install-{slug}.sh"),
+    }
+}
+
+/// The `install_script.<platform>` key for a framework, or `None` for
+/// cross-platform frameworks that write a bare `install_script` value.
+fn platform_key_for(framework: InstallFramework) -> Option<&'static str> {
+    match framework {
+        InstallFramework::NativeIos => Some("ios"),
+        InstallFramework::NativeAndroid => Some("android"),
+        InstallFramework::Tauri => None,
+    }
+}
+
+/// The `install_script` TOML snippet to print when the user declines the
+/// automatic golem.toml update. Platform-specific frameworks emit an inline
+/// table keyed by platform; cross-platform frameworks emit a bare string.
+fn install_script_snippet(framework: InstallFramework, output_path: &str) -> String {
+    match platform_key_for(framework) {
+        Some(p) => format!("install_script = {{ {p} = \"{output_path}\" }}"),
+        None => format!("install_script = \"{output_path}\""),
+    }
 }
 
 #[cfg(test)]
@@ -817,5 +836,103 @@ mod tests {
         let mut found = Vec::new();
         walk_for(&missing, 5, &mut |_p| true, &mut found);
         assert!(found.is_empty(), "missing dir SHALL produce no matches");
+    }
+
+    // 17. parse_xcode_schemes reads names under the `Schemes:` header and stops
+    //    at the first blank line that follows them.
+    #[test]
+    fn parse_xcode_schemes_extracts_block() {
+        let text = "Information about project \"MyApp\":\n    \
+                    Targets:\n        MyApp\n\n    \
+                    Schemes:\n        MyApp\n        MyAppTests\n\n";
+        let schemes = parse_xcode_schemes(text);
+        assert_eq!(
+            schemes,
+            vec!["MyApp".to_string(), "MyAppTests".to_string()],
+            "SHALL collect scheme names until the terminating blank line"
+        );
+    }
+
+    // 18. No `Schemes:` header anywhere yields an empty Vec.
+    #[test]
+    fn parse_xcode_schemes_no_header_is_empty() {
+        let text = "Information about workspace:\n    Targets:\n        App\n";
+        assert!(
+            parse_xcode_schemes(text).is_empty(),
+            "absence of Schemes header SHALL yield no schemes"
+        );
+    }
+
+    // 19. Empty input yields no schemes.
+    #[test]
+    fn parse_xcode_schemes_empty_input() {
+        assert!(parse_xcode_schemes("").is_empty(), "empty text SHALL yield no schemes");
+    }
+
+    // 20. A Schemes header with no following blank line (EOF instead) still
+    //    terminates cleanly with whatever was collected.
+    #[test]
+    fn parse_xcode_schemes_header_at_eof() {
+        let text = "Schemes:\n        OnlyOne";
+        assert_eq!(
+            parse_xcode_schemes(text),
+            vec!["OnlyOne".to_string()],
+            "trailing scheme without blank line SHALL still be collected"
+        );
+    }
+
+    // 21. default_output_path embeds the platform for native frameworks and a
+    //    bare filename for Tauri, slugging the app name in all cases.
+    #[test]
+    fn default_output_path_per_framework() {
+        assert_eq!(
+            default_output_path(InstallFramework::NativeIos, "My App"),
+            "scripts/install-My-App-ios.sh",
+            "iOS default SHALL embed -ios and slug the name"
+        );
+        assert_eq!(
+            default_output_path(InstallFramework::NativeAndroid, "My App"),
+            "scripts/install-My-App-android.sh",
+            "Android default SHALL embed -android"
+        );
+        assert_eq!(
+            default_output_path(InstallFramework::Tauri, "My App"),
+            "scripts/install-My-App.sh",
+            "Tauri default SHALL omit a platform suffix"
+        );
+    }
+
+    // 22. platform_key_for maps native frameworks to their platform and Tauri
+    //    to None (cross-platform).
+    #[test]
+    fn platform_key_for_maps_frameworks() {
+        assert_eq!(platform_key_for(InstallFramework::NativeIos), Some("ios"));
+        assert_eq!(platform_key_for(InstallFramework::NativeAndroid), Some("android"));
+        assert_eq!(
+            platform_key_for(InstallFramework::Tauri),
+            None,
+            "Tauri SHALL have no platform key"
+        );
+    }
+
+    // 23. install_script_snippet emits an inline table for native frameworks
+    //    and a bare string for cross-platform ones.
+    #[test]
+    fn install_script_snippet_per_framework() {
+        assert_eq!(
+            install_script_snippet(InstallFramework::NativeIos, "scripts/install-app-ios.sh"),
+            "install_script = { ios = \"scripts/install-app-ios.sh\" }",
+            "iOS SHALL emit an ios-keyed inline table"
+        );
+        assert_eq!(
+            install_script_snippet(InstallFramework::NativeAndroid, "scripts/x.sh"),
+            "install_script = { android = \"scripts/x.sh\" }",
+            "Android SHALL emit an android-keyed inline table"
+        );
+        assert_eq!(
+            install_script_snippet(InstallFramework::Tauri, "scripts/install-app.sh"),
+            "install_script = \"scripts/install-app.sh\"",
+            "Tauri SHALL emit a bare install_script string"
+        );
     }
 }

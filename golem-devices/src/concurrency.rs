@@ -88,7 +88,16 @@ fn get_available_ram_mb_macos() -> Result<u64> {
 
     let output = Command::new("vm_stat").output()?;
     let text = String::from_utf8_lossy(&output.stdout);
+    Ok(parse_vm_stat(&text))
+}
 
+/// Parse `vm_stat` output into available RAM in megabytes.
+///
+/// Sums the free/inactive/speculative page counts and multiplies by the page
+/// size declared on the first line (defaulting to 16384 if absent), then
+/// converts bytes to MiB. Missing fields contribute 0.
+#[cfg(any(target_os = "macos", test))]
+fn parse_vm_stat(text: &str) -> u64 {
     // First line: "Mach Virtual Memory Statistics: (page size of NNNN bytes)"
     let page_size: u64 = text
         .lines()
@@ -117,12 +126,21 @@ fn get_available_ram_mb_macos() -> Result<u64> {
     let speculative = page_value("Pages speculative");
 
     let available_bytes = (free + inactive + speculative) * page_size;
-    Ok(available_bytes / (1024 * 1024))
+    available_bytes / (1024 * 1024)
 }
 
 #[cfg(target_os = "linux")]
 fn get_available_ram_mb_linux() -> Result<u64> {
     let contents = std::fs::read_to_string("/proc/meminfo")?;
+    parse_meminfo(&contents)
+}
+
+/// Parse `/proc/meminfo` contents into available RAM in megabytes.
+///
+/// Reads the `MemAvailable:` line (value in kB) and converts to MiB. Errors if
+/// the line is absent or its value cannot be parsed.
+#[cfg(any(target_os = "linux", test))]
+fn parse_meminfo(contents: &str) -> Result<u64> {
     for line in contents.lines() {
         if let Some(rest) = line.strip_prefix("MemAvailable:") {
             let kb: u64 = rest
@@ -241,7 +259,16 @@ async fn android_device_free_disk_mb(udid: &str) -> Option<u64> {
         .await
         .ok()?;
     let s = String::from_utf8_lossy(&out.stdout);
-    let line = s.lines().nth(1)?;
+    parse_df_output(&s)
+}
+
+/// Parse `df -k /data` output into free MiB.
+///
+/// Reads the second line (skipping the header), takes the 4th whitespace
+/// column (Available, in kB) and converts to MiB. Returns None if the line or
+/// column is missing or unparseable.
+fn parse_df_output(text: &str) -> Option<u64> {
+    let line = text.lines().nth(1)?;
     let avail_kb: u64 = line.split_whitespace().nth(3)?.parse().ok()?;
     Some(avail_kb / 1024)
 }
@@ -586,6 +613,139 @@ mod tests {
         assert_eq!(
             snap.device_free_disk_mb, snap.host_free_disk_mb,
             "iOS simulator device disk SHALL mirror host disk"
+        );
+    }
+
+    // -- parse_vm_stat ------------------------------------------------------
+
+    // 25. parse_vm_stat sums free/inactive/speculative pages times page size.
+    #[test]
+    fn parse_vm_stat_sums_pages_with_declared_page_size() {
+        // 1. Page size 4096 bytes; 256+256+512 = 1024 pages = 4 MiB.
+        let text = "Mach Virtual Memory Statistics: (page size of 4096 bytes)\n\
+            Pages free:                                  256.\n\
+            Pages inactive:                              256.\n\
+            Pages speculative:                           512.\n";
+        assert_eq!(
+            parse_vm_stat(text),
+            4,
+            "1024 pages * 4096 bytes SHALL be 4 MiB"
+        );
+    }
+
+    // 26. parse_vm_stat defaults page size to 16384 when first line lacks it.
+    #[test]
+    fn parse_vm_stat_defaults_page_size_when_absent() {
+        // 1. No "page size of" marker → default 16384; 64 pages = 1 MiB.
+        let text = "Some unrelated header line\n\
+            Pages free:                                   64.\n";
+        assert_eq!(
+            parse_vm_stat(text),
+            1,
+            "64 pages * default 16384 bytes SHALL be 1 MiB"
+        );
+    }
+
+    // 27. parse_vm_stat treats missing page categories as zero.
+    #[test]
+    fn parse_vm_stat_missing_categories_count_zero() {
+        // 1. Only "Pages free" present; others absent → counted as 0.
+        let text = "Mach Virtual Memory Statistics: (page size of 4096 bytes)\n\
+            Pages free:                                  256.\n";
+        // 256 pages * 4096 = 1 MiB.
+        assert_eq!(
+            parse_vm_stat(text),
+            1,
+            "absent categories SHALL contribute zero pages"
+        );
+    }
+
+    // 28. parse_vm_stat on empty input yields zero.
+    #[test]
+    fn parse_vm_stat_empty_input_is_zero() {
+        assert_eq!(parse_vm_stat(""), 0, "empty vm_stat SHALL yield 0 MiB");
+    }
+
+    // -- parse_meminfo ------------------------------------------------------
+
+    // 29. parse_meminfo reads MemAvailable kB and converts to MiB.
+    #[test]
+    fn parse_meminfo_reads_mem_available() {
+        let text = "MemTotal:       16384000 kB\n\
+            MemFree:         1024000 kB\n\
+            MemAvailable:    2097152 kB\n";
+        // 2097152 kB / 1024 = 2048 MiB.
+        let mb = parse_meminfo(text).expect("MemAvailable SHALL parse");
+        assert_eq!(mb, 2048, "2097152 kB SHALL convert to 2048 MiB");
+    }
+
+    // 30. parse_meminfo errors when MemAvailable is absent.
+    #[test]
+    fn parse_meminfo_missing_field_errors() {
+        let text = "MemTotal:       16384000 kB\nMemFree: 1024000 kB\n";
+        let err = parse_meminfo(text).expect_err("absent MemAvailable SHALL error");
+        assert!(
+            err.to_string().contains("MemAvailable not found"),
+            "error SHALL name the missing field, got: {err}"
+        );
+    }
+
+    // 31. parse_meminfo errors when the value is non-numeric.
+    #[test]
+    fn parse_meminfo_unparseable_value_errors() {
+        let text = "MemAvailable:    not_a_number kB\n";
+        let err = parse_meminfo(text).expect_err("non-numeric value SHALL error");
+        assert!(
+            err.to_string().contains("failed to parse MemAvailable"),
+            "error SHALL describe the parse failure, got: {err}"
+        );
+    }
+
+    // -- parse_df_output ----------------------------------------------------
+
+    // 32. parse_df_output reads the Available column (4th) in kB → MiB.
+    #[test]
+    fn parse_df_output_reads_available_column() {
+        let text = "Filesystem     1K-blocks    Used Available Use% Mounted on\n\
+            /dev/block/dm-1 100000000 40000000 2097152  40% /data\n";
+        // Available = 2097152 kB / 1024 = 2048 MiB.
+        let mb = parse_df_output(text).expect("df Available SHALL parse");
+        assert_eq!(mb, 2048, "2097152 kB SHALL convert to 2048 MiB");
+    }
+
+    // 33. parse_df_output returns None when the data line is missing.
+    #[test]
+    fn parse_df_output_missing_data_line_is_none() {
+        // 1. Header only, no second line.
+        let text = "Filesystem 1K-blocks Used Available Use% Mounted on\n";
+        assert_eq!(
+            parse_df_output(text),
+            None,
+            "header-only df output SHALL yield None"
+        );
+    }
+
+    // 34. parse_df_output returns None when the Available column is absent.
+    #[test]
+    fn parse_df_output_short_data_line_is_none() {
+        // 1. Data line has fewer than 4 columns.
+        let text = "Filesystem 1K-blocks Used Available\n/dev/block one two\n";
+        assert_eq!(
+            parse_df_output(text),
+            None,
+            "data line lacking the Available column SHALL yield None"
+        );
+    }
+
+    // 35. parse_df_output returns None when the Available column is non-numeric.
+    #[test]
+    fn parse_df_output_non_numeric_available_is_none() {
+        let text = "Filesystem 1K-blocks Used Available Use% Mounted on\n\
+            /dev/block 100 40 xyz 40% /data\n";
+        assert_eq!(
+            parse_df_output(text),
+            None,
+            "non-numeric Available SHALL yield None"
         );
     }
 }

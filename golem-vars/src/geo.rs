@@ -384,6 +384,7 @@ fn expand_format(fmt: &str, rng: &mut impl Rng) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::geo_loader::{GeoCity, GeoCountry, GeoState};
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
 
@@ -1174,5 +1175,102 @@ mod tests {
         assert_eq!(parse_numerals("４2"), Some(42));
         // Trailing non-digit makes the whole parse fail.
         assert_eq!(parse_numerals("4x"), None);
+    }
+
+    /// Convenience: build a `GeoData` fixture with one state holding the given
+    /// region tags and one city per (name, postcode-codes) pair supplied.
+    fn geo_fixture(region_tags: &[&str], cities: &[(&str, &[&str])]) -> GeoData {
+        let cities: Vec<GeoCity> = cities
+            .iter()
+            .map(|(name, codes)| {
+                let postcodes: Vec<GeoPostcode> = codes
+                    .iter()
+                    .map(|code| GeoPostcode::for_test(code, "St", None, None))
+                    .collect();
+                GeoCity::for_test(name, postcodes)
+            })
+            .collect();
+        let state = GeoState::for_test(
+            region_tags.iter().map(|s| s.to_string()).collect(),
+            cities,
+        );
+        let country = GeoCountry::for_test("ZZ", vec!["+99 ### ####".to_string()]);
+        GeoData::for_test(country, vec![state])
+    }
+
+    // -----------------------------------------------------------------------
+    // 40. collect_city_names with a hand-built GeoData returns every city name.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn collect_city_names_from_fixture_returns_all() {
+        let geo = geo_fixture(&["r1"], &[("Alpha", &["1"]), ("Beta", &["2"])]);
+        let names = collect_city_names(Some(&geo), None);
+        assert_eq!(
+            names,
+            vec!["Alpha".to_string(), "Beta".to_string()],
+            "SHALL return every city name in order, got: {names:?}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // 41. collect_city_names region filter is case-insensitive and excludes
+    //     states whose region_tags do not contain the requested tag.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn collect_city_names_region_filter_case_insensitive() {
+        let geo = geo_fixture(&["Kansai"], &[("Osaka", &["1"])]);
+        // 1. Matching tag with different casing SHALL still match.
+        let matched = collect_city_names(Some(&geo), Some("kansai"));
+        assert_eq!(
+            matched,
+            vec!["Osaka".to_string()],
+            "case-insensitive region match SHALL include the city, got: {matched:?}"
+        );
+        // 2. A non-matching tag SHALL exclude the state entirely.
+        let missed = collect_city_names(Some(&geo), Some("Narnia"));
+        assert!(
+            missed.is_empty(),
+            "non-matching region SHALL yield no cities, got: {missed:?}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // 42. collect_postcodes flattens every postcode code across cities.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn collect_postcodes_from_fixture_flattens_codes() {
+        let geo = geo_fixture(&["r1"], &[("Alpha", &["100", "101"]), ("Beta", &["200"])]);
+        let codes = collect_postcodes(Some(&geo));
+        assert_eq!(
+            codes,
+            vec!["100".to_string(), "101".to_string(), "200".to_string()],
+            "SHALL flatten every postcode code, got: {codes:?}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // 43. pick_random_postcode_entry returns one of the fixture's entries and
+    //     errors when the fixture has no postcodes.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn pick_random_postcode_entry_returns_member_or_errors() {
+        // 1. With entries, the picked code SHALL be one we put in.
+        let geo = geo_fixture(&["r1"], &[("Alpha", &["100", "101"])]);
+        let mut rng = seeded_rng();
+        let entry = pick_random_postcode_entry(&geo, &mut rng).expect("SHALL pick an entry");
+        assert!(
+            entry.code == "100" || entry.code == "101",
+            "picked code SHALL be a fixture entry, got: {}",
+            entry.code
+        );
+
+        // 2. With no postcodes at all, it SHALL error.
+        let empty = geo_fixture(&["r1"], &[("Alpha", &[])]);
+        let mut rng = seeded_rng();
+        let result = pick_random_postcode_entry(&empty, &mut rng);
+        assert!(
+            result.is_err(),
+            "empty geo data SHALL error from pick_random_postcode_entry"
+        );
     }
 }

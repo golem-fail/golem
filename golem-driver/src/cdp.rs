@@ -56,9 +56,16 @@ pub async fn find_webview_socket(device_serial: &str, package_name: &str) -> Opt
         .ok()?;
 
     let text = String::from_utf8_lossy(&output.stdout);
-    for pid in &pids {
+    match_webview_socket(&text, &pids)
+}
+
+/// Pure socket-matching logic for `find_webview_socket`: scan the contents of
+/// `/proc/net/unix` for a `webview_devtools_remote_<pid>` socket name, trying
+/// each PID in order. Returns the first matching socket name.
+fn match_webview_socket(proc_net_unix: &str, pids: &[&str]) -> Option<String> {
+    for pid in pids {
         let suffix = format!("webview_devtools_remote_{pid}");
-        for line in text.lines() {
+        for line in proc_net_unix.lines() {
             if let Some(idx) = line.find(&suffix) {
                 let name = line[idx..].split_whitespace().next()?;
                 return Some(name.to_string());
@@ -144,8 +151,14 @@ pub async fn get_page_id(port: u16) -> Result<String> {
         .text()
         .await?;
 
+    parse_page_id(&resp)
+}
+
+/// Pure target-selection logic for `get_page_id`: parse the CDP `/json`
+/// response body and return the `id` of the first page target.
+fn parse_page_id(resp: &str) -> Result<String> {
     let targets: serde_json::Value =
-        serde_json::from_str(&resp).context("failed to parse CDP /json")?;
+        serde_json::from_str(resp).context("failed to parse CDP /json")?;
 
     let arr = targets.as_array().context("CDP /json not an array")?;
     if arr.is_empty() {
@@ -200,26 +213,8 @@ pub async fn evaluate_js(
     while let Some(msg) = read.next().await {
         let msg = msg.context("CDP WebSocket read error")?;
         if let Message::Text(text) = msg {
-            let resp: serde_json::Value =
-                serde_json::from_str(&text).context("failed to parse CDP response")?;
-
-            if resp.get("id").and_then(|v| v.as_i64()) == Some(1) {
-                if let Some(err) = resp.get("result").and_then(|r| r.get("exceptionDetails")) {
-                    return Err(golem_events::coded(
-                        golem_events::FailureCode::DeviceWebviewComms,
-                        anyhow::anyhow!("CDP evaluation error: {err}"),
-                    ));
-                }
-                let value = resp
-                    .get("result")
-                    .and_then(|r| r.get("result"))
-                    .and_then(|r| r.get("value"));
-                return Ok(match value {
-                    Some(v) if v.is_string() => v.as_str().unwrap_or("").to_string(),
-                    Some(v) if v.is_null() => String::new(),
-                    Some(v) => v.to_string(),
-                    None => String::new(),
-                });
+            if let Some(result) = parse_eval_response(&text)? {
+                return Ok(result);
             }
         }
     }
@@ -228,6 +223,38 @@ pub async fn evaluate_js(
         golem_events::FailureCode::DeviceWebviewComms,
         anyhow::anyhow!("CDP WebSocket closed without response"),
     ))
+}
+
+/// Pure response coercion for `evaluate_js`: parse a single CDP WebSocket text
+/// frame. Returns:
+/// - `Ok(Some(value))` for the matching `id == 1` response, coerced to a string
+///   (`undefined`/`null` → empty string, strings unquoted, others stringified).
+/// - `Ok(None)` for any other message — the caller keeps reading.
+/// - `Err(..)` if the frame is unparseable or carries `exceptionDetails`.
+fn parse_eval_response(text: &str) -> Result<Option<String>> {
+    let resp: serde_json::Value =
+        serde_json::from_str(text).context("failed to parse CDP response")?;
+
+    if resp.get("id").and_then(|v| v.as_i64()) != Some(1) {
+        return Ok(None);
+    }
+
+    if let Some(err) = resp.get("result").and_then(|r| r.get("exceptionDetails")) {
+        return Err(golem_events::coded(
+            golem_events::FailureCode::DeviceWebviewComms,
+            anyhow::anyhow!("CDP evaluation error: {err}"),
+        ));
+    }
+    let value = resp
+        .get("result")
+        .and_then(|r| r.get("result"))
+        .and_then(|r| r.get("value"));
+    Ok(Some(match value {
+        Some(v) if v.is_string() => v.as_str().unwrap_or("").to_string(),
+        Some(v) if v.is_null() => String::new(),
+        Some(v) => v.to_string(),
+        None => String::new(),
+    }))
 }
 
 /// Evaluate the DOM traversal JavaScript via CDP and return the raw JSON string.
@@ -493,6 +520,160 @@ mod tests {
         assert!(
             js.contains("aria-label"),
             "traversal JS SHALL extract the aria-label attribute"
+        );
+    }
+
+    // 15. match_webview_socket returns the socket name following the
+    //     webview_devtools_remote_<pid> suffix on a matching /proc/net/unix line.
+    #[test]
+    fn match_socket_finds_name_for_pid() {
+        let proc = "0000: 00000002 0 0 0 1 0 12345 @webview_devtools_remote_4321\n";
+        let got = match_webview_socket(proc, &["4321"]);
+        // The localabstract socket name is matched from the suffix start, so the
+        // leading `@` (abstract-namespace marker) is not part of the returned name.
+        assert_eq!(
+            got.as_deref(),
+            Some("webview_devtools_remote_4321"),
+            "matching socket name SHALL be returned from the suffix start"
+        );
+    }
+
+    // 16. match_webview_socket tries PIDs in order and returns the first hit.
+    #[test]
+    fn match_socket_tries_pids_in_order() {
+        let proc = "x y z @webview_devtools_remote_222\nx y z @webview_devtools_remote_111\n";
+        // 333 has no socket; 111 does — first listed PID with a match wins.
+        let got = match_webview_socket(proc, &["333", "111"]);
+        assert_eq!(
+            got.as_deref(),
+            Some("webview_devtools_remote_111"),
+            "first PID with a matching socket SHALL win"
+        );
+    }
+
+    // 17. match_webview_socket returns None when no PID has a socket.
+    #[test]
+    fn match_socket_none_when_no_match() {
+        let proc = "0000: foo bar @some_other_socket\n";
+        assert!(
+            match_webview_socket(proc, &["4321"]).is_none(),
+            "absent socket SHALL yield None"
+        );
+    }
+
+    // 18. parse_page_id returns the id of the first target.
+    #[test]
+    fn parse_page_id_returns_first_target_id() {
+        let resp = r#"[{"id":"PAGE_A","type":"page"},{"id":"PAGE_B"}]"#;
+        let got = parse_page_id(resp).expect("valid /json SHALL parse");
+        assert_eq!(got, "PAGE_A", "the first target's id SHALL be returned");
+    }
+
+    // 19. parse_page_id errors on an empty target array.
+    #[test]
+    fn parse_page_id_errors_on_empty_array() {
+        let err = parse_page_id("[]").expect_err("empty array SHALL error");
+        assert!(
+            err.to_string().contains("No CDP page targets found"),
+            "empty array SHALL report no targets, got: {err}"
+        );
+    }
+
+    // 20. parse_page_id errors when the response is not a JSON array.
+    #[test]
+    fn parse_page_id_errors_when_not_array() {
+        let err = parse_page_id(r#"{"id":"x"}"#).expect_err("object SHALL error");
+        assert!(
+            err.to_string().contains("not an array"),
+            "non-array SHALL report not-an-array, got: {err}"
+        );
+    }
+
+    // 21. parse_page_id errors when the first target lacks an id.
+    #[test]
+    fn parse_page_id_errors_without_id() {
+        let err = parse_page_id(r#"[{"type":"page"}]"#).expect_err("missing id SHALL error");
+        assert!(
+            err.to_string().contains("no id"),
+            "target without id SHALL report no id, got: {err}"
+        );
+    }
+
+    // 22. parse_eval_response unquotes a string result value.
+    #[test]
+    fn parse_eval_unquotes_string_value() {
+        let resp = r#"{"id":1,"result":{"result":{"value":"hello"}}}"#;
+        let got = parse_eval_response(resp).expect("valid response SHALL parse");
+        assert_eq!(
+            got,
+            Some("hello".to_string()),
+            "string value SHALL be returned unquoted"
+        );
+    }
+
+    // 23. parse_eval_response coerces null and undefined (missing) to empty string.
+    #[test]
+    fn parse_eval_null_and_missing_become_empty() {
+        let null_resp = r#"{"id":1,"result":{"result":{"value":null}}}"#;
+        assert_eq!(
+            parse_eval_response(null_resp).expect("parse"),
+            Some(String::new()),
+            "null value SHALL coerce to empty string"
+        );
+        let missing_resp = r#"{"id":1,"result":{"result":{}}}"#;
+        assert_eq!(
+            parse_eval_response(missing_resp).expect("parse"),
+            Some(String::new()),
+            "missing value SHALL coerce to empty string"
+        );
+    }
+
+    // 24. parse_eval_response stringifies non-string values (numbers, objects).
+    #[test]
+    fn parse_eval_stringifies_non_string_value() {
+        let num_resp = r#"{"id":1,"result":{"result":{"value":42}}}"#;
+        assert_eq!(
+            parse_eval_response(num_resp).expect("parse"),
+            Some("42".to_string()),
+            "numeric value SHALL be stringified"
+        );
+        let obj_resp = r#"{"id":1,"result":{"result":{"value":{"a":1}}}}"#;
+        assert_eq!(
+            parse_eval_response(obj_resp).expect("parse"),
+            Some(r#"{"a":1}"#.to_string()),
+            "object value SHALL be JSON-stringified"
+        );
+    }
+
+    // 25. parse_eval_response returns None for a non-matching id (caller keeps reading).
+    #[test]
+    fn parse_eval_skips_non_matching_id() {
+        let resp = r#"{"id":2,"result":{"result":{"value":"ignored"}}}"#;
+        assert_eq!(
+            parse_eval_response(resp).expect("parse"),
+            None,
+            "non-matching id SHALL yield None so the caller keeps reading"
+        );
+    }
+
+    // 26. parse_eval_response surfaces exceptionDetails as an error.
+    #[test]
+    fn parse_eval_errors_on_exception_details() {
+        let resp = r#"{"id":1,"result":{"exceptionDetails":{"text":"boom"}}}"#;
+        let err = parse_eval_response(resp).expect_err("exceptionDetails SHALL error");
+        assert!(
+            err.to_string().contains("CDP evaluation error"),
+            "exceptionDetails SHALL surface as evaluation error, got: {err}"
+        );
+    }
+
+    // 27. parse_eval_response errors on an unparseable frame.
+    #[test]
+    fn parse_eval_errors_on_bad_json() {
+        let err = parse_eval_response("not json").expect_err("bad json SHALL error");
+        assert!(
+            err.to_string().contains("failed to parse CDP response"),
+            "unparseable frame SHALL report parse failure, got: {err}"
         );
     }
 }
