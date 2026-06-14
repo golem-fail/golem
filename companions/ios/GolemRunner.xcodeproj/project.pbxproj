@@ -15,6 +15,12 @@
 		A1000006 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000008 /* Assets.xcassets */; };
 		A1000007 /* SnapshotHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* SnapshotHelper.m */; };
 		A1000008 /* GestureSynthesizer.m in Sources */ = {isa = PBXBuildFile; fileRef = A2000016 /* GestureSynthesizer.m */; };
+		C1000001 /* HTTPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000003 /* HTTPServer.swift */; };
+		C1000002 /* HierarchySerializer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000004 /* HierarchySerializer.swift */; };
+		C1000003 /* SnapshotHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* SnapshotHelper.m */; };
+		C1000004 /* HTTPResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2000001 /* HTTPResponseTests.swift */; };
+		C1000005 /* MockSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2000002 /* MockSnapshot.swift */; };
+		C1000006 /* HierarchySerializerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2000003 /* HierarchySerializerTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -43,6 +49,11 @@
 		A2000015 /* GestureSynthesizer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GestureSynthesizer.h; sourceTree = "<group>"; };
 		A2000016 /* GestureSynthesizer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GestureSynthesizer.m; sourceTree = "<group>"; };
 		A2000014 /* GolemRunnerUITests-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "GolemRunnerUITests-Bridging-Header.h"; sourceTree = "<group>"; };
+		C2000001 /* HTTPResponseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPResponseTests.swift; sourceTree = "<group>"; };
+		C2000002 /* MockSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockSnapshot.swift; sourceTree = "<group>"; };
+		C2000003 /* HierarchySerializerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HierarchySerializerTests.swift; sourceTree = "<group>"; };
+		C2000004 /* GolemRunnerTests-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "GolemRunnerTests-Bridging-Header.h"; sourceTree = "<group>"; };
+		C2000010 /* GolemRunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GolemRunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -54,6 +65,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A6000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C6000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -79,6 +97,7 @@
 			children = (
 				A7000002 /* GolemRunnerApp */,
 				A7000003 /* GolemRunnerUITests */,
+				C7000001 /* GolemRunnerTests */,
 				A7000004 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -110,11 +129,23 @@
 			path = GolemRunnerUITests;
 			sourceTree = "<group>";
 		};
+		C7000001 /* GolemRunnerTests */ = {
+			isa = PBXGroup;
+			children = (
+				C2000001 /* HTTPResponseTests.swift */,
+				C2000002 /* MockSnapshot.swift */,
+				C2000003 /* HierarchySerializerTests.swift */,
+				C2000004 /* GolemRunnerTests-Bridging-Header.h */,
+			);
+			path = GolemRunnerTests;
+			sourceTree = "<group>";
+		};
 		A7000004 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				A2000010 /* GolemRunnerApp.app */,
 				A2000011 /* GolemRunnerUITests.xctest */,
+				C2000010 /* GolemRunnerTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -156,6 +187,22 @@
 			productReference = A2000011 /* GolemRunnerUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		C5000001 /* GolemRunnerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C9000001 /* Build configuration list for PBXNativeTarget "GolemRunnerTests" */;
+			buildPhases = (
+				C8000001 /* Sources */,
+				C6000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GolemRunnerTests;
+			productName = GolemRunnerTests;
+			productReference = C2000010 /* GolemRunnerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -172,6 +219,9 @@
 					A5000002 = {
 						CreatedOnToolsVersion = 15.0;
 						TestTargetID = A5000001;
+					};
+					C5000001 = {
+						CreatedOnToolsVersion = 15.0;
 					};
 				};
 			};
@@ -190,6 +240,7 @@
 			targets = (
 				A5000001 /* GolemRunnerApp */,
 				A5000002 /* GolemRunnerUITests */,
+				C5000001 /* GolemRunnerTests */,
 			);
 		};
 /* End PBXProject section */
@@ -213,6 +264,19 @@
 				A1000005 /* RequestRouter.swift in Sources */,
 				A1000007 /* SnapshotHelper.m in Sources */,
 				A1000008 /* GestureSynthesizer.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C8000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C1000004 /* HTTPResponseTests.swift in Sources */,
+				C1000005 /* MockSnapshot.swift in Sources */,
+				C1000006 /* HierarchySerializerTests.swift in Sources */,
+				C1000001 /* HTTPServer.swift in Sources */,
+				C1000002 /* HierarchySerializer.swift in Sources */,
+				C1000003 /* SnapshotHelper.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -423,6 +487,50 @@
 			};
 			name = Release;
 		};
+		C4000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = fail.golem.runner.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "GolemRunnerTests/GolemRunnerTests-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		C4000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = fail.golem.runner.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "GolemRunnerTests/GolemRunnerTests-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -449,6 +557,15 @@
 			buildConfigurations = (
 				B1000001 /* Debug */,
 				B1000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C9000001 /* Build configuration list for PBXNativeTarget "GolemRunnerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C4000001 /* Debug */,
+				C4000002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

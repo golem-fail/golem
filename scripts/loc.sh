@@ -109,6 +109,15 @@ for f in "${ALL_FILES[@]}"; do
     qnt)  TEST_FILES["Quint (spec)"]+="$f"$'\n'; add_ext "Quint (spec)" "$ext"; continue ;;
   esac
 
+  # Swift test code: the whole iOS companion unit-test target dir
+  # (`GolemRunnerTests/`) is test code. The `*.test.*` glob above only
+  # catches `foo.test.swift`, so these would otherwise count as Swift program
+  # code. (Scoped to the dir, not a `*Tests.swift` suffix, to avoid catching
+  # the `GolemRunnerUITests.swift` harness, which is companion logic.)
+  if [[ "$ext" == "swift" && "$f" == */GolemRunnerTests/* ]]; then
+    TEST_FILES["Swift (test)"]+="$f"$'\n'; add_ext "Swift (test)" "$ext"; continue
+  fi
+
   # Programming
   case "$ext" in
     rs)                PROG_FILES["Rust"]+="$f"$'\n'; add_ext Rust "$ext" ;;
@@ -221,20 +230,29 @@ declare -A ROW_FACT=()
 # Sum per-file `grep -c` counts over a newline-separated file list.
 sum_grep() {
   local pattern="$1" list="$2"
+  # `grep -c` exits 1 when nothing matches; with pipefail+`set -e` that would
+  # abort the script, so swallow it (awk still prints 0 for empty input).
   echo -n "$list" | xargs grep -hcE "$pattern" 2>/dev/null \
-    | awk '{ s += $1 } END { print s + 0 }'
+    | awk '{ s += $1 } END { print s + 0 }' || true
 }
 
 if [[ -n "${PROG_FILES["Rust"]:-}" ]]; then
   n=$(sum_grep '\bfn ' "${PROG_FILES["Rust"]}")
   ROW_FACT["Rust"]="$(fmt_num "$n") fn"
-  n=$(sum_grep '#\[(tokio::)?test\]' "${PROG_FILES["Rust"]}")
+  # Match `#[test]`, `#[tokio::test]`, and `#[tokio::test(...)]` (runtime args)
+  # — the trailing `[](]` accepts `test` followed by `]` or `(`.
+  n=$(sum_grep '#\[(tokio::)?test[](]' "${PROG_FILES["Rust"]}")
   ROW_FACT["Rust (test)"]="$(fmt_num "$n") tests"
 fi
 
 if [[ -n "${PROG_FILES["Swift"]:-}" ]]; then
   n=$(sum_grep '\bfunc ' "${PROG_FILES["Swift"]}")
   ROW_FACT["Swift"]="$(fmt_num "$n") func"
+fi
+
+if [[ -n "${TEST_FILES["Swift (test)"]:-}" ]]; then
+  n=$(sum_grep '@Test' "${TEST_FILES["Swift (test)"]}")
+  ROW_FACT["Swift (test)"]="$(fmt_num "$n") tests"
 fi
 
 if [[ -n "${PROG_FILES["Java"]:-}" ]]; then
@@ -412,7 +430,7 @@ print_sorted_group() {
     case "$key" in
       Rust|Svelte|Dart|Java|Swift|Python|Ruby|Go|HTML|CSS|TOML|JSON|XML|plist|Properties|Markdown)
         exts="" ;;
-      "Rust (test)"|"Quint (spec)")
+      "Rust (test)"|"Quint (spec)"|"Swift (test)")
         exts="" ;;
     esac
     local fact="${ROW_FACT[$key]:-}"
