@@ -8,7 +8,7 @@
 //! Protocol: JSON objects terminated by newline over unix domain socket
 //! at `~/.golem/golem.sock`.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -16,12 +16,21 @@ use tokio::net::{UnixListener, UnixStream};
 
 use crate::suite::{SuiteConfig, SuiteRunner};
 
-/// Path to the orchestrator socket.
-fn socket_path() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    let dir = PathBuf::from(home).join(".golem");
+/// Build the orchestrator socket path under a supplied base directory,
+/// creating the `.golem` directory if it does not yet exist.
+///
+/// Split out from [`socket_path`] so tests can inject a temp base instead
+/// of touching the real `~/.golem`.
+fn socket_path_in(base: &Path) -> PathBuf {
+    let dir = base.join(".golem");
     let _ = std::fs::create_dir_all(&dir);
     dir.join("golem.sock")
+}
+
+/// Path to the orchestrator socket (`~/.golem/golem.sock`).
+fn socket_path() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    socket_path_in(Path::new(&home))
 }
 
 /// Try to connect to an existing orchestrator server.
@@ -967,5 +976,27 @@ mod tests {
         tokio::time::timeout(std::time::Duration::from_secs(5), server.wait_for_clients())
             .await
             .expect("wait_for_clients SHALL return once active_clients reaches 0");
+    }
+
+    // 15. socket_path_in builds `<base>/.golem/golem.sock` under the
+    //     supplied base and materializes the `.golem` directory.
+    #[test]
+    fn socket_path_in_builds_path_under_supplied_base() {
+        let base = std::env::temp_dir().join(format!("golem-sockpath-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+
+        let sock = socket_path_in(&base);
+
+        assert_eq!(
+            sock,
+            base.join(".golem").join("golem.sock"),
+            "socket_path_in SHALL build <base>/.golem/golem.sock"
+        );
+        assert!(
+            base.join(".golem").is_dir(),
+            "socket_path_in SHALL create the .golem directory under the base"
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

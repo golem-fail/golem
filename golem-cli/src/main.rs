@@ -383,8 +383,12 @@ fn build_config_json(
 use golem_report::flake::{build_summary as build_flake_summary, FlakeEntry};
 
 fn render_flake_summary(entries: &[FlakeEntry]) -> String {
-    use std::fmt::Write;
     let use_color = std::io::IsTerminal::is_terminal(&std::io::stderr());
+    render_flake_summary_with_color(entries, use_color)
+}
+
+fn render_flake_summary_with_color(entries: &[FlakeEntry], use_color: bool) -> String {
+    use std::fmt::Write;
     // Match the stream renderer's continuation indent — `Summary` /
     // `Results:` lines start at column 13 (after the timestamp + space),
     // so the flake block aligns when piped beside them.
@@ -639,6 +643,92 @@ mod tests {
         // skip row: passed==0 && failed==0 → else branch → PASS label.
         assert!(out.contains("PASS     0/3    skip (dev)"), "a fully-skipped entry SHALL fall to the PASS label branch, got: {out}");
         assert!(out.contains("FLAKE    1/3    flaky (dev)"), "flake row SHALL render, got: {out}");
+    }
+
+    // 8. Color injection: the same sample flake summary SHALL render with
+    //    ANSI escapes when use_color=true and without any when false, while
+    //    the human-readable content (header tally + per-flow bodies) stays
+    //    identical between the two.
+    #[test]
+    fn render_with_color_emits_ansi_only_when_enabled() {
+        let entries = vec![
+            entry("flaky (dev)", 1, 2, 0, 3),
+            entry("broken (dev)", 0, 3, 0, 3),
+            entry("good (dev)", 3, 0, 0, 3),
+        ];
+
+        let plain = render_flake_summary_with_color(&entries, false);
+        let colored = render_flake_summary_with_color(&entries, true);
+
+        // The plain path SHALL be byte-identical to the TTY-derived default
+        // when stderr is not a terminal (as it isn't under nextest).
+        assert_eq!(
+            plain,
+            render_flake_summary(&entries),
+            "non-colored path SHALL match the real (non-TTY) render verbatim",
+        );
+
+        // 1. use_color=false SHALL emit no ANSI escape sequences at all.
+        assert!(
+            !plain.contains('\x1b'),
+            "non-colored render SHALL contain no ESC byte, got: {plain:?}",
+        );
+        // 2. use_color=true SHALL emit ANSI escape sequences.
+        assert!(
+            colored.contains('\x1b'),
+            "colored render SHALL contain ANSI escapes, got: {colored:?}",
+        );
+        // 3. The colored render SHALL carry the category label colors.
+        assert!(colored.contains("\x1b[1;33mFLAKE"), "FLAKE row SHALL be bold-yellow, got: {colored:?}");
+        assert!(colored.contains("\x1b[1;31mFAIL "), "FAIL row SHALL be bold-red, got: {colored:?}");
+        assert!(colored.contains("\x1b[1;32mPASS "), "PASS row SHALL be bold-green, got: {colored:?}");
+
+        // 4. Stripping ANSI from the colored output SHALL reproduce the
+        //    plain output exactly — color is purely decorative.
+        let stripped = strip_ansi(&colored);
+        assert_eq!(
+            stripped, plain,
+            "colored output with escapes removed SHALL equal the plain output",
+        );
+    }
+
+    // Color injection over the all-passed short-circuit: the dim "all flows
+    // passed" line is wrapped in ANSI only when use_color=true.
+    #[test]
+    fn render_with_color_dims_all_passed_line() {
+        let entries = vec![entry("a (dev)", 3, 0, 0, 3)];
+
+        let plain = render_flake_summary_with_color(&entries, false);
+        let colored = render_flake_summary_with_color(&entries, true);
+
+        assert!(plain.contains("all flows passed in every run"));
+        assert!(!plain.contains('\x1b'), "plain all-passed SHALL have no ANSI, got: {plain:?}");
+        // \x1b[2m is the DIM code wrapping the all-passed line.
+        assert!(
+            colored.contains("\x1b[2mall flows passed in every run\x1b[0m"),
+            "colored all-passed line SHALL be dimmed, got: {colored:?}",
+        );
+        assert_eq!(strip_ansi(&colored), plain, "stripping color SHALL match plain");
+    }
+
+    // Minimal ANSI stripper for the color-injection assertions above —
+    // removes CSI sequences of the form ESC '[' ... 'm'.
+    fn strip_ansi(s: &str) -> String {
+        let mut out = String::with_capacity(s.len());
+        let mut chars = s.chars();
+        while let Some(c) = chars.next() {
+            if c == '\x1b' {
+                // Skip until (and including) the terminating 'm'.
+                for n in chars.by_ref() {
+                    if n == 'm' {
+                        break;
+                    }
+                }
+            } else {
+                out.push(c);
+            }
+        }
+        out
     }
 
     // 7. parse_platform_override: absent flag → None; known values map to

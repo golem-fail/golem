@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io::Write;
 use std::time::SystemTime;
 
 use chrono::{DateTime, Local};
@@ -726,6 +727,20 @@ fn print_failure_block(
     pending: &[(SystemTime, SubstepEvent)],
     use_color: bool,
 ) {
+    let mut w = std::io::stderr().lock();
+    print_failure_block_to(&mut w, code, msg, msg_color, dp, pending, use_color);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn print_failure_block_to(
+    w: &mut dyn Write,
+    code: &str,
+    msg: &str,
+    msg_color: &str,
+    dp: &str,
+    pending: &[(SystemTime, SubstepEvent)],
+    use_color: bool,
+) {
     // Continuation gutter for the error message — replaces the timestamp
     // column so the line reads as "still the FAIL above talking". When
     // there are no substeps below, close the rope with `╰`; otherwise `│`
@@ -737,9 +752,9 @@ fn print_failure_block(
         pipe_glyph.to_string()
     };
     if use_color {
-        eprintln!("{gutter_pipe}{TS_CONTINUATION_PAD}{dp}       {msg_color}{code} {msg}{RESET}");
+        let _ = writeln!(w, "{gutter_pipe}{TS_CONTINUATION_PAD}{dp}       {msg_color}{code} {msg}{RESET}");
     } else {
-        eprintln!("{gutter_pipe}{TS_CONTINUATION_PAD}{dp}       {code} {msg}");
+        let _ = writeln!(w, "{gutter_pipe}{TS_CONTINUATION_PAD}{dp}       {code} {msg}");
     }
     // Replayed substeps with ├/╰ rope.
     let total = pending.len();
@@ -749,42 +764,47 @@ fn print_failure_block(
         let gutter = if use_color { format!("{DIM}{g}{RESET} ") } else { format!("{g} ") };
         let sub_ts = format_timestamp(*st, use_color);
         let prefixed_ts = format!("{gutter}{sub_ts}");
-        print_substep(&prefixed_ts, dp, sub, use_color);
+        print_substep_to(w, &prefixed_ts, dp, sub, use_color);
     }
 }
 
 fn print_substep(ts: &str, dp: &str, sub: &SubstepEvent, use_color: bool) {
+    let mut w = std::io::stderr().lock();
+    print_substep_to(&mut w, ts, dp, sub, use_color);
+}
+
+fn print_substep_to(w: &mut dyn Write, ts: &str, dp: &str, sub: &SubstepEvent, use_color: bool) {
     let b = SYM_BULLET;
     let (d, r) = if use_color { (DIM, RESET) } else { ("", "") };
 
     match sub {
         SubstepEvent::ElementResolved { selector, bounds, tap_point } => {
-            eprintln!("{ts}  {dp}    {d}{b} element_resolved \"{selector}\" bounds=({},{},{},{}) tap=({},{}){r}",
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} element_resolved \"{selector}\" bounds=({},{},{},{}) tap=({},{}){r}",
                 bounds.x, bounds.y, bounds.width, bounds.height, tap_point.x, tap_point.y);
         }
         SubstepEvent::ElementNotFound { selector, timeout_ms } => {
-            eprintln!("{ts}  {dp}    {d}{b} element_not_found \"{selector}\" after {timeout_ms}ms{r}");
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} element_not_found \"{selector}\" after {timeout_ms}ms{r}");
         }
         SubstepEvent::Tap { point, .. } => {
-            eprintln!("{ts}  {dp}    {d}{b} tap ({},{}){r}", point.x, point.y);
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} tap ({},{}){r}", point.x, point.y);
         }
         SubstepEvent::DoubleTap { point, .. } => {
-            eprintln!("{ts}  {dp}    {d}{b} double_tap ({},{}){r}", point.x, point.y);
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} double_tap ({},{}){r}", point.x, point.y);
         }
         SubstepEvent::LongPress { point, duration_ms, .. } => {
-            eprintln!("{ts}  {dp}    {d}{b} long_press ({},{}) {}ms{r}", point.x, point.y, duration_ms);
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} long_press ({},{}) {}ms{r}", point.x, point.y, duration_ms);
         }
         SubstepEvent::TextInput { text, .. } => {
-            eprintln!("{ts}  {dp}    {d}{b} text_input \"{text}\"{r}");
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} text_input \"{text}\"{r}");
         }
         SubstepEvent::Backspace { count } => {
-            eprintln!("{ts}  {dp}    {d}{b} backspace ×{count}{r}");
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} backspace ×{count}{r}");
         }
         SubstepEvent::Swipe { from, to, .. } => {
-            eprintln!("{ts}  {dp}    {d}{b} swipe ({},{})→({},{}){r}", from.x, from.y, to.x, to.y);
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} swipe ({},{})→({},{}){r}", from.x, from.y, to.x, to.y);
         }
         SubstepEvent::ScrollStarted { selector, direction } => {
-            eprintln!("{ts}  {dp}    {d}{b} scroll_started \"{selector}\" direction={direction}{r}");
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} scroll_started \"{selector}\" direction={direction}{r}");
         }
         SubstepEvent::ScrollAttempt { attempt: _, direction, strategy_index, from, to, result, tree_stats } => {
             let dir_arrow = match direction.as_str() {
@@ -797,49 +817,49 @@ fn print_substep(ts: &str, dp: &str, sub: &SubstepEvent, use_color: bool) {
                 ScrollAttemptResult::BoundaryReached => "boundary reached".to_string(),
             };
             let stats = format_tree_stats(tree_stats);
-            eprintln!("{ts}  {dp}      {d}[scroll] {dir_arrow} strategy {} ({},{})→({},{}) → {result_str} {stats}{r}",
+            let _ = writeln!(w, "{ts}  {dp}      {d}[scroll] {dir_arrow} strategy {} ({},{})→({},{}) → {result_str} {stats}{r}",
                 strategy_index + 1, from.x, from.y, to.x, to.y);
         }
         SubstepEvent::ScrollFound { selector, position, total_attempts } => {
-            eprintln!("{ts}  {dp}    {d}{b} scroll_found \"{selector}\" at ({},{}) after {total_attempts} attempts{r}",
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} scroll_found \"{selector}\" at ({},{}) after {total_attempts} attempts{r}",
                 position.x, position.y);
         }
         SubstepEvent::ScrollDirectionReversed { to_direction, reason } => {
-            eprintln!("{ts}  {dp}    {d}{b} scroll_reversed →{to_direction} {reason}{r}");
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} scroll_reversed →{to_direction} {reason}{r}");
         }
         SubstepEvent::ScrollStrategySwitch { to_index, reason } => {
-            eprintln!("{ts}  {dp}    {d}{b} scroll_strategy_switch →{} {reason}{r}", to_index + 1);
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} scroll_strategy_switch →{} {reason}{r}", to_index + 1);
         }
         SubstepEvent::AppLaunch { bundle, duration_ms } => {
-            eprintln!("{ts}  {dp}    {d}{b} app_launch bundle={bundle} {duration_ms}ms{r}");
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} app_launch bundle={bundle} {duration_ms}ms{r}");
         }
         SubstepEvent::PostSettle { action, duration_ms, stable } => {
             let note = if *stable { "stable" } else { "timeout, still animating" };
-            eprintln!("{ts}  {dp}    {d}{b} post_settle {action} {duration_ms}ms ({note}){r}");
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} post_settle {action} {duration_ms}ms ({note}){r}");
         }
         SubstepEvent::AppStop { bundle } => {
-            eprintln!("{ts}  {dp}    {d}{b} app_stop bundle={bundle}{r}");
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} app_stop bundle={bundle}{r}");
         }
         SubstepEvent::DriverWarning { message } => {
             // Render in yellow + bold to stand out next to neutral
             // substep lines — the operator should notice before the
             // next step fails.
             let warn_tag = tag("[warning]", YELLOW, use_color);
-            eprintln!("{ts}  {dp}    {warn_tag} {message}");
+            let _ = writeln!(w, "{ts}  {dp}    {warn_tag} {message}");
         }
         SubstepEvent::RetryAttempt { attempt, max, delay_ms, error } => {
-            eprintln!("{ts}  {dp}    {d}{b} retry {attempt}/{max} delay={delay_ms}ms: {error}{r}");
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} retry {attempt}/{max} delay={delay_ms}ms: {error}{r}");
         }
         SubstepEvent::HttpRequest { method, url, status, duration_ms } => {
             let s = status.map(|s| s.to_string()).unwrap_or_else(|| "?".to_string());
-            eprintln!("{ts}  {dp}    {d}{b} http {method} {url} → {s} [{duration_ms}ms]{r}");
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} http {method} {url} → {s} [{duration_ms}ms]{r}");
         }
         SubstepEvent::BashCommand { command, exit_code, duration_ms } => {
             let code = exit_code.map(|c| c.to_string()).unwrap_or_else(|| "?".to_string());
-            eprintln!("{ts}  {dp}    {d}{b} bash \"{command}\" exit={code} [{duration_ms}ms]{r}");
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} bash \"{command}\" exit={code} [{duration_ms}ms]{r}");
         }
         SubstepEvent::Screenshot { path } => {
-            eprintln!("{ts}  {dp}    {d}{b} screenshot {path}{r}");
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} screenshot {path}{r}");
         }
         _ => {}
     }
@@ -1145,6 +1165,71 @@ mod tests {
             format_tree_stats(&stats),
             "{3 trees, 181~190 nodes}",
             "differing min/max SHALL render a min~max range"
+        );
+    }
+
+    // 27. print_substep_to: a no-color Tap substep renders the expected line
+    //     into an injected sink (proves the sink seam works end to end).
+    #[test]
+    fn print_substep_to_renders_tap_no_color() {
+        let sub = SubstepEvent::Tap {
+            point: golem_events::Point { x: 12, y: 34 },
+            element_bounds: None,
+        };
+        let mut buf: Vec<u8> = Vec::new();
+        print_substep_to(&mut buf, "TS ", "", &sub, false);
+        let out = String::from_utf8(buf).expect("substep output SHALL be valid UTF-8");
+        assert_eq!(
+            out, "TS       \u{2219} tap (12,34)\n",
+            "no-color tap substep SHALL render bullet + coordinates with a trailing newline"
+        );
+    }
+
+    // 28. print_failure_block_to: no-color, no pending substeps closes the rope
+    //     with `╰` and emits a single error-continuation line into the sink.
+    #[test]
+    fn print_failure_block_to_no_color_no_substeps() {
+        let mut buf: Vec<u8> = Vec::new();
+        print_failure_block_to(&mut buf, "EP422", "type unsupported", BOLD_RED, "", &[], false);
+        let out = String::from_utf8(buf).expect("failure block output SHALL be valid UTF-8");
+        // ╰ gutter + 14-space pad + 7 spaces + "EP422 type unsupported".
+        let expected = format!(
+            "\u{2570}{TS_CONTINUATION_PAD}       EP422 type unsupported\n"
+        );
+        assert_eq!(
+            out, expected,
+            "empty-pending failure block SHALL close the rope with ╰ and render the code + message"
+        );
+    }
+
+    // 29. print_failure_block_to: a buffered substep replays under the error
+    //     line; the gutter switches to `│` then the substep gets the closing `╰`.
+    #[test]
+    fn print_failure_block_to_replays_pending_substep() {
+        let sub = SubstepEvent::ElementNotFound {
+            selector: "Submit".to_string(),
+            timeout_ms: 5000,
+        };
+        let pending = [(SystemTime::UNIX_EPOCH, sub)];
+        let mut buf: Vec<u8> = Vec::new();
+        print_failure_block_to(&mut buf, "EE301", "not found", BOLD_RED, "", &pending, false);
+        let out = String::from_utf8(buf).expect("failure block output SHALL be valid UTF-8");
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines.len(), 2, "one error line plus one replayed substep SHALL render");
+        assert!(
+            lines[0].starts_with('\u{2502}'),
+            "with pending substeps the error gutter SHALL be │, got: {:?}",
+            lines[0]
+        );
+        assert!(
+            lines[1].contains('\u{2570}'),
+            "the last (only) replayed substep SHALL use the closing ╰ rope, got: {:?}",
+            lines[1]
+        );
+        assert!(
+            lines[1].contains("element_not_found \"Submit\" after 5000ms"),
+            "the replayed substep SHALL render its element_not_found detail, got: {:?}",
+            lines[1]
         );
     }
 }

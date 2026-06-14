@@ -1,5 +1,29 @@
 # Roadmap
 
+## Testability: unified I/O seam abstractions (subprocess + HTTP)
+
+Coverage sweep surfaced ~15 functions that directly construct `tokio::process::Command`
+or issue HTTP, making their orchestration logic untestable without real devices/network.
+Rather than 15 piecemeal injections, do two shared seams:
+
+- **`CommandRunner` trait** (real impl spawns; test fake returns canned `Output`/errors),
+  injected where subprocess calls happen: `golem-runner` `installed_state::query`
+  (xcrun/adb/defaults), `installer::run_install_script`, `cleanup` shutdown;
+  `golem-devices` `lifecycle` (boot/run/spawn), `settings` appliers, `concurrency`
+  (adb free-disk), `resource_manager` shutdown; `golem-driver` `android` adb runner;
+  `golem-cli` `suite` reboot/wait. A clock/sleep seam pairs with this for the
+  reboot/wait timeouts.
+- **HTTP/transport seam** for `golem-runner` `actions/external` `handle_http` (inject a
+  `reqwest::Client`/transport) and `handle_await_email` (an `ImapPoller` trait),
+  `golem-runner` `perf` companion fetch, and `golem-driver` `webkit`/`android` companion
+  transport (in-memory duplex for tests).
+
+Also `golem-cli` `install_cache` could take a seam over `installed_state::query` to drive
+`evaluate_cache_gates` with fake `DeviceInstallInfo`. Each seam is behavior-preserving
+(real impl is the default); the payoff is hermetic unit tests for retry/timeout/error
+orchestration. Sizable, architectural — its own session. (The small standalone Cat-3
+seams — main color, orchestrator socket_path, stream `impl Write` — were done inline.)
+
 ## Scroll: `center` + `visibility_percentage` for edge/partial targets (Maestro parity)
 
 `e2e/cross/scroll_search.test.toml` `horizontal_carousel_scroll` fails (EF408)
