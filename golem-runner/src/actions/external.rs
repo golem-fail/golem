@@ -1344,4 +1344,109 @@ mod tests {
             "error SHALL name the imap_port field, got: {err_msg}"
         );
     }
+
+    // ── alert/hierarchy-change path: wait_for_alert_gone observes the
+    //    alert leaving the tree across successive get_hierarchy calls ────
+
+    /// Build a root containing a two-button alert (Cancel, OK).
+    fn root_with_alert() -> golem_element::Element {
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let mut alert = make_element("Alert", Bounds::new(50, 200, 275, 150));
+        let cancel_btn = make_element_with_text("Button", "Cancel", Bounds::new(60, 310, 80, 30));
+        let ok_btn = make_element_with_text("Button", "OK", Bounds::new(200, 310, 80, 30));
+        alert.children.push(cancel_btn);
+        alert.children.push(ok_btn);
+        root.children.push(alert);
+        root
+    }
+
+    // 12. After accept_alert taps the positive button, wait_for_alert_gone
+    //     SHALL observe the alert leaving the hierarchy on a subsequent
+    //     get_hierarchy and return promptly (not spin to its deadline).
+    //     The mock's FIFO queue models the alert disappearing: the first
+    //     get_hierarchy (the resolve loop) sees the alert, and the next one
+    //     (wait_for_alert_gone) sees an alert-free tree.
+    #[tokio::test]
+    async fn accept_alert_returns_when_hierarchy_loses_alert() {
+        let driver = MockPlatformDriver::new(make_element("View", Bounds::new(0, 0, 375, 812)));
+        // First get_hierarchy: alert present → accept_alert taps OK.
+        driver.push_hierarchy(root_with_alert());
+        // Steady fallback (after the queue drains) is an alert-free View, so
+        // wait_for_alert_gone's first poll sees no alert and returns.
+
+        let step = make_step("accept_alert");
+        let ctx = test_ctx(Path::new("."));
+
+        // A tight wall-clock cap proves we did NOT spin to the 2.5s
+        // wait_for_alert_gone deadline: the hierarchy change short-circuits.
+        let outcome = tokio::time::timeout(
+            std::time::Duration::from_millis(1500),
+            handle_accept_alert(&step, &driver, &ctx),
+        )
+        .await
+        .expect("accept_alert SHALL return before the 2.5s alert-gone deadline");
+        outcome.expect("accept_alert SHALL succeed once the alert leaves the tree");
+
+        let calls = driver.get_calls();
+        let tap_calls: Vec<_> = calls.iter().filter(|c| c.0 == "tap").collect();
+        assert_eq!(tap_calls.len(), 1, "SHALL tap exactly one button");
+        // Last button (OK) center: x=200+40=240, y=310+15=325.
+        assert_eq!(
+            tap_calls[0].1,
+            vec!["240", "325"],
+            "SHALL tap the positive (last) button"
+        );
+        // wait_for_alert_gone SHALL have polled the hierarchy again after the
+        // tap (more than the single resolve fetch).
+        let gh_calls = calls.iter().filter(|c| c.0 == "get_hierarchy").count();
+        assert!(
+            gh_calls >= 2,
+            "SHALL re-poll get_hierarchy in wait_for_alert_gone, got {gh_calls}"
+        );
+    }
+
+    // 13. dismiss_alert taps the negative button, then wait_for_alert_gone
+    //     SHALL keep polling while the alert lingers (mid-dismiss
+    //     animation) and return only once a later get_hierarchy shows the
+    //     alert is gone. The FIFO queue models the alert persisting for one
+    //     extra poll after the tap before the alert-free tree appears.
+    #[tokio::test]
+    async fn dismiss_alert_polls_until_lingering_alert_clears() {
+        let driver = MockPlatformDriver::new(make_element("View", Bounds::new(0, 0, 375, 812)));
+        // 1st get_hierarchy (resolve loop): alert present → tap Cancel.
+        driver.push_hierarchy(root_with_alert());
+        // 2nd get_hierarchy (wait_for_alert_gone, first poll): alert still
+        // present mid-dismiss → loop continues.
+        driver.push_hierarchy(root_with_alert());
+        // 3rd+ get_hierarchy: queue drained → steady alert-free View, so the
+        // poll sees no alert and returns.
+
+        let step = make_step("dismiss_alert");
+        let ctx = test_ctx(Path::new("."));
+
+        let outcome = tokio::time::timeout(
+            std::time::Duration::from_millis(2000),
+            handle_dismiss_alert(&step, &driver, &ctx),
+        )
+        .await
+        .expect("dismiss_alert SHALL return before the 2.5s alert-gone deadline");
+        outcome.expect("dismiss_alert SHALL succeed once the lingering alert clears");
+
+        let calls = driver.get_calls();
+        let tap_calls: Vec<_> = calls.iter().filter(|c| c.0 == "tap").collect();
+        assert_eq!(tap_calls.len(), 1, "SHALL tap exactly one button");
+        // First button (Cancel) center: x=60+40=100, y=310+15=325.
+        assert_eq!(
+            tap_calls[0].1,
+            vec!["100", "325"],
+            "SHALL tap the negative (first) button"
+        );
+        // resolve fetch + at least two wait_for_alert_gone polls (lingering,
+        // then clear).
+        let gh_calls = calls.iter().filter(|c| c.0 == "get_hierarchy").count();
+        assert!(
+            gh_calls >= 3,
+            "SHALL re-poll get_hierarchy until the alert clears, got {gh_calls}"
+        );
+    }
 }

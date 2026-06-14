@@ -316,6 +316,72 @@ mod tests {
         );
     }
 
+    // ── assert_visible: element appears on a later poll ───────────────
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn assert_visible_succeeds_when_element_appears_on_later_poll() {
+        // 1. The element is absent from the first hierarchy snapshot but
+        //    present in the steady fallback. resolve_element polls every
+        //    250ms, so the SECOND get_hierarchy() call (after the first
+        //    miss) SHALL observe the element and the assertion passes.
+        //    With paused time the inter-poll sleep advances instantly.
+        let absent = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root_with_button("Welcome"));
+        // First poll sees a tree without the button; the queue then
+        // empties and subsequent polls fall back to the steady tree.
+        driver.push_hierarchy(absent);
+
+        let mut step = make_step("assert_visible");
+        step.on_text = Some("Welcome".to_string());
+
+        let ctx = test_ctx(Path::new("."));
+        handle_assert_visible(&step, &driver, &ctx)
+            .await
+            .expect("assert_visible SHALL succeed once the element appears on a later poll");
+
+        // Two get_hierarchy calls: the initial miss plus the resolving poll.
+        let polls = driver
+            .get_calls()
+            .iter()
+            .filter(|(method, _)| method == "get_hierarchy")
+            .count();
+        assert!(
+            polls >= 2,
+            "resolve_element SHALL re-poll after the first miss, got {polls} get_hierarchy calls",
+        );
+    }
+
+    // ── assert_not_visible: element disappears on a later poll ────────
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn assert_not_visible_succeeds_when_element_disappears_on_later_poll() {
+        // 2. The element is present in the first hierarchy snapshot but
+        //    gone from the steady fallback. poll_for_absence keeps polling
+        //    every 250ms, so the SECOND get_hierarchy() call SHALL observe
+        //    the element gone and the assertion passes (no timeout error).
+        let driver = MockPlatformDriver::new(make_element("View", Bounds::new(0, 0, 375, 812)));
+        // First poll still sees the element; the queue then empties and the
+        // steady (empty) tree shows it has disappeared.
+        driver.push_hierarchy(root_with_button("Loading"));
+
+        let mut step = make_step("assert_not_visible");
+        step.on_text = Some("Loading".to_string());
+
+        handle_assert_not_visible(&step, &driver)
+            .await
+            .expect("assert_not_visible SHALL succeed once the element disappears on a later poll");
+
+        let polls = driver
+            .get_calls()
+            .iter()
+            .filter(|(method, _)| method == "get_hierarchy")
+            .count();
+        assert!(
+            polls >= 2,
+            "poll_for_absence SHALL re-poll after the first hit, got {polls} get_hierarchy calls",
+        );
+    }
+
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn assert_alert_times_out_when_no_alert_displayed() {
         // The action now polls for an alert until the surrounding

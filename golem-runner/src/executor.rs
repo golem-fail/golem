@@ -2894,4 +2894,153 @@ action = "screenshot"
         assert_eq!(parse_duration("0s"), Some(Duration::from_secs(0)));
         assert_eq!(parse_duration("0ms"), Some(Duration::from_millis(0)));
     }
+
+    // ── Perf-collection path (item #24) ──────────────────────────────
+    //
+    // The block-boundary perf capture in `execute_flow` (the
+    // `if perf_enabled { if let Some(collector) = ctx.perf_collector`
+    // arm) is unreachable from `test_ctx`, which wires `perf_collector:
+    // None`. `TestHarness` injects a `PerfCollectorSet::from_raw`
+    // (caller-supplied `RawPerfData`, no device I/O) plus a capturing
+    // emitter, letting these tests drive the real capture pipeline
+    // deterministically.
+
+    // 19. With a collector wired in and perf enabled (default), a block
+    //     boundary SHALL capture one snapshot per executed block from the
+    //     injected raw data — no real device touched.
+    #[tokio::test]
+    async fn perf_snapshot_captured_from_injected_raw() {
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let raw = RawPerfData {
+            memory_mb: Some(123.5),
+            cpu_percent: Some(8.0),
+            threads: Some(11),
+            ..RawPerfData::default()
+        };
+        let harness = crate::context::TestHarness::new(
+            tmp.path(),
+            &[("com.example.app".to_string(), raw)],
+        );
+        let mut ctx = harness.ctx();
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let mut vars = VariableStore::new();
+        // 19a. Two blocks SHALL each contribute a boundary snapshot.
+        let flow = make_flow(vec![
+            make_block(Some("first"), vec![make_success_step()]),
+            make_block(Some("second"), vec![make_success_step()]),
+        ]);
+
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
+            .await
+            .expect("execute_flow SHALL not error");
+
+        assert!(result.success, "flow SHALL succeed");
+        assert_eq!(
+            result.perf_snapshots.len(),
+            2,
+            "one snapshot SHALL be captured per executed block"
+        );
+        // 19b. The injected raw data SHALL flow through into the snapshot.
+        let snap = &result.perf_snapshots[0];
+        assert_eq!(
+            snap.memory_mb,
+            Some(123.5),
+            "injected memory SHALL appear in the captured snapshot"
+        );
+        assert_eq!(snap.cpu_percent, Some(8.0));
+        assert_eq!(snap.threads, Some(11));
+        // 19c. The snapshot label SHALL carry the collector's active bundle.
+        assert!(
+            snap.label.contains("com.example.app"),
+            "snapshot label SHALL name the active bundle: {}",
+            snap.label
+        );
+        // 19d. The capture SHALL publish the metrics into the `_perf` var.
+        let perf_var = vars.get("_perf").expect("_perf var SHALL be written");
+        assert_eq!(
+            perf_var.get_path("memory_mb").and_then(|v| v.as_str()),
+            Some("123.5"),
+            "_perf.memory_mb SHALL reflect the injected reading"
+        );
+    }
+
+    // 20. An injected reading above a configured error threshold SHALL
+    //     fail the flow with a perf reason — exercising the
+    //     `ThresholdResult::Error` arm of the capture path.
+    #[tokio::test]
+    async fn perf_error_threshold_fails_flow() {
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let raw = RawPerfData {
+            memory_mb: Some(500.0),
+            ..RawPerfData::default()
+        };
+        let harness = crate::context::TestHarness::new(
+            tmp.path(),
+            &[("com.example.app".to_string(), raw)],
+        );
+        let mut ctx = harness.ctx();
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let mut vars = VariableStore::new();
+        let options = FlowOptions {
+            perf_memory_error_mb: Some(256.0),
+            ..FlowOptions::default()
+        };
+        let flow = make_flow_with_options(
+            vec![make_block(Some("heavy"), vec![make_success_step()])],
+            options,
+        );
+
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
+            .await
+            .expect("execute_flow SHALL return Ok(FlowResult), not Err");
+
+        assert!(!result.success, "breaching the error threshold SHALL fail the flow");
+        let reason = result
+            .failed_reason
+            .expect("a perf error SHALL set a failure reason");
+        assert!(
+            reason.contains("memory") && reason.contains("error threshold"),
+            "failure reason SHALL describe the perf error: {reason}"
+        );
+    }
+
+    // 21. With perf explicitly disabled, the collector SHALL NOT be
+    //     consulted: no snapshots are produced even though one is wired in.
+    #[tokio::test]
+    async fn perf_disabled_skips_collection() {
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let raw = RawPerfData {
+            memory_mb: Some(999.0),
+            ..RawPerfData::default()
+        };
+        let harness = crate::context::TestHarness::new(
+            tmp.path(),
+            &[("com.example.app".to_string(), raw)],
+        );
+        let mut ctx = harness.ctx();
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let mut vars = VariableStore::new();
+        let options = FlowOptions {
+            perf: Some(false),
+            ..FlowOptions::default()
+        };
+        let flow = make_flow_with_options(
+            vec![make_block(Some("only"), vec![make_success_step()])],
+            options,
+        );
+
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
+            .await
+            .expect("execute_flow SHALL not error");
+
+        assert!(result.success, "flow SHALL succeed");
+        assert!(
+            result.perf_snapshots.is_empty(),
+            "perf=false SHALL skip capture entirely"
+        );
+        assert!(
+            vars.get("_perf").is_none(),
+            "disabled perf SHALL not write the _perf var"
+        );
+    }
 }

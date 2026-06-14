@@ -24,6 +24,9 @@ pub struct PerfCollector {
     bundle_id: String,
     /// Companion HTTP port (localhost). Used on Android for FDs, disk, and network.
     companion_port: Option<u16>,
+    /// Test-only: when set, `capture` returns this verbatim and skips all device I/O.
+    #[cfg(test)]
+    forced_raw: Option<RawPerfData>,
 }
 
 impl PerfCollector {
@@ -38,11 +41,31 @@ impl PerfCollector {
             device_id,
             bundle_id,
             companion_port,
+            #[cfg(test)]
+            forced_raw: None,
+        }
+    }
+
+    /// Test-only constructor that yields the caller-supplied [`RawPerfData`] on
+    /// `capture`, bypassing all real adb/companion device I/O. Lets perf and
+    /// lifecycle tests exercise the capture pipeline deterministically.
+    #[cfg(test)]
+    pub(crate) fn from_raw(bundle_id: String, raw: RawPerfData) -> Self {
+        Self {
+            platform: Platform::Android,
+            device_id: "test-device".to_string(),
+            bundle_id,
+            companion_port: None,
+            forced_raw: Some(raw),
         }
     }
 
     /// Capture a performance snapshot. Returns partial data on failure — never errors.
     pub async fn capture(&self) -> RawPerfData {
+        #[cfg(test)]
+        if let Some(raw) = &self.forced_raw {
+            return raw.clone();
+        }
         match self.platform {
             Platform::Android => self.capture_android().await,
             Platform::Ios => self.capture_ios().await,
@@ -206,6 +229,28 @@ impl PerfCollectorSet {
             collectors.insert(
                 bundle_id.clone(),
                 PerfCollector::new(platform, device_id.clone(), bundle_id.clone(), companion_port),
+            );
+        }
+        Self {
+            collectors,
+            active_bundle: Mutex::new(first_bundle),
+        }
+    }
+
+    /// Test-only constructor: build a set whose collectors yield the supplied
+    /// raw data per bundle, with no real device I/O. The first entry is marked
+    /// active. Pairs with [`PerfCollector::from_raw`] for lifecycle/perf tests.
+    #[cfg(test)]
+    pub(crate) fn from_raw(apps: &[(String, RawPerfData)]) -> Self {
+        let mut collectors = HashMap::new();
+        let mut first_bundle = None;
+        for (bundle_id, raw) in apps {
+            if first_bundle.is_none() {
+                first_bundle = Some(bundle_id.clone());
+            }
+            collectors.insert(
+                bundle_id.clone(),
+                PerfCollector::from_raw(bundle_id.clone(), raw.clone()),
             );
         }
         Self {
@@ -860,5 +905,60 @@ user     12345   ??    0.0 S    31T   0:00.02   0:00.05 /path/to/app
             "unknown active bundle SHALL yield empty data"
         );
         assert!(data.file_descriptors.is_none());
+    }
+
+    // 8. from_raw seam: PerfCollector::from_raw SHALL return the supplied data on
+    //    capture, with no device I/O.
+    #[tokio::test]
+    async fn collector_from_raw_yields_supplied_data() {
+        let raw = RawPerfData {
+            memory_mb: Some(42.5),
+            cpu_percent: Some(7.0),
+            threads: Some(9),
+            ..RawPerfData::default()
+        };
+        let collector = PerfCollector::from_raw("com.example.main".to_string(), raw);
+        let data = collector.capture().await;
+        assert_eq!(
+            data.memory_mb,
+            Some(42.5),
+            "from_raw SHALL return the injected memory verbatim"
+        );
+        assert_eq!(data.cpu_percent, Some(7.0));
+        assert_eq!(data.threads, Some(9));
+    }
+
+    // 9. from_raw set seam: PerfCollectorSet::from_raw SHALL capture per active app
+    //    from injected data, with no device I/O.
+    #[tokio::test]
+    async fn collector_set_from_raw_captures_active() {
+        let apps = vec![
+            (
+                "com.example.main".to_string(),
+                RawPerfData {
+                    memory_mb: Some(100.0),
+                    ..RawPerfData::default()
+                },
+            ),
+            (
+                "com.example.other".to_string(),
+                RawPerfData {
+                    memory_mb: Some(200.0),
+                    ..RawPerfData::default()
+                },
+            ),
+        ];
+        let set = PerfCollectorSet::from_raw(&apps);
+        assert_eq!(
+            set.capture().await.memory_mb,
+            Some(100.0),
+            "first app SHALL be active and yield its injected data"
+        );
+        set.set_active("com.example.other");
+        assert_eq!(
+            set.capture().await.memory_mb,
+            Some(200.0),
+            "after switching, capture SHALL yield the new active app's injected data"
+        );
     }
 }

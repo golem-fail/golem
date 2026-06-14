@@ -1102,4 +1102,81 @@ mod tests {
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, "stop_recording");
     }
+
+    // ---------------------------------------------------------------
+    // 29. stop_recording copies the driver-configured source path to
+    //     the per-block destination and returns the destination. The
+    //     driver's stop_recording reports the path via
+    //     MockPlatformDriver::set_recording_path.
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn stop_recording_copies_configured_source_to_dest() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        let tmp = tempfile::tempdir().expect("failed to create tempdir");
+
+        // 1. Stage a real source file and point the driver at it, so
+        //    stop_recording() returns a path that actually exists and
+        //    the std::fs::copy SHALL succeed.
+        let source = tmp.path().join("device_capture.mp4");
+        std::fs::write(&source, b"fake mp4 bytes").expect("write source");
+        driver.set_recording_path(source.to_str().expect("source path is utf8"));
+
+        let config = CaptureConfig {
+            output_dir: tmp.path().to_path_buf(),
+            flow_name: "login".to_string(),
+            device_name: "test_device".to_string(),
+            ..CaptureConfig::default()
+        };
+
+        let dest = stop_recording(&driver, &config, "login", 0)
+            .await
+            .expect("stop_recording SHALL succeed when source exists");
+
+        // 2. Returned path SHALL be the structured per-block destination.
+        assert_eq!(
+            dest,
+            build_recording_path(&config, "login", 0),
+            "stop_recording SHALL return the per-block destination path"
+        );
+        assert!(dest.exists(), "destination recording SHALL exist on disk");
+        assert_eq!(
+            std::fs::read(&dest).expect("read dest"),
+            b"fake mp4 bytes",
+            "destination SHALL be a byte-for-byte copy of the source"
+        );
+
+        // 3. The driver's stop_recording SHALL have been invoked once.
+        let calls = driver.get_calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "stop_recording");
+    }
+
+    // ---------------------------------------------------------------
+    // 30. stop_recording bails when the driver reports an empty path
+    //     (recording was never active), without attempting a copy.
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn stop_recording_errors_on_empty_path() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        let tmp = tempfile::tempdir().expect("failed to create tempdir");
+        let config = CaptureConfig {
+            output_dir: tmp.path().to_path_buf(),
+            ..test_config()
+        };
+
+        // 1. An empty recording path signals "recording was not active".
+        driver.set_recording_path("");
+
+        let result = stop_recording(&driver, &config, "login", 0).await;
+        assert!(result.is_err(), "empty source path SHALL error");
+        let err_msg = format!("{}", result.expect_err("should be an error"));
+        assert!(
+            err_msg.contains("empty recording path"),
+            "expected 'empty recording path' in error, got: {err_msg}"
+        );
+
+        let calls = driver.get_calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "stop_recording");
+    }
 }

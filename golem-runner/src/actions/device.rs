@@ -466,4 +466,119 @@ mod tests {
             "error SHALL mention permission param, got: {err:#}"
         );
     }
+
+    // ── set_dark_mode driver Err propagates ───────────────────────────
+
+    #[tokio::test]
+    async fn dark_mode_propagates_driver_error() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_error("set_dark_mode", "ui mode service unavailable");
+
+        let mut step = make_step("dark_mode");
+        step.params
+            .insert("enabled".to_string(), toml::Value::Boolean(true));
+
+        let err = handle_dark_mode(&step, &driver)
+            .await
+            .expect_err("driver Err SHALL propagate");
+        assert!(
+            format!("{err:#}").contains("ui mode service unavailable"),
+            "handler SHALL propagate the driver error, got: {err:#}"
+        );
+    }
+
+    // ── set_location driver Err propagates ────────────────────────────
+
+    #[tokio::test]
+    async fn set_location_propagates_driver_error() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_error("set_location", "location mocking denied");
+
+        let mut step = make_step("set_location");
+        step.params
+            .insert("latitude".to_string(), toml::Value::Float(35.6762));
+        step.params
+            .insert("longitude".to_string(), toml::Value::Float(139.6503));
+
+        let err = handle_set_location(&step, &driver)
+            .await
+            .expect_err("driver Err SHALL propagate");
+        assert!(
+            format!("{err:#}").contains("location mocking denied"),
+            "handler SHALL propagate the driver error, got: {err:#}"
+        );
+    }
+
+    // ── press_button driver Err propagates ────────────────────────────
+
+    #[tokio::test]
+    async fn press_propagates_driver_error() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_error("press_button", "keyevent rejected");
+
+        let mut step = make_step("press");
+        step.params.insert(
+            "button".to_string(),
+            toml::Value::String("home".to_string()),
+        );
+
+        let err = handle_press(&step, &driver)
+            .await
+            .expect_err("driver Err SHALL propagate");
+        assert!(
+            format!("{err:#}").contains("keyevent rejected"),
+            "handler SHALL propagate the driver error, got: {err:#}"
+        );
+    }
+
+    // ── grant_permission driver Err propagates ────────────────────────
+
+    #[tokio::test]
+    async fn grant_permission_propagates_driver_error() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_error("grant_permission", "unknown permission");
+
+        let mut step = make_step("grant_permission");
+        step.app = Some("com.example.app".to_string());
+        step.params.insert(
+            "permission".to_string(),
+            toml::Value::String("camera".to_string()),
+        );
+
+        let err = handle_grant_permission(&step, &driver)
+            .await
+            .expect_err("driver Err SHALL propagate");
+        assert!(
+            format!("{err:#}").contains("unknown permission"),
+            "handler SHALL propagate the driver error, got: {err:#}"
+        );
+    }
+
+    // ── revoke_permission driver Err propagates ───────────────────────
+
+    #[tokio::test]
+    async fn revoke_permission_propagates_driver_error() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_error("revoke_permission", "permission not held");
+
+        let mut step = make_step("revoke_permission");
+        step.app = Some("com.example.app".to_string());
+        step.params.insert(
+            "permission".to_string(),
+            toml::Value::String("location".to_string()),
+        );
+
+        let err = handle_revoke_permission(&step, &driver)
+            .await
+            .expect_err("driver Err SHALL propagate");
+        assert!(
+            format!("{err:#}").contains("permission not held"),
+            "handler SHALL propagate the driver error, got: {err:#}"
+        );
+    }
 }

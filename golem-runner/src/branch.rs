@@ -924,4 +924,79 @@ mod tests {
             "value below a negative threshold SHALL NOT satisfy gte"
         );
     }
+
+    // ---------------------------------------------------------------
+    // 39. A driver whose hierarchy fetch returns Err surfaces the error
+    //     out of evaluate_branch for an if_visible condition, rather than
+    //     being silently treated as "not visible".
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn if_visible_propagates_hierarchy_fetch_error() {
+        // 1. A driver whose get_hierarchy is wired to fail.
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        driver.set_error("get_hierarchy", "device disconnected");
+        let vars = VariableStore::new();
+        let conditions = vec![cond_if_visible("Try Premium Free", "premium")];
+
+        // 2. evaluate_branch SHALL return the underlying fetch error.
+        let result = evaluate_branch(&conditions, &driver, &vars).await;
+
+        assert!(
+            result.is_err(),
+            "hierarchy-fetch Err SHALL propagate out of evaluate_branch"
+        );
+        let message = result.expect_err("expected Err from failing fetch").to_string();
+        assert!(
+            message.contains("device disconnected"),
+            "error SHALL carry the underlying fetch message, got: {message}"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 40. The same hierarchy-fetch Err also surfaces for an
+    //     if_not_visible condition (the other screen-based branch path).
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn if_not_visible_propagates_hierarchy_fetch_error() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        driver.set_error("get_hierarchy", "adb broken pipe");
+        let vars = VariableStore::new();
+        let conditions = vec![cond_if_not_visible("Try Premium Free", "free_flow")];
+
+        let result = evaluate_branch(&conditions, &driver, &vars).await;
+
+        let message = result.expect_err("expected Err from failing fetch").to_string();
+        assert!(
+            message.contains("adb broken pipe"),
+            "if_not_visible SHALL propagate the fetch error, got: {message}"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 41. clearing the injected error restores normal evaluation:
+    //     after clear_error, the same if_visible condition matches the
+    //     steady hierarchy as usual.
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn cleared_hierarchy_fetch_error_resumes_normal_evaluation() {
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["Try Premium Free"]));
+        driver.set_error("get_hierarchy", "transient failure");
+        let vars = VariableStore::new();
+        let conditions = vec![cond_if_visible("Try Premium Free", "premium")];
+
+        // 1. While the error is set, evaluation fails.
+        let failed = evaluate_branch(&conditions, &driver, &vars).await;
+        assert!(failed.is_err(), "set_error SHALL make evaluation fail");
+
+        // 2. After clearing, evaluation succeeds and the condition matches.
+        driver.clear_error("get_hierarchy");
+        let recovered = evaluate_branch(&conditions, &driver, &vars)
+            .await
+            .expect("should not error after clear_error");
+        assert_eq!(
+            recovered,
+            Some("premium".to_string()),
+            "clear_error SHALL restore normal hierarchy-based matching"
+        );
+    }
 }

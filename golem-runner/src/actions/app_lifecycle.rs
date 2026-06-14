@@ -104,9 +104,10 @@ pub(crate) async fn handle_clear_data(
 mod tests {
     use super::*;
     use crate::actions::test_helpers::*;
-    use crate::context::test_ctx;
+    use crate::context::{test_ctx, TestHarness};
     use golem_driver::MockPlatformDriver;
     use golem_element::Bounds;
+    use golem_events::{extract_code, EventKind, FailureCode, SubstepEvent};
     use std::path::Path;
 
     // ── launch action calls driver.launch_app ─────────────────────────
@@ -367,5 +368,199 @@ mod tests {
             None,
             "no perf collector SHALL mean no recorded launch_ms"
         );
+    }
+
+    // ── failure propagation (#35) ─────────────────────────────────────
+
+    // 9. A failing driver.launch_app SHALL propagate as an error tagged
+    //    AppLifecycleFailed, with the driver message preserved.
+    #[tokio::test]
+    async fn launch_failure_propagates_with_app_lifecycle_code() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_error("launch_app", "device offline");
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("launch");
+        step.app = Some("com.example.app".to_string());
+
+        let err = handle_launch(&step, &driver, &[], &ctx)
+            .await
+            .expect_err("launch_app failure SHALL propagate as an error");
+        assert_eq!(
+            extract_code(&err),
+            Some(FailureCode::AppLifecycleFailed),
+            "launch failure SHALL be tagged AppLifecycleFailed"
+        );
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("device offline"),
+            "launch failure SHALL preserve the driver message, got: {msg}"
+        );
+    }
+
+    // 10. A failing driver.stop_app SHALL propagate as an error tagged
+    //     AppLifecycleFailed, with the driver message preserved.
+    //
+    // `handle_stop` only sleeps 2s *after* a successful stop, so the
+    // failing path returns immediately — no paused-time flavor needed.
+    #[tokio::test]
+    async fn stop_failure_propagates_with_app_lifecycle_code() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_error("stop_app", "terminate refused");
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("stop");
+        step.app = Some("com.example.app".to_string());
+
+        let err = handle_stop(&step, &driver, &[], &ctx)
+            .await
+            .expect_err("stop_app failure SHALL propagate as an error");
+        assert_eq!(
+            extract_code(&err),
+            Some(FailureCode::AppLifecycleFailed),
+            "stop failure SHALL be tagged AppLifecycleFailed"
+        );
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("terminate refused"),
+            "stop failure SHALL preserve the driver message, got: {msg}"
+        );
+    }
+
+    // 11. A failing driver.clear_app_data SHALL propagate the raw driver
+    //     error verbatim (handle_clear_data does not re-tag it).
+    #[tokio::test]
+    async fn clear_data_failure_propagates_driver_error() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        // "clear_data" is the documented shorthand for clear_app_data.
+        driver.set_error("clear_data", "wipe denied");
+
+        let mut step = make_step("clear_data");
+        step.app = Some("com.example.app".to_string());
+
+        let err = handle_clear_data(&step, &driver, &[])
+            .await
+            .expect_err("clear_app_data failure SHALL propagate as an error");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("wipe denied"),
+            "clear_data failure SHALL surface the driver message, got: {msg}"
+        );
+    }
+
+    // 12. When launch fails, the success-path substeps SHALL NOT fire and
+    //     the perf collector SHALL NOT be marked active for the bundle.
+    #[tokio::test]
+    async fn launch_failure_does_not_emit_substeps_or_activate_perf() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_error("launch_app", "boom");
+
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let raw = crate::perf::RawPerfData::default();
+        let mut harness =
+            TestHarness::new(tmp.path(), &[("com.example.app".to_string(), raw)]);
+        {
+            let ctx = harness.ctx();
+            let mut step = make_step("launch");
+            step.app = Some("com.example.app".to_string());
+
+            handle_launch(&step, &driver, &[], &ctx)
+                .await
+                .expect_err("launch_app failure SHALL propagate");
+
+            // launch_ms is only stored on the perf-success path.
+            assert_eq!(
+                ctx.take_launch_ms(),
+                None,
+                "a failed launch SHALL NOT record launch_ms"
+            );
+        }
+        // No AppLaunch / DriverWarning substep SHALL have been emitted.
+        while let Some(event) = harness.try_recv() {
+            assert!(
+                !matches!(
+                    event.kind,
+                    EventKind::Substep(SubstepEvent::AppLaunch { .. })
+                        | EventKind::Substep(SubstepEvent::DriverWarning { .. })
+                ),
+                "a failed launch SHALL NOT emit AppLaunch or DriverWarning substeps"
+            );
+        }
+    }
+
+    // ── launch-warning surfacing (#36) ────────────────────────────────
+
+    // 13. A non-fatal launch warning (Ok(Some(_))) SHALL surface as a
+    //     DriverWarning substep while the launch step still succeeds.
+    #[tokio::test]
+    async fn launch_warning_surfaces_as_driver_warning_substep() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        driver.set_launch_warning("settle-probe timed out");
+
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let raw = crate::perf::RawPerfData::default();
+        let mut harness =
+            TestHarness::new(tmp.path(), &[("com.example.app".to_string(), raw)]);
+        {
+            let ctx = harness.ctx();
+            let mut step = make_step("launch");
+            step.app = Some("com.example.app".to_string());
+
+            handle_launch(&step, &driver, &[], &ctx)
+                .await
+                .expect("a launch warning SHALL NOT fail the step");
+        }
+
+        let mut saw_warning = false;
+        while let Some(event) = harness.try_recv() {
+            if let EventKind::Substep(SubstepEvent::DriverWarning { message }) = event.kind {
+                assert_eq!(
+                    message, "settle-probe timed out",
+                    "the surfaced warning SHALL carry the driver's message"
+                );
+                saw_warning = true;
+            }
+        }
+        assert!(
+            saw_warning,
+            "a launch warning SHALL surface as a DriverWarning substep"
+        );
+    }
+
+    // 14. With no launch warning set, launch SHALL NOT emit any
+    //     DriverWarning substep.
+    #[tokio::test]
+    async fn launch_without_warning_emits_no_driver_warning() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let raw = crate::perf::RawPerfData::default();
+        let mut harness =
+            TestHarness::new(tmp.path(), &[("com.example.app".to_string(), raw)]);
+        {
+            let ctx = harness.ctx();
+            let mut step = make_step("launch");
+            step.app = Some("com.example.app".to_string());
+
+            handle_launch(&step, &driver, &[], &ctx)
+                .await
+                .expect("launch SHALL succeed");
+        }
+
+        while let Some(event) = harness.try_recv() {
+            assert!(
+                !matches!(
+                    event.kind,
+                    EventKind::Substep(SubstepEvent::DriverWarning { .. })
+                ),
+                "no warning SHALL mean no DriverWarning substep"
+            );
+        }
     }
 }

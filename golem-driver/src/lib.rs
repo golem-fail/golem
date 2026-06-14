@@ -11,6 +11,7 @@ pub use common::CompanionHealth;
 
 use async_trait::async_trait;
 use golem_element::Element;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Mutex;
 
 /// Direction for swipe and scroll gestures
@@ -253,6 +254,31 @@ pub struct MockPlatformDriver {
     /// Cleared when `hide_keyboard()` is called, mirroring real driver
     /// behaviour. Mutate via `set_keyboard_height` only.
     keyboard_height: Mutex<i32>,
+    /// Per-method injected errors. Keyed by the canonical trait method
+    /// name; when present, that method returns `Err(anyhow!(message))`
+    /// before doing anything else. Empty by default (no errors).
+    errors: Mutex<HashMap<String, String>>,
+    /// Queue of hierarchies for `get_hierarchy` to pop FIFO. When empty,
+    /// `get_hierarchy` falls back to the steady `hierarchy` field, so
+    /// single-hierarchy tests are unaffected. Empty by default.
+    hierarchy_queue: Mutex<VecDeque<Element>>,
+    /// Warning string `launch_app` returns as its `Some(_)` warning.
+    /// `None` by default (launch returns `Ok(None)`).
+    launch_warning: Mutex<Option<String>>,
+    /// Path `stop_recording` returns. Defaults to the historical
+    /// `"mock_recording.mp4"` so existing tests are unchanged.
+    recording_path: Mutex<String>,
+}
+
+/// Map a caller-supplied method name to the canonical trait method name
+/// used as the error-map key. Accepts both the real trait method names
+/// and the conventional shorthands (`clear_data`, `swipe`).
+fn canonical_method_name(method: &str) -> &str {
+    match method {
+        "clear_data" => "clear_app_data",
+        "swipe" => "swipe_coords",
+        other => other,
+    }
 }
 
 impl MockPlatformDriver {
@@ -261,6 +287,10 @@ impl MockPlatformDriver {
             hierarchy: Mutex::new(hierarchy),
             calls: Mutex::new(Vec::new()),
             keyboard_height: Mutex::new(0),
+            errors: Mutex::new(HashMap::new()),
+            hierarchy_queue: Mutex::new(VecDeque::new()),
+            launch_warning: Mutex::new(None),
+            recording_path: Mutex::new("mock_recording.mp4".to_string()),
         }
     }
 
@@ -289,21 +319,83 @@ impl MockPlatformDriver {
             .expect("lock poisoned")
             .push((method.to_string(), args));
     }
+
+    /// Inject an error: the named trait method returns `Err(anyhow!(message))`.
+    /// Accepts the real trait method names plus the shorthands
+    /// `clear_data` (→ `clear_app_data`) and `swipe` (→ `swipe_coords`).
+    pub fn set_error(&self, method: &str, message: &str) {
+        self.errors
+            .lock()
+            .expect("lock poisoned")
+            .insert(canonical_method_name(method).to_string(), message.to_string());
+    }
+
+    /// Clear a previously-injected error for the named method.
+    pub fn clear_error(&self, method: &str) {
+        self.errors
+            .lock()
+            .expect("lock poisoned")
+            .remove(canonical_method_name(method));
+    }
+
+    /// Return the injected error for `method` as an `Err`, if one is set.
+    /// `method` here is always the canonical trait method name.
+    fn check_error(&self, method: &str) -> anyhow::Result<()> {
+        let msg = self
+            .errors
+            .lock()
+            .expect("lock poisoned")
+            .get(method)
+            .cloned();
+        match msg {
+            Some(m) => Err(anyhow::anyhow!(m)),
+            None => Ok(()),
+        }
+    }
+
+    /// Enqueue a hierarchy. Successive `get_hierarchy()` calls pop the
+    /// queue FIFO; once it empties, `get_hierarchy()` falls back to the
+    /// steady `hierarchy` set via `new`/`set_hierarchy`.
+    pub fn push_hierarchy(&self, hierarchy: Element) {
+        self.hierarchy_queue
+            .lock()
+            .expect("lock poisoned")
+            .push_back(hierarchy);
+    }
+
+    /// Set the warning string `launch_app` surfaces (as `Ok(Some(_))`).
+    pub fn set_launch_warning(&self, warning: &str) {
+        *self.launch_warning.lock().expect("lock poisoned") = Some(warning.to_string());
+    }
+
+    /// Set the path `stop_recording` returns.
+    pub fn set_recording_path(&self, path: &str) {
+        *self.recording_path.lock().expect("lock poisoned") = path.to_string();
+    }
 }
 
 #[async_trait]
 impl PlatformDriver for MockPlatformDriver {
     async fn get_hierarchy(&self) -> anyhow::Result<(Element, common::HierarchyMeta)> {
         self.record_call("get_hierarchy", vec![]);
+        self.check_error("get_hierarchy")?;
         let meta = common::HierarchyMeta {
             keyboard_height: *self.keyboard_height.lock().expect("lock poisoned"),
             ..common::HierarchyMeta::default()
         };
-        Ok((self.hierarchy.lock().expect("lock poisoned").clone(), meta))
+        let tree = {
+            let mut queue = self.hierarchy_queue.lock().expect("lock poisoned");
+            match queue.pop_front() {
+                Some(t) => t,
+                None => self.hierarchy.lock().expect("lock poisoned").clone(),
+            }
+        };
+        Ok((tree, meta))
     }
 
     async fn tap(&self, x: i32, y: i32) -> anyhow::Result<()> {
         self.record_call("tap", vec![x.to_string(), y.to_string()]);
+        self.check_error("tap")?;
         Ok(())
     }
 
@@ -342,6 +434,7 @@ impl PlatformDriver for MockPlatformDriver {
                 to_y.to_string(),
             ],
         );
+        self.check_error("swipe_coords")?;
         Ok(())
     }
 
@@ -377,31 +470,37 @@ impl PlatformDriver for MockPlatformDriver {
 
     async fn launch_app(&self, bundle_id: &str) -> anyhow::Result<Option<String>> {
         self.record_call("launch_app", vec![bundle_id.to_string()]);
-        Ok(None)
+        self.check_error("launch_app")?;
+        Ok(self.launch_warning.lock().expect("lock poisoned").clone())
     }
 
     async fn stop_app(&self, bundle_id: &str) -> anyhow::Result<()> {
         self.record_call("stop_app", vec![bundle_id.to_string()]);
+        self.check_error("stop_app")?;
         Ok(())
     }
 
     async fn clear_app_data(&self, bundle_id: &str) -> anyhow::Result<()> {
         self.record_call("clear_app_data", vec![bundle_id.to_string()]);
+        self.check_error("clear_app_data")?;
         Ok(())
     }
 
     async fn press_button(&self, button: &str) -> anyhow::Result<()> {
         self.record_call("press_button", vec![button.to_string()]);
+        self.check_error("press_button")?;
         Ok(())
     }
 
     async fn set_dark_mode(&self, enabled: bool) -> anyhow::Result<()> {
         self.record_call("set_dark_mode", vec![enabled.to_string()]);
+        self.check_error("set_dark_mode")?;
         Ok(())
     }
 
     async fn set_location(&self, lat: f64, lon: f64) -> anyhow::Result<()> {
         self.record_call("set_location", vec![lat.to_string(), lon.to_string()]);
+        self.check_error("set_location")?;
         Ok(())
     }
 
@@ -434,6 +533,7 @@ impl PlatformDriver for MockPlatformDriver {
             "grant_permission",
             vec![bundle_id.to_string(), permission.to_string()],
         );
+        self.check_error("grant_permission")?;
         Ok(())
     }
 
@@ -442,17 +542,20 @@ impl PlatformDriver for MockPlatformDriver {
             "revoke_permission",
             vec![bundle_id.to_string(), permission.to_string()],
         );
+        self.check_error("revoke_permission")?;
         Ok(())
     }
 
     async fn start_recording(&self, name: &str) -> anyhow::Result<()> {
         self.record_call("start_recording", vec![name.to_string()]);
+        self.check_error("start_recording")?;
         Ok(())
     }
 
     async fn stop_recording(&self) -> anyhow::Result<String> {
         self.record_call("stop_recording", vec![]);
-        Ok("mock_recording.mp4".to_string())
+        self.check_error("stop_recording")?;
+        Ok(self.recording_path.lock().expect("lock poisoned").clone())
     }
 
     async fn remove_port_forwards(&self) -> anyhow::Result<()> {
@@ -542,6 +645,105 @@ mod tests {
         assert_eq!(calls[0].1, vec!["hello world"]);
         assert_eq!(calls[1].0, "type_text");
         assert_eq!(calls[1].1, vec!["goodbye"]);
+    }
+
+    // ── MockPlatformDriver additive capabilities ───────────────────
+
+    #[tokio::test]
+    async fn mock_set_error_makes_method_return_err() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+
+        driver.set_error("tap", "boom");
+        let err = driver.tap(1, 2).await.expect_err("tap SHALL return Err");
+        assert_eq!(err.to_string(), "boom");
+
+        // Other methods stay Ok.
+        driver.launch_app("com.x").await.expect("launch SHALL be Ok");
+    }
+
+    #[tokio::test]
+    async fn mock_clear_error_restores_ok() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+
+        driver.set_error("get_hierarchy", "down");
+        driver
+            .get_hierarchy()
+            .await
+            .expect_err("get_hierarchy SHALL fail while error set");
+
+        driver.clear_error("get_hierarchy");
+        driver
+            .get_hierarchy()
+            .await
+            .expect("get_hierarchy SHALL succeed after clear_error");
+    }
+
+    #[tokio::test]
+    async fn mock_error_accepts_shorthand_method_names() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+
+        driver.set_error("clear_data", "no");
+        driver
+            .clear_app_data("com.x")
+            .await
+            .expect_err("clear_data shorthand SHALL inject into clear_app_data");
+
+        driver.set_error("swipe", "no");
+        driver
+            .swipe_coords(0, 0, 1, 1)
+            .await
+            .expect_err("swipe shorthand SHALL inject into swipe_coords");
+    }
+
+    #[tokio::test]
+    async fn mock_push_hierarchy_pops_fifo_then_falls_back() {
+        let steady = make_element("Steady", Bounds::new(0, 0, 10, 10));
+        let driver = MockPlatformDriver::new(steady);
+
+        driver.push_hierarchy(make_element("First", Bounds::new(0, 0, 1, 1)));
+        driver.push_hierarchy(make_element("Second", Bounds::new(0, 0, 1, 1)));
+
+        let a = driver.get_hierarchy().await.expect("get_hierarchy");
+        assert_eq!(a.0.element_type, "First");
+        let b = driver.get_hierarchy().await.expect("get_hierarchy");
+        assert_eq!(b.0.element_type, "Second");
+
+        // Queue drained → falls back to steady hierarchy.
+        let c = driver.get_hierarchy().await.expect("get_hierarchy");
+        assert_eq!(c.0.element_type, "Steady");
+        let d = driver.get_hierarchy().await.expect("get_hierarchy");
+        assert_eq!(d.0.element_type, "Steady");
+    }
+
+    #[tokio::test]
+    async fn mock_set_launch_warning_surfaces_in_launch_app() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+
+        // Default: no warning.
+        assert_eq!(driver.launch_app("com.x").await.expect("launch"), None);
+
+        driver.set_launch_warning("settle-probe timed out");
+        assert_eq!(
+            driver.launch_app("com.x").await.expect("launch"),
+            Some("settle-probe timed out".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn mock_set_recording_path_overrides_default() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+
+        // Default path preserved for existing tests.
+        assert_eq!(
+            driver.stop_recording().await.expect("stop"),
+            "mock_recording.mp4"
+        );
+
+        driver.set_recording_path("/tmp/custom.mp4");
+        assert_eq!(
+            driver.stop_recording().await.expect("stop"),
+            "/tmp/custom.mp4"
+        );
     }
 
     #[test]

@@ -1632,4 +1632,84 @@ mod tests {
             "a fully-visible container SHALL trigger no driver calls, got: {calls:?}"
         );
     }
+
+    // ── 34. type retries when the post-tap hierarchy reports no focus ──
+
+    // Builds a root holding a single TextField whose `focused` flag is set
+    // as requested. Used to drive `handle_type`'s focus-retry loop via
+    // `push_hierarchy`, where successive `get_hierarchy()` snapshots differ.
+    fn root_with_input_focus(id: &str, focused: bool) -> golem_element::Element {
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let mut input = make_element_with_id("TextField", id, Bounds::new(20, 100, 300, 44));
+        input.focused = focused;
+        root.children.push(input);
+        root
+    }
+
+    #[tokio::test]
+    async fn type_retries_once_when_first_focus_check_reports_unfocused() {
+        // handle_type taps to focus, then re-fetches the hierarchy to verify
+        // focus. If the field is NOT focused after the first tap, it
+        // re-resolves and taps once more (single retry). This depends on the
+        // hierarchy CHANGING between get_hierarchy() calls: the post-tap
+        // snapshot reports unfocused, but the next attempt's snapshot reports
+        // focused. We stage that transition with push_hierarchy.
+        //
+        // get_hierarchy() call order inside handle_type:
+        //   1. resolve_element  (attempt 0)      -> field present
+        //   2. post-tap focus check (attempt 0)  -> UNFOCUSED -> forces retry
+        //   3. resolve_element  (attempt 1)      -> field present
+        //   4. post-tap focus check (attempt 1)  -> FOCUSED (loop exits)
+        let driver = MockPlatformDriver::new(root_with_input_focus("email", true));
+        // Queue snapshots 1-2 as unfocused; snapshots 3+ fall through to the
+        // steady focused tree set above.
+        driver.push_hierarchy(root_with_input_focus("email", false));
+        driver.push_hierarchy(root_with_input_focus("email", false));
+
+        let mut step = make_step("type");
+        step.on_accessibility_label = Some("email".to_string());
+        step.input = Some("hello".to_string());
+
+        let ctx = test_ctx(Path::new("."));
+        handle_type(&step, &driver, &ctx)
+            .await
+            .expect("type SHALL succeed after one focus retry");
+
+        let calls = driver.get_calls();
+        let tap_calls: Vec<_> = calls.iter().filter(|c| c.0 == "tap").collect();
+        assert_eq!(
+            tap_calls.len(),
+            2,
+            "an unfocused post-tap snapshot SHALL trigger exactly one tap retry (two taps total)"
+        );
+        let type_calls: Vec<_> = calls.iter().filter(|c| c.0 == "type_text").collect();
+        assert_eq!(type_calls.len(), 1, "text SHALL be typed exactly once after focus is confirmed");
+        assert_eq!(type_calls[0].1, vec!["hello"]);
+    }
+
+    #[tokio::test]
+    async fn type_does_not_retry_when_first_focus_check_reports_focused() {
+        // Contrast to #34: when the very first post-tap snapshot already
+        // reports the field focused, the loop exits immediately — no retry,
+        // a single tap. The steady hierarchy is focused and the queue is
+        // empty, so every get_hierarchy() returns the same focused tree.
+        let driver = MockPlatformDriver::new(root_with_input_focus("email", true));
+
+        let mut step = make_step("type");
+        step.on_accessibility_label = Some("email".to_string());
+        step.input = Some("hello".to_string());
+
+        let ctx = test_ctx(Path::new("."));
+        handle_type(&step, &driver, &ctx)
+            .await
+            .expect("type SHALL succeed on the first focus check");
+
+        let calls = driver.get_calls();
+        let tap_calls: Vec<_> = calls.iter().filter(|c| c.0 == "tap").collect();
+        assert_eq!(
+            tap_calls.len(),
+            1,
+            "a focused post-tap snapshot SHALL NOT trigger a retry (one tap total)"
+        );
+    }
 }

@@ -1672,4 +1672,167 @@ mod tests {
         assert!(matches!(&sel.right_of, Some(AnchorSelector::Text(s)) if s == "R"));
         assert!(matches!(&sel.left_of, Some(AnchorSelector::Text(s)) if s == "L"));
     }
+
+    // ── 39. resolve_element polls until a later tree contains the target ─
+
+    #[tokio::test]
+    async fn resolve_element_polls_until_target_appears() {
+        // First two get_hierarchy snapshots lack the target (loading state);
+        // the third carries it. The resolver SHALL keep polling across the
+        // queue rather than failing on the first empty snapshot.
+        let empty = make_element("View", Bounds::new(0, 0, 375, 812));
+        let mut populated = make_element("View", Bounds::new(0, 0, 375, 812));
+        populated.children.push(make_element_with_text(
+            "Button",
+            "Submit",
+            Bounds::new(100, 200, 100, 44),
+        ));
+
+        // Steady fallback also carries the target so the test never hangs to
+        // the deadline if the queue drains, but the queue front must be hit.
+        let driver = MockPlatformDriver::new(populated.clone());
+        driver.push_hierarchy(empty.clone());
+        driver.push_hierarchy(empty);
+        driver.push_hierarchy(populated);
+
+        let mut step = make_step("tap");
+        step.on_text = Some("Submit".to_string());
+        step.timeout = Some(2000);
+
+        let (elem, _coords) = resolve_element(&step, &driver, None)
+            .await
+            .expect("resolver SHALL find target once a later poll surfaces it");
+        assert_eq!(elem.text.as_deref(), Some("Submit"));
+        // At least three get_hierarchy calls (two empty + the populated one).
+        let fetches = driver
+            .get_calls()
+            .into_iter()
+            .filter(|c| c.0 == "get_hierarchy")
+            .count();
+        assert!(
+            fetches >= 3,
+            "resolver SHALL poll the hierarchy repeatedly, got {fetches} fetches"
+        );
+    }
+
+    // ── 40. resolve_element retries past a transient get_hierarchy error ─
+
+    #[tokio::test]
+    async fn resolve_element_retries_after_transient_fetch_error() {
+        // The first get_hierarchy errors (companion blip); after the error is
+        // cleared a subsequent poll succeeds and finds the target. The
+        // resolver's `Err(_) if before deadline` arm SHALL swallow the
+        // transient error and retry.
+        let mut populated = make_element("View", Bounds::new(0, 0, 375, 812));
+        populated.children.push(make_element_with_text(
+            "Button",
+            "Submit",
+            Bounds::new(100, 200, 100, 44),
+        ));
+        let driver = MockPlatformDriver::new(populated);
+        driver.set_error("get_hierarchy", "transient companion blip");
+
+        let mut step = make_step("tap");
+        step.on_text = Some("Submit".to_string());
+        step.timeout = Some(2000);
+
+        // Clear the error after a short delay so an in-deadline retry succeeds.
+        let driver_ref = &driver;
+        let (res, ()) = tokio::join!(
+            resolve_element(&step, driver_ref, None),
+            async {
+                tokio::time::sleep(Duration::from_millis(300)).await;
+                driver_ref.clear_error("get_hierarchy");
+            }
+        );
+        let (elem, _coords) = res.expect("resolver SHALL recover after the transient error clears");
+        assert_eq!(elem.text.as_deref(), Some("Submit"));
+    }
+
+    // ── 41. resolve_element surfaces a fetch error that never clears ─────
+
+    #[tokio::test]
+    async fn resolve_element_propagates_persistent_fetch_error() {
+        // get_hierarchy errors for the whole (tight) timeout window. Once the
+        // deadline passes the resolver's terminal `Err(e)` arm SHALL return
+        // the underlying error rather than a not-found message.
+        let driver = MockPlatformDriver::new(make_element("View", Bounds::new(0, 0, 375, 812)));
+        driver.set_error("get_hierarchy", "companion wedged hard");
+
+        let mut step = make_step("tap");
+        step.on_text = Some("Submit".to_string());
+        step.timeout = Some(50);
+
+        let err = resolve_element(&step, &driver, None)
+            .await
+            .expect_err("a persistent fetch error SHALL propagate");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("companion wedged hard"),
+            "the underlying fetch error SHALL surface, got: {msg}"
+        );
+    }
+
+    // ── 42. poll_for_absence waits for the target to disappear ──────────
+
+    #[tokio::test]
+    async fn poll_for_absence_waits_for_target_to_disappear() {
+        // First snapshot still has the element; a later queued snapshot drops
+        // it. poll_for_absence SHALL keep polling and resolve to Ok once gone.
+        let mut present = make_element("View", Bounds::new(0, 0, 400, 800));
+        present.children.push(make_element_with_text(
+            "Label",
+            "Spinner",
+            Bounds::new(0, 0, 100, 30),
+        ));
+        let absent = make_element("View", Bounds::new(0, 0, 400, 800));
+
+        // Steady fallback is the absent tree so the queue front (present)
+        // is what forces the extra poll.
+        let driver = MockPlatformDriver::new(absent.clone());
+        driver.push_hierarchy(present.clone());
+        driver.push_hierarchy(present);
+        driver.push_hierarchy(absent);
+
+        let mut step = make_step("assert_not_visible");
+        step.on_text = Some("Spinner".to_string());
+        step.timeout = Some(2000);
+
+        poll_for_absence(&step, &driver)
+            .await
+            .expect("absence poll SHALL succeed once the element disappears");
+        let fetches = driver
+            .get_calls()
+            .into_iter()
+            .filter(|c| c.0 == "get_hierarchy")
+            .count();
+        assert!(
+            fetches >= 3,
+            "absence poll SHALL re-fetch while the element lingers, got {fetches}"
+        );
+    }
+
+    // ── 43. poll_for_absence retries past a transient fetch error ───────
+
+    #[tokio::test]
+    async fn poll_for_absence_retries_after_transient_fetch_error() {
+        // get_hierarchy errors first, then clears. The element is absent in
+        // the steady tree, so once a poll succeeds poll_for_absence returns Ok.
+        let driver = MockPlatformDriver::new(make_element("View", Bounds::new(0, 0, 400, 800)));
+        driver.set_error("get_hierarchy", "transient blip");
+
+        let mut step = make_step("assert_not_visible");
+        step.on_text = Some("Spinner".to_string());
+        step.timeout = Some(2000);
+
+        let driver_ref = &driver;
+        let (res, ()) = tokio::join!(
+            poll_for_absence(&step, driver_ref),
+            async {
+                tokio::time::sleep(Duration::from_millis(300)).await;
+                driver_ref.clear_error("get_hierarchy");
+            }
+        );
+        res.expect("absence poll SHALL recover after the transient fetch error clears");
+    }
 }
