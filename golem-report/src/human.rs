@@ -211,8 +211,12 @@ pub fn format_suite(report: &SuiteReport) -> String {
         .flows
         .iter()
         .filter(|f| {
+            // 1. Genuine coverage-group skip (success=true + skip reason), OR
+            // 2. Every step skipped — but only when the flow did NOT pass, so a
+            //    passing all-skipped flow stays counted once (as passed), never double-counted.
             f.is_skipped()
-                || (!f.step_results.is_empty()
+                || (!f.is_passed()
+                    && !f.step_results.is_empty()
                     && f.step_results.iter().all(|s| matches!(s.outcome, StepOutcome::Skipped)))
         })
         .count();
@@ -918,10 +922,10 @@ mod tests {
         assert!(out.contains("0 passed, 0 failed, 1 skipped"), "SHALL classify as skipped");
     }
 
-    // 21. format_suite counts an all-skipped-steps flow as skipped
+    // 21. format_suite counts a passing all-skipped-steps flow as passed only, never as skipped
 
     #[test]
-    fn suite_counts_all_skipped_steps_flow_as_skipped() {
+    fn suite_counts_all_skipped_steps_flow_as_passed_only() {
         let suite = SuiteReport {
             flows: vec![FlowReport {
                 first_failure_code: None,
@@ -948,10 +952,65 @@ mod tests {
             finished_at: None,
         };
         let out = format_suite(&suite);
-        // success=true + no skipped_reason → is_passed() is true, but the all-steps-skipped
-        // branch also marks it skipped in the skipped tally.
-        assert!(out.contains("1 passed"), "SHALL count as a passed flow");
-        assert!(out.contains("1 skipped"), "all-skipped-steps flow SHALL also tally as skipped");
+        // success=true + no skipped_reason → is_passed() is true; the all-steps-skipped
+        // branch is now suppressed for passing flows, so it tallies once (passed), not twice.
+        assert!(
+            out.contains("1 passed, 0 failed, 0 skipped"),
+            "passing all-skipped-steps flow SHALL count as passed only, never as skipped"
+        );
+    }
+
+    // 21b. counts never over-tally a passing all-skipped-steps flow (regression for double-count)
+
+    #[test]
+    fn suite_passing_all_skipped_flow_counts_within_total() {
+        let suite = SuiteReport {
+            flows: vec![FlowReport {
+                first_failure_code: None,
+                flow_name: "all_skip_steps".to_string(),
+                success: true,
+                step_results: vec![skipped_step("tap", "A"), skipped_step("tap", "B")],
+                warnings: vec![],
+                duration_ms: 0,
+                seed: None,
+                screenshot_path: None,
+                device_name: None,
+                os_major: None,
+                perf_snapshots: vec![],
+                skipped_reason: None,
+                covered_axes: Vec::new(),
+                recordings: Vec::new(),
+                repeat: None,
+                started_at: None,
+                finished_at: None,
+            }],
+            installs: Vec::new(),
+            total_duration_ms: 0,
+            started_at: None,
+            finished_at: None,
+        };
+
+        // 1. Recompute the three suite tallies exactly as format_suite does.
+        let passed = suite.flows.iter().filter(|f| f.is_passed()).count();
+        let failed = suite.flows.iter().filter(|f| f.is_failed()).count();
+        let skipped = suite
+            .flows
+            .iter()
+            .filter(|f| {
+                f.is_skipped()
+                    || (!f.is_passed()
+                        && !f.step_results.is_empty()
+                        && f.step_results.iter().all(|s| matches!(s.outcome, StepOutcome::Skipped)))
+            })
+            .count();
+
+        // 2. The three categories SHALL be mutually exclusive: their sum never exceeds the flow count.
+        assert!(
+            passed + failed + skipped <= suite.flows.len(),
+            "passed+failed+skipped SHALL NOT exceed total flow count (no double-counting)"
+        );
+        assert_eq!(passed, 1, "the flow SHALL count once as passed");
+        assert_eq!(skipped, 0, "the flow SHALL NOT also count as skipped");
     }
 
     // 22. format_duration pads narrow values and renders three decimals

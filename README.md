@@ -588,7 +588,7 @@ Each action has a built-in multiplier applied to the base timeout (`step_timeout
 
 | Multiplier | Timeout (at 5s base) | Actions |
 |------------|---------------------|---------|
-| 1x | 5s | `tap`, `doubleTap`, `backspace`, `long_press`, `swipe`, `pinch`, `gesture`, `press`, `rotate`, `screenshot`, `hide_keyboard`, device controls |
+| 1x | 5s | `tap`, `double_tap`, `backspace`, `long_press`, `swipe`, `pinch`, `gesture`, `press`, `rotate`, `screenshot`, `hide_keyboard`, device controls |
 | 2x | 10s | `type`, `assert_visible`, `assert_checked`, `assert_not_visible`, `read`, alerts |
 | 3x | 15s | `launch`, `stop` |
 | 4x | 20s | `bash`, `run` |
@@ -1043,12 +1043,12 @@ Find an element matching the selectors and tap its center.
 
 Supports all selectors, `auto_scroll`, `timeout`, `if_fail`, `retry`.
 
-#### `doubleTap` — Double-tap an element
+#### `double_tap` — Double-tap an element
 
 Two rapid taps (40ms apart) at the element center.
 
 ```toml
-{ action = "doubleTap", on_text = "Zoom" }
+{ action = "double_tap", on_text = "Zoom" }
 ```
 
 Same selectors and options as `tap`.

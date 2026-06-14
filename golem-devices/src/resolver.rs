@@ -292,20 +292,14 @@ fn resolve_full(
         } else if requires_physical(os_opt, dt_opt, available) && options.ignore_missing_physical {
             // Physical device required but not connected -- skip silently.
             continue;
-        } else if options.create_if_missing {
-            if let Some(synthetic) = make_synthetic_device(os_opt, dt_opt) {
-                result.push(ResolvedDevice {
-                    device: synthetic,
-                    apps: Vec::new(),
-                    created: true,
-                });
-            } else {
-                bail!(
-                    "no available device matching os={:?}, type={:?}",
-                    os_opt,
-                    dt_opt
-                );
-            }
+        } else if let (true, Some(synthetic)) =
+            (options.create_if_missing, make_synthetic_device(os_opt, dt_opt))
+        {
+            result.push(ResolvedDevice {
+                device: synthetic,
+                apps: Vec::new(),
+                created: true,
+            });
         } else {
             bail!(
                 "no available device matching os={:?}, type={:?}",
@@ -493,7 +487,11 @@ fn make_synthetic_device(
             let (p, m) = match spec {
                 crate::OsVersionSpec::Exact { platform, major } => (platform, major),
                 crate::OsVersionSpec::Minimum { platform, major } => (platform, major),
-                crate::OsVersionSpec::Latest { platform, .. } => (platform, 0),
+                crate::OsVersionSpec::Latest { .. } => {
+                    unreachable!(
+                        "Latest is expanded to a concrete major before make_synthetic_* runs"
+                    )
+                }
             };
             (p, m)
         }
@@ -533,7 +531,11 @@ fn make_synthetic_for_requirement(req: &Requirement) -> Option<DeviceInfo> {
             let (platform, major) = match spec {
                 crate::OsVersionSpec::Exact { platform, major } => (platform, major),
                 crate::OsVersionSpec::Minimum { platform, major } => (platform, major),
-                crate::OsVersionSpec::Latest { platform, .. } => (platform, 0),
+                crate::OsVersionSpec::Latest { .. } => {
+                    unreachable!(
+                        "Latest is expanded to a concrete major before make_synthetic_* runs"
+                    )
+                }
             };
             Some(DeviceInfo {
                 name: format!("synthetic-{}-{}", platform, major),
@@ -1799,5 +1801,44 @@ mod tests {
             result.is_err(),
             "a same-major different-platform device SHALL NOT satisfy the spec"
         );
+    }
+
+    // 43. The reachable synthetic-device builders produce the expected concrete
+    //     devices for Exact and Minimum specs. The Latest arm is unreachable
+    //     (expand_latest_in_constraint rewrites it first), so it is not exercised
+    //     here — calling it would panic via unreachable!().
+    #[test]
+    fn synthetic_builders_cover_reachable_specs() {
+        // 1. make_synthetic_device with an Exact OS spec yields that major.
+        let os = "android:34".to_string();
+        let dt = DeviceType::Tablet;
+        let synthetic = make_synthetic_device(&Some(&os), &Some(&dt))
+            .expect("Exact spec SHALL build a synthetic device");
+        assert_eq!(synthetic.platform, Platform::Android);
+        assert_eq!(synthetic.os_major, 34);
+        assert_eq!(synthetic.device_type, DeviceType::Tablet);
+        assert_eq!(synthetic.state, DeviceState::NeedsCreation);
+
+        // 2. make_synthetic_device with a Minimum OS spec keeps the floor major.
+        let min_os = "ios:17+".to_string();
+        let min_synthetic = make_synthetic_device(&Some(&min_os), &None)
+            .expect("Minimum spec SHALL build a synthetic device");
+        assert_eq!(min_synthetic.platform, Platform::Ios);
+        assert_eq!(min_synthetic.os_major, 17);
+        assert_eq!(min_synthetic.device_type, DeviceType::Phone);
+
+        // 3. make_synthetic_for_requirement handles the OsVersion (Exact) branch.
+        let req = Requirement::OsVersion("ios:18".to_string());
+        let req_synthetic = make_synthetic_for_requirement(&req)
+            .expect("OsVersion requirement SHALL build a synthetic device");
+        assert_eq!(req_synthetic.platform, Platform::Ios);
+        assert_eq!(req_synthetic.os_major, 18);
+
+        // 4. make_synthetic_for_requirement handles the DeviceType branch.
+        let type_req = Requirement::DeviceType(DeviceType::Tablet);
+        let type_synthetic = make_synthetic_for_requirement(&type_req)
+            .expect("DeviceType requirement SHALL build a synthetic device");
+        assert_eq!(type_synthetic.device_type, DeviceType::Tablet);
+        assert_eq!(type_synthetic.state, DeviceState::NeedsCreation);
     }
 }

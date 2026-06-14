@@ -18,6 +18,7 @@ pub enum ValidationErrorKind {
     MissingGoto,
     ConflictingBranchCondition,
     MissingComparison,
+    InvalidConcurrency,
 }
 
 const KNOWN_ACTIONS: &[&str] = &[
@@ -170,6 +171,25 @@ pub fn validate_flow(flow: &FlowFile) -> Vec<ValidationError> {
             errors.push(ValidationError {
                 message: format!("App '{}' has no device constraints", app.name),
                 kind: ValidationErrorKind::MissingDevices,
+            });
+        }
+    }
+
+    // 10. Concurrency options, if set, SHALL be >= 1 — a value of 0 would
+    //     deadlock the parallel executor's semaphore (zero permits).
+    if let Some(ref opts) = flow.flow.options {
+        if opts.max_concurrency == Some(0) {
+            errors.push(ValidationError {
+                message: "max_concurrency SHALL be >= 1 (0 would deadlock the executor)"
+                    .to_string(),
+                kind: ValidationErrorKind::InvalidConcurrency,
+            });
+        }
+        if opts.suite_concurrency == Some(0) {
+            errors.push(ValidationError {
+                message: "suite_concurrency SHALL be >= 1 (0 would deadlock the executor)"
+                    .to_string(),
+                kind: ValidationErrorKind::InvalidConcurrency,
             });
         }
     }
@@ -847,6 +867,64 @@ app = "virtualapp"
         assert!(
             issues.is_empty(),
             "push targeting virtual app SHALL not be flagged: {issues:?}"
+        );
+    }
+
+    // 24. max_concurrency = 0 is rejected (would deadlock the executor)
+    #[test]
+    fn zero_max_concurrency_rejected() {
+        let toml_str = r#"
+[flow]
+name = "zero concurrency"
+
+[flow.options]
+max_concurrency = 0
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let errors = validate_flow(&flow);
+        let kinds: Vec<&ValidationErrorKind> = errors.iter().map(|e| &e.kind).collect();
+        assert!(
+            kinds.contains(&&ValidationErrorKind::InvalidConcurrency),
+            "max_concurrency = 0 SHALL be rejected, got: {kinds:?}"
+        );
+    }
+
+    // 25. suite_concurrency = 0 is rejected (would deadlock the executor)
+    #[test]
+    fn zero_suite_concurrency_rejected() {
+        let toml_str = r#"
+[flow]
+name = "zero suite concurrency"
+
+[flow.options]
+suite_concurrency = 0
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let errors = validate_flow(&flow);
+        let kinds: Vec<&ValidationErrorKind> = errors.iter().map(|e| &e.kind).collect();
+        assert!(
+            kinds.contains(&&ValidationErrorKind::InvalidConcurrency),
+            "suite_concurrency = 0 SHALL be rejected, got: {kinds:?}"
+        );
+    }
+
+    // 26. Concurrency options >= 1 are accepted (no InvalidConcurrency)
+    #[test]
+    fn positive_concurrency_accepted() {
+        let toml_str = r#"
+[flow]
+name = "valid concurrency"
+
+[flow.options]
+max_concurrency = 1
+suite_concurrency = 4
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let errors = validate_flow(&flow);
+        let kinds: Vec<&ValidationErrorKind> = errors.iter().map(|e| &e.kind).collect();
+        assert!(
+            !kinds.contains(&&ValidationErrorKind::InvalidConcurrency),
+            "concurrency >= 1 SHALL be accepted, got: {kinds:?}"
         );
     }
 

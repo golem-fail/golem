@@ -633,24 +633,24 @@ mod tests {
         assert_eq!(tap_calls[0].1, vec!["150", "222"]);
     }
 
-    // ── 2. doubleTap sends two taps at correct coordinates ───────────
+    // ── 2. double_tap sends two taps at correct coordinates ───────────
 
     #[tokio::test]
     async fn double_tap_sends_two_taps_at_correct_coordinates() {
         let root = root_with_button("Submit");
         let driver = MockPlatformDriver::new(root);
 
-        let mut step = make_step("doubleTap");
+        let mut step = make_step("double_tap");
         step.on_text = Some("Submit".to_string());
 
         let ctx = test_ctx(Path::new("."));
         handle_double_tap(&step, &driver, &ctx)
             .await
-            .expect("doubleTap SHALL succeed");
+            .expect("double_tap SHALL succeed");
 
         let calls = driver.get_calls();
         let tap_calls: Vec<_> = calls.iter().filter(|c| c.0 == "tap").collect();
-        assert_eq!(tap_calls.len(), 2, "doubleTap SHALL produce exactly two tap calls");
+        assert_eq!(tap_calls.len(), 2, "double_tap SHALL produce exactly two tap calls");
         // Both taps hit the same center: x=100+100/2=150, y=200+44/2=222
         assert_eq!(tap_calls[0].1, vec!["150", "222"]);
         assert_eq!(tap_calls[1].1, vec!["150", "222"]);

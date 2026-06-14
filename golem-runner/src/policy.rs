@@ -29,6 +29,11 @@ const DEFAULT_RETRY_DELAY_MS: u64 = 1_000;
 /// Default base timeout in milliseconds (5 seconds).
 pub const DEFAULT_BASE_TIMEOUT_MS: u64 = 5_000;
 
+/// Ceiling for an auto-computed step timeout (3 hours). Only applies to the
+/// `base_timeout_ms * action_multiplier` path — an explicit `step.timeout`
+/// is honored verbatim, however large.
+const MAX_AUTO_TIMEOUT_MS: u64 = 10_800_000;
+
 /// Compute the effective timeout for a step.
 ///
 /// Priority:
@@ -43,16 +48,20 @@ pub fn effective_timeout(step: &Step, base_timeout_ms: u64) -> u64 {
         return t;
     }
 
-    let multiplied = base_timeout_ms * action_multiplier(step);
+    let multiplied = base_timeout_ms.saturating_mul(action_multiplier(step));
 
     // If the step has an intrinsic duration (gesture, long_press, rotate),
     // ensure timeout covers it plus 2s for settle.
     let intrinsic = intrinsic_duration_ms(step);
-    if intrinsic > 0 {
-        multiplied.max(intrinsic + 2_000)
+    let computed = if intrinsic > 0 {
+        multiplied.max(intrinsic.saturating_add(2_000))
     } else {
         multiplied
-    }
+    };
+
+    // Cap the auto-computed timeout at a sane ceiling so a pathological
+    // multiplier/intrinsic can't park a step on the deadline for days.
+    computed.min(MAX_AUTO_TIMEOUT_MS)
 }
 
 /// Per-action timeout multiplier applied to the base timeout.
@@ -88,7 +97,7 @@ fn action_multiplier(step: &Step) -> u64 {
         // settle (the first tap after a fresh app launch on iOS 26 spends
         // multiple seconds on WebKit Inspector enrichment + tree
         // stabilisation; a 1x = 5s budget consistently underflows).
-        "tap" | "doubleTap" | "backspace" | "long_press" | "swipe"
+        "tap" | "double_tap" | "backspace" | "long_press" | "swipe"
         | "pinch" | "gesture" | "rotate"
         | "type" | "assert_visible" | "assert_checked" | "assert_not_visible"
         | "assert_alert" | "accept_alert" | "dismiss_alert"
@@ -145,12 +154,10 @@ fn intrinsic_duration_ms(step: &Step) -> u64 {
             }
         }
         "gesture" => {
-            let duration_per_segment = step.duration.unwrap_or(300);
-            let max_points = step.fingers.iter()
-                .map(|f| f.points.len())
-                .max()
-                .unwrap_or(2);
-            duration_per_segment * max_points.saturating_sub(1) as u64
+            // Both iOS and Android companions treat the finger `duration`
+            // as the TOTAL time for the whole path, not per-segment — so
+            // the intrinsic is just the duration (like swipe).
+            step.duration.unwrap_or(300)
         }
         "rotate" => {
             if let Some(degrees) = step.rotation {
@@ -974,29 +981,54 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // 27. gesture intrinsic = duration_per_segment * (max_points - 1)
+    // 27. gesture intrinsic = total path duration (companions treat the
+    //     finger duration as the whole-path time, not per-segment)
     // -----------------------------------------------------------------
     #[test]
-    fn gesture_intrinsic_uses_max_finger_points() {
+    fn gesture_intrinsic_uses_total_duration() {
         let sel = golem_parser::SelectorGroup { text: Some("p".into()), ..Default::default() };
 
-        // No fingers → max_points defaults to 2 → segments = 1.
-        // default duration 300 * 1 = 300 intrinsic + 2000 = 2300, under 2x.
+        // No fingers, default duration 300 intrinsic + 2000 = 2300, under 2x.
         let empty = Step { action: "gesture".into(), ..Default::default() };
         assert_eq!(effective_timeout(&empty, 5_000), 10_000);
 
-        // One finger with many points + a big per-segment duration so the
-        // intrinsic clears the 2x floor. 5 points → 4 segments;
-        // duration 5000 * 4 = 20000 intrinsic + 2000 = 22000 > 10000.
+        // A big total duration that clears the 2x floor regardless of how
+        // many points the finger has: duration 20000 + 2000 = 22000 > 10000.
         let big = Step {
             action: "gesture".into(),
-            duration: Some(5_000),
+            duration: Some(20_000),
             fingers: vec![golem_parser::Finger {
                 points: vec![sel.clone(), sel.clone(), sel.clone(), sel.clone(), sel.clone()],
             }],
             ..Default::default()
         };
         assert_eq!(effective_timeout(&big, 5_000), 22_000);
+    }
+
+    // -----------------------------------------------------------------
+    // 27a. multi-point gesture intrinsic == step.duration (total), not a
+    //      per-segment product — point count SHALL NOT scale the floor.
+    // -----------------------------------------------------------------
+    #[test]
+    fn gesture_intrinsic_independent_of_point_count() {
+        let sel = golem_parser::SelectorGroup { text: Some("p".into()), ..Default::default() };
+
+        // A 6-point finger with duration 30000. If the intrinsic were the
+        // old per-segment product (5 * 30000 = 150000), the floor would be
+        // 152000. With the total-duration semantics it is 30000 + 2000.
+        let many_points = Step {
+            action: "gesture".into(),
+            duration: Some(30_000),
+            fingers: vec![golem_parser::Finger {
+                points: vec![sel.clone(), sel.clone(), sel.clone(), sel.clone(), sel.clone(), sel.clone()],
+            }],
+            ..Default::default()
+        };
+        assert_eq!(
+            effective_timeout(&many_points, 5_000),
+            32_000,
+            "gesture floor SHALL be step.duration + 2s settle, independent of point count",
+        );
     }
 
     // -----------------------------------------------------------------
@@ -1030,7 +1062,6 @@ mod tests {
         for action in [
             "assert_visible", "assert_not_visible", "assert_checked", "read",
             "screenshot", "log", "set_variable", "http_get", "await_email",
-            "doubleTap", // note: settle uses snake_case "double_tap" only
         ] {
             let step = Step { action: action.into(), ..Default::default() };
             assert!(
@@ -1038,5 +1069,62 @@ mod tests {
                 "{action} SHALL NOT require post-action settle",
             );
         }
+    }
+
+    // -----------------------------------------------------------------
+    // 30. double_tap is a mutating action: it gets both the 2x action
+    //     multiplier AND requires post-action settle.
+    // -----------------------------------------------------------------
+    #[test]
+    fn double_tap_gets_multiplier_and_post_settle() {
+        let step = Step { action: "double_tap".into(), ..Default::default() };
+        // 1. 2x action multiplier on the 5s base = 10_000ms.
+        assert_eq!(
+            effective_timeout(&step, 5_000),
+            10_000,
+            "double_tap SHALL get the 2x interaction multiplier",
+        );
+        // 2. double_tap mutates the UI, so it SHALL need post-settle.
+        assert!(
+            needs_post_settle(&step),
+            "double_tap SHALL require post-action settle",
+        );
+    }
+
+    // -----------------------------------------------------------------
+    // 31. effective_timeout uses saturating_mul and caps the computed
+    //     path at MAX_AUTO_TIMEOUT_MS; an explicit step.timeout is never
+    //     capped.
+    // -----------------------------------------------------------------
+    #[test]
+    fn effective_timeout_caps_and_saturates() {
+        // 1. await_email is 48x; a huge base would overflow an unchecked
+        //    multiply. saturating_mul avoids the panic, and the cap then
+        //    clamps the result to MAX_AUTO_TIMEOUT_MS.
+        let email = Step { action: "await_email".into(), ..Default::default() };
+        assert_eq!(
+            effective_timeout(&email, u64::MAX),
+            MAX_AUTO_TIMEOUT_MS,
+            "saturating multiply SHALL be capped at the 3h ceiling",
+        );
+
+        // 2. A long intrinsic (type) that would exceed the ceiling is also
+        //    capped on the computed path.
+        let mut typing = Step { action: "type".into(), ..Default::default() };
+        typing.input = Some("x".repeat(1_000_000));
+        assert_eq!(
+            effective_timeout(&typing, 5_000),
+            MAX_AUTO_TIMEOUT_MS,
+            "computed intrinsic floor SHALL be capped at the 3h ceiling",
+        );
+
+        // 3. An explicit user-set timeout is returned verbatim, never capped.
+        let mut explicit = Step { action: "await_email".into(), ..Default::default() };
+        explicit.timeout = Some(MAX_AUTO_TIMEOUT_MS * 5);
+        assert_eq!(
+            effective_timeout(&explicit, 5_000),
+            MAX_AUTO_TIMEOUT_MS * 5,
+            "explicit step.timeout SHALL NOT be capped",
+        );
     }
 }

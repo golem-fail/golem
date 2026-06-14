@@ -159,7 +159,21 @@ impl VariableStore {
     }
 
     /// Push a scope to the front (highest priority position).
+    ///
+    /// Deduplicates by level: if a scope with the same `ScopeLevel` already
+    /// exists, the incoming scope's vars are merged into it (consistent with
+    /// `merge_scope`) rather than creating a second scope at that level. This
+    /// keeps `resolve()` (first-of-level wins) and `get()` (front scope) in
+    /// agreement.
     pub fn push_scope(&mut self, scope: Scope) {
+        for existing in &mut self.scopes {
+            if existing.level == scope.level {
+                for (key, value) in scope.vars {
+                    existing.vars.insert(key, value);
+                }
+                return;
+            }
+        }
         self.scopes.insert(0, scope);
     }
 
@@ -755,6 +769,40 @@ mod tests {
 
         assert_eq!(store.scopes()[0].level, ScopeLevel::Flow);
         assert_eq!(store.scopes()[1].level, ScopeLevel::Project);
+    }
+
+    // 10b. push_scope dedups by level: pushing a scope whose level already
+    //      exists merges into it rather than creating a duplicate, keeping
+    //      resolve() and get() in agreement.
+    #[test]
+    fn push_scope_dedups_by_level() {
+        let mut store = VariableStore::new();
+
+        let mut first = Scope::new(ScopeLevel::Cli);
+        first.set("x", VarValue::string("first"));
+        store.push_scope(first);
+
+        let mut second = Scope::new(ScopeLevel::Cli);
+        second.set("x", VarValue::string("second"));
+        second.set("y", VarValue::string("extra"));
+        store.push_scope(second);
+
+        // Only one Cli scope SHALL exist.
+        assert_eq!(
+            store.scopes().len(),
+            1,
+            "push_scope SHALL NOT create a duplicate level"
+        );
+        // Incoming vars SHALL be merged in (overwriting collisions).
+        assert_eq!(store.get("x"), Some(&VarValue::string("second")));
+        assert_eq!(store.get("y"), Some(&VarValue::string("extra")));
+
+        // resolve() and get() SHALL agree (no diverging duplicate level).
+        assert_eq!(
+            store.resolve("x").expect("should resolve"),
+            store.get("x").expect("should get"),
+            "resolve() and get() SHALL agree after dedup"
+        );
     }
 
     // --- resolve uses ScopeLevel priority, not list position ---

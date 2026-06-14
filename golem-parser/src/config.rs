@@ -182,7 +182,17 @@ pub fn merge_config(project: &ProjectConfig, flow: &FlowFile) -> FlowFile {
         || merged_opts.max_runtime.is_some()
         || merged_opts.suite_concurrency.is_some()
         || merged_opts.keep_devices.is_some()
-        || merged_opts.coverage.is_some();
+        || merged_opts.coverage.is_some()
+        || merged_opts.app_lifecycle.is_some()
+        || merged_opts.perf.is_some()
+        || merged_opts.perf_memory_warn_mb.is_some()
+        || merged_opts.perf_memory_error_mb.is_some()
+        || merged_opts.perf_cpu_warn_percent.is_some()
+        || merged_opts.perf_cpu_error_percent.is_some()
+        || merged_opts.perf_threads_warn.is_some()
+        || merged_opts.perf_threads_error.is_some()
+        || merged_opts.perf_fd_warn.is_some()
+        || merged_opts.perf_fd_error.is_some();
 
     merged.flow.options = if has_any_option {
         Some(merged_opts)
@@ -1008,6 +1018,43 @@ max_runtime = "5m"
         assert_eq!(opts.perf_threads_warn, Some(64));
         // Flow value wins.
         assert_eq!(opts.max_runtime.as_deref(), Some("5m"));
+    }
+
+    // ---------------------------------------------------------------
+    // 31. merge_config inherits a perf-only project option even when no
+    //     other counted option (and no flow options) is present —
+    //     regression: perf fields were omitted from has_any_option, so the
+    //     merged options were silently dropped to None.
+    // ---------------------------------------------------------------
+    #[test]
+    fn merge_perf_only_project_option_inherited() {
+        // 1. Project sets ONLY a perf threshold; flow has no options at all.
+        let project = parse_project_config(
+            r#"
+[options]
+perf_memory_error_mb = 512.0
+"#,
+        )
+        .expect("project config SHALL parse");
+
+        let flow = minimal_flow(
+            r#"
+[flow]
+name = "test"
+"#,
+        );
+
+        // 2. Merge SHALL retain the inherited perf threshold rather than None.
+        let merged = merge_config(&project, &flow);
+        let opts = merged
+            .flow
+            .options
+            .expect("perf-only project option SHALL survive the merge");
+        assert_eq!(
+            opts.perf_memory_error_mb,
+            Some(512.0),
+            "SHALL preserve the inherited perf threshold"
+        );
     }
 
     // ---------------------------------------------------------------

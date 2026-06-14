@@ -57,7 +57,13 @@ pub fn set_cover_greedy(boxes: &[DeviceSlot], candidates: &[DeviceInfo]) -> Vec<
                 (i, ticks)
             })
             .filter(|(_, ticks)| !ticks.is_empty())
-            .max_by_key(|(_, ticks)| ticks.len());
+            // 1. Candidates arrive in ascending index order; `fold` keeps the
+            //    first strict maximum, so equal-tick ties resolve to the LOWEST
+            //    index (matches the doc; `max_by_key` would keep the last).
+            .fold(None, |best: Option<(usize, Vec<usize>)>, cur| match best {
+                Some((_, ref bt)) if cur.1.len() <= bt.len() => best,
+                _ => Some(cur),
+            });
 
         match choice {
             Some((idx, ticks)) => {
@@ -334,17 +340,37 @@ mod tests {
     }
 
     // An all-open box is ticked equally (1 tick) by every candidate. On a tie,
-    // max_by_key returns the LAST maximal element, so greedy picks the highest
-    // index — not the first candidate. Documents the tie-break ordering.
+    // the documented rule breaks toward the LOWEST index, so greedy picks the
+    // first candidate. Documents the tie-break ordering.
     #[test]
-    fn set_cover_open_box_tie_break_picks_last() {
+    fn set_cover_open_box_tie_break_picks_first() {
         let boxes = vec![empty_slot()];
         let candidates = vec![
             device("iPhone", "u1", Platform::Ios, 26, DeviceType::Phone),
             device("Pixel", "u2", Platform::Android, 34, DeviceType::Phone),
         ];
         let picked = set_cover_greedy(&boxes, &candidates);
-        // 1. Both tick the open box once; max_by_key keeps the last max → index 1.
-        assert_eq!(picked, vec![1], "equal-tick tie SHALL resolve to the last (highest-index) candidate");
+        // 1. Both tick the open box once; the fold keeps the first max → index 0.
+        assert_eq!(picked, vec![0], "equal-tick tie SHALL resolve to the lowest-index candidate");
+    }
+
+    // Regression: three candidates all tick the same single box with an equal
+    // count. The tie SHALL resolve to the lowest index, regardless of how many
+    // higher-index candidates also tie.
+    #[test]
+    fn set_cover_equal_tick_tie_picks_lowest_index() {
+        let boxes = vec![empty_slot()];
+        let candidates = vec![
+            device("iPhone", "u1", Platform::Ios, 26, DeviceType::Phone),
+            device("Pixel", "u2", Platform::Android, 34, DeviceType::Phone),
+            device("iPad", "u3", Platform::Ios, 26, DeviceType::Tablet),
+        ];
+        let picked = set_cover_greedy(&boxes, &candidates);
+        // 1. All three tick the open box once; lowest index wins the tie.
+        assert_eq!(
+            picked,
+            vec![0],
+            "equal-tick tie across multiple candidates SHALL pick the lowest index"
+        );
     }
 }

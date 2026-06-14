@@ -504,11 +504,13 @@ mod tests {
                 .expect("base_url SHALL resolve"),
             &VarValue::string("https://override.test")
         );
-        // A non-empty override SHALL push exactly one extra scope.
+        // Flow-level overrides merge into the inherited Flow scope
+        // (push_scope dedups by ScopeLevel), so the scope count is
+        // unchanged — the override still wins via overwrite (asserted above).
         assert_eq!(
             child.scopes().len(),
-            parent_scopes + 1,
-            "non-empty overrides SHALL push exactly one scope"
+            parent_scopes,
+            "Flow-level overrides SHALL merge into the inherited Flow scope, not add a new one"
         );
     }
 }

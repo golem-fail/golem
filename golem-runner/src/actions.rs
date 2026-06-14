@@ -46,7 +46,7 @@ pub async fn execute_action(
     let action = step.action.as_str();
     match action {
         "tap" => handle_tap(step, driver, ctx).await,
-        "doubleTap" => handle_double_tap(step, driver, ctx).await,
+        "double_tap" => handle_double_tap(step, driver, ctx).await,
         "type" => handle_type(step, driver, ctx).await,
         "backspace" => handle_backspace(step, driver, ctx).await,
         "long_press" => handle_long_press(step, driver, ctx).await,

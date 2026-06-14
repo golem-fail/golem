@@ -728,7 +728,9 @@ impl CompanionClient {
     }
 
     /// Set the per-request timeout for `post_json`/`get_text`/`get_bytes`.
-    /// Pass `Duration::ZERO` to clear. Sub-millisecond values clamp to 1ms.
+    /// Stored with whole-millisecond precision (`as_millis` truncation).
+    /// Pass `Duration::ZERO`, or any value that truncates to 0ms, to clear
+    /// the timeout (`current_request_timeout` then returns `None`).
     pub fn set_request_timeout(&self, timeout: std::time::Duration) {
         let ms = timeout.as_millis().min(u64::MAX as u128) as u64;
         self.request_timeout_ms
@@ -1577,5 +1579,18 @@ mod tests {
         );
         c.set_request_timeout(std::time::Duration::ZERO);
         assert!(c.current_request_timeout().is_none(), "ZERO SHALL clear the timeout");
+    }
+
+    // 59. Sub-millisecond Durations truncate to 0ms (whole-ms precision),
+    //     which clears the timeout rather than clamping up to 1ms.
+    #[test]
+    fn companion_request_timeout_sub_millisecond_truncates_to_zero() {
+        let c = CompanionClient::new(1);
+        c.set_request_timeout(std::time::Duration::from_millis(250));
+        c.set_request_timeout(std::time::Duration::from_micros(500));
+        assert!(
+            c.current_request_timeout().is_none(),
+            "sub-millisecond timeout SHALL truncate to 0ms and clear the timeout"
+        );
     }
 }

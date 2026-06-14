@@ -76,6 +76,16 @@ fn resolve_references(template: &str, vars: &HashMap<String, VarValue>) -> Resul
                 ));
             }
 
+            // An empty reference `${}` is malformed: there is no variable name to
+            // look up, so reject it as a parse error rather than treating it as a
+            // lookup of the empty-named variable.
+            if ref_name.is_empty() {
+                return Err(golem_events::coded(
+                    golem_events::FailureCode::ParseVariable,
+                    anyhow!("malformed variable reference: empty ${{}}"),
+                ));
+            }
+
             // Resolve the reference: split on first '.' to get var name and optional path
             let resolved = resolve_var_path(&ref_name, vars)?;
             result.push_str(&resolved);
@@ -528,7 +538,8 @@ mod tests {
         );
     }
 
-    // 21. Empty reference ${} resolves the empty-named variable, which is undefined
+    // 21. Empty reference ${} is rejected as a malformed parse error, not
+    //     treated as a lookup of the empty-named variable.
     #[test]
     fn error_on_empty_reference() {
         let vars: HashMap<String, VarValue> = HashMap::new();
@@ -537,8 +548,25 @@ mod tests {
         let err = result.expect_err("should be error");
         let msg = golem_events::clean_msg(&err);
         assert!(
-            msg.contains("undefined variable"),
-            "empty reference SHALL be treated as an undefined variable, got: {msg}"
+            msg.contains("malformed variable reference"),
+            "empty reference SHALL be rejected as malformed, got: {msg}"
+        );
+        assert!(
+            !msg.contains("undefined variable"),
+            "empty reference SHALL NOT be treated as an undefined variable, got: {msg}"
+        );
+    }
+
+    // 24. Empty reference ${} carries the ParseVariable failure code (same as
+    //     the unclosed-brace case), confirming it is classified as malformed.
+    #[test]
+    fn empty_reference_uses_parse_variable_code() {
+        let vars: HashMap<String, VarValue> = HashMap::new();
+        let err = resolve_references("${}", &vars).expect_err("empty ref SHALL error");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::ParseVariable),
+            "empty ${{}} SHALL be coded as ParseVariable"
         );
     }
 
