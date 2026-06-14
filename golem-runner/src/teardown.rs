@@ -509,4 +509,58 @@ mod tests {
             "explicit if_fail=error should be preserved"
         );
     }
+
+    // ---------------------------------------------------------------
+    // 14. apply_teardown_defaults preserves all non-if_fail fields
+    //     while defaulting if_fail (verifies it clones the whole step
+    //     rather than reconstructing a bare one).
+    // ---------------------------------------------------------------
+    #[test]
+    fn apply_teardown_defaults_preserves_other_fields() {
+        let step = Step {
+            action: "tap".to_string(),
+            on_text: Some("Submit".to_string()),
+            on_index: Some(3),
+            input: Some("hello".to_string()),
+            save_to: Some("captured".to_string()),
+            timeout: Some(1234),
+            retry: Some(5),
+            ..Default::default()
+        };
+        assert!(step.if_fail.is_none(), "precondition: if_fail is None");
+
+        let effective = apply_teardown_defaults(&step);
+
+        // if_fail was defaulted...
+        assert_eq!(
+            effective.if_fail.as_deref(),
+            Some("ignore"),
+            "if_fail SHALL be defaulted to ignore"
+        );
+        // ...but every other field SHALL survive the clone unchanged.
+        assert_eq!(effective.action, "tap", "action SHALL be preserved");
+        assert_eq!(
+            effective.on_text.as_deref(),
+            Some("Submit"),
+            "on_text SHALL be preserved"
+        );
+        assert_eq!(effective.on_index, Some(3), "on_index SHALL be preserved");
+        assert_eq!(
+            effective.input.as_deref(),
+            Some("hello"),
+            "input SHALL be preserved"
+        );
+        assert_eq!(
+            effective.save_to.as_deref(),
+            Some("captured"),
+            "save_to SHALL be preserved"
+        );
+        assert_eq!(
+            effective.timeout,
+            Some(1234),
+            "timeout SHALL be preserved"
+        );
+        assert_eq!(effective.retry, Some(5), "retry SHALL be preserved");
+    }
+
 }

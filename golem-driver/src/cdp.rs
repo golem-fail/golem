@@ -283,3 +283,216 @@ pub fn offset_bounds(node: &mut serde_json::Value, dx: i32, dy: i32) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    // 1. scale_bounds_by_dpr scales all four edges of `bounds` by the factor.
+    #[test]
+    fn scale_scales_all_bounds_edges() {
+        let mut node = json!({
+            "bounds": { "left": 10, "top": 20, "right": 30, "bottom": 40 }
+        });
+        scale_bounds_by_dpr(&mut node, 2.0);
+        let b = &node["bounds"];
+        assert_eq!(b["left"], 20, "left SHALL be scaled by dpr");
+        assert_eq!(b["top"], 40, "top SHALL be scaled by dpr");
+        assert_eq!(b["right"], 60, "right SHALL be scaled by dpr");
+        assert_eq!(b["bottom"], 80, "bottom SHALL be scaled by dpr");
+    }
+
+    // 2. scale_bounds_by_dpr also scales `visible_bounds`, not just `bounds`.
+    #[test]
+    fn scale_scales_visible_bounds_too() {
+        let mut node = json!({
+            "bounds": { "left": 1, "top": 2, "right": 3, "bottom": 4 },
+            "visible_bounds": { "left": 5, "top": 6, "right": 7, "bottom": 8 }
+        });
+        scale_bounds_by_dpr(&mut node, 3.0);
+        assert_eq!(node["bounds"]["left"], 3, "bounds SHALL be scaled");
+        assert_eq!(
+            node["visible_bounds"]["bottom"], 24,
+            "visible_bounds SHALL be scaled"
+        );
+    }
+
+    // 3. scale_bounds_by_dpr rounds to nearest integer (banker-free round()).
+    #[test]
+    fn scale_rounds_fractional_results() {
+        let mut node = json!({
+            "bounds": { "left": 3, "top": 5, "right": 10, "bottom": 1 }
+        });
+        // 1.5 dpr: 3->4.5->5(round), 5->7.5->8, 10->15, 1->1.5->2
+        scale_bounds_by_dpr(&mut node, 1.5);
+        let b = &node["bounds"];
+        assert_eq!(b["left"], 5, "4.5 SHALL round to 5");
+        assert_eq!(b["top"], 8, "7.5 SHALL round to 8");
+        assert_eq!(b["right"], 15, "15.0 SHALL stay 15");
+        assert_eq!(b["bottom"], 2, "1.5 SHALL round to 2");
+    }
+
+    // 4. scale_bounds_by_dpr recurses into children.
+    #[test]
+    fn scale_recurses_into_children() {
+        let mut node = json!({
+            "bounds": { "left": 10, "top": 10, "right": 10, "bottom": 10 },
+            "children": [
+                { "bounds": { "left": 5, "top": 5, "right": 5, "bottom": 5 } }
+            ]
+        });
+        scale_bounds_by_dpr(&mut node, 2.0);
+        assert_eq!(node["bounds"]["left"], 20, "parent SHALL be scaled");
+        assert_eq!(
+            node["children"][0]["bounds"]["left"], 10,
+            "child bounds SHALL be scaled recursively"
+        );
+    }
+
+    // 5. scale_bounds_by_dpr leaves a node without bounds untouched.
+    #[test]
+    fn scale_ignores_node_without_bounds() {
+        let mut node = json!({ "tag": "div" });
+        scale_bounds_by_dpr(&mut node, 2.0);
+        assert_eq!(node, json!({ "tag": "div" }), "node SHALL be unchanged");
+    }
+
+    // 6. scale_bounds_by_dpr skips non-integer bound field values.
+    #[test]
+    fn scale_skips_non_integer_fields() {
+        let mut node = json!({
+            "bounds": { "left": "x", "top": 4 }
+        });
+        scale_bounds_by_dpr(&mut node, 2.0);
+        assert_eq!(node["bounds"]["left"], "x", "non-i64 left SHALL be left as-is");
+        assert_eq!(node["bounds"]["top"], 8, "integer top SHALL be scaled");
+    }
+
+    // 7. scale_bounds_by_dpr with dpr 1.0 is a no-op on values.
+    #[test]
+    fn scale_identity_dpr_preserves_values() {
+        let mut node = json!({
+            "bounds": { "left": 7, "top": 11, "right": 13, "bottom": 17 }
+        });
+        scale_bounds_by_dpr(&mut node, 1.0);
+        let b = &node["bounds"];
+        assert_eq!(b["left"], 7, "dpr 1.0 SHALL preserve left");
+        assert_eq!(b["bottom"], 17, "dpr 1.0 SHALL preserve bottom");
+    }
+
+    // 8. offset_bounds shifts all four edges of `bounds` by dx/dy.
+    #[test]
+    fn offset_shifts_all_bounds_edges() {
+        let mut node = json!({
+            "bounds": { "left": 10, "top": 20, "right": 30, "bottom": 40 }
+        });
+        offset_bounds(&mut node, 5, -3);
+        let b = &node["bounds"];
+        assert_eq!(b["left"], 15, "left SHALL be offset by dx");
+        assert_eq!(b["top"], 17, "top SHALL be offset by dy");
+        assert_eq!(b["right"], 35, "right SHALL be offset by dx");
+        assert_eq!(b["bottom"], 37, "bottom SHALL be offset by dy");
+    }
+
+    // 9. offset_bounds offsets visible_bounds as well as bounds.
+    #[test]
+    fn offset_shifts_visible_bounds_too() {
+        let mut node = json!({
+            "bounds": { "left": 0, "top": 0, "right": 0, "bottom": 0 },
+            "visible_bounds": { "left": 100, "top": 200, "right": 300, "bottom": 400 }
+        });
+        offset_bounds(&mut node, 10, 20);
+        assert_eq!(node["bounds"]["left"], 10, "bounds SHALL be offset");
+        assert_eq!(
+            node["visible_bounds"]["top"], 220,
+            "visible_bounds SHALL be offset"
+        );
+    }
+
+    // 10. offset_bounds recurses into children.
+    #[test]
+    fn offset_recurses_into_children() {
+        let mut node = json!({
+            "bounds": { "left": 0, "top": 0, "right": 0, "bottom": 0 },
+            "children": [
+                { "bounds": { "left": 1, "top": 2, "right": 3, "bottom": 4 } }
+            ]
+        });
+        offset_bounds(&mut node, 100, 200);
+        assert_eq!(
+            node["children"][0]["bounds"]["left"], 101,
+            "child left SHALL be offset recursively"
+        );
+        assert_eq!(
+            node["children"][0]["bounds"]["top"], 202,
+            "child top SHALL be offset recursively"
+        );
+    }
+
+    // 11. offset_bounds with zero deltas preserves values.
+    #[test]
+    fn offset_zero_delta_preserves_values() {
+        let mut node = json!({
+            "bounds": { "left": 9, "top": 8, "right": 7, "bottom": 6 }
+        });
+        offset_bounds(&mut node, 0, 0);
+        let b = &node["bounds"];
+        assert_eq!(b["left"], 9, "zero offset SHALL preserve left");
+        assert_eq!(b["bottom"], 6, "zero offset SHALL preserve bottom");
+    }
+
+    // 12. offset_bounds leaves a node without bounds untouched.
+    #[test]
+    fn offset_ignores_node_without_bounds() {
+        let mut node = json!({ "tag": "span", "children": [] });
+        offset_bounds(&mut node, 5, 5);
+        assert_eq!(
+            node,
+            json!({ "tag": "span", "children": [] }),
+            "node without bounds SHALL be unchanged"
+        );
+    }
+
+    // 13. offset_bounds offsets only the present edges when some are missing.
+    #[test]
+    fn offset_handles_partial_bounds() {
+        let mut node = json!({
+            "bounds": { "left": 10, "right": 20 }
+        });
+        offset_bounds(&mut node, 5, 99);
+        assert_eq!(node["bounds"]["left"], 15, "present left SHALL be offset");
+        assert_eq!(node["bounds"]["right"], 25, "present right SHALL be offset");
+        assert!(
+            node["bounds"].get("top").is_none(),
+            "absent top SHALL NOT be added"
+        );
+    }
+
+    // 14. DOM_TRAVERSAL_JS embedded blob is the minified traversal script,
+    //     not merely non-whitespace. Assert sentinel substrings that the
+    //     traversal logic depends on and that the minifier preserves
+    //     (property/global accesses survive name-mangling), proving the
+    //     build-script wired up the intended source rather than an empty or
+    //     wrong file.
+    #[test]
+    fn dom_traversal_js_blob_is_the_traversal_script() {
+        let js = DOM_TRAVERSAL_JS.trim();
+        assert!(
+            !js.is_empty(),
+            "embedded minified DOM traversal JS SHALL be non-empty"
+        );
+        assert!(
+            js.contains("getBoundingClientRect"),
+            "traversal JS SHALL read element bounds via getBoundingClientRect"
+        );
+        assert!(
+            js.contains("IntersectionObserver"),
+            "traversal JS SHALL compute visibility via IntersectionObserver"
+        );
+        assert!(
+            js.contains("aria-label"),
+            "traversal JS SHALL extract the aria-label attribute"
+        );
+    }
+}

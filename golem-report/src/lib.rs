@@ -609,4 +609,322 @@ mod tests {
             other => panic!("SHALL produce Tap variant, got {other:?}"),
         }
     }
+
+    // 14. LongPress carries element_bounds on the event but the detail
+    //     variant has no such field — conversion SHALL keep point and
+    //     duration and silently drop the bounds.
+    #[test]
+    fn long_press_keeps_point_and_duration_dropping_bounds() {
+        let event = SubstepEvent::LongPress {
+            point: Point { x: 70, y: 90 },
+            duration_ms: 800,
+            element_bounds: Some(Rect { x: 1, y: 2, width: 3, height: 4 }),
+        };
+        match SubstepDetail::from(&event) {
+            SubstepDetail::LongPress { point, duration_ms } => {
+                assert_eq!(point.x, 70, "SHALL preserve point.x");
+                assert_eq!(point.y, 90, "SHALL preserve point.y");
+                assert_eq!(duration_ms, 800, "SHALL preserve duration_ms");
+            }
+            other => panic!("SHALL produce LongPress variant, got {other:?}"),
+        }
+    }
+
+    // 15. Swipe carries duration_ms on the event but the detail variant
+    //     has only from/to — conversion SHALL keep endpoints and drop
+    //     the duration.
+    #[test]
+    fn swipe_keeps_endpoints_dropping_duration() {
+        let event = SubstepEvent::Swipe {
+            from: Point { x: 10, y: 20 },
+            to: Point { x: 30, y: 40 },
+            duration_ms: Some(250),
+        };
+        match SubstepDetail::from(&event) {
+            SubstepDetail::Swipe { from, to } => {
+                assert_eq!(from.x, 10, "SHALL preserve from.x");
+                assert_eq!(from.y, 20, "SHALL preserve from.y");
+                assert_eq!(to.x, 30, "SHALL preserve to.x");
+                assert_eq!(to.y, 40, "SHALL preserve to.y");
+            }
+            other => panic!("SHALL produce Swipe variant, got {other:?}"),
+        }
+    }
+
+    // 16. DoubleTap preserves point and element_bounds verbatim.
+    #[test]
+    fn double_tap_preserves_point_and_bounds() {
+        let event = SubstepEvent::DoubleTap {
+            point: Point { x: 5, y: 6 },
+            element_bounds: None,
+        };
+        match SubstepDetail::from(&event) {
+            SubstepDetail::DoubleTap { point, element_bounds } => {
+                assert_eq!(point.x, 5, "SHALL preserve point.x");
+                assert_eq!(point.y, 6, "SHALL preserve point.y");
+                assert!(element_bounds.is_none(), "SHALL preserve None bounds");
+            }
+            other => panic!("SHALL produce DoubleTap variant, got {other:?}"),
+        }
+    }
+
+    // 17. ScrollAttempt formats the ScrollAttemptResult enum via Debug
+    //     into the detail's `result` String, preserving the numeric
+    //     fields, and copies the rest of the fields.
+    #[test]
+    fn scroll_attempt_debug_formats_result_and_copies_fields() {
+        let event = SubstepEvent::ScrollAttempt {
+            attempt: 3,
+            direction: "down".into(),
+            strategy_index: 2,
+            from: Point { x: 100, y: 700 },
+            to: Point { x: 100, y: 300 },
+            result: golem_events::ScrollAttemptResult::Stall { count: 2, max: 3 },
+            tree_stats: golem_events::TreeStats { fetches: 4, min_nodes: 10, max_nodes: 90 },
+        };
+        match SubstepDetail::from(&event) {
+            SubstepDetail::ScrollAttempt {
+                attempt, direction, strategy_index, from, to, result, tree_stats,
+            } => {
+                assert_eq!(attempt, 3, "SHALL preserve attempt");
+                assert_eq!(direction, "down", "SHALL preserve direction");
+                assert_eq!(strategy_index, 2, "SHALL preserve strategy_index");
+                assert_eq!(from.y, 700, "SHALL preserve from.y");
+                assert_eq!(to.y, 300, "SHALL preserve to.y");
+                assert_eq!(result, "Stall { count: 2, max: 3 }",
+                    "SHALL Debug-format the ScrollAttemptResult into result");
+                assert_eq!(tree_stats.fetches, 4, "SHALL preserve tree_stats.fetches");
+                assert_eq!(tree_stats.min_nodes, 10, "SHALL preserve tree_stats.min_nodes");
+                assert_eq!(tree_stats.max_nodes, 90, "SHALL preserve tree_stats.max_nodes");
+            }
+            other => panic!("SHALL produce ScrollAttempt variant, got {other:?}"),
+        }
+    }
+
+    // 18. ScrollAttempt with a fieldless result variant Debug-formats to
+    //     the bare variant name.
+    #[test]
+    fn scroll_attempt_fieldless_result_debug_formats_to_name() {
+        let event = SubstepEvent::ScrollAttempt {
+            attempt: 1,
+            direction: "up".into(),
+            strategy_index: 0,
+            from: Point { x: 0, y: 0 },
+            to: Point { x: 0, y: 100 },
+            result: golem_events::ScrollAttemptResult::BoundaryReached,
+            tree_stats: golem_events::TreeStats::default(),
+        };
+        match SubstepDetail::from(&event) {
+            SubstepDetail::ScrollAttempt { result, .. } => {
+                assert_eq!(result, "BoundaryReached",
+                    "SHALL Debug-format a fieldless result to its variant name");
+            }
+            other => panic!("SHALL produce ScrollAttempt variant, got {other:?}"),
+        }
+    }
+
+    // 19. AssertionMismatch carries an Option<String> actual; conversion
+    //     SHALL pass through both Some and the absence of element_bounds
+    //     (the variant has none).
+    #[test]
+    fn assertion_mismatch_preserves_optional_actual() {
+        let some = SubstepEvent::AssertionMismatch {
+            expected: "Welcome".into(),
+            actual: Some("Goodbye".into()),
+        };
+        match SubstepDetail::from(&some) {
+            SubstepDetail::AssertionMismatch { expected, actual } => {
+                assert_eq!(expected, "Welcome", "SHALL preserve expected");
+                assert_eq!(actual.as_deref(), Some("Goodbye"), "SHALL preserve Some actual");
+            }
+            other => panic!("SHALL produce AssertionMismatch variant, got {other:?}"),
+        }
+        let none = SubstepEvent::AssertionMismatch { expected: "X".into(), actual: None };
+        match SubstepDetail::from(&none) {
+            SubstepDetail::AssertionMismatch { actual, .. } => {
+                assert!(actual.is_none(), "SHALL preserve None actual");
+            }
+            other => panic!("SHALL produce AssertionMismatch variant, got {other:?}"),
+        }
+    }
+
+    // 20. RetryAttempt copies all numeric fields and clones the error.
+    #[test]
+    fn retry_attempt_preserves_all_fields() {
+        let event = SubstepEvent::RetryAttempt {
+            attempt: 2,
+            max: 5,
+            delay_ms: 1500,
+            error: "timeout".into(),
+        };
+        match SubstepDetail::from(&event) {
+            SubstepDetail::RetryAttempt { attempt, max, delay_ms, error } => {
+                assert_eq!(attempt, 2, "SHALL preserve attempt");
+                assert_eq!(max, 5, "SHALL preserve max");
+                assert_eq!(delay_ms, 1500, "SHALL preserve delay_ms");
+                assert_eq!(error, "timeout", "SHALL preserve error");
+            }
+            other => panic!("SHALL produce RetryAttempt variant, got {other:?}"),
+        }
+    }
+
+    // 21. HttpRequest preserves method/url/status/duration, including a
+    //     None status.
+    #[test]
+    fn http_request_preserves_fields_with_none_status() {
+        let event = SubstepEvent::HttpRequest {
+            method: "POST".into(),
+            url: "https://api.example.com/charge".into(),
+            status: None,
+            duration_ms: 42,
+        };
+        match SubstepDetail::from(&event) {
+            SubstepDetail::HttpRequest { method, url, status, duration_ms } => {
+                assert_eq!(method, "POST", "SHALL preserve method");
+                assert_eq!(url, "https://api.example.com/charge", "SHALL preserve url");
+                assert!(status.is_none(), "SHALL preserve None status");
+                assert_eq!(duration_ms, 42, "SHALL preserve duration_ms");
+            }
+            other => panic!("SHALL produce HttpRequest variant, got {other:?}"),
+        }
+    }
+
+    // 22. BashCommand preserves command/exit_code/duration.
+    #[test]
+    fn bash_command_preserves_fields() {
+        let event = SubstepEvent::BashCommand {
+            command: "echo hi".into(),
+            exit_code: Some(0),
+            duration_ms: 7,
+        };
+        match SubstepDetail::from(&event) {
+            SubstepDetail::BashCommand { command, exit_code, duration_ms } => {
+                assert_eq!(command, "echo hi", "SHALL preserve command");
+                assert_eq!(exit_code, Some(0), "SHALL preserve exit_code");
+                assert_eq!(duration_ms, 7, "SHALL preserve duration_ms");
+            }
+            other => panic!("SHALL produce BashCommand variant, got {other:?}"),
+        }
+    }
+
+    // 23. BarrierAborted preserves the step_count.
+    #[test]
+    fn barrier_aborted_preserves_step_count() {
+        let event = SubstepEvent::BarrierAborted { step_count: 9 };
+        match SubstepDetail::from(&event) {
+            SubstepDetail::BarrierAborted { step_count } => {
+                assert_eq!(step_count, 9, "SHALL preserve step_count");
+            }
+            other => panic!("SHALL produce BarrierAborted variant, got {other:?}"),
+        }
+    }
+
+    // 24. The remaining string-carrying variants (ScrollStarted,
+    //     ScrollDirectionReversed, ScrollStrategySwitch, AssertionMatch,
+    //     PostSettle, AppStop, DriverWarning, Screenshot, Backspace) map
+    //     1:1; spot-check representative fields and tags.
+    #[test]
+    fn string_and_scalar_variants_map_one_to_one() {
+        match SubstepDetail::from(&SubstepEvent::ScrollStarted {
+            selector: "text=Foo".into(), direction: "down".into(),
+        }) {
+            SubstepDetail::ScrollStarted { selector, direction } => {
+                assert_eq!(selector, "text=Foo");
+                assert_eq!(direction, "down");
+            }
+            other => panic!("SHALL produce ScrollStarted, got {other:?}"),
+        }
+        match SubstepDetail::from(&SubstepEvent::ScrollDirectionReversed {
+            to_direction: "up".into(), reason: "boundary".into(),
+        }) {
+            SubstepDetail::ScrollDirectionReversed { to_direction, reason } => {
+                assert_eq!(to_direction, "up");
+                assert_eq!(reason, "boundary");
+            }
+            other => panic!("SHALL produce ScrollDirectionReversed, got {other:?}"),
+        }
+        match SubstepDetail::from(&SubstepEvent::ScrollStrategySwitch {
+            to_index: 3, reason: "stall".into(),
+        }) {
+            SubstepDetail::ScrollStrategySwitch { to_index, reason } => {
+                assert_eq!(to_index, 3);
+                assert_eq!(reason, "stall");
+            }
+            other => panic!("SHALL produce ScrollStrategySwitch, got {other:?}"),
+        }
+        match SubstepDetail::from(&SubstepEvent::AssertionMatch {
+            expected: "A".into(), actual: "A".into(),
+            element_bounds: Some(Rect { x: 1, y: 1, width: 1, height: 1 }),
+        }) {
+            SubstepDetail::AssertionMatch { expected, actual, element_bounds } => {
+                assert_eq!(expected, "A");
+                assert_eq!(actual, "A");
+                assert!(element_bounds.is_some());
+            }
+            other => panic!("SHALL produce AssertionMatch, got {other:?}"),
+        }
+        match SubstepDetail::from(&SubstepEvent::PostSettle {
+            action: "tap".into(), duration_ms: 12, stable: true,
+        }) {
+            SubstepDetail::PostSettle { action, duration_ms, stable } => {
+                assert_eq!(action, "tap");
+                assert_eq!(duration_ms, 12);
+                assert!(stable);
+            }
+            other => panic!("SHALL produce PostSettle, got {other:?}"),
+        }
+        match SubstepDetail::from(&SubstepEvent::AppStop { bundle: "com.x".into() }) {
+            SubstepDetail::AppStop { bundle } => assert_eq!(bundle, "com.x"),
+            other => panic!("SHALL produce AppStop, got {other:?}"),
+        }
+        match SubstepDetail::from(&SubstepEvent::DriverWarning { message: "slow".into() }) {
+            SubstepDetail::DriverWarning { message } => assert_eq!(message, "slow"),
+            other => panic!("SHALL produce DriverWarning, got {other:?}"),
+        }
+        match SubstepDetail::from(&SubstepEvent::Screenshot { path: "/tmp/a.png".into() }) {
+            SubstepDetail::Screenshot { path } => assert_eq!(path, "/tmp/a.png"),
+            other => panic!("SHALL produce Screenshot, got {other:?}"),
+        }
+        match SubstepDetail::from(&SubstepEvent::Backspace { count: 3 }) {
+            SubstepDetail::Backspace { count } => assert_eq!(count, 3),
+            other => panic!("SHALL produce Backspace, got {other:?}"),
+        }
+    }
+
+    // 25. Serialize emits the snake_case `type` tag and, via
+    //     skip_serializing_if, omits a None element_bounds entirely while
+    //     keeping a Some one.
+    #[test]
+    fn serialize_uses_snake_case_tag_and_skips_none_bounds() {
+        let none = SubstepDetail::Tap {
+            point: Point { x: 1, y: 2 },
+            element_bounds: None,
+        };
+        let v = serde_json::to_value(&none).expect("SHALL serialize Tap");
+        assert_eq!(v["type"], "tap", "SHALL tag with snake_case variant name");
+        assert!(v.get("element_bounds").is_none(),
+            "SHALL omit a None element_bounds entirely");
+
+        let some = SubstepDetail::Tap {
+            point: Point { x: 1, y: 2 },
+            element_bounds: Some(Rect { x: 0, y: 0, width: 10, height: 10 }),
+        };
+        let v = serde_json::to_value(&some).expect("SHALL serialize Tap");
+        assert!(v.get("element_bounds").is_some(),
+            "SHALL keep a Some element_bounds");
+    }
+
+    // 26. The multi-word variant ElementNotFound serializes its tag in
+    //     snake_case (element_not_found).
+    #[test]
+    fn serialize_multiword_variant_tag_is_snake_case() {
+        let d = SubstepDetail::ElementNotFound {
+            selector: "text=Ghost".into(),
+            timeout_ms: 5000,
+        };
+        let v = serde_json::to_value(&d).expect("SHALL serialize ElementNotFound");
+        assert_eq!(v["type"], "element_not_found",
+            "SHALL render multi-word variant tag in snake_case");
+        assert_eq!(v["timeout_ms"], 5000, "SHALL include scalar fields");
+    }
 }

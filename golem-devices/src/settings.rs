@@ -141,3 +141,161 @@ pub async fn apply_device_settings(
         Platform::Ios => apply_ios_settings(device, ios).await,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{DeviceState, DeviceType};
+    use std::collections::HashMap;
+
+    // Build a minimal device for a given platform. The settings appliers
+    // only read `udid` and (for the dispatcher) `platform`.
+    fn device(platform: Platform) -> DeviceInfo {
+        DeviceInfo {
+            name: "test-device".to_string(),
+            udid: "UDID-XYZ".to_string(),
+            platform,
+            device_type: DeviceType::Phone,
+            os_major: 17,
+            os_version: "17.2".to_string(),
+            state: DeviceState::Booted,
+            physical: false,
+            playstore: false,
+            screen_width: None,
+            screen_height: None,
+            screen_scale: None,
+            last_booted: None,
+            runtime_id: None,
+            device_type_id: None,
+        }
+    }
+
+    fn map(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    // 1. Empty Android entries spawn no process and yield no warnings.
+    #[tokio::test]
+    async fn android_empty_entries_yields_no_warnings() {
+        let warnings = apply_android_settings(&device(Platform::Android), &HashMap::new()).await;
+        assert!(
+            warnings.is_empty(),
+            "empty android entries SHALL produce no warnings, got {warnings:?}"
+        );
+    }
+
+    // 2. An Android key with no namespace prefix is rejected (no `.` to split).
+    #[tokio::test]
+    async fn android_missing_namespace_prefix_warns() {
+        let entries = map(&[("nodotkey", "1")]);
+        let warnings = apply_android_settings(&device(Platform::Android), &entries).await;
+        assert_eq!(
+            warnings.len(),
+            1,
+            "missing-namespace key SHALL produce exactly one warning"
+        );
+        assert!(
+            warnings[0].contains("missing namespace prefix") && warnings[0].contains("nodotkey"),
+            "warning SHALL name the offending key and reason, got {:?}",
+            warnings[0]
+        );
+    }
+
+    // 3. An Android key whose namespace is not system|secure|global is rejected.
+    #[tokio::test]
+    async fn android_invalid_namespace_warns() {
+        let entries = map(&[("bogus.some_key", "1")]);
+        let warnings = apply_android_settings(&device(Platform::Android), &entries).await;
+        assert_eq!(
+            warnings.len(),
+            1,
+            "invalid-namespace key SHALL produce exactly one warning"
+        );
+        assert!(
+            warnings[0].contains("not one of system|secure|global")
+                && warnings[0].contains("bogus"),
+            "warning SHALL name the bad namespace, got {:?}",
+            warnings[0]
+        );
+    }
+
+    // 5. Multiple invalid Android keys each produce their own warning.
+    #[tokio::test]
+    async fn android_multiple_invalid_keys_each_warn() {
+        let entries = map(&[("nodot", "1"), ("wrongns.k", "2")]);
+        let warnings = apply_android_settings(&device(Platform::Android), &entries).await;
+        assert_eq!(
+            warnings.len(),
+            2,
+            "two invalid keys SHALL produce two warnings, got {warnings:?}"
+        );
+    }
+
+    // 6. Empty iOS entries spawn no process and yield no warnings.
+    #[tokio::test]
+    async fn ios_empty_entries_yields_no_warnings() {
+        let warnings = apply_ios_settings(&device(Platform::Ios), &HashMap::new()).await;
+        assert!(
+            warnings.is_empty(),
+            "empty ios entries SHALL produce no warnings, got {warnings:?}"
+        );
+    }
+
+    // 7. An iOS key with no domain prefix (no `.`) is rejected before spawn.
+    #[tokio::test]
+    async fn ios_missing_domain_prefix_warns() {
+        let entries = map(&[("nodotdomain", "1")]);
+        let warnings = apply_ios_settings(&device(Platform::Ios), &entries).await;
+        assert_eq!(
+            warnings.len(),
+            1,
+            "missing-domain key SHALL produce exactly one warning"
+        );
+        assert!(
+            warnings[0].contains("missing domain prefix") && warnings[0].contains("nodotdomain"),
+            "warning SHALL name the offending key and reason, got {:?}",
+            warnings[0]
+        );
+    }
+
+    // 8. The Android dispatcher routes to the Android applier and ignores the
+    //    iOS map: an invalid android key warns, an (ignored) ios entry does not.
+    #[tokio::test]
+    async fn dispatch_android_uses_android_map_only() {
+        let android = map(&[("nodot", "1")]);
+        let ios = map(&[("would.be.ios", "x")]);
+        let warnings = apply_device_settings(&device(Platform::Android), &android, &ios).await;
+        assert_eq!(
+            warnings.len(),
+            1,
+            "android dispatch SHALL apply only the android map, got {warnings:?}"
+        );
+        assert!(
+            warnings[0].contains("device_settings.android"),
+            "android dispatch warning SHALL come from the android applier, got {:?}",
+            warnings[0]
+        );
+    }
+
+    // 9. The iOS dispatcher routes to the iOS applier and ignores the
+    //    Android map.
+    #[tokio::test]
+    async fn dispatch_ios_uses_ios_map_only() {
+        let android = map(&[("secure.would_be_android", "1")]);
+        let ios = map(&[("nodot", "x")]);
+        let warnings = apply_device_settings(&device(Platform::Ios), &android, &ios).await;
+        assert_eq!(
+            warnings.len(),
+            1,
+            "ios dispatch SHALL apply only the ios map, got {warnings:?}"
+        );
+        assert!(
+            warnings[0].contains("device_settings.ios"),
+            "ios dispatch warning SHALL come from the ios applier, got {:?}",
+            warnings[0]
+        );
+    }
+}

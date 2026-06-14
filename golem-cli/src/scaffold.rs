@@ -616,6 +616,181 @@ install_script = { ios = "scripts/ios.sh" }
         assert_eq!(content.matches("[[apps]]").count(), 1);
     }
 
+    // 13. label() returns the stable string for every framework variant.
+    #[test]
+    fn install_framework_label_all_variants() {
+        assert_eq!(InstallFramework::NativeIos.label(), "native-ios");
+        assert_eq!(InstallFramework::NativeAndroid.label(), "native-android");
+        assert_eq!(InstallFramework::Tauri.label(), "tauri");
+    }
+
+    // 14. render_template leaves text untouched when no placeholder matches.
+    #[test]
+    fn render_template_no_match_is_noop() {
+        let tmpl = "echo {{NOT_PROVIDED}}";
+        let rendered = render_template(tmpl, &[("OTHER", "x")]);
+        assert_eq!(
+            rendered, "echo {{NOT_PROVIDED}}",
+            "unmatched placeholders SHALL be left in place"
+        );
+    }
+
+    // 15. render_template replaces every occurrence of a repeated placeholder.
+    #[test]
+    fn render_template_replaces_all_occurrences() {
+        let tmpl = "{{X}}-{{X}}-{{X}}";
+        let rendered = render_template(tmpl, &[("X", "z")]);
+        assert_eq!(
+            rendered, "z-z-z",
+            "all occurrences of a placeholder SHALL be replaced"
+        );
+    }
+
+    // 16. render_template with an empty placeholder list returns the template verbatim.
+    #[test]
+    fn render_template_empty_placeholders_returns_template() {
+        let tmpl = "literal {{KEEP}}";
+        assert_eq!(render_template(tmpl, &[]), "literal {{KEEP}}");
+    }
+
+    // 17. write_install_script renders the Tauri template into an existing
+    //     parent dir, substituting every Tauri-specific placeholder.
+    #[test]
+    fn write_install_script_renders_tauri_placeholders() {
+        let tmp = TempDir::new().expect("tempdir");
+        // Output sits directly in the tempdir, whose parent already exists —
+        // create_dir_all is a no-op and the rendered content is what we verify.
+        let out = tmp.path().join("install.sh");
+        write_install_script(
+            &out,
+            InstallFramework::Tauri,
+            &[
+                ("TAURI_DIR", "./app"),
+                ("IOS_SCHEME", "MyApp_iOS"),
+                ("TAURI_CMD", "pnpm tauri"),
+            ],
+        )
+        .expect("write");
+
+        let content = fs::read_to_string(&out).expect("read");
+        // 17a. Each placeholder SHALL be substituted with its supplied value.
+        assert!(
+            content.contains(r#"TAURI_DIR="./app""#),
+            "TAURI_DIR SHALL be substituted, got:\n{content}"
+        );
+        assert!(
+            content.contains(r#"IOS_SCHEME="MyApp_iOS""#),
+            "IOS_SCHEME SHALL be substituted, got:\n{content}"
+        );
+        assert!(
+            content.contains(r#"TAURI_CMD="pnpm tauri""#),
+            "TAURI_CMD SHALL be substituted, got:\n{content}"
+        );
+        // 17b. No placeholder tokens SHALL remain in the rendered Tauri script.
+        assert!(
+            !content.contains("{{"),
+            "no placeholders SHALL remain, got:\n{content}"
+        );
+    }
+
+    // 18. update on a missing golem.toml surfaces a read error (not a panic).
+    #[test]
+    fn update_golem_toml_missing_file_errors() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("does-not-exist.toml");
+        let result = update_golem_toml_install_script(
+            &path, "app", Some("com.x"), "scripts/x.sh", None,
+        );
+        assert!(result.is_err(), "missing golem.toml SHALL error");
+        let msg = format!("{}", result.expect_err("expected error"));
+        assert!(
+            msg.contains("read"),
+            "error should mention the read step, got: {msg}"
+        );
+    }
+
+    // 19. update on a malformed golem.toml surfaces a parse error.
+    #[test]
+    fn update_golem_toml_invalid_toml_errors() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("golem.toml");
+        fs::write(&path, "this is = = not valid toml [[[").expect("write");
+        let result = update_golem_toml_install_script(
+            &path, "app", Some("com.x"), "scripts/x.sh", None,
+        );
+        assert!(result.is_err(), "invalid TOML SHALL error");
+        let msg = format!("{}", result.expect_err("expected error"));
+        assert!(
+            msg.contains("parse"),
+            "error should mention the parse step, got: {msg}"
+        );
+    }
+
+    // 20. update errors when `apps` exists but is not an array-of-tables.
+    #[test]
+    fn update_golem_toml_apps_wrong_type_errors() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("golem.toml");
+        fs::write(&path, "apps = \"not-a-table-array\"\n").expect("write");
+        let result = update_golem_toml_install_script(
+            &path, "app", Some("com.x"), "scripts/x.sh", None,
+        );
+        assert!(result.is_err(), "wrong `apps` type SHALL error");
+        let msg = format!("{}", result.expect_err("expected error"));
+        assert!(
+            msg.contains("not an array of tables"),
+            "error should explain the type mismatch, got: {msg}"
+        );
+    }
+
+    // 21. re-writing the same platform key overwrites only that key, keeping the other.
+    #[test]
+    fn update_golem_toml_same_platform_overwrites_keeps_other() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("golem.toml");
+        fs::write(&path, r#"
+[[apps]]
+name = "app-b"
+install_script = { ios = "scripts/ios-old.sh", android = "scripts/android.sh" }
+"#).expect("write");
+        update_golem_toml_install_script(
+            &path, "app-b", None, "scripts/ios-new.sh", Some("ios"),
+        ).expect("update ios");
+        let content = fs::read_to_string(&path).expect("read");
+        assert!(content.contains("scripts/ios-new.sh"), "ios key SHALL be updated");
+        assert!(!content.contains("scripts/ios-old.sh"), "old ios value SHALL be replaced");
+        assert!(content.contains("scripts/android.sh"), "android key SHALL be preserved");
+    }
+
+    // 22. cross-platform (None) path backfills a missing bundle on an existing entry.
+    #[test]
+    fn update_golem_toml_cross_platform_backfills_bundle() {
+        let tmp = TempDir::new().expect("tempdir");
+        let path = tmp.path().join("golem.toml");
+        fs::write(&path, r#"
+[[apps]]
+name = "app-b"
+install_script = "scripts/old.sh"
+"#).expect("write");
+        update_golem_toml_install_script(
+            &path, "app-b", Some("com.backfill"), "scripts/new.sh", None,
+        ).expect("update");
+        let content = fs::read_to_string(&path).expect("read");
+        assert!(content.contains(r#"bundle = "com.backfill""#),
+            "cross-platform update SHALL backfill missing bundle, got:\n{content}");
+        assert!(content.contains(r#"install_script = "scripts/new.sh""#));
+    }
+
+    // 23. flow_template embeds the given name verbatim into the [flow] name field.
+    #[test]
+    fn flow_template_embeds_name() {
+        let rendered = flow_template("my-special_flow");
+        assert!(
+            rendered.contains(r#"name = "my-special_flow""#),
+            "flow template SHALL embed the supplied name, got:\n{rendered}"
+        );
+    }
+
     #[test]
     fn all_templates_render_without_leftover_placeholders() {
         let tmp = TempDir::new().expect("tempdir");

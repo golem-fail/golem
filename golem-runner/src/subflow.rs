@@ -388,4 +388,127 @@ mod tests {
         assert!(config.vars.is_empty());
         assert!(config.save_to.is_empty());
     }
+
+    // ---------------------------------------------------------------
+    // 13. propagate_results overwrites an existing parent variable
+    //     (set_in_scope writes into the parent's existing Flow scope).
+    // ---------------------------------------------------------------
+    #[test]
+    fn propagate_results_overwrites_existing_parent_var() {
+        let mut child_store = VariableStore::new();
+        let mut scope = Scope::new(ScopeLevel::Flow);
+        scope.set("token", VarValue::string("fresh-token"));
+        child_store.push_scope(scope);
+
+        // Parent already has a `base_url`; propagate over it.
+        let mut parent = make_parent_store();
+        let scopes_before = parent.scopes().len();
+        let mut save_to = HashMap::new();
+        save_to.insert("token".to_string(), "base_url".to_string());
+
+        propagate_results(&child_store, &mut parent, &save_to)
+            .expect("propagation should succeed");
+
+        // Existing parent variable SHALL be replaced with the propagated value.
+        assert_eq!(
+            parent.get("base_url"),
+            Some(&VarValue::string("fresh-token"))
+        );
+        // Writing into the existing Flow scope SHALL NOT add a new scope.
+        assert_eq!(
+            parent.scopes().len(),
+            scopes_before,
+            "overwrite SHALL reuse the existing Flow scope, not push a new one"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 14. propagate_results applies earlier mappings before hitting a
+    //     missing var; there is no rollback (partial propagation). Driven
+    //     deterministically via two calls so the partial-write invariant
+    //     is genuinely exercised regardless of HashMap iteration order.
+    // ---------------------------------------------------------------
+    #[test]
+    fn propagate_results_partial_before_missing_var_errors() {
+        let mut child_store = VariableStore::new();
+        let mut scope = Scope::new(ScopeLevel::Flow);
+        scope.set("present", VarValue::string("ok"));
+        child_store.push_scope(scope);
+
+        let mut parent = make_parent_store();
+
+        // 1. A first, fully-valid call writes the present mapping into the
+        //    parent. Asserting it is present proves the write actually lands
+        //    (not vacuous): the parent gains "saved_present" == "ok".
+        let mut first_save_to = HashMap::new();
+        first_save_to.insert("present".to_string(), "saved_present".to_string());
+        propagate_results(&child_store, &mut parent, &first_save_to)
+            .expect("present-only propagation SHALL succeed");
+        assert_eq!(
+            parent.get("saved_present"),
+            Some(&VarValue::string("ok")),
+            "the present mapping SHALL be written to the parent"
+        );
+
+        // 2. A second call referencing a missing child var errors. The error
+        //    SHALL NOT roll back the already-written "saved_present" value,
+        //    and SHALL NOT write the missing mapping's target.
+        let mut second_save_to = HashMap::new();
+        second_save_to.insert("missing".to_string(), "saved_missing".to_string());
+        let result = propagate_results(&child_store, &mut parent, &second_save_to);
+
+        // 3. The missing child var SHALL surface as an error naming it.
+        assert!(result.is_err(), "missing child var SHALL error");
+        let err_msg = result.expect_err("should be error").to_string();
+        assert!(
+            err_msg.contains("missing"),
+            "error SHALL name the missing variable: {err_msg}"
+        );
+
+        // 4. No rollback: the prior write survives the failed call.
+        assert_eq!(
+            parent.get("saved_present"),
+            Some(&VarValue::string("ok")),
+            "a failed propagation SHALL NOT roll back already-written values"
+        );
+        // 5. The missing mapping's target SHALL never be written.
+        assert_eq!(
+            parent.get("saved_missing"),
+            None,
+            "the missing mapping SHALL NOT be written to the parent"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 15. prepare_child_vars override scope takes precedence over an
+    //     inherited value of the same name across the whole resolution.
+    // ---------------------------------------------------------------
+    #[test]
+    fn prepare_child_vars_override_resolves_over_inherited() {
+        let parent = make_parent_store();
+        let parent_scopes = parent.scopes().len();
+        let mut overrides = HashMap::new();
+        overrides.insert("base_url".to_string(), "https://override.test".to_string());
+
+        let child = prepare_child_vars(&parent, &overrides);
+
+        // The override SHALL win for both get() (first match) and the
+        // priority-aware resolve().
+        assert_eq!(
+            child.get("base_url"),
+            Some(&VarValue::string("https://override.test"))
+        );
+        assert_eq!(
+            child
+                .resolve("base_url")
+                .expect("base_url SHALL resolve"),
+            &VarValue::string("https://override.test")
+        );
+        // A non-empty override SHALL push exactly one extra scope.
+        assert_eq!(
+            child.scopes().len(),
+            parent_scopes + 1,
+            "non-empty overrides SHALL push exactly one scope"
+        );
+    }
 }

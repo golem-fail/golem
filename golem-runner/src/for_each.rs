@@ -708,4 +708,185 @@ mod tests {
         assert_eq!(filter.platform, Some(Platform::Ios));
         assert!(filter.os.is_none());
     }
+
+    // ---------------------------------------------------------------
+    // 30. from_map parses physical = "false"
+    // ---------------------------------------------------------------
+    #[test]
+    fn from_map_parses_physical_false() {
+        let mut map = HashMap::new();
+        map.insert("physical".to_string(), "false".to_string());
+        let filter = WhereFilter::from_map(&map);
+        assert_eq!(
+            filter.physical,
+            Some(false),
+            "physical=\"false\" SHALL parse to Some(false)"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 31. from_map with unparseable physical yields None
+    // ---------------------------------------------------------------
+    #[test]
+    fn from_map_unparseable_physical_yields_none() {
+        let mut map = HashMap::new();
+        map.insert("physical".to_string(), "yes".to_string());
+        let filter = WhereFilter::from_map(&map);
+        assert!(
+            filter.physical.is_none(),
+            "non-bool physical string SHALL yield None"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 32. from_device_filter parses device_type phone
+    // ---------------------------------------------------------------
+    #[test]
+    fn from_device_filter_parses_phone() {
+        let df = DeviceFilter {
+            device_type: Some("phone".to_string()),
+            os: None,
+            physical: None,
+        };
+        let filter = WhereFilter::from_device_filter(&df);
+        assert_eq!(filter.device_type, Some(DeviceType::Phone));
+    }
+
+    // ---------------------------------------------------------------
+    // 33. from_device_filter with unknown device_type yields None
+    // ---------------------------------------------------------------
+    #[test]
+    fn from_device_filter_unknown_type_yields_none() {
+        let df = DeviceFilter {
+            device_type: Some("watch".to_string()),
+            os: None,
+            physical: None,
+        };
+        let filter = WhereFilter::from_device_filter(&df);
+        assert!(
+            filter.device_type.is_none(),
+            "unrecognised device_type SHALL yield None"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 34. from_device_filter with all-None fields leaves all unset
+    // ---------------------------------------------------------------
+    #[test]
+    fn from_device_filter_all_none_leaves_unset() {
+        let df = DeviceFilter {
+            device_type: None,
+            os: None,
+            physical: None,
+        };
+        let filter = WhereFilter::from_device_filter(&df);
+        assert!(filter.device_type.is_none());
+        assert!(filter.platform.is_none());
+        assert!(filter.os.is_none());
+        assert!(
+            filter.name.is_none(),
+            "from_device_filter SHALL never set name"
+        );
+        assert!(filter.physical.is_none());
+    }
+
+    // ---------------------------------------------------------------
+    // 35. build_each_contexts captures vars only for matching udids
+    // ---------------------------------------------------------------
+    #[test]
+    fn build_each_contexts_partial_vars() {
+        let devices = vec![
+            make_device("With Vars", "uid-1"),
+            make_device("Without Vars", "uid-2"),
+        ];
+        let mut device_vars: HashMap<String, HashMap<String, VarValue>> = HashMap::new();
+        let mut vars = HashMap::new();
+        vars.insert("token".to_string(), VarValue::string("abc"));
+        device_vars.insert("uid-1".to_string(), vars);
+
+        let contexts = build_each_contexts(&devices, &device_vars);
+        assert_eq!(
+            contexts[0].vars.get("token"),
+            Some(&VarValue::string("abc")),
+            "device with vars SHALL retain them"
+        );
+        assert!(
+            contexts[1].vars.is_empty(),
+            "device without vars SHALL get an empty map"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 36. build_each_contexts on empty device slice yields no contexts
+    // ---------------------------------------------------------------
+    #[test]
+    fn build_each_contexts_empty_devices() {
+        let devices: Vec<DeviceInfo> = vec![];
+        let device_vars: HashMap<String, HashMap<String, VarValue>> = HashMap::new();
+        let contexts = build_each_contexts(&devices, &device_vars);
+        assert!(
+            contexts.is_empty(),
+            "empty device slice SHALL produce no contexts"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 37. empty os prefix matches every device
+    // ---------------------------------------------------------------
+    #[test]
+    fn where_filter_empty_os_prefix_matches_all() {
+        let filter = WhereFilter {
+            device_type: None,
+            platform: None,
+            os: Some(String::new()),
+            name: None,
+            physical: None,
+        };
+        let mut device = make_device("Pixel 8", "uid-1");
+        device.os_version = "14".to_string();
+        assert!(
+            filter.matches(&device),
+            "empty os prefix SHALL match any os_version"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 38. os prefix is a prefix match, not exact (17 matches 17.0)
+    // ---------------------------------------------------------------
+    #[test]
+    fn where_filter_os_is_prefix_not_exact() {
+        let filter = WhereFilter {
+            device_type: None,
+            platform: None,
+            os: Some("17.2".to_string()),
+            name: None,
+            physical: None,
+        };
+        let mut exact = make_device("iPhone 15", "uid-1");
+        exact.os_version = "17.2.1".to_string();
+        assert!(
+            filter.matches(&exact),
+            "prefix os SHALL match longer version strings"
+        );
+
+        let mut shorter = make_device("iPhone 15", "uid-2");
+        shorter.os_version = "17".to_string();
+        assert!(
+            !filter.matches(&shorter),
+            "longer prefix SHALL NOT match shorter version"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 39. from_map physical takes precedence path with os non-platform value
+    //     (os string retained, platform unset)
+    // ---------------------------------------------------------------
+    #[test]
+    fn from_map_non_platform_os_retained_as_prefix() {
+        let mut map = HashMap::new();
+        map.insert("os".to_string(), "14".to_string());
+        let filter = WhereFilter::from_map(&map);
+        assert!(filter.platform.is_none());
+        assert_eq!(filter.os, Some("14".to_string()));
+    }
 }

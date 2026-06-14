@@ -341,4 +341,143 @@ mod tests {
         assert_eq!(extract_code(&e), None);
         assert_eq!(clean_msg(&e), "plain error");
     }
+
+    // 1. Each domain maps to its documented char-2 letter.
+    #[test]
+    fn domain_letters_are_distinct_and_correct() {
+        assert_eq!(Domain::Host.letter(), 'H', "Host SHALL render as H");
+        assert_eq!(Domain::Device.letter(), 'D', "Device SHALL render as D");
+        assert_eq!(Domain::App.letter(), 'A', "App SHALL render as A");
+        assert_eq!(Domain::Flow.letter(), 'F', "Flow SHALL render as F");
+        assert_eq!(Domain::Parsing.letter(), 'P', "Parsing SHALL render as P");
+    }
+
+    // 2. Host/Device/App are infrastructure; Flow/Parsing are test faults.
+    #[test]
+    fn is_infrastructure_partitions_domains() {
+        assert!(Domain::Host.is_infrastructure(), "Host SHALL be infrastructure");
+        assert!(Domain::Device.is_infrastructure(), "Device SHALL be infrastructure");
+        assert!(Domain::App.is_infrastructure(), "App SHALL be infrastructure");
+        assert!(!Domain::Flow.is_infrastructure(), "Flow SHALL NOT be infrastructure");
+        assert!(
+            !Domain::Parsing.is_infrastructure(),
+            "Parsing SHALL NOT be infrastructure"
+        );
+    }
+
+    // 3. Severity letters cover both variants explicitly.
+    #[test]
+    fn severity_letters() {
+        assert_eq!(Severity::Error.letter(), 'E', "Error SHALL render as E");
+        assert_eq!(Severity::Warning.letter(), 'W', "Warning SHALL render as W");
+    }
+
+    // 4. A representative of each domain group maps back to the right Domain.
+    #[test]
+    fn domain_classification_per_group() {
+        assert_eq!(FailureCode::FlowExplicitFail.domain(), Domain::Flow);
+        assert_eq!(FailureCode::Uncoded.domain(), Domain::Flow);
+        assert_eq!(FailureCode::ParseUnknownAction.domain(), Domain::Parsing);
+        assert_eq!(FailureCode::AppInstallPathBlocked.domain(), Domain::App);
+        assert_eq!(FailureCode::DeviceNotFound.domain(), Domain::Device);
+        assert_eq!(FailureCode::HostOrchestratorIpc.domain(), Domain::Host);
+    }
+
+    // 5. fragment is the severity-less domain-letter + zero-padded number.
+    #[test]
+    fn fragment_omits_severity_and_zero_pads() {
+        assert_eq!(FailureCode::FlowElementNotFound.fragment(), "F404");
+        assert_eq!(FailureCode::Uncoded.fragment(), "F000");
+        assert_eq!(FailureCode::ParseMissingParam.fragment(), "P422");
+        assert_eq!(FailureCode::DeviceDriverOpFailed.fragment(), "D520");
+    }
+
+    // 6. render composes severity letter + domain letter + zero-padded number,
+    //    pinned to literals so a wrong order or missing separator is caught.
+    #[test]
+    fn render_is_severity_letter_plus_fragment() {
+        let c = FailureCode::AppLifecycleFailed;
+        assert_eq!(
+            c.render(Severity::Error),
+            "EA503",
+            "render SHALL be severity letter + domain letter + number"
+        );
+        assert_eq!(
+            c.render(Severity::Warning),
+            "WA503",
+            "warning severity SHALL only swap the leading letter"
+        );
+    }
+
+    // 7. Spot-check the remaining numeric codes not exercised by render tests.
+    #[test]
+    fn numbers_match_registry() {
+        assert_eq!(FailureCode::FlowExplicitFail.number(), 400);
+        assert_eq!(FailureCode::FlowElementOffscreen.number(), 405);
+        assert_eq!(FailureCode::FlowUnexpectedlyPresent.number(), 409);
+        assert_eq!(FailureCode::FlowAssertionMismatch.number(), 412);
+        assert_eq!(FailureCode::FlowAlertInteraction.number(), 417);
+        assert_eq!(FailureCode::FlowExternalFailed.number(), 424);
+        assert_eq!(FailureCode::FlowMaxRuntime.number(), 504);
+        assert_eq!(FailureCode::FlowMaxSteps.number(), 508);
+        assert_eq!(FailureCode::ParseMissingReference.number(), 404);
+        assert_eq!(FailureCode::ParseVariable.number(), 450);
+        assert_eq!(FailureCode::ParseFlowFile.number(), 460);
+        assert_eq!(FailureCode::ParseDeviceConstraint.number(), 461);
+        assert_eq!(FailureCode::AppInstallScriptNotFound.number(), 404);
+        assert_eq!(FailureCode::AppInstallTimeout.number(), 408);
+        assert_eq!(FailureCode::AppStateQueryFailed.number(), 502);
+        assert_eq!(FailureCode::DeviceBootTimeout.number(), 408);
+        assert_eq!(FailureCode::DeviceBusy.number(), 409);
+        assert_eq!(FailureCode::DeviceCreateFailed.number(), 500);
+        assert_eq!(FailureCode::DeviceWebviewComms.number(), 502);
+        assert_eq!(FailureCode::DeviceRegistrationTimeout.number(), 504);
+        assert_eq!(FailureCode::HostPortsExhausted.number(), 429);
+    }
+
+    // 8. extract_code returns the OUTERMOST tag when two are chained.
+    #[test]
+    fn extract_returns_outermost_tag() {
+        let inner: anyhow::Result<()> =
+            Err(anyhow!("inner cause")).code(FailureCode::FlowElementNotFound);
+        let e = match inner {
+            Err(e) => e,
+            Ok(()) => panic!("expected Err"),
+        };
+        // Re-tag the already-coded error with a different, outer code.
+        let outer = coded(FailureCode::FlowStepTimeout, e);
+        assert_eq!(
+            extract_code(&outer),
+            Some(FailureCode::FlowStepTimeout),
+            "extract_code SHALL return the outermost tag"
+        );
+    }
+
+    // 9. coded flattens the inner message so {e:#} never double-prints the cause.
+    #[test]
+    fn coded_flattens_without_double_printing_cause() {
+        let layered: anyhow::Result<()> = Err(anyhow!("root cause"));
+        let layered = layered.map_err(|e| e.context("doing work"));
+        let e = match layered {
+            Err(e) => coded(FailureCode::FlowExternalFailed, e),
+            Ok(()) => panic!("expected Err"),
+        };
+        let msg = clean_msg(&e);
+        // The flattened message preserves the full chain exactly once.
+        assert_eq!(msg, "doing work: root cause");
+        assert_eq!(
+            msg.matches("root cause").count(),
+            1,
+            "cause SHALL appear exactly once"
+        );
+        assert_eq!(extract_code(&e), Some(FailureCode::FlowExternalFailed));
+    }
+
+    // 11. CodeExt leaves Ok values untouched (no spurious tagging).
+    #[test]
+    fn code_ext_preserves_ok() {
+        let r: anyhow::Result<i32> = Ok(7);
+        let tagged = r.code(FailureCode::FlowExplicitFail);
+        assert_eq!(tagged.ok(), Some(7), "Ok SHALL pass through untagged");
+    }
 }

@@ -979,3 +979,263 @@ pub(crate) async fn fetch_webview_dom(
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 1. build_rpc nests the selector and argument dictionary under the
+    //    expected `__selector` / `__argument` keys.
+    #[test]
+    fn build_rpc_wraps_selector_and_argument() {
+        let mut args = plist::Dictionary::new();
+        args.insert("k".to_string(), plist::Value::String("v".to_string()));
+        let msg = build_rpc("_rpc_reportIdentifier:", args);
+
+        let dict = msg.as_dictionary().expect("build_rpc SHALL produce a dictionary");
+        assert_eq!(
+            dict.get("__selector").and_then(|v| v.as_string()),
+            Some("_rpc_reportIdentifier:"),
+            "selector SHALL be stored under __selector"
+        );
+        let arg = dict
+            .get("__argument")
+            .and_then(|v| v.as_dictionary())
+            .expect("__argument SHALL be a dictionary");
+        assert_eq!(
+            arg.get("k").and_then(|v| v.as_string()),
+            Some("v"),
+            "argument dictionary SHALL be preserved verbatim"
+        );
+    }
+
+    // 2. build_rpc round-trips through parse_rpc: what we build is what we parse.
+    #[test]
+    fn build_rpc_round_trips_through_parse_rpc() {
+        let mut args = plist::Dictionary::new();
+        args.insert("WIRX".to_string(), plist::Value::String("y".to_string()));
+        let msg = build_rpc("_rpc_forwardSocketData:", args);
+
+        let (selector, parsed_args) =
+            parse_rpc(&msg).expect("parse_rpc SHALL parse a build_rpc message");
+        assert_eq!(
+            selector, "_rpc_forwardSocketData:",
+            "parsed selector SHALL match the built selector"
+        );
+        assert_eq!(
+            parsed_args.get("WIRX").and_then(|v| v.as_string()),
+            Some("y"),
+            "parsed argument dictionary SHALL match"
+        );
+    }
+
+    // 3. parse_rpc returns None when the value is not a dictionary at all.
+    #[test]
+    fn parse_rpc_rejects_non_dictionary() {
+        let msg = plist::Value::String("not a dict".to_string());
+        assert!(
+            parse_rpc(&msg).is_none(),
+            "parse_rpc SHALL return None for a non-dictionary value"
+        );
+    }
+
+    // 4. parse_rpc returns None when the `__selector` key is missing.
+    #[test]
+    fn parse_rpc_rejects_missing_selector() {
+        let mut dict = plist::Dictionary::new();
+        dict.insert(
+            "__argument".to_string(),
+            plist::Value::Dictionary(plist::Dictionary::new()),
+        );
+        let msg = plist::Value::Dictionary(dict);
+        assert!(
+            parse_rpc(&msg).is_none(),
+            "parse_rpc SHALL return None when __selector is absent"
+        );
+    }
+
+    // 5. parse_rpc returns None when `__selector` is present but not a string.
+    #[test]
+    fn parse_rpc_rejects_non_string_selector() {
+        let mut dict = plist::Dictionary::new();
+        dict.insert("__selector".to_string(), plist::Value::Integer(7.into()));
+        dict.insert(
+            "__argument".to_string(),
+            plist::Value::Dictionary(plist::Dictionary::new()),
+        );
+        let msg = plist::Value::Dictionary(dict);
+        assert!(
+            parse_rpc(&msg).is_none(),
+            "parse_rpc SHALL return None when __selector is not a string"
+        );
+    }
+
+    // 6. parse_rpc returns None when `__argument` is missing or not a dictionary.
+    #[test]
+    fn parse_rpc_rejects_missing_or_non_dict_argument() {
+        // Missing __argument entirely.
+        let mut missing = plist::Dictionary::new();
+        missing.insert(
+            "__selector".to_string(),
+            plist::Value::String("_rpc_x:".to_string()),
+        );
+        assert!(
+            parse_rpc(&plist::Value::Dictionary(missing)).is_none(),
+            "parse_rpc SHALL return None when __argument is absent"
+        );
+
+        // __argument present but the wrong type.
+        let mut wrong_type = plist::Dictionary::new();
+        wrong_type.insert(
+            "__selector".to_string(),
+            plist::Value::String("_rpc_x:".to_string()),
+        );
+        wrong_type.insert(
+            "__argument".to_string(),
+            plist::Value::String("nope".to_string()),
+        );
+        assert!(
+            parse_rpc(&plist::Value::Dictionary(wrong_type)).is_none(),
+            "parse_rpc SHALL return None when __argument is not a dictionary"
+        );
+    }
+
+    /// Helper: build an `_rpc_applicationSentData:` message with the given
+    /// destination and a message-data value, ready for extract_message_data.
+    fn sent_data_msg(selector: &str, dest: Option<&str>, data: Option<plist::Value>) -> plist::Value {
+        let mut args = plist::Dictionary::new();
+        if let Some(d) = dest {
+            args.insert(
+                "WIRDestinationKey".to_string(),
+                plist::Value::String(d.to_string()),
+            );
+        }
+        if let Some(v) = data {
+            args.insert("WIRMessageDataKey".to_string(), v);
+        }
+        build_rpc(selector, args)
+    }
+
+    // 7. extract_message_data pulls the JSON string when destination matches
+    //    and the payload is binary Data (the on-wire representation).
+    #[test]
+    fn extract_message_data_returns_data_payload_for_matching_dest() {
+        let msg = sent_data_msg(
+            "_rpc_applicationSentData:",
+            Some("SENDER-1"),
+            Some(plist::Value::Data(b"{\"id\":1}".to_vec())),
+        );
+        assert_eq!(
+            extract_message_data(&msg, "SENDER-1").as_deref(),
+            Some("{\"id\":1}"),
+            "extract_message_data SHALL decode the Data payload as UTF-8"
+        );
+    }
+
+    // 8. extract_message_data also accepts a String payload directly.
+    #[test]
+    fn extract_message_data_returns_string_payload() {
+        let msg = sent_data_msg(
+            "_rpc_applicationSentData:",
+            Some("SENDER-1"),
+            Some(plist::Value::String("hello".to_string())),
+        );
+        assert_eq!(
+            extract_message_data(&msg, "SENDER-1").as_deref(),
+            Some("hello"),
+            "extract_message_data SHALL pass through a String payload"
+        );
+    }
+
+    // 9. extract_message_data returns None for a different selector.
+    #[test]
+    fn extract_message_data_rejects_other_selector() {
+        let msg = sent_data_msg(
+            "_rpc_reportCurrentState:",
+            Some("SENDER-1"),
+            Some(plist::Value::String("hello".to_string())),
+        );
+        assert!(
+            extract_message_data(&msg, "SENDER-1").is_none(),
+            "extract_message_data SHALL ignore non-applicationSentData selectors"
+        );
+    }
+
+    // 10. extract_message_data returns None when the destination is not us.
+    #[test]
+    fn extract_message_data_rejects_mismatched_destination() {
+        let msg = sent_data_msg(
+            "_rpc_applicationSentData:",
+            Some("SOMEONE-ELSE"),
+            Some(plist::Value::String("hello".to_string())),
+        );
+        assert!(
+            extract_message_data(&msg, "SENDER-1").is_none(),
+            "extract_message_data SHALL drop messages addressed to another sender"
+        );
+    }
+
+    // 11. extract_message_data returns None when the destination key is absent.
+    #[test]
+    fn extract_message_data_rejects_missing_destination() {
+        let msg = sent_data_msg(
+            "_rpc_applicationSentData:",
+            None,
+            Some(plist::Value::String("hello".to_string())),
+        );
+        assert!(
+            extract_message_data(&msg, "SENDER-1").is_none(),
+            "extract_message_data SHALL return None when WIRDestinationKey is missing"
+        );
+    }
+
+    // 12. extract_message_data returns None when the message-data value has an
+    //     unsupported type (neither Data nor String).
+    #[test]
+    fn extract_message_data_rejects_unsupported_payload_type() {
+        let msg = sent_data_msg(
+            "_rpc_applicationSentData:",
+            Some("SENDER-1"),
+            Some(plist::Value::Integer(42.into())),
+        );
+        assert!(
+            extract_message_data(&msg, "SENDER-1").is_none(),
+            "extract_message_data SHALL return None for a non-text payload"
+        );
+    }
+
+    // 13. extract_message_data returns None when the Data payload is not valid UTF-8.
+    #[test]
+    fn extract_message_data_rejects_invalid_utf8_data() {
+        let msg = sent_data_msg(
+            "_rpc_applicationSentData:",
+            Some("SENDER-1"),
+            Some(plist::Value::Data(vec![0xff, 0xfe, 0xfd])),
+        );
+        assert!(
+            extract_message_data(&msg, "SENDER-1").is_none(),
+            "extract_message_data SHALL return None when the Data is not UTF-8"
+        );
+    }
+
+    // 14. extract_message_data returns None when the message-data key is absent.
+    #[test]
+    fn extract_message_data_rejects_missing_data_key() {
+        let msg = sent_data_msg("_rpc_applicationSentData:", Some("SENDER-1"), None);
+        assert!(
+            extract_message_data(&msg, "SENDER-1").is_none(),
+            "extract_message_data SHALL return None when WIRMessageDataKey is missing"
+        );
+    }
+
+    // 15. extract_message_data returns None when the message is not RPC-shaped
+    //     (no __selector / __argument), exercising the parse_rpc short-circuit.
+    #[test]
+    fn extract_message_data_rejects_non_rpc_message() {
+        let msg = plist::Value::String("garbage".to_string());
+        assert!(
+            extract_message_data(&msg, "SENDER-1").is_none(),
+            "extract_message_data SHALL return None for a non-RPC message"
+        );
+    }
+}

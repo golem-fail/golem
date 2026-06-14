@@ -334,6 +334,7 @@ mod tests {
         let cfg = ConcurrencyConfig::default();
         assert_eq!(cfg.max_concurrency, 4);
         assert_eq!(cfg.min_free_ram_mb, 2048);
+        assert_eq!(cfg.min_free_disk_mb, 50_000);
         assert_eq!(cfg.launch_delay_ms, 2000);
     }
 
@@ -507,5 +508,84 @@ mod tests {
         let p1 = plan_launches(&ids(&["a", "b"]), &cfg);
         let p2 = plan_launches(&ids(&["a", "b"]), &cfg);
         assert_eq!(p1, p2);
+    }
+
+    // 18. plan_launches threads the caller's device order verbatim into
+    //     device_order (not sorted/dedup'd), while max_parallel stays equal
+    //     across both inputs of the same length.
+    #[test]
+    fn launch_plan_inequality_on_different_order() {
+        let cfg = ConcurrencyConfig::default();
+        let p1 = plan_launches(&ids(&["a", "b"]), &cfg);
+        let p2 = plan_launches(&ids(&["b", "a"]), &cfg);
+        // 1. Each plan's device_order matches its own input verbatim.
+        assert_eq!(p1.device_order, ids(&["a", "b"]));
+        assert_eq!(p2.device_order, ids(&["b", "a"]));
+        // 2. Same length → identical parallelism cap regardless of order.
+        assert_eq!(p1.max_parallel, p2.max_parallel);
+    }
+
+    // 19. get_available_disk_mb returns a plausible value on the host OS.
+    #[test]
+    fn get_available_disk_mb_returns_positive_value() {
+        let mb = get_available_disk_mb().expect("should query disk space");
+        assert!(mb > 0, "available disk SHALL be positive, got {mb}");
+    }
+
+    // 20. has_sufficient_disk is true when threshold + estimate is trivially
+    //     small (zero minimum, zero estimated device size).
+    #[test]
+    fn has_sufficient_disk_true_when_requirement_trivial() {
+        let cfg = ConcurrencyConfig {
+            min_free_disk_mb: 0,
+            ..ConcurrencyConfig::default()
+        };
+        let ok = has_sufficient_disk(&cfg, 0).expect("should query disk space");
+        assert!(ok, "any nonzero free disk SHALL satisfy a zero requirement");
+    }
+
+    // 21. has_sufficient_disk is false when the minimum requirement exceeds
+    //     any conceivable free space. min_free_disk_mb + estimate sums to
+    //     exactly u64::MAX here (no overflow), so the comparison
+    //     `available >= u64::MAX` is what fails the check.
+    #[test]
+    fn has_sufficient_disk_false_when_requirement_unsatisfiable() {
+        let cfg = ConcurrencyConfig {
+            min_free_disk_mb: u64::MAX - 1,
+            ..ConcurrencyConfig::default()
+        };
+        let ok = has_sufficient_disk(&cfg, 1).expect("should query disk space");
+        assert!(
+            !ok,
+            "a requirement larger than the volume SHALL fail the check"
+        );
+    }
+
+    // 23. capture_host populates host fields and leaves device field None.
+    #[tokio::test]
+    async fn capture_host_records_host_only() {
+        let snap = ResourceSnapshot::capture_host().await;
+        assert!(
+            snap.host_free_disk_mb.is_some(),
+            "host disk SHALL be captured"
+        );
+        assert!(
+            snap.host_free_ram_mb.is_some(),
+            "host RAM SHALL be captured"
+        );
+        assert_eq!(
+            snap.device_free_disk_mb, None,
+            "host-only capture SHALL leave device field None"
+        );
+    }
+
+    // 24. capture_with_ios_simulator mirrors host disk into the device field.
+    #[tokio::test]
+    async fn capture_with_ios_simulator_mirrors_host_disk() {
+        let snap = ResourceSnapshot::capture_with_ios_simulator().await;
+        assert_eq!(
+            snap.device_free_disk_mb, snap.host_free_disk_mb,
+            "iOS simulator device disk SHALL mirror host disk"
+        );
     }
 }

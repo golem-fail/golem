@@ -322,4 +322,176 @@ mod tests {
             "expected 'invalid latest syntax' in: {err}"
         );
     }
+
+    // 18. Non-numeric latest count -- "ios:latest:abc" SHALL fail with count context
+    #[test]
+    fn latest_non_numeric_count() {
+        let err = parse_os_version("ios:latest:abc")
+            .expect_err("`:latest:abc` SHALL be rejected")
+            .to_string();
+        assert!(
+            err.contains("invalid count after 'latest:'"),
+            "expected 'invalid count after latest:' in: {err}"
+        );
+    }
+
+    // 19. Empty latest count -- "ios:latest:" SHALL fail to parse the empty count
+    #[test]
+    fn latest_empty_count() {
+        let err = parse_os_version("ios:latest:")
+            .expect_err("`:latest:` SHALL be rejected")
+            .to_string();
+        assert!(
+            err.contains("invalid count after 'latest:'"),
+            "expected 'invalid count after latest:' in: {err}"
+        );
+    }
+
+    // 20. Bare plus suffix -- "ios:+" SHALL fail with invalid version number
+    #[test]
+    fn bare_plus_suffix() {
+        let err = parse_os_version("ios:+")
+            .expect_err("`ios:+` SHALL be rejected")
+            .to_string();
+        assert!(
+            err.contains("invalid version number"),
+            "expected 'invalid version number' in: {err}"
+        );
+    }
+
+    // 21. Non-numeric version -- "android:foo" SHALL fail with invalid version number
+    #[test]
+    fn non_numeric_version() {
+        let err = parse_os_version("android:foo")
+            .expect_err("`android:foo` SHALL be rejected")
+            .to_string();
+        assert!(
+            err.contains("invalid version number"),
+            "expected 'invalid version number' in: {err}"
+        );
+    }
+
+    // 22. Minimum with minor -- "ios:18.6+" SHALL drop the minor and yield Minimum major 18
+    #[test]
+    fn minimum_with_minor() {
+        let spec = parse_os_version("ios:18.6+").expect("should parse");
+        assert_eq!(
+            spec,
+            OsVersionSpec::Minimum {
+                platform: Platform::Ios,
+                major: 18,
+            }
+        );
+    }
+
+    // 23. Android version-zero -- "android:0" SHALL be an exact match on 0 (boundary)
+    #[test]
+    fn version_zero_is_exact() {
+        let spec = parse_os_version("android:0").expect("should parse");
+        assert_eq!(
+            spec,
+            OsVersionSpec::Exact {
+                platform: Platform::Android,
+                major: 0,
+            }
+        );
+        assert!(matches_version(&spec, 0));
+        assert!(!matches_version(&spec, 1));
+    }
+
+    // 24. Minimum boundary -- a Minimum spec SHALL match its own major (>= is inclusive)
+    #[test]
+    fn minimum_matches_equal() {
+        let spec = OsVersionSpec::Minimum {
+            platform: Platform::Ios,
+            major: 17,
+        };
+        assert!(matches_version(&spec, 17), "Minimum SHALL include its own major");
+        assert!(!matches_version(&spec, 16));
+    }
+
+    // 25. Latest always matches -- matches_version on Latest SHALL be true for any major
+    #[test]
+    fn latest_always_matches() {
+        let spec = OsVersionSpec::Latest {
+            platform: Platform::Android,
+            count: 1,
+        };
+        assert!(matches_version(&spec, 0), "Latest SHALL match any major");
+        assert!(matches_version(&spec, u32::MAX), "Latest SHALL match any major");
+    }
+
+    // 26. resolve_latest dedups -- duplicate majors collapse before truncation
+    #[test]
+    fn resolve_latest_dedups_duplicates() {
+        let resolved = resolve_latest(Platform::Ios, 3, &[18, 18, 17, 17, 16]);
+        assert_eq!(
+            resolved,
+            vec![18, 17, 16],
+            "duplicate majors SHALL collapse to distinct values"
+        );
+    }
+
+    // 27. resolve_latest count caps after dedup -- count=2 over duplicates yields the 2 highest distinct
+    #[test]
+    fn resolve_latest_count_caps_after_dedup() {
+        let resolved = resolve_latest(Platform::Android, 2, &[34, 34, 33, 31]);
+        assert_eq!(
+            resolved,
+            vec![34, 33],
+            "count SHALL cap distinct majors, latest first"
+        );
+    }
+
+    // 28. resolve_latest on empty input -- SHALL yield an empty vec regardless of count
+    #[test]
+    fn resolve_latest_empty_available() {
+        let resolved = resolve_latest(Platform::Ios, 5, &[]);
+        assert!(resolved.is_empty(), "empty availability SHALL resolve to empty");
+    }
+
+    // 29. resolve_latest count zero -- SHALL yield an empty vec even with availability
+    #[test]
+    fn resolve_latest_count_zero() {
+        let resolved = resolve_latest(Platform::Ios, 0, &[16, 17, 18]);
+        assert!(resolved.is_empty(), "count of 0 SHALL resolve to empty");
+    }
+
+    // 30. resolve_latest sorts unordered input -- SHALL return descending regardless of input order
+    #[test]
+    fn resolve_latest_sorts_unordered_input() {
+        let resolved = resolve_latest(Platform::Android, 3, &[31, 34, 28]);
+        assert_eq!(
+            resolved,
+            vec![34, 31, 28],
+            "unordered input SHALL resolve latest-first"
+        );
+    }
+
+    // 31. Empty input string -- "" has no colon and SHALL be rejected
+    #[test]
+    fn empty_input_string() {
+        let err = parse_os_version("")
+            .expect_err("empty input SHALL be rejected")
+            .to_string();
+        assert!(
+            err.contains("missing ':'"),
+            "expected \"missing ':'\" in: {err}"
+        );
+    }
+
+    // 32. Empty platform -- ":18" has an empty platform segment and SHALL be unsupported
+    #[test]
+    fn empty_platform() {
+        let err = parse_os_version(":18")
+            .expect_err("empty platform SHALL be rejected")
+            .to_string();
+        // 32. The empty segment SHALL hit the `other` arm with an empty platform name,
+        //     producing the exact "unsupported platform: " (trailing space, nothing after) —
+        //     distinguishing it from a named-but-unknown platform like "windows".
+        assert_eq!(
+            err, "unsupported platform: ",
+            "empty platform SHALL render an empty platform name, got: {err}"
+        );
+    }
 }

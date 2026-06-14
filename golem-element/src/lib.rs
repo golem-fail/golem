@@ -406,4 +406,248 @@ mod tests {
             "SHALL use effective_bounds (visible_bounds) for viewport filtering"
         );
     }
+
+    // ── node_count tests ──────────────────────────────────────────────
+
+    // 1. A lone element with no children counts as 1 (the root itself).
+    #[test]
+    fn node_count_single_element_is_one() {
+        let elem = make_element("View", make_bounds(0, 0, 10, 10));
+        assert_eq!(elem.node_count(), 1, "lone element SHALL count as 1");
+    }
+
+    // 2. node_count recurses through nested children and sums the whole tree.
+    #[test]
+    fn node_count_counts_nested_tree() {
+        let mut root = make_element("View", make_bounds(0, 0, 100, 100));
+        let mut mid = make_element("Group", make_bounds(0, 0, 50, 50));
+        mid.children
+            .push(make_element("Leaf", make_bounds(0, 0, 10, 10)));
+        mid.children
+            .push(make_element("Leaf", make_bounds(0, 0, 10, 10)));
+        root.children.push(mid);
+        root.children
+            .push(make_element("Sibling", make_bounds(0, 0, 10, 10)));
+        // root(1) + mid(1) + 2 leaves(2) + sibling(1) = 5
+        assert_eq!(root.node_count(), 5, "node_count SHALL sum the whole tree");
+    }
+
+    // ── Viewport tests ────────────────────────────────────────────────
+
+    // 3. Viewport::new sets the origin to (0, 0) and keeps the dimensions.
+    #[test]
+    fn viewport_new_has_zero_origin() {
+        let vp = Viewport::new(375, 812);
+        assert_eq!(vp.x, 0, "Viewport::new SHALL place origin x at 0");
+        assert_eq!(vp.y, 0, "Viewport::new SHALL place origin y at 0");
+        assert_eq!(vp.width, 375);
+        assert_eq!(vp.height, 812);
+    }
+
+    // 4. from_root carries a non-zero origin (e.g. an alert dialog window).
+    #[test]
+    fn viewport_from_root_preserves_nonzero_origin() {
+        let root = make_element("Alert", make_bounds(40, 200, 300, 400));
+        let vp = Viewport::from_root(&root);
+        assert_eq!(vp.x, 40, "from_root SHALL preserve origin x");
+        assert_eq!(vp.y, 200, "from_root SHALL preserve origin y");
+        assert_eq!(vp.width, 300);
+        assert_eq!(vp.height, 400);
+    }
+
+    // 5. contains respects a non-zero viewport origin: an element to the left
+    //    of the origin is excluded even though its absolute x is positive.
+    #[test]
+    fn viewport_contains_respects_nonzero_origin() {
+        let root = make_element("Alert", make_bounds(100, 100, 200, 200));
+        let vp = Viewport::from_root(&root);
+        // Fully inside the shifted window.
+        assert!(
+            vp.contains(&Bounds::new(120, 120, 50, 50)),
+            "element inside shifted window SHALL be contained"
+        );
+        // Left of the window's origin (x+width=90 <= 100) — excluded.
+        assert!(
+            !vp.contains(&Bounds::new(40, 120, 50, 50)),
+            "element left of shifted origin SHALL be excluded"
+        );
+    }
+
+    // 6. contains treats edge-touching as non-overlap (strict inequality):
+    //    an element whose right edge equals the origin x is excluded.
+    #[test]
+    fn viewport_contains_edge_touch_is_excluded() {
+        let vp = Viewport::new(375, 812);
+        // right edge x+width = 0 == viewport.x = 0 -> not > x -> excluded.
+        assert!(
+            !vp.contains(&Bounds::new(-100, 10, 100, 44)),
+            "element whose right edge touches origin SHALL be excluded"
+        );
+        // bottom edge y+height = 0 == viewport.y = 0 -> excluded.
+        assert!(
+            !vp.contains(&Bounds::new(10, -44, 100, 44)),
+            "element whose bottom edge touches origin SHALL be excluded"
+        );
+    }
+
+    // ── Bounds::intersect edge cases ──────────────────────────────────
+
+    // 7. Edge-touching bounds (right of A == left of B) have zero area.
+    #[test]
+    fn bounds_intersect_touching_edges_zero_area() {
+        let a = make_bounds(0, 0, 50, 50);
+        let b = make_bounds(50, 0, 50, 50);
+        let i = a.intersect(&b);
+        assert_eq!(
+            i.area(),
+            0,
+            "edge-touching bounds SHALL produce zero-area intersection"
+        );
+    }
+
+    // 8. Identical bounds intersect to themselves.
+    #[test]
+    fn bounds_intersect_identical() {
+        let a = make_bounds(10, 20, 100, 40);
+        assert_eq!(
+            a.intersect(&a),
+            make_bounds(10, 20, 100, 40),
+            "self-intersection SHALL equal the bounds"
+        );
+    }
+
+    // 9. Area handles a tall, narrow region beyond i32 overflow range,
+    //    confirming the i64 widening cast.
+    #[test]
+    fn bounds_area_widens_to_i64() {
+        let big = make_bounds(0, 0, 100_000, 100_000);
+        assert_eq!(
+            big.area(),
+            10_000_000_000_i64,
+            "area SHALL widen to i64 and not overflow"
+        );
+    }
+
+    // ── FindResult uses effective_bounds ──────────────────────────────
+
+    // 10. FindResult::new computes tap coordinates from visible_bounds when set.
+    #[test]
+    fn find_result_uses_visible_bounds_for_tap() {
+        let mut elem = make_element("Button", make_bounds(0, 0, 200, 80));
+        elem.visible_bounds = Some(make_bounds(0, 0, 50, 40));
+        let result = FindResult::new(elem);
+        assert_eq!(result.tap_x, 25, "tap_x SHALL come from visible_bounds center");
+        assert_eq!(result.tap_y, 20, "tap_y SHALL come from visible_bounds center");
+    }
+
+    // ── filter_viewport structural behavior ──────────────────────────
+
+    // 11. filter_viewport flattens deeply nested visible descendants into a
+    //     single flat child list, and emptied leaves carry no children.
+    #[test]
+    fn filter_viewport_flattens_deep_tree() {
+        let vp = Viewport::new(375, 812);
+        let mut root = make_element("View", make_bounds(0, 0, 375, 812));
+        let mut group = make_element("Group", make_bounds(10, 100, 200, 200));
+        let nested = make_element("Label", make_bounds(20, 110, 80, 20));
+        group.children.push(nested);
+        root.children.push(group);
+
+        let filtered = filter_viewport(&root, &vp);
+        // Group + nested label both visible -> flattened to 2 top-level children.
+        assert_eq!(
+            filtered.children.len(),
+            2,
+            "SHALL flatten visible descendants into a single list"
+        );
+        for child in &filtered.children {
+            assert!(
+                child.children.is_empty(),
+                "flattened leaves SHALL carry no children"
+            );
+        }
+    }
+
+    // 12. filter_viewport preserves the root's own metadata and bounds.
+    #[test]
+    fn filter_viewport_preserves_root_metadata() {
+        let vp = Viewport::new(375, 812);
+        let mut root = make_element("Window", make_bounds(0, 0, 375, 812));
+        root.text = Some("title".to_string());
+        root.accessibility_label = Some("root-window".to_string());
+        root.placeholder = Some("ph".to_string());
+        root.enabled = true;
+        root.checked = true;
+        root.clickable = false;
+        root.focused = true;
+        root.visible_bounds = Some(make_bounds(0, 0, 375, 812));
+
+        let filtered = filter_viewport(&root, &vp);
+        assert_eq!(filtered.element_type, "Window");
+        assert_eq!(filtered.text.as_deref(), Some("title"));
+        assert_eq!(filtered.accessibility_label.as_deref(), Some("root-window"));
+        assert_eq!(filtered.placeholder.as_deref(), Some("ph"));
+        assert!(filtered.enabled);
+        assert!(filtered.checked);
+        assert!(!filtered.clickable);
+        assert!(filtered.focused);
+        assert_eq!(filtered.bounds, make_bounds(0, 0, 375, 812));
+        assert_eq!(filtered.visible_bounds, Some(make_bounds(0, 0, 375, 812)));
+    }
+
+    // 13. The root element itself is never emitted as a child even if it
+    //     would be visible — only descendants are collected.
+    #[test]
+    fn filter_viewport_excludes_root_from_children() {
+        let vp = Viewport::new(375, 812);
+        let root = make_element("View", make_bounds(0, 0, 100, 100));
+        let filtered = filter_viewport(&root, &vp);
+        assert!(
+            filtered.children.is_empty(),
+            "root SHALL not appear in its own flattened children"
+        );
+    }
+
+    // ── serde defaults ────────────────────────────────────────────────
+
+    // 14. A minimal companion wire payload — only the required
+    //     element_type and bounds, every optional field omitted — SHALL
+    //     still parse, with each omitted field falling back to its default.
+    //     This guards the wire contract: companions send sparse payloads.
+    #[test]
+    fn element_deserializes_with_defaults_for_missing_fields() {
+        let json = r#"{
+            "element_type": "View",
+            "bounds": {"x": 0, "y": 0, "width": 10, "height": 10}
+        }"#;
+        let elem: Element = serde_json::from_str(json).expect("minimal payload SHALL parse");
+        // 14a. Required fields carry their wire values.
+        assert_eq!(elem.element_type, "View", "element_type SHALL parse from wire");
+        assert_eq!(
+            elem.bounds,
+            Bounds::new(0, 0, 10, 10),
+            "bounds SHALL parse from wire"
+        );
+        // 14b. Omitted Option fields default to None (serde Option handling).
+        assert!(elem.text.is_none(), "omitted text SHALL default to None");
+        assert!(
+            elem.accessibility_label.is_none(),
+            "omitted accessibility_label SHALL default to None"
+        );
+        assert!(
+            elem.placeholder.is_none(),
+            "omitted placeholder SHALL default to None"
+        );
+        assert!(
+            elem.visible_bounds.is_none(),
+            "omitted visible_bounds SHALL default to None"
+        );
+        // 14c. Omitted bool fields default to false.
+        assert!(!elem.enabled, "omitted enabled SHALL default to false");
+        assert!(!elem.checked, "omitted checked SHALL default to false");
+        assert!(!elem.clickable, "omitted clickable SHALL default to false");
+        assert!(!elem.focused, "omitted focused SHALL default to false");
+        // 14d. Omitted children default to an empty Vec.
+        assert!(elem.children.is_empty(), "omitted children SHALL default to empty");
+    }
 }

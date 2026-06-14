@@ -720,4 +720,385 @@ mod tests {
             "Ignored SHALL map to Skipped"
         );
     }
+
+    // 1. iso8601_utc renders millisecond-precision UTC with a trailing Z.
+    #[test]
+    fn iso8601_utc_has_millis_and_z_suffix() {
+        // UNIX_EPOCH + 1500ms => 1970-01-01T00:00:01.500Z
+        let t = SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(1500);
+        let s = iso8601_utc(t);
+        assert_eq!(
+            s, "1970-01-01T00:00:01.500Z",
+            "iso8601_utc SHALL render millisecond precision with a Z suffix"
+        );
+    }
+
+    // 2. A step started but never finished before the flow ends maps to
+    //    Skipped (outcome stays None and is converted on report build).
+    #[test]
+    fn unfinished_step_maps_to_skipped() {
+        let mut acc = ReportAccumulator::new();
+        let dev = "dev";
+        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
+        acc.process(&make_event(1, dev, EventKind::StepStarted {
+            global_step_index: 0, block_name: "b".into(), step_index_in_block: 0,
+            action: "tap".into(), selector_label: "X".into(),
+        }));
+        // A new StepStarted finishes the previous (still-pending) step.
+        acc.process(&make_event(2, dev, EventKind::StepStarted {
+            global_step_index: 1, block_name: "b".into(), step_index_in_block: 1,
+            action: "tap".into(), selector_label: "Y".into(),
+        }));
+        acc.process(&make_event(3, dev, EventKind::StepFinished {
+            global_step_index: 1, outcome: golem_events::StepOutcome::Success,
+            duration_ms: 5, retry_count: 0, screenshot_path: None,
+            tree_stats: golem_events::TreeStats::default(),
+        }));
+
+        let suite = acc.into_suite_report();
+        let steps = &suite.flows[0].step_results;
+        assert_eq!(steps.len(), 2, "both steps SHALL be recorded");
+        assert!(
+            matches!(steps[0].outcome, ReportStepOutcome::Skipped),
+            "an unfinished step SHALL map to Skipped"
+        );
+        assert!(
+            matches!(steps[1].outcome, ReportStepOutcome::Success),
+            "the finished step SHALL keep its Success outcome"
+        );
+    }
+
+    // 3. BlockStarted iteration is stamped onto subsequent steps' block_iteration.
+    #[test]
+    fn block_iteration_propagates_to_steps() {
+        let mut acc = ReportAccumulator::new();
+        let dev = "dev";
+        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
+        acc.process(&make_event(1, dev, EventKind::BlockStarted {
+            block_name: "loop".into(), block_index: 0, iteration: 3,
+        }));
+        acc.process(&make_event(2, dev, EventKind::StepStarted {
+            global_step_index: 0, block_name: "loop".into(), step_index_in_block: 0,
+            action: "tap".into(), selector_label: "X".into(),
+        }));
+        acc.process(&make_event(3, dev, EventKind::StepFinished {
+            global_step_index: 0, outcome: golem_events::StepOutcome::Success,
+            duration_ms: 1, retry_count: 0, screenshot_path: None,
+            tree_stats: golem_events::TreeStats::default(),
+        }));
+
+        let suite = acc.into_suite_report();
+        assert_eq!(
+            suite.flows[0].step_results[0].block_iteration, 3,
+            "step SHALL inherit the most recent BlockStarted iteration"
+        );
+    }
+
+    // 4. With no BlockStarted, block_iteration defaults to 0.
+    #[test]
+    fn block_iteration_defaults_to_zero_without_block_started() {
+        let mut acc = ReportAccumulator::new();
+        let dev = "dev";
+        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
+        acc.process(&make_event(1, dev, EventKind::StepStarted {
+            global_step_index: 0, block_name: "b".into(), step_index_in_block: 0,
+            action: "tap".into(), selector_label: "X".into(),
+        }));
+        acc.process(&make_event(2, dev, EventKind::StepFinished {
+            global_step_index: 0, outcome: golem_events::StepOutcome::Success,
+            duration_ms: 1, retry_count: 0, screenshot_path: None,
+            tree_stats: golem_events::TreeStats::default(),
+        }));
+
+        let suite = acc.into_suite_report();
+        assert_eq!(
+            suite.flows[0].step_results[0].block_iteration, 0,
+            "absent BlockStarted SHALL default block_iteration to 0"
+        );
+    }
+
+    // 5. BlockFinished with a recording_path appends a RecordingEntry to the flow.
+    #[test]
+    fn block_finished_with_recording_path_appends_recording() {
+        let mut acc = ReportAccumulator::new();
+        let dev = "dev";
+        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
+        acc.process(&make_event(1, dev, EventKind::BlockFinished {
+            block_name: "rec".into(), block_index: 0, iteration: 2,
+            recording_path: Some("/tmp/rec.mp4".into()),
+        }));
+
+        let suite = acc.into_suite_report();
+        let recs = &suite.flows[0].recordings;
+        assert_eq!(recs.len(), 1, "SHALL record one recording entry");
+        assert_eq!(recs[0].block, "rec", "SHALL preserve block name");
+        assert_eq!(recs[0].iteration, 2, "SHALL preserve iteration");
+        assert_eq!(recs[0].path, "/tmp/rec.mp4", "SHALL preserve path");
+    }
+
+    // 6. BlockFinished with recording_path=None adds no recording.
+    #[test]
+    fn block_finished_without_recording_path_adds_nothing() {
+        let mut acc = ReportAccumulator::new();
+        let dev = "dev";
+        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
+        acc.process(&make_event(1, dev, EventKind::BlockFinished {
+            block_name: "rec".into(), block_index: 0, iteration: 0,
+            recording_path: None,
+        }));
+
+        let suite = acc.into_suite_report();
+        assert!(
+            suite.flows[0].recordings.is_empty(),
+            "BlockFinished without a recording_path SHALL add no recording"
+        );
+    }
+
+    // 7. InstallStarted then InstallFinished produces an InstallReport with
+    //    both timestamps populated (started drained from install_starts).
+    #[test]
+    fn install_started_then_finished_populates_install_report() {
+        let mut acc = ReportAccumulator::new();
+        let dev = "dev";
+        acc.process(&make_event(0, dev, EventKind::InstallStarted {
+            app_name: "App".into(), bundle_id: "com.app".into(),
+            script_path: "/s.sh".into(), target: "iPhone".into(), os_major: 18,
+        }));
+        acc.process(&make_event(1, dev, EventKind::InstallFinished {
+            app_name: "App".into(), bundle_id: "com.app".into(), success: true,
+            duration_ms: 1234, exit_code: None, error: None, code: None,
+            target: "iPhone".into(), os_major: 18,
+        }));
+
+        let suite = acc.into_suite_report();
+        assert_eq!(suite.installs.len(), 1, "SHALL produce one install report");
+        let install = &suite.installs[0];
+        assert_eq!(install.app_name, "App");
+        assert_eq!(install.bundle_id, "com.app");
+        assert_eq!(install.device_name, "dev", "SHALL set device_name from DeviceId");
+        assert_eq!(install.os_major, Some(18));
+        assert!(install.success);
+        assert_eq!(install.duration_ms, 1234);
+        assert!(install.started_at.is_some(), "started_at SHALL be drained from InstallStarted");
+        assert!(install.finished_at.is_some(), "finished_at SHALL be stamped from InstallFinished");
+    }
+
+    // 8. InstallFinished without a matching InstallStarted leaves started_at None.
+    #[test]
+    fn install_finished_without_start_has_no_started_at() {
+        let mut acc = ReportAccumulator::new();
+        let dev = "dev";
+        acc.process(&make_event(0, dev, EventKind::InstallFinished {
+            app_name: "App".into(), bundle_id: "com.app".into(), success: false,
+            duration_ms: 0, exit_code: Some(2), error: Some("boom".into()),
+            code: Some(golem_events::FailureCode::AppInstallFailed),
+            target: "iPhone".into(), os_major: 18,
+        }));
+
+        let suite = acc.into_suite_report();
+        let install = &suite.installs[0];
+        assert_eq!(install.started_at, None, "absent InstallStarted SHALL leave started_at None");
+        assert!(install.finished_at.is_some(), "finished_at SHALL still be stamped");
+        assert_eq!(install.exit_code, Some(2), "SHALL preserve exit_code");
+        assert_eq!(install.error.as_deref(), Some("boom"), "SHALL preserve error");
+        assert_eq!(install.code, Some(golem_events::FailureCode::AppInstallFailed), "SHALL preserve code");
+    }
+
+    // 9. The first *failed* step's code surfaces on the flow; a later failure
+    //    does not override the earlier one.
+    #[test]
+    fn first_failed_step_code_wins_on_flow() {
+        let mut acc = ReportAccumulator::new();
+        let dev = "dev";
+        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
+        // First failure
+        acc.process(&make_event(1, dev, EventKind::StepStarted {
+            global_step_index: 0, block_name: "b".into(), step_index_in_block: 0,
+            action: "tap".into(), selector_label: "X".into(),
+        }));
+        acc.process(&make_event(2, dev, EventKind::StepFinished {
+            global_step_index: 0,
+            outcome: golem_events::StepOutcome::Failed { message: "first".into(), code: golem_events::FailureCode::FlowElementNotFound },
+            duration_ms: 1, retry_count: 0, screenshot_path: None,
+            tree_stats: golem_events::TreeStats::default(),
+        }));
+        // Second failure with a different code
+        acc.process(&make_event(3, dev, EventKind::StepStarted {
+            global_step_index: 1, block_name: "b".into(), step_index_in_block: 1,
+            action: "tap".into(), selector_label: "Y".into(),
+        }));
+        acc.process(&make_event(4, dev, EventKind::StepFinished {
+            global_step_index: 1,
+            outcome: golem_events::StepOutcome::Failed { message: "second".into(), code: golem_events::FailureCode::Uncoded },
+            duration_ms: 1, retry_count: 0, screenshot_path: None,
+            tree_stats: golem_events::TreeStats::default(),
+        }));
+
+        let suite = acc.into_suite_report();
+        assert_eq!(
+            suite.flows[0].first_failure_code,
+            Some(golem_events::FailureCode::FlowElementNotFound),
+            "the first failed step's code SHALL win"
+        );
+    }
+
+    // 10. A warning's code SHALL NOT pre-empt a later failed step's code on
+    //     the flow summary line.
+    #[test]
+    fn warning_code_does_not_preempt_failure_code() {
+        let mut acc = ReportAccumulator::new();
+        let dev = "dev";
+        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
+        // Warning first
+        acc.process(&make_event(1, dev, EventKind::StepStarted {
+            global_step_index: 0, block_name: "b".into(), step_index_in_block: 0,
+            action: "tap".into(), selector_label: "X".into(),
+        }));
+        acc.process(&make_event(2, dev, EventKind::StepFinished {
+            global_step_index: 0,
+            outcome: golem_events::StepOutcome::Warning { message: "warn".into(), code: golem_events::FailureCode::Uncoded },
+            duration_ms: 1, retry_count: 0, screenshot_path: None,
+            tree_stats: golem_events::TreeStats::default(),
+        }));
+        // Real failure after
+        acc.process(&make_event(3, dev, EventKind::StepStarted {
+            global_step_index: 1, block_name: "b".into(), step_index_in_block: 1,
+            action: "tap".into(), selector_label: "Y".into(),
+        }));
+        acc.process(&make_event(4, dev, EventKind::StepFinished {
+            global_step_index: 1,
+            outcome: golem_events::StepOutcome::Failed { message: "fail".into(), code: golem_events::FailureCode::FlowElementNotFound },
+            duration_ms: 1, retry_count: 0, screenshot_path: None,
+            tree_stats: golem_events::TreeStats::default(),
+        }));
+
+        let suite = acc.into_suite_report();
+        assert_eq!(
+            suite.flows[0].first_failure_code,
+            Some(golem_events::FailureCode::FlowElementNotFound),
+            "a warning code SHALL NOT pre-empt the fatal step's code"
+        );
+    }
+
+    // 11. A flow whose steps all succeed derives no failure code: with no
+    //     Failed step the derived code stays None and (absent an explicit
+    //     FlowCouldNotRun code) `explicit_code.or(derived)` resolves to None.
+    //     (The explicit-code-wins arm is covered by
+    //     `flow_could_not_run_is_a_failure_with_code`, since a synthetic
+    //     FlowCouldNotRun flow can carry no steps to derive a code from.)
+    #[test]
+    fn flow_with_only_success_steps_has_no_failure_code() {
+        let mut acc = ReportAccumulator::new();
+        let dev = "dev";
+        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
+        acc.process(&make_event(1, dev, EventKind::StepStarted {
+            global_step_index: 0, block_name: "b".into(), step_index_in_block: 0,
+            action: "tap".into(), selector_label: "X".into(),
+        }));
+        acc.process(&make_event(2, dev, EventKind::StepFinished {
+            global_step_index: 0, outcome: golem_events::StepOutcome::Success,
+            duration_ms: 1, retry_count: 0, screenshot_path: None,
+            tree_stats: golem_events::TreeStats::default(),
+        }));
+
+        let suite = acc.into_suite_report();
+        assert_eq!(
+            suite.flows[0].first_failure_code, None,
+            "a flow with only successful steps SHALL carry no failure code"
+        );
+    }
+
+    // 12. RepeatContext from FlowStarted is preserved onto the FlowReport.
+    #[test]
+    fn repeat_context_propagates_to_flow_report() {
+        let mut acc = ReportAccumulator::new();
+        let dev = "dev";
+        acc.process(&make_event(0, dev, EventKind::FlowStarted {
+            flow_name: "f".into(), os_major: 0,
+            repeat: Some(golem_events::RepeatContext { index: 2, total: 5 }),
+        }));
+
+        let suite = acc.into_suite_report();
+        let repeat = suite.flows[0].repeat.expect("repeat SHALL be preserved");
+        assert_eq!(repeat.index, 2, "SHALL preserve repeat index");
+        assert_eq!(repeat.total, 5, "SHALL preserve repeat total");
+    }
+
+    // 13. The first observed event stamps the suite started_at; SuiteFinished
+    //     stamps finished_at. Both render as ISO-8601 UTC strings.
+    #[test]
+    fn suite_timestamps_from_first_event_and_suite_finished() {
+        let mut acc = ReportAccumulator::new();
+        let first = make_event(0, "dev", EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None });
+        let started_iso = iso8601_utc(first.wall_time);
+        acc.process(&first);
+        acc.process(&make_event(1, "dev", EventKind::SuiteFinished {
+            duration_ms: 99, passed: 0, failed: 0, skipped: 0,
+        }));
+
+        let suite = acc.into_suite_report();
+        assert_eq!(suite.total_duration_ms, 99, "SHALL set total_duration_ms");
+        assert_eq!(
+            suite.started_at.as_deref(),
+            Some(started_iso.as_str()),
+            "started_at SHALL come from the first observed event's wall_time"
+        );
+        assert!(suite.finished_at.is_some(), "finished_at SHALL be set from SuiteFinished");
+    }
+
+    // 14. Substep events arriving with no current step are dropped silently
+    //     (no current step => nowhere to attach).
+    #[test]
+    fn substep_without_current_step_is_dropped() {
+        let mut acc = ReportAccumulator::new();
+        let dev = "dev";
+        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
+        // No StepStarted; this substep has nowhere to land.
+        acc.process(&make_event(1, dev, EventKind::Substep(SubstepEvent::Tap {
+            point: Point { x: 1, y: 2 }, element_bounds: None,
+        })));
+
+        let suite = acc.into_suite_report();
+        assert!(
+            suite.flows[0].step_results.is_empty(),
+            "a substep with no current step SHALL be dropped, creating no step"
+        );
+    }
+
+    // 15. StepFinished arriving with no current step is a no-op (no flow steps).
+    #[test]
+    fn step_finished_without_current_step_is_noop() {
+        let mut acc = ReportAccumulator::new();
+        let dev = "dev";
+        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
+        acc.process(&make_event(1, dev, EventKind::StepFinished {
+            global_step_index: 0, outcome: golem_events::StepOutcome::Success,
+            duration_ms: 1, retry_count: 0, screenshot_path: None,
+            tree_stats: golem_events::TreeStats::default(),
+        }));
+
+        let suite = acc.into_suite_report();
+        assert!(
+            suite.flows[0].step_results.is_empty(),
+            "StepFinished with no current step SHALL add no step"
+        );
+    }
+
+    // 16. accumulate_events drains the broadcast channel into the accumulator
+    //     and stops when the sender is dropped.
+    #[tokio::test]
+    async fn accumulate_events_drains_channel_until_closed() {
+        let (tx, rx) = broadcast::channel(16);
+        let acc = tokio::sync::Mutex::new(ReportAccumulator::new());
+
+        tx.send(make_event(0, "dev", EventKind::FlowStarted { flow_name: "drained".into(), os_major: 0, repeat: None }))
+            .expect("send SHALL succeed");
+        drop(tx); // closing the channel ends the loop
+
+        accumulate_events(rx, &acc).await;
+
+        let report = acc.into_inner().into_suite_report();
+        assert_eq!(report.flows.len(), 1, "SHALL accumulate the sent event");
+        assert_eq!(report.flows[0].flow_name, "drained", "SHALL process the event payload");
+    }
 }

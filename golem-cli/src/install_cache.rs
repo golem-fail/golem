@@ -274,6 +274,88 @@ mod tests {
     }
 
     #[test]
+    fn gate_decision_install_time_drift_negative_direction_misses() {
+        // 1. Drift detection uses abs(): when the device's recorded time is
+        //    *earlier* than the stored cache time, the gate still fires.
+        let t = chrono::Utc::now();
+        let earlier = t - chrono::Duration::seconds(30);
+        let entry = make_entry(fp_git("a"), Some(t));
+        let v = gate_decision(Some(&entry), &fp_git("a"), &info_present(Some(earlier)));
+        let r = miss_reason(v);
+        assert!(r.contains("install-time differs"),
+            "negative-direction drift SHALL also miss (abs comparison): {r}");
+    }
+
+    #[test]
+    fn gate_decision_install_time_at_exactly_two_seconds_hits() {
+        // 2. The tolerance is `> 2`, so exactly 2 seconds is inclusive (a Hit).
+        let t = chrono::Utc::now();
+        let edge = t + chrono::Duration::seconds(2);
+        let entry = make_entry(fp_git("a"), Some(t));
+        let v = gate_decision(Some(&entry), &fp_git("a"), &info_present(Some(edge)));
+        assert!(matches!(v, CacheVerdict::Hit { .. }),
+            "exactly 2s drift SHALL be within the inclusive tolerance");
+    }
+
+    #[test]
+    fn gate_decision_install_time_just_over_tolerance_misses() {
+        // 3. 3 seconds is the first value strictly greater than the 2s tolerance.
+        let t = chrono::Utc::now();
+        let over = t + chrono::Duration::seconds(3);
+        let entry = make_entry(fp_git("a"), Some(t));
+        let v = gate_decision(Some(&entry), &fp_git("a"), &info_present(Some(over)));
+        let r = miss_reason(v);
+        assert!(r.contains("install-time differs"),
+            "3s drift SHALL exceed the 2s tolerance and miss: {r}");
+    }
+
+    #[test]
+    fn gate_decision_stored_install_time_none_skips_gate_and_hits() {
+        // 4. When only the device reports an install-time (stored is None), the
+        //    drift gate is skipped — fingerprint+presence carry the decision.
+        let t = chrono::Utc::now();
+        let entry = make_entry(fp_git("a"), None);
+        let v = gate_decision(Some(&entry), &fp_git("a"), &info_present(Some(t)));
+        assert!(matches!(v, CacheVerdict::Hit { .. }),
+            "missing stored install-time SHALL skip the drift gate");
+    }
+
+    #[test]
+    fn gate_decision_device_install_time_none_skips_gate_and_hits() {
+        // 5. Symmetric to above: stored time present, device time None.
+        let t = chrono::Utc::now();
+        let entry = make_entry(fp_git("a"), Some(t));
+        let v = gate_decision(Some(&entry), &fp_git("a"), &info_present(None));
+        assert!(matches!(v, CacheVerdict::Hit { .. }),
+            "missing device install-time SHALL skip the drift gate");
+    }
+
+    #[test]
+    fn gate_decision_no_entry_takes_precedence_over_absent_bundle() {
+        // 6. Gate ordering: a missing entry is reported before the
+        //    not-installed gate even when the device also lacks the bundle.
+        let info = golem_runner::installed_state::DeviceInstallInfo::not_installed();
+        let v = gate_decision(None, &fp_git("a"), &info);
+        let r = miss_reason(v);
+        assert!(r.contains("no prior cache entry"),
+            "missing-entry gate SHALL fire before the presence gate: {r}");
+    }
+
+    #[test]
+    fn gate_decision_none_fingerprint_takes_precedence_over_no_entry() {
+        // 7. Gate ordering: an unavailable fingerprint is reported even when
+        //    there is no entry at all.
+        let v = gate_decision(
+            None,
+            &golem_runner::fingerprint::Fingerprint::None,
+            &info_present(None),
+        );
+        let r = miss_reason(v);
+        assert!(r.contains("fingerprint unavailable"),
+            "fingerprint gate SHALL fire before the missing-entry gate: {r}");
+    }
+
+    #[test]
     fn gate_decision_hit_label_is_fingerprint_short_label() {
         let entry = make_entry(fp_git("abc1234567"), None);
         let v = gate_decision(Some(&entry), &fp_git("abc1234567"), &info_present(None));
@@ -423,6 +505,172 @@ mod tests {
         assert_eq!(
             pick.udid, "udid-2",
             "SHALL prefer the device with the higher cache-hit count across all slot apps",
+        );
+    }
+
+    #[tokio::test]
+    async fn rank_without_slot_returns_first_candidate() {
+        // 1. A None slot disables ranking entirely — first input wins.
+        use golem_runner::installer::{InstallCache, InstallOutcome};
+        let sim1 = test_device("iPhone 16", "udid-1");
+        let sim2 = test_device("iPhone 16 Pro", "udid-2");
+        let free = vec![&sim1, &sim2];
+
+        let cache = InstallCache::new();
+        // Even though sim2 has a hit, a None slot SHALL ignore it.
+        cache
+            .set(("udid-2".into(), "com.app".into()), InstallOutcome::Succeeded)
+            .await;
+        let matrix = vec![test_matrix_entry("app", "com.app")];
+
+        let pick =
+            rank_by_install_cache(&free, Some(Platform::Ios), None, Some(&cache), &matrix).await;
+        assert_eq!(
+            pick.udid, "udid-1",
+            "a None slot SHALL fall back to input order regardless of cache",
+        );
+    }
+
+    #[tokio::test]
+    async fn rank_no_matrix_match_scores_zero_returns_first() {
+        // 2. When the install matrix has no entry for the slot's app, every
+        //    device's bundle list is empty and is skipped — first wins.
+        use golem_runner::installer::{InstallCache, InstallOutcome};
+        let sim1 = test_device("iPhone 16", "udid-1");
+        let sim2 = test_device("iPhone 16 Pro", "udid-2");
+        let free = vec![&sim1, &sim2];
+
+        let cache = InstallCache::new();
+        cache
+            .set(("udid-2".into(), "com.app".into()), InstallOutcome::Succeeded)
+            .await;
+
+        // Slot references "app" but the matrix only knows "other".
+        let slot = test_slot(&["app"]);
+        let matrix = vec![test_matrix_entry("other", "com.app")];
+
+        let pick =
+            rank_by_install_cache(&free, Some(Platform::Ios), Some(&slot), Some(&cache), &matrix)
+                .await;
+        assert_eq!(
+            pick.udid, "udid-1",
+            "no matrix match SHALL leave every score at 0 and return the first candidate",
+        );
+    }
+
+    #[tokio::test]
+    async fn rank_platform_filter_excludes_mismatched_matrix_entry() {
+        // 3. With the platform pinned, an InstallEntry for a different platform
+        //    SHALL NOT match — the iOS device's hit is invisible, score 0.
+        use golem_runner::installer::{InstallCache, InstallOutcome};
+        let sim1 = test_device("iPhone 16", "udid-1");
+        let sim2 = test_device("iPhone 16 Pro", "udid-2");
+        let free = vec![&sim1, &sim2];
+
+        let cache = InstallCache::new();
+        cache
+            .set(("udid-2".into(), "com.app".into()), InstallOutcome::Succeeded)
+            .await;
+
+        let slot = test_slot(&["app"]);
+        // Matrix entry is Android-only; pinned iOS platform filters it out.
+        let android_entry = InstallEntry {
+            platform: Platform::Android,
+            app_name: "app".to_string(),
+            bundle_id: "com.app".to_string(),
+            script_path: PathBuf::from("/tmp/noop.sh"),
+            timeout_ms: 1000,
+            device_constraints: Vec::new(),
+        };
+        let matrix = vec![android_entry];
+
+        let pick =
+            rank_by_install_cache(&free, Some(Platform::Ios), Some(&slot), Some(&cache), &matrix)
+                .await;
+        assert_eq!(
+            pick.udid, "udid-1",
+            "platform filter SHALL exclude a cross-platform matrix entry, leaving score 0",
+        );
+    }
+
+    #[tokio::test]
+    async fn rank_none_platform_uses_each_device_own_platform() {
+        // 4. When platform is None (mixed-platform pool), each device matches
+        //    the matrix entry for its own platform.
+        use golem_runner::installer::{InstallCache, InstallOutcome};
+        let ios = test_device("iPhone 16", "udid-ios");
+        let mut android = test_device("Pixel", "udid-android");
+        android.platform = Platform::Android;
+        let free = vec![&ios, &android];
+
+        let cache = InstallCache::new();
+        // Only the Android device has a Succeeded hit on its own bundle.
+        cache
+            .set(("udid-android".into(), "com.app.android".into()), InstallOutcome::Succeeded)
+            .await;
+
+        let slot = test_slot(&["app"]);
+        let matrix = vec![
+            test_matrix_entry("app", "com.app.ios"),
+            InstallEntry {
+                platform: Platform::Android,
+                app_name: "app".to_string(),
+                bundle_id: "com.app.android".to_string(),
+                script_path: PathBuf::from("/tmp/noop.sh"),
+                timeout_ms: 1000,
+                device_constraints: Vec::new(),
+            },
+        ];
+
+        let pick = rank_by_install_cache(&free, None, Some(&slot), Some(&cache), &matrix).await;
+        assert_eq!(
+            pick.udid, "udid-android",
+            "with no pinned platform each device SHALL resolve bundles via its own platform",
+        );
+    }
+
+    #[tokio::test]
+    async fn rank_equal_scores_keeps_first_candidate() {
+        // 5. Ties are broken by input order: both devices have one hit, so the
+        //    first device SHALL win (score > best_score is strict).
+        use golem_runner::installer::{InstallCache, InstallOutcome};
+        let sim1 = test_device("iPhone 16", "udid-1");
+        let sim2 = test_device("iPhone 16 Pro", "udid-2");
+        let free = vec![&sim1, &sim2];
+
+        let cache = InstallCache::new();
+        cache.set(("udid-1".into(), "com.app".into()), InstallOutcome::Succeeded).await;
+        cache.set(("udid-2".into(), "com.app".into()), InstallOutcome::Succeeded).await;
+
+        let slot = test_slot(&["app"]);
+        let matrix = vec![test_matrix_entry("app", "com.app")];
+
+        let pick =
+            rank_by_install_cache(&free, Some(Platform::Ios), Some(&slot), Some(&cache), &matrix)
+                .await;
+        assert_eq!(
+            pick.udid, "udid-1",
+            "equal cache-hit scores SHALL be broken by input order (first wins)",
+        );
+    }
+
+    #[tokio::test]
+    async fn rank_single_candidate_returned_even_with_no_hits() {
+        // 6. A one-element free pool always returns that element.
+        use golem_runner::installer::InstallCache;
+        let only = test_device("iPhone 16", "udid-only");
+        let free = vec![&only];
+
+        let cache = InstallCache::new();
+        let slot = test_slot(&["app"]);
+        let matrix = vec![test_matrix_entry("app", "com.app")];
+
+        let pick =
+            rank_by_install_cache(&free, Some(Platform::Ios), Some(&slot), Some(&cache), &matrix)
+                .await;
+        assert_eq!(
+            pick.udid, "udid-only",
+            "a single-candidate pool SHALL return that candidate",
         );
     }
 }

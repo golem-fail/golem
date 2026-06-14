@@ -1,5 +1,16 @@
 # Roadmap
 
+## Remove clippy `allow-*-in-tests` and clean up `.unwrap()`/`.expect()` in tests
+
+`clippy.toml` sets `allow-unwrap-in-tests = true` + `allow-expect-in-tests = true`
+so the workspace `unwrap_used` deny doesn't fire on test code. This unblocked the
+clippy gate (it was already red at HEAD from ~217 pre-existing test `.unwrap()`s).
+No runtime/coverage risk — test code is `#[cfg(test)]`, a panic is just a test
+failure. **Low priority, purely for better failure messages:** at some point drop
+both clippy.toml lines and migrate test `.unwrap()` → `.expect("… SHALL …")` so a
+failing test prints *why* rather than "called unwrap on None". Mechanical, fannable
+one-agent-per-file. Not critical.
+
 ## Android type can't do Unicode (uses `input text`)
 
 `CompanionServer.handleType` types via `executeShell("input text <line>")`

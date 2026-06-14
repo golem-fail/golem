@@ -570,4 +570,252 @@ mod tests {
         assert_eq!(sanitize_app_name_for_path("my-app_2"), "my-app_2");
         assert_eq!(sanitize_app_name_for_path("my app!"), "my-app-");
     }
+
+    // 1. Empty name sanitizes to empty; non-ASCII alphanumerics are kept
+    //    (char::is_alphanumeric is Unicode-aware), other symbols become '-'.
+    #[test]
+    fn sanitize_app_name_for_path_edge_cases() {
+        assert_eq!(sanitize_app_name_for_path(""), "", "empty SHALL stay empty");
+        assert_eq!(
+            sanitize_app_name_for_path("café9"),
+            "café9",
+            "unicode alphanumerics SHALL be preserved"
+        );
+        assert_eq!(
+            sanitize_app_name_for_path("a/b\\c.d"),
+            "a-b-c-d",
+            "path separators and dots SHALL become dashes"
+        );
+        assert_eq!(
+            sanitize_app_name_for_path("!@#"),
+            "---",
+            "all-symbol input SHALL map each char to a dash"
+        );
+    }
+
+    // 2. Identical path and base resolve to "." rather than an empty path.
+    #[test]
+    fn pathdiff_identical_is_dot() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        let rel = pathdiff_relative(root, root).expect("relative");
+        assert_eq!(rel, PathBuf::from("."), "same path SHALL yield \".\"");
+    }
+
+    // 3. A sibling directory must be reached by going up then down ("../sibling").
+    #[test]
+    fn pathdiff_sibling_uses_parent_traversal() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        let a = root.join("a");
+        let b = root.join("b");
+        std::fs::create_dir_all(&a).expect("mkdir a");
+        std::fs::create_dir_all(&b).expect("mkdir b");
+        let rel = pathdiff_relative(&b, &a).expect("relative");
+        assert_eq!(
+            rel,
+            PathBuf::from("../b"),
+            "sibling SHALL traverse up then into target"
+        );
+    }
+
+    // 4. A base nested below the target yields one ".." per extra base level.
+    #[test]
+    fn pathdiff_base_below_target() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        let deep = root.join("x").join("y");
+        std::fs::create_dir_all(&deep).expect("mkdir deep");
+        let rel = pathdiff_relative(root, &deep).expect("relative");
+        assert_eq!(
+            rel,
+            PathBuf::from("../.."),
+            "ascending two levels SHALL produce two parent hops"
+        );
+    }
+
+    // 5. No matching project/workspace anywhere returns an empty Vec.
+    #[test]
+    fn discover_xcode_projects_empty_when_none() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(tmp.path().join("src")).expect("mkdir");
+        let found = discover_xcode_projects(tmp.path(), 5);
+        assert!(found.is_empty(), "no xcode artifacts SHALL yield empty: {found:?}");
+    }
+
+    // 6. When two .xcodeproj exist they are ordered alphabetically by path
+    //    (workspace-preference tie-breaker falls through to path compare).
+    #[test]
+    fn discover_xcode_projects_sorts_alphabetically_within_type() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("zeta/Z.xcodeproj")).expect("mkdir z");
+        std::fs::create_dir_all(root.join("alpha/A.xcodeproj")).expect("mkdir a");
+        let found = discover_xcode_projects(root, 5);
+        assert_eq!(found.len(), 2);
+        assert!(
+            found[0].to_string_lossy().contains("alpha"),
+            "alphabetical order SHALL place alpha first: {found:?}"
+        );
+    }
+
+    // 7. A settings.gradle at the search root itself surfaces as "." (empty
+    //    relative path is normalized to dot).
+    #[test]
+    fn discover_android_roots_root_itself_is_dot() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        std::fs::write(root.join("settings.gradle"), "").expect("write");
+        let found = discover_android_roots(root, 5);
+        assert_eq!(found, vec![".".to_string()], "root gradle SHALL be \".\"");
+    }
+
+    // 8. Both settings.gradle and settings.gradle.kts in the same dir dedupe
+    //    to a single entry for that directory.
+    #[test]
+    fn discover_android_roots_dedupes_same_dir() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("proj")).expect("mkdir");
+        std::fs::write(root.join("proj/settings.gradle"), "").expect("write");
+        std::fs::write(root.join("proj/settings.gradle.kts"), "").expect("write");
+        let found = discover_android_roots(root, 5);
+        assert_eq!(found, vec!["proj".to_string()], "same dir SHALL dedupe");
+    }
+
+    // 9. A file (not directory) named src-tauri is ignored — only directories
+    //    count, per the predicate's is_dir() guard.
+    #[test]
+    fn discover_tauri_dirs_ignores_file_named_src_tauri() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        std::fs::write(root.join("src-tauri"), "").expect("write file");
+        let found = discover_tauri_dirs(root, 5);
+        assert!(found.is_empty(), "file named src-tauri SHALL be ignored: {found:?}");
+    }
+
+    // 10. A src-tauri directly under the search root surfaces its parent as ".".
+    #[test]
+    fn discover_tauri_dirs_root_parent_is_dot() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("src-tauri")).expect("mkdir");
+        let found = discover_tauri_dirs(root, 5);
+        assert_eq!(found, vec![".".to_string()], "root src-tauri parent SHALL be \".\"");
+    }
+
+    // 11. bun is detected ahead of all others when bun.lock(b) co-exists with
+    //    a pnpm/yarn/npm lockfile in the same dir (check order is bun-first).
+    #[test]
+    fn detect_tauri_command_bun_wins_over_others() {
+        let items = [
+            ("npx tauri", "npm"),
+            ("yarn tauri", "yarn"),
+            ("pnpm tauri", "pnpm"),
+            ("bun tauri", "bun"),
+            ("cargo tauri", "cargo"),
+        ];
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let d = tmp.path();
+        std::fs::write(d.join("bun.lock"), "").expect("write");
+        std::fs::write(d.join("pnpm-lock.yaml"), "").expect("write");
+        std::fs::write(d.join("yarn.lock"), "").expect("write");
+        std::fs::write(d.join("package-lock.json"), "").expect("write");
+        assert_eq!(detect_tauri_command(d, &items), 3, "bun SHALL take priority");
+    }
+
+    // 12. package-lock.json (npm) and bare package.json both fall back to npx.
+    #[test]
+    fn detect_tauri_command_npm_lockfiles() {
+        let items = [
+            ("npx tauri", "npm"),
+            ("yarn tauri", "yarn"),
+            ("pnpm tauri", "pnpm"),
+            ("bun tauri", "bun"),
+            ("cargo tauri", "cargo"),
+        ];
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(tmp.path().join("package-lock.json"), "").expect("write");
+        assert_eq!(detect_tauri_command(tmp.path(), &items), 0, "package-lock SHALL pick npx");
+
+        let tmp2 = tempfile::tempdir().expect("tempdir");
+        std::fs::write(tmp2.path().join("package.json"), "{}").expect("write");
+        assert_eq!(detect_tauri_command(tmp2.path(), &items), 0, "package.json SHALL pick npx");
+    }
+
+    // 13. The dir's own lockfile takes precedence over a parent dir lockfile
+    //    (candidates are scanned dir-first, parent-second).
+    #[test]
+    fn detect_tauri_command_own_dir_beats_parent() {
+        let items = [
+            ("npx tauri", "npm"),
+            ("yarn tauri", "yarn"),
+            ("pnpm tauri", "pnpm"),
+            ("bun tauri", "bun"),
+            ("cargo tauri", "cargo"),
+        ];
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let sub = tmp.path().join("app");
+        std::fs::create_dir(&sub).expect("mkdir");
+        std::fs::write(sub.join("yarn.lock"), "").expect("write child");
+        std::fs::write(tmp.path().join("pnpm-lock.yaml"), "").expect("write parent");
+        assert_eq!(detect_tauri_command(&sub, &items), 1, "own-dir lockfile SHALL win");
+    }
+
+    // 14. walk_for honours its depth budget: at depth 1 only direct children
+    //    are examined, so a nested match is not found.
+    #[test]
+    fn walk_for_respects_depth_limit() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("nested")).expect("mkdir");
+        std::fs::write(root.join("nested/target.txt"), "").expect("write");
+        let mut found = Vec::new();
+        walk_for(
+            root,
+            1,
+            &mut |p| p.file_name().and_then(|n| n.to_str()) == Some("target.txt"),
+            &mut found,
+        );
+        assert!(found.is_empty(), "depth 1 SHALL not reach a grandchild: {found:?}");
+
+        let mut found2 = Vec::new();
+        walk_for(
+            root,
+            5,
+            &mut |p| p.file_name().and_then(|n| n.to_str()) == Some("target.txt"),
+            &mut found2,
+        );
+        assert_eq!(found2.len(), 1, "deeper budget SHALL reach the match");
+    }
+
+    // 15. walk_for skips dot-prefixed entries (hidden dirs/files) entirely.
+    #[test]
+    fn walk_for_skips_hidden_entries() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".hidden")).expect("mkdir");
+        std::fs::write(root.join(".hidden/marker"), "").expect("write nested");
+        std::fs::write(root.join(".secret"), "").expect("write hidden file");
+        let mut found = Vec::new();
+        walk_for(root, 5, &mut |_p| true, &mut found);
+        assert!(
+            found.iter().all(|p| {
+                let n = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                !n.starts_with('.')
+            }),
+            "hidden entries SHALL be skipped: {found:?}"
+        );
+    }
+
+    // 16. walk_for returns silently when handed a path that is not a readable
+    //    directory (read_dir error branch).
+    #[test]
+    fn walk_for_nonexistent_dir_is_noop() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let missing = tmp.path().join("does-not-exist");
+        let mut found = Vec::new();
+        walk_for(&missing, 5, &mut |_p| true, &mut found);
+        assert!(found.is_empty(), "missing dir SHALL produce no matches");
+    }
 }

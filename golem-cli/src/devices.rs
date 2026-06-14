@@ -418,4 +418,196 @@ mod tests {
             "NeedsCreation state should render as 'needs-creation'"
         );
     }
+
+    // 1. The last section emits a blank line ("\n\n"); exactly one trailing
+    //    newline is truncated, so the output ends with a single newline, not two.
+    #[test]
+    fn output_ends_with_single_newline_not_double() {
+        let output = format_device_list(&[]);
+        assert!(
+            output.ends_with('\n'),
+            "format_device_list output SHALL end with a single newline"
+        );
+        assert!(
+            !output.ends_with("\n\n"),
+            "format_device_list SHALL strip exactly one of the two trailing newlines"
+        );
+    }
+
+    // 2. The Physical Devices header SHALL be emitted last, after Android.
+    //    (iOS < Android ordering is already covered by
+    //    `mixed_ios_and_android_devices_grouped_correctly`; this test adds the
+    //    Physical-header position, the only section never exercised for ordering
+    //    elsewhere.)
+    #[test]
+    fn sections_emitted_in_fixed_order() {
+        let output = format_device_list(&[]);
+        let android = output
+            .find("Android Emulators:")
+            .expect("Android header SHALL exist");
+        let physical = output
+            .find("Physical Devices:")
+            .expect("Physical header SHALL exist");
+        assert!(
+            android < physical,
+            "Physical Devices section SHALL appear after Android Emulators"
+        );
+    }
+
+    // 3. A physical iOS device SHALL be grouped under Physical Devices, not iOS Simulators.
+    #[test]
+    fn physical_ios_device_grouped_under_physical_not_simulators() {
+        let devices = vec![make_device(
+            "Field iPhone",
+            Platform::Ios,
+            DeviceType::Phone,
+            "18.0",
+            18,
+            DeviceState::Connected,
+            true,
+        )];
+
+        let output = format_device_list(&devices);
+        let phys_pos = output
+            .find("Physical Devices:")
+            .expect("Physical header SHALL exist");
+        let name_pos = output
+            .find("Field iPhone")
+            .expect("device name SHALL appear");
+        assert!(
+            name_pos > phys_pos,
+            "Physical iOS device SHALL be listed under Physical Devices"
+        );
+
+        // The iOS Simulators section SHALL report (none) since the only iOS device is physical.
+        let ios_pos = output
+            .find("iOS Simulators:")
+            .expect("iOS header SHALL exist");
+        let between_ios_and_android = &output[ios_pos
+            ..output
+                .find("Android Emulators:")
+                .expect("Android header SHALL exist")];
+        assert!(
+            between_ios_and_android.contains("(none)"),
+            "iOS Simulators section SHALL show (none) when only physical iOS device exists"
+        );
+    }
+
+    // 4. Column padding SHALL be driven by the widest entry in the section.
+    #[test]
+    fn name_column_padded_to_widest_name() {
+        let devices = vec![
+            make_device(
+                "A",
+                Platform::Ios,
+                DeviceType::Phone,
+                "18.0",
+                18,
+                DeviceState::Shutdown,
+                false,
+            ),
+            make_device(
+                "LongerName",
+                Platform::Ios,
+                DeviceType::Phone,
+                "18.0",
+                18,
+                DeviceState::Shutdown,
+                false,
+            ),
+        ];
+
+        let output = format_device_list(&devices);
+        let rows: Vec<&str> = output
+            .lines()
+            .skip(1)
+            .take_while(|l| !l.is_empty())
+            .collect();
+        assert_eq!(rows.len(), 2, "Two device rows SHALL be emitted");
+
+        // The version column SHALL start at the same offset on every row (proves name padding).
+        let p0 = rows[0]
+            .find("ios:18.0")
+            .expect("version SHALL appear in row 0");
+        let p1 = rows[1]
+            .find("ios:18.0")
+            .expect("version SHALL appear in row 1");
+        assert_eq!(
+            p0, p1,
+            "Version column SHALL be aligned across rows of differing name length"
+        );
+        // The shorter name's row carries padding so the offset reflects the longest name (10).
+        assert!(
+            p0 >= "  LongerName".len(),
+            "Version column offset SHALL reflect the widest name width"
+        );
+    }
+
+    // 5. A populated section SHALL NOT contain the (none) marker.
+    #[test]
+    fn populated_section_has_no_none_marker() {
+        let devices = vec![make_device(
+            "iPhone 15",
+            Platform::Ios,
+            DeviceType::Phone,
+            "18.0",
+            18,
+            DeviceState::Booted,
+            false,
+        )];
+
+        let output = format_device_list(&devices);
+        let ios_pos = output
+            .find("iOS Simulators:")
+            .expect("iOS header SHALL exist");
+        let android_pos = output
+            .find("Android Emulators:")
+            .expect("Android header SHALL exist");
+        let ios_section = &output[ios_pos..android_pos];
+        assert!(
+            !ios_section.contains("(none)"),
+            "Populated iOS section SHALL NOT contain a (none) marker"
+        );
+    }
+
+    // 6. state_label SHALL map every DeviceState variant to its kebab/lower label.
+    #[test]
+    fn state_label_maps_all_variants() {
+        assert_eq!(state_label(DeviceState::Booted), "booted");
+        assert_eq!(state_label(DeviceState::Shutdown), "shutdown");
+        assert_eq!(state_label(DeviceState::Connected), "connected");
+        assert_eq!(
+            state_label(DeviceState::NeedsCreation),
+            "needs-creation",
+            "NeedsCreation SHALL map to needs-creation"
+        );
+    }
+
+    // 7. Each device row SHALL render in the order: name, platform:version, type, state.
+    #[test]
+    fn row_renders_fields_in_declared_order() {
+        let devices = vec![make_device(
+            "iPad Pro",
+            Platform::Ios,
+            DeviceType::Tablet,
+            "17.5",
+            17,
+            DeviceState::Booted,
+            false,
+        )];
+
+        let output = format_device_list(&devices);
+        let row = output
+            .lines()
+            .find(|l| l.contains("iPad Pro"))
+            .expect("device row SHALL exist");
+        let name = row.find("iPad Pro").expect("name SHALL appear");
+        let ver = row.find("ios:17.5").expect("version SHALL appear");
+        let dtype = row.find("tablet").expect("type SHALL appear");
+        let state = row.find("booted").expect("state SHALL appear");
+        assert!(
+            name < ver && ver < dtype && dtype < state,
+            "Row fields SHALL appear in order name < version < type < state"
+        );
+    }
 }

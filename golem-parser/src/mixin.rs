@@ -756,4 +756,439 @@ on_text = "mixin-step-3"
         assert_eq!(expanded[2].on_text.as_deref(), Some("mixin-step-2"));
         assert_eq!(expanded[3].on_text.as_deref(), Some("mixin-step-3"));
     }
+
+    // ---------------------------------------------------------------
+    // 15. resolve_mixin_path rejects path traversal
+    // ---------------------------------------------------------------
+    #[test]
+    fn resolve_mixin_path_rejects_traversal() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        let result = resolve_mixin_path("../escape", tmp.path(), tmp.path());
+
+        assert!(result.is_err(), "traversal SHALL be rejected");
+        let err_msg = format!("{}", result.expect_err("SHALL be an error"));
+        assert!(
+            err_msg.contains("path traversal"),
+            "error SHALL mention path traversal, got: {err_msg}"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 16. resolve_mixin_path appends .toml when missing
+    // ---------------------------------------------------------------
+    #[test]
+    fn resolve_mixin_path_appends_toml_suffix() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        write_mixin(tmp.path(), "thing", "");
+
+        let resolved = resolve_mixin_path("thing", tmp.path(), tmp.path())
+            .expect("SHALL resolve when file exists");
+        assert!(
+            resolved.ends_with("thing.toml"),
+            "resolved path SHALL end with thing.toml, got: {}",
+            resolved.display()
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 17. resolve_mixin_path accepts explicit .toml without doubling
+    // ---------------------------------------------------------------
+    #[test]
+    fn resolve_mixin_path_explicit_toml_not_doubled() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        write_mixin(tmp.path(), "thing", "");
+
+        let resolved = resolve_mixin_path("thing.toml", tmp.path(), tmp.path())
+            .expect("SHALL resolve with explicit .toml");
+        assert!(
+            resolved.ends_with("thing.toml"),
+            "SHALL NOT double the suffix, got: {}",
+            resolved.display()
+        );
+        assert!(
+            !resolved.to_string_lossy().contains("thing.toml.toml"),
+            "SHALL NOT produce thing.toml.toml"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 18. resolve_mixin_path not found returns descriptive error
+    // ---------------------------------------------------------------
+    #[test]
+    fn resolve_mixin_path_not_found_error() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        let result = resolve_mixin_path("missing", tmp.path(), tmp.path());
+
+        assert!(result.is_err(), "missing mixin SHALL error");
+        let err_msg = format!("{}", result.expect_err("SHALL be an error"));
+        assert!(
+            err_msg.contains("not found") && err_msg.contains("missing"),
+            "error SHALL name the mixin and say not found, got: {err_msg}"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 19. resolve_mixin_path walks up from nested flow_dir, closest wins
+    // ---------------------------------------------------------------
+    #[test]
+    fn resolve_mixin_path_closest_wins() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        let project_root = tmp.path();
+        let nested = project_root.join("a").join("b");
+        fs::create_dir_all(&nested).expect("Failed to create nested dirs");
+
+        // Same-named mixin at both project root and nested flow_dir.
+        write_mixin(project_root, "shared", "[[step]]\naction = \"root\"\n");
+        write_mixin(&nested, "shared", "[[step]]\naction = \"nested\"\n");
+
+        let resolved = resolve_mixin_path("shared", &nested, project_root)
+            .expect("SHALL resolve from nested dir");
+        let content = fs::read_to_string(&resolved).expect("SHALL read resolved file");
+        assert!(
+            content.contains("nested"),
+            "closest (nested) mixin SHALL win, got: {content}"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 20. resolve_mixin_path finds mixin at an ancestor dir
+    // ---------------------------------------------------------------
+    #[test]
+    fn resolve_mixin_path_found_at_ancestor() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        let project_root = tmp.path();
+        let nested = project_root.join("a").join("b");
+        fs::create_dir_all(&nested).expect("Failed to create nested dirs");
+
+        // Mixin only at project root; flow_dir is nested.
+        write_mixin(project_root, "only_root", "[[step]]\naction = \"root\"\n");
+
+        let resolved = resolve_mixin_path("only_root", &nested, project_root)
+            .expect("SHALL walk up to ancestor");
+        let content = fs::read_to_string(&resolved).expect("SHALL read resolved file");
+        assert!(content.contains("root"), "SHALL find ancestor mixin, got: {content}");
+    }
+
+    // ---------------------------------------------------------------
+    // 21. load_mixin missing 'mixin' param errors
+    // ---------------------------------------------------------------
+    #[test]
+    fn load_mixin_missing_mixin_param_errors() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        let step = Step {
+            action: "load_mixin".to_string(),
+            ..Default::default()
+        };
+
+        let result = expand_mixins(&[step], tmp.path(), tmp.path());
+        assert!(result.is_err(), "missing mixin param SHALL error");
+        let err_msg = format!("{}", result.expect_err("SHALL be an error"));
+        assert!(
+            err_msg.contains("missing 'mixin' parameter"),
+            "error SHALL mention missing mixin param, got: {err_msg}"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 22. load_mixin with non-string 'mixin' value errors (not a str)
+    // ---------------------------------------------------------------
+    #[test]
+    fn load_mixin_non_string_mixin_param_errors() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        let mut params = HashMap::new();
+        params.insert("mixin".to_string(), toml::Value::Integer(42));
+        let step = Step {
+            action: "load_mixin".to_string(),
+            params,
+            ..Default::default()
+        };
+
+        let result = expand_mixins(&[step], tmp.path(), tmp.path());
+        assert!(
+            result.is_err(),
+            "non-string mixin param SHALL be treated as missing and error"
+        );
+        let err_msg = format!("{}", result.expect_err("SHALL be an error"));
+        assert!(
+            err_msg.contains("missing 'mixin' parameter"),
+            "error SHALL mention missing mixin param, got: {err_msg}"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 23. load_mixin referencing a missing file errors on read
+    // ---------------------------------------------------------------
+    #[test]
+    fn load_mixin_unresolvable_name_errors() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        let steps = vec![load_mixin_step("does_not_exist", None)];
+
+        let result = expand_mixins(&steps, tmp.path(), tmp.path());
+        assert!(result.is_err(), "unresolvable mixin SHALL error");
+        let err_msg = format!("{}", result.expect_err("SHALL be an error"));
+        assert!(
+            err_msg.contains("not found"),
+            "error SHALL say not found, got: {err_msg}"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 24. extract_vars_from_step ignores non-string var values
+    // ---------------------------------------------------------------
+    #[test]
+    fn extract_vars_ignores_non_string_values() {
+        let mut table = toml::map::Map::new();
+        table.insert("good".to_string(), toml::Value::String("ok".to_string()));
+        table.insert("num".to_string(), toml::Value::Integer(7));
+        table.insert("flag".to_string(), toml::Value::Boolean(true));
+        let mut params = HashMap::new();
+        params.insert("vars".to_string(), toml::Value::Table(table));
+        let step = Step {
+            action: "load_mixin".to_string(),
+            params,
+            ..Default::default()
+        };
+
+        let vars = extract_vars_from_step(&step);
+        assert_eq!(vars.len(), 1, "only string var SHALL be extracted");
+        assert_eq!(vars.get("good").map(String::as_str), Some("ok"));
+        assert!(!vars.contains_key("num"), "integer var SHALL be ignored");
+        assert!(!vars.contains_key("flag"), "boolean var SHALL be ignored");
+    }
+
+    // ---------------------------------------------------------------
+    // 25. extract_vars_from_step returns empty when vars absent
+    // ---------------------------------------------------------------
+    #[test]
+    fn extract_vars_empty_when_absent() {
+        let step = load_mixin_step("x", None);
+        let vars = extract_vars_from_step(&step);
+        assert!(vars.is_empty(), "no vars param SHALL yield empty map");
+    }
+
+    // ---------------------------------------------------------------
+    // 26. remap_string replaces multiple distinct keys
+    // ---------------------------------------------------------------
+    #[test]
+    fn remap_string_multiple_keys() {
+        let mut vars = HashMap::new();
+        vars.insert("a".to_string(), "X".to_string());
+        vars.insert("b".to_string(), "Y".to_string());
+
+        let out = remap_string("${a}-${b}-${a}", &vars);
+        assert_eq!(out, "X-Y-X", "every occurrence of each key SHALL be replaced");
+    }
+
+    // ---------------------------------------------------------------
+    // 27. remap remaps the grouped `on` selector and nested fields
+    // ---------------------------------------------------------------
+    #[test]
+    fn remap_grouped_on_selector() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        write_mixin(
+            tmp.path(),
+            "grouped",
+            r#"
+[[step]]
+action = "tap"
+
+[step.on]
+text = "${label}"
+accessibility_label = "${aid}"
+below = "${anchor_text}"
+"#,
+        );
+
+        let mut vars = HashMap::new();
+        vars.insert("label".to_string(), "Submit".to_string());
+        vars.insert("aid".to_string(), "submit-btn".to_string());
+        vars.insert("anchor_text".to_string(), "Header".to_string());
+
+        let steps = vec![load_mixin_step("grouped", Some(vars))];
+        let expanded =
+            expand_mixins(&steps, tmp.path(), tmp.path()).expect("expansion should succeed");
+
+        let group = expanded[0].on.as_ref().expect("on group SHALL be present");
+        assert_eq!(group.text.as_deref(), Some("Submit"));
+        assert_eq!(group.accessibility_label.as_deref(), Some("submit-btn"));
+        match group.below.as_ref().expect("below anchor SHALL be present") {
+            crate::Anchor::Text(s) => assert_eq!(s, "Header"),
+            other => panic!("below SHALL be a Text anchor, got: {other:?}"),
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // 28. remap descends into a nested Selector anchor
+    // ---------------------------------------------------------------
+    #[test]
+    fn remap_nested_selector_anchor() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        write_mixin(
+            tmp.path(),
+            "nested_anchor",
+            r#"
+[[step]]
+action = "tap"
+
+[step.on]
+text = "${label}"
+
+[step.on.right_of]
+text = "${anchor_label}"
+"#,
+        );
+
+        let mut vars = HashMap::new();
+        vars.insert("label".to_string(), "Field".to_string());
+        vars.insert("anchor_label".to_string(), "Caption".to_string());
+
+        let steps = vec![load_mixin_step("nested_anchor", Some(vars))];
+        let expanded =
+            expand_mixins(&steps, tmp.path(), tmp.path()).expect("expansion should succeed");
+
+        let group = expanded[0].on.as_ref().expect("on group SHALL be present");
+        match group.right_of.as_ref().expect("right_of SHALL be present") {
+            crate::Anchor::Selector(inner) => {
+                assert_eq!(inner.text.as_deref(), Some("Caption"));
+            }
+            other => panic!("right_of SHALL be a Selector anchor, got: {other:?}"),
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // 29. remap recurses into nested params (table + array)
+    // ---------------------------------------------------------------
+    #[test]
+    fn remap_recursive_params() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        write_mixin(
+            tmp.path(),
+            "params",
+            r#"
+[[step]]
+action = "custom"
+list = ["${a}", "literal"]
+
+[step.nested]
+inner = "${b}"
+"#,
+        );
+
+        let mut vars = HashMap::new();
+        vars.insert("a".to_string(), "AA".to_string());
+        vars.insert("b".to_string(), "BB".to_string());
+
+        let steps = vec![load_mixin_step("params", Some(vars))];
+        let expanded =
+            expand_mixins(&steps, tmp.path(), tmp.path()).expect("expansion should succeed");
+
+        let list = expanded[0]
+            .params
+            .get("list")
+            .and_then(|v| v.as_array())
+            .expect("list param SHALL be an array");
+        assert_eq!(list[0].as_str(), Some("AA"), "array string SHALL be remapped");
+        assert_eq!(list[1].as_str(), Some("literal"), "non-var literal SHALL stay");
+
+        let inner = expanded[0]
+            .params
+            .get("nested")
+            .and_then(|v| v.as_table())
+            .and_then(|t| t.get("inner"))
+            .and_then(|v| v.as_str())
+            .expect("nested.inner SHALL be a string");
+        assert_eq!(inner, "BB", "nested table string SHALL be remapped");
+    }
+
+    // ---------------------------------------------------------------
+    // 30. remap leaves non-string params (integers) untouched
+    // ---------------------------------------------------------------
+    #[test]
+    fn remap_preserves_non_string_params() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        write_mixin(
+            tmp.path(),
+            "typed",
+            r#"
+[[step]]
+action = "custom"
+count = 5
+label = "${name}"
+"#,
+        );
+
+        let mut vars = HashMap::new();
+        vars.insert("name".to_string(), "Bob".to_string());
+
+        let steps = vec![load_mixin_step("typed", Some(vars))];
+        let expanded =
+            expand_mixins(&steps, tmp.path(), tmp.path()).expect("expansion should succeed");
+
+        assert_eq!(
+            expanded[0].params.get("count").and_then(|v| v.as_integer()),
+            Some(5),
+            "integer param SHALL be untouched"
+        );
+        assert_eq!(
+            expanded[0].params.get("label").and_then(|v| v.as_str()),
+            Some("Bob"),
+            "string param SHALL be remapped"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 31. remap rewrites flat relational on_* fields and action
+    // ---------------------------------------------------------------
+    #[test]
+    fn remap_flat_relational_and_action() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        write_mixin(
+            tmp.path(),
+            "flat",
+            r#"
+[[step]]
+action = "${act}"
+on_below = "${below_anchor}"
+on_above = "${above_anchor}"
+input = "${value}"
+app = "${app_id}"
+"#,
+        );
+
+        let mut vars = HashMap::new();
+        vars.insert("act".to_string(), "tap".to_string());
+        vars.insert("below_anchor".to_string(), "Footer".to_string());
+        vars.insert("above_anchor".to_string(), "Banner".to_string());
+        vars.insert("value".to_string(), "typed-text".to_string());
+        vars.insert("app_id".to_string(), "com.example".to_string());
+
+        let steps = vec![load_mixin_step("flat", Some(vars))];
+        let expanded =
+            expand_mixins(&steps, tmp.path(), tmp.path()).expect("expansion should succeed");
+
+        let step = &expanded[0];
+        assert_eq!(step.action, "tap", "action SHALL be remapped");
+        assert_eq!(step.on_below.as_deref(), Some("Footer"));
+        assert_eq!(step.on_above.as_deref(), Some("Banner"));
+        assert_eq!(step.input.as_deref(), Some("typed-text"));
+        assert_eq!(step.app.as_deref(), Some("com.example"));
+    }
+
+    // ---------------------------------------------------------------
+    // 32. parse_mixin defaults to empty steps for empty input
+    // ---------------------------------------------------------------
+    #[test]
+    fn parse_mixin_empty_yields_no_steps() {
+        let mixin = parse_mixin("").expect("empty mixin SHALL parse");
+        assert!(mixin.steps.is_empty(), "empty mixin SHALL have no steps");
+    }
+
+    // ---------------------------------------------------------------
+    // 33. parse_mixin rejects malformed TOML
+    // ---------------------------------------------------------------
+    #[test]
+    fn parse_mixin_malformed_toml_errors() {
+        let result = parse_mixin("this is = = not toml");
+        assert!(result.is_err(), "malformed TOML SHALL error");
+    }
 }

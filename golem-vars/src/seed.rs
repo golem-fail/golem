@@ -170,4 +170,68 @@ mod tests {
             "successive generate calls should produce different values"
         );
     }
+
+    // 8. child() consumes a value from the parent RNG, advancing its state
+    #[test]
+    fn child_advances_parent_rng_state() {
+        let mut parent_with_child = SeedManager::new(42);
+        let _child = parent_with_child.child();
+        let after_child: u64 = parent_with_child.rng().gen();
+
+        let mut parent_without_child = SeedManager::new(42);
+        let without_child: u64 = parent_without_child.rng().gen();
+
+        assert_ne!(
+            after_child, without_child,
+            "child() SHALL consume a value from the parent, advancing its state"
+        );
+    }
+
+    // 9. Two successive children from one parent have independent, differing sequences
+    #[test]
+    fn successive_children_differ_from_one_parent() {
+        let mut parent = SeedManager::new(42);
+        let mut child_a = parent.child();
+        let mut child_b = parent.child();
+
+        let a_val: u64 = child_a.rng().gen();
+        let b_val: u64 = child_b.rng().gen();
+
+        assert_ne!(
+            a_val, b_val,
+            "two children derived from one parent SHALL have different seeds/sequences"
+        );
+    }
+
+    // 10. The seed reported by random() reproduces that instance's exact sequence
+    #[test]
+    fn random_seed_matches_its_own_sequence() {
+        let mut sm = SeedManager::random();
+        let reported = sm.seed();
+        let from_random: Vec<u64> = (0..5).map(|_| sm.rng().gen()).collect();
+
+        let mut replay = SeedManager::new(reported);
+        let from_replay: Vec<u64> = (0..5).map(|_| replay.rng().gen()).collect();
+
+        assert_eq!(
+            from_random, from_replay,
+            "a random() instance SHALL produce the same sequence as new(its reported seed)"
+        );
+    }
+
+    // 11. child() seed is reproducible across separate parents with the same seed
+    #[test]
+    fn child_seed_reproducible_across_parents() {
+        let mut parent1 = SeedManager::new(123);
+        let mut parent2 = SeedManager::new(123);
+
+        let child1 = parent1.child();
+        let child2 = parent2.child();
+
+        assert_eq!(
+            child1.seed(),
+            child2.seed(),
+            "child seed SHALL be identical for parents with the same seed"
+        );
+    }
 }

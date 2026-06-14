@@ -650,4 +650,229 @@ mod tests {
         assert_eq!(device.screen_width, None);
         assert_eq!(device.screen_height, None);
     }
+
+    // 10. density == 0 short-circuits to Phone (guards divide-by-zero)
+    #[test]
+    fn classify_density_zero_is_phone() {
+        let device_type = classify_android_device_type(2000, 2000, 0);
+        assert_eq!(device_type, DeviceType::Phone,
+            "density 0 SHALL classify as Phone without dividing by zero");
+    }
+
+    // 11. Exactly 600dp is the tablet threshold (>= 600 is tablet)
+    #[test]
+    fn classify_exactly_600dp_is_tablet() {
+        // min_px = 600, density = 160 -> dp = 600 * 160 / 160 = 600
+        let device_type = classify_android_device_type(600, 800, 160);
+        assert_eq!(device_type, DeviceType::Tablet,
+            "exactly 600dp SHALL classify as Tablet");
+    }
+
+    // 12. Just below 600dp stays a Phone
+    #[test]
+    fn classify_just_below_600dp_is_phone() {
+        // min_px = 599, density = 160 -> dp = 599 < 600
+        let device_type = classify_android_device_type(599, 800, 160);
+        assert_eq!(device_type, DeviceType::Phone,
+            "599dp SHALL classify as Phone");
+    }
+
+    // 13. Missing density defaults to 160, so screen_scale is 1.0
+    #[test]
+    fn missing_density_defaults_scale_to_one() {
+        let config = make_config(&[
+            ("hw.lcd.width", "1080"),
+            ("hw.lcd.height", "2400"),
+        ]);
+        let device = parse_avd_config("AVD", &config)
+            .expect("SHALL parse config");
+        assert_eq!(device.screen_scale, Some(1.0),
+            "missing density SHALL default to 160 -> scale 1.0");
+    }
+
+    // 14. screen_scale reflects density / 160
+    #[test]
+    fn screen_scale_reflects_density() {
+        let config = make_config(&[
+            ("hw.lcd.width", "1080"),
+            ("hw.lcd.height", "2400"),
+            ("hw.lcd.density", "320"),
+        ]);
+        let device = parse_avd_config("AVD", &config)
+            .expect("SHALL parse config");
+        assert_eq!(device.screen_scale, Some(2.0),
+            "density 320 SHALL produce scale 2.0");
+    }
+
+    // 15. Empty displayname falls back to avd_name (filter rejects empty string)
+    #[test]
+    fn empty_display_name_falls_back_to_avd_name() {
+        let config = make_config(&[
+            ("hw.lcd.width", "1080"),
+            ("hw.lcd.height", "2400"),
+            ("avd.ini.displayname", ""),
+        ]);
+        let device = parse_avd_config("Fallback_AVD", &config)
+            .expect("SHALL parse config");
+        assert_eq!(device.name, "Fallback_AVD",
+            "empty displayname SHALL fall back to avd_name");
+    }
+
+    // 16. Non-numeric dimensions fall back to 0 -> None for width/height
+    #[test]
+    fn non_numeric_dimensions_become_none() {
+        let config = make_config(&[
+            ("hw.lcd.width", "abc"),
+            ("hw.lcd.height", "xyz"),
+            ("hw.lcd.density", "440"),
+        ]);
+        let device = parse_avd_config("AVD", &config)
+            .expect("SHALL parse config");
+        assert_eq!(device.screen_width, None,
+            "unparseable width SHALL become None");
+        assert_eq!(device.screen_height, None,
+            "unparseable height SHALL become None");
+    }
+
+    // 17. Empty abi.type yields runtime_id None
+    #[test]
+    fn empty_abi_yields_no_runtime_id() {
+        let config = make_config(&[
+            ("hw.lcd.width", "1080"),
+            ("hw.lcd.height", "2400"),
+            ("abi.type", ""),
+        ]);
+        let device = parse_avd_config("AVD", &config)
+            .expect("SHALL parse config");
+        assert_eq!(device.runtime_id, None,
+            "empty abi.type SHALL yield runtime_id None");
+    }
+
+    // 18. parse_properties skips comments, blanks, and lines without '='
+    #[test]
+    fn parse_properties_skips_comments_blanks_and_invalid() {
+        let contents = "# a comment\n\nkey1 = value1\nnoequalsline\n   # indented comment\nkey2=value2\n";
+        let props = parse_properties(contents);
+        assert_eq!(props.get("key1"), Some(&"value1".to_string()),
+            "key/value SHALL be trimmed and stored");
+        assert_eq!(props.get("key2"), Some(&"value2".to_string()));
+        assert!(!props.contains_key("noequalsline"),
+            "lines without '=' SHALL be skipped");
+        assert_eq!(props.len(), 2,
+            "comments and blank lines SHALL NOT be stored");
+    }
+
+    // 19. parse_properties keeps '=' inside the value (split_once)
+    #[test]
+    fn parse_properties_value_with_equals() {
+        let props = parse_properties("path=a=b=c");
+        assert_eq!(props.get("path"), Some(&"a=b=c".to_string()),
+            "only the first '=' SHALL split key from value");
+    }
+
+    // 20. parse_avd_list trims whitespace and filters blank lines
+    #[test]
+    fn avd_list_trims_and_filters_blanks() {
+        let output = "  Pixel_4  \n\n   \nNexus_5X\n";
+        let names = parse_avd_list(output);
+        assert_eq!(names, vec!["Pixel_4", "Nexus_5X"],
+            "names SHALL be trimmed and blank lines dropped");
+    }
+
+    // 21. parse_avd_list on empty input is empty
+    #[test]
+    fn avd_list_empty_input() {
+        assert!(parse_avd_list("").is_empty(),
+            "empty output SHALL yield no AVD names");
+    }
+
+    // 22. extract_api_level handles ext suffixes only on exact-numeric segments
+    #[test]
+    fn extract_api_level_non_numeric_segment_is_none() {
+        // "android-34-ext8" is not parseable as u32 by strip_prefix path here
+        assert_eq!(extract_api_level("system-images/android-34-ext8/google_apis/"), None,
+            "android-34-ext8 SHALL NOT parse as a bare u32");
+    }
+
+    // 23. extract_api_level finds the segment anywhere in the path
+    #[test]
+    fn extract_api_level_finds_segment_anywhere() {
+        assert_eq!(extract_api_level("a/b/android-29/c"), Some(29),
+            "android-NN SHALL be found in any path segment");
+    }
+
+    // 24. pick_system_image rejects non-arm64-v8a ABIs
+    #[test]
+    fn pick_system_image_rejects_non_arm_abi() {
+        let images = vec![img(34, "google_apis", "x86_64")];
+        assert!(pick_system_image(&images, 34, None).is_none(),
+            "non arm64-v8a ABI SHALL be rejected");
+    }
+
+    // 25. pick_system_image with preferred_api 0 matches any API level
+    #[test]
+    fn pick_system_image_api_zero_matches_any() {
+        let images = vec![img(30, "google_apis", "arm64-v8a")];
+        let pick = pick_system_image(&images, 0, None)
+            .expect("SHALL match any API when preferred_api is 0");
+        assert_eq!(pick.api_level, 30);
+    }
+
+    // 26. pick_system_image filters by exact preferred_api when nonzero
+    #[test]
+    fn pick_system_image_filters_exact_api() {
+        let images = vec![img(30, "google_apis", "arm64-v8a")];
+        assert!(pick_system_image(&images, 34, None).is_none(),
+            "non-matching API level SHALL be rejected");
+    }
+
+    // 27. pick_system_image on empty slice is None
+    #[test]
+    fn pick_system_image_empty_is_none() {
+        assert!(pick_system_image(&[], 0, None).is_none(),
+            "empty image list SHALL yield None");
+    }
+
+    // 28. pick_device_profile picks latest phone (rfind = last matching)
+    #[test]
+    fn pick_device_profile_phone_picks_latest() {
+        let profiles = vec![
+            DeviceProfileInfo { id: "pixel_6".into(), name: "Pixel 6".into(), is_phone: true },
+            DeviceProfileInfo { id: "pixel_9".into(), name: "Pixel 9".into(), is_phone: true },
+            DeviceProfileInfo { id: "tablet".into(), name: "Pixel Tablet".into(), is_phone: false },
+        ];
+        let pick = pick_device_profile(&profiles, true)
+            .expect("SHALL find a phone profile");
+        assert_eq!(pick.id, "pixel_9",
+            "rfind SHALL pick the latest (last) matching phone");
+    }
+
+    // 29. pick_device_profile for tablet matches name containing "Tablet"
+    #[test]
+    fn pick_device_profile_tablet_matches_by_name() {
+        let profiles = vec![
+            DeviceProfileInfo { id: "pixel_9".into(), name: "Pixel 9".into(), is_phone: true },
+            DeviceProfileInfo { id: "tablet".into(), name: "Pixel Tablet".into(), is_phone: false },
+        ];
+        let pick = pick_device_profile(&profiles, false)
+            .expect("SHALL find a tablet profile");
+        assert_eq!(pick.id, "tablet");
+    }
+
+    // 30. pick_device_profile returns None when nothing matches
+    #[test]
+    fn pick_device_profile_no_match_is_none() {
+        let profiles = vec![
+            DeviceProfileInfo { id: "tablet".into(), name: "Pixel Tablet".into(), is_phone: false },
+        ];
+        assert!(pick_device_profile(&profiles, true).is_none(),
+            "no phone present SHALL yield None");
+    }
+
+    // 31. pick_device_profile on empty slice is None
+    #[test]
+    fn pick_device_profile_empty_is_none() {
+        assert!(pick_device_profile(&[], true).is_none(),
+            "empty profile list SHALL yield None");
+    }
 }

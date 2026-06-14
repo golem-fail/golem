@@ -302,4 +302,196 @@ mod tests {
             load_fixture_into_store("broken", "data", dir, dir, &mut store, &mut rng);
         assert!(result.is_err(), "SHALL error on invalid TOML");
     }
+
+    // ---------------------------------------------------------------
+    // 9. Same seed produces same generated value (deterministic threading
+    //    of the caller-supplied rng through evaluate_generators)
+    // ---------------------------------------------------------------
+    #[test]
+    fn same_seed_produces_same_generated_value() {
+        let tmp = TempDir::new().expect("temp dir");
+        let dir = tmp.path();
+        write_fixture(dir, "gen", "[vars]\nemail = \"fake:email\"\n");
+
+        let load_email = || {
+            let mut store = VariableStore::new();
+            let mut rng = seeded_rng();
+            load_fixture_into_store("gen", "user", dir, dir, &mut store, &mut rng)
+                .expect("should load fixture");
+            let user = store.resolve("user").expect("user should exist");
+            user.get_path("email")
+                .and_then(|v| v.as_str())
+                .map(str::to_owned)
+                .expect("user.email should resolve to a string")
+        };
+
+        let first = load_email();
+        let second = load_email();
+        assert_eq!(first, second, "same seed SHALL produce same generated value");
+    }
+
+    // ---------------------------------------------------------------
+    // 10. Loading a second fixture into the SAME namespace replaces the
+    //     prior object at that namespace (no merge, last write wins)
+    // ---------------------------------------------------------------
+    #[test]
+    fn same_namespace_second_load_replaces_first() {
+        let tmp = TempDir::new().expect("temp dir");
+        let dir = tmp.path();
+        write_fixture(dir, "first", "[vars]\nname = \"Alice\"\nonly_first = \"x\"\n");
+        write_fixture(dir, "second", "[vars]\nname = \"Bob\"\n");
+
+        let mut store = VariableStore::new();
+        let mut rng = seeded_rng();
+
+        load_fixture_into_store("first", "user", dir, dir, &mut store, &mut rng)
+            .expect("first load");
+        load_fixture_into_store("second", "user", dir, dir, &mut store, &mut rng)
+            .expect("second load");
+
+        let user = store.resolve("user").expect("user should exist");
+        let obj = user.as_object().expect("user should be an object");
+        assert_eq!(
+            obj.get("name"),
+            Some(&VarValue::string("Bob")),
+            "second load SHALL overwrite name"
+        );
+        assert!(
+            obj.get("only_first").is_none(),
+            "keys from the first fixture SHALL NOT survive a same-namespace replace"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 11. Fixture resolved by walking up from flow_dir to project_root
+    //     when it lives in an ancestor's __fixtures__ directory
+    // ---------------------------------------------------------------
+    #[test]
+    fn fixture_resolved_from_ancestor_directory() {
+        let tmp = TempDir::new().expect("temp dir");
+        let project_root = tmp.path();
+        let flow_dir = project_root.join("flows").join("auth");
+        fs::create_dir_all(&flow_dir).expect("create flow dir");
+
+        // Fixture lives at project_root, flow runs two levels deeper.
+        write_fixture(project_root, "shared", "[vars]\nkey = \"value\"\n");
+
+        let mut store = VariableStore::new();
+        let mut rng = seeded_rng();
+
+        load_fixture_into_store("shared", "cfg", &flow_dir, project_root, &mut store, &mut rng)
+            .expect("should resolve fixture from ancestor");
+
+        let cfg = store.resolve("cfg").expect("cfg should exist");
+        assert_eq!(cfg.get_path("key"), Some(&VarValue::string("value")));
+    }
+
+    // ---------------------------------------------------------------
+    // 12. Subfolder fixture name loads into store under namespace
+    // ---------------------------------------------------------------
+    #[test]
+    fn subfolder_fixture_name_loads() {
+        let tmp = TempDir::new().expect("temp dir");
+        let dir = tmp.path();
+        write_fixture(dir, "payments/card", "[vars]\npan = \"4242424242424242\"\n");
+
+        let mut store = VariableStore::new();
+        let mut rng = seeded_rng();
+
+        load_fixture_into_store("payments/card", "card", dir, dir, &mut store, &mut rng)
+            .expect("should load subfolder fixture");
+
+        let card = store.resolve("card").expect("card should exist");
+        assert_eq!(
+            card.get_path("pan"),
+            Some(&VarValue::string("4242424242424242"))
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 13. Non-string var value propagates parse error (vars is
+    //     HashMap<String, String>; integer fails deserialization)
+    // ---------------------------------------------------------------
+    #[test]
+    fn non_string_var_value_propagates_error() {
+        let tmp = TempDir::new().expect("temp dir");
+        let dir = tmp.path();
+        write_fixture(dir, "typed", "[vars]\ncount = 5\n");
+
+        let mut store = VariableStore::new();
+        let mut rng = seeded_rng();
+
+        let result = load_fixture_into_store("typed", "data", dir, dir, &mut store, &mut rng);
+        assert!(
+            result.is_err(),
+            "non-string var value SHALL propagate as a load error"
+        );
+        assert!(
+            store.resolve("data").is_err(),
+            "no namespace SHALL be stored when parsing fails"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 14. Unknown generator name propagates as a load error
+    // ---------------------------------------------------------------
+    #[test]
+    fn invalid_generator_propagates_error() {
+        let tmp = TempDir::new().expect("temp dir");
+        let dir = tmp.path();
+        // `fake:` parses fine (GeneratorDef with an empty name); the error originates in
+        // generate_simple, whose `_` arm rejects an empty/unknown name as "unknown generator".
+        write_fixture(dir, "badgen", "[vars]\nx = \"fake:\"\n");
+
+        let mut store = VariableStore::new();
+        let mut rng = seeded_rng();
+
+        let result = load_fixture_into_store("badgen", "data", dir, dir, &mut store, &mut rng);
+        assert!(
+            result.is_err(),
+            "an unknown generator name SHALL propagate as a load error"
+        );
+        // Lock in WHICH branch fired: the unknown-generator arm, not a parse failure.
+        let err_msg = format!("{}", result.expect_err("should be an error"));
+        assert!(
+            err_msg.contains("unknown generator"),
+            "error SHALL come from the unknown-generator branch, got: {err_msg}"
+        );
+        // Nothing SHALL be stored when generation fails.
+        assert!(
+            store.resolve("data").is_err(),
+            "no namespace SHALL be stored when generation fails"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 15. Distinct generated keys advance the rng (independent values
+    //     within a single load call)
+    // ---------------------------------------------------------------
+    #[test]
+    fn distinct_generated_keys_advance_rng() {
+        let tmp = TempDir::new().expect("temp dir");
+        let dir = tmp.path();
+        write_fixture(dir, "multi", "[vars]\na = \"fake:email\"\nb = \"fake:email\"\n");
+
+        let mut store = VariableStore::new();
+        let mut rng = seeded_rng();
+
+        load_fixture_into_store("multi", "user", dir, dir, &mut store, &mut rng)
+            .expect("should load fixture");
+
+        let user = store.resolve("user").expect("user should exist");
+        let a = user
+            .get_path("a")
+            .and_then(|v| v.as_str())
+            .expect("a should be a string");
+        let b = user
+            .get_path("b")
+            .and_then(|v| v.as_str())
+            .expect("b should be a string");
+        assert_ne!(
+            a, b,
+            "two generators in one fixture SHALL draw from the advancing rng, not repeat"
+        );
+    }
 }

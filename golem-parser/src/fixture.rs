@@ -111,7 +111,7 @@ mod tests {
 
         let result = resolve_fixture_path("user", flow_dir, project_root);
         assert!(result.is_ok(), "Should find fixture in same directory");
-        let path = result.unwrap();
+        let path = result.expect("fixture path SHALL resolve");
         assert!(path.ends_with("__fixtures__/user.toml"));
     }
 
@@ -182,7 +182,7 @@ mod tests {
         let result = resolve_fixture_path("user", &flow_dir, project_root);
         assert!(result.is_ok(), "Should find closest fixture");
         // The closest one is in flows/__fixtures__/user.toml
-        let path = result.unwrap();
+        let path = result.expect("fixture path SHALL resolve");
         assert!(
             path.to_string_lossy().contains("flows/__fixtures__/user.toml")
                 || path.to_string_lossy().contains("flows\\__fixtures__\\user.toml"),
@@ -208,7 +208,7 @@ mod tests {
 
         let result = resolve_fixture_path("payments/stripe_card", flow_dir, project_root);
         assert!(result.is_ok(), "Should find fixture in subfolder");
-        let path = result.unwrap();
+        let path = result.expect("fixture path SHALL resolve");
         assert!(path.ends_with("__fixtures__/payments/stripe_card.toml"));
     }
 
@@ -360,5 +360,125 @@ key = "value"
 "#;
         let fixture = parse_fixture(toml_str).expect("Empty vars section should be valid");
         assert!(fixture.vars.is_empty());
+    }
+
+    // ---------------------------------------------------------------
+    // 14. No [vars] section at all — defaults to empty (serde default)
+    // ---------------------------------------------------------------
+    #[test]
+    fn parse_fixture_no_vars_section_defaults_empty() {
+        // A file with no [vars] table SHALL parse to an empty vars map via #[serde(default)].
+        let fixture = parse_fixture("").expect("empty file SHALL parse to empty fixture");
+        assert!(
+            fixture.vars.is_empty(),
+            "missing [vars] SHALL default to empty map"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 16. Malformed TOML — propagates parse error
+    // ---------------------------------------------------------------
+    #[test]
+    fn parse_fixture_malformed_toml_errors() {
+        // Unterminated string is invalid TOML and SHALL bubble up as an error.
+        let result = parse_fixture("[vars]\nemail = \"unterminated\n");
+        assert!(result.is_err(), "malformed TOML SHALL produce an error");
+    }
+
+    // ---------------------------------------------------------------
+    // 17. Wrong type for a var value — non-string rejected
+    // ---------------------------------------------------------------
+    #[test]
+    fn parse_fixture_non_string_var_value_errors() {
+        // vars is HashMap<String, String>; an integer value SHALL fail deserialization.
+        let result = parse_fixture("[vars]\ncount = 5\n");
+        assert!(
+            result.is_err(),
+            "non-string var value SHALL fail to deserialize"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 18. Wrong type for [vars] itself — non-table rejected
+    // ---------------------------------------------------------------
+    #[test]
+    fn parse_fixture_vars_not_a_table_errors() {
+        // vars declared as a scalar instead of a table SHALL fail.
+        let result = parse_fixture("vars = \"oops\"\n");
+        assert!(
+            result.is_err(),
+            "scalar vars value SHALL fail to deserialize into a map"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 19. Not-found error message names both flow_dir and project_root
+    // ---------------------------------------------------------------
+    #[test]
+    fn not_found_error_mentions_search_bounds() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        let project_root = tmp.path();
+        let flow_dir = project_root.join("flows").join("auth");
+        fs::create_dir_all(&flow_dir).expect("Failed to create flow dir");
+
+        let result = resolve_fixture_path("missing", &flow_dir, project_root);
+        let err_msg = format!("{}", result.expect_err("missing fixture SHALL error"));
+        assert!(
+            err_msg.contains("missing"),
+            "error SHALL name the fixture, got: {err_msg}"
+        );
+        assert!(
+            err_msg.contains("auth"),
+            "error SHALL name the starting flow_dir, got: {err_msg}"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 20. Path traversal rejected even with a bare ".." segment
+    // ---------------------------------------------------------------
+    #[test]
+    fn path_traversal_rejected_bare_dotdot() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        let dir = tmp.path();
+
+        let result = resolve_fixture_path("..", dir, dir);
+        let err_msg = format!("{}", result.expect_err("bare .. SHALL be rejected"));
+        assert!(
+            err_msg.contains("path traversal"),
+            "bare .. SHALL be rejected as traversal, got: {err_msg}"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 21. flow_dir below project_root that does not exist still errors
+    //     cleanly (canonicalize falls back to the literal path)
+    // ---------------------------------------------------------------
+    #[test]
+    fn nonexistent_dirs_resolve_to_not_found() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        let project_root = tmp.path().join("nope_root");
+        let flow_dir = project_root.join("nope_flow");
+        // Neither directory exists; canonicalize fails and falls back to literal paths.
+        let result = resolve_fixture_path("user", &flow_dir, &project_root);
+        assert!(
+            result.is_err(),
+            "absent dirs with no fixture SHALL yield not-found, not a panic"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 22. parse_fixture performs no value interpretation — values with
+    //     special chars (=, comma, parens) are stored verbatim. Guards
+    //     against a future contributor adding value-transformation logic.
+    // ---------------------------------------------------------------
+    #[test]
+    fn parse_fixture_stores_values_without_interpretation() {
+        let toml_str = "[vars]\nraw = \"a=b,c=d (x)\"\n";
+        let fixture = parse_fixture(toml_str).expect("SHALL parse value with special chars");
+        assert_eq!(
+            fixture.vars.get("raw").map(|s| s.as_str()),
+            Some("a=b,c=d (x)"),
+            "value SHALL be stored verbatim without interpretation"
+        );
     }
 }

@@ -859,6 +859,239 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn spawn_failure_yields_script_not_found_code() {
+        // 1. A nonexistent script SHALL fail to spawn and surface
+        //    AppInstallScriptNotFound (not the generic install-failed code).
+        let tmp = tempdir().expect("tempdir");
+        let missing = tmp.path().join("does-not-exist.sh");
+        let result = run_install_script(
+            &missing, tmp.path(),
+            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, false, None,
+        ).await;
+        let err = result.expect_err("spawning a missing script SHALL fail");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::AppInstallScriptNotFound),
+            "spawn failure SHALL be coded AppInstallScriptNotFound: {err:#}"
+        );
+        assert!(
+            format!("{err:#}").contains("failed to spawn install script"),
+            "error SHALL mention the spawn failure: {err:#}"
+        );
+    }
+
+    #[tokio::test]
+    async fn nonzero_exit_is_coded_install_failed() {
+        // 2. A nonzero script exit SHALL be coded AppInstallFailed.
+        let tmp = tempdir().expect("tempdir");
+        let script = write_script(tmp.path(), "#!/bin/sh\nexit 3\n");
+        let result = run_install_script(
+            &script, tmp.path(),
+            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, false, None,
+        ).await;
+        let err = result.expect_err("nonzero exit SHALL fail");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::AppInstallFailed),
+            "nonzero exit SHALL be coded AppInstallFailed: {err:#}"
+        );
+    }
+
+    #[tokio::test]
+    async fn timeout_is_coded_install_timeout() {
+        // 3. A timed-out script SHALL be coded AppInstallTimeout (distinct
+        //    from the plain exit-failure code).
+        let tmp = tempdir().expect("tempdir");
+        let script = write_script(tmp.path(), "#!/bin/sh\nsleep 10\n");
+        let result = run_install_script(
+            &script, tmp.path(),
+            "ios", "udid-1", "com.x", "app", 200, "test target", 0, false, None,
+        ).await;
+        let err = result.expect_err("timeout SHALL fail");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::AppInstallTimeout),
+            "timeout SHALL be coded AppInstallTimeout: {err:#}"
+        );
+    }
+
+    #[tokio::test]
+    async fn success_emits_started_and_finished_events() {
+        // 4. On exit 0, an emitter SHALL receive InstallStarted (with the
+        //    target/os_major fields plumbed) followed by a successful
+        //    InstallFinished.
+        use golem_events::channel::event_channel;
+        use golem_events::DeviceId;
+        let (sender, subs) = event_channel();
+        let mut rx = subs.subscribe();
+        let emitter = DeviceEmitter::new(sender, DeviceId("ios/sim".into()));
+
+        let tmp = tempdir().expect("tempdir");
+        let script = write_script(tmp.path(), "#!/bin/sh\nexit 0\n");
+        let result = run_install_script(
+            &script, tmp.path(),
+            "ios", "udid-1", "com.x", "app", 5_000, "iPhone 16e (ios/v18/phone)", 18, false,
+            Some(&emitter),
+        ).await;
+        assert!(result.is_ok(), "exit 0 SHALL be ok: {result:?}");
+
+        let first = rx.recv().await.expect("SHALL receive InstallStarted");
+        match first.kind {
+            EventKind::InstallStarted { app_name, bundle_id, target, os_major, .. } => {
+                assert_eq!(app_name, "app", "InstallStarted SHALL carry app_name");
+                assert_eq!(bundle_id, "com.x", "InstallStarted SHALL carry bundle_id");
+                assert_eq!(target, "iPhone 16e (ios/v18/phone)",
+                    "InstallStarted SHALL carry the target string verbatim");
+                assert_eq!(os_major, 18, "InstallStarted SHALL carry os_major");
+            }
+            other => panic!("first event SHALL be InstallStarted, got {other:?}"),
+        }
+
+        // The next event(s) may include InstallOutput; find InstallFinished.
+        loop {
+            let ev = rx.recv().await.expect("SHALL receive InstallFinished");
+            if let EventKind::InstallFinished { success, exit_code, error, code, os_major, .. } = ev.kind {
+                assert!(success, "exit 0 SHALL emit success=true");
+                assert_eq!(exit_code, Some(0), "success SHALL report exit_code 0");
+                assert!(error.is_none(), "success SHALL carry no error");
+                assert!(code.is_none(), "success SHALL carry no failure code");
+                assert_eq!(os_major, 18, "InstallFinished SHALL echo os_major");
+                break;
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn stderr_lines_are_streamed_as_install_output_events() {
+        // 5. Each stderr line SHALL be emitted as an InstallOutput event,
+        //    tagged with the app name, in order.
+        use golem_events::channel::event_channel;
+        use golem_events::DeviceId;
+        let (sender, subs) = event_channel();
+        let mut rx = subs.subscribe();
+        let emitter = DeviceEmitter::new(sender, DeviceId("ios/sim".into()));
+
+        let tmp = tempdir().expect("tempdir");
+        let script = write_script(tmp.path(),
+            "#!/bin/sh\necho line-one >&2\necho line-two >&2\nexit 0\n");
+        let result = run_install_script(
+            &script, tmp.path(),
+            "ios", "udid-1", "com.x", "myapp", 5_000, "test target", 0, false,
+            Some(&emitter),
+        ).await;
+        assert!(result.is_ok(), "exit 0 SHALL be ok: {result:?}");
+
+        let mut output_lines = Vec::new();
+        // Drain all events; collect the InstallOutput lines.
+        while let Ok(ev) = rx.try_recv() {
+            if let EventKind::InstallOutput { app_name, line } = ev.kind {
+                assert_eq!(app_name, "myapp", "InstallOutput SHALL carry the app name");
+                output_lines.push(line);
+            }
+        }
+        assert_eq!(output_lines, vec!["line-one".to_string(), "line-two".to_string()],
+            "every stderr line SHALL be streamed as InstallOutput in order");
+    }
+
+    #[tokio::test]
+    async fn failure_emits_finished_with_code_and_error() {
+        // 6. On nonzero exit, the emitted InstallFinished SHALL carry
+        //    success=false, the exit code, an error message, and the
+        //    AppInstallFailed failure code.
+        use golem_events::channel::event_channel;
+        use golem_events::DeviceId;
+        let (sender, subs) = event_channel();
+        let mut rx = subs.subscribe();
+        let emitter = DeviceEmitter::new(sender, DeviceId("ios/sim".into()));
+
+        let tmp = tempdir().expect("tempdir");
+        let script = write_script(tmp.path(),
+            "#!/bin/sh\necho boom >&2\nexit 7\n");
+        let result = run_install_script(
+            &script, tmp.path(),
+            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, false,
+            Some(&emitter),
+        ).await;
+        assert!(result.is_err(), "exit 7 SHALL fail");
+
+        loop {
+            let ev = rx.recv().await.expect("SHALL receive InstallFinished");
+            if let EventKind::InstallFinished { success, exit_code, error, code, .. } = ev.kind {
+                assert!(!success, "nonzero exit SHALL emit success=false");
+                assert_eq!(exit_code, Some(7), "InstallFinished SHALL report the exit code");
+                assert!(error.is_some(), "failure SHALL carry an error message");
+                assert_eq!(code, Some(golem_events::FailureCode::AppInstallFailed),
+                    "failure SHALL carry AppInstallFailed code");
+                break;
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn forget_persistent_disabled_is_noop_ok() {
+        // 7. With persistence never loaded, forget_persistent SHALL be a
+        //    no-op that returns Ok (no path configured).
+        let cache = InstallCache::new();
+        cache
+            .forget_persistent("u-1", "com.x")
+            .await
+            .expect("forget without a configured path SHALL be a no-op Ok");
+    }
+
+    #[tokio::test]
+    async fn forget_persistent_missing_entry_is_ok() {
+        // 8. Forgetting an entry that was never set SHALL be Ok and not
+        //    create/alter the cache file (nothing removed -> no flush).
+        let tmp = tempdir().expect("tempdir");
+        let path = tmp.path().join("install-cache.json");
+        let cache = InstallCache::new();
+        cache.load_persistent(path.clone()).await.expect("load");
+        cache
+            .forget_persistent("u-1", "com.absent")
+            .await
+            .expect("forgetting an absent entry SHALL be Ok");
+        assert!(!path.exists(),
+            "forgetting an absent entry SHALL NOT write the cache file");
+    }
+
+    #[tokio::test]
+    async fn set_persistent_creates_missing_parent_dirs() {
+        // 9. flush_persistent SHALL create missing parent directories so a
+        //    set into a not-yet-existing cache dir succeeds.
+        let tmp = tempdir().expect("tempdir");
+        let path = tmp.path().join("nested").join("dir").join("install-cache.json");
+        let cache = InstallCache::new();
+        cache.load_persistent(path.clone()).await.expect("load");
+        let entry = PersistedInstall {
+            fingerprint: Fingerprint::None,
+            device_install_time: None,
+            installed_version: None,
+            installed_at: chrono::Utc::now(),
+        };
+        cache
+            .set_persistent("u-1", "com.x", entry)
+            .await
+            .expect("set into a missing parent dir SHALL create it and succeed");
+        assert!(path.exists(),
+            "set_persistent SHALL create parent dirs and write the file");
+    }
+
+    #[tokio::test]
+    async fn acquire_build_fast_path_after_resolution() {
+        // 10. Once an outcome is recorded, a fresh acquire SHALL take the
+        //     fast path and return Installed without becoming a Builder.
+        let cache = InstallCache::new();
+        match cache.acquire_build("ios", "com.fast").await {
+            BuildRole::Build(slot) => slot.record_success().await,
+            _ => panic!("first caller SHALL be Builder"),
+        }
+        match cache.acquire_build("ios", "com.fast").await {
+            BuildRole::Installed(BuildOutcome::Succeeded) => {}
+            _ => panic!("resolved key SHALL return Installed(Succeeded) on fast path"),
+        }
+    }
+
+    #[tokio::test]
     async fn acquire_build_keys_are_per_platform_and_bundle() {
         let cache = InstallCache::new();
         // iOS / com.a builds successfully.

@@ -830,4 +830,213 @@ mod tests {
         step.input = Some("ab".repeat(40));
         assert_eq!(effective_timeout(&step, 5_000), 42_000);
     }
+
+    // -----------------------------------------------------------------
+    // 19. Type falls back to on_text length when input is None
+    // -----------------------------------------------------------------
+    #[test]
+    fn type_uses_on_text_when_input_absent() {
+        // No input, but a long on_text: per-char cost still applies.
+        let mut step = Step { action: "type".into(), ..Default::default() };
+        step.on_text = Some("x".repeat(80));
+        // 80 * 500 = 40000 intrinsic + 2000 settle = 42000 > 2x base.
+        assert_eq!(effective_timeout(&step, 5_000), 42_000);
+
+        // input wins over on_text when both present.
+        step.input = Some("hi".to_string());
+        // 2 * 500 = 1000 intrinsic + 2000 = 3000, under 2x base → 10000.
+        assert_eq!(effective_timeout(&step, 5_000), 10_000);
+    }
+
+    // -----------------------------------------------------------------
+    // 20. http_* and open_link actions get 6x
+    // -----------------------------------------------------------------
+    #[test]
+    fn http_and_open_link_get_6x() {
+        for action in ["http_get", "http_post", "http_put", "http_patch", "http_delete", "open_link"] {
+            let step = Step { action: action.into(), ..Default::default() };
+            assert_eq!(
+                effective_timeout(&step, 5_000),
+                30_000,
+                "{action} SHALL get 6x = 30000ms",
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // 21. 1x instant actions use the bare base timeout
+    // -----------------------------------------------------------------
+    #[test]
+    fn instant_actions_get_1x() {
+        for action in [
+            "screenshot", "add_media", "fail", "load_fixture", "push_notification",
+            "set_variable", "log", "clear_data", "press", "dark_mode", "set_location",
+            "grant_permission", "revoke_permission", "hide_keyboard",
+        ] {
+            let step = Step { action: action.into(), ..Default::default() };
+            assert_eq!(
+                effective_timeout(&step, 5_000),
+                5_000,
+                "{action} SHALL get 1x = 5000ms",
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // 22. stop also gets 5x like launch
+    // -----------------------------------------------------------------
+    #[test]
+    fn stop_gets_5x() {
+        let step = Step { action: "stop".into(), ..Default::default() };
+        assert_eq!(effective_timeout(&step, 5_000), 25_000);
+    }
+
+    // -----------------------------------------------------------------
+    // 23. `within` bumps a non-scroll action only via auto_scroll path
+    //     — a plain tap with `within` but no auto_scroll keeps 2x.
+    // -----------------------------------------------------------------
+    #[test]
+    fn within_without_auto_scroll_on_tap_keeps_2x() {
+        let within = golem_parser::SelectorGroup { text: Some("Box".into()), ..Default::default() };
+        let step = Step { action: "tap".into(), within: Some(within), ..Default::default() };
+        // tap maps to 2x = 10000; within_bump is only added inside the
+        // scroll / auto_scroll arms, not the tap arm.
+        assert_eq!(effective_timeout(&step, 5_000), 10_000);
+    }
+
+    // -----------------------------------------------------------------
+    // 24. backspace intrinsic scales with count param (500ms each)
+    // -----------------------------------------------------------------
+    #[test]
+    fn backspace_intrinsic_scales_with_count() {
+        // Default count=1 → intrinsic 500 + 2000 = 2500, under 2x base.
+        let mut step = Step { action: "backspace".into(), ..Default::default() };
+        assert_eq!(effective_timeout(&step, 5_000), 10_000);
+
+        // count=20 → 20*500 = 10000 intrinsic + 2000 = 12000 > 2x base.
+        step.params.insert("count".to_string(), toml::Value::Integer(20));
+        assert_eq!(effective_timeout(&step, 5_000), 12_000);
+
+        // Negative count clamps to 0 → intrinsic 0, no floor effect.
+        step.params.insert("count".to_string(), toml::Value::Integer(-5));
+        assert_eq!(effective_timeout(&step, 5_000), 10_000);
+    }
+
+    // -----------------------------------------------------------------
+    // 25. long_press negative duration clamps to 0 intrinsic
+    // -----------------------------------------------------------------
+    #[test]
+    fn long_press_negative_duration_clamps() {
+        let mut step = Step { action: "long_press".into(), ..Default::default() };
+        step.params.insert("duration".to_string(), toml::Value::Integer(-100));
+        // clamped to 0 intrinsic → no floor, 2x base = 10000.
+        assert_eq!(effective_timeout(&step, 5_000), 10_000);
+    }
+
+    // -----------------------------------------------------------------
+    // 26. swipe: 2-point (start+end) is instant; 3+ points use duration
+    // -----------------------------------------------------------------
+    #[test]
+    fn swipe_intrinsic_depends_on_point_count() {
+        let sel = golem_parser::SelectorGroup { text: Some("a".into()), ..Default::default() };
+
+        // 2-point swipe (start + end) → intrinsic 0 → 2x base = 10000.
+        let two = Step {
+            action: "swipe".into(),
+            start: Some(sel.clone()),
+            end: Some(sel.clone()),
+            ..Default::default()
+        };
+        assert_eq!(effective_timeout(&two, 5_000), 10_000);
+
+        // 3-point swipe (start + end + 1 extra) with no duration → default
+        // 300ms intrinsic + 2000 = 2300, under 2x base = 10000.
+        let three = Step {
+            action: "swipe".into(),
+            start: Some(sel.clone()),
+            end: Some(sel.clone()),
+            points: vec![sel.clone()],
+            ..Default::default()
+        };
+        assert_eq!(effective_timeout(&three, 5_000), 10_000);
+
+        // 3-point swipe with a long duration that exceeds the 2x floor:
+        // duration 20000 + 2000 settle = 22000 > 10000.
+        let slow = Step {
+            action: "swipe".into(),
+            start: Some(sel.clone()),
+            end: Some(sel.clone()),
+            points: vec![sel.clone()],
+            duration: Some(20_000),
+            ..Default::default()
+        };
+        assert_eq!(effective_timeout(&slow, 5_000), 22_000);
+    }
+
+    // -----------------------------------------------------------------
+    // 27. gesture intrinsic = duration_per_segment * (max_points - 1)
+    // -----------------------------------------------------------------
+    #[test]
+    fn gesture_intrinsic_uses_max_finger_points() {
+        let sel = golem_parser::SelectorGroup { text: Some("p".into()), ..Default::default() };
+
+        // No fingers → max_points defaults to 2 → segments = 1.
+        // default duration 300 * 1 = 300 intrinsic + 2000 = 2300, under 2x.
+        let empty = Step { action: "gesture".into(), ..Default::default() };
+        assert_eq!(effective_timeout(&empty, 5_000), 10_000);
+
+        // One finger with many points + a big per-segment duration so the
+        // intrinsic clears the 2x floor. 5 points → 4 segments;
+        // duration 5000 * 4 = 20000 intrinsic + 2000 = 22000 > 10000.
+        let big = Step {
+            action: "gesture".into(),
+            duration: Some(5_000),
+            fingers: vec![golem_parser::Finger {
+                points: vec![sel.clone(), sel.clone(), sel.clone(), sel.clone(), sel.clone()],
+            }],
+            ..Default::default()
+        };
+        assert_eq!(effective_timeout(&big, 5_000), 22_000);
+    }
+
+    // -----------------------------------------------------------------
+    // 28. rotate with no rotation set → intrinsic 0, 2x floor wins
+    // -----------------------------------------------------------------
+    #[test]
+    fn rotate_without_rotation_has_zero_intrinsic() {
+        let step = Step { action: "rotate".into(), ..Default::default() };
+        // rotation is None → intrinsic 0 → 2x base = 10000.
+        assert_eq!(effective_timeout(&step, 5_000), 10_000);
+    }
+
+    // -----------------------------------------------------------------
+    // 29. needs_post_settle: mutating actions yes, read-only no
+    // -----------------------------------------------------------------
+    #[test]
+    fn needs_post_settle_mutating_vs_readonly() {
+        for action in [
+            "tap", "double_tap", "type", "backspace", "long_press", "swipe",
+            "scroll", "hide_keyboard", "pinch", "rotate", "gesture", "press",
+            "launch", "stop", "accept_alert", "dismiss_alert", "dark_mode",
+            "set_location", "open_link",
+        ] {
+            let step = Step { action: action.into(), ..Default::default() };
+            assert!(
+                needs_post_settle(&step),
+                "{action} SHALL require post-action settle",
+            );
+        }
+
+        for action in [
+            "assert_visible", "assert_not_visible", "assert_checked", "read",
+            "screenshot", "log", "set_variable", "http_get", "await_email",
+            "doubleTap", // note: settle uses snake_case "double_tap" only
+        ] {
+            let step = Step { action: action.into(), ..Default::default() };
+            assert!(
+                !needs_post_settle(&step),
+                "{action} SHALL NOT require post-action settle",
+            );
+        }
+    }
 }

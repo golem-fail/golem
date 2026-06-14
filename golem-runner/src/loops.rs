@@ -373,4 +373,150 @@ mod tests {
             "second entry should fail with max_iterations=1"
         );
     }
+
+    // ---------------------------------------------------------------
+    // 16. Max iterations of 0 rejects even the first entry
+    // ---------------------------------------------------------------
+    #[test]
+    fn max_iterations_zero_rejects_first_entry() {
+        let mut tracker = LoopTracker::new(0);
+
+        let result = tracker.enter_block("a");
+        assert!(
+            result.is_err(),
+            "with max_iterations=0 the very first entry SHALL fail"
+        );
+
+        let err_msg = result.expect_err("should be error").to_string();
+        assert!(
+            err_msg.contains("Maximum iterations (0) exceeded"),
+            "error SHALL report the zero limit: {err_msg}"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 17. A rejected entry bails before creating a per-block counter
+    // ---------------------------------------------------------------
+    #[test]
+    fn rejected_entry_does_not_create_counter() {
+        // 1. A reject-everything tracker, plus an unrelated block we DO let
+        //    through once so its counter genuinely sits at value 0 after entry.
+        //    This is the case get_loop_count alone cannot distinguish from
+        //    "no counter at all", so we prove the distinction another way.
+        let mut tracker = LoopTracker::new(1);
+
+        // 2. First entry to "created" succeeds: its counter is inserted at 0
+        //    and immediately incremented to 1 (so get_loop_count == 1).
+        let first = tracker
+            .enter_block("created")
+            .expect("first entry SHALL succeed under max_iterations=1");
+        assert_eq!(first, 0, "first successful entry SHALL return _loop = 0");
+
+        // 3. The next entry to a fresh block "rejected" is bounced by the
+        //    global limit. enter_block bumps total_entries (line 32) then
+        //    bails (lines 33-38) BEFORE reaching the or_insert at line 40.
+        tracker
+            .enter_block("rejected")
+            .expect_err("entry SHALL be rejected once max_iterations is hit");
+
+        // 4. Proof the bail ran AFTER the total_entries bump but BEFORE the
+        //    counter insert: total_entries advanced to 2, yet "rejected" still
+        //    reports 0 while the earlier "created" block kept its counter at 1.
+        assert_eq!(
+            tracker.total_entries(),
+            2,
+            "the rejected attempt SHALL still bump total_entries to 2"
+        );
+        assert_eq!(
+            tracker.get_loop_count("rejected"),
+            0,
+            "the rejected block SHALL have no counter recorded"
+        );
+        assert_eq!(
+            tracker.get_loop_count("created"),
+            1,
+            "the earlier accepted block SHALL retain its incremented counter"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 18. total_entries keeps incrementing past the limit on each rejected call
+    // ---------------------------------------------------------------
+    #[test]
+    fn total_entries_increments_on_each_rejected_call() {
+        let mut tracker = LoopTracker::new(1);
+
+        tracker.enter_block("a").expect("first entry should succeed");
+        assert_eq!(tracker.total_entries(), 1);
+
+        // Each subsequent rejected call still bumps total_entries before bailing.
+        tracker
+            .enter_block("a")
+            .expect_err("second entry SHALL be rejected");
+        assert_eq!(
+            tracker.total_entries(),
+            2,
+            "total_entries SHALL count the rejected attempt"
+        );
+
+        tracker
+            .enter_block("a")
+            .expect_err("third entry SHALL still be rejected");
+        assert_eq!(
+            tracker.total_entries(),
+            3,
+            "total_entries SHALL keep counting rejected attempts"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 19. Error names the block that triggered the overflow, not earlier ones
+    // ---------------------------------------------------------------
+    #[test]
+    fn error_names_triggering_block() {
+        let mut tracker = LoopTracker::new(2);
+
+        tracker.enter_block("alpha").expect("entry 1 should succeed");
+        tracker.enter_block("beta").expect("entry 2 should succeed");
+
+        let err_msg = tracker
+            .enter_block("gamma")
+            .expect_err("third entry SHALL exceed max_iterations=2")
+            .to_string();
+        assert!(
+            err_msg.contains("block 'gamma'"),
+            "error SHALL name the block that triggered the overflow: {err_msg}"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 20. reset_block on a never-entered block is a harmless no-op
+    // ---------------------------------------------------------------
+    #[test]
+    fn reset_never_entered_block_is_noop() {
+        let mut tracker = LoopTracker::new(DEFAULT_MAX_ITERATIONS);
+
+        tracker
+            .enter_block("real")
+            .expect("should not exceed max iterations");
+
+        // Resetting a block that was never entered must not panic or disturb others.
+        tracker.reset_block("ghost");
+
+        assert_eq!(
+            tracker.get_loop_count("ghost"),
+            0,
+            "never-entered block SHALL still report 0 after reset"
+        );
+        assert_eq!(
+            tracker.get_loop_count("real"),
+            1,
+            "resetting an unrelated block SHALL leave other counters intact"
+        );
+        assert_eq!(
+            tracker.total_entries(),
+            1,
+            "resetting a never-entered block SHALL not touch total_entries"
+        );
+    }
 }

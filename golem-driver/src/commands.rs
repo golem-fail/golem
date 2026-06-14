@@ -390,4 +390,30 @@ mod tests {
         assert_eq!(cmd[6], "com.test.pkg");
         assert_eq!(cmd[7], "android.permission.ACCESS_FINE_LOCATION");
     }
+
+    // -----------------------------------------------------------------------
+    // 18. iOS permission action is positional, not validated — an arbitrary
+    //     action string is forwarded verbatim into the privacy slot
+    // -----------------------------------------------------------------------
+    #[test]
+    fn ios_permission_forwards_arbitrary_action() {
+        // 1. A non grant/revoke action ("reset") is accepted without validation.
+        let cmd = permission_command_ios("DEV", "reset", "location", "com.x");
+        // 2. The whole argv SHALL match the hand-written expected command, proving
+        //    the arbitrary action lands in the privacy slot verbatim and every
+        //    other position (prefix + device id) is left untouched.
+        assert_eq!(
+            cmd,
+            vec![
+                "xcrun",
+                "simctl",
+                "privacy",
+                "DEV",
+                "reset",
+                "location",
+                "com.x",
+            ],
+            "arbitrary action SHALL be forwarded verbatim with no validation",
+        );
+    }
 }

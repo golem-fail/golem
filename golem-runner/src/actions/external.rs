@@ -1035,4 +1035,313 @@ mod tests {
             "name SHALL be loaded from fixture"
         );
     }
+
+    // ── push_notification defaults missing title/body to empty ─────────
+
+    // 1. With no params at all, title and body default to "" and payload to None.
+    #[tokio::test]
+    async fn push_notification_defaults_missing_params() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+
+        let step = make_step("push_notification");
+        // No title/body/payload params
+
+        handle_push_notification(&step, &driver)
+            .await
+            .expect("push_notification SHALL succeed with defaults");
+
+        let calls = driver.get_calls();
+        let pn_calls: Vec<_> = calls
+            .iter()
+            .filter(|c| c.0 == "push_notification")
+            .collect();
+        assert_eq!(pn_calls.len(), 1, "SHALL call push_notification once");
+        // payload is None → mock represents it as empty/omitted; title and
+        // body SHALL be the empty-string defaults.
+        assert_eq!(pn_calls[0].1[0], "", "title SHALL default to empty string");
+        assert_eq!(pn_calls[0].1[1], "", "body SHALL default to empty string");
+    }
+
+    // ── bash failure path ──────────────────────────────────────────────
+
+    // 2. A command with a non-zero exit code SHALL fail the action and the
+    //    error SHALL surface the exit code.
+    #[tokio::test]
+    async fn bash_nonzero_exit_returns_error() {
+        let mut vars = make_vars();
+
+        let mut step = make_step("bash");
+        step.params.insert(
+            "run".to_string(),
+            toml::Value::String("exit 3".to_string()),
+        );
+
+        let result = handle_bash(&step, &mut vars).await;
+        assert!(result.is_err(), "bash SHALL fail on non-zero exit");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("exit code 3"),
+            "error SHALL surface the exit code, got: {err_msg}"
+        );
+    }
+
+    // ── run action passes args to the script ───────────────────────────
+
+    // 3. The `args` array SHALL be forwarded to the executed script.
+    #[tokio::test]
+    async fn run_action_forwards_args() {
+        let tmp = tempfile::tempdir().expect("temp dir");
+        let script_path = tmp.path().join("echo_args.sh");
+        std::fs::write(&script_path, "#!/bin/sh\necho \"$1-$2\"\n").expect("write script");
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))
+                .expect("set permissions");
+        }
+
+        let mut vars = make_vars();
+        let ctx = test_ctx(tmp.path());
+
+        let mut step = make_step("run");
+        step.params.insert(
+            "script".to_string(),
+            toml::Value::String("echo_args.sh".to_string()),
+        );
+        step.params.insert(
+            "args".to_string(),
+            toml::Value::Array(vec![
+                toml::Value::String("alpha".to_string()),
+                toml::Value::String("beta".to_string()),
+            ]),
+        );
+        step.save_to = Some("result".to_string());
+
+        handle_run(&step, &mut vars, &ctx)
+            .await
+            .expect("run SHALL succeed and forward args");
+
+        let saved = vars.get("result").expect("result variable should exist");
+        let obj = saved.as_object().expect("result SHALL be an object");
+        assert_eq!(
+            obj.get("stdout"),
+            Some(&VarValue::string("alpha-beta")),
+            "args SHALL be forwarded to the script in order"
+        );
+    }
+
+    // ── run action failure path saves output then errors ───────────────
+
+    // 4. On a non-zero script exit, save_to SHALL still be populated with the
+    //    exit_code, and the action SHALL then return an error.
+    #[tokio::test]
+    async fn run_action_failure_saves_exit_code_then_errors() {
+        let tmp = tempfile::tempdir().expect("temp dir");
+        let script_path = tmp.path().join("fail.sh");
+        std::fs::write(&script_path, "#!/bin/sh\necho partial\nexit 7\n").expect("write script");
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))
+                .expect("set permissions");
+        }
+
+        let mut vars = make_vars();
+        let ctx = test_ctx(tmp.path());
+
+        let mut step = make_step("run");
+        step.params.insert(
+            "script".to_string(),
+            toml::Value::String("fail.sh".to_string()),
+        );
+        step.save_to = Some("result".to_string());
+
+        let result = handle_run(&step, &mut vars, &ctx).await;
+        assert!(result.is_err(), "run SHALL fail on non-zero exit");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("exit code 7"),
+            "error SHALL surface exit code, got: {err_msg}"
+        );
+
+        // save_to SHALL be populated before the failure is reported.
+        let saved = vars.get("result").expect("result SHALL be saved on failure");
+        let obj = saved.as_object().expect("result SHALL be an object");
+        assert_eq!(
+            obj.get("exit_code"),
+            Some(&VarValue::string("7")),
+            "exit_code SHALL be saved as a string"
+        );
+        assert_eq!(
+            obj.get("stdout"),
+            Some(&VarValue::string("partial")),
+            "stdout SHALL be captured even on failure"
+        );
+    }
+
+    // ── http unsupported method bails ──────────────────────────────────
+
+    // 5. An unrecognised HTTP method SHALL bail before any network access.
+    #[tokio::test]
+    async fn http_unsupported_method_bails() {
+        let mut vars = make_vars();
+
+        let mut step = make_step("http_options");
+        step.params.insert(
+            "url".to_string(),
+            toml::Value::String("http://127.0.0.1:0/".to_string()),
+        );
+
+        let result = handle_http(&step, &mut vars, "OPTIONS").await;
+        assert!(result.is_err(), "unsupported method SHALL error");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("Unsupported HTTP method"),
+            "error SHALL mention unsupported method, got: {err_msg}"
+        );
+    }
+
+    // ── fail action default message ────────────────────────────────────
+
+    // 6. With no on_text, handle_fail SHALL use the default message.
+    #[tokio::test]
+    async fn fail_action_uses_default_message_when_no_text() {
+        let step = make_step("fail");
+        // No on_text set
+
+        let result = handle_fail(&step);
+        assert!(result.is_err(), "fail SHALL always error");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("Flow failed (no message provided)"),
+            "error SHALL use the default message, got: {err_msg}"
+        );
+    }
+
+    // ── accept_alert with single button taps that button ───────────────
+
+    // 7. A single-button alert SHALL have its only button tapped by accept.
+    #[tokio::test]
+    async fn accept_alert_single_button_taps_only_button() {
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let mut alert = make_element("Alert", Bounds::new(50, 200, 275, 150));
+        let ok_btn = make_element_with_text("Button", "OK", Bounds::new(60, 310, 200, 30));
+        alert.children.push(ok_btn);
+        root.children.push(alert);
+        let driver = MockPlatformDriver::new(root);
+
+        let step = make_step("accept_alert");
+        let ctx = test_ctx(Path::new("."));
+        handle_accept_alert(&step, &driver, &ctx)
+            .await
+            .expect("accept_alert SHALL succeed for single-button alert");
+
+        let calls = driver.get_calls();
+        let tap_calls: Vec<_> = calls.iter().filter(|c| c.0 == "tap").collect();
+        assert_eq!(tap_calls.len(), 1, "SHALL tap the only button");
+        // Only button center: x=60+100=160, y=310+15=325
+        assert_eq!(tap_calls[0].1, vec!["160", "325"], "SHALL tap the sole button");
+    }
+
+    // ── accept_alert fails when alert has no buttons ───────────────────
+
+    // 8. An alert element with no button children SHALL make accept_alert fail.
+    #[tokio::test]
+    async fn accept_alert_no_buttons_fails() {
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let alert = make_element("Alert", Bounds::new(50, 200, 275, 150));
+        root.children.push(alert);
+        let driver = MockPlatformDriver::new(root);
+
+        let step = make_step("accept_alert");
+        let ctx = test_ctx(Path::new("."));
+        let result = handle_accept_alert(&step, &driver, &ctx).await;
+        assert!(result.is_err(), "accept_alert SHALL fail with no buttons");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("no buttons found"),
+            "error SHALL mention no buttons, got: {err_msg}"
+        );
+    }
+
+    // ── dismiss_alert fails when alert has no buttons ──────────────────
+
+    // 9. An alert element with no button children SHALL make dismiss_alert fail.
+    #[tokio::test]
+    async fn dismiss_alert_no_buttons_fails() {
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let alert = make_element("Alert", Bounds::new(50, 200, 275, 150));
+        root.children.push(alert);
+        let driver = MockPlatformDriver::new(root);
+
+        let step = make_step("dismiss_alert");
+        let ctx = test_ctx(Path::new("."));
+        let result = handle_dismiss_alert(&step, &driver, &ctx).await;
+        assert!(result.is_err(), "dismiss_alert SHALL fail with no buttons");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("no buttons found"),
+            "error SHALL mention no buttons, got: {err_msg}"
+        );
+    }
+
+    // ── await_email reports missing inbox credential fields ────────────
+
+    // 10. When the inbox var exists but lacks imap_host, the action SHALL
+    //     fail naming the missing field.
+    #[tokio::test]
+    async fn await_email_fails_when_inbox_missing_imap_host() {
+        let mut vars = make_vars();
+        // Inbox object present, but no imap_host key.
+        vars.set_in_scope(
+            ScopeLevel::Flow,
+            "test_inbox",
+            VarValue::object(vec![("imap_port", VarValue::string("993"))]),
+        );
+
+        let mut step = make_step("await_email");
+        step.params.insert(
+            "inbox".to_string(),
+            toml::Value::String("test_inbox".to_string()),
+        );
+
+        let result = handle_await_email(&step, &mut vars).await;
+        assert!(result.is_err(), "await_email SHALL fail without imap_host");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("imap_host"),
+            "error SHALL name the missing imap_host field, got: {err_msg}"
+        );
+    }
+
+    // 11. A present-but-non-numeric imap_port SHALL be rejected as invalid.
+    #[tokio::test]
+    async fn await_email_fails_when_imap_port_invalid() {
+        let mut vars = make_vars();
+        vars.set_in_scope(
+            ScopeLevel::Flow,
+            "test_inbox",
+            VarValue::object(vec![
+                ("imap_host", VarValue::string("imap.example.com")),
+                ("imap_port", VarValue::string("not-a-number")),
+            ]),
+        );
+
+        let mut step = make_step("await_email");
+        step.params.insert(
+            "inbox".to_string(),
+            toml::Value::String("test_inbox".to_string()),
+        );
+
+        let result = handle_await_email(&step, &mut vars).await;
+        assert!(result.is_err(), "await_email SHALL reject invalid imap_port");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("imap_port"),
+            "error SHALL name the imap_port field, got: {err_msg}"
+        );
+    }
 }

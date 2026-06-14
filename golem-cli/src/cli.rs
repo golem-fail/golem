@@ -406,4 +406,276 @@ mod tests {
             ]
         );
     }
+
+    // 17. `--output` defaults to ["human"] when omitted
+    #[test]
+    fn run_output_default_is_human() {
+        let cli = parse(&["run"]);
+        let Commands::Run(run) = cli.command else {
+            panic!("expected Run");
+        };
+        assert_eq!(
+            run.outputs,
+            vec!["human"],
+            "outputs SHALL default to [human] when --output omitted"
+        );
+    }
+
+    // 18. `--repeat` defaults to 1
+    #[test]
+    fn run_repeat_default_is_one() {
+        let cli = parse(&["run"]);
+        let Commands::Run(run) = cli.command else {
+            panic!("expected Run");
+        };
+        assert_eq!(run.repeat, 1, "repeat SHALL default to 1");
+    }
+
+    // 19. `--repeat` accepts the documented boundaries 1 and 100
+    #[test]
+    fn run_repeat_boundaries_accepted() {
+        let lo = parse(&["run", "--repeat", "1"]);
+        let Commands::Run(run_lo) = lo.command else {
+            panic!("expected Run");
+        };
+        assert_eq!(run_lo.repeat, 1, "repeat=1 SHALL be accepted");
+
+        let hi = parse(&["run", "--repeat", "100"]);
+        let Commands::Run(run_hi) = hi.command else {
+            panic!("expected Run");
+        };
+        assert_eq!(run_hi.repeat, 100, "repeat=100 SHALL be accepted");
+    }
+
+    // 20. `--repeat 0` is below the range and SHALL be rejected
+    #[test]
+    fn run_repeat_zero_rejected() {
+        let res = Cli::try_parse_from(["golem", "run", "--repeat", "0"]);
+        assert!(res.is_err(), "repeat=0 SHALL be rejected (range starts at 1)");
+    }
+
+    // 21. `--repeat 101` is above the range and SHALL be rejected
+    #[test]
+    fn run_repeat_above_cap_rejected() {
+        let res = Cli::try_parse_from(["golem", "run", "--repeat", "101"]);
+        assert!(
+            res.is_err(),
+            "repeat=101 SHALL be rejected (range capped at 100)"
+        );
+    }
+
+    // 22. recording flags all default to false
+    #[test]
+    fn run_recording_flags_default_false() {
+        let cli = parse(&["run"]);
+        let Commands::Run(run) = cli.command else {
+            panic!("expected Run");
+        };
+        assert!(!run.record, "record SHALL default false");
+        assert!(!run.no_record, "no_record SHALL default false");
+        assert!(!run.trace, "trace SHALL default false");
+    }
+
+    // 23. `--record --no-record --trace` all set independently (no parse-time conflict)
+    #[test]
+    fn run_recording_flags_coexist() {
+        let cli = parse(&["run", "--record", "--no-record", "--trace"]);
+        let Commands::Run(run) = cli.command else {
+            panic!("expected Run");
+        };
+        assert!(run.record, "record SHALL be set");
+        assert!(run.no_record, "no_record SHALL be set");
+        assert!(run.trace, "trace SHALL be set");
+    }
+
+    // 24. `--output-dir` and `--no-results`
+    #[test]
+    fn run_output_dir_and_no_results() {
+        let cli = parse(&["run", "--output-dir", "out/dir", "--no-results"]);
+        let Commands::Run(run) = cli.command else {
+            panic!("expected Run");
+        };
+        assert_eq!(run.output_dir.as_deref(), Some("out/dir"));
+        assert!(run.no_results, "no_results SHALL be set");
+    }
+
+    // 25. cache/build flags: --rebuild, --no-build, --max-concurrency, --max-wait
+    #[test]
+    fn run_build_and_queue_flags() {
+        let cli = parse(&[
+            "run",
+            "--rebuild",
+            "--no-build",
+            "--max-concurrency",
+            "4",
+            "--max-wait",
+            "1h30m",
+        ]);
+        let Commands::Run(run) = cli.command else {
+            panic!("expected Run");
+        };
+        assert!(run.rebuild, "rebuild SHALL be set");
+        assert!(run.no_build, "no_build SHALL be set");
+        assert_eq!(run.max_concurrency, Some(4));
+        assert_eq!(run.max_wait.as_deref(), Some("1h30m"));
+    }
+
+    // 26. --platform and --coverage overrides
+    #[test]
+    fn run_platform_and_coverage() {
+        let cli = parse(&["run", "--platform", "ios", "--coverage", "one"]);
+        let Commands::Run(run) = cli.command else {
+            panic!("expected Run");
+        };
+        assert_eq!(run.platform.as_deref(), Some("ios"));
+        assert_eq!(run.coverage.as_deref(), Some("one"));
+    }
+
+    // 27. seed/start/output-dir/platform default to None
+    #[test]
+    fn run_optionals_default_none() {
+        let cli = parse(&["run"]);
+        let Commands::Run(run) = cli.command else {
+            panic!("expected Run");
+        };
+        assert!(run.seed.is_none(), "seed SHALL default None");
+        assert!(run.start.is_none(), "start SHALL default None");
+        assert!(run.output_dir.is_none(), "output_dir SHALL default None");
+        assert!(run.platform.is_none(), "platform SHALL default None");
+        assert!(run.coverage.is_none(), "coverage SHALL default None");
+        assert!(run.max_concurrency.is_none(), "max_concurrency SHALL default None");
+        assert!(run.max_wait.is_none(), "max_wait SHALL default None");
+    }
+
+    // 28. `tree` with no args: all options None/false
+    #[test]
+    fn tree_defaults() {
+        let cli = parse(&["tree"]);
+        let Commands::Tree(tree) = cli.command else {
+            panic!("expected Tree");
+        };
+        assert!(tree.platform.is_none());
+        assert!(tree.device.is_none());
+        assert!(!tree.full);
+        assert!(!tree.json);
+        assert!(tree.bundle.is_none());
+        assert!(!tree.verbose);
+    }
+
+    // 29. `tree` with all options populated
+    #[test]
+    fn tree_all_options() {
+        let cli = parse(&[
+            "tree",
+            "--platform",
+            "android",
+            "--device",
+            "emulator-5554",
+            "--full",
+            "--json",
+            "--bundle",
+            "com.example.app",
+            "--verbose",
+        ]);
+        let Commands::Tree(tree) = cli.command else {
+            panic!("expected Tree");
+        };
+        assert_eq!(tree.platform.as_deref(), Some("android"));
+        assert_eq!(tree.device.as_deref(), Some("emulator-5554"));
+        assert!(tree.full, "full SHALL be set");
+        assert!(tree.json, "json SHALL be set");
+        assert_eq!(tree.bundle.as_deref(), Some("com.example.app"));
+        assert!(tree.verbose, "verbose SHALL be set");
+    }
+
+    // 30. `installscript` subcommand parses
+    #[test]
+    fn install_script_subcommand() {
+        let cli = parse(&["install-script"]);
+        assert!(matches!(cli.command, Commands::InstallScript));
+    }
+
+    // 31. `cache info` nested subcommand
+    #[test]
+    fn cache_info_subcommand() {
+        let cli = parse(&["cache", "info"]);
+        let Commands::Cache(cache) = cli.command else {
+            panic!("expected Cache");
+        };
+        assert!(matches!(cache.command, CacheCommands::Info));
+    }
+
+    // 32. `cache` without a subcommand SHALL fail (subcommand is required)
+    #[test]
+    fn cache_requires_subcommand() {
+        let res = Cli::try_parse_from(["golem", "cache"]);
+        assert!(res.is_err(), "cache without subcommand SHALL be rejected");
+    }
+
+    // 33. `create` without a name SHALL fail (positional is required)
+    #[test]
+    fn create_requires_name() {
+        let res = Cli::try_parse_from(["golem", "create"]);
+        assert!(res.is_err(), "create without name SHALL be rejected");
+    }
+
+    // 34. an unknown subcommand SHALL fail
+    #[test]
+    fn unknown_subcommand_rejected() {
+        let res = Cli::try_parse_from(["golem", "frobnicate"]);
+        assert!(res.is_err(), "unknown subcommand SHALL be rejected");
+    }
+
+    // 35. parse_var_args: empty input yields empty vec
+    #[test]
+    fn parse_var_args_empty() {
+        let result = parse_var_args(&[]).expect("empty input should parse");
+        assert!(result.is_empty(), "empty input SHALL yield empty vec");
+    }
+
+    // 36. parse_var_args: value containing '=' splits only on the first '='
+    #[test]
+    fn parse_var_args_value_with_equals() {
+        let vars = vec!["token=a=b=c".to_string()];
+        let result = parse_var_args(&vars).expect("should parse");
+        assert_eq!(
+            result,
+            vec![("token".to_string(), "a=b=c".to_string())],
+            "split SHALL occur only on the first '='"
+        );
+    }
+
+    // 37. parse_var_args: empty value (KEY=) is allowed and yields empty string
+    #[test]
+    fn parse_var_args_empty_value() {
+        let vars = vec!["key=".to_string()];
+        let result = parse_var_args(&vars).expect("should parse");
+        assert_eq!(result, vec![("key".to_string(), String::new())]);
+    }
+
+    // 38. parse_var_args: empty key (=value) is allowed and yields empty key
+    #[test]
+    fn parse_var_args_empty_key() {
+        let vars = vec!["=value".to_string()];
+        let result = parse_var_args(&vars).expect("should parse");
+        assert_eq!(result, vec![(String::new(), "value".to_string())]);
+    }
+
+    // 39. parse_var_args: one invalid among valid entries fails the whole parse
+    #[test]
+    fn parse_var_args_fails_fast_on_any_invalid() {
+        let vars = vec![
+            "good=1".to_string(),
+            "bad".to_string(),
+            "alsogood=2".to_string(),
+        ];
+        let result = parse_var_args(&vars);
+        assert!(result.is_err(), "any invalid entry SHALL fail the parse");
+        let msg = format!("{}", result.expect_err("should be error"));
+        assert!(msg.contains("bad"), "error SHALL name the offending value");
+        assert!(
+            msg.contains("KEY=VALUE"),
+            "error SHALL mention the expected KEY=VALUE format"
+        );
+    }
 }

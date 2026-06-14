@@ -1299,4 +1299,178 @@ mod tests {
         assert_eq!(first_untypeable_char("こん"), Some((0, 'こ')));
         assert_eq!(first_untypeable_char("aこ"), Some((1, 'こ')));
     }
+
+    // 1. Empty input has no untypeable char.
+    #[test]
+    fn untypeable_empty_string_is_none() {
+        assert_eq!(
+            first_untypeable_char(""),
+            None,
+            "empty input SHALL have no untypeable char"
+        );
+    }
+
+    // 2. Range boundaries: space (0x20) and tilde (0x7e) are the inclusive
+    //    endpoints of the typeable printable-ASCII window.
+    #[test]
+    fn untypeable_space_and_tilde_are_boundary_inclusive() {
+        assert_eq!(
+            first_untypeable_char(" ~"),
+            None,
+            "space (0x20) and tilde (0x7e) SHALL be typeable as range endpoints"
+        );
+    }
+
+    // 3. DEL (0x7f) sits one past the tilde endpoint and SHALL be rejected.
+    #[test]
+    fn untypeable_del_just_past_range_rejected() {
+        assert_eq!(
+            first_untypeable_char("a\u{7f}"),
+            Some((1, '\u{7f}')),
+            "DEL (0x7f) is one past the typeable range and SHALL be rejected"
+        );
+    }
+
+    // 4. NUL and other sub-space control chars (below 0x20, not newline) are
+    //    rejected; the first such char wins.
+    #[test]
+    fn untypeable_nul_rejected_first() {
+        assert_eq!(
+            first_untypeable_char("\0abc"),
+            Some((0, '\0')),
+            "NUL SHALL be the first reported untypeable char"
+        );
+    }
+
+    // 5. Carriage return is a control char other than newline, so rejected
+    //    (only '\n' is whitelisted, not '\r').
+    #[test]
+    fn untypeable_carriage_return_rejected() {
+        assert_eq!(
+            first_untypeable_char("a\rb"),
+            Some((1, '\r')),
+            "carriage return SHALL be rejected — only newline is whitelisted"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // shell_quote — single-quote wrapping for adb shell interpolation
+    // -----------------------------------------------------------------------
+
+    // 6. A plain value with no special chars is wrapped in single quotes.
+    #[test]
+    fn shell_quote_wraps_plain_value() {
+        assert_eq!(
+            shell_quote("hello"),
+            "'hello'",
+            "plain value SHALL be wrapped in single quotes"
+        );
+    }
+
+    // 7. A value combining whitespace with an embedded single quote stays a
+    //    single shell token: the space sits inside the wrapping quotes while
+    //    the quote triggers the close-reopen escape, exercising both at once.
+    #[test]
+    fn shell_quote_preserves_spaces() {
+        assert_eq!(
+            shell_quote("a b's"),
+            r"'a b'\''s'",
+            "whitespace SHALL stay inside the quoted token while the embedded quote is escaped"
+        );
+    }
+
+    // 8. Embedded single quotes use the close-reopen escape sequence so the
+    //    quoting survives the adb-shell re-tokenisation round trip.
+    #[test]
+    fn shell_quote_escapes_embedded_single_quote() {
+        // it's → 'it'\''s'
+        assert_eq!(shell_quote("it's"), r"'it'\''s'");
+    }
+
+    // 9. Multiple embedded single quotes each get the escape sequence.
+    #[test]
+    fn shell_quote_escapes_multiple_single_quotes() {
+        assert_eq!(shell_quote("'a'"), r"''\''a'\'''");
+    }
+
+    // 10. Empty input yields an empty quoted token (not an empty string),
+    //     so it still occupies one positional arg slot.
+    #[test]
+    fn shell_quote_empty_value() {
+        assert_eq!(shell_quote(""), "''");
+    }
+
+    // -----------------------------------------------------------------------
+    // normalize_android_permission — remaining one-to-one shorthands + SDK
+    // boundary for `photos`
+    // -----------------------------------------------------------------------
+
+    // 11. The remaining simple shorthands each map to exactly one permission.
+    #[test]
+    fn normalize_remaining_simple_shorthands() {
+        assert_eq!(
+            normalize_android_permission("microphone", 34).expect("known"),
+            vec!["android.permission.RECORD_AUDIO"],
+        );
+        assert_eq!(
+            normalize_android_permission("location", 34).expect("known"),
+            vec!["android.permission.ACCESS_FINE_LOCATION"],
+        );
+        assert_eq!(
+            normalize_android_permission("contacts", 34).expect("known"),
+            vec!["android.permission.READ_CONTACTS"],
+        );
+        assert_eq!(
+            normalize_android_permission("calendar", 34).expect("known"),
+            vec!["android.permission.READ_CALENDAR"],
+        );
+    }
+
+    // 12. `photos` at exactly SDK 33 takes the READ_MEDIA_IMAGES branch (the
+    //     lower inclusive boundary of the 13+ grouping), confirming the
+    //     `>= 34` vs `>= 33` split at 33 vs 34 is not off-by-one.
+    #[test]
+    fn normalize_photos_sdk_boundary_33_vs_34() {
+        // SDK 33: single READ_MEDIA_IMAGES (no USER_SELECTED).
+        assert_eq!(
+            normalize_android_permission("photos", 33).expect("known"),
+            vec!["android.permission.READ_MEDIA_IMAGES"],
+        );
+        // SDK 34: adds READ_MEDIA_VISUAL_USER_SELECTED.
+        assert_eq!(
+            normalize_android_permission("photos", 34).expect("known"),
+            vec![
+                "android.permission.READ_MEDIA_IMAGES",
+                "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+            ],
+        );
+    }
+
+    // 13. `photos` at exactly SDK 32 takes the legacy storage branch (the
+    //     upper inclusive boundary of the ≤32 grouping).
+    #[test]
+    fn normalize_photos_sdk_boundary_32_legacy() {
+        assert_eq!(
+            normalize_android_permission("photos", 32).expect("known"),
+            vec!["android.permission.READ_EXTERNAL_STORAGE"],
+        );
+    }
+
+    // 14. A full `android.permission.*` string passes through regardless of
+    //     SDK and is never re-split, even when SDK would change a shorthand.
+    #[test]
+    fn normalize_full_string_ignores_sdk() {
+        assert_eq!(
+            normalize_android_permission("android.permission.READ_MEDIA_IMAGES", 21)
+                .expect("full string passes"),
+            vec!["android.permission.READ_MEDIA_IMAGES"],
+        );
+    }
+
+    // 15. Unknown shorthand still errors at SDK 0 (no SDK-dependent escape
+    //     hatch for unknown names).
+    #[test]
+    fn normalize_unknown_shorthand_errors_at_sdk_zero() {
+        assert!(normalize_android_permission("bogus", 0).is_err());
+    }
 }

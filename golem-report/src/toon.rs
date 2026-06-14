@@ -929,4 +929,498 @@ mod tests {
             "SHALL NOT contain P lines when no perf snapshots"
         );
     }
+
+    // ── iso_to_unix_ms / format_t0_offset tests ─────────────────────
+
+    // 1. Valid RFC-3339 timestamp parses to its epoch-millis value.
+    #[test]
+    fn iso_to_unix_ms_parses_valid_rfc3339() {
+        // 1970-01-01T00:00:01Z is exactly 1000ms past the epoch.
+        assert_eq!(
+            iso_to_unix_ms("1970-01-01T00:00:01Z"),
+            Some(1000),
+            "valid RFC-3339 SHALL parse to epoch millis"
+        );
+    }
+
+    // 2. Unparseable timestamp yields None (no bogus value).
+    #[test]
+    fn iso_to_unix_ms_rejects_garbage() {
+        assert_eq!(
+            iso_to_unix_ms("not-a-timestamp"),
+            None,
+            "garbage timestamp SHALL parse to None"
+        );
+    }
+
+    // 3. Both line ts and anchor present → ` t0+:<delta>` with the difference.
+    #[test]
+    fn format_t0_offset_emits_delta_when_both_present() {
+        // line at 5000ms, anchor at 1000ms → delta 4000.
+        let out = format_t0_offset(Some("1970-01-01T00:00:05Z"), Some(1000));
+        assert_eq!(out, " t0+:4000", "SHALL emit delta when line and anchor present");
+    }
+
+    // 4. Anchor missing → empty string (offset dropped, not bogus).
+    #[test]
+    fn format_t0_offset_empty_when_anchor_missing() {
+        let out = format_t0_offset(Some("1970-01-01T00:00:05Z"), None);
+        assert_eq!(out, "", "SHALL emit empty when anchor absent");
+    }
+
+    // 5. Line ts unparseable → empty string even if anchor present.
+    #[test]
+    fn format_t0_offset_empty_when_line_unparseable() {
+        let out = format_t0_offset(Some("garbage"), Some(1000));
+        assert_eq!(out, "", "SHALL emit empty when line ts unparseable");
+    }
+
+    // ── format_step_toon tree-stats / device / os tests ─────────────
+
+    // 6. Success step with tree fetches appends ` t:fetches/max_nodes`.
+    #[test]
+    fn step_success_with_tree_stats_appends_t_suffix() {
+        let mut step = success_step("tap", "OK", 45);
+        step.tree_stats = golem_events::TreeStats { fetches: 3, max_nodes: 128, ..Default::default() };
+        let out = format_step_toon(&step);
+        assert_eq!(out, " +tap:OK d:45 t:3/128", "SHALL append t:fetches/max_nodes when fetches > 0");
+    }
+
+    // 7. Zero tree fetches omits the t: suffix entirely.
+    #[test]
+    fn step_success_zero_tree_fetches_omits_t_suffix() {
+        let mut step = success_step("tap", "OK", 45);
+        step.tree_stats = golem_events::TreeStats { fetches: 0, max_nodes: 200, ..Default::default() };
+        let out = format_step_toon(&step);
+        assert_eq!(out, " +tap:OK d:45", "SHALL omit t: suffix when fetches == 0");
+    }
+
+    // 8. Success step with substeps appends substep notation before tree suffix.
+    #[test]
+    fn step_success_substeps_precede_tree_suffix() {
+        let mut step = success_step("tap", "OK", 45);
+        step.substeps = vec![crate::SubstepDetail::Tap {
+            point: golem_events::Point { x: 10, y: 20 },
+            element_bounds: None,
+        }];
+        step.tree_stats = golem_events::TreeStats { fetches: 1, max_nodes: 50, ..Default::default() };
+        let out = format_step_toon(&step);
+        assert_eq!(out, " +tap:OK d:45 @10,20 t:1/50", "substeps SHALL precede tree suffix");
+    }
+
+    // 9. Warning step carries its substep suffix (but no tree suffix).
+    #[test]
+    fn step_warning_carries_substeps() {
+        let mut step = warning_step("scroll", "Promo", 15, "element not found");
+        step.substeps = vec![crate::SubstepDetail::DriverWarning {
+            message: "slow".into(),
+        }];
+        let out = format_step_toon(&step);
+        assert_eq!(
+            out,
+            " ~scroll:Promo d:15 WF000 element not found warn:\"slow\"",
+            "warning step SHALL append substep notation"
+        );
+    }
+
+    // ── format_flow_toon device / os / block-header tests ───────────
+
+    // 10. Header emits dev: and os: when present, in order.
+    #[test]
+    fn flow_header_includes_device_and_os() {
+        let mut report = sample_flow(true, None);
+        report.device_name = Some("android/Pixel_7a".into());
+        report.os_major = Some(34);
+        let out = format_flow_toon(&report);
+        let first = out.lines().next().expect("header line");
+        assert_eq!(first, "F:login_flow dev:android/Pixel_7a os:34 d:10200");
+    }
+
+    // 11. Steps under a named block emit a ` B:<block>` header once.
+    #[test]
+    fn flow_block_header_emitted_for_named_block() {
+        let mut report = sample_flow(true, None);
+        let mut s = success_step("tap", "OK", 10);
+        s.block_name = "checkout".into();
+        report.step_results = vec![s];
+        let out = format_flow_toon(&report);
+        assert!(out.contains(" B:checkout\n"), "SHALL emit B:checkout header; got: {out}");
+    }
+
+    // 12. Block iteration > 0 emits ` B:<block> i:<n>` header.
+    #[test]
+    fn flow_block_header_with_iteration() {
+        let mut report = sample_flow(true, None);
+        let mut s = success_step("tap", "OK", 10);
+        s.block_name = "loop".into();
+        s.block_iteration = 2;
+        report.step_results = vec![s];
+        let out = format_flow_toon(&report);
+        assert!(out.contains(" B:loop i:2\n"), "SHALL emit B:loop i:2 header; got: {out}");
+    }
+
+    // 13. A new header is emitted each time the (block, iteration) pair changes.
+    #[test]
+    fn flow_block_header_reemitted_on_iteration_change() {
+        let mut report = sample_flow(true, None);
+        let mut s0 = success_step("tap", "A", 10);
+        s0.block_name = "loop".into();
+        s0.block_iteration = 1;
+        let mut s1 = success_step("tap", "B", 10);
+        s1.block_name = "loop".into();
+        s1.block_iteration = 2;
+        report.step_results = vec![s0, s1];
+        let out = format_flow_toon(&report);
+        let headers: Vec<&str> = out.lines().filter(|l| l.starts_with(" B:")).collect();
+        assert_eq!(headers, vec![" B:loop i:1", " B:loop i:2"], "SHALL re-emit header per iteration");
+    }
+
+    // 14. Empty block_name suppresses the B: header line.
+    #[test]
+    fn flow_empty_block_name_omits_header() {
+        let report = sample_flow(true, None);
+        let out = format_flow_toon(&report);
+        assert!(
+            !out.lines().any(|l| l.starts_with(" B:")),
+            "SHALL NOT emit B: header when block_name empty"
+        );
+    }
+
+    // ── flow result-line code / skip tests ──────────────────────────
+
+    // 15. FAIL result line appends first_failure_code token when set.
+    #[test]
+    fn flow_result_fail_appends_failure_code() {
+        let mut report = sample_flow(false, None);
+        report.first_failure_code = Some(golem_events::FailureCode::FlowStepTimeout);
+        let out = format_flow_toon(&report);
+        let last = out.lines().last().expect("result line");
+        assert_eq!(last, "R:FAIL 4/1/1 EF408", "FAIL line SHALL carry the failure code token");
+    }
+
+    // 16. PASS flow never appends a failure code even if one is somehow set.
+    #[test]
+    fn flow_result_pass_omits_failure_code() {
+        let mut report = sample_flow(true, None);
+        report.first_failure_code = Some(golem_events::FailureCode::FlowStepTimeout);
+        let out = format_flow_toon(&report);
+        let last = out.lines().last().expect("result line");
+        assert!(!last.contains("EF408"), "PASS line SHALL NOT carry a failure code; got: {last}");
+    }
+
+    // 17. Skipped flow (success + reason) renders SKIP and appends the reason.
+    #[test]
+    fn flow_result_skip_appends_reason() {
+        let mut report = sample_flow(true, None);
+        report.skipped_reason = Some("covered by peer run".into());
+        report.step_results = vec![];
+        let out = format_flow_toon(&report);
+        let last = out.lines().last().expect("result line");
+        assert_eq!(last, "R:SKIP 0/0/0 covered by peer run", "SKIP line SHALL append the reason");
+    }
+
+    // ── recording-line tests ────────────────────────────────────────
+
+    // 18. Recordings emit one ` rec block:iter path` line each.
+    #[test]
+    fn flow_emits_recording_lines() {
+        let mut report = sample_flow(true, None);
+        report.step_results = vec![success_step("launch", "", 100)];
+        report.recordings = vec![
+            crate::RecordingEntry { block: "checkout".into(), iteration: 0, path: "/tmp/a.mp4".into() },
+            crate::RecordingEntry { block: "checkout".into(), iteration: 1, path: "/tmp/b.mp4".into() },
+        ];
+        let out = format_flow_toon(&report);
+        assert!(out.contains(" rec checkout:0 /tmp/a.mp4\n"), "SHALL emit first recording line; got: {out}");
+        assert!(out.contains(" rec checkout:1 /tmp/b.mp4\n"), "SHALL emit second recording line; got: {out}");
+    }
+
+    // ── suite T0 / install / flake tests ────────────────────────────
+
+    fn empty_suite() -> SuiteReport {
+        SuiteReport {
+            flows: Vec::new(),
+            installs: Vec::new(),
+            total_duration_ms: 0,
+            started_at: None,
+            finished_at: None,
+        }
+    }
+
+    // 19. Suite anchor timestamp emits a single T0: line when parseable.
+    #[test]
+    fn suite_emits_t0_when_started_at_parseable() {
+        let mut suite = empty_suite();
+        suite.started_at = Some("1970-01-01T00:00:01Z".into());
+        let out = format_suite_toon(&suite);
+        assert!(out.contains("\nT0:1000\n"), "SHALL emit T0:<ms> when anchor parseable; got: {out}");
+    }
+
+    // 20. Unparseable suite anchor omits the T0: line entirely.
+    #[test]
+    fn suite_omits_t0_when_started_at_unparseable() {
+        let mut suite = empty_suite();
+        suite.started_at = Some("nonsense".into());
+        let out = format_suite_toon(&suite);
+        assert!(
+            !out.lines().any(|l| l.starts_with("T0:")),
+            "SHALL NOT emit T0: when anchor unparseable"
+        );
+    }
+
+    // 21. Install lines render device, bundle, ok/fail, duration, os, and error indent.
+    #[test]
+    fn suite_renders_install_lines_with_error_indent() {
+        let mut suite = empty_suite();
+        suite.installs = vec![crate::InstallReport {
+            app_name: "myapp".into(),
+            bundle_id: "com.example".into(),
+            device_name: "android/emu".into(),
+            os_major: Some(34),
+            success: false,
+            duration_ms: 4200,
+            exit_code: Some(1),
+            error: Some("line one\nline two".into()),
+            code: None,
+            started_at: None,
+            finished_at: None,
+        }];
+        let out = format_suite_toon(&suite);
+        assert!(
+            out.contains("I myapp:com.example:android/emu R:fail d:4200 os:34\n"),
+            "install line SHALL carry name/bundle/device/result/duration/os; got: {out}"
+        );
+        assert!(out.contains("  line one\n"), "SHALL indent error line one; got: {out}");
+        assert!(out.contains("  line two\n"), "SHALL indent error line two; got: {out}");
+    }
+
+    // 22. Successful install renders R:ok and omits os: when os_major absent.
+    #[test]
+    fn suite_install_ok_omits_os_when_absent() {
+        let mut suite = empty_suite();
+        suite.installs = vec![crate::InstallReport {
+            app_name: "app".into(),
+            bundle_id: "b".into(),
+            device_name: "ios/sim".into(),
+            os_major: None,
+            success: true,
+            duration_ms: 900,
+            exit_code: Some(0),
+            error: None,
+            code: None,
+            started_at: None,
+            finished_at: None,
+        }];
+        let out = format_suite_toon(&suite);
+        let line = out.lines().find(|l| l.starts_with("I ")).expect("install line");
+        assert_eq!(line, "I app:b:ios/sim R:ok d:900", "ok install SHALL omit os: when absent");
+    }
+
+    // 23. Suite schema header comment lines are always present.
+    #[test]
+    fn suite_emits_schema_header_comments() {
+        let out = format_suite_toon(&empty_suite());
+        assert!(out.starts_with("# F=flow-run"), "SHALL begin with the F= schema header; got: {out}");
+        assert!(out.contains("# step:"), "SHALL include the step schema header");
+        assert!(out.contains("# perf:"), "SHALL include the perf schema header");
+        assert!(out.contains("# install:"), "SHALL include the install schema header");
+        assert!(out.contains("# time:"), "SHALL include the time schema header");
+    }
+
+    // 24. A flow whose every step is Skipped counts toward the suite skip total.
+    #[test]
+    fn suite_total_counts_all_skipped_steps_flow_as_skip() {
+        let mut suite = empty_suite();
+        let mut flow = sample_flow(false, None);
+        flow.success = false;
+        flow.step_results = vec![skipped_step("tap", "A"), skipped_step("tap", "B")];
+        suite.flows = vec![flow];
+        suite.total_duration_ms = 10;
+        let out = format_suite_toon(&suite);
+        let last = out.lines().last().expect("total line");
+        // is_failed (success=false) AND all-skipped → counted in both fail and skip tallies.
+        assert_eq!(last, "total:0×pass,1×fail,1×skip d:10", "all-skipped-steps flow SHALL count as skip");
+    }
+
+    // 25. Flake summary emitted when any flow carries repeat context.
+    #[test]
+    fn suite_emits_flake_summary_when_repeated() {
+        let mut suite = empty_suite();
+        let mut pass = sample_flow(true, None);
+        pass.flow_name = "f".into();
+        pass.step_results = vec![success_step("launch", "", 1)];
+        pass.repeat = Some(golem_events::RepeatContext { index: 0, total: 2 });
+        let mut fail = sample_flow(false, None);
+        fail.flow_name = "f".into();
+        fail.step_results = vec![failed_step("tap", "x", 1, "boom")];
+        fail.repeat = Some(golem_events::RepeatContext { index: 1, total: 2 });
+        suite.flows = vec![pass, fail];
+        suite.total_duration_ms = 2;
+        let out = format_suite_toon(&suite);
+        assert!(out.contains("# flake:"), "SHALL emit flake schema header; got: {out}");
+        assert!(out.contains("flake:1/2 f"), "SHALL tally 1/2 for flow f; got: {out}");
+    }
+
+    // 26. No flake lines for a single-run suite (no repeat set).
+    #[test]
+    fn suite_omits_flake_summary_when_not_repeated() {
+        let mut suite = empty_suite();
+        let mut flow = sample_flow(true, None);
+        flow.step_results = vec![success_step("launch", "", 1)];
+        suite.flows = vec![flow];
+        let out = format_suite_toon(&suite);
+        assert!(
+            !out.lines().any(|l| l.starts_with("flake:") || l == "# flake: flake:passed/total flow (sorted flakiest-first)"),
+            "single-run suite SHALL NOT emit flake lines; got: {out}"
+        );
+    }
+
+    // ── remaining substep-variant tests ─────────────────────────────
+
+    // 27. AppStop renders stop:bundle.
+    #[test]
+    fn substeps_toon_app_stop() {
+        let out = format_substeps_toon(&[crate::SubstepDetail::AppStop { bundle: "com.x".into() }]);
+        assert_eq!(out, " stop:com.x", "AppStop SHALL render stop:bundle");
+    }
+
+    // 28. TextInput renders t:"text".
+    #[test]
+    fn substeps_toon_text_input() {
+        let out = format_substeps_toon(&[crate::SubstepDetail::TextInput {
+            text: "hello".into(),
+            field_bounds: None,
+        }]);
+        assert_eq!(out, " t:\"hello\"", "TextInput SHALL render t:\"text\"");
+    }
+
+    // 29. Swipe renders (from)→(to).
+    #[test]
+    fn substeps_toon_swipe() {
+        let out = format_substeps_toon(&[crate::SubstepDetail::Swipe {
+            from: golem_events::Point { x: 1, y: 2 },
+            to: golem_events::Point { x: 3, y: 4 },
+        }]);
+        assert_eq!(out, " (1,2)→(3,4)", "Swipe SHALL render (from)→(to)");
+    }
+
+    // 30. ElementNotFound renders !found Nms.
+    #[test]
+    fn substeps_toon_element_not_found() {
+        let out = format_substeps_toon(&[crate::SubstepDetail::ElementNotFound {
+            selector: "text=X".into(),
+            timeout_ms: 5000,
+        }]);
+        assert_eq!(out, " !found 5000ms", "ElementNotFound SHALL render !found Nms");
+    }
+
+    // 31. ScrollStarted renders dir:<direction>.
+    #[test]
+    fn substeps_toon_scroll_started() {
+        let out = format_substeps_toon(&[crate::SubstepDetail::ScrollStarted {
+            selector: "text=X".into(),
+            direction: "down".into(),
+        }]);
+        assert_eq!(out, " dir:down", "ScrollStarted SHALL render dir:<direction>");
+    }
+
+    // 32. ScrollAttempt renders #attempt dir (from)→(to) result.
+    #[test]
+    fn substeps_toon_scroll_attempt() {
+        let out = format_substeps_toon(&[crate::SubstepDetail::ScrollAttempt {
+            attempt: 2,
+            direction: "down".into(),
+            strategy_index: 0,
+            from: golem_events::Point { x: 1, y: 2 },
+            to: golem_events::Point { x: 3, y: 4 },
+            result: "moved".into(),
+            tree_stats: golem_events::TreeStats::default(),
+        }]);
+        assert_eq!(out, " #2 down (1,2)→(3,4) moved", "ScrollAttempt SHALL render #n dir (from)→(to) result");
+    }
+
+    // 33. ScrollDirectionReversed renders rev→<dir> <reason>.
+    #[test]
+    fn substeps_toon_scroll_direction_reversed() {
+        let out = format_substeps_toon(&[crate::SubstepDetail::ScrollDirectionReversed {
+            to_direction: "up".into(),
+            reason: "edge".into(),
+        }]);
+        assert_eq!(out, " rev→up edge", "ScrollDirectionReversed SHALL render rev→<dir> <reason>");
+    }
+
+    // 34. ScrollStrategySwitch renders strat→<index+1> <reason> (1-based).
+    #[test]
+    fn substeps_toon_scroll_strategy_switch_is_one_based() {
+        let out = format_substeps_toon(&[crate::SubstepDetail::ScrollStrategySwitch {
+            to_index: 0,
+            reason: "fallback".into(),
+        }]);
+        assert_eq!(out, " strat→1 fallback", "ScrollStrategySwitch SHALL render 1-based index");
+    }
+
+    // 35. RetryAttempt renders retry attempt/max: error.
+    #[test]
+    fn substeps_toon_retry_attempt() {
+        let out = format_substeps_toon(&[crate::SubstepDetail::RetryAttempt {
+            attempt: 1,
+            max: 3,
+            delay_ms: 100,
+            error: "stale".into(),
+        }]);
+        assert_eq!(out, " retry 1/3: stale", "RetryAttempt SHALL render retry n/m: error");
+    }
+
+    // 36. HttpRequest with a status renders method→status Nms.
+    #[test]
+    fn substeps_toon_http_request_with_status() {
+        let out = format_substeps_toon(&[crate::SubstepDetail::HttpRequest {
+            method: "GET".into(),
+            url: "https://x".into(),
+            status: Some(200),
+            duration_ms: 42,
+        }]);
+        assert_eq!(out, " GET→200 42ms", "HttpRequest with status SHALL render method→status Nms");
+    }
+
+    // 37. HttpRequest without a status renders ? in place of the code.
+    #[test]
+    fn substeps_toon_http_request_without_status() {
+        let out = format_substeps_toon(&[crate::SubstepDetail::HttpRequest {
+            method: "POST".into(),
+            url: "https://x".into(),
+            status: None,
+            duration_ms: 7,
+        }]);
+        assert_eq!(out, " POST→? 7ms", "HttpRequest without status SHALL render ?");
+    }
+
+    // 38. BashCommand with an exit code renders bash:"cmd" exit=N Nms.
+    #[test]
+    fn substeps_toon_bash_command_with_exit() {
+        let out = format_substeps_toon(&[crate::SubstepDetail::BashCommand {
+            command: "ls".into(),
+            exit_code: Some(0),
+            duration_ms: 12,
+        }]);
+        assert_eq!(out, " bash:\"ls\" exit=0 12ms", "BashCommand SHALL render bash:\"cmd\" exit=N Nms");
+    }
+
+    // 39. BashCommand without an exit code renders exit=?.
+    #[test]
+    fn substeps_toon_bash_command_without_exit() {
+        let out = format_substeps_toon(&[crate::SubstepDetail::BashCommand {
+            command: "sleep".into(),
+            exit_code: None,
+            duration_ms: 99,
+        }]);
+        assert_eq!(out, " bash:\"sleep\" exit=? 99ms", "BashCommand without exit SHALL render exit=?");
+    }
+
+    // 40. An unhandled substep variant contributes nothing (empty result).
+    #[test]
+    fn substeps_toon_unhandled_variant_produces_empty() {
+        let out = format_substeps_toon(&[crate::SubstepDetail::Backspace { count: 3 }]);
+        assert_eq!(out, "", "unhandled substep variant SHALL contribute no notation");
+    }
 }

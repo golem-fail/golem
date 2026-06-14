@@ -745,4 +745,361 @@ mod tests {
         let cleaned: &[u8] = b"withnull\0ok";
         assert!(out.windows(cleaned.len()).any(|w| w == cleaned));
     }
+
+    // ---------------------------------------------------------------
+    // 13. embed_png_metadata returns original when sig is valid but
+    //     the stream is too short to contain a complete IHDR chunk.
+    // ---------------------------------------------------------------
+    #[test]
+    fn embed_png_metadata_returns_original_for_truncated_ihdr() {
+        // Valid 8-byte signature but only 20 bytes total — shorter than
+        // the 33-byte IHDR-end offset, so the splice must bail and
+        // return the input unchanged.
+        let mut truncated = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        truncated.extend_from_slice(&[0u8; 12]);
+        assert!(truncated.len() < 33, "fixture SHALL be shorter than IHDR end");
+        let out = embed_png_metadata(&truncated, &[("k", "v")]);
+        assert_eq!(out, truncated, "truncated IHDR SHALL be returned unchanged");
+    }
+
+    // ---------------------------------------------------------------
+    // 14. embed_png_metadata with an empty entries slice is a no-op
+    //     copy of the input bytes (no chunks added).
+    // ---------------------------------------------------------------
+    #[test]
+    fn embed_png_metadata_empty_entries_preserves_bytes() {
+        let png = minimal_png();
+        let out = embed_png_metadata(&png, &[]);
+        assert_eq!(out, png, "no entries SHALL leave PNG byte-identical");
+    }
+
+    // ---------------------------------------------------------------
+    // 15. build_tree_path mirrors the screenshot path with a
+    //     `_tree.json` suffix in the same screenshots directory.
+    // ---------------------------------------------------------------
+    #[test]
+    fn build_tree_path_uses_tree_json_suffix() {
+        let config = test_config();
+        let path = build_tree_path(&config, "verify block", 3, 0, 1, "error");
+
+        assert_eq!(
+            path,
+            PathBuf::from(
+                ".golem/results/login_flow/iPhone_16e/screenshots/3_verify_block_0_1_error_tree.json"
+            )
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 16. capture_failure_tree returns error when screenshot_on_failure
+    //     is off, without touching the driver.
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn capture_failure_tree_disabled_when_no_screenshot_on_failure() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        let config = CaptureConfig {
+            screenshot_on_failure: false,
+            ..test_config()
+        };
+
+        let result = capture_failure_tree(&driver, &config, "block", 1, 0, 0, "error").await;
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.expect_err("should be an error"));
+        assert!(
+            err_msg.contains("disabled"),
+            "expected 'disabled' in error message, got: {err_msg}"
+        );
+        assert!(driver.get_calls().is_empty(), "driver SHALL NOT be called when disabled");
+    }
+
+    // ---------------------------------------------------------------
+    // 17. capture_failure_tree returns error when write_to_disk is off.
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn capture_failure_tree_disabled_when_no_write_to_disk() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        let config = CaptureConfig {
+            write_to_disk: false,
+            ..test_config()
+        };
+
+        let result = capture_failure_tree(&driver, &config, "block", 1, 0, 0, "error").await;
+        assert!(result.is_err());
+        assert!(driver.get_calls().is_empty());
+    }
+
+    // ---------------------------------------------------------------
+    // 18. capture_failure_tree writes pretty JSON of the hierarchy and
+    //     fetches the hierarchy via the driver.
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn capture_failure_tree_writes_json_file() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        let tmp = tempfile::tempdir().expect("failed to create tempdir");
+        let config = CaptureConfig {
+            output_dir: tmp.path().to_path_buf(),
+            flow_name: "login".to_string(),
+            device_name: "test_device".to_string(),
+            ..CaptureConfig::default()
+        };
+
+        let path = capture_failure_tree(&driver, &config, "auth", 2, 0, 1, "error")
+            .await
+            .expect("tree dump should succeed");
+
+        assert!(path.exists(), "tree json file SHALL exist on disk");
+        assert_eq!(
+            path.extension().and_then(|e| e.to_str()),
+            Some("json"),
+            "tree dump SHALL be a .json file"
+        );
+        let json = std::fs::read_to_string(&path).expect("should read file");
+        let parsed: serde_json::Value =
+            serde_json::from_str(&json).expect("tree dump SHALL be valid JSON");
+        assert_eq!(parsed["element_type"], "View");
+
+        let calls = driver.get_calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "get_hierarchy");
+    }
+
+    // ---------------------------------------------------------------
+    // 19. build_trace_path zero-pads the boundary index to 3 digits.
+    // ---------------------------------------------------------------
+    #[test]
+    fn build_trace_path_zero_pads_boundary_index() {
+        let config = test_config();
+        let path = build_trace_path(&config, 0, "preflow", "png");
+        assert_eq!(
+            path,
+            PathBuf::from(".golem/results/login_flow/iPhone_16e/trace/000_preflow.png")
+        );
+        let path2 = build_trace_path(&config, 42, "after", "json");
+        assert_eq!(
+            path2,
+            PathBuf::from(".golem/results/login_flow/iPhone_16e/trace/042_after.json")
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 20. build_trace_path keeps indices >= 1000 unmodified (pad is a
+    //     minimum width, not a truncation).
+    // ---------------------------------------------------------------
+    #[test]
+    fn build_trace_path_large_index_not_truncated() {
+        let config = test_config();
+        let path = build_trace_path(&config, 1234, "after", "png");
+        assert_eq!(
+            path.file_name().and_then(|f| f.to_str()),
+            Some("1234_after.png")
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 21. capture_trace_boundary returns error when trace is off.
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn capture_trace_boundary_disabled_when_trace_off() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        let config = CaptureConfig {
+            trace: false,
+            ..test_config()
+        };
+        let meta = TraceMeta {
+            after_step: None,
+            action: None,
+            wall_clock: "2026-06-15T00:00:00Z",
+        };
+
+        let result = capture_trace_boundary(&driver, &config, 0, "preflow", meta).await;
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.expect_err("should be an error"));
+        assert!(err_msg.contains("disabled"), "got: {err_msg}");
+        assert!(driver.get_calls().is_empty());
+    }
+
+    // ---------------------------------------------------------------
+    // 22. capture_trace_boundary returns error when write_to_disk off.
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn capture_trace_boundary_disabled_when_no_write_to_disk() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        let config = CaptureConfig {
+            trace: true,
+            write_to_disk: false,
+            ..test_config()
+        };
+        let meta = TraceMeta {
+            after_step: Some(1),
+            action: Some("tap"),
+            wall_clock: "2026-06-15T00:00:00Z",
+        };
+
+        let result = capture_trace_boundary(&driver, &config, 1, "after", meta).await;
+        assert!(result.is_err());
+        assert!(driver.get_calls().is_empty());
+    }
+
+    // ---------------------------------------------------------------
+    // 23. capture_trace_boundary writes a PNG + JSON pair, embeds the
+    //     metadata into the PNG, and fetches screenshot then hierarchy.
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn capture_trace_boundary_writes_png_and_json_pair() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        let tmp = tempfile::tempdir().expect("failed to create tempdir");
+        let config = CaptureConfig {
+            trace: true,
+            output_dir: tmp.path().to_path_buf(),
+            flow_name: "login".to_string(),
+            device_name: "test_device".to_string(),
+            ..CaptureConfig::default()
+        };
+        let meta = TraceMeta {
+            after_step: Some(5),
+            action: Some("tap"),
+            wall_clock: "2026-06-15T12:00:00Z",
+        };
+
+        let (png_path, json_path) = capture_trace_boundary(&driver, &config, 5, "after", meta)
+            .await
+            .expect("trace boundary capture should succeed");
+
+        assert!(png_path.exists(), "trace PNG SHALL exist");
+        assert!(json_path.exists(), "trace JSON SHALL exist");
+        assert_eq!(png_path.extension().and_then(|e| e.to_str()), Some("png"));
+        assert_eq!(json_path.extension().and_then(|e| e.to_str()), Some("json"));
+
+        // The JSON is the serialized hierarchy.
+        let json = std::fs::read_to_string(&json_path).expect("read json");
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid json");
+        assert_eq!(parsed["element_type"], "View");
+
+        // Screenshot fetched before hierarchy.
+        let calls = driver.get_calls();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0].0, "screenshot");
+        assert_eq!(calls[1].0, "get_hierarchy");
+    }
+
+    // ---------------------------------------------------------------
+    // 24. capture_trace_boundary with after_step=None / action=None
+    //     (the pre-flow boundary) still succeeds and writes both files.
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn capture_trace_boundary_preflow_optional_meta_omitted() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        let tmp = tempfile::tempdir().expect("failed to create tempdir");
+        let config = CaptureConfig {
+            trace: true,
+            output_dir: tmp.path().to_path_buf(),
+            flow_name: "login".to_string(),
+            device_name: "test_device".to_string(),
+            ..CaptureConfig::default()
+        };
+        let meta = TraceMeta {
+            after_step: None,
+            action: None,
+            wall_clock: "2026-06-15T00:00:00Z",
+        };
+
+        let (png_path, json_path) =
+            capture_trace_boundary(&driver, &config, 0, "preflow", meta)
+                .await
+                .expect("preflow boundary capture should succeed");
+
+        assert!(png_path.exists());
+        assert!(json_path.exists());
+    }
+
+    // ---------------------------------------------------------------
+    // 25. write_trace_sidecar returns error when write_to_disk is off.
+    // ---------------------------------------------------------------
+    #[test]
+    fn write_trace_sidecar_disabled_when_no_write_to_disk() {
+        let config = CaptureConfig {
+            write_to_disk: false,
+            ..test_config()
+        };
+        let sidecar = TraceSidecar {
+            flow: "login".to_string(),
+            device: "dev".to_string(),
+            block: "auth".to_string(),
+            iteration: 0,
+            golem_version: "0.0.0".to_string(),
+            recording_started_at_ms: 0,
+            boundaries: Vec::new(),
+        };
+
+        let result = write_trace_sidecar(&config, "auth", 0, &sidecar);
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.expect_err("should be an error"));
+        assert!(err_msg.contains("disabled"), "got: {err_msg}");
+    }
+
+    // ---------------------------------------------------------------
+    // 26. write_trace_sidecar writes a sanitized `{block}_{iter}_steps.json`
+    //     in the recordings dir with the serialized sidecar contents.
+    // ---------------------------------------------------------------
+    #[test]
+    fn write_trace_sidecar_writes_steps_json() {
+        let tmp = tempfile::tempdir().expect("failed to create tempdir");
+        let config = CaptureConfig {
+            output_dir: tmp.path().to_path_buf(),
+            flow_name: "login".to_string(),
+            device_name: "Pixel 6".to_string(),
+            ..CaptureConfig::default()
+        };
+        let sidecar = TraceSidecar {
+            flow: "login".to_string(),
+            device: "Pixel 6".to_string(),
+            block: "auth".to_string(),
+            iteration: 2,
+            golem_version: "1.2.3".to_string(),
+            recording_started_at_ms: 1000,
+            boundaries: vec![TraceBoundary {
+                boundary: 0,
+                after_step: None,
+                offset_ms: 0,
+            }],
+        };
+
+        let path = write_trace_sidecar(&config, "auth block", 2, &sidecar)
+            .expect("sidecar write should succeed");
+
+        assert_eq!(
+            path,
+            tmp.path().join("login/Pixel_6/recordings/auth_block_2_steps.json")
+        );
+        let json = std::fs::read_to_string(&path).expect("read sidecar");
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid json");
+        assert_eq!(parsed["block"], "auth");
+        assert_eq!(parsed["iteration"], 2);
+        assert_eq!(parsed["golem_version"], "1.2.3");
+        assert_eq!(parsed["boundaries"][0]["boundary"], 0);
+        assert!(parsed["boundaries"][0]["after_step"].is_null());
+    }
+
+    // ---------------------------------------------------------------
+    // 28. stop_recording surfaces an error when the source file copy
+    //     fails (mock returns a non-existent path).
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn stop_recording_errors_when_source_missing() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        let tmp = tempfile::tempdir().expect("failed to create tempdir");
+        let config = CaptureConfig {
+            output_dir: tmp.path().to_path_buf(),
+            ..test_config()
+        };
+
+        // Mock returns "mock_recording.mp4" which does not exist, so the
+        // std::fs::copy SHALL fail.
+        let result = stop_recording(&driver, &config, "login", 0).await;
+        assert!(result.is_err(), "copy of missing source SHALL error");
+
+        let calls = driver.get_calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "stop_recording");
+    }
 }

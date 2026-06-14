@@ -915,4 +915,264 @@ mod tests {
         assert_eq!(format_numerals(123, NumeralStyle::FullWidth), "１２３");
         assert_eq!(format_numerals(7, NumeralStyle::ArabicIndic), "٧");
     }
+
+    /// Convenience: build a `GeoPostcode` for entry-expansion tests.
+    fn postcode_entry(
+        street_en: &str,
+        pattern: Option<&str>,
+        fixed: Option<Vec<&str>>,
+    ) -> GeoPostcode {
+        GeoPostcode {
+            code: "0000-000".to_string(),
+            street: String::new(),
+            street_en: street_en.to_string(),
+            pattern: pattern.map(|s| s.to_string()),
+            fixed: fixed.map(|v| v.into_iter().map(|s| s.to_string()).collect()),
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 26. expand_street_from_entry: pattern branch delegates to pattern expansion
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_street_from_entry_pattern_branch() {
+        let mut rng = seeded_rng();
+        let entry = postcode_entry("Baker Street", Some("n{1,9} Baker Street"), None);
+        let result = expand_street_from_entry(&entry, &mut rng);
+        assert!(
+            result.ends_with("Baker Street"),
+            "pattern branch SHALL expand to street name, got: {result}"
+        );
+        assert!(
+            !result.contains("n{"),
+            "pattern branch SHALL replace token, got: {result}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // 27. expand_street_from_entry: empty fixed list uses "1 street_en"
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_street_from_entry_empty_fixed_uses_one() {
+        let mut rng = seeded_rng();
+        let entry = postcode_entry("High Street", None, Some(vec![]));
+        let result = expand_street_from_entry(&entry, &mut rng);
+        assert_eq!(
+            result, "1 High Street",
+            "empty fixed list SHALL produce '1 street_en', got: {result}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // 28. expand_street_from_entry: non-empty fixed list picks an entry verbatim
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_street_from_entry_fixed_picks_verbatim() {
+        let mut rng = seeded_rng();
+        let entry = postcode_entry("ignored", None, Some(vec!["Only One Address"]));
+        let result = expand_street_from_entry(&entry, &mut rng);
+        assert_eq!(
+            result, "Only One Address",
+            "single-element fixed list SHALL be returned verbatim, got: {result}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // 29. expand_street_from_entry: no pattern, no fixed → "NUM street_en"
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_street_from_entry_default_numeric_prefix() {
+        let entry = postcode_entry("Main Road", None, None);
+        // Cover the random-number range with several seeds.
+        for seed in 0u64..10 {
+            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            let result = expand_street_from_entry(&entry, &mut rng);
+            assert!(
+                result.ends_with(" Main Road"),
+                "default branch SHALL end with street name, got: {result} (seed={seed})"
+            );
+            let num: u32 = result
+                .split_whitespace()
+                .next()
+                .expect("SHALL have a leading number")
+                .parse()
+                .expect("leading token SHALL be numeric");
+            assert!(
+                (1..200).contains(&num),
+                "default number SHALL be in 1..200, got: {num} (seed={seed})"
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 30. expand_street_pattern: tokenless pattern with non-matching street_en
+    //     falls back to "NUM street_en" using a freshly generated number.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_street_pattern_fallback_when_name_absent() {
+        for seed in 0u64..10 {
+            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            // Pattern has no token and does not contain the (non-empty) street_en.
+            let result = expand_street_pattern("Some Lane", "Baker Street", &mut rng);
+            assert!(
+                result.ends_with("Baker Street"),
+                "fallback SHALL append street_en, got: {result} (seed={seed})"
+            );
+            let num: u32 = result
+                .split_whitespace()
+                .next()
+                .expect("SHALL have a leading number")
+                .parse()
+                .expect("leading token SHALL be numeric");
+            assert!(
+                (1..200).contains(&num),
+                "fallback number SHALL be in 1..200, got: {num} (seed={seed})"
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 31. expand_street_pattern: malformed token (no closing brace) breaks loop
+    //     and the fallback appends the absent street name.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_street_pattern_unclosed_token_breaks() {
+        let mut rng = seeded_rng();
+        // "n{1,5 Foo" has no closing brace → loop breaks, no token replaced.
+        // The unchanged pattern lacks the non-empty street_en, so the fallback
+        // builds "NUM street_en" with a freshly generated number.
+        let result = expand_street_pattern("n{1,5 Foo", "Bar", &mut rng);
+        assert!(
+            result.ends_with(" Bar"),
+            "unclosed token SHALL fall back to 'NUM street_en', got: {result}"
+        );
+        let num: u32 = result
+            .split_whitespace()
+            .next()
+            .expect("SHALL have a leading number")
+            .parse()
+            .expect("leading token SHALL be numeric");
+        assert!(
+            (1..200).contains(&num),
+            "fallback number SHALL be in 1..200, got: {num}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // 32. expand_street_pattern: token without comma breaks loop, returns as-is.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_street_pattern_token_without_comma_returns_as_is() {
+        let mut rng = seeded_rng();
+        // No comma inside braces → split_once fails → break; street_en empty → return as-is.
+        let result = expand_street_pattern("Road n{5}", "", &mut rng);
+        assert_eq!(
+            result, "Road n{5}",
+            "comma-less token SHALL leave pattern unchanged, got: {result}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // 33. expand_street_pattern: non-numeric min breaks loop, returns as-is.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_street_pattern_non_numeric_bounds_returns_as_is() {
+        let mut rng = seeded_rng();
+        let result = expand_street_pattern("Road n{a,b}", "", &mut rng);
+        assert_eq!(
+            result, "Road n{a,b}",
+            "non-numeric bounds SHALL leave pattern unchanged, got: {result}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // 34. expand_street_pattern: bounds are trimmed of whitespace.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_street_pattern_trims_bound_whitespace() {
+        let mut rng = seeded_rng();
+        let result = expand_street_pattern("n{ 3 , 3 } Way", "Way", &mut rng);
+        assert_eq!(
+            result, "3 Way",
+            "trimmed bounds SHALL parse and equal-range yields the value, got: {result}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // 35. expand_street_pattern: Arabic-Indic min yields Arabic-Indic output.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_street_pattern_arabic_indic_output() {
+        let mut rng = seeded_rng();
+        // Equal range so output is deterministic: ٧ (Arabic-Indic 7).
+        let result = expand_street_pattern("شارع n{٧,٧}", "", &mut rng);
+        assert!(
+            result.contains('٧'),
+            "Arabic-Indic min SHALL produce Arabic-Indic digit, got: {result}"
+        );
+        assert!(
+            !result.chars().any(|c| c.is_ascii_digit()),
+            "Arabic-Indic output SHALL NOT contain ASCII digits, got: {result}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // 36. detect_numeral_style: each branch and the no-digit default.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn detect_numeral_style_branches() {
+        assert_eq!(detect_numeral_style("12"), NumeralStyle::Ascii);
+        assert_eq!(detect_numeral_style("１２"), NumeralStyle::FullWidth);
+        assert_eq!(detect_numeral_style("٧"), NumeralStyle::ArabicIndic);
+        // Leading non-digit chars are skipped until the first digit is found.
+        assert_eq!(detect_numeral_style("abc５"), NumeralStyle::FullWidth);
+        // No digit at all defaults to Ascii.
+        assert_eq!(detect_numeral_style("no digits"), NumeralStyle::Ascii);
+        assert_eq!(detect_numeral_style(""), NumeralStyle::Ascii);
+    }
+
+    // -----------------------------------------------------------------------
+    // 37. expand_format: '#' becomes a digit, other chars pass through.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_format_preserves_non_hash_chars() {
+        let mut rng = seeded_rng();
+        let result = expand_format("AB-##-(x)", &mut rng);
+        assert_eq!(
+            result.len(),
+            "AB-##-(x)".len(),
+            "expand_format SHALL preserve length, got: {result}"
+        );
+        assert!(
+            result.starts_with("AB-") && result.ends_with("-(x)"),
+            "literal chars SHALL pass through, got: {result}"
+        );
+        assert!(
+            !result.contains('#'),
+            "all '#' SHALL be replaced, got: {result}"
+        );
+        // The two replaced positions SHALL be ASCII digits.
+        let digits: Vec<char> = result.chars().filter(|c| c.is_ascii_digit()).collect();
+        assert_eq!(digits.len(), 2, "two '#' SHALL become two digits, got: {result}");
+    }
+
+    // -----------------------------------------------------------------------
+    // 38. expand_format: empty string yields empty string.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_format_empty_is_empty() {
+        let mut rng = seeded_rng();
+        assert_eq!(expand_format("", &mut rng), "", "empty format SHALL stay empty");
+    }
+
+    // -----------------------------------------------------------------------
+    // 39. parse_numerals: mixed full-width/ASCII digits parse together.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn parse_numerals_mixed_digits() {
+        // Full-width '４' followed by ASCII '2' → 42.
+        assert_eq!(parse_numerals("４2"), Some(42));
+        // Trailing non-digit makes the whole parse fail.
+        assert_eq!(parse_numerals("4x"), None);
+    }
 }

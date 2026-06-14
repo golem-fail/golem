@@ -382,4 +382,185 @@ mod tests {
         clone.mark_unhealthy("uid-1");
         assert!(rm.is_unhealthy("uid-1"));
     }
+
+    // 1. find_free_port returns the very first port in range when nothing is used.
+    #[test]
+    fn find_free_port_returns_range_start_when_empty() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        let port = rm.find_free_port(&[]).expect("free port SHALL be found");
+        assert_eq!(port, PORT_RANGE_START, "first free port SHALL be range start");
+    }
+
+    // 2. find_free_port skips ports listed in used_ports.
+    #[test]
+    fn find_free_port_skips_used_ports() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        let used = vec![PORT_RANGE_START, PORT_RANGE_START + 1];
+        let port = rm.find_free_port(&used).expect("free port SHALL be found");
+        assert_eq!(port, PORT_RANGE_START + 2, "SHALL skip externally-used ports");
+    }
+
+    // 3. find_free_port skips ports already allocated by this manager.
+    #[test]
+    fn find_free_port_skips_allocated_ports() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        let d = test_device("dev", "uid-1", Platform::Ios);
+        rm.try_allocate(&d, PORT_RANGE_START).expect("allocate SHALL succeed");
+        let port = rm.find_free_port(&[]).expect("free port SHALL be found");
+        assert_eq!(port, PORT_RANGE_START + 1, "SHALL skip already-allocated ports");
+    }
+
+    // 4. find_free_port considers both used_ports and allocated ports together.
+    #[test]
+    fn find_free_port_skips_used_and_allocated_combined() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        let d = test_device("dev", "uid-1", Platform::Ios);
+        rm.try_allocate(&d, PORT_RANGE_START + 1).expect("allocate SHALL succeed");
+        // start is externally used, start+1 is allocated → first free is start+2.
+        let port = rm.find_free_port(&[PORT_RANGE_START]).expect("free port SHALL be found");
+        assert_eq!(port, PORT_RANGE_START + 2, "SHALL combine used and allocated exclusions");
+    }
+
+    // 5. find_free_port errors with HostPortsExhausted when whole range is used.
+    #[test]
+    fn find_free_port_exhausted_returns_coded_error() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        let all_ports: Vec<u16> = (PORT_RANGE_START..=PORT_RANGE_END).collect();
+        let err = rm
+            .find_free_port(&all_ports)
+            .expect_err("SHALL error when no ports remain");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::HostPortsExhausted),
+            "exhaustion SHALL carry HostPortsExhausted code",
+        );
+    }
+
+    // 6. try_allocate of an already-allocated device fails with DeviceBusy.
+    #[test]
+    fn try_allocate_duplicate_device_is_device_busy() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        let d = test_device("dev", "uid-1", Platform::Ios);
+        rm.try_allocate(&d, 8222).expect("first allocate SHALL succeed");
+        let err = rm
+            .try_allocate(&d, 8223)
+            .expect_err("re-allocating same device SHALL fail");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::DeviceBusy),
+            "duplicate allocation SHALL carry DeviceBusy code",
+        );
+        // The original allocation SHALL be untouched (still on its first port).
+        assert_eq!(rm.port_for("uid-1"), Some(8222));
+        assert_eq!(rm.active_count(), 1, "failed re-allocate SHALL NOT add a slot");
+    }
+
+    // 7. try_allocate failing on the concurrency limit carries DeviceBusy code.
+    #[test]
+    fn try_allocate_concurrency_limit_carries_device_busy_code() {
+        let config = ConcurrencyConfig {
+            max_concurrency: 1,
+            ..ConcurrencyConfig::default()
+        };
+        let rm = ResourceManager::with_ram_provider(config, Box::new(FixedRamProvider(8192)));
+        let d1 = test_device("d1", "uid-1", Platform::Ios);
+        let d2 = test_device("d2", "uid-2", Platform::Android);
+        rm.try_allocate(&d1, 8222).expect("first SHALL succeed");
+        let err = rm.try_allocate(&d2, 8223).expect_err("second SHALL fail");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::DeviceBusy),
+            "limit rejection SHALL carry DeviceBusy code",
+        );
+    }
+
+    // 8. port_for an unknown device returns None.
+    #[test]
+    fn port_for_unknown_device_is_none() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        assert_eq!(rm.port_for("nope"), None, "unknown device SHALL have no port");
+    }
+
+    // 9. release of a device that was never allocated is a no-op.
+    #[test]
+    fn release_unknown_device_is_noop() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        let d = test_device("dev", "uid-1", Platform::Ios);
+        rm.try_allocate(&d, 8222).expect("allocate SHALL succeed");
+        rm.release("not-allocated");
+        assert_eq!(rm.active_count(), 1, "releasing unknown udid SHALL NOT drop a slot");
+        assert_eq!(rm.port_for("uid-1"), Some(8222));
+    }
+
+    // 10. mark_golem_booted with a repeated UDID overwrites, not duplicates.
+    #[test]
+    fn mark_golem_booted_same_udid_does_not_double_count() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        rm.mark_golem_booted(test_device("sim-a", "uid-1", Platform::Ios));
+        rm.mark_golem_booted(test_device("sim-b", "uid-1", Platform::Ios));
+        assert_eq!(rm.golem_booted_count(), 1, "same UDID SHALL overwrite, not duplicate");
+    }
+
+    // 11. mark_healthy removes only the named udid, leaving other unhealthy entries intact.
+    #[test]
+    fn mark_healthy_unknown_device_removes_only_named_key() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        // A genuinely-unhealthy device must survive a mark_healthy targeting some other udid.
+        rm.mark_unhealthy("uid-1");
+        rm.mark_healthy("never-seen");
+        assert!(
+            rm.is_unhealthy("uid-1"),
+            "mark_healthy of an unrelated udid SHALL NOT clear other unhealthy entries",
+        );
+        assert!(
+            !rm.is_unhealthy("never-seen"),
+            "unknown device SHALL remain healthy",
+        );
+    }
+
+    // 12. unhealthy flag is independent from allocation state.
+    #[test]
+    fn unhealthy_flag_independent_of_allocation() {
+        let rm = ResourceManager::with_ram_provider(
+            ConcurrencyConfig::default(),
+            Box::new(FixedRamProvider(8192)),
+        );
+        let d = test_device("dev", "uid-1", Platform::Ios);
+        rm.try_allocate(&d, 8222).expect("allocate SHALL succeed");
+        rm.mark_unhealthy("uid-1");
+        // Marking unhealthy SHALL NOT alter allocation bookkeeping.
+        assert_eq!(rm.active_count(), 1);
+        assert_eq!(rm.port_for("uid-1"), Some(8222));
+        assert!(rm.is_unhealthy("uid-1"));
+    }
 }

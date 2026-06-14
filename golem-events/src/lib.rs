@@ -582,3 +582,291 @@ pub enum ScrollAttemptResult {
     Stall { count: u32, max: u32 },
     BoundaryReached,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 1. DeviceId Display writes the inner string verbatim.
+    #[test]
+    fn device_id_display_is_verbatim() {
+        assert_eq!(DeviceId("ios/iPhone 15 Pro".into()).to_string(), "ios/iPhone 15 Pro");
+        assert_eq!(DeviceId("suite".into()).to_string(), "suite");
+        assert_eq!(DeviceId(String::new()).to_string(), "");
+    }
+
+    // 2. system_time_to_unix_nanos on a known epoch offset returns that
+    //    offset in nanoseconds.
+    #[test]
+    fn system_time_to_unix_nanos_known_offset() {
+        let t = UNIX_EPOCH + std::time::Duration::new(5, 123);
+        assert_eq!(
+            system_time_to_unix_nanos(t),
+            5_000_000_123,
+            "secs+subsec SHALL combine into total nanos"
+        );
+    }
+
+    // 3. Pre-epoch SystemTime saturates to 0 rather than panicking.
+    #[test]
+    fn system_time_to_unix_nanos_pre_epoch_saturates_zero() {
+        let pre = UNIX_EPOCH - std::time::Duration::from_secs(10);
+        assert_eq!(
+            system_time_to_unix_nanos(pre),
+            0,
+            "pre-epoch time SHALL saturate to 0"
+        );
+    }
+
+    // 4. unix_nanos_to_system_time reconstructs the same SystemTime
+    //    (round-trips with the forward conversion).
+    #[test]
+    fn unix_nanos_roundtrip_through_system_time() {
+        let nanos = 1_700_000_000_987_654_321u128;
+        let t = unix_nanos_to_system_time(nanos);
+        assert_eq!(
+            system_time_to_unix_nanos(t),
+            nanos,
+            "nanos SHALL round-trip through SystemTime"
+        );
+    }
+
+    // 5. unix_nanos_to_system_time splits secs/subsec without u64
+    //    truncation for a post-2554 value (> u64::MAX nanos).
+    #[test]
+    fn unix_nanos_to_system_time_handles_post_2554() {
+        // A value larger than u64::MAX nanoseconds would truncate if the
+        // split were done with Duration::from_nanos on the raw u128.
+        let big = (u64::MAX as u128) + 2_000_000_000; // ~2 secs past u64 ns
+        let t = unix_nanos_to_system_time(big);
+        assert_eq!(
+            system_time_to_unix_nanos(t),
+            big,
+            "post-2554 nanos SHALL survive without truncation"
+        );
+    }
+
+    // 6. unix_nanos_to_system_time at exactly the epoch yields UNIX_EPOCH.
+    #[test]
+    fn unix_nanos_zero_is_epoch() {
+        assert_eq!(unix_nanos_to_system_time(0), UNIX_EPOCH);
+    }
+
+    fn sample_event() -> Event {
+        Event {
+            seq: 42,
+            device_id: DeviceId("android/Pixel_7_API_34".into()),
+            timestamp: Instant::now(),
+            wall_time: UNIX_EPOCH + std::time::Duration::new(1_700_000_000, 250),
+            kind: EventKind::SuiteStarted { flow_count: 3 },
+        }
+    }
+
+    // 7. WireEvent::from(&Event) copies seq/device_id/kind and encodes
+    //    wall_time as unix nanos.
+    #[test]
+    fn wire_event_from_event_copies_fields() {
+        let e = sample_event();
+        let w = WireEvent::from(&e);
+        assert_eq!(w.seq, 42);
+        assert_eq!(w.device_id, DeviceId("android/Pixel_7_API_34".into()));
+        assert_eq!(
+            w.wall_time_unix_nanos,
+            system_time_to_unix_nanos(e.wall_time),
+            "wire wall_time SHALL be the unix-nanos encoding"
+        );
+        assert!(matches!(w.kind, EventKind::SuiteStarted { flow_count: 3 }));
+    }
+
+    // 8. WireEvent::into_event reconstructs wall_time from nanos and
+    //    preserves seq/device_id/kind; timestamp is a fresh Instant.
+    #[test]
+    fn wire_event_into_event_reconstructs_wall_time() {
+        let e = sample_event();
+        let original_wall = e.wall_time;
+        let w = WireEvent::from(&e);
+        let back = w.into_event();
+        assert_eq!(back.seq, 42);
+        assert_eq!(back.device_id, DeviceId("android/Pixel_7_API_34".into()));
+        assert_eq!(
+            back.wall_time, original_wall,
+            "rehydrated wall_time SHALL match the original"
+        );
+        assert!(matches!(back.kind, EventKind::SuiteStarted { flow_count: 3 }));
+    }
+
+    // 9. WireEvent serializes to the exact wire schema: a flat object keyed
+    //    `seq`/`device_id`/`wall_time_unix_nanos`/`kind`, with device_id as a
+    //    bare string (newtype-transparent) and wall_time as a JSON number.
+    //    Guards against schema drift (renamed keys, DeviceId gaining a wrapper
+    //    object, wall_time becoming a quoted string), which a symmetric
+    //    encode/decode would silently pass.
+    #[test]
+    fn wire_event_serde_roundtrip() {
+        let w = WireEvent::from(&sample_event());
+        let json = serde_json::to_string(&w).expect("serialize SHALL succeed");
+        // wall_time of sample_event() is epoch + 1_700_000_000s + 250ns.
+        assert_eq!(
+            json,
+            r#"{"seq":42,"device_id":"android/Pixel_7_API_34","wall_time_unix_nanos":1700000000000000250,"kind":{"SuiteStarted":{"flow_count":3}}}"#,
+            "WireEvent JSON SHALL be the flat wire schema with a bare-string device_id and numeric wall_time"
+        );
+        let back: WireEvent = serde_json::from_str(&json).expect("deserialize SHALL succeed");
+        assert_eq!(back.seq, 42);
+        assert_eq!(back.device_id, DeviceId("android/Pixel_7_API_34".into()));
+        assert_eq!(back.wall_time_unix_nanos, 1_700_000_000_000_000_250);
+    }
+
+    // 10. TreeStats::record on the first fetch seeds both min and max.
+    #[test]
+    fn tree_stats_record_first_fetch_seeds_min_max() {
+        let mut s = TreeStats::default();
+        s.record(57);
+        assert_eq!(s.fetches, 1);
+        assert_eq!(s.min_nodes, 57, "first fetch SHALL seed min_nodes");
+        assert_eq!(s.max_nodes, 57, "first fetch SHALL seed max_nodes");
+    }
+
+    // 11. TreeStats::record tracks min and max across fetches, including a
+    //     later smaller count than the first.
+    #[test]
+    fn tree_stats_record_tracks_min_and_max() {
+        let mut s = TreeStats::default();
+        s.record(50);
+        s.record(80);
+        s.record(30);
+        assert_eq!(s.fetches, 3);
+        assert_eq!(s.min_nodes, 30, "min SHALL fall to the smallest count");
+        assert_eq!(s.max_nodes, 80, "max SHALL rise to the largest count");
+    }
+
+    // 12. TreeStats::record can seed min to 0 on the first fetch (0 is a
+    //     legitimate first value, distinct from the merge sentinel).
+    #[test]
+    fn tree_stats_record_zero_first_fetch() {
+        let mut s = TreeStats::default();
+        s.record(0);
+        s.record(10);
+        assert_eq!(s.min_nodes, 0, "0 first count SHALL stay as min");
+        assert_eq!(s.max_nodes, 10);
+    }
+
+    // 13. TreeStats::merge with a zero-fetch other is a no-op.
+    #[test]
+    fn tree_stats_merge_zero_fetch_is_noop() {
+        let mut s = TreeStats { fetches: 2, min_nodes: 10, max_nodes: 40 };
+        s.merge(&TreeStats::default());
+        assert_eq!(s.fetches, 2);
+        assert_eq!(s.min_nodes, 10);
+        assert_eq!(s.max_nodes, 40);
+    }
+
+    // 14. TreeStats::merge into a fresh (min_nodes==0 sentinel) target adopts
+    //     the other's min rather than keeping the 0 sentinel.
+    #[test]
+    fn tree_stats_merge_into_fresh_adopts_min() {
+        let mut s = TreeStats::default();
+        let other = TreeStats { fetches: 3, min_nodes: 12, max_nodes: 90 };
+        s.merge(&other);
+        assert_eq!(s.fetches, 3);
+        assert_eq!(s.min_nodes, 12, "fresh target SHALL take other's min, not 0");
+        assert_eq!(s.max_nodes, 90);
+    }
+
+    // 15. TreeStats::merge combines fetch counts and takes the lower min /
+    //     higher max across both.
+    #[test]
+    fn tree_stats_merge_combines_min_max() {
+        let mut s = TreeStats { fetches: 2, min_nodes: 20, max_nodes: 50 };
+        let other = TreeStats { fetches: 4, min_nodes: 15, max_nodes: 45 };
+        s.merge(&other);
+        assert_eq!(s.fetches, 6, "fetch counts SHALL add");
+        assert_eq!(s.min_nodes, 15, "merge SHALL keep the lower min");
+        assert_eq!(s.max_nodes, 50, "merge SHALL keep the higher max");
+    }
+
+    // 16. TreeStats::merge does not lower a nonzero min when other's min is
+    //     larger.
+    #[test]
+    fn tree_stats_merge_keeps_smaller_existing_min() {
+        let mut s = TreeStats { fetches: 1, min_nodes: 5, max_nodes: 5 };
+        let other = TreeStats { fetches: 1, min_nodes: 100, max_nodes: 200 };
+        s.merge(&other);
+        assert_eq!(s.min_nodes, 5, "existing smaller min SHALL be preserved");
+        assert_eq!(s.max_nodes, 200);
+    }
+
+    // 17. EventKind StepFinished serializes to the externally-tagged wire
+    //     schema: `{"StepFinished":{...}}`, with the nested StepOutcome also
+    //     externally tagged (`{"Failed":{...}}`) and FailureCode as its bare
+    //     variant name (`"FlowElementNotFound"`). Asserting the literal shape
+    //     catches an unintended enum-representation change (e.g. someone
+    //     adding `#[serde(tag=...)]` or renaming a code) that a symmetric
+    //     round-trip would not detect.
+    #[test]
+    fn step_finished_serde_roundtrip() {
+        let kind = EventKind::StepFinished {
+            global_step_index: 7,
+            outcome: StepOutcome::Failed {
+                message: "boom".into(),
+                code: FailureCode::FlowElementNotFound,
+            },
+            duration_ms: 1234,
+            retry_count: 2,
+            screenshot_path: Some("/tmp/shot.png".into()),
+            tree_stats: TreeStats { fetches: 3, min_nodes: 10, max_nodes: 20 },
+        };
+        let json = serde_json::to_string(&kind).expect("serialize SHALL succeed");
+        assert_eq!(
+            json,
+            r#"{"StepFinished":{"global_step_index":7,"outcome":{"Failed":{"message":"boom","code":"FlowElementNotFound"}},"duration_ms":1234,"retry_count":2,"screenshot_path":"/tmp/shot.png","tree_stats":{"fetches":3,"min_nodes":10,"max_nodes":20}}}"#,
+            "EventKind SHALL be externally tagged with FailureCode as a bare variant name"
+        );
+        let back: EventKind = serde_json::from_str(&json).expect("deserialize SHALL succeed");
+        match back {
+            EventKind::StepFinished { global_step_index, retry_count, outcome, .. } => {
+                assert_eq!(global_step_index, 7);
+                assert_eq!(retry_count, 2);
+                assert!(matches!(
+                    outcome,
+                    StepOutcome::Failed { code: FailureCode::FlowElementNotFound, .. }
+                ));
+            }
+            other => panic!("expected StepFinished, got {other:?}"),
+        }
+    }
+
+    // 19. SubstepEvent ScrollAttempt serializes to the externally-tagged wire
+    //     schema: `{"ScrollAttempt":{...}}`, with nested Point objects keyed
+    //     `x`/`y` and ScrollAttemptResult externally tagged
+    //     (`{"Stall":{"count":..,"max":..}}`). The literal guards the nested
+    //     geometry + result enum representation against drift that a symmetric
+    //     encode/decode would silently pass.
+    #[test]
+    fn substep_scroll_attempt_serde_roundtrip() {
+        let s = SubstepEvent::ScrollAttempt {
+            attempt: 1,
+            direction: "down".into(),
+            strategy_index: 0,
+            from: Point { x: 10, y: 200 },
+            to: Point { x: 10, y: 50 },
+            result: ScrollAttemptResult::Stall { count: 2, max: 3 },
+            tree_stats: TreeStats::default(),
+        };
+        let json = serde_json::to_string(&s).expect("serialize SHALL succeed");
+        assert_eq!(
+            json,
+            r#"{"ScrollAttempt":{"attempt":1,"direction":"down","strategy_index":0,"from":{"x":10,"y":200},"to":{"x":10,"y":50},"result":{"Stall":{"count":2,"max":3}},"tree_stats":{"fetches":0,"min_nodes":0,"max_nodes":0}}}"#,
+            "SubstepEvent SHALL be externally tagged with x/y Points and a tagged Stall result"
+        );
+        let back: SubstepEvent = serde_json::from_str(&json).expect("deserialize SHALL succeed");
+        match back {
+            SubstepEvent::ScrollAttempt { from, to, result, .. } => {
+                assert_eq!(from.x, 10);
+                assert_eq!(to.y, 50);
+                assert!(matches!(result, ScrollAttemptResult::Stall { count: 2, max: 3 }));
+            }
+            other => panic!("expected ScrollAttempt, got {other:?}"),
+        }
+    }
+}

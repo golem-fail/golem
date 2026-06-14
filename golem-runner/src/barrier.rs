@@ -153,4 +153,65 @@ mod tests {
         assert!(!flow_b.should_stop(100));
         assert_eq!(flow_b.failure_point(), None);
     }
+
+    // 7. Default::default() SHALL behave identically to new(): no failure recorded.
+    #[test]
+    fn default_matches_new() {
+        let b = FailureBarrier::default();
+        assert!(!b.has_failure(), "default barrier SHALL have no failure");
+        assert!(!b.should_stop(0), "default barrier SHALL NOT stop at step 0");
+        assert!(
+            !b.should_stop(u64::MAX - 1),
+            "default barrier SHALL NOT stop even at very high step counts",
+        );
+        assert_eq!(b.failure_point(), None);
+    }
+
+    // 8. A failure recorded at step 0 SHALL stop at and past step 0,
+    //    exercising the lowest valid boundary.
+    #[test]
+    fn failure_at_step_zero() {
+        let b = FailureBarrier::new();
+        b.report_failure(0);
+        assert!(b.has_failure(), "failure at step 0 SHALL be recorded");
+        assert_eq!(b.failure_point(), Some(0));
+        assert!(b.should_stop(0), "device at step 0 SHALL stop when failure is at 0");
+        assert!(b.should_stop(1), "device past the failure point SHALL stop");
+    }
+
+    // 9. report_failure(u64::MAX) is indistinguishable from no failure: the
+    //    sentinel NO_FAILURE is u64::MAX, so fetch_min leaves it unchanged and
+    //    has_failure()/failure_point() SHALL still report "no failure".
+    #[test]
+    fn report_sentinel_value_is_treated_as_no_failure() {
+        let b = FailureBarrier::new();
+        b.report_failure(u64::MAX);
+        assert!(
+            !b.has_failure(),
+            "reporting the sentinel value SHALL NOT count as a failure",
+        );
+        assert_eq!(b.failure_point(), None);
+        assert!(
+            !b.should_stop(u64::MAX),
+            "no real failure SHALL mean no stop, even at the max step count",
+        );
+    }
+
+    // 10. A later report_failure with a higher step count SHALL NOT raise the
+    //     recorded point once an earlier failure is in place (fetch_min keeps
+    //     the minimum), and a repeated report of the same point is idempotent.
+    #[test]
+    fn later_higher_report_does_not_raise_point() {
+        let b = FailureBarrier::new();
+        b.report_failure(4);
+        b.report_failure(4); // idempotent
+        b.report_failure(9); // higher — must not move the point
+        assert_eq!(
+            b.failure_point(),
+            Some(4),
+            "the earliest reported failure point SHALL be retained",
+        );
+        assert!(!b.should_stop(3), "device before the point SHALL keep going");
+        assert!(b.should_stop(4), "device at the retained point SHALL stop");
+    }
 }

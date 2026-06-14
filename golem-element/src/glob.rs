@@ -264,4 +264,90 @@ mod tests {
         assert!(glob_match("送信*", "送信ボタン"));
         assert!(!glob_match("送信*", "キャンセル"));
     }
+
+    // 16. Trailing backslash is kept as a literal backslash
+    #[test]
+    fn trailing_backslash_is_literal() {
+        assert!(glob_match("path\\", "path\\"), "trailing backslash SHALL match a literal backslash");
+        assert!(!glob_match("path\\", "path"), "missing backslash SHALL NOT match");
+        assert!(!glob_match("path\\", "path\\x"), "extra char after backslash SHALL NOT match");
+    }
+
+    // 17. Backslash before an ordinary character escapes to that literal character
+    #[test]
+    fn escaped_ordinary_char_is_literal() {
+        assert!(glob_match("a\\bc", "abc"), "escaped ordinary char SHALL collapse to the char itself");
+        assert!(!glob_match("a\\bc", "a\\bc"), "the backslash SHALL NOT remain in the match target");
+    }
+
+    // 18. Escaped backslash matches a single literal backslash
+    #[test]
+    fn escaped_backslash_is_single_backslash() {
+        assert!(glob_match("a\\\\b", "a\\b"), "escaped backslash SHALL match one literal backslash");
+        assert!(!glob_match("a\\\\b", "a\\\\b"), "two backslashes SHALL NOT match");
+    }
+
+    // 19. One compiled GlobMatcher yields correct verdicts across interleaved
+    //     matching and non-matching inputs without being re-compiled.
+    #[test]
+    fn compiled_matcher_is_reusable() {
+        let matcher = GlobMatcher::new("log-*.txt");
+        // Interleave accept/reject calls on the SAME matcher so a stale-state
+        // bug (e.g. a verdict leaking from a prior call) would surface as a
+        // wrong result on a later, independent input.
+        let cases: &[(&str, bool)] = &[
+            ("log-1.txt", true),
+            ("log-1.csv", false),
+            ("log-final.txt", true),
+            ("audit-1.txt", false),
+            ("log-.txt", true),
+            ("log-1.txt.bak", false),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(
+                matcher.is_match(input),
+                *expected,
+                "reused matcher SHALL return {expected} for {input:?}"
+            );
+        }
+    }
+
+    // 20. Question mark consumes exactly one multi-byte unicode scalar
+    #[test]
+    fn question_mark_matches_one_unicode_char() {
+        assert!(glob_match("送?信", "送ボ信"), "? SHALL match a single multi-byte char");
+        assert!(!glob_match("送?信", "送信"), "? SHALL require one char to be present");
+        assert!(!glob_match("送?信", "送ボタ信"), "? SHALL NOT consume two chars");
+    }
+
+    // 21. Star backtracks so a trailing literal can still match
+    #[test]
+    fn star_backtracks_to_trailing_literal() {
+        assert!(glob_match("*.txt", "report.txt"), "star SHALL backtrack to align the trailing literal");
+        assert!(glob_match("a*z", "a-bb-z"), "star SHALL leave room for the closing literal");
+        assert!(!glob_match("a*z", "a-bb-y"), "wrong trailing literal SHALL NOT match");
+    }
+
+    // 22. Consecutive stars behave like a single star
+    #[test]
+    fn consecutive_stars() {
+        assert!(glob_match("**", ""), "double star SHALL match empty");
+        assert!(glob_match("a**b", "ab"), "double star SHALL match zero chars between literals");
+        assert!(glob_match("a**b", "axyzb"), "double star SHALL match many chars between literals");
+        assert!(!glob_match("a**b", "axyz"), "double star SHALL still require the trailing literal");
+    }
+
+    // 23. Star over multi-byte unicode iterates on char boundaries
+    #[test]
+    fn star_over_unicode() {
+        assert!(glob_match("送*ン", "送信ボタン"), "star SHALL span multi-byte chars to reach the literal");
+        assert!(!glob_match("送*ン", "送信ボタ"), "star SHALL NOT match when trailing literal is absent");
+    }
+
+    // 24. Question mark must match a char, not partial bytes of a multi-byte char
+    #[test]
+    fn question_then_literal_alignment() {
+        assert!(glob_match("?信", "送信"), "leading ? SHALL match one full char before the literal");
+        assert!(!glob_match("?信", "信"), "leading ? SHALL require a preceding char");
+    }
 }

@@ -254,4 +254,63 @@ mod tests {
         let label = format_label(0, &row);
         assert_eq!(label, "data[0]: ");
     }
+
+    // ---------------------------------------------------------------
+    // 12. expand_data_rows on empty slice returns empty Vec
+    //     (distinct from get_runs, which injects a default run)
+    // ---------------------------------------------------------------
+    #[test]
+    fn expand_empty_slice_returns_empty() {
+        let runs = expand_data_rows(&[]);
+        assert!(runs.is_empty(), "expanding an empty slice SHALL yield no runs");
+    }
+
+    // ---------------------------------------------------------------
+    // 13. expand_data_rows populates each DataRun label from its row
+    // ---------------------------------------------------------------
+    #[test]
+    fn expand_sets_label_per_row() {
+        let data = vec![
+            HashMap::from([("payment".to_string(), "credit_card".to_string())]),
+            HashMap::from([("payment".to_string(), "paypal".to_string())]),
+        ];
+
+        let runs = expand_data_rows(&data);
+        assert_eq!(runs[0].label, "data[0]: payment=credit_card");
+        assert_eq!(runs[1].label, "data[1]: payment=paypal");
+    }
+
+    // ---------------------------------------------------------------
+    // 15. apply_data_vars with an empty map is a no-op
+    // ---------------------------------------------------------------
+    #[test]
+    fn apply_empty_data_vars_is_noop() {
+        let mut store = VariableStore::new();
+        store.set_in_scope(ScopeLevel::Flow, "kept", VarValue::String("yes".to_string()));
+
+        apply_data_vars(&mut store, &HashMap::new());
+
+        let val = store.resolve("kept").expect("pre-existing var SHALL remain");
+        assert_eq!(val, &VarValue::String("yes".to_string()));
+    }
+
+    // ---------------------------------------------------------------
+    // 16. format_label reflects a non-zero index
+    // ---------------------------------------------------------------
+    #[test]
+    fn label_uses_provided_index() {
+        let row = HashMap::from([("x".to_string(), "1".to_string())]);
+        let label = format_label(7, &row);
+        assert_eq!(label, "data[7]: x=1");
+    }
+
+    // ---------------------------------------------------------------
+    // 17. format_label single pair has no separator comma
+    // ---------------------------------------------------------------
+    #[test]
+    fn label_single_pair_has_no_comma() {
+        let row = HashMap::from([("only".to_string(), "one".to_string())]);
+        let label = format_label(0, &row);
+        assert_eq!(label, "data[0]: only=one");
+    }
 }

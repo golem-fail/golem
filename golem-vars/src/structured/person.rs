@@ -336,4 +336,168 @@ mod tests {
             unique_first.len()
         );
     }
+
+    // 24. is_family_first SHALL be true only for JP, CN, KR
+    #[test]
+    fn is_family_first_true_for_known_countries() {
+        assert!(is_family_first("JP"), "JP SHALL be family-first");
+        assert!(is_family_first("CN"), "CN SHALL be family-first");
+        assert!(is_family_first("KR"), "KR SHALL be family-first");
+    }
+
+    // 25. is_family_first SHALL be false for other / empty / unknown countries
+    #[test]
+    fn is_family_first_false_for_other_countries() {
+        assert!(!is_family_first("US"), "US SHALL NOT be family-first");
+        assert!(!is_family_first("GB"), "GB SHALL NOT be family-first");
+        assert!(!is_family_first(""), "empty SHALL NOT be family-first");
+    }
+
+    // 26. is_family_first SHALL be case-sensitive (lowercase does not match)
+    #[test]
+    fn is_family_first_is_case_sensitive() {
+        assert!(
+            !is_family_first("jp"),
+            "lowercase 'jp' SHALL NOT be family-first"
+        );
+        assert!(
+            !is_family_first("Jp"),
+            "mixed-case 'Jp' SHALL NOT be family-first"
+        );
+    }
+
+    // 27. Non-family-first country SHALL render name as "First Last"
+    #[test]
+    fn person_us_uses_first_last_order() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("person", &[("country", "US")]);
+        let result = generate_structured(&d, &mut rng).expect("should generate");
+
+        let first = field(&result, "first");
+        let last = field(&result, "last");
+        let name = field(&result, "name");
+
+        assert_eq!(
+            name,
+            format!("{first} {last}"),
+            "US name SHALL be in First Last order"
+        );
+    }
+
+    // 28. KR person SHALL render name in family-first ("Last First") order
+    #[test]
+    fn person_kr_uses_family_first_order() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("person", &[("country", "KR")]);
+        let result = generate_structured(&d, &mut rng).expect("should generate");
+
+        let first = field(&result, "first");
+        let last = field(&result, "last");
+        let name = field(&result, "name");
+
+        // Pin the seed-42 components so the assertion is not circular with the
+        // production format string: the same draw rendered first-last would be
+        // "Dolores Adeyemi", but family-first SHALL invert it to "Adeyemi Dolores".
+        assert_eq!(first, "Dolores", "seed-42 KR first SHALL be stable");
+        assert_eq!(last, "Adeyemi", "seed-42 KR last SHALL be stable");
+        assert_eq!(
+            name, "Adeyemi Dolores",
+            "KR name SHALL be family-first (Last First), not 'Dolores Adeyemi'"
+        );
+    }
+
+    // 29. expand_phone_format SHALL replace every '#' with a decimal digit
+    #[test]
+    fn expand_phone_format_replaces_hash_with_digits() {
+        let mut rng = seeded_rng();
+        let out = expand_phone_format("###", &mut rng);
+        assert_eq!(out.len(), 3, "length SHALL be preserved");
+        assert!(
+            out.chars().all(|c| c.is_ascii_digit()),
+            "all '#' SHALL become digits, got: {out}"
+        );
+    }
+
+    // 30. expand_phone_format SHALL preserve non-'#' characters verbatim
+    #[test]
+    fn expand_phone_format_preserves_literals() {
+        let mut rng = seeded_rng();
+        let out = expand_phone_format("+1 (###) ###-####", &mut rng);
+        assert!(out.starts_with("+1 ("), "literal prefix SHALL be preserved");
+        assert!(out.contains(") "), "literal separators SHALL be preserved");
+        assert!(out.contains('-'), "literal dash SHALL be preserved");
+        // Every original '#' position is now a digit; literals unchanged.
+        assert_eq!(
+            out.chars().filter(|c| c.is_ascii_digit()).count(),
+            1 + 3 + 3 + 4,
+            "digit count SHALL equal literal digits plus expanded '#', got: {out}"
+        );
+    }
+
+    // 31. expand_phone_format on a format with no '#' SHALL return it unchanged
+    #[test]
+    fn expand_phone_format_no_hash_is_identity() {
+        let mut rng = seeded_rng();
+        let out = expand_phone_format("+44-FIXED", &mut rng);
+        assert_eq!(out, "+44-FIXED", "no-'#' format SHALL pass through unchanged");
+    }
+
+    // 32. expand_phone_format on an empty format SHALL return an empty string
+    #[test]
+    fn expand_phone_format_empty_is_empty() {
+        let mut rng = seeded_rng();
+        let out = expand_phone_format("", &mut rng);
+        assert_eq!(out, "", "empty format SHALL produce empty string");
+    }
+
+    // 33. generate_phone with None country SHALL fall back to a random geo country
+    #[test]
+    fn generate_phone_none_country_uses_random_geo() {
+        let mut rng = seeded_rng();
+        let phone = generate_phone(None, &mut rng);
+        assert!(
+            phone.starts_with('+'),
+            "fallback phone SHALL start with '+', got: {phone}"
+        );
+        assert!(
+            phone.len() > 5,
+            "fallback phone SHALL be plausibly long, got: {phone}"
+        );
+    }
+
+    // 34. generate_phone for JP SHALL use the JP +81 format
+    #[test]
+    fn generate_phone_jp_uses_jp_format() {
+        let mut rng = seeded_rng();
+        let phone = generate_phone(Some("JP"), &mut rng);
+        assert!(
+            phone.starts_with("+81"),
+            "JP phone SHALL start with +81, got: {phone}"
+        );
+    }
+
+    // 35. generate_phone for an unknown country SHALL fall back to random geo
+    #[test]
+    fn generate_phone_unknown_country_falls_back() {
+        let mut rng = seeded_rng();
+        let phone = generate_phone(Some("ZZ"), &mut rng);
+        assert!(
+            phone.starts_with('+'),
+            "unknown-country phone SHALL fall back to a '+' format, got: {phone}"
+        );
+        assert!(
+            phone.len() > 5,
+            "unknown-country phone SHALL be plausibly long, got: {phone}"
+        );
+    }
+
+    // 36. generate_phone SHALL be deterministic for a fixed seed and country
+    #[test]
+    fn generate_phone_deterministic() {
+        let mut rng1 = ChaCha8Rng::seed_from_u64(7);
+        let mut rng2 = ChaCha8Rng::seed_from_u64(7);
+        let p1 = generate_phone(Some("JP"), &mut rng1);
+        let p2 = generate_phone(Some("JP"), &mut rng2);
+        assert_eq!(p1, p2, "same seed+country SHALL produce same phone");
+    }
 }

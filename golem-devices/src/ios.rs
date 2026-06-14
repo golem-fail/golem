@@ -646,4 +646,297 @@ mod tests {
             .expect("should find creating");
         assert_eq!(d_creating.state, DeviceState::Shutdown);
     }
+
+    // 9. pick_runtime_for_spec: Minimum spec falls through to latest (first)
+    #[test]
+    fn pick_runtime_minimum_returns_latest() {
+        let runtimes = vec![rt(26), rt(18), rt(17)];
+        let pick = pick_runtime_for_spec(
+            &runtimes,
+            Some(&OsVersionSpec::Minimum { platform: Platform::Ios, major: 17 }),
+        )
+        .expect("SHALL fall through to latest for Minimum spec");
+        assert_eq!(pick.major, 26, "Minimum spec SHALL return latest, not the floor");
+    }
+
+    // 10. pick_runtime_for_spec: empty runtime list yields None
+    #[test]
+    fn pick_runtime_empty_list_returns_none() {
+        let runtimes: Vec<RuntimeInfo> = vec![];
+        assert!(
+            pick_runtime_for_spec(&runtimes, None).is_none(),
+            "empty runtime list SHALL yield None"
+        );
+        assert!(
+            pick_runtime_for_spec(
+                &runtimes,
+                Some(&OsVersionSpec::Exact { platform: Platform::Ios, major: 18 })
+            )
+            .is_none(),
+            "empty runtime list with Exact spec SHALL yield None"
+        );
+    }
+
+    /// Helper: build a DeviceTypeInfo for pick_device_type tests.
+    fn dti(identifier: &str, name: &str, is_phone: bool) -> DeviceTypeInfo {
+        DeviceTypeInfo {
+            identifier: identifier.to_string(),
+            name: name.to_string(),
+            is_phone,
+        }
+    }
+
+    // 11. pick_device_type(want_phone=true) picks the LAST phone (latest model)
+    #[test]
+    fn pick_device_type_phone_picks_last_phone() {
+        let types = vec![
+            dti("id.iPhone-14", "iPhone 14", true),
+            dti("id.iPad-Air", "iPad Air", false),
+            dti("id.iPhone-16", "iPhone 16", true),
+        ];
+        let pick = pick_device_type(&types, true)
+            .expect("SHALL find a phone");
+        assert_eq!(pick.name, "iPhone 16", "rfind SHALL return the latest phone");
+    }
+
+    // 12. pick_device_type(want_phone=false) picks the LAST iPad (by name)
+    #[test]
+    fn pick_device_type_tablet_picks_last_ipad() {
+        let types = vec![
+            dti("id.iPad-9th", "iPad (9th generation)", false),
+            dti("id.iPhone-16", "iPhone 16", true),
+            dti("id.iPad-Pro", "iPad Pro 13-inch (M4)", false),
+        ];
+        let pick = pick_device_type(&types, false)
+            .expect("SHALL find an iPad");
+        assert_eq!(
+            pick.name, "iPad Pro 13-inch (M4)",
+            "rfind SHALL return the latest iPad by name match"
+        );
+    }
+
+    // 13. pick_device_type for tablet matches on name "iPad", not the is_phone flag
+    #[test]
+    fn pick_device_type_tablet_uses_name_not_flag() {
+        // An entry whose is_phone is false but name lacks "iPad" SHALL NOT match.
+        let types = vec![
+            dti("id.AppleTV", "Apple TV 4K", false),
+            dti("id.iPad-Air", "iPad Air 11-inch", false),
+        ];
+        let pick = pick_device_type(&types, false)
+            .expect("SHALL find an iPad by name");
+        assert_eq!(pick.name, "iPad Air 11-inch");
+    }
+
+    // 14. pick_device_type returns None when no candidate matches
+    #[test]
+    fn pick_device_type_no_match_returns_none() {
+        let only_tablets = vec![dti("id.iPad-Air", "iPad Air", false)];
+        assert!(
+            pick_device_type(&only_tablets, true).is_none(),
+            "no phone present SHALL yield None"
+        );
+        let only_phones = vec![dti("id.iPhone-16", "iPhone 16", true)];
+        assert!(
+            pick_device_type(&only_phones, false).is_none(),
+            "no iPad present SHALL yield None"
+        );
+        let empty: Vec<DeviceTypeInfo> = vec![];
+        assert!(
+            pick_device_type(&empty, true).is_none(),
+            "empty list SHALL yield None"
+        );
+    }
+
+    // 15. classify_device_type maps iPad ids to Tablet and everything else to Phone
+    #[test]
+    fn classify_device_type_branches() {
+        assert_eq!(
+            classify_device_type("com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M4"),
+            DeviceType::Tablet,
+            "id containing iPad SHALL classify as Tablet"
+        );
+        assert_eq!(
+            classify_device_type("com.apple.CoreSimulator.SimDeviceType.iPhone-16"),
+            DeviceType::Phone,
+            "iPhone id SHALL classify as Phone"
+        );
+        assert_eq!(
+            classify_device_type("com.apple.CoreSimulator.SimDeviceType.Apple-Watch"),
+            DeviceType::Phone,
+            "non-iPad id SHALL default to Phone"
+        );
+    }
+
+    // 16. parse_runtime_version: single-part version (no minor) yields major and bare string
+    #[test]
+    fn runtime_version_single_part() {
+        let result = parse_runtime_version("com.apple.CoreSimulator.SimRuntime.iOS-18");
+        assert_eq!(
+            result,
+            Some((18, "18".to_string())),
+            "single-part version SHALL yield major and a dotless version string"
+        );
+    }
+
+    // 17. parse_runtime_version: non-numeric major yields None
+    #[test]
+    fn runtime_version_non_numeric_major_none() {
+        let result =
+            parse_runtime_version("com.apple.CoreSimulator.SimRuntime.iOS-beta-1");
+        assert!(result.is_none(), "non-numeric major SHALL yield None");
+    }
+
+    // 18. parse_runtime_version: lowercase-only "ios" lacks the "iOS-" prefix → None
+    #[test]
+    fn runtime_version_lowercase_ios_none() {
+        let result =
+            parse_runtime_version("com.apple.CoreSimulator.SimRuntime.ios-18-6");
+        assert!(
+            result.is_none(),
+            "lowercase ios without the iOS- prefix SHALL yield None"
+        );
+    }
+
+    // 19. parse_simctl_output: missing deviceTypeIdentifier defaults to Phone
+    #[test]
+    fn parse_missing_device_type_defaults_to_phone() {
+        let dev = make_device_json(
+            "Some Device",
+            "LLLL-1234",
+            "Shutdown",
+            true,
+            None,
+            None,
+        );
+        let json = make_simctl_json(&[(
+            "com.apple.CoreSimulator.SimRuntime.iOS-18-4",
+            &format!("[{dev}]"),
+        )]);
+
+        let devices = parse_simctl_output(&json).expect("should parse");
+        assert_eq!(devices.len(), 1);
+        assert_eq!(
+            devices[0].device_type,
+            DeviceType::Phone,
+            "absent deviceTypeIdentifier SHALL default to Phone"
+        );
+        assert!(
+            devices[0].device_type_id.is_none(),
+            "absent deviceTypeIdentifier SHALL remain None in DeviceInfo"
+        );
+    }
+
+    // 20. parse_simctl_output: non-iOS runtime key in devices map is skipped
+    #[test]
+    fn parse_non_ios_runtime_skipped() {
+        let dev = make_device_json(
+            "Apple TV",
+            "MMMM-5678",
+            "Shutdown",
+            true,
+            Some("com.apple.CoreSimulator.SimDeviceType.Apple-TV-4K"),
+            None,
+        );
+        let json = make_simctl_json(&[(
+            "com.apple.CoreSimulator.SimRuntime.tvOS-18-0",
+            &format!("[{dev}]"),
+        )]);
+
+        let devices = parse_simctl_output(&json).expect("should parse");
+        assert!(
+            devices.is_empty(),
+            "tvOS runtime SHALL be skipped, yielding no devices"
+        );
+    }
+
+    // 21. parse_simctl_output: iOS-keyed runtime whose suffix is unparseable is skipped
+    #[test]
+    fn parse_ios_runtime_unparseable_version_skipped() {
+        // Key contains "iOS" (passes the runtime filter) but the iOS- suffix
+        // has a non-numeric major, so parse_runtime_version returns None → continue.
+        let dev = make_device_json(
+            "iPhone X",
+            "NNNN-9012",
+            "Shutdown",
+            true,
+            Some("com.apple.CoreSimulator.SimDeviceType.iPhone-X"),
+            None,
+        );
+        let json = make_simctl_json(&[(
+            "com.apple.CoreSimulator.SimRuntime.iOS-unknown",
+            &format!("[{dev}]"),
+        )]);
+
+        let devices = parse_simctl_output(&json).expect("should parse");
+        assert!(
+            devices.is_empty(),
+            "iOS runtime with unparseable version SHALL be skipped"
+        );
+    }
+
+    // 22. parse_simctl_output: malformed JSON returns Err
+    #[test]
+    fn parse_invalid_json_returns_err() {
+        let result = parse_simctl_output("{ not valid json ]");
+        assert!(result.is_err(), "malformed JSON SHALL yield an Err");
+    }
+
+    // 23. parse_simctl_output: empty devices map yields empty vec (no panic)
+    #[test]
+    fn parse_empty_devices_map_returns_empty() {
+        let json = r#"{ "devices": {} }"#;
+        let devices = parse_simctl_output(json).expect("should parse empty map");
+        assert!(devices.is_empty());
+    }
+
+    // 24. parse_simctl_output: every input-derived DeviceInfo field is wired from the source JSON
+    #[test]
+    fn parse_sets_simulator_field_defaults() {
+        let dev = make_device_json(
+            "iPhone 16",
+            "OOOO-3456",
+            "Booted",
+            true,
+            Some("com.apple.CoreSimulator.SimDeviceType.iPhone-16"),
+            Some("2026-01-02T03:04:05Z"),
+        );
+        let runtime = "com.apple.CoreSimulator.SimRuntime.iOS-18-4";
+        let json = make_simctl_json(&[(runtime, &format!("[{dev}]"))]);
+
+        let devices = parse_simctl_output(&json).expect("should parse");
+        // 1. Exactly one device is synthesized from the single input entry.
+        assert_eq!(devices.len(), 1, "one input device SHALL yield one DeviceInfo");
+        let d = &devices[0];
+        // 2. Input-derived identity fields propagate verbatim from the JSON.
+        assert_eq!(d.name, "iPhone 16", "name SHALL be copied from input");
+        assert_eq!(d.udid, "OOOO-3456", "udid SHALL be copied from input");
+        assert_eq!(
+            d.last_booted.as_deref(),
+            Some("2026-01-02T03:04:05Z"),
+            "last_booted SHALL carry lastBootedAt from input"
+        );
+        assert_eq!(
+            d.runtime_id.as_deref(),
+            Some(runtime),
+            "runtime_id SHALL carry the originating runtime key"
+        );
+        assert_eq!(
+            d.device_type_id.as_deref(),
+            Some("com.apple.CoreSimulator.SimDeviceType.iPhone-16"),
+            "device_type_id SHALL be preserved verbatim"
+        );
+        // 3. Derived enum fields reflect the parsed branch (Ios platform, Phone type, Booted state, parsed OS).
+        assert_eq!(d.platform, Platform::Ios, "platform SHALL be Ios for simulators");
+        assert_eq!(d.device_type, DeviceType::Phone, "iPhone-16 SHALL classify as Phone");
+        assert_eq!(d.state, DeviceState::Booted, "\"Booted\" state SHALL map to DeviceState::Booted");
+        assert_eq!(d.os_major, 18, "os_major SHALL be parsed from the iOS-18-4 runtime");
+        assert_eq!(d.os_version, "18.4", "os_version SHALL be the dotted form of the runtime version");
+        // 4. Simulator-only constant fields are fixed (not derived from input).
+        assert!(!d.physical, "simulators SHALL be marked non-physical");
+        assert!(!d.playstore, "iOS simulators SHALL have playstore=false");
+        assert!(d.screen_width.is_none(), "screen_width SHALL be unset for sims");
+        assert!(d.screen_height.is_none(), "screen_height SHALL be unset for sims");
+        assert!(d.screen_scale.is_none(), "screen_scale SHALL be unset for sims");
+    }
 }

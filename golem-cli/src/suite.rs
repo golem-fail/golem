@@ -3597,4 +3597,375 @@ mod tests {
         assert!(!s.contains("LOW"), "got: {s}");
         assert!(!s.contains("low disk"), "got: {s}");
     }
+
+    // ---------------------------------------------------------------
+    // Shared builders for the pure-function tests below.
+    // ---------------------------------------------------------------
+    fn device(
+        name: &str,
+        platform: Platform,
+        device_type: golem_devices::DeviceType,
+        os_major: u32,
+    ) -> DeviceInfo {
+        DeviceInfo {
+            name: name.to_string(),
+            udid: format!("udid-{name}"),
+            platform,
+            device_type,
+            os_major,
+            os_version: format!("{os_major}.0"),
+            state: DeviceState::Booted,
+            physical: false,
+            playstore: false,
+            screen_width: None,
+            screen_height: None,
+            screen_scale: None,
+            last_booted: None,
+            runtime_id: None,
+            device_type_id: None,
+        }
+    }
+
+    fn empty_slot() -> DeviceSlot {
+        DeviceSlot {
+            platform: None,
+            os_version: None,
+            device_type: None,
+            physical: None,
+            name: None,
+            playstore: None,
+            accessibility_label: None,
+            booted: None,
+            apps: Vec::new(),
+        }
+    }
+
+    fn group(boxes: Vec<DeviceSlot>, max_runs: Option<u32>) -> CoverageGroup {
+        CoverageGroup {
+            flow_idx: 0,
+            strategy: golem_parser::CoverageStrategy::Smart,
+            boxes,
+            max_runs,
+        }
+    }
+
+    /// Build a `DeviceConstraint` from a TOML fragment. Avoids naming the
+    /// struct's many optional fields by hand and keeps tests resilient to
+    /// field additions — only the keys under test are set.
+    fn constraint(toml_src: &str) -> golem_parser::DeviceConstraint {
+        toml::from_str(toml_src).expect("constraint TOML SHALL deserialize")
+    }
+
+    // ---------------------------------------------------------------
+    // format_install_target — single-source target label
+    // ---------------------------------------------------------------
+    #[test]
+    fn format_install_target_renders_name_platform_version_type() {
+        let d = device("iPhone 16e", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        assert_eq!(
+            format_install_target(&d, "ios"),
+            "iPhone 16e (ios/v18/phone)",
+            "install target SHALL be name (platform/vN/type)",
+        );
+    }
+
+    #[test]
+    fn format_install_target_uses_passed_platform_string_not_device_platform() {
+        // The function takes an explicit platform_str so callers can pass a
+        // pre-formatted value; it does NOT re-derive from device.platform.
+        // 1. Device's real platform is Android; pass a DISAGREEING "ios"
+        //    string so the two cannot coincide.
+        let d = device("Pixel 8", Platform::Android, golem_devices::DeviceType::Tablet, 14);
+        let target = format_install_target(&d, "ios");
+        // 2. Label SHALL reflect the passed string, proving device.platform
+        //    (which would yield "android") is ignored.
+        assert_eq!(
+            target, "Pixel 8 (ios/v14/tablet)",
+            "format_install_target SHALL use the passed platform_str, not device.platform",
+        );
+        assert!(
+            !target.contains("android"),
+            "label SHALL NOT re-derive platform from the Android device",
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // device_covered_axes — [platform, vN, device_type]
+    // ---------------------------------------------------------------
+    #[test]
+    fn device_covered_axes_lists_platform_version_type() {
+        let d = device("iPad", Platform::Ios, golem_devices::DeviceType::Tablet, 26);
+        assert_eq!(
+            device_covered_axes(&d),
+            vec!["ios".to_string(), "v26".to_string(), "tablet".to_string()],
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // is_group_complete — stop-condition predicate
+    // ---------------------------------------------------------------
+    #[test]
+    fn is_group_complete_true_when_run_cap_reached() {
+        // max_runs = 1, one run done → complete regardless of ticks.
+        let g = group(vec![empty_slot(), empty_slot()], Some(1));
+        let progress = GroupProgress { ticked: Default::default(), runs: 1 };
+        assert!(is_group_complete(&g, &progress), "run cap SHALL end the group");
+    }
+
+    #[test]
+    fn is_group_complete_false_when_runs_below_cap_and_boxes_unticked() {
+        let g = group(vec![empty_slot(), empty_slot()], Some(2));
+        let progress = GroupProgress { ticked: Default::default(), runs: 1 };
+        assert!(!is_group_complete(&g, &progress));
+    }
+
+    #[test]
+    fn is_group_complete_true_when_all_boxes_ticked() {
+        // Smart group (max_runs = None): complete once every pool box ticked.
+        let g = group(vec![empty_slot(), empty_slot()], None);
+        let mut ticked = std::collections::HashSet::new();
+        ticked.insert(0usize);
+        ticked.insert(1usize);
+        let progress = GroupProgress { ticked, runs: 1 };
+        assert!(is_group_complete(&g, &progress), "all boxes ticked SHALL end the group");
+    }
+
+    #[test]
+    fn is_group_complete_false_when_some_boxes_unticked() {
+        let g = group(vec![empty_slot(), empty_slot()], None);
+        let mut ticked = std::collections::HashSet::new();
+        ticked.insert(0usize);
+        let progress = GroupProgress { ticked, runs: 1 };
+        assert!(!is_group_complete(&g, &progress));
+    }
+
+    #[test]
+    fn is_group_complete_false_for_empty_pool_with_no_cap() {
+        // Defensive case from the docs: max_runs None + empty pool → never
+        // complete (the !boxes.is_empty() guard blocks the tick branch).
+        let g = group(Vec::new(), None);
+        let progress = GroupProgress { ticked: Default::default(), runs: 99 };
+        assert!(!is_group_complete(&g, &progress));
+    }
+
+    // ---------------------------------------------------------------
+    // pool_ticks_for_device — bonus-coverage credit
+    // ---------------------------------------------------------------
+    #[test]
+    fn pool_ticks_for_device_returns_matching_box_indices() {
+        // Pool: [ios-phone, android-phone, ios (any type)]. An iOS phone
+        // matches box 0 and the platform-only box 2, not the android box 1.
+        let ios_phone = DeviceSlot {
+            platform: Some(Platform::Ios),
+            device_type: Some(golem_devices::DeviceType::Phone),
+            ..empty_slot()
+        };
+        let android_phone = DeviceSlot {
+            platform: Some(Platform::Android),
+            device_type: Some(golem_devices::DeviceType::Phone),
+            ..empty_slot()
+        };
+        let ios_any = DeviceSlot {
+            platform: Some(Platform::Ios),
+            ..empty_slot()
+        };
+        let g = group(vec![ios_phone, android_phone, ios_any], None);
+        let d = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        assert_eq!(
+            pool_ticks_for_device(&d, &g),
+            vec![0usize, 2usize],
+            "device SHALL tick every pool box it satisfies",
+        );
+    }
+
+    #[test]
+    fn pool_ticks_for_device_empty_when_nothing_matches() {
+        let android_box = DeviceSlot {
+            platform: Some(Platform::Android),
+            ..empty_slot()
+        };
+        let g = group(vec![android_box], None);
+        let d = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        assert!(pool_ticks_for_device(&d, &g).is_empty());
+    }
+
+    // ---------------------------------------------------------------
+    // coverage_skip_report — synthetic SKIP report
+    // ---------------------------------------------------------------
+    #[test]
+    fn coverage_skip_report_marks_success_with_skip_reason_and_axes() {
+        let slot = DeviceSlot {
+            platform: Some(Platform::Ios),
+            device_type: Some(golem_devices::DeviceType::Phone),
+            ..empty_slot()
+        };
+        let r = coverage_skip_report("login".to_string(), &[slot], Some(7), Instant::now());
+        assert!(r.success, "skip report SHALL keep success=true so exit code stays 0");
+        assert_eq!(r.flow_name, "login");
+        assert_eq!(r.seed, Some(7));
+        assert_eq!(
+            r.skipped_reason.as_deref(),
+            Some("coverage group satisfied by peer run"),
+        );
+        // covered_axes is derived from shape_label's `/`-split of the slot.
+        assert_eq!(r.covered_axes, vec!["ios".to_string(), "phone".to_string()]);
+        assert_eq!(r.device_name.as_deref(), Some("ios/phone"));
+        assert!(r.step_results.is_empty(), "no steps ran on a skipped run");
+    }
+
+    #[test]
+    fn coverage_skip_report_handles_no_slots() {
+        let r = coverage_skip_report("orphan".to_string(), &[], None, Instant::now());
+        assert!(r.success);
+        assert!(r.device_name.is_none(), "no slot SHALL yield no device_name");
+        assert!(r.covered_axes.is_empty());
+    }
+
+    // ---------------------------------------------------------------
+    // device_matches_entry_constraints — install-matrix safety net
+    // ---------------------------------------------------------------
+    fn entry_with(constraints: Vec<golem_parser::DeviceConstraint>) -> InstallEntry {
+        InstallEntry {
+            platform: Platform::Ios,
+            app_name: "app".to_string(),
+            bundle_id: "com.x".to_string(),
+            script_path: PathBuf::from("install.sh"),
+            timeout_ms: 1000,
+            device_constraints: constraints,
+        }
+    }
+
+    #[test]
+    fn entry_constraints_empty_matches_any_device() {
+        let d = device("Pixel", Platform::Android, golem_devices::DeviceType::Phone, 14);
+        assert!(device_matches_entry_constraints(&d, &entry_with(Vec::new())));
+    }
+
+    #[test]
+    fn entry_constraints_device_type_must_match() {
+        let phone = entry_with(vec![constraint(r#"type = "phone""#)]);
+        let tablet_dev = device("iPad", Platform::Ios, golem_devices::DeviceType::Tablet, 18);
+        let phone_dev = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        assert!(!device_matches_entry_constraints(&tablet_dev, &phone));
+        assert!(device_matches_entry_constraints(&phone_dev, &phone));
+    }
+
+    #[test]
+    fn entry_constraints_default_excludes_physical_devices() {
+        // No `hardware` key = virtual-only. A physical device SHALL NOT match.
+        let e = entry_with(vec![constraint(r#"type = "phone""#)]);
+        let mut phys = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        phys.physical = true;
+        assert!(!device_matches_entry_constraints(&phys, &e));
+    }
+
+    #[test]
+    fn entry_constraints_hardware_real_matches_physical() {
+        let e = entry_with(vec![constraint(r#"hardware = "real""#)]);
+        let mut phys = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        phys.physical = true;
+        let virt = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        assert!(device_matches_entry_constraints(&phys, &e));
+        assert!(!device_matches_entry_constraints(&virt, &e), "virtual SHALL NOT match hardware=real");
+    }
+
+    #[test]
+    fn entry_constraints_hardware_array_matches_either() {
+        let e = entry_with(vec![constraint(r#"hardware = ["virtual", "real"]"#)]);
+        let mut phys = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        phys.physical = true;
+        let virt = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        assert!(device_matches_entry_constraints(&phys, &e));
+        assert!(device_matches_entry_constraints(&virt, &e));
+    }
+
+    #[test]
+    fn entry_constraints_name_must_match_exactly() {
+        let e = entry_with(vec![constraint(r#"name = "Pixel 8""#)]);
+        let pixel = device("Pixel 8", Platform::Android, golem_devices::DeviceType::Phone, 14);
+        let other = device("Pixel 7a", Platform::Android, golem_devices::DeviceType::Phone, 14);
+        assert!(device_matches_entry_constraints(&pixel, &e));
+        assert!(!device_matches_entry_constraints(&other, &e));
+    }
+
+    #[test]
+    fn entry_constraints_playstore_flag_must_match() {
+        let e = entry_with(vec![constraint("playstore = true")]);
+        let mut with_ps = device("Pixel", Platform::Android, golem_devices::DeviceType::Phone, 14);
+        with_ps.playstore = true;
+        let without_ps = device("Pixel", Platform::Android, golem_devices::DeviceType::Phone, 14);
+        assert!(device_matches_entry_constraints(&with_ps, &e));
+        assert!(!device_matches_entry_constraints(&without_ps, &e));
+    }
+
+    #[test]
+    fn entry_constraints_any_of_multiple_matches() {
+        // A device matches the entry if it matches ANY one constraint.
+        let e = entry_with(vec![
+            constraint(r#"name = "Other""#),
+            constraint(r#"type = "phone""#),
+        ]);
+        let phone = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        assert!(device_matches_entry_constraints(&phone, &e),
+            "matching any single constraint SHALL admit the device");
+    }
+
+    // ---------------------------------------------------------------
+    // build_suite_planned_event — pre-formatted SuitePlanned payload
+    // ---------------------------------------------------------------
+    #[test]
+    fn build_suite_planned_event_empty_parsed_yields_empty_lists() {
+        let parsed = golem_orchestrator::ParsedSuite {
+            flows: Vec::new(),
+            flow_runs: Vec::new(),
+            coverage_groups: Vec::new(),
+            install_matrix: Vec::new(),
+            device_availability: Vec::new(),
+            parse_failures: Vec::new(),
+            lint_warnings: Vec::new(),
+        };
+        match build_suite_planned_event(&parsed) {
+            golem_events::EventKind::SuitePlanned {
+                flow_runs,
+                install_entries,
+                device_availability,
+            } => {
+                assert!(flow_runs.is_empty());
+                assert!(install_entries.is_empty());
+                assert!(device_availability.is_empty());
+            }
+            other => panic!("SHALL build a SuitePlanned event, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn build_suite_planned_event_formats_install_entries() {
+        let parsed = golem_orchestrator::ParsedSuite {
+            flows: Vec::new(),
+            flow_runs: Vec::new(),
+            coverage_groups: Vec::new(),
+            install_matrix: vec![InstallEntry {
+                platform: Platform::Android,
+                app_name: "MyApp".to_string(),
+                bundle_id: "com.my.app".to_string(),
+                script_path: PathBuf::from("i.sh"),
+                timeout_ms: 1000,
+                device_constraints: Vec::new(),
+            }],
+            device_availability: vec!["ios/v26/phone: 1 booted".to_string()],
+            parse_failures: Vec::new(),
+            lint_warnings: Vec::new(),
+        };
+        match build_suite_planned_event(&parsed) {
+            golem_events::EventKind::SuitePlanned {
+                install_entries,
+                device_availability,
+                ..
+            } => {
+                assert_eq!(install_entries, vec!["android MyApp → com.my.app".to_string()]);
+                assert_eq!(device_availability, vec!["ios/v26/phone: 1 booted".to_string()]);
+            }
+            other => panic!("SHALL build a SuitePlanned event, got {other:?}"),
+        }
+    }
 }

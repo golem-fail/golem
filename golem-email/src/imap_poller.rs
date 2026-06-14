@@ -256,6 +256,16 @@ mod tests {
         }
     }
 
+    /// A mock connection whose `fetch_inbox` always fails.
+    struct FailingInboxConnection;
+
+    #[async_trait]
+    impl ImapConnection for FailingInboxConnection {
+        async fn fetch_inbox(&self) -> Result<Vec<EmailMessage>> {
+            anyhow::bail!("connection refused")
+        }
+    }
+
     /// A mock connection that returns an empty inbox for the first N calls,
     /// then returns the provided messages.
     struct DelayedInboxConnection {
@@ -314,6 +324,70 @@ mod tests {
         assert!(EmailMessage::from_raw(raw).is_err());
     }
 
+    // 1. A missing To header SHALL surface as an error carrying the
+    //    "missing To header" context, distinct from the From failure.
+    #[test]
+    fn parse_email_missing_to_is_error() {
+        let raw = "From: a@b.com\nSubject: hi\n\nBody text";
+        let err = EmailMessage::from_raw(raw).expect_err("missing To SHALL error");
+        let msg = format!("{err:#}");
+        assert!(msg.contains("missing To header"), "unexpected error: {msg}");
+    }
+
+    // 2. A missing Subject header SHALL surface as an error.
+    #[test]
+    fn parse_email_missing_subject_is_error() {
+        let raw = "From: a@b.com\nTo: c@d.com\n\nBody text";
+        let err = EmailMessage::from_raw(raw).expect_err("missing Subject SHALL error");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("missing Subject header"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    // 3. Date is optional: when absent the field SHALL default to empty
+    //    while parsing still succeeds.
+    #[test]
+    fn parse_email_missing_date_defaults_empty() {
+        let raw = "From: a@b.com\nTo: c@d.com\nSubject: hi\n\nBody text";
+        let msg = EmailMessage::from_raw(raw).expect("SHALL parse without Date");
+        assert_eq!(msg.date, "", "absent Date SHALL be empty string");
+        assert_eq!(msg.body, "Body text");
+    }
+
+    // 4. With no blank-line separator there is no body, so the body
+    //    SHALL default to empty (headers still parse).
+    #[test]
+    fn parse_email_no_blank_line_has_empty_body() {
+        let raw = "From: a@b.com\nTo: c@d.com\nSubject: hi";
+        let msg = EmailMessage::from_raw(raw).expect("SHALL parse header-only message");
+        assert_eq!(msg.body, "", "no blank line SHALL yield empty body");
+        assert_eq!(msg.subject, "hi");
+    }
+
+    // 5. Headers SHALL be matched case-insensitively (real mail may use
+    //    lowercase keys like "from:").
+    #[test]
+    fn parse_email_case_insensitive_headers() {
+        let raw = "from: a@b.com\nto: c@d.com\nsubject: hi\n\nBody";
+        let msg = EmailMessage::from_raw(raw).expect("SHALL parse lowercase headers");
+        assert_eq!(msg.from, "a@b.com");
+        assert_eq!(msg.to, "c@d.com");
+        assert_eq!(msg.subject, "hi");
+    }
+
+    // 6. Header values SHALL be trimmed of surrounding whitespace, and a
+    //    CRLF-separated body SHALL be preferred and trimmed.
+    #[test]
+    fn parse_email_trims_header_and_body() {
+        let raw = "From: a@b.com  \r\nTo: c@d.com\r\nSubject: spaced  \r\n\r\n  Body  ";
+        let msg = EmailMessage::from_raw(raw).expect("SHALL parse");
+        assert_eq!(msg.from, "a@b.com", "From SHALL be trimmed");
+        assert_eq!(msg.subject, "spaced", "Subject SHALL be trimmed");
+        assert_eq!(msg.body, "Body", "body SHALL be trimmed");
+    }
+
     // -- Tests: subject matching --------------------------------------------
 
     #[test]
@@ -339,6 +413,47 @@ mod tests {
     fn subject_matches_leading_trailing_wildcard() {
         assert!(subject_matches("abc", "*"));
         assert!(subject_matches("", "*"));
+    }
+
+    // 7. `?` requires exactly one character, so it SHALL NOT match an
+    //    empty position.
+    #[test]
+    fn subject_matches_question_mark_requires_one_char() {
+        assert!(!subject_matches("code-", "code-?"), "? SHALL NOT match empty");
+        assert!(subject_matches("code-X", "code-?"));
+    }
+
+    // 8. Regex-special characters in the pattern SHALL be treated as
+    //    literals, not as regex metacharacters.
+    #[test]
+    fn subject_matches_escapes_regex_special_chars() {
+        // '.' is escaped, so it matches a literal dot only.
+        assert!(subject_matches("a.b", "a.b"));
+        assert!(!subject_matches("axb", "a.b"), "'.' SHALL be literal, not any-char");
+        // '+' is escaped: literal plus, not "one-or-more".
+        assert!(subject_matches("a+b", "a+b"));
+        assert!(!subject_matches("aaab", "a+b"));
+        // Parentheses and brackets are literal.
+        assert!(subject_matches("code (1) [x]", "code (1) [x]"));
+    }
+
+    // 9. Multiple wildcards SHALL each expand independently and the whole
+    //    pattern is anchored at both ends.
+    #[test]
+    fn subject_matches_multiple_wildcards_anchored() {
+        assert!(subject_matches("alpha-beta-gamma", "alpha*gamma"));
+        assert!(subject_matches("a1b2c", "a*b*c"));
+        // Anchored: a trailing-only match is not enough without a wildcard.
+        assert!(!subject_matches("prefix-verification", "verification"));
+    }
+
+    // 10. An invalid regex (unbalanced escape) cannot arise from glob
+    //     translation, but an empty pattern SHALL only match an empty
+    //     subject because of the ^$ anchors.
+    #[test]
+    fn subject_matches_empty_pattern_only_matches_empty() {
+        assert!(subject_matches("", ""));
+        assert!(!subject_matches("x", ""), "empty pattern SHALL NOT match non-empty");
     }
 
     // -- Tests: ImapPoller configuration ------------------------------------
@@ -442,5 +557,88 @@ mod tests {
 
         let result = poller.await_email("*verification*", 200, 50).await;
         assert!(result.is_err(), "SHALL NOT match any email");
+    }
+
+    // 11. A fetch failure SHALL propagate immediately, wrapped with the
+    //     "failed to fetch IMAP inbox" context (not a timeout).
+    #[tokio::test]
+    async fn await_email_propagates_fetch_error() {
+        let poller = ImapPoller::with_connection(
+            "host".into(),
+            993,
+            "user".into(),
+            "pass".into(),
+            Box::new(FailingInboxConnection),
+        );
+
+        let err = poller
+            .await_email("*verification*", 5000, 50)
+            .await
+            .expect_err("fetch failure SHALL error");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("failed to fetch IMAP inbox"),
+            "SHALL carry fetch context: {msg}"
+        );
+        assert!(
+            msg.contains("connection refused"),
+            "SHALL preserve underlying cause: {msg}"
+        );
+        assert!(!msg.contains("timed out"), "SHALL fail fast, not time out: {msg}");
+    }
+
+    // 12. When several messages are present the first matching one (in
+    //     inbox order) SHALL be returned.
+    #[tokio::test]
+    async fn await_email_returns_first_matching() {
+        let msgs = vec![
+            make_email("Welcome aboard"),
+            make_email("verification one"),
+            make_email("verification two"),
+        ];
+        let conn = MockImapConnection { messages: msgs };
+        let poller = ImapPoller::with_connection(
+            "host".into(),
+            993,
+            "user".into(),
+            "pass".into(),
+            Box::new(conn),
+        );
+
+        let result = poller
+            .await_email("*verification*", 5000, 50)
+            .await
+            .expect("SHALL find a match");
+        assert_eq!(
+            result.subject, "verification one",
+            "SHALL return first matching in inbox order"
+        );
+    }
+
+    // 13. The real IMAP backend is not yet wired up: polling through a
+    //     `new`-constructed poller SHALL surface the "not yet implemented"
+    //     error via the fetch context.
+    #[tokio::test]
+    async fn await_email_real_backend_reports_unimplemented() {
+        let poller = ImapPoller::new(
+            "imap.example.com".into(),
+            993,
+            "user@example.com".into(),
+            "pass".into(),
+        );
+
+        let err = poller
+            .await_email("*verification*", 5000, 50)
+            .await
+            .expect_err("real backend SHALL error");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("not yet implemented"),
+            "SHALL report unimplemented real IMAP: {msg}"
+        );
+        assert!(
+            msg.contains("imap.example.com"),
+            "SHALL include configured host: {msg}"
+        );
     }
 }

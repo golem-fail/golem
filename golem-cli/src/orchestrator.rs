@@ -642,3 +642,65 @@ fn file_uri_str(path: &str) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 1. A plain ASCII alphanumeric path keeps every byte and gains only the scheme.
+    #[test]
+    fn file_uri_str_plain_ascii_is_unchanged_after_scheme() {
+        let uri = file_uri_str("/Users/dev/results");
+        assert_eq!(
+            uri, "file:///Users/dev/results",
+            "plain ASCII path SHALL be appended verbatim after file://"
+        );
+    }
+
+    // 2. The unreserved set (- . _ ~ /) SHALL pass through without percent-encoding.
+    #[test]
+    fn file_uri_str_unreserved_chars_pass_through() {
+        let uri = file_uri_str("/a-b/c.d/e_f/g~h/");
+        assert_eq!(
+            uri, "file:///a-b/c.d/e_f/g~h/",
+            "unreserved chars -._~/ SHALL not be percent-encoded"
+        );
+    }
+
+    // 3. A space is reserved and SHALL be percent-encoded as %20.
+    #[test]
+    fn file_uri_str_space_is_percent_encoded() {
+        let uri = file_uri_str("/a b");
+        assert_eq!(
+            uri, "file:///a%20b",
+            "a space SHALL be encoded as %20 so OSC 8 links don't break"
+        );
+    }
+
+    // 4. Reserved ASCII punctuation (e.g. % itself) SHALL be percent-encoded uppercase hex.
+    #[test]
+    fn file_uri_str_reserved_punctuation_is_uppercase_hex() {
+        let uri = file_uri_str("a%b:c");
+        assert_eq!(
+            uri, "file://a%25b%3Ac",
+            "reserved punctuation SHALL be encoded as uppercase two-digit hex"
+        );
+    }
+
+    // 5. Multibyte UTF-8 (non-ASCII) SHALL be encoded per-byte, not per-char.
+    #[test]
+    fn file_uri_str_non_ascii_is_encoded_per_byte() {
+        let uri = file_uri_str("/r\u{00e9}sum\u{00e9}.txt");
+        assert_eq!(
+            uri, "file:///r%C3%A9sum%C3%A9.txt",
+            "each UTF-8 byte of a non-ASCII char SHALL be percent-encoded"
+        );
+    }
+
+    // 6. An empty path yields just the scheme prefix.
+    #[test]
+    fn file_uri_str_empty_path_is_scheme_only() {
+        let uri = file_uri_str("");
+        assert_eq!(uri, "file://", "empty input SHALL produce just the scheme");
+    }
+}

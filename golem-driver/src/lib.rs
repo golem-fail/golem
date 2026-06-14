@@ -699,4 +699,336 @@ mod tests {
             start.elapsed()
         );
     }
+
+    // ── settle gate: error + reset paths ───────────────────────────
+
+    /// Mock whose `get_hierarchy` always errors, exercising the
+    /// `Err(_) => 0` branch in the settle loop. A driver that can never
+    /// produce a tree SHALL never settle and SHALL bail at the deadline
+    /// (returning Ok, not surfacing the error).
+    struct ErroringMock;
+
+    #[async_trait]
+    impl PlatformDriver for ErroringMock {
+        async fn get_hierarchy(&self) -> anyhow::Result<(Element, common::HierarchyMeta)> {
+            anyhow::bail!("companion port unresponsive")
+        }
+        async fn tap(&self, _x: i32, _y: i32) -> anyhow::Result<()> { unimplemented!() }
+        async fn long_press(&self, _x: i32, _y: i32, _d: u64) -> anyhow::Result<()> { unimplemented!() }
+        async fn type_text(&self, _t: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn backspace(&self, _c: u32) -> anyhow::Result<()> { unimplemented!() }
+        async fn swipe_coords(&self, _: i32, _: i32, _: i32, _: i32) -> anyhow::Result<()> { unimplemented!() }
+        async fn pinch(&self, _x: i32, _y: i32, _s: f64, _v: f64) -> anyhow::Result<()> { unimplemented!() }
+        async fn gesture(&self, _f: Vec<GestureFinger>) -> anyhow::Result<()> { unimplemented!() }
+        async fn screenshot(&self) -> anyhow::Result<ScreenshotResult> { unimplemented!() }
+        async fn hide_keyboard(&self) -> anyhow::Result<()> { unimplemented!() }
+        async fn launch_app(&self, _b: &str) -> anyhow::Result<Option<String>> { unimplemented!() }
+        async fn stop_app(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn clear_app_data(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn press_button(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn set_dark_mode(&self, _e: bool) -> anyhow::Result<()> { unimplemented!() }
+        async fn set_location(&self, _: f64, _: f64) -> anyhow::Result<()> { unimplemented!() }
+        async fn open_url(&self, _u: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn push_notification(&self, _: &str, _: &str, _: Option<&str>) -> anyhow::Result<()> { unimplemented!() }
+        async fn add_media(&self, _p: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn grant_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn revoke_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn start_recording(&self, _n: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn stop_recording(&self) -> anyhow::Result<String> { unimplemented!() }
+        async fn remove_port_forwards(&self) -> anyhow::Result<()> { unimplemented!() }
+    }
+
+    // 1. A perpetually-erroring hierarchy fetch is treated as 0 nodes and
+    //    never settles; the gate SHALL still return Ok at the deadline.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn await_first_frame_treats_hierarchy_error_as_zero_nodes() {
+        let driver = ErroringMock;
+        let start = tokio::time::Instant::now();
+        driver
+            .await_first_frame()
+            .await
+            .expect("settle SHALL return Ok even when hierarchy always errors");
+        assert!(
+            start.elapsed() >= AWAIT_FIRST_FRAME_DEADLINE,
+            "erroring tree SHALL wait until the deadline: {:?}",
+            start.elapsed()
+        );
+    }
+
+    // 2. A single stable poll above threshold is NOT enough: when the count
+    //    changes after one match, the stable-poll counter SHALL reset and
+    //    settle SHALL only fire once two CONSECUTIVE equal polls land.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn await_first_frame_resets_stable_counter_on_count_change() {
+        let high = above_threshold();
+        // high, high (1 stable match) → high+1 (reset) → high+1, high+1
+        // (settle on the 2nd consecutive match of the new value).
+        let driver = SequencedMock::new(vec![high, high, high + 1, high + 1, high + 1]);
+        let start = tokio::time::Instant::now();
+        driver
+            .await_first_frame()
+            .await
+            .expect("settle SHALL eventually fire");
+        // The first stable run is broken by the high+1 change, so settle
+        // cannot have fired before the 4th poll (>= 3 intervals elapsed).
+        assert!(
+            start.elapsed() >= AWAIT_FIRST_FRAME_POLL_INTERVAL * 3,
+            "a changed count SHALL reset the stable counter: {:?}",
+            start.elapsed()
+        );
+    }
+
+    // ── MockPlatformDriver: call recording for every method ────────
+
+    // 1. long_press records x, y and duration in order.
+    #[tokio::test]
+    async fn mock_records_long_press_with_duration() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        driver.long_press(12, 34, 750).await.expect("long_press failed");
+        let calls = driver.get_calls();
+        assert_eq!(calls.len(), 1, "exactly one call SHALL be recorded");
+        assert_eq!(calls[0].0, "long_press");
+        assert_eq!(calls[0].1, vec!["12", "34", "750"]);
+    }
+
+    // 2. backspace records its count.
+    #[tokio::test]
+    async fn mock_records_backspace_count() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        driver.backspace(5).await.expect("backspace failed");
+        let calls = driver.get_calls();
+        assert_eq!(calls[0].0, "backspace");
+        assert_eq!(calls[0].1, vec!["5"], "backspace SHALL record its count");
+    }
+
+    // 3. swipe_coords records all four coordinates in from→to order.
+    #[tokio::test]
+    async fn mock_records_swipe_coords() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        driver.swipe_coords(1, 2, 3, 4).await.expect("swipe failed");
+        let calls = driver.get_calls();
+        assert_eq!(calls[0].0, "swipe_coords");
+        assert_eq!(calls[0].1, vec!["1", "2", "3", "4"]);
+    }
+
+    // 4. pinch records coordinates plus scale and velocity as floats.
+    #[tokio::test]
+    async fn mock_records_pinch_scale_and_velocity() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        driver.pinch(50, 60, 2.0, 1.5).await.expect("pinch failed");
+        let calls = driver.get_calls();
+        assert_eq!(calls[0].0, "pinch");
+        assert_eq!(calls[0].1, vec!["50", "60", "2", "1.5"]);
+    }
+
+    // 5. gesture summarises each finger as "<n>pts@<ms>ms", one arg per
+    //    finger, preserving order.
+    #[tokio::test]
+    async fn mock_records_gesture_finger_summary() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        let fingers = vec![
+            GestureFinger { points: vec![(0, 0), (1, 1), (2, 2)], duration_ms: 300 },
+            GestureFinger { points: vec![(9, 9)], duration_ms: 100 },
+        ];
+        driver.gesture(fingers).await.expect("gesture failed");
+        let calls = driver.get_calls();
+        assert_eq!(calls[0].0, "gesture");
+        assert_eq!(calls[0].1, vec!["3pts@300ms", "1pts@100ms"]);
+    }
+
+    // 6. screenshot records exactly one no-arg "screenshot" call.
+    #[tokio::test]
+    async fn mock_screenshot_records_noarg_call() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        driver.screenshot().await.expect("screenshot failed");
+        let calls = driver.get_calls();
+        assert_eq!(calls.len(), 1, "exactly one call SHALL be recorded");
+        assert_eq!(calls[0].0, "screenshot", "the call SHALL be named screenshot");
+        assert!(
+            calls[0].1.is_empty(),
+            "screenshot SHALL record no arguments"
+        );
+    }
+
+    // 7. push_notification with no payload records only title + body.
+    #[tokio::test]
+    async fn mock_push_notification_without_payload() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        driver
+            .push_notification("T", "B", None)
+            .await
+            .expect("push failed");
+        let calls = driver.get_calls();
+        assert_eq!(calls[0].0, "push_notification");
+        assert_eq!(
+            calls[0].1,
+            vec!["T", "B"],
+            "absent payload SHALL omit the third arg"
+        );
+    }
+
+    // 8. push_notification with a payload appends it as a third arg.
+    #[tokio::test]
+    async fn mock_push_notification_with_payload() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        driver
+            .push_notification("T", "B", Some("{\"k\":1}"))
+            .await
+            .expect("push failed");
+        let calls = driver.get_calls();
+        assert_eq!(
+            calls[0].1,
+            vec!["T", "B", "{\"k\":1}"],
+            "present payload SHALL be appended as the third arg"
+        );
+    }
+
+    // 9. stop_recording records exactly one no-arg "stop_recording" call.
+    #[tokio::test]
+    async fn mock_stop_recording_records_noarg_call() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        driver.stop_recording().await.expect("stop_recording failed");
+        let calls = driver.get_calls();
+        assert_eq!(calls.len(), 1, "exactly one call SHALL be recorded");
+        assert_eq!(
+            calls[0].0, "stop_recording",
+            "the call SHALL be named stop_recording"
+        );
+        assert!(
+            calls[0].1.is_empty(),
+            "stop_recording SHALL record no arguments"
+        );
+    }
+
+    // 10. The remaining single/double-string-arg methods all record their
+    //     name and arguments verbatim.
+    #[tokio::test]
+    async fn mock_records_remaining_methods_verbatim() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        let launch_warning = driver.launch_app("com.x").await.expect("launch failed");
+        assert!(
+            launch_warning.is_none(),
+            "mock launch_app SHALL surface no warning"
+        );
+        driver.stop_app("com.x").await.expect("stop failed");
+        driver.clear_app_data("com.x").await.expect("clear failed");
+        driver.press_button("home").await.expect("press failed");
+        driver.set_dark_mode(true).await.expect("dark failed");
+        driver.set_location(1.5, -2.5).await.expect("loc failed");
+        driver.open_url("https://x").await.expect("url failed");
+        driver.add_media("/tmp/a.png").await.expect("media failed");
+        driver
+            .grant_permission("com.x", "camera")
+            .await
+            .expect("grant failed");
+        driver
+            .revoke_permission("com.x", "camera")
+            .await
+            .expect("revoke failed");
+        driver.start_recording("rec").await.expect("rec failed");
+        driver.remove_port_forwards().await.expect("ports failed");
+
+        let calls = driver.get_calls();
+        let expected: Vec<(&str, Vec<&str>)> = vec![
+            ("launch_app", vec!["com.x"]),
+            ("stop_app", vec!["com.x"]),
+            ("clear_app_data", vec!["com.x"]),
+            ("press_button", vec!["home"]),
+            ("set_dark_mode", vec!["true"]),
+            ("set_location", vec!["1.5", "-2.5"]),
+            ("open_url", vec!["https://x"]),
+            ("add_media", vec!["/tmp/a.png"]),
+            ("grant_permission", vec!["com.x", "camera"]),
+            ("revoke_permission", vec!["com.x", "camera"]),
+            ("start_recording", vec!["rec"]),
+            ("remove_port_forwards", vec![]),
+        ];
+        assert_eq!(calls.len(), expected.len());
+        for (i, (name, args)) in expected.iter().enumerate() {
+            assert_eq!(&calls[i].0, name, "call {i} name SHALL match");
+            assert_eq!(&calls[i].1, args, "call {i} args SHALL match");
+        }
+    }
+
+    // ── MockPlatformDriver: keyboard height + call bookkeeping ─────
+
+    // 12. set_keyboard_height is reflected in the next get_hierarchy meta.
+    #[tokio::test]
+    async fn mock_get_hierarchy_reports_keyboard_height() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        driver.set_keyboard_height(291);
+        let (_, meta) = driver.get_hierarchy().await.expect("get_hierarchy failed");
+        assert_eq!(
+            meta.keyboard_height, 291,
+            "meta SHALL reflect the configured keyboard height"
+        );
+    }
+
+    // 13. hide_keyboard records the call and zeroes the keyboard height so
+    //     the next get_hierarchy reports 0.
+    #[tokio::test]
+    async fn mock_hide_keyboard_zeroes_height() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        driver.set_keyboard_height(300);
+        driver.hide_keyboard().await.expect("hide_keyboard failed");
+        let (_, meta) = driver.get_hierarchy().await.expect("get_hierarchy failed");
+        assert_eq!(
+            meta.keyboard_height, 0,
+            "hide_keyboard SHALL zero the keyboard height"
+        );
+        // The call log holds hide_keyboard then get_hierarchy.
+        let calls = driver.get_calls();
+        assert_eq!(calls[0].0, "hide_keyboard");
+    }
+
+    // 14. clear_calls empties the recorded-call log without affecting
+    //     subsequent recording.
+    #[tokio::test]
+    async fn mock_clear_calls_resets_log() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        driver.tap(1, 1).await.expect("tap failed");
+        assert_eq!(driver.get_calls().len(), 1);
+        driver.clear_calls();
+        assert!(
+            driver.get_calls().is_empty(),
+            "clear_calls SHALL empty the log"
+        );
+        driver.tap(2, 2).await.expect("tap failed");
+        assert_eq!(
+            driver.get_calls().len(),
+            1,
+            "recording SHALL resume after clear_calls"
+        );
+    }
+
+    // ── default trait methods (no-op implementations) ──────────────
+
+    // 15. poke_for_system_alert's default impl is a no-op that returns Ok
+    //     and records nothing.
+    #[tokio::test]
+    async fn mock_poke_for_system_alert_is_noop_ok() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        driver
+            .poke_for_system_alert()
+            .await
+            .expect("poke SHALL be a no-op Ok");
+        assert!(
+            driver.get_calls().is_empty(),
+            "default poke SHALL record nothing"
+        );
+    }
+
+    // 16. set_request_timeout's default impl is a no-op that records
+    //     nothing and does not panic.
+    #[test]
+    fn mock_set_request_timeout_is_noop() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        driver.set_request_timeout(std::time::Duration::from_secs(3));
+        assert!(
+            driver.get_calls().is_empty(),
+            "default set_request_timeout SHALL record nothing"
+        );
+    }
+
+    // ── plain value-type derives ───────────────────────────────────
 }

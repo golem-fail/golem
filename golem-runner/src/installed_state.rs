@@ -241,4 +241,110 @@ mod tests {
         assert!(parse_android_timestamp("garbage").is_none());
         assert!(parse_android_timestamp("2026-04-27").is_none());
     }
+
+    // 5. not_installed() SHALL produce the negative sentinel: not installed,
+    //    no time, no version.
+    #[test]
+    fn not_installed_is_negative_sentinel() {
+        let info = DeviceInstallInfo::not_installed();
+        assert!(!info.installed, "not_installed SHALL report installed=false");
+        assert!(info.install_time.is_none(), "not_installed SHALL have no install_time");
+        assert!(info.version.is_none(), "not_installed SHALL have no version");
+    }
+
+    // 6. A valid lastUpdateTime line SHALL parse, surrounding whitespace and
+    //    trailing content stripped by the line trim.
+    #[test]
+    fn android_timestamp_valid_round_trips() {
+        let t = parse_android_timestamp("2020-01-02 03:04:05")
+            .expect("valid timestamp SHALL parse");
+        assert_eq!(t.format("%Y-%m-%d %H:%M:%S").to_string(), "2020-01-02 03:04:05");
+    }
+
+    // 7. Empty / whitespace-only timestamp input SHALL NOT parse.
+    #[test]
+    fn android_timestamp_empty_returns_none() {
+        assert!(parse_android_timestamp("").is_none(), "empty SHALL NOT parse");
+        assert!(parse_android_timestamp("   ").is_none(), "whitespace SHALL NOT parse");
+    }
+
+    // 8. An empty versionName value SHALL be treated as absent (None), not as
+    //    an empty string.
+    #[test]
+    fn parse_dumpsys_empty_version_name_is_none() {
+        let (_, v) = parse_android_dumpsys("versionName=\nlastUpdateTime=2026-04-27 09:12:45");
+        assert!(v.is_none(), "empty versionName SHALL yield None");
+    }
+
+    // 9. versionName surrounding whitespace SHALL be trimmed.
+    #[test]
+    fn parse_dumpsys_version_name_trimmed() {
+        let (_, v) = parse_android_dumpsys("versionName=   1.2.3   ");
+        assert_eq!(v.as_deref(), Some("1.2.3"), "versionName SHALL be trimmed");
+    }
+
+    // 10. When lastUpdateTime appears multiple times, the last occurrence
+    //     SHALL win (loop assigns unconditionally).
+    #[test]
+    fn parse_dumpsys_last_update_time_last_wins() {
+        let sample = "lastUpdateTime=2020-01-01 00:00:00\nlastUpdateTime=2021-02-02 11:11:11";
+        let (t, _) = parse_android_dumpsys(sample);
+        let t = t.expect("a lastUpdateTime SHALL parse");
+        assert_eq!(t.format("%Y-%m-%d %H:%M:%S").to_string(), "2021-02-02 11:11:11",
+            "last lastUpdateTime SHALL win");
+    }
+
+    // 11. An unparseable lastUpdateTime value SHALL reset install_time to None
+    //     even if an earlier valid one was seen.
+    #[test]
+    fn parse_dumpsys_bad_last_update_time_clears_time() {
+        let sample = "lastUpdateTime=2020-01-01 00:00:00\nlastUpdateTime=garbage";
+        let (t, _) = parse_android_dumpsys(sample);
+        assert!(t.is_none(), "trailing unparseable lastUpdateTime SHALL clear the value");
+    }
+
+    // 12. versionName containing '=' SHALL keep everything after the first '='.
+    #[test]
+    fn parse_dumpsys_version_name_with_equals() {
+        let (_, v) = parse_android_dumpsys("versionName=1.0=beta");
+        assert_eq!(v.as_deref(), Some("1.0=beta"),
+            "value after first '=' SHALL be preserved");
+    }
+
+    // 13. Empty dumpsys text SHALL yield no time and no version.
+    #[test]
+    fn parse_dumpsys_empty_text() {
+        let (t, v) = parse_android_dumpsys("");
+        assert!(t.is_none());
+        assert!(v.is_none());
+    }
+
+    // 14. The UNIX epoch SystemTime SHALL map to the epoch UTC instant.
+    #[test]
+    fn system_time_to_utc_epoch() {
+        let dt = system_time_to_utc(SystemTime::UNIX_EPOCH);
+        assert_eq!(dt.timestamp(), 0, "epoch SHALL map to timestamp 0");
+        assert_eq!(dt.format("%Y-%m-%d %H:%M:%S").to_string(), "1970-01-01 00:00:00");
+    }
+
+    // 15. A post-epoch SystemTime SHALL round-trip its second + nanosecond
+    //     components into the resulting DateTime.
+    #[test]
+    fn system_time_to_utc_post_epoch() {
+        use std::time::Duration;
+        let t = SystemTime::UNIX_EPOCH + Duration::new(1_700_000_000, 123_456_789);
+        let dt = system_time_to_utc(t);
+        assert_eq!(dt.timestamp(), 1_700_000_000, "seconds SHALL round-trip");
+        assert_eq!(dt.timestamp_subsec_nanos(), 123_456_789, "nanos SHALL round-trip");
+    }
+
+    // 16. A pre-epoch SystemTime SHALL saturate to default (zero) duration,
+    //     mapping to the epoch rather than panicking.
+    #[test]
+    fn system_time_to_utc_pre_epoch_saturates() {
+        use std::time::Duration;
+        let t = SystemTime::UNIX_EPOCH - Duration::from_secs(5);
+        let dt = system_time_to_utc(t);
+        assert_eq!(dt.timestamp(), 0, "pre-epoch SHALL saturate to epoch, not panic");
+    }
 }

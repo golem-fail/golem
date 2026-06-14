@@ -355,4 +355,124 @@ mod tests {
             "SHALL error for nonexistent region"
         );
     }
+
+    // 26. Unknown country code falls back to a random geo country (None branch
+    //     of geo lookup when a country param IS supplied but not in the DB).
+    #[test]
+    fn address_unknown_country_falls_back_to_geo() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("address", &[("country", "ZZ")]);
+        let result =
+            generate_structured(&d, &mut rng).expect("SHALL fall back for unknown country");
+        let country_code = field(&result, "country_code");
+        let loaded_codes = crate::geo_loader::geo_database().countries();
+        assert!(
+            loaded_codes.contains(&country_code.as_str()),
+            "Unknown country SHALL fall back to a geo-database country, got: {country_code}"
+        );
+    }
+
+    // 27. State filter is case-insensitive (lowercase "tokyo" SHALL match
+    //     "Tokyo" via eq_ignore_ascii_case).
+    #[test]
+    fn address_state_filter_is_case_insensitive() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("address", &[("country", "JP"), ("state", "tokyo")]);
+        let result =
+            generate_structured(&d, &mut rng).expect("SHALL match case-insensitively");
+        let state = field(&result, "state");
+        assert_eq!(
+            state, "Tokyo",
+            "lowercase state filter SHALL match Tokyo, got: {state}"
+        );
+    }
+
+    // 28. Region filter is case-insensitive (lowercase "kanto" SHALL match
+    //     region tag "Kanto").
+    #[test]
+    fn address_region_filter_is_case_insensitive() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("address", &[("country", "JP"), ("region", "kanto")]);
+        let result =
+            generate_structured(&d, &mut rng).expect("SHALL match region case-insensitively");
+        assert_eq!(
+            field(&result, "country_code"),
+            "JP",
+            "SHALL be a JP address"
+        );
+        // 1. Build the set of JP states tagged "Kanto" (case-insensitive) straight
+        //    from the geo DB, then assert the generated state is one of them. This
+        //    proves the lowercase "kanto" filter actually matched the "Kanto" tag,
+        //    rather than merely returning some arbitrary JP state.
+        let kanto_states: Vec<&str> = crate::geo_loader::geo_database()
+            .get("JP")
+            .expect("JP SHALL be loaded")
+            .states
+            .iter()
+            .filter(|s| s.region_tags.iter().any(|t| t.eq_ignore_ascii_case("kanto")))
+            .map(|s| s.name_en.as_str())
+            .collect();
+        assert!(
+            !kanto_states.is_empty(),
+            "fixture SHALL contain at least one Kanto-tagged state"
+        );
+        let state = field(&result, "state");
+        assert!(
+            kanto_states.contains(&state.as_str()),
+            "lowercase region filter SHALL constrain to a Kanto-tagged state, got: {state} (expected one of {kanto_states:?})"
+        );
+    }
+
+    // 29. Combined state + region filters that both match the same state
+    //     (Tokyo is tagged Kanto) SHALL succeed and constrain to that state.
+    #[test]
+    fn address_combined_state_and_region_match() {
+        let mut rng = seeded_rng();
+        let d = def_with_params(
+            "address",
+            &[("country", "JP"), ("state", "Tokyo"), ("region", "Kanto")],
+        );
+        let result = generate_structured(&d, &mut rng)
+            .expect("SHALL match when both state and region apply");
+        assert_eq!(field(&result, "state"), "Tokyo");
+        assert_eq!(field(&result, "country_code"), "JP");
+    }
+
+    // 30. Combined state + region filters that conflict (Tokyo is not in the
+    //     Kansai region) SHALL error, and the message SHALL name both filters.
+    #[test]
+    fn address_combined_state_and_region_conflict_errors() {
+        let mut rng = seeded_rng();
+        let d = def_with_params(
+            "address",
+            &[("country", "JP"), ("state", "Tokyo"), ("region", "Kansai")],
+        );
+        let err = generate_structured(&d, &mut rng)
+            .expect_err("conflicting state+region SHALL error");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("state=Tokyo") && msg.contains("region=Kansai"),
+            "error SHALL name both filters, got: {msg}"
+        );
+        assert!(
+            msg.contains("JP"),
+            "error SHALL name the country, got: {msg}"
+        );
+    }
+
+    // 31. generate_address_from_geo (pub(crate)) directly yields a fully
+    //     consistent address object for a specific country's geo data.
+    #[test]
+    fn generate_from_geo_directly_produces_full_address() {
+        let mut rng = seeded_rng();
+        let geo = crate::geo_loader::geo_database()
+            .get("JP")
+            .expect("JP SHALL be loaded");
+        let result =
+            super::generate_address_from_geo(geo, &mut rng).expect("SHALL generate from geo");
+        assert_eq!(field(&result, "country_code"), "JP");
+        assert!(!field(&result, "street").is_empty());
+        assert!(!field(&result, "city").is_empty());
+        assert!(!field(&result, "postcode").is_empty());
+    }
 }

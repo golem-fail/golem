@@ -836,4 +836,298 @@ mod tests {
         assert!(has_field(&result, "amount"), "SHALL have amount field");
         assert_eq!(field(&result, "amount"), "2000");
     }
+
+    // --- Unknown brand on the random (no-provider) path ---
+
+    // 1. An unrecognised brand on the no-provider path SHALL error.
+    #[test]
+    fn credit_card_random_unknown_brand_errors() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("credit_card", &[("brand", "dinersclub")]);
+        let result = generate_structured(&d, &mut rng);
+        assert!(result.is_err(), "unknown brand SHALL error on random path");
+    }
+
+    // 2. Brand matching SHALL be case-insensitive on the random path.
+    #[test]
+    fn credit_card_random_brand_case_insensitive() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("credit_card", &[("brand", "ViSa")]);
+        let result = generate_structured(&d, &mut rng).expect("uppercase brand SHALL resolve");
+        assert_eq!(
+            field(&result, "brand"),
+            "visa",
+            "case-insensitive brand SHALL normalise to canonical name"
+        );
+    }
+
+    // --- Random-path brand prefixes/lengths for every brand ---
+
+    // 3. Each canonical brand on the random path SHALL produce a Luhn-valid number
+    //    with that brand's prefix and length.
+    #[test]
+    fn credit_card_random_each_brand_prefix_and_length() {
+        let cases = [
+            ("visa", "4", 16usize),
+            ("mastercard", "51", 16),
+            ("amex", "34", 15),
+            ("discover", "6011", 16),
+        ];
+        for (brand, prefix, len) in cases {
+            let mut rng = seeded_rng();
+            let d = def_with_params("credit_card", &[("brand", brand)]);
+            let result = generate_structured(&d, &mut rng)
+                .unwrap_or_else(|_| panic!("brand {brand} SHALL generate"));
+            let number = field(&result, "number");
+            assert_eq!(
+                field(&result, "brand"),
+                brand,
+                "brand {brand} SHALL be echoed back"
+            );
+            assert_eq!(
+                number.len(),
+                len,
+                "brand {brand} number SHALL have length {len}, got {number}"
+            );
+            assert!(
+                number.starts_with(prefix),
+                "brand {brand} number SHALL start with prefix {prefix}, got {number}"
+            );
+            assert!(
+                luhn_valid(&number),
+                "brand {brand} number SHALL be Luhn-valid, got {number}"
+            );
+        }
+    }
+
+    // --- invalid_number combined with an explicit brand on the random path ---
+
+    // 4. declined:invalid_number SHALL still honour the brand and only break Luhn
+    //    via the final check digit (prefix/length preserved).
+    #[test]
+    fn credit_card_random_invalid_number_keeps_brand() {
+        let mut rng = seeded_rng();
+        let d = def_with_params(
+            "credit_card",
+            &[("status", "declined:invalid_number"), ("brand", "amex")],
+        );
+        let result = generate_structured(&d, &mut rng).expect("SHALL generate");
+        let number = field(&result, "number");
+        assert_eq!(field(&result, "brand"), "amex", "brand SHALL be honoured");
+        assert_eq!(number.len(), 15, "amex invalid number SHALL keep length 15");
+        assert!(number.starts_with("34"), "amex prefix SHALL be preserved");
+        assert!(!luhn_valid(&number), "invalid_number SHALL fail Luhn check");
+    }
+
+    // --- approved status passed explicitly on the random path ---
+
+    // 5. status=approved on the random path SHALL be accepted and echoed as empty.
+    #[test]
+    fn credit_card_random_explicit_approved_status_empty() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("credit_card", &[("status", "approved")]);
+        let result = generate_structured(&d, &mut rng).expect("SHALL generate");
+        assert_eq!(
+            field(&result, "status"),
+            "",
+            "approved status SHALL be echoed back as empty string"
+        );
+        assert!(
+            luhn_valid(&field(&result, "number")),
+            "approved card SHALL be Luhn-valid"
+        );
+    }
+
+    // --- Generic threeds field is NOT present for non-threeds statuses ---
+
+    // 6. A non-threeds generic status SHALL NOT carry a threeds field.
+    #[test]
+    fn credit_card_random_non_threeds_has_no_threeds_field() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("credit_card", &[("status", "declined:invalid_cvv")]);
+        let result = generate_structured(&d, &mut rng).expect("SHALL generate");
+        assert!(
+            !has_field(&result, "threeds"),
+            "non-threeds status SHALL NOT carry a threeds field"
+        );
+    }
+
+    // --- Provider build_output optional fields ---
+
+    // 7. A provider card carrying a per-card otp SHALL surface the otp field.
+    #[test]
+    fn credit_card_provider_otp_field_surfaced() {
+        let mut rng = seeded_rng();
+        let d = def_with_params(
+            "credit_card",
+            &[("provider", "payu"), ("status", "approved"), ("brand", "amex")],
+        );
+        let result = generate_structured(&d, &mut rng).expect("SHALL generate payu amex card");
+        assert!(has_field(&result, "otp"), "SHALL surface otp field");
+        assert_eq!(field(&result, "otp"), "725356", "SHALL carry the card's otp");
+    }
+
+    // 8. A provider card carrying a per-card pin SHALL surface the pin field.
+    #[test]
+    fn credit_card_provider_pin_field_surfaced() {
+        let mut rng = seeded_rng();
+        let d = def_with_params(
+            "credit_card",
+            &[("provider", "paystack"), ("status", "approved"), ("brand", "verve")],
+        );
+        let result =
+            generate_structured(&d, &mut rng).expect("SHALL generate paystack verve card");
+        assert!(has_field(&result, "pin"), "SHALL surface pin field");
+        // Seed 42 deterministically selects the verve card numbered 507850785078507804,
+        // whose per-card pin literal is 0000; assert that concrete value flows through
+        // build_output (mirroring the otp test) rather than merely that a pin key exists.
+        assert_eq!(field(&result, "number"), "507850785078507804", "seed 42 SHALL pick this verve card");
+        assert_eq!(field(&result, "pin"), "0000", "SHALL carry the card's pin literal");
+    }
+
+    // 9. A provider card carrying a description SHALL surface the description field.
+    //    dLocal approved is a single visa card whose number/cvv/expiry come from
+    //    provider literal defaults, exercising the literal default resolution path.
+    #[test]
+    fn credit_card_provider_description_and_literal_defaults() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("credit_card", &[("provider", "dlocal"), ("status", "approved")]);
+        let result = generate_structured(&d, &mut rng).expect("SHALL generate dlocal card");
+        assert!(has_field(&result, "description"), "SHALL surface description");
+        assert_eq!(field(&result, "description"), "200");
+        assert_eq!(
+            field(&result, "number"),
+            "4111111111111111",
+            "SHALL resolve literal number default"
+        );
+        assert_eq!(field(&result, "cvv"), "123", "SHALL resolve literal cvv default");
+        assert_eq!(
+            field(&result, "expiry"),
+            "10/40",
+            "SHALL resolve literal expiry default"
+        );
+        assert!(
+            !has_field(&result, "name"),
+            "name default of \"random\" SHALL NOT emit a name field"
+        );
+    }
+
+    // 10. A provider threeds status with a colon-suffixed variant SHALL still set
+    //     the threeds flag (build_output uses starts_with).
+    #[test]
+    fn credit_card_provider_threeds_variant_sets_flag() {
+        let mut rng = seeded_rng();
+        let d = def_with_params(
+            "credit_card",
+            &[("provider", "dlocal"), ("status", "threeds:not_enrolled")],
+        );
+        let result = generate_structured(&d, &mut rng).expect("SHALL generate dlocal 3DS card");
+        assert_eq!(field(&result, "threeds"), "true", "SHALL set threeds flag");
+        assert_eq!(
+            field(&result, "status"),
+            "threeds:not_enrolled",
+            "SHALL echo the requested status verbatim"
+        );
+    }
+
+    // 11. A status with no matching card for the provider SHALL error.
+    #[test]
+    fn credit_card_provider_no_matching_status_errors() {
+        let mut rng = seeded_rng();
+        let d = def_with_params(
+            "credit_card",
+            &[("provider", "payu"), ("status", "declined:lost")],
+        );
+        let result = generate_structured(&d, &mut rng);
+        assert!(
+            result.is_err(),
+            "a status with no matching provider card SHALL error"
+        );
+    }
+
+    // --- Pure helper: luhn_check_digit ---
+
+    // 12. luhn_check_digit SHALL append the digit that makes the sequence valid;
+    //     re-running luhn_valid on prefix+check SHALL pass.
+    #[test]
+    fn luhn_check_digit_makes_sequence_valid() {
+        // "411111111111111" needs check digit 1 -> 4111111111111111.
+        let digits: Vec<u8> = "411111111111111"
+            .chars()
+            .filter_map(|c| c.to_digit(10).map(|d| d as u8))
+            .collect();
+        let check = luhn_check_digit(&digits);
+        let full: String = digits
+            .iter()
+            .chain(std::iter::once(&check))
+            .map(|d| char::from(b'0' + d))
+            .collect();
+        assert_eq!(check, 1, "check digit for 411111111111111 SHALL be 1");
+        assert!(luhn_valid(&full), "prefix + check digit SHALL be Luhn-valid");
+    }
+
+    // 13. luhn_check_digit of an already-zero-sum sequence SHALL be 0.
+    #[test]
+    fn luhn_check_digit_zero_when_sum_multiple_of_ten() {
+        // Single digit 0 doubled is 0 -> sum 0 -> check (10 - 0) % 10 = 0.
+        assert_eq!(luhn_check_digit(&[0]), 0, "zero sequence SHALL yield check 0");
+        // "0000000" stays at sum 0.
+        assert_eq!(luhn_check_digit(&[0, 0, 0, 0, 0, 0, 0]), 0);
+    }
+
+    // --- Pure helper: generate_luhn_number ---
+
+    // 14. generate_luhn_number SHALL preserve the prefix, hit the requested length,
+    //     and be Luhn-valid.
+    #[test]
+    fn generate_luhn_number_prefix_length_validity() {
+        let mut rng = seeded_rng();
+        let number = generate_luhn_number("4", 16, &mut rng);
+        assert_eq!(number.len(), 16, "SHALL match requested length");
+        assert!(number.starts_with('4'), "SHALL preserve the prefix");
+        assert!(
+            number.chars().all(|c| c.is_ascii_digit()),
+            "SHALL be all digits"
+        );
+        assert!(luhn_valid(&number), "SHALL be Luhn-valid");
+    }
+
+    // 15. generate_luhn_number SHALL be deterministic for a fixed seed.
+    #[test]
+    fn generate_luhn_number_deterministic() {
+        let mut rng1 = seeded_rng();
+        let mut rng2 = seeded_rng();
+        let a = generate_luhn_number("34", 15, &mut rng1);
+        let b = generate_luhn_number("34", 15, &mut rng2);
+        assert_eq!(a, b, "same seed SHALL produce same Luhn number");
+    }
+
+    // --- Production luhn_check_digit / generate_luhn_number degenerate input ---
+
+    // 16. luhn_check_digit of an empty slice SHALL be 0 (sum 0 -> (10 - 0) % 10),
+    //     and generate_luhn_number with an empty prefix SHALL still emit a
+    //     full-length, all-digit, Luhn-valid number. This exercises the shipped
+    //     pub(crate) Luhn primitives on degenerate input, not the test oracle.
+    #[test]
+    fn luhn_primitives_handle_degenerate_input() {
+        // luhn_check_digit is production (pub(crate)); empty slice has sum 0.
+        assert_eq!(
+            luhn_check_digit(&[]),
+            0,
+            "empty digit slice SHALL yield check digit 0"
+        );
+
+        // generate_luhn_number with an empty prefix still fills to length and validates.
+        let mut rng = seeded_rng();
+        let number = generate_luhn_number("", 16, &mut rng);
+        assert_eq!(number.len(), 16, "empty prefix SHALL still reach requested length");
+        assert!(
+            number.chars().all(|c| c.is_ascii_digit()),
+            "empty-prefix number SHALL be all digits"
+        );
+        assert!(
+            luhn_valid(&number),
+            "empty-prefix number SHALL be Luhn-valid, got {number}"
+        );
+    }
 }

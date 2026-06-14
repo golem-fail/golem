@@ -515,4 +515,368 @@ goto = "nowhere"
             errors.len()
         );
     }
+
+    // 10. Empty goto string is flagged as MissingGoto (and also InvalidGotoTarget,
+    //     since "" is never a registered block name)
+    #[test]
+    fn empty_goto_is_missing_goto() {
+        let toml_str = r#"
+[flow]
+name = "empty goto"
+
+[[block]]
+name = "first"
+
+[[block.branch]]
+if_visible = "X"
+goto = ""
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let errors = validate_flow(&flow);
+        let kinds: Vec<&ValidationErrorKind> = errors.iter().map(|e| &e.kind).collect();
+        assert!(
+            kinds.contains(&&ValidationErrorKind::MissingGoto),
+            "empty goto SHALL produce MissingGoto, got: {kinds:?}"
+        );
+        assert!(
+            kinds.contains(&&ValidationErrorKind::InvalidGotoTarget),
+            "empty goto SHALL also be an unknown target, got: {kinds:?}"
+        );
+    }
+
+    // 11. Branch with both a visibility check and if_var conflicts
+    #[test]
+    fn conflicting_branch_condition_if_visible_and_if_var() {
+        let toml_str = r#"
+[flow]
+name = "conflict"
+
+[[block]]
+name = "first"
+
+[[block.branch]]
+if_visible = "Welcome"
+if_var = "count"
+equals = "1"
+goto = "first"
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let errors = validate_flow(&flow);
+        let kinds: Vec<&ValidationErrorKind> = errors.iter().map(|e| &e.kind).collect();
+        assert!(
+            kinds.contains(&&ValidationErrorKind::ConflictingBranchCondition),
+            "visibility + if_var SHALL conflict, got: {kinds:?}"
+        );
+        // A valid comparison was supplied, so no MissingComparison.
+        assert!(
+            !kinds.contains(&&ValidationErrorKind::MissingComparison),
+            "comparison present SHALL not flag MissingComparison, got: {kinds:?}"
+        );
+    }
+
+    // 12. if_not_visible also counts as a visibility check for the conflict path
+    #[test]
+    fn conflicting_branch_condition_if_not_visible_and_if_var() {
+        let toml_str = r#"
+[flow]
+name = "conflict not visible"
+
+[[block]]
+name = "first"
+
+[[block.branch]]
+if_not_visible = "Spinner"
+if_var = "count"
+gte = 3
+goto = "first"
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let errors = validate_flow(&flow);
+        let kinds: Vec<&ValidationErrorKind> = errors.iter().map(|e| &e.kind).collect();
+        assert!(
+            kinds.contains(&&ValidationErrorKind::ConflictingBranchCondition),
+            "if_not_visible + if_var SHALL conflict, got: {kinds:?}"
+        );
+    }
+
+    // 13. if_var with a matches comparison is accepted (no MissingComparison)
+    #[test]
+    fn if_var_with_matches_comparison_ok() {
+        let toml_str = r#"
+[flow]
+name = "matches ok"
+
+[[block]]
+name = "check"
+
+[[block.branch]]
+if_var = "status"
+matches = "^done$"
+goto = "check"
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let errors = validate_flow(&flow);
+        assert!(
+            errors.is_empty(),
+            "if_var + matches SHALL be valid, got: {errors:?}"
+        );
+    }
+
+    // 14. if_var with a gte comparison is accepted
+    #[test]
+    fn if_var_with_gte_comparison_ok() {
+        let toml_str = r#"
+[flow]
+name = "gte ok"
+
+[[block]]
+name = "check"
+
+[[block.branch]]
+if_var = "count"
+gte = 5
+goto = "check"
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let errors = validate_flow(&flow);
+        assert!(
+            errors.is_empty(),
+            "if_var + gte SHALL be valid, got: {errors:?}"
+        );
+    }
+
+    // 15. lint_within_no_op flags `within` on a non-scroll, non-auto_scroll step
+    #[test]
+    fn lint_within_flags_non_consuming_step() {
+        let toml_str = r#"
+[flow]
+name = "within no-op"
+
+[[block]]
+name = "first"
+
+[[block.steps]]
+action = "swipe"
+within = { text = "Container" }
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let issues = lint_within_no_op(&flow);
+        assert_eq!(issues.len(), 1, "swipe with within SHALL be flagged");
+        assert_eq!(issues[0].action, "swipe");
+        assert_eq!(issues[0].step_index, 0);
+        assert_eq!(issues[0].block_name.as_deref(), Some("first"));
+    }
+
+    // 16. lint_within_no_op ignores `within` on a scroll step (it's consumed)
+    #[test]
+    fn lint_within_ignores_scroll_step() {
+        let toml_str = r#"
+[flow]
+name = "scroll within"
+
+[[block]]
+
+[[block.steps]]
+action = "scroll"
+within = { text = "Container" }
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let issues = lint_within_no_op(&flow);
+        assert!(
+            issues.is_empty(),
+            "scroll consumes within, SHALL not be flagged: {issues:?}"
+        );
+    }
+
+    // 17. lint_within_no_op ignores `within` when auto_scroll = true
+    #[test]
+    fn lint_within_ignores_auto_scroll_step() {
+        let toml_str = r#"
+[flow]
+name = "auto scroll within"
+
+[[block]]
+
+[[block.steps]]
+action = "tap"
+auto_scroll = true
+within = { text = "Container" }
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let issues = lint_within_no_op(&flow);
+        assert!(
+            issues.is_empty(),
+            "auto_scroll consumes within, SHALL not be flagged: {issues:?}"
+        );
+    }
+
+    // 18. lint_within_no_op skips steps without a within at all
+    #[test]
+    fn lint_within_skips_steps_without_within() {
+        let toml_str = r#"
+[flow]
+name = "no within"
+
+[[block]]
+
+[[block.steps]]
+action = "tap"
+text = "OK"
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let issues = lint_within_no_op(&flow);
+        assert!(issues.is_empty(), "no within means no issue: {issues:?}");
+    }
+
+    // 19. lint_push_notification_phys: no phys-capable app => no issues even
+    //     when push_notification is used
+    #[test]
+    fn lint_push_notif_no_phys_capable_apps() {
+        let toml_str = r#"
+[flow]
+name = "virtual only"
+
+[[flow.apps]]
+name = "myapp"
+bundle = "com.example.app"
+
+[[flow.apps.devices]]
+os = "android"
+
+[[block]]
+
+[[block.steps]]
+action = "push_notification"
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let issues = lint_push_notification_phys(&flow);
+        assert!(
+            issues.is_empty(),
+            "absent hardware defaults to virtual, SHALL not flag: {issues:?}"
+        );
+    }
+
+    // 20. lint_push_notification_phys: app opts into real hardware AND uses the
+    //     action => flagged, resolving target via flow-default first app
+    #[test]
+    fn lint_push_notif_real_hardware_default_app() {
+        let toml_str = r#"
+[flow]
+name = "phys push"
+
+[[flow.apps]]
+name = "myapp"
+bundle = "com.example.app"
+
+[[flow.apps.devices]]
+os = "android"
+hardware = "real"
+
+[[block]]
+name = "notify"
+
+[[block.steps]]
+action = "push_notification"
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let issues = lint_push_notification_phys(&flow);
+        assert_eq!(issues.len(), 1, "real-hardware push SHALL be flagged");
+        assert_eq!(issues[0].app_name, "myapp");
+        assert_eq!(issues[0].step_index, 0);
+        assert_eq!(issues[0].block_name.as_deref(), Some("notify"));
+    }
+
+    // 21. lint_push_notification_phys: array form ["virtual", "real"] also
+    //     counts as phys-capable
+    #[test]
+    fn lint_push_notif_array_hardware_includes_real() {
+        let toml_str = r#"
+[flow]
+name = "phys push array"
+
+[[flow.apps]]
+name = "myapp"
+bundle = "com.example.app"
+
+[[flow.apps.devices]]
+os = "android"
+hardware = ["virtual", "real"]
+
+[[block]]
+
+[[block.steps]]
+action = "push_notification"
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let issues = lint_push_notification_phys(&flow);
+        assert_eq!(issues.len(), 1, "array including real SHALL be flagged");
+        assert_eq!(issues[0].app_name, "myapp");
+    }
+
+    // 22. lint_push_notification_phys: step.app override targets a non-phys app =>
+    //     not flagged even though another app is phys-capable
+    #[test]
+    fn lint_push_notif_step_app_override_to_virtual() {
+        let toml_str = r#"
+[flow]
+name = "override target"
+
+[[flow.apps]]
+name = "physapp"
+bundle = "com.example.phys"
+
+[[flow.apps.devices]]
+os = "android"
+hardware = "real"
+
+[[flow.apps]]
+name = "virtualapp"
+bundle = "com.example.virtual"
+
+[[flow.apps.devices]]
+os = "android"
+
+[[block]]
+
+[[block.steps]]
+action = "push_notification"
+app = "virtualapp"
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let issues = lint_push_notification_phys(&flow);
+        assert!(
+            issues.is_empty(),
+            "push targeting virtual app SHALL not be flagged: {issues:?}"
+        );
+    }
+
+    // 23. lint_push_notification_phys: non-push steps are ignored even when the
+    //     app is phys-capable
+    #[test]
+    fn lint_push_notif_ignores_non_push_steps() {
+        let toml_str = r#"
+[flow]
+name = "no push action"
+
+[[flow.apps]]
+name = "myapp"
+bundle = "com.example.app"
+
+[[flow.apps.devices]]
+os = "android"
+hardware = "real"
+
+[[block]]
+
+[[block.steps]]
+action = "tap"
+text = "OK"
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        let issues = lint_push_notification_phys(&flow);
+        assert!(
+            issues.is_empty(),
+            "no push_notification step SHALL produce no issues: {issues:?}"
+        );
+    }
 }

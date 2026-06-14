@@ -1174,4 +1174,564 @@ max_steps = 100
         assert!(opts.perf_threads_warn.is_none());
         assert!(opts.perf_fd_warn.is_none());
     }
+
+    // ---------------------------------------------------------------
+    // 26. InstallScriptValue::for_platform — Single resolves every platform
+    // ---------------------------------------------------------------
+    #[test]
+    fn install_script_single_resolves_all_platforms() {
+        let v = InstallScriptValue::Single("scripts/install.sh".to_string());
+        assert_eq!(
+            v.for_platform("ios"),
+            Some("scripts/install.sh"),
+            "Single SHALL resolve for ios"
+        );
+        assert_eq!(
+            v.for_platform("android"),
+            Some("scripts/install.sh"),
+            "Single SHALL resolve for android"
+        );
+        assert_eq!(
+            v.for_platform("web"),
+            Some("scripts/install.sh"),
+            "Single SHALL resolve for any platform string"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 27. InstallScriptValue::for_platform — PerPlatform keyed lookup
+    // ---------------------------------------------------------------
+    #[test]
+    fn install_script_per_platform_resolves_by_key() {
+        let v = InstallScriptValue::PerPlatform(InstallScriptPerPlatform {
+            ios: Some("ios.sh".to_string()),
+            android: Some("android.sh".to_string()),
+        });
+        assert_eq!(v.for_platform("ios"), Some("ios.sh"), "ios key SHALL resolve");
+        assert_eq!(
+            v.for_platform("android"),
+            Some("android.sh"),
+            "android key SHALL resolve"
+        );
+        assert_eq!(
+            v.for_platform("windows"),
+            None,
+            "unknown platform SHALL resolve to None"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 28. InstallScriptValue::for_platform — PerPlatform missing key is None
+    // ---------------------------------------------------------------
+    #[test]
+    fn install_script_per_platform_missing_key_is_none() {
+        let v = InstallScriptValue::PerPlatform(InstallScriptPerPlatform {
+            ios: Some("ios.sh".to_string()),
+            android: None,
+        });
+        assert_eq!(v.for_platform("ios"), Some("ios.sh"), "present ios key SHALL resolve");
+        assert_eq!(
+            v.for_platform("android"),
+            None,
+            "absent android key SHALL resolve to None"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 29. install_script deserializes from a single string (untagged)
+    // ---------------------------------------------------------------
+    #[test]
+    fn install_script_deserializes_single_string() {
+        let toml_str = r#"
+[flow]
+name = "single install"
+
+[[flow.apps]]
+name = "app1"
+bundle = "com.example"
+install_script = "scripts/install.sh"
+install_timeout_ms = 900000
+"#;
+        let flow = parse_flow(toml_str).expect("single install_script SHALL parse");
+        let app = &flow.flow.apps[0];
+        let script = app.install_script.as_ref().expect("install_script present");
+        assert!(
+            matches!(script, InstallScriptValue::Single(s) if s == "scripts/install.sh"),
+            "string form SHALL deserialize to Single"
+        );
+        assert_eq!(app.install_timeout_ms, Some(900_000));
+    }
+
+    // ---------------------------------------------------------------
+    // 30. install_script deserializes from a platform-keyed table (untagged)
+    // ---------------------------------------------------------------
+    #[test]
+    fn install_script_deserializes_per_platform_table() {
+        let toml_str = r#"
+[flow]
+name = "per-platform install"
+
+[[flow.apps]]
+name = "app1"
+bundle = "com.example"
+install_script = { ios = "ios.sh", android = "android.sh" }
+"#;
+        let flow = parse_flow(toml_str).expect("table install_script SHALL parse");
+        let script = flow.flow.apps[0]
+            .install_script
+            .as_ref()
+            .expect("install_script present");
+        match script {
+            InstallScriptValue::PerPlatform(p) => {
+                assert_eq!(p.ios.as_deref(), Some("ios.sh"));
+                assert_eq!(p.android.as_deref(), Some("android.sh"));
+            }
+            InstallScriptValue::Single(_) => panic!("table SHALL deserialize to PerPlatform"),
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // 31. StringOrVec::to_vec — Single wraps in a one-element vec
+    // ---------------------------------------------------------------
+    #[test]
+    fn string_or_vec_to_vec_single() {
+        let s = StringOrVec::Single("phone".to_string());
+        assert_eq!(s.to_vec(), vec!["phone".to_string()], "Single SHALL yield one element");
+    }
+
+    // ---------------------------------------------------------------
+    // 32. StringOrVec::to_vec — Multiple clones the vec
+    // ---------------------------------------------------------------
+    #[test]
+    fn string_or_vec_to_vec_multiple() {
+        let s = StringOrVec::Multiple(vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(
+            s.to_vec(),
+            vec!["a".to_string(), "b".to_string()],
+            "Multiple SHALL yield all elements"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 33. CoverageStrategy parses all lowercase variants
+    // ---------------------------------------------------------------
+    #[test]
+    fn coverage_strategy_lowercase_variants() {
+        for (literal, expected) in [
+            ("one", CoverageStrategy::One),
+            ("min", CoverageStrategy::Min),
+            ("smart", CoverageStrategy::Smart),
+            ("full", CoverageStrategy::Full),
+        ] {
+            let toml_str = format!(
+                r#"
+[flow]
+name = "coverage"
+
+[flow.options]
+coverage = "{literal}"
+"#
+            );
+            let flow = parse_flow(&toml_str).expect("coverage variant SHALL parse");
+            let opts = flow.flow.options.expect("options present");
+            assert_eq!(
+                opts.coverage,
+                Some(expected),
+                "coverage `{literal}` SHALL map to its variant"
+            );
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // 34. CoverageStrategy rejects unknown / wrong-case values
+    // ---------------------------------------------------------------
+    #[test]
+    fn coverage_strategy_rejects_unknown() {
+        let toml_str = r#"
+[flow]
+name = "bad coverage"
+
+[flow.options]
+coverage = "Full"
+"#;
+        let result = parse_flow(toml_str);
+        assert!(
+            result.is_err(),
+            "uppercase / unknown coverage SHALL fail to parse (rename_all = lowercase)"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 35. AppLifecycle parses all lowercase variants
+    // ---------------------------------------------------------------
+    #[test]
+    fn app_lifecycle_lowercase_variants() {
+        for (literal, expected) in [
+            ("reset", AppLifecycle::Reset),
+            ("launch", AppLifecycle::Launch),
+            ("manual", AppLifecycle::Manual),
+        ] {
+            let toml_str = format!(
+                r#"
+[flow]
+name = "lifecycle"
+
+[flow.options]
+app_lifecycle = "{literal}"
+"#
+            );
+            let flow = parse_flow(&toml_str).expect("lifecycle variant SHALL parse");
+            let opts = flow.flow.options.expect("options present");
+            assert_eq!(
+                opts.app_lifecycle,
+                Some(expected),
+                "app_lifecycle `{literal}` SHALL map to its variant"
+            );
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // 36. AppLifecycle rejects unknown value
+    // ---------------------------------------------------------------
+    #[test]
+    fn app_lifecycle_rejects_unknown() {
+        let toml_str = r#"
+[flow]
+name = "bad lifecycle"
+
+[flow.options]
+app_lifecycle = "restart"
+"#;
+        let result = parse_flow(toml_str);
+        assert!(result.is_err(), "unknown app_lifecycle SHALL fail to parse");
+    }
+
+    // ---------------------------------------------------------------
+    // 37. Branch with if_not_visible / equals / matches fields
+    // ---------------------------------------------------------------
+    #[test]
+    fn branch_with_remaining_condition_fields() {
+        let toml_str = r#"
+[flow]
+name = "branch fields"
+
+[[block]]
+
+[[block.branch]]
+if_not_visible = "Spinner"
+goto = "ready"
+
+[[block.branch]]
+if_var = "status"
+equals = "done"
+goto = "finish"
+
+[[block.branch]]
+if_var = "name"
+matches = "^a.*"
+goto = "matched"
+"#;
+        let flow = parse_flow(toml_str).expect("branch fields SHALL parse");
+        let b = &flow.block[0].branch;
+        assert_eq!(b[0].if_not_visible.as_deref(), Some("Spinner"));
+        assert_eq!(b[1].equals.as_deref(), Some("done"));
+        assert_eq!(b[2].matches.as_deref(), Some("^a.*"));
+    }
+
+    // ---------------------------------------------------------------
+    // 38. CoordValue — absolute pixels vs percentage string
+    // ---------------------------------------------------------------
+    #[test]
+    fn coord_value_pixels_and_percent() {
+        let toml_str = r#"
+[flow]
+name = "coords"
+
+[[block]]
+steps = [
+  { action = "tap", on = { x = 100, y = "50%" } },
+]
+"#;
+        let flow = parse_flow(toml_str).expect("coord values SHALL parse");
+        let g = flow.block[0].steps[0]
+            .on
+            .as_ref()
+            .expect("on group present");
+        assert!(
+            matches!(g.x, Some(CoordValue::Pixels(100))),
+            "integer SHALL deserialize to Pixels"
+        );
+        assert!(
+            matches!(&g.y, Some(CoordValue::Percent(s)) if s == "50%"),
+            "string SHALL deserialize to Percent"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 39. Anchor on every relational field (below/above/left_of)
+    // ---------------------------------------------------------------
+    #[test]
+    fn anchor_on_all_relational_fields() {
+        let toml_str = r#"
+[flow]
+name = "relational"
+
+[[block]]
+steps = [
+  { action = "tap", on = { text = "X", below = "B", above = "A", left_of = "L" } },
+]
+"#;
+        let flow = parse_flow(toml_str).expect("relational anchors SHALL parse");
+        let g = flow.block[0].steps[0]
+            .on
+            .as_ref()
+            .expect("on group present");
+        assert!(matches!(&g.below, Some(Anchor::Text(s)) if s == "B"));
+        assert!(matches!(&g.above, Some(Anchor::Text(s)) if s == "A"));
+        assert!(matches!(&g.left_of, Some(Anchor::Text(s)) if s == "L"));
+    }
+
+    // ---------------------------------------------------------------
+    // 40. Multi-touch fingers gesture parses into Finger paths
+    // ---------------------------------------------------------------
+    #[test]
+    fn multi_touch_fingers_parse() {
+        let toml_str = r#"
+[flow]
+name = "multitouch"
+
+[[block]]
+
+[[block.steps]]
+action = "pinch"
+scale = 2.0
+velocity = 1.5
+rotation = 90.0
+
+[[block.steps.fingers]]
+points = [{ x = 0, y = 0 }, { x = 100, y = 100 }]
+
+[[block.steps.fingers]]
+points = [{ x = 200, y = 200 }, { x = 50, y = 50 }]
+"#;
+        let flow = parse_flow(toml_str).expect("multi-touch SHALL parse");
+        let step = &flow.block[0].steps[0];
+        assert_eq!(step.scale, Some(2.0));
+        assert_eq!(step.velocity, Some(1.5));
+        assert_eq!(step.rotation, Some(90.0));
+        assert_eq!(step.fingers.len(), 2, "two finger paths SHALL parse");
+        assert_eq!(step.fingers[0].points.len(), 2);
+        assert!(matches!(step.fingers[1].points[0].x, Some(CoordValue::Pixels(200))));
+    }
+
+    // ---------------------------------------------------------------
+    // 41. Gesture `points` alias for the path field
+    // ---------------------------------------------------------------
+    #[test]
+    fn gesture_points_alias() {
+        let toml_str = r#"
+[flow]
+name = "path"
+
+[[block]]
+steps = [
+  { action = "swipe", points = [{ x = 0, y = 0 }, { x = 100, y = 100 }] },
+]
+"#;
+        let flow = parse_flow(toml_str).expect("points path SHALL parse");
+        let step = &flow.block[0].steps[0];
+        assert_eq!(step.points.len(), 2, "points alias SHALL populate the path");
+    }
+
+    // ---------------------------------------------------------------
+    // 42. Swipe start/end/within selector blocks
+    // ---------------------------------------------------------------
+    #[test]
+    fn swipe_start_end_within_blocks() {
+        let toml_str = r#"
+[flow]
+name = "swipe blocks"
+
+[[block]]
+
+[[block.steps]]
+action = "swipe"
+duration = 300
+
+[block.steps.start]
+text = "TopAnchor"
+
+[block.steps.end]
+text = "BottomAnchor"
+
+[block.steps.within]
+text = "ScrollContainer"
+"#;
+        let flow = parse_flow(toml_str).expect("start/end/within SHALL parse");
+        let step = &flow.block[0].steps[0];
+        assert_eq!(
+            step.start.as_ref().expect("start present").text.as_deref(),
+            Some("TopAnchor")
+        );
+        assert_eq!(
+            step.end.as_ref().expect("end present").text.as_deref(),
+            Some("BottomAnchor")
+        );
+        assert_eq!(
+            step.within.as_ref().expect("within present").text.as_deref(),
+            Some("ScrollContainer")
+        );
+        assert_eq!(step.duration, Some(300));
+    }
+
+    // ---------------------------------------------------------------
+    // 43. Step app/restart/auto_scroll/scroll_timeout/input fields
+    // ---------------------------------------------------------------
+    #[test]
+    fn step_app_restart_autoscroll_input_fields() {
+        let toml_str = r#"
+[flow]
+name = "step misc"
+
+[[block]]
+
+[[block.steps]]
+action = "type_text"
+input = "hello world"
+app = "other-app"
+restart = true
+auto_scroll = false
+scroll_timeout = 8000
+"#;
+        let flow = parse_flow(toml_str).expect("misc step fields SHALL parse");
+        let step = &flow.block[0].steps[0];
+        assert_eq!(step.input.as_deref(), Some("hello world"));
+        assert_eq!(step.app.as_deref(), Some("other-app"));
+        assert_eq!(step.restart, Some(true));
+        assert_eq!(step.auto_scroll, Some(false));
+        assert_eq!(step.scroll_timeout, Some(8000));
+    }
+
+    // ---------------------------------------------------------------
+    // 44. Block record override and save_to map
+    // ---------------------------------------------------------------
+    #[test]
+    fn block_record_and_save_to() {
+        let toml_str = r#"
+[flow]
+name = "block record"
+
+[[block]]
+name = "b"
+record = false
+
+[block.save_to]
+total = "counter_value"
+
+[[block.steps]]
+action = "tap"
+"#;
+        let flow = parse_flow(toml_str).expect("record/save_to SHALL parse");
+        let block = &flow.block[0];
+        assert_eq!(block.record, Some(false), "explicit record opt-out SHALL parse");
+        assert_eq!(
+            block.save_to.get("total").map(|s| s.as_str()),
+            Some("counter_value")
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 45. ProjectAppConfig deserializes from [[apps]]-style table
+    // ---------------------------------------------------------------
+    #[test]
+    fn project_app_config_deserializes() {
+        let toml_str = r#"
+name = "app-b"
+bundle = "fail.golem.testb"
+install_timeout_ms = 900000
+install_script = { ios = "ios.sh", android = "android.sh" }
+
+[[devices]]
+os = "android"
+"#;
+        let cfg: ProjectAppConfig =
+            toml::from_str(toml_str).expect("ProjectAppConfig SHALL deserialize");
+        assert_eq!(cfg.name, "app-b");
+        assert_eq!(cfg.bundle.as_deref(), Some("fail.golem.testb"));
+        assert_eq!(cfg.install_timeout_ms, Some(900_000));
+        assert_eq!(cfg.devices.len(), 1);
+        assert!(matches!(
+            cfg.install_script,
+            Some(InstallScriptValue::PerPlatform(_))
+        ));
+    }
+
+    // ---------------------------------------------------------------
+    // 46. DeviceConstraint full axis set (hardware/playstore/booted/expand)
+    // ---------------------------------------------------------------
+    #[test]
+    fn device_constraint_full_axes() {
+        let toml_str = r#"
+[flow]
+name = "device axes"
+
+[[flow.apps]]
+name = "app1"
+bundle = "com.example"
+
+[[flow.apps.devices]]
+type = ["phone", "tablet"]
+name = "Pixel 7a"
+accessibility_label = "device-label"
+hardware = ["virtual", "real"]
+playstore = true
+booted = false
+expand = "matrix"
+"#;
+        let flow = parse_flow(toml_str).expect("full device axes SHALL parse");
+        let d = &flow.flow.apps[0].devices[0];
+        assert_eq!(
+            d.device_type.as_ref().expect("type present").to_vec(),
+            vec!["phone".to_string(), "tablet".to_string()]
+        );
+        assert_eq!(d.name.as_deref(), Some("Pixel 7a"));
+        assert_eq!(d.accessibility_label.as_deref(), Some("device-label"));
+        assert_eq!(
+            d.hardware.as_ref().expect("hardware present").to_vec(),
+            vec!["virtual".to_string(), "real".to_string()]
+        );
+        assert_eq!(d.playstore, Some(true));
+        assert_eq!(d.booted, Some(false));
+        assert_eq!(d.expand.as_deref(), Some("matrix"));
+    }
+
+    // ---------------------------------------------------------------
+    // 47. Malformed TOML — syntax error surfaces as Err
+    // ---------------------------------------------------------------
+    #[test]
+    fn malformed_toml_is_err() {
+        let toml_str = "this is = = not valid toml [[[";
+        assert!(parse_flow(toml_str).is_err(), "invalid TOML SHALL produce an error");
+    }
+
+    // ---------------------------------------------------------------
+    // 48. Flow-level vars map parses
+    // ---------------------------------------------------------------
+    #[test]
+    fn flow_level_vars() {
+        let toml_str = r#"
+[flow]
+name = "vars"
+
+[flow.vars]
+base_url = "https://example.com"
+token = "abc123"
+"#;
+        let flow = parse_flow(toml_str).expect("flow vars SHALL parse");
+        assert_eq!(
+            flow.flow.vars.get("base_url").map(|s| s.as_str()),
+            Some("https://example.com")
+        );
+        assert_eq!(flow.flow.vars.get("token").map(|s| s.as_str()), Some("abc123"));
+    }
 }

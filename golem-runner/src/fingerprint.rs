@@ -333,4 +333,220 @@ mod tests {
         };
         assert_eq!(c.short_label(), "content:8f2a1bcd");
     }
+
+    // 1. is_some() distinguishes the disabled None variant from real ones.
+    #[test]
+    fn is_some_true_for_git_and_content() {
+        let g = Fingerprint::Git {
+            rev: "abc".into(),
+            porcelain: "def".into(),
+        };
+        let c = Fingerprint::Content { hash: "0123".into() };
+        assert!(g.is_some(), "Git fingerprint SHALL be is_some");
+        assert!(c.is_some(), "Content fingerprint SHALL be is_some");
+        assert!(!Fingerprint::None.is_some(), "None SHALL NOT be is_some");
+    }
+
+    // 2. A rev shorter than 7 chars SHALL be emitted whole (min() guards the slice).
+    #[test]
+    fn short_label_short_rev_not_truncated() {
+        let g = Fingerprint::Git {
+            rev: "abc".into(),
+            porcelain: "da39a3ee5e6b4b0d3255bfef95601890afd80709".into(),
+        };
+        assert_eq!(g.short_label(), "git:abc",
+            "rev shorter than 7 chars SHALL be emitted whole");
+    }
+
+    // 3. A dirty porcelain shorter than 4 chars SHALL be emitted whole.
+    #[test]
+    fn short_label_short_porcelain_not_truncated() {
+        let g = Fingerprint::Git {
+            rev: "abcdef0".into(),
+            porcelain: "12".into(),
+        };
+        assert_eq!(g.short_label(), "git:abcdef0+12",
+            "porcelain shorter than 4 chars SHALL be emitted whole");
+    }
+
+    // 4. A content hash shorter than 8 chars SHALL be emitted whole.
+    #[test]
+    fn short_label_short_content_hash_not_truncated() {
+        let c = Fingerprint::Content { hash: "abc".into() };
+        assert_eq!(c.short_label(), "content:abc",
+            "content hash shorter than 8 chars SHALL be emitted whole");
+    }
+
+    // 5. An empty tree yields no entries, so compute SHALL fall through to None.
+    #[test]
+    fn compute_empty_dir_is_none() {
+        let dir = tempdir().expect("tempdir");
+        let f = Fingerprint::compute(dir.path());
+        assert_eq!(f, Fingerprint::None,
+            "empty non-git tree SHALL produce None");
+        assert!(!f.is_some());
+    }
+
+    // 6. A directory whose only contents are inside ignored dirs SHALL be None.
+    #[test]
+    fn compute_only_ignored_content_is_none() {
+        let dir = tempdir().expect("tempdir");
+        std::fs::create_dir(dir.path().join("node_modules")).expect("mkdir");
+        std::fs::write(dir.path().join("node_modules/dep.js"), "x").expect("write");
+        let f = Fingerprint::compute(dir.path());
+        assert_eq!(f, Fingerprint::None,
+            "tree with only ignored content SHALL produce None");
+    }
+
+    // 7. The .golemignore custom ignore file SHALL exclude matching files.
+    #[test]
+    fn content_fingerprint_honours_golemignore() {
+        let dir = tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("a.txt"), "hello").expect("write a");
+        std::fs::write(dir.path().join(".golemignore"), "secret.bin\n").expect("write ignore");
+        let a = Fingerprint::compute(dir.path());
+        std::fs::write(dir.path().join("secret.bin"), vec![0u8; 64]).expect("write secret");
+        let b = Fingerprint::compute(dir.path());
+        assert_eq!(a, b, ".golemignore'd file SHALL NOT contribute to fingerprint");
+    }
+
+    // 8. Renaming a file (same content) changes the (path,hash) pair set, so
+    //    the fingerprint SHALL change even though byte content is identical.
+    #[test]
+    fn content_fingerprint_changes_when_file_renamed() {
+        let dir = tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("a.txt"), "payload").expect("write a");
+        let a = Fingerprint::compute(dir.path());
+        std::fs::remove_file(dir.path().join("a.txt")).expect("rm a");
+        std::fs::write(dir.path().join("b.txt"), "payload").expect("write b");
+        let b = Fingerprint::compute(dir.path());
+        assert_ne!(a, b, "rename SHALL change fingerprint (path is part of the hash)");
+    }
+
+    // 9. Path is folded into the hash alongside content: two trees that carry
+    //    identical file *content* but differ only in how the path string is
+    //    split across files SHALL produce distinct fingerprints. With identical
+    //    20-byte content digests in both trees, the only thing that can drive a
+    //    difference is the path bytes participating in the fold.
+    #[test]
+    fn content_fingerprint_path_participates_in_hash() {
+        // 9a. Tree 1: files "a" and "bc", both holding the same content.
+        let dir1 = tempdir().expect("tempdir1");
+        std::fs::write(dir1.path().join("a"), "shared").expect("write a");
+        std::fs::write(dir1.path().join("bc"), "shared").expect("write bc");
+        let f1 = Fingerprint::compute(dir1.path());
+
+        // 9b. Tree 2: files "ab" and "c" with the same shared content, so the
+        //     per-file content digests match tree 1's exactly — only the path
+        //     split differs.
+        let dir2 = tempdir().expect("tempdir2");
+        std::fs::write(dir2.path().join("ab"), "shared").expect("write ab");
+        std::fs::write(dir2.path().join("c"), "shared").expect("write c");
+        let f2 = Fingerprint::compute(dir2.path());
+
+        // 9c. Both are Content fingerprints (non-git tempdirs).
+        assert!(matches!(f1, Fingerprint::Content { .. }),
+            "tree 1 SHALL be a Content fingerprint");
+        assert!(matches!(f2, Fingerprint::Content { .. }),
+            "tree 2 SHALL be a Content fingerprint");
+        // 9d. Equal content, different paths => different fingerprint, proving
+        //     the path string is hashed in, not just the content.
+        assert_ne!(f1, f2,
+            "trees with equal content but distinct path splits SHALL differ");
+    }
+
+    // 10. The persisted-cache on-disk form for Content SHALL be the
+    //     snake_case-tagged shape `{"kind":"content","hash":"…"}`. This is a
+    //     load-bearing contract: the install cache reads these back across
+    //     runs, so the exact tag + field layout is pinned to a literal here.
+    //     (The derive round-trip itself is already covered by
+    //     fingerprint_serde_roundtrip; this asserts the wire format instead.)
+    #[test]
+    fn content_fingerprint_serialized_wire_format() {
+        let c = Fingerprint::Content { hash: "8f2a1bcd".into() };
+        let s = serde_json::to_string(&c).expect("serialize");
+        assert_eq!(s, r#"{"kind":"content","hash":"8f2a1bcd"}"#,
+            "Content SHALL serialize to the snake_case kind-tagged wire form");
+    }
+
+    // 11. Git tier: a fresh repo with one commit and a clean tree SHALL
+    //     produce a Git fingerprint whose porcelain is the empty-output sha1,
+    //     so its label omits the porcelain suffix.
+    #[test]
+    fn compute_git_repo_clean_tree_is_git_variant() {
+        let dir = tempdir().expect("tempdir");
+        let root = dir.path();
+        let run = |args: &[&str]| {
+            let out = Command::new("git")
+                .args(args)
+                .current_dir(root)
+                .env("GIT_AUTHOR_NAME", "t")
+                .env("GIT_AUTHOR_EMAIL", "t@t")
+                .env("GIT_COMMITTER_NAME", "t")
+                .env("GIT_COMMITTER_EMAIL", "t@t")
+                .output()
+                .expect("git runs");
+            assert!(out.status.success(),
+                "git {:?} SHALL succeed: {}", args, String::from_utf8_lossy(&out.stderr));
+        };
+        run(&["init", "-q"]);
+        std::fs::write(root.join("a.txt"), "hello").expect("write");
+        run(&["add", "a.txt"]);
+        run(&["commit", "-q", "-m", "init"]);
+
+        let f = Fingerprint::compute(root);
+        match &f {
+            Fingerprint::Git { rev, porcelain } => {
+                assert!(!rev.is_empty(), "git rev SHALL be non-empty");
+                assert_eq!(porcelain, "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+                    "clean tree SHALL hash empty porcelain output");
+                assert!(f.short_label().starts_with("git:"),
+                    "git fingerprint SHALL render a git: label");
+                assert!(!f.short_label().contains('+'),
+                    "clean tree label SHALL omit the porcelain suffix");
+            }
+            other => panic!("git repo SHALL produce Git variant, got {other:?}"),
+        }
+    }
+
+    // 12. Git tier: an uncommitted edit SHALL flip the porcelain hash away
+    //     from the clean value, producing a dirty label with the + suffix.
+    #[test]
+    fn compute_git_repo_dirty_tree_changes_porcelain() {
+        let dir = tempdir().expect("tempdir");
+        let root = dir.path();
+        let run = |args: &[&str]| {
+            let out = Command::new("git")
+                .args(args)
+                .current_dir(root)
+                .env("GIT_AUTHOR_NAME", "t")
+                .env("GIT_AUTHOR_EMAIL", "t@t")
+                .env("GIT_COMMITTER_NAME", "t")
+                .env("GIT_COMMITTER_EMAIL", "t@t")
+                .output()
+                .expect("git runs");
+            assert!(out.status.success(),
+                "git {:?} SHALL succeed: {}", args, String::from_utf8_lossy(&out.stderr));
+        };
+        run(&["init", "-q"]);
+        std::fs::write(root.join("a.txt"), "hello").expect("write");
+        run(&["add", "a.txt"]);
+        run(&["commit", "-q", "-m", "init"]);
+        let clean = Fingerprint::compute(root);
+
+        // Add an untracked file — porcelain output is now non-empty.
+        std::fs::write(root.join("dirty.txt"), "x").expect("write dirty");
+        let dirty = Fingerprint::compute(root);
+
+        match (&clean, &dirty) {
+            (Fingerprint::Git { rev: r1, porcelain: p1 },
+             Fingerprint::Git { rev: r2, porcelain: p2 }) => {
+                assert_eq!(r1, r2, "rev SHALL be unchanged by a working-tree edit");
+                assert_ne!(p1, p2, "uncommitted change SHALL change the porcelain hash");
+                assert!(dirty.short_label().contains('+'),
+                    "dirty tree label SHALL include the porcelain suffix");
+            }
+            _ => panic!("both computations SHALL be Git variants"),
+        }
+    }
 }

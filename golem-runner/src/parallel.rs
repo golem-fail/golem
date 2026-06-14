@@ -385,4 +385,189 @@ mod tests {
         result_ids.sort();
         assert_eq!(result_ids, vec!["alpha", "beta", "gamma"]);
     }
+
+    // ---------------------------------------------------------------
+    // 12. failed_devices() reports every failing id when several fail
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn failed_devices_reports_all_failing_ids() {
+        let result = execute_block_parallel(
+            &[
+                "ok1".to_string(),
+                "bad1".to_string(),
+                "ok2".to_string(),
+                "bad2".to_string(),
+            ],
+            DEFAULT_MAX_CONCURRENCY,
+            |id| async move {
+                if id.starts_with("bad") {
+                    Err(anyhow::anyhow!("{id} failed"))
+                } else {
+                    Ok(Vec::new())
+                }
+            },
+        )
+        .await;
+
+        let mut failed = result.failed_devices();
+        failed.sort();
+        assert_eq!(
+            failed,
+            vec!["bad1", "bad2"],
+            "failed_devices SHALL list exactly the failing device ids"
+        );
+        assert!(!result.all_succeeded());
+    }
+
+    // ---------------------------------------------------------------
+    // 13. A failed task carries no warnings (error path clears them)
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn failed_task_has_empty_warnings() {
+        let result = execute_block_parallel(
+            &["boom".to_string()],
+            DEFAULT_MAX_CONCURRENCY,
+            |_id| async move { Err::<Vec<String>, _>(anyhow::anyhow!("nope")) },
+        )
+        .await;
+
+        assert_eq!(result.device_results.len(), 1);
+        assert!(
+            result.device_results[0].warnings.is_empty(),
+            "a failed device SHALL carry no warnings"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 14. Mixed run: success keeps warnings, failure keeps error
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn mixed_run_preserves_warnings_and_errors_per_device() {
+        let result = execute_block_parallel(
+            &["good".to_string(), "bad".to_string()],
+            DEFAULT_MAX_CONCURRENCY,
+            |id| async move {
+                if id == "bad" {
+                    Err(anyhow::anyhow!("bad device error"))
+                } else {
+                    Ok(vec!["a warning".to_string()])
+                }
+            },
+        )
+        .await;
+
+        let good = result
+            .device_results
+            .iter()
+            .find(|r| r.device_id == "good")
+            .expect("should find good");
+        assert!(good.success, "good device SHALL succeed");
+        assert_eq!(good.warnings, vec!["a warning".to_string()]);
+        assert!(good.error.is_none(), "successful device SHALL have no error");
+
+        let bad = result
+            .device_results
+            .iter()
+            .find(|r| r.device_id == "bad")
+            .expect("should find bad");
+        assert!(!bad.success, "bad device SHALL fail");
+        assert!(bad.warnings.is_empty());
+        assert!(
+            bad.error
+                .as_ref()
+                .is_some_and(|e| e.contains("bad device error")),
+            "failed device SHALL retain its error message"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 15. max_concurrency larger than device count runs all devices
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn max_concurrency_exceeding_device_count_runs_all() {
+        // 1. Over-provision the semaphore (100 permits, 4 devices) so it never
+        //    blocks; observe peak concurrency to prove every device runs at
+        //    once, unlike the semaphore-bounded case in test 5.
+        let device_count = 4;
+        let devices: Vec<String> = (0..device_count).map(|i| format!("device{i}")).collect();
+        let concurrent = Arc::new(AtomicUsize::new(0));
+        let peak = Arc::new(AtomicUsize::new(0));
+        let concurrent_clone = concurrent.clone();
+        let peak_clone = peak.clone();
+
+        let result = execute_block_parallel(&devices, 100, move |_id| {
+            let concurrent = concurrent_clone.clone();
+            let peak = peak_clone.clone();
+            async move {
+                let current = concurrent.fetch_add(1, Ordering::SeqCst) + 1;
+                loop {
+                    let old_peak = peak.load(Ordering::SeqCst);
+                    if current <= old_peak {
+                        break;
+                    }
+                    match peak.compare_exchange_weak(
+                        old_peak,
+                        current,
+                        Ordering::SeqCst,
+                        Ordering::SeqCst,
+                    ) {
+                        Ok(_) => break,
+                        Err(_) => continue,
+                    }
+                }
+                // 2. Hold so all over-provisioned tasks overlap before any exits.
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                concurrent.fetch_sub(1, Ordering::SeqCst);
+                Ok(Vec::new())
+            }
+        })
+        .await;
+
+        // 3. All devices ran and succeeded.
+        assert_eq!(
+            result.device_results.len(),
+            device_count,
+            "all devices SHALL run when concurrency exceeds device count"
+        );
+        assert!(result.all_succeeded());
+
+        // 4. With permits >> devices, peak concurrency SHALL reach the full
+        //    device count (no semaphore throttling), distinguishing this from
+        //    the bounded case where peak is capped below device count.
+        assert_eq!(
+            peak.load(Ordering::SeqCst),
+            device_count,
+            "over-provisioned semaphore SHALL let every device run concurrently"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 16. Multiple warnings from one device are all retained in order
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn multiple_warnings_retained_in_order() {
+        let result = execute_block_parallel(
+            &["multi".to_string()],
+            DEFAULT_MAX_CONCURRENCY,
+            |_id| async {
+                Ok(vec![
+                    "first".to_string(),
+                    "second".to_string(),
+                    "third".to_string(),
+                ])
+            },
+        )
+        .await;
+
+        assert_eq!(result.device_results.len(), 1);
+        assert_eq!(
+            result.device_results[0].warnings,
+            vec![
+                "first".to_string(),
+                "second".to_string(),
+                "third".to_string()
+            ],
+            "warnings SHALL be retained in the order produced"
+        );
+    }
 }

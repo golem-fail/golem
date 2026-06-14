@@ -667,6 +667,302 @@ mod tests {
         assert!(out.contains("launch: 1240ms"), "SHALL contain launch value");
     }
 
+    // 11. format_step with an empty target uses the bare action (no quotes)
+
+    #[test]
+    fn step_empty_target_uses_bare_action() {
+        let step = success_step("launch", "", 120);
+        let out = format_step(&step);
+        assert!(out.contains("launch"), "SHALL contain action");
+        assert!(!out.contains('"'), "empty target SHALL NOT add quote chars");
+    }
+
+    // 12. format_step with a long label clamps padding to zero (no panic,
+    //     timing still present right after the label)
+
+    #[test]
+    fn step_long_label_clamps_padding() {
+        let long_target = "X".repeat(80);
+        let step = success_step("tap", &long_target, 45);
+        let out = format_step(&step);
+        // saturating_sub means no panic and zero padding; timing still appears.
+        assert!(out.contains(&long_target), "SHALL contain the long target");
+        assert!(out.contains("0.045s]"), "SHALL still render the timing");
+        // The bracket should sit immediately after the label (no spaces between).
+        let label = format!("tap \"{long_target}\"");
+        assert!(out.contains(&format!("{label}[")), "long label SHALL have no padding before timing");
+    }
+
+    // 13. format_flow skipped flow shows SKIPPED status word and reason line
+
+    #[test]
+    fn flow_skipped_shows_status_and_reason() {
+        let report = FlowReport {
+            first_failure_code: None,
+            flow_name: "covered_flow".to_string(),
+            success: true,
+            step_results: vec![],
+            warnings: vec![],
+            duration_ms: 0,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            os_major: None,
+            perf_snapshots: vec![],
+            skipped_reason: Some("peer run met coverage goal".to_string()),
+            covered_axes: Vec::new(),
+            recordings: Vec::new(),
+            repeat: None,
+            started_at: None,
+            finished_at: None,
+        };
+
+        let out = format_flow(&report);
+        assert!(out.contains("SKIPPED"), "SHALL say SKIPPED");
+        assert!(out.contains(SYM_SKIPPED), "SHALL use the skipped symbol");
+        assert!(
+            out.contains("Skipped: peer run met coverage goal"),
+            "SHALL show the skipped reason"
+        );
+        assert!(!out.contains("PASSED"), "SHALL NOT say PASSED for a skipped flow");
+        // No step counts → no trailing parenthesised counts on the summary line.
+        assert!(!out.contains("passed"), "no step counts SHALL be rendered");
+    }
+
+    // 14. format_flow renders covered axes and recording entries
+
+    #[test]
+    fn flow_shows_covered_axes_and_recordings() {
+        let report = FlowReport {
+            first_failure_code: None,
+            flow_name: "matrix_flow".to_string(),
+            success: true,
+            step_results: vec![success_step("launch", "", 100)],
+            warnings: vec![],
+            duration_ms: 100,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            os_major: None,
+            perf_snapshots: vec![],
+            skipped_reason: None,
+            covered_axes: vec!["os:android".to_string(), "locale:en".to_string()],
+            recordings: vec![crate::RecordingEntry {
+                block: "main".to_string(),
+                iteration: 2,
+                path: ".golem/rec/main_2.mp4".to_string(),
+            }],
+            repeat: None,
+            started_at: None,
+            finished_at: None,
+        };
+
+        let out = format_flow(&report);
+        assert!(out.contains("Covered: os:android, locale:en"), "SHALL join covered axes");
+        assert!(
+            out.contains("Recording: .golem/rec/main_2.mp4 (block main, iter 2)"),
+            "SHALL render the recording entry with block and iteration"
+        );
+    }
+
+    // 15. format_flow counts skipped steps and renders the skipped count
+
+    #[test]
+    fn flow_counts_skipped_steps() {
+        let report = FlowReport {
+            first_failure_code: None,
+            flow_name: "partial_flow".to_string(),
+            success: true,
+            step_results: vec![
+                success_step("launch", "", 100),
+                skipped_step("tap", "Cancel"),
+                skipped_step("tap", "Dismiss"),
+            ],
+            warnings: vec![],
+            duration_ms: 100,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            os_major: None,
+            perf_snapshots: vec![],
+            skipped_reason: None,
+            covered_axes: Vec::new(),
+            recordings: Vec::new(),
+            repeat: None,
+            started_at: None,
+            finished_at: None,
+        };
+
+        let out = format_flow(&report);
+        assert!(out.contains("1 passed"), "SHALL count 1 passed");
+        assert!(out.contains("2 skipped"), "SHALL count 2 skipped steps");
+    }
+
+    // 16. format_perf_snapshot omits fields whose values are None
+
+    #[test]
+    fn perf_snapshot_omits_none_fields() {
+        let snap = PerfSnapshot {
+            label: "sparse".into(),
+            memory_mb: Some(10.0),
+            cpu_percent: None,
+            threads: None,
+            file_descriptors: None,
+            disk_mb: None,
+            net_rx_kb: None,
+            net_tx_kb: None,
+            launch_ms: None,
+            timestamp: "0".into(),
+        };
+        let out = format_perf_snapshot(&snap);
+        assert!(out.contains("mem: 10.0 MB"), "SHALL render present memory field");
+        assert!(!out.contains("cpu:"), "SHALL omit absent cpu field");
+        assert!(!out.contains("thr:"), "SHALL omit absent threads field");
+        assert!(!out.contains("net:"), "SHALL omit absent net field");
+        assert!(!out.contains("launch:"), "SHALL omit absent launch field");
+    }
+
+    // 17. format_perf_snapshot only renders net when BOTH rx and tx are Some
+
+    #[test]
+    fn perf_snapshot_net_requires_both_directions() {
+        let snap = PerfSnapshot {
+            label: "half_net".into(),
+            memory_mb: None,
+            cpu_percent: None,
+            threads: None,
+            file_descriptors: None,
+            disk_mb: None,
+            net_rx_kb: Some(100.0),
+            net_tx_kb: None,
+            launch_ms: None,
+            timestamp: "0".into(),
+        };
+        let out = format_perf_snapshot(&snap);
+        assert!(!out.contains("net:"), "net SHALL require both rx and tx");
+    }
+
+    // 18. format_perf_snapshot renders threads, fd, disk, and net when present
+
+    #[test]
+    fn perf_snapshot_renders_secondary_fields() {
+        let snap = PerfSnapshot {
+            label: "full".into(),
+            memory_mb: None,
+            cpu_percent: None,
+            threads: Some(7),
+            file_descriptors: Some(13),
+            disk_mb: Some(5.5),
+            net_rx_kb: Some(200.0),
+            net_tx_kb: Some(50.0),
+            launch_ms: None,
+            timestamp: "0".into(),
+        };
+        let out = format_perf_snapshot(&snap);
+        assert!(out.contains("thr: 7"), "SHALL render threads");
+        assert!(out.contains("fd: 13"), "SHALL render file descriptors");
+        assert!(out.contains("disk: 5.5 MB"), "SHALL render disk");
+        assert!(out.contains("net: 200/50 KB"), "SHALL render net with both directions");
+    }
+
+    // 19. format_suite separator line is present between flows and summary
+
+    #[test]
+    fn suite_renders_separator() {
+        let suite = SuiteReport {
+            flows: vec![],
+            installs: Vec::new(),
+            total_duration_ms: 0,
+            started_at: None,
+            finished_at: None,
+        };
+        let out = format_suite(&suite);
+        assert!(out.contains(SEPARATOR), "SHALL render the separator line");
+        assert!(
+            out.contains("Suite: 0 passed, 0 failed, 0 skipped"),
+            "empty suite SHALL report all zero counts"
+        );
+    }
+
+    // 20. format_suite classifies a coverage-group skip as skipped, not passed
+
+    #[test]
+    fn suite_counts_coverage_skip_as_skipped() {
+        let suite = SuiteReport {
+            flows: vec![FlowReport {
+                first_failure_code: None,
+                flow_name: "skipped_flow".to_string(),
+                success: true,
+                step_results: vec![],
+                warnings: vec![],
+                duration_ms: 0,
+                seed: None,
+                screenshot_path: None,
+                device_name: None,
+                os_major: None,
+                perf_snapshots: vec![],
+                skipped_reason: Some("peer met goal".to_string()),
+                covered_axes: Vec::new(),
+                recordings: Vec::new(),
+                repeat: None,
+                started_at: None,
+                finished_at: None,
+            }],
+            installs: Vec::new(),
+            total_duration_ms: 0,
+            started_at: None,
+            finished_at: None,
+        };
+        let out = format_suite(&suite);
+        // is_skipped() flow is skipped, not passed and not failed.
+        assert!(out.contains("0 passed, 0 failed, 1 skipped"), "SHALL classify as skipped");
+    }
+
+    // 21. format_suite counts an all-skipped-steps flow as skipped
+
+    #[test]
+    fn suite_counts_all_skipped_steps_flow_as_skipped() {
+        let suite = SuiteReport {
+            flows: vec![FlowReport {
+                first_failure_code: None,
+                flow_name: "all_skip_steps".to_string(),
+                success: true,
+                step_results: vec![skipped_step("tap", "A"), skipped_step("tap", "B")],
+                warnings: vec![],
+                duration_ms: 0,
+                seed: None,
+                screenshot_path: None,
+                device_name: None,
+                os_major: None,
+                perf_snapshots: vec![],
+                skipped_reason: None,
+                covered_axes: Vec::new(),
+                recordings: Vec::new(),
+                repeat: None,
+                started_at: None,
+                finished_at: None,
+            }],
+            installs: Vec::new(),
+            total_duration_ms: 0,
+            started_at: None,
+            finished_at: None,
+        };
+        let out = format_suite(&suite);
+        // success=true + no skipped_reason → is_passed() is true, but the all-steps-skipped
+        // branch also marks it skipped in the skipped tally.
+        assert!(out.contains("1 passed"), "SHALL count as a passed flow");
+        assert!(out.contains("1 skipped"), "all-skipped-steps flow SHALL also tally as skipped");
+    }
+
+    // 22. format_duration pads narrow values and renders three decimals
+
+    #[test]
+    fn duration_is_fixed_width_three_decimals() {
+        assert_eq!(format_duration(45), "   0.045s", "SHALL right-pad to width 8 with 3 decimals");
+        assert_eq!(format_duration(0), "   0.000s", "zero SHALL render as 0.000s");
+        assert_eq!(format_duration(10012), "  10.012s", "SHALL render seconds with padding");
+    }
+
     #[test]
     fn perf_section_omitted_when_empty() {
         let report = FlowReport {

@@ -192,4 +192,180 @@ mod tests {
             "error should mention no app specified, got: {err_msg}"
         );
     }
+
+    // ── resolve_app_bundle ────────────────────────────────────────────
+
+    fn app_config(name: &str, bundle: Option<&str>) -> AppConfig {
+        AppConfig {
+            name: name.to_string(),
+            bundle: bundle.map(str::to_string),
+            devices: Vec::new(),
+            install_script: None,
+            install_timeout_ms: None,
+        }
+    }
+
+    // 1. A friendly name matching an apps entry SHALL resolve to that
+    //    entry's bundle id, not the friendly name.
+    #[test]
+    fn resolve_app_bundle_resolves_friendly_name_to_bundle() {
+        let mut step = make_step("launch");
+        step.app = Some("app".to_string());
+        let apps = vec![app_config("app", Some("com.example.real"))];
+
+        let resolved = resolve_app_bundle(&step, &apps).expect("friendly name SHALL resolve");
+        assert_eq!(
+            resolved, "com.example.real",
+            "friendly name SHALL resolve to the configured bundle id"
+        );
+    }
+
+    // 2. A matching friendly name whose entry has no bundle id SHALL be
+    //    an error naming the offending app.
+    #[test]
+    fn resolve_app_bundle_errors_when_matched_app_has_no_bundle() {
+        let mut step = make_step("launch");
+        step.app = Some("myFriendlyApp".to_string());
+        let apps = vec![app_config("myFriendlyApp", None)];
+
+        let err = resolve_app_bundle(&step, &apps).expect_err("missing bundle SHALL error");
+        let msg = format!("{err}");
+        // A distinctive name proves the offending app id is interpolated,
+        // not merely that the boilerplate "app '...'" text is present.
+        assert!(
+            msg.contains("has no bundle id") && msg.contains("'myFriendlyApp'"),
+            "error SHALL name the offending app missing a bundle id, got: {msg}"
+        );
+    }
+
+    // 3. An app value that matches no apps entry SHALL fall back to being
+    //    treated as a direct bundle id (even when apps is non-empty).
+    #[test]
+    fn resolve_app_bundle_falls_back_to_direct_bundle_id() {
+        let mut step = make_step("launch");
+        step.app = Some("direct.bundle.id".to_string());
+        let apps = vec![app_config("other", Some("com.example.other"))];
+
+        let resolved = resolve_app_bundle(&step, &apps).expect("unmatched value SHALL pass through");
+        assert_eq!(
+            resolved, "direct.bundle.id",
+            "an unmatched app value SHALL be used verbatim as the bundle id"
+        );
+    }
+
+    // 4. The first matching apps entry SHALL win when names collide.
+    #[test]
+    fn resolve_app_bundle_uses_first_matching_entry() {
+        let mut step = make_step("launch");
+        step.app = Some("app".to_string());
+        let apps = vec![
+            app_config("app", Some("com.first")),
+            app_config("app", Some("com.second")),
+        ];
+
+        let resolved = resolve_app_bundle(&step, &apps).expect("duplicate names SHALL resolve");
+        assert_eq!(
+            resolved, "com.first",
+            "the first matching apps entry SHALL win"
+        );
+    }
+
+    // 5. A missing app value SHALL error and the message SHALL name the
+    //    offending action.
+    #[test]
+    fn resolve_app_bundle_error_names_action() {
+        let step = make_step("clear_data");
+        let err = resolve_app_bundle(&step, &[]).expect_err("missing app SHALL error");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("No app specified") && msg.contains("clear_data"),
+            "error SHALL name the action with no app, got: {msg}"
+        );
+    }
+
+    // ── launch with restart stops first, then launches ────────────────
+
+    // `handle_launch` with restart=true issues a stop_app before launch;
+    // it also sleeps 1s, so run under paused time to keep this fast.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn launch_with_restart_stops_then_launches() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("launch");
+        step.app = Some("com.example.app".to_string());
+        step.restart = Some(true);
+
+        handle_launch(&step, &driver, &[], &ctx)
+            .await
+            .expect("restart launch SHALL succeed");
+
+        let calls = driver.get_calls();
+        let names: Vec<&str> = calls.iter().map(|c| c.0.as_str()).collect();
+        let stop_pos = names
+            .iter()
+            .position(|&n| n == "stop_app")
+            .expect("restart SHALL issue a stop_app");
+        let launch_pos = names
+            .iter()
+            .position(|&n| n == "launch_app")
+            .expect("restart SHALL still launch_app");
+        assert!(
+            stop_pos < launch_pos,
+            "stop_app SHALL precede launch_app on restart"
+        );
+    }
+
+    // ── launch resolves friendly name before launching ────────────────
+
+    // 7. handle_launch SHALL launch the resolved bundle id, not the
+    //    friendly name, when an apps entry matches.
+    #[tokio::test]
+    async fn launch_resolves_friendly_name_before_launching() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("launch");
+        step.app = Some("app".to_string());
+        let apps = vec![app_config("app", Some("com.example.resolved"))];
+
+        handle_launch(&step, &driver, &apps, &ctx)
+            .await
+            .expect("launch SHALL succeed");
+
+        let calls = driver.get_calls();
+        let launch_calls: Vec<_> = calls.iter().filter(|c| c.0 == "launch_app").collect();
+        assert_eq!(launch_calls.len(), 1, "exactly one launch_app SHALL fire");
+        assert_eq!(
+            launch_calls[0].1,
+            vec!["com.example.resolved"],
+            "launch SHALL use the resolved bundle id"
+        );
+    }
+
+    // ── launch without perf collector does not record launch_ms ───────
+
+    // 8. With no perf collector active, handle_launch SHALL NOT store a
+    //    launch duration on the context.
+    #[tokio::test]
+    async fn launch_without_perf_collector_does_not_store_launch_ms() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        let ctx = test_ctx(Path::new("."));
+
+        let mut step = make_step("launch");
+        step.app = Some("com.example.app".to_string());
+
+        handle_launch(&step, &driver, &[], &ctx)
+            .await
+            .expect("launch SHALL succeed");
+
+        assert_eq!(
+            ctx.take_launch_ms(),
+            None,
+            "no perf collector SHALL mean no recorded launch_ms"
+        );
+    }
 }

@@ -2579,4 +2579,319 @@ action = "screenshot"
             Some("login:dev:0")
         );
     }
+
+    // ── step_target: label construction ──────────────────────────────
+
+    // 1. A bare step (no selectors/input/options) yields an empty label.
+    #[test]
+    fn step_target_empty_for_bare_step() {
+        let step = empty_step("screenshot");
+        assert_eq!(step_target(&step), "", "bare step SHALL produce empty label");
+    }
+
+    // 2. Each direct selector field is rendered with its own key=value.
+    #[test]
+    fn step_target_renders_direct_selectors_in_order() {
+        let mut step = empty_step("tap");
+        step.on_text = Some("Submit".into());
+        step.on_accessibility_label = Some("submit-btn".into());
+        step.on_below = Some("Header".into());
+        step.on_right_of = Some("Icon".into());
+        step.app = Some("myapp".into());
+        assert_eq!(
+            step_target(&step),
+            "on_text=\"Submit\" on_accessibility_label=\"submit-btn\" on_below=\"Header\" on_right_of=\"Icon\" app=\"myapp\"",
+            "fields SHALL render in definition order with quoted values"
+        );
+    }
+
+    // 3. The `on` SelectorGroup contributes text and accessibility_label parts.
+    #[test]
+    fn step_target_renders_on_group_fields() {
+        let mut step = empty_step("tap");
+        step.on = Some(golem_parser::SelectorGroup {
+            text: Some("Next".into()),
+            accessibility_label: Some("next-aria".into()),
+            ..Default::default()
+        });
+        assert_eq!(
+            step_target(&step),
+            "text=\"Next\" accessibility_label=\"next-aria\"",
+            "on group SHALL contribute text and accessibility_label parts"
+        );
+    }
+
+    // 4. Input is truncated to 20 chars, counting characters not bytes
+    //    (a multibyte char at the boundary SHALL not panic or split).
+    #[test]
+    fn step_target_truncates_input_by_chars() {
+        let mut step = empty_step("type");
+        // 25 multibyte characters; only the first 20 SHALL be shown.
+        step.input = Some("あ".repeat(25));
+        let label = step_target(&step);
+        assert_eq!(
+            label,
+            format!("input=\"{}\"", "あ".repeat(20)),
+            "input SHALL be truncated to 20 chars without splitting a multibyte char"
+        );
+    }
+
+    // 5. auto_scroll=Some(false) SHALL NOT emit a token; only Some(true) does.
+    #[test]
+    fn step_target_auto_scroll_only_when_true() {
+        let mut step = empty_step("tap");
+        step.on_text = Some("X".into());
+        step.auto_scroll = Some(false);
+        assert_eq!(
+            step_target(&step),
+            "on_text=\"X\"",
+            "auto_scroll=false SHALL NOT add a token"
+        );
+        step.auto_scroll = Some(true);
+        assert_eq!(
+            step_target(&step),
+            "on_text=\"X\" auto_scroll",
+            "auto_scroll=true SHALL add the bare token"
+        );
+    }
+
+    // 6. timeout renders as timeout=<n>.
+    #[test]
+    fn step_target_renders_timeout() {
+        let mut step = empty_step("tap");
+        step.on_text = Some("X".into());
+        step.timeout = Some(1500);
+        assert_eq!(step_target(&step), "on_text=\"X\" timeout=1500");
+    }
+
+    // ── build_snapshot: field copying ────────────────────────────────
+
+    // 7. build_snapshot copies every raw metric and attaches the
+    //    supplied label / launch_ms / timestamp verbatim.
+    #[test]
+    fn build_snapshot_copies_raw_and_metadata() {
+        let raw = RawPerfData {
+            memory_mb: Some(101.5),
+            cpu_percent: Some(12.0),
+            threads: Some(11),
+            file_descriptors: Some(22),
+            disk_mb: Some(33.0),
+            net_rx_kb: Some(44.0),
+            net_tx_kb: Some(55.0),
+        };
+        let snap = build_snapshot(&raw, "lbl:dev:0".into(), Some(900), "ts-1".into());
+        assert_eq!(snap.label, "lbl:dev:0");
+        assert_eq!(snap.memory_mb, Some(101.5));
+        assert_eq!(snap.cpu_percent, Some(12.0));
+        assert_eq!(snap.threads, Some(11));
+        assert_eq!(snap.file_descriptors, Some(22));
+        assert_eq!(snap.disk_mb, Some(33.0));
+        assert_eq!(snap.net_rx_kb, Some(44.0));
+        assert_eq!(snap.net_tx_kb, Some(55.0));
+        assert_eq!(snap.launch_ms, Some(900), "launch_ms SHALL pass through");
+        assert_eq!(snap.timestamp, "ts-1", "timestamp SHALL pass through");
+    }
+
+    // ── evaluate_thresholds: per-metric branches ─────────────────────
+
+    fn snapshot_with(
+        memory: Option<f64>,
+        cpu: Option<f64>,
+        threads: Option<u32>,
+        fds: Option<u32>,
+    ) -> PerfSnapshot {
+        PerfSnapshot {
+            label: "t:dev:0".into(),
+            memory_mb: memory,
+            cpu_percent: cpu,
+            threads,
+            file_descriptors: fds,
+            disk_mb: None,
+            net_rx_kb: None,
+            net_tx_kb: None,
+            launch_ms: None,
+            timestamp: "0".into(),
+        }
+    }
+
+    // 8. CPU over the error threshold yields an Error.
+    #[test]
+    fn threshold_error_on_cpu() {
+        let snap = snapshot_with(None, Some(95.0), None, None);
+        let opts = FlowOptions {
+            perf_cpu_error_percent: Some(90.0),
+            ..Default::default()
+        };
+        match evaluate_thresholds(&snap, Some(&opts)) {
+            ThresholdResult::Error(msg) => assert!(msg.contains("CPU"), "SHALL mention CPU: {msg}"),
+            _ => panic!("expected Error for CPU over error threshold"),
+        }
+    }
+
+    // 9. Threads over the error threshold yields an Error.
+    #[test]
+    fn threshold_error_on_threads() {
+        let snap = snapshot_with(None, None, Some(500), None);
+        let opts = FlowOptions {
+            perf_threads_error: Some(256),
+            ..Default::default()
+        };
+        match evaluate_thresholds(&snap, Some(&opts)) {
+            ThresholdResult::Error(msg) => assert!(msg.contains("threads"), "SHALL mention threads: {msg}"),
+            _ => panic!("expected Error for threads over error threshold"),
+        }
+    }
+
+    // 10. File descriptors over the error threshold yields an Error.
+    #[test]
+    fn threshold_error_on_fds() {
+        let snap = snapshot_with(None, None, None, Some(1024));
+        let opts = FlowOptions {
+            perf_fd_error: Some(512),
+            ..Default::default()
+        };
+        match evaluate_thresholds(&snap, Some(&opts)) {
+            ThresholdResult::Error(msg) => assert!(msg.contains("FDs"), "SHALL mention FDs: {msg}"),
+            _ => panic!("expected Error for FDs over error threshold"),
+        }
+    }
+
+    // 11. CPU over the warn threshold (and under/absent error) yields a Warn.
+    #[test]
+    fn threshold_warn_on_cpu() {
+        let snap = snapshot_with(None, Some(85.0), None, None);
+        let opts = FlowOptions {
+            perf_cpu_warn_percent: Some(80.0),
+            ..Default::default()
+        };
+        match evaluate_thresholds(&snap, Some(&opts)) {
+            ThresholdResult::Warn(msg) => assert!(msg.contains("warning"), "SHALL mention warning: {msg}"),
+            _ => panic!("expected Warn for CPU over warn threshold"),
+        }
+    }
+
+    // 12. Threads over the warn threshold yields a Warn.
+    #[test]
+    fn threshold_warn_on_threads() {
+        let snap = snapshot_with(None, None, Some(150), None);
+        let opts = FlowOptions {
+            perf_threads_warn: Some(100),
+            ..Default::default()
+        };
+        match evaluate_thresholds(&snap, Some(&opts)) {
+            ThresholdResult::Warn(msg) => assert!(msg.contains("threads"), "SHALL mention threads: {msg}"),
+            _ => panic!("expected Warn for threads over warn threshold"),
+        }
+    }
+
+    // 13. File descriptors over the warn threshold yields a Warn.
+    #[test]
+    fn threshold_warn_on_fds() {
+        let snap = snapshot_with(None, None, None, Some(300));
+        let opts = FlowOptions {
+            perf_fd_warn: Some(200),
+            ..Default::default()
+        };
+        match evaluate_thresholds(&snap, Some(&opts)) {
+            ThresholdResult::Warn(msg) => assert!(msg.contains("FDs"), "SHALL mention FDs: {msg}"),
+            _ => panic!("expected Warn for FDs over warn threshold"),
+        }
+    }
+
+    // 14. Error thresholds are checked before warn thresholds: when a
+    //     metric trips both, the result SHALL be the Error variant.
+    #[test]
+    fn threshold_error_takes_precedence_over_warn() {
+        let snap = snapshot_with(None, Some(95.0), None, None);
+        let opts = FlowOptions {
+            perf_cpu_warn_percent: Some(80.0),
+            perf_cpu_error_percent: Some(90.0),
+            ..Default::default()
+        };
+        match evaluate_thresholds(&snap, Some(&opts)) {
+            ThresholdResult::Error(msg) => assert!(msg.contains("error threshold"), "SHALL be error: {msg}"),
+            _ => panic!("error SHALL win over warn when both trip"),
+        }
+    }
+
+    // 15. A metric exactly equal to its threshold does NOT trip (strict >).
+    #[test]
+    fn threshold_equal_is_not_over() {
+        let snap = snapshot_with(Some(200.0), None, None, None);
+        let opts = FlowOptions {
+            perf_memory_warn_mb: Some(200.0),
+            ..Default::default()
+        };
+        assert!(
+            matches!(evaluate_thresholds(&snap, Some(&opts)), ThresholdResult::Ok),
+            "value equal to threshold SHALL NOT trip (comparison is strict >)"
+        );
+    }
+
+    // 16. A metric value present but the matching limit unset is ignored.
+    #[test]
+    fn threshold_ok_when_limit_unset() {
+        let snap = snapshot_with(Some(9999.0), Some(99.0), Some(9999), Some(9999));
+        let opts = FlowOptions::default();
+        assert!(
+            matches!(evaluate_thresholds(&snap, Some(&opts)), ThresholdResult::Ok),
+            "no configured limits SHALL never trip a threshold"
+        );
+    }
+
+    // ── write_perf_var: None metrics render as empty strings ─────────
+
+    // 17. A snapshot whose numeric metrics are all None writes empty
+    //     strings for those keys (never absent, never "0").
+    #[test]
+    fn write_perf_var_none_metrics_become_empty_strings() {
+        let snapshot = PerfSnapshot {
+            label: "lbl".into(),
+            memory_mb: None,
+            cpu_percent: None,
+            threads: None,
+            file_descriptors: None,
+            disk_mb: None,
+            net_rx_kb: None,
+            net_tx_kb: None,
+            launch_ms: None,
+            timestamp: "ts".into(),
+        };
+        let mut vars = VariableStore::new();
+        write_perf_var(&mut vars, &snapshot);
+        let val = vars.get("_perf").expect("_perf SHALL exist");
+        for key in [
+            "memory_mb",
+            "cpu_percent",
+            "threads",
+            "file_descriptors",
+            "disk_mb",
+            "net_rx_kb",
+            "net_tx_kb",
+            "launch_ms",
+        ] {
+            assert_eq!(
+                val.get_path(key).and_then(|v| v.as_str()),
+                Some(""),
+                "None metric '{key}' SHALL render as an empty string"
+            );
+        }
+        assert_eq!(
+            val.get_path("label").and_then(|v| v.as_str()),
+            Some("lbl"),
+            "label SHALL still be written"
+        );
+    }
+
+    // ── parse_duration: numeric boundaries ───────────────────────────
+
+    // 18. Zero values for the second/millisecond units parse to a zero
+    //     Duration rather than being rejected as falsy/empty. (Minute and
+    //     hour multiplication are already covered by parse_duration_formats
+    //     via 5m/2h, so they are not re-asserted here.)
+    #[test]
+    fn parse_duration_zero_and_multiplied_units() {
+        assert_eq!(parse_duration("0s"), Some(Duration::from_secs(0)));
+        assert_eq!(parse_duration("0ms"), Some(Duration::from_millis(0)));
+    }
 }

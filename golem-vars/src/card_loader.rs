@@ -346,4 +346,134 @@ mod tests {
             "SHALL have APRO name trigger"
         );
     }
+
+    // 1. Bare status with no exact key falls through to the prefix branch and
+    //    collects every "status:*" child (stripe has no bare "dispute" key but
+    //    has "dispute:fraudulent" and "dispute:product_not_received").
+    #[test]
+    fn status_pure_prefix_match_no_exact_key() {
+        let db = card_database();
+        let stripe = db.get("stripe").expect("SHALL find stripe");
+        assert!(
+            !stripe.statuses.contains_key("dispute"),
+            "precondition: no bare 'dispute' key"
+        );
+        let cards = find_cards(stripe, "dispute", None);
+        assert_eq!(
+            cards.len(),
+            2,
+            "SHALL collect both dispute:* children via prefix match"
+        );
+    }
+
+    // 2. Bare status that matches neither an exact key nor any "status:*" prefix
+    //    SHALL produce an empty result.
+    #[test]
+    fn bare_status_no_match_is_empty() {
+        let db = card_database();
+        let stripe = db.get("stripe").expect("SHALL find stripe");
+        let cards = find_cards(stripe, "totally_unknown_status", None);
+        assert!(cards.is_empty(), "unknown bare status SHALL yield no cards");
+    }
+
+    // 3. A colon status whose parent does not exist SHALL fall back to an empty
+    //    result (the unwrap_or_default arm), not panic.
+    #[test]
+    fn colon_status_missing_parent_is_empty() {
+        let db = card_database();
+        let stripe = db.get("stripe").expect("SHALL find stripe");
+        assert!(
+            !stripe.statuses.contains_key("ghost"),
+            "precondition: no 'ghost' parent key"
+        );
+        let cards = find_cards(stripe, "ghost:variant", None);
+        assert!(
+            cards.is_empty(),
+            "colon status with missing parent SHALL yield no cards"
+        );
+    }
+
+    // 4. Brand filtering SHALL be case-insensitive: an uppercase query matches a
+    //    lowercase stored brand.
+    #[test]
+    fn brand_filter_is_case_insensitive() {
+        let db = card_database();
+        let stripe = db.get("stripe").expect("SHALL find stripe");
+        let cards = find_cards(stripe, "approved", Some("AMEX"));
+        assert_eq!(cards.len(), 1, "uppercase AMEX SHALL match lowercase brand");
+        assert_eq!(cards[0].number.as_deref(), Some("378282246310005"));
+    }
+
+    // 5. A brand filter that matches no card SHALL produce an empty result.
+    #[test]
+    fn brand_filter_no_match_is_empty() {
+        let db = card_database();
+        let stripe = db.get("stripe").expect("SHALL find stripe");
+        let cards = find_cards(stripe, "approved", Some("jcb"));
+        assert!(
+            cards.is_empty(),
+            "brand absent from approved set SHALL yield no cards"
+        );
+    }
+
+    // 6. Cards without a brand SHALL be excluded by a brand filter (the
+    //    unwrap_or(false) arm). Praxis approved holds one brandless card and one
+    //    amex card: filtering by amex SHALL drop the brandless one.
+    #[test]
+    fn brand_filter_excludes_cards_without_brand() {
+        let db = card_database();
+        let praxis = db.get("praxis").expect("SHALL find praxis");
+        let unfiltered = find_cards(praxis, "approved", None);
+        assert!(
+            unfiltered.iter().any(|c| c.brand.is_none()),
+            "precondition: a praxis approved card carries no brand"
+        );
+        let filtered = find_cards(praxis, "approved", Some("amex"));
+        assert!(
+            filtered.iter().all(|c| c.brand.is_some()),
+            "brandless cards SHALL be excluded by a brand filter"
+        );
+        assert!(
+            filtered.len() < unfiltered.len(),
+            "filtering by amex SHALL drop the brandless card"
+        );
+    }
+
+    // 7. provider_ids() SHALL return its ids in ascending sorted order. Checked
+    //    independently of the production sort: a strictly-monotonic windows()
+    //    scan plus a known out-of-insertion-order pair ("adyen" before "stripe",
+    //    even though "stripe" is inserted first in RAW_ENTRIES).
+    #[test]
+    fn provider_ids_are_sorted() {
+        let db = card_database();
+        let ids = db.provider_ids();
+        assert!(
+            ids.windows(2).all(|w| w[0] < w[1]),
+            "provider_ids SHALL be strictly ascending: {ids:?}"
+        );
+        let adyen = ids
+            .iter()
+            .position(|id| *id == "adyen")
+            .expect("SHALL contain adyen");
+        let stripe = ids
+            .iter()
+            .position(|id| *id == "stripe")
+            .expect("SHALL contain stripe");
+        assert!(
+            adyen < stripe,
+            "adyen SHALL sort before stripe despite later insertion order"
+        );
+    }
+
+    // 8. An empty brand string filters out every card (no stored brand equals "").
+    #[test]
+    fn empty_brand_filter_excludes_all() {
+        let db = card_database();
+        let stripe = db.get("stripe").expect("SHALL find stripe");
+        let cards = find_cards(stripe, "approved", Some(""));
+        assert!(
+            cards.is_empty(),
+            "empty brand string SHALL match no stored brand"
+        );
+    }
 }

@@ -438,4 +438,130 @@ mod tests {
             "expected 'is an object' error, got: {msg}"
         );
     }
+
+    // 16. Dot-path that resolves to a nested object (not a string) yields error
+    #[test]
+    fn error_dot_path_resolves_to_object() {
+        let mut vars: HashMap<String, VarValue> = HashMap::new();
+        vars.insert(
+            "addr".to_string(),
+            VarValue::object(vec![(
+                "geo",
+                VarValue::object(vec![("lat", VarValue::string("35.6"))]),
+            )]),
+        );
+
+        let result = resolve_var_path("addr.geo", &vars);
+        assert!(result.is_err());
+        let err = result.expect_err("should be error");
+        let msg = golem_events::clean_msg(&err);
+        assert!(
+            msg.contains("resolved to an object, not a string"),
+            "expected object-not-string error, got: {msg}"
+        );
+    }
+
+    // 17. Dot-path to a missing field yields a "path not found" error
+    #[test]
+    fn error_dot_path_field_not_found() {
+        let mut vars: HashMap<String, VarValue> = HashMap::new();
+        vars.insert(
+            "addr".to_string(),
+            VarValue::object(vec![("country_code", VarValue::string("JP"))]),
+        );
+
+        let result = resolve_var_path("addr.nonexistent", &vars);
+        assert!(result.is_err());
+        let err = result.expect_err("should be error");
+        let msg = golem_events::clean_msg(&err);
+        assert!(
+            msg.contains("not found") && msg.contains("addr"),
+            "expected 'path not found' error mentioning the variable, got: {msg}"
+        );
+    }
+
+    // 18. Dot-path on a string variable navigates into a non-object and is not found
+    #[test]
+    fn error_dot_path_through_string_variable() {
+        let mut vars: HashMap<String, VarValue> = HashMap::new();
+        vars.insert("name".to_string(), VarValue::string("Alice"));
+
+        let result = resolve_var_path("name.first", &vars);
+        assert!(result.is_err());
+        let err = result.expect_err("should be error");
+        let msg = golem_events::clean_msg(&err);
+        assert!(
+            msg.contains("not found"),
+            "expected 'path not found' error for path into a string, got: {msg}"
+        );
+    }
+
+    // 19. Dot-path navigating multiple segments down to a leaf string succeeds
+    #[test]
+    fn dot_path_multi_segment_leaf_string() {
+        let mut vars: HashMap<String, VarValue> = HashMap::new();
+        vars.insert(
+            "user".to_string(),
+            VarValue::object(vec![(
+                "addr",
+                VarValue::object(vec![("city", VarValue::string("Tokyo"))]),
+            )]),
+        );
+
+        let resolved = resolve_var_path("user.addr.city", &vars).expect("should succeed");
+        assert_eq!(resolved, "Tokyo", "deep dot-path SHALL resolve to leaf string");
+    }
+
+    // 20. Malformed generator def (unterminated parens) yields a parse error
+    #[test]
+    fn error_on_unparseable_generator_def() {
+        let mut rng = seeded_rng();
+        // Opening paren but no closing paren -> GeneratorDef::parse returns None.
+        let vars = vec![("bad".to_string(), "fake:email(domain=x".to_string())];
+        let result = evaluate_generators(&vars, &mut rng);
+
+        assert!(result.is_err());
+        let err = result.expect_err("should be error");
+        assert!(
+            err.to_string().contains("failed to parse generator definition"),
+            "expected parse-failure error, got: {err}"
+        );
+    }
+
+    // 21. Empty reference ${} resolves the empty-named variable, which is undefined
+    #[test]
+    fn error_on_empty_reference() {
+        let vars: HashMap<String, VarValue> = HashMap::new();
+        let result = resolve_references("prefix-${}-suffix", &vars);
+        assert!(result.is_err());
+        let err = result.expect_err("should be error");
+        let msg = golem_events::clean_msg(&err);
+        assert!(
+            msg.contains("undefined variable"),
+            "empty reference SHALL be treated as an undefined variable, got: {msg}"
+        );
+    }
+
+    // 22. A '$' not followed by '{' is emitted literally
+    #[test]
+    fn lone_dollar_is_literal() {
+        let vars: HashMap<String, VarValue> = HashMap::new();
+        let result = resolve_references("cost is $5 and $ alone", &vars)
+            .expect("should succeed");
+        assert_eq!(result, "cost is $5 and $ alone");
+    }
+
+    // 23. Resolved reference value is inserted literally (no recursive re-resolution)
+    #[test]
+    fn resolved_value_is_not_re_resolved() {
+        let mut vars: HashMap<String, VarValue> = HashMap::new();
+        // 'a' itself contains a ${b} sequence; resolution does not recurse into it.
+        vars.insert("a".to_string(), VarValue::string("${b}"));
+
+        let result = resolve_references("${a}", &vars).expect("should succeed");
+        assert_eq!(
+            result, "${b}",
+            "resolved value SHALL be inserted literally without re-resolution"
+        );
+    }
 }

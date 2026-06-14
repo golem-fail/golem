@@ -171,6 +171,12 @@ pub(crate) fn geo_database() -> &'static GeoDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha8Rng;
+
+    fn seeded_rng() -> ChaCha8Rng {
+        ChaCha8Rng::seed_from_u64(42)
+    }
 
     // 1. JP is present with correct iso_code
     #[test]
@@ -350,5 +356,52 @@ mod tests {
                 geo.country.iso_code
             );
         }
+    }
+
+    // 17. countries() SHALL return ISO codes in ascending sorted order
+    #[test]
+    fn geo_database_countries_is_sorted() {
+        let codes = geo_database().countries();
+        // 1. Assert each adjacent pair is ascending, independently of the
+        //    implementation's own .sort() call (no re-sorting to derive expected).
+        assert!(
+            codes.windows(2).all(|w| w[0] <= w[1]),
+            "countries() SHALL be sorted ascending, got {codes:?}"
+        );
+    }
+
+    // 19. random() with the same seed SHALL produce the same country
+    #[test]
+    fn geo_database_random_is_deterministic_for_same_seed() {
+        let db = geo_database();
+        let first = db.random(&mut seeded_rng()).country.iso_code.clone();
+        let second = db.random(&mut seeded_rng()).country.iso_code.clone();
+        assert_eq!(
+            first, second,
+            "same seed SHALL produce the same random country"
+        );
+    }
+
+    // 20. random() SHALL always return a country that is actually loaded
+    #[test]
+    fn geo_database_random_returns_loaded_country() {
+        let db = geo_database();
+        let mut rng = seeded_rng();
+        for _ in 0..50 {
+            let picked = &db.random(&mut rng).country.iso_code;
+            assert!(
+                db.get(picked).is_some(),
+                "random() SHALL return a loaded country, got {picked}"
+            );
+        }
+    }
+
+    // 21. Empty-string lookup SHALL return None
+    #[test]
+    fn geo_database_get_empty_returns_none() {
+        assert!(
+            geo_database().get("").is_none(),
+            "empty code SHALL resolve to None"
+        );
     }
 }

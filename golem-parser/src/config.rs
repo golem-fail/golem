@@ -763,4 +763,274 @@ record = true
         // Only in flow
         assert_eq!(opts.record, Some(true));
     }
+
+    // ---------------------------------------------------------------
+    // 20. Invalid TOML surfaces a parse error
+    // ---------------------------------------------------------------
+    #[test]
+    fn parse_invalid_toml_errors() {
+        // Unterminated string / malformed key-value is not valid TOML.
+        let toml_str = "this is = = not valid toml";
+        let result = parse_project_config(toml_str);
+        assert!(
+            result.is_err(),
+            "Malformed TOML SHALL surface a parse error"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 21. Wrong value type for a known option surfaces an error
+    // ---------------------------------------------------------------
+    #[test]
+    fn parse_wrong_option_type_errors() {
+        // max_concurrency is u32; a string SHALL fail deserialization.
+        let toml_str = r#"
+[options]
+max_concurrency = "not a number"
+"#;
+        let result = parse_project_config(toml_str);
+        assert!(
+            result.is_err(),
+            "Wrong-typed option value SHALL surface a deserialization error"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 22. Only the first [[teardown]] block is taken
+    // ---------------------------------------------------------------
+    #[test]
+    fn parse_only_first_teardown_block_taken() {
+        let toml_str = r#"
+[[teardown]]
+
+[[teardown.steps]]
+action = "screenshot"
+
+[[teardown]]
+
+[[teardown.steps]]
+action = "back"
+"#;
+        let config =
+            parse_project_config(toml_str).expect("multi-teardown config SHALL parse");
+        let teardown = config
+            .teardown
+            .as_ref()
+            .expect("SHALL retain a teardown block");
+        assert_eq!(
+            teardown.steps.len(),
+            1,
+            "SHALL keep only the first teardown block"
+        );
+        assert_eq!(
+            teardown.steps[0].action, "screenshot",
+            "SHALL keep the first block, not the second"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 23. coverage and app_lifecycle options parse into enums
+    // ---------------------------------------------------------------
+    #[test]
+    fn parse_coverage_and_app_lifecycle() {
+        let toml_str = r#"
+[options]
+coverage = "full"
+app_lifecycle = "manual"
+"#;
+        let config =
+            parse_project_config(toml_str).expect("coverage/app_lifecycle config SHALL parse");
+        assert_eq!(config.options.coverage, Some(crate::CoverageStrategy::Full));
+        assert_eq!(
+            config.options.app_lifecycle,
+            Some(crate::AppLifecycle::Manual)
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 24. Invalid coverage enum value surfaces an error
+    // ---------------------------------------------------------------
+    #[test]
+    fn parse_invalid_coverage_value_errors() {
+        let toml_str = r#"
+[options]
+coverage = "sideways"
+"#;
+        let result = parse_project_config(toml_str);
+        assert!(
+            result.is_err(),
+            "Unknown coverage variant SHALL surface a deserialization error"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 25. load_project_config returns Ok(None) when no golem.toml exists
+    // ---------------------------------------------------------------
+    #[test]
+    fn load_config_none_when_missing() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        let result =
+            load_project_config(tmp.path()).expect("absent config SHALL be Ok(None), not Err");
+        assert!(
+            result.is_none(),
+            "SHALL return None when no golem.toml is found"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 26. load_project_config reads and parses a found golem.toml
+    // ---------------------------------------------------------------
+    #[test]
+    fn load_config_reads_and_parses() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        fs::write(
+            tmp.path().join("golem.toml"),
+            "[options]\nmax_concurrency = 7\n\n[vars]\nfoo = \"bar\"\n",
+        )
+        .expect("Failed to write golem.toml");
+
+        let config = load_project_config(tmp.path())
+            .expect("present config SHALL parse without error")
+            .expect("SHALL return Some when golem.toml exists");
+        assert_eq!(config.options.max_concurrency, Some(7));
+        assert_eq!(config.vars.get("foo").map(|s| s.as_str()), Some("bar"));
+    }
+
+    // ---------------------------------------------------------------
+    // 27. load_project_config surfaces parse errors on malformed file
+    // ---------------------------------------------------------------
+    #[test]
+    fn load_config_propagates_parse_error() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        fs::write(
+            tmp.path().join("golem.toml"),
+            "[options]\nmax_concurrency = \"oops\"\n",
+        )
+        .expect("Failed to write golem.toml");
+
+        let result = load_project_config(tmp.path());
+        assert!(
+            result.is_err(),
+            "A found-but-malformed golem.toml SHALL surface an Err, not Ok(None)"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 28. find_project_config tolerates a non-existent start dir
+    //     (canonicalize fails, falls back to the literal path)
+    // ---------------------------------------------------------------
+    #[test]
+    fn find_config_nonexistent_start_dir_returns_none() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        let missing = tmp.path().join("does").join("not").join("exist");
+        let result = find_project_config(&missing);
+        assert!(
+            result.is_none(),
+            "SHALL return None (not panic) when start dir cannot be canonicalized"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 29. merge_config flows coverage/app_lifecycle through when another
+    //     counted option is also present
+    // ---------------------------------------------------------------
+    #[test]
+    fn merge_coverage_and_app_lifecycle_inherited() {
+        let project = parse_project_config(
+            r#"
+[options]
+max_concurrency = 2
+coverage = "min"
+app_lifecycle = "launch"
+"#,
+        )
+        .expect("project config SHALL parse");
+
+        let flow = minimal_flow(
+            r#"
+[flow]
+name = "test"
+"#,
+        );
+
+        let merged = merge_config(&project, &flow);
+        let opts = merged
+            .flow
+            .options
+            .expect("merged flow SHALL have options");
+        assert_eq!(opts.coverage, Some(crate::CoverageStrategy::Min));
+        assert_eq!(opts.app_lifecycle, Some(crate::AppLifecycle::Launch));
+    }
+
+    // ---------------------------------------------------------------
+    // 30. merge_config inherits numeric/perf project options when a
+    //     counted option is present; flow value wins per-field
+    // ---------------------------------------------------------------
+    #[test]
+    fn merge_perf_and_numeric_options_inherited() {
+        let project = parse_project_config(
+            r#"
+[options]
+min_free_ram_mb = 1024
+min_free_disk_mb = 4096
+max_steps = 500
+max_runtime = "10m"
+suite_concurrency = 3
+keep_devices = true
+perf_memory_warn_mb = 128.5
+perf_threads_warn = 64
+"#,
+        )
+        .expect("project config SHALL parse");
+
+        let flow = minimal_flow(
+            r#"
+[flow]
+name = "test"
+
+[flow.options]
+max_runtime = "5m"
+"#,
+        );
+
+        let merged = merge_config(&project, &flow);
+        let opts = merged
+            .flow
+            .options
+            .expect("merged flow SHALL have options");
+        // Inherited from project.
+        assert_eq!(opts.min_free_ram_mb, Some(1024));
+        assert_eq!(opts.min_free_disk_mb, Some(4096));
+        assert_eq!(opts.max_steps, Some(500));
+        assert_eq!(opts.suite_concurrency, Some(3));
+        assert_eq!(opts.keep_devices, Some(true));
+        assert_eq!(opts.perf_memory_warn_mb, Some(128.5));
+        assert_eq!(opts.perf_threads_warn, Some(64));
+        // Flow value wins.
+        assert_eq!(opts.max_runtime.as_deref(), Some("5m"));
+    }
+
+    // ---------------------------------------------------------------
+    // 32. merge_config preserves flow options even when project is empty
+    // ---------------------------------------------------------------
+    #[test]
+    fn merge_empty_project_preserves_flow_options() {
+        let project = ProjectConfig::default();
+        let flow = minimal_flow(
+            r#"
+[flow]
+name = "test"
+
+[flow.options]
+max_concurrency = 9
+"#,
+        );
+
+        let merged = merge_config(&project, &flow);
+        let opts = merged
+            .flow
+            .options
+            .expect("flow-only options SHALL survive an empty-project merge");
+        assert_eq!(opts.max_concurrency, Some(9));
+    }
 }

@@ -253,4 +253,98 @@ mod tests {
         let free = vec![device("iPhone", "u1", Platform::Ios, 26, DeviceType::Phone)];
         assert!(pick_best_covering(&boxes, &remaining, &free).is_none());
     }
+
+    // No free candidates at all → nothing to pick.
+    #[test]
+    fn pick_best_covering_empty_free_returns_none() {
+        let boxes = vec![os_box(Platform::Ios, 26)];
+        let remaining: std::collections::HashSet<usize> = [0usize].into_iter().collect();
+        let free: Vec<DeviceInfo> = Vec::new();
+        assert!(
+            pick_best_covering(&boxes, &remaining, &free).is_none(),
+            "no free device SHALL yield no pick"
+        );
+    }
+
+    // Nothing left to cover → every candidate ticks zero, so None.
+    #[test]
+    fn pick_best_covering_empty_remaining_returns_none() {
+        let boxes = vec![os_box(Platform::Ios, 26)];
+        let remaining: std::collections::HashSet<usize> = std::collections::HashSet::new();
+        let free = vec![device("iPhone", "u1", Platform::Ios, 26, DeviceType::Phone)];
+        assert!(
+            pick_best_covering(&boxes, &remaining, &free).is_none(),
+            "no remaining box SHALL yield no pick even with a matching device"
+        );
+    }
+
+    // An empty (all-axes-open) slot is ticked by any device; the returned
+    // tick list SHALL name that box index.
+    #[test]
+    fn pick_best_covering_open_slot_ticked_by_any_device() {
+        let boxes = vec![empty_slot()];
+        let remaining: std::collections::HashSet<usize> = [0usize].into_iter().collect();
+        let free = vec![device("iPhone", "u1", Platform::Ios, 26, DeviceType::Phone)];
+        let pick = pick_best_covering(&boxes, &remaining, &free).expect("open slot SHALL match");
+        assert_eq!(pick.0.udid, "u1");
+        assert_eq!(pick.1, vec![0], "open slot SHALL be reported as ticked");
+    }
+
+    // A candidate that ticks nothing is never picked; greedy stops once the
+    // only useful device is exhausted, leaving the unreachable box uncovered
+    // and not looping forever.
+    #[test]
+    fn set_cover_skips_useless_candidate_and_terminates() {
+        let boxes = vec![os_box(Platform::Ios, 26), os_box(Platform::Android, 34)];
+        let candidates = vec![
+            device("android-34", "u-droid", Platform::Android, 34, DeviceType::Phone),
+            device("ios-18", "u-old", Platform::Ios, 18, DeviceType::Phone),
+        ];
+        let picked = set_cover_greedy(&boxes, &candidates);
+        // Only the android device ticks anything (box 1); the ios-18 device
+        // ticks neither box and is skipped; box 0 stays uncovered.
+        assert_eq!(picked, vec![0], "SHALL pick only the android device");
+    }
+
+    // The picked_set guard: across multiple rounds a device is never picked
+    // twice. Forces two rounds — round 1 picks the broadest device, round 2
+    // must pick the other device for the box the first cannot tick — then
+    // asserts no index repeats in the pick list.
+    #[test]
+    fn set_cover_never_picks_same_device_twice() {
+        // 1. iPad-26 ticks {box0 ios26, box1 tablet}; Pixel-34 ticks {box2 android34}.
+        //    No single device covers all three, so greedy runs two rounds.
+        let boxes = vec![
+            os_box(Platform::Ios, 26),
+            type_box(DeviceType::Tablet),
+            os_box(Platform::Android, 34),
+        ];
+        let candidates = vec![
+            device("iPad-26", "u-pad", Platform::Ios, 26, DeviceType::Tablet),
+            device("Pixel-34", "u-pix", Platform::Android, 34, DeviceType::Phone),
+        ];
+        let picked = set_cover_greedy(&boxes, &candidates);
+        // 2. Round 1 picks the broadest (iPad, 2 ticks); round 2 picks Pixel.
+        assert_eq!(picked, vec![0, 1], "SHALL pick iPad then Pixel across two rounds");
+        // 3. No device index appears more than once — the picked_set guard held.
+        let mut seen = std::collections::HashSet::new();
+        for idx in &picked {
+            assert!(seen.insert(*idx), "device {idx} SHALL be picked at most once");
+        }
+    }
+
+    // An all-open box is ticked equally (1 tick) by every candidate. On a tie,
+    // max_by_key returns the LAST maximal element, so greedy picks the highest
+    // index — not the first candidate. Documents the tie-break ordering.
+    #[test]
+    fn set_cover_open_box_tie_break_picks_last() {
+        let boxes = vec![empty_slot()];
+        let candidates = vec![
+            device("iPhone", "u1", Platform::Ios, 26, DeviceType::Phone),
+            device("Pixel", "u2", Platform::Android, 34, DeviceType::Phone),
+        ];
+        let picked = set_cover_greedy(&boxes, &candidates);
+        // 1. Both tick the open box once; max_by_key keeps the last max → index 1.
+        assert_eq!(picked, vec![1], "equal-tick tie SHALL resolve to the last (highest-index) candidate");
+    }
 }

@@ -732,4 +732,307 @@ mod tests {
         let result = interpolate("${greeting}", &ctx).unwrap();
         assert_eq!(result, "Hello, Alice");
     }
+
+    // 28. self: prefix used with no device set -- distinct Other error
+    #[test]
+    fn self_prefix_without_device_context() {
+        let store = VariableStore::new();
+        let ctx = simple_ctx(&store);
+        let result = interpolate("${self:email}", &ctx);
+        let err = result.expect_err("self: without device SHALL error");
+        assert!(
+            matches!(err, VarError::Other(ref msg) if msg.contains("outside device context")),
+            "expected device context error, got: {err}"
+        );
+    }
+
+    // 29. self: prefix when device set but no device stores available
+    #[test]
+    fn self_prefix_without_device_stores() {
+        let store = VariableStore::new();
+        let ctx = InterpolationContext {
+            store: &store,
+            device: Some("pixel_9"),
+            device_stores: None,
+            global_store: None,
+            each_vars: None,
+            builtins: None,
+        };
+        let result = interpolate("${self:email}", &ctx);
+        let err = result.expect_err("self: without device stores SHALL error");
+        assert!(
+            matches!(err, VarError::Other(ref msg) if msg.contains("no device stores available")),
+            "expected no-device-stores error, got: {err}"
+        );
+    }
+
+    // 30. self: prefix when current device is absent from the device stores map
+    #[test]
+    fn self_prefix_device_missing_from_stores() {
+        let store = VariableStore::new();
+        let device_stores: HashMap<String, VariableStore> = HashMap::new();
+        let ctx = InterpolationContext {
+            store: &store,
+            device: Some("pixel_9"),
+            device_stores: Some(&device_stores),
+            global_store: None,
+            each_vars: None,
+            builtins: None,
+        };
+        let result = interpolate("${self:email}", &ctx);
+        let err = result.expect_err("self: for absent device SHALL error");
+        assert!(
+            matches!(err, VarError::Undefined(ref name) if name == "self:email"),
+            "expected Undefined(self:email), got: {err}"
+        );
+    }
+
+    // 31. global: prefix used but no global store provided
+    #[test]
+    fn global_prefix_without_global_store() {
+        let store = VariableStore::new();
+        let ctx = simple_ctx(&store);
+        let result = interpolate("${global:email}", &ctx);
+        let err = result.expect_err("global: without global store SHALL error");
+        assert!(
+            matches!(err, VarError::Other(ref msg) if msg.contains("no global store available")),
+            "expected no-global-store error, got: {err}"
+        );
+    }
+
+    // 32. device_name: prefix used but no device stores available
+    #[test]
+    fn device_prefix_without_device_stores() {
+        let store = VariableStore::new();
+        let ctx = simple_ctx(&store);
+        let result = interpolate("${iphone_17:var}", &ctx);
+        let err = result.expect_err("device prefix without stores SHALL error");
+        assert!(
+            matches!(err, VarError::Other(ref msg)
+                     if msg.contains("iphone_17:") && msg.contains("no device stores available")),
+            "expected no-device-stores error naming the device, got: {err}"
+        );
+    }
+
+    // 33. Bare reference falls through a non-matching device store to the main store
+    #[test]
+    fn bare_reference_falls_through_device_store_to_main() {
+        let main_store = store_with(
+            ScopeLevel::Project,
+            vec![("only_in_main", VarValue::string("main-value"))],
+        );
+        // Device store exists but does NOT contain the key.
+        let device_store = store_with(
+            ScopeLevel::Project,
+            vec![("something_else", VarValue::string("x"))],
+        );
+        let mut device_stores = HashMap::new();
+        device_stores.insert("pixel_9".to_string(), device_store);
+
+        let ctx = InterpolationContext {
+            store: &main_store,
+            device: Some("pixel_9"),
+            device_stores: Some(&device_stores),
+            global_store: None,
+            each_vars: None,
+            builtins: None,
+        };
+        let result = interpolate("${only_in_main}", &ctx).expect("SHALL fall through to main");
+        assert_eq!(result, "main-value");
+    }
+
+    // 34. Builtin matched as root but accessed with a dot path -- NotAnObject
+    #[test]
+    fn builtin_with_dot_access_is_not_an_object() {
+        let store = VariableStore::new();
+        let mut builtins = HashMap::new();
+        builtins.insert("_device".to_string(), "Pixel 9".to_string());
+
+        let ctx = InterpolationContext {
+            store: &store,
+            device: None,
+            device_stores: None,
+            global_store: None,
+            each_vars: None,
+            builtins: Some(&builtins),
+        };
+        let result = interpolate("${_device.field}", &ctx);
+        let err = result.expect_err("dot access on a builtin SHALL error");
+        assert!(
+            matches!(err, VarError::NotAnObject(ref s) if s == "_device"),
+            "expected NotAnObject(_device), got: {err}"
+        );
+    }
+
+    // 35. Resolving a bare top-level object (no dot path) directly is NotAnObject
+    #[test]
+    fn bare_object_reference_is_not_an_object() {
+        let store = store_with(
+            ScopeLevel::Project,
+            vec![(
+                "person",
+                VarValue::object(vec![("first", VarValue::string("Sarah"))]),
+            )],
+        );
+        let ctx = simple_ctx(&store);
+        let result = interpolate("${person}", &ctx);
+        let err = result.expect_err("interpolating an object directly SHALL error");
+        assert!(
+            matches!(err, VarError::NotAnObject(ref s) if s == "person"),
+            "expected NotAnObject(person), got: {err}"
+        );
+    }
+
+    // 36. Resolving a dot path down to an object (not a leaf string) is NotAnObject
+    #[test]
+    fn dot_path_to_object_is_not_an_object() {
+        let store = store_with(
+            ScopeLevel::Project,
+            vec![(
+                "config",
+                VarValue::object(vec![(
+                    "db",
+                    VarValue::object(vec![("host", VarValue::string("localhost"))]),
+                )]),
+            )],
+        );
+        let ctx = simple_ctx(&store);
+        // config.db is itself an object, not a string leaf.
+        let result = interpolate("${config.db}", &ctx);
+        let err = result.expect_err("dot path landing on an object SHALL error");
+        assert!(
+            matches!(err, VarError::NotAnObject(ref s) if s == "config.db"),
+            "expected NotAnObject(config.db), got: {err}"
+        );
+    }
+
+    // 37. Lone $ not followed by { or $ is preserved literally
+    #[test]
+    fn lone_dollar_preserved() {
+        let store = VariableStore::new();
+        let ctx = simple_ctx(&store);
+        let result = interpolate("cost is $5 today", &ctx).expect("lone $ SHALL pass through");
+        assert_eq!(result, "cost is $5 today");
+    }
+
+    // 38. Trailing $ at end of template is preserved literally
+    #[test]
+    fn trailing_dollar_preserved() {
+        let store = VariableStore::new();
+        let ctx = simple_ctx(&store);
+        let result = interpolate("price$", &ctx).expect("trailing $ SHALL pass through");
+        assert_eq!(result, "price$");
+    }
+
+    // 39. Empty template yields empty string
+    #[test]
+    fn empty_template() {
+        let store = VariableStore::new();
+        let ctx = simple_ctx(&store);
+        let result = interpolate("", &ctx).expect("empty template SHALL be empty");
+        assert_eq!(result, "");
+    }
+
+    // 40. Empty reference ${} resolves as an undefined bare variable
+    #[test]
+    fn empty_reference_is_undefined() {
+        let store = VariableStore::new();
+        let ctx = simple_ctx(&store);
+        let result = interpolate("${}", &ctx);
+        let err = result.expect_err("empty reference SHALL error");
+        assert!(
+            matches!(err, VarError::Undefined(ref name) if name.is_empty()),
+            "expected Undefined(\"\"), got: {err}"
+        );
+    }
+
+    // 41. _each. prefix with a dot path into a nested object
+    #[test]
+    fn each_prefix_with_dot_path() {
+        let main_store = VariableStore::new();
+        let each_store = store_with(
+            ScopeLevel::Project,
+            vec![(
+                "item",
+                VarValue::object(vec![("name", VarValue::string("apple"))]),
+            )],
+        );
+        let ctx = InterpolationContext {
+            store: &main_store,
+            device: None,
+            device_stores: None,
+            global_store: None,
+            each_vars: Some(&each_store),
+            builtins: None,
+        };
+        let result = interpolate("${_each.item.name}", &ctx).expect("nested _each SHALL resolve");
+        assert_eq!(result, "apple");
+    }
+
+    // 42. Cross-device prefix when the named device exists but the var does not
+    #[test]
+    fn cross_device_var_not_found_in_existing_device() {
+        let main_store = VariableStore::new();
+        let iphone_store = store_with(
+            ScopeLevel::Project,
+            vec![("present", VarValue::string("yes"))],
+        );
+        let mut device_stores = HashMap::new();
+        device_stores.insert("iphone_17".to_string(), iphone_store);
+
+        let ctx = InterpolationContext {
+            store: &main_store,
+            device: None,
+            device_stores: Some(&device_stores),
+            global_store: None,
+            each_vars: None,
+            builtins: None,
+        };
+        let result = interpolate("${iphone_17:absent}", &ctx);
+        let err = result.expect_err("missing cross-device var SHALL error");
+        assert!(
+            matches!(err, VarError::Undefined(ref name) if name == "absent"),
+            "expected Undefined(absent), got: {err}"
+        );
+    }
+
+    // 43. Literal text surrounding a reference is preserved on both sides
+    #[test]
+    fn surrounding_literal_text_preserved() {
+        let store = store_with(
+            ScopeLevel::Project,
+            vec![("name", VarValue::string("Alice"))],
+        );
+        let ctx = simple_ctx(&store);
+        let result = interpolate("Hi ${name}, welcome!", &ctx).expect("SHALL interpolate");
+        assert_eq!(result, "Hi Alice, welcome!");
+    }
+
+    // 44. Builtins take precedence over a same-named device store entry
+    #[test]
+    fn builtin_wins_over_device_store() {
+        let main_store = VariableStore::new();
+        let device_store = store_with(
+            ScopeLevel::Project,
+            vec![("_device", VarValue::string("from-device-store"))],
+        );
+        let mut device_stores = HashMap::new();
+        device_stores.insert("pixel_9".to_string(), device_store);
+        let mut builtins = HashMap::new();
+        builtins.insert("_device".to_string(), "builtin-value".to_string());
+
+        let ctx = InterpolationContext {
+            store: &main_store,
+            device: Some("pixel_9"),
+            device_stores: Some(&device_stores),
+            global_store: None,
+            each_vars: None,
+            builtins: Some(&builtins),
+        };
+        let result = interpolate("${_device}", &ctx).expect("SHALL resolve");
+        assert_eq!(
+            result, "builtin-value",
+            "builtin SHALL win over device store"
+        );
+    }
 }

@@ -150,4 +150,133 @@ mod tests {
             "error should mention the action name, got: {err_msg}"
         );
     }
+
+    // ── dispatch routing: each action string reaches its handler ──────
+    //
+    // These exercise the `match` in `execute_action` (the only logic in
+    // this file). Each handler is identified by the param-validation
+    // error it emits before any device/network I/O, so the assertions
+    // confirm the action string routed to the intended handler without
+    // requiring a live device.
+
+    async fn dispatch(step: &Step) -> Result<()> {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        let mut vars = make_vars();
+        let ctx = test_ctx(Path::new("."));
+        execute_action(step, &driver, &mut vars, &ctx, &[]).await
+    }
+
+    // 3. `fail` routes to handle_fail and surfaces FlowExplicitFail.
+    #[tokio::test]
+    async fn fail_action_routes_to_handle_fail() {
+        let err = dispatch(&make_step("fail"))
+            .await
+            .expect_err("fail action SHALL error");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::FlowExplicitFail),
+            "fail SHALL carry FlowExplicitFail",
+        );
+    }
+
+    // 4. `bash` without a `run` param routes to handle_bash and reports the
+    //    missing-param error before spawning a shell.
+    #[tokio::test]
+    async fn bash_action_routes_to_handle_bash_and_validates_run_param() {
+        let err = dispatch(&make_step("bash"))
+            .await
+            .expect_err("bash without run SHALL error");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("bash action requires 'run' param"),
+            "bash SHALL route to handle_bash, got: {msg}",
+        );
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::ParseMissingParam),
+            "missing bash param SHALL carry ParseMissingParam",
+        );
+    }
+
+    // 5. `run` without a `script` param routes to handle_run.
+    #[tokio::test]
+    async fn run_action_routes_to_handle_run_and_validates_script_param() {
+        let err = dispatch(&make_step("run"))
+            .await
+            .expect_err("run without script SHALL error");
+        assert!(
+            format!("{err}").contains("run action requires 'script' param"),
+            "run SHALL route to handle_run",
+        );
+    }
+
+    // 6. `await_email` without an `inbox` param routes to handle_await_email
+    //    and fails before any IMAP connection.
+    #[tokio::test]
+    async fn await_email_action_routes_to_handle_await_email() {
+        let err = dispatch(&make_step("await_email"))
+            .await
+            .expect_err("await_email without inbox SHALL error");
+        assert!(
+            format!("{err}").contains("await_email action requires 'inbox' param"),
+            "await_email SHALL route to handle_await_email",
+        );
+    }
+
+    // 7. `load_fixture` without a `fixture` param routes to handle_load_fixture.
+    #[tokio::test]
+    async fn load_fixture_action_routes_to_handle_load_fixture() {
+        let err = dispatch(&make_step("load_fixture"))
+            .await
+            .expect_err("load_fixture without fixture SHALL error");
+        assert!(
+            format!("{err}").contains("load_fixture action requires 'fixture' param"),
+            "load_fixture SHALL route to handle_load_fixture",
+        );
+    }
+
+    // 8. `open_link` without a `url` param routes to handle_open_link.
+    #[tokio::test]
+    async fn open_link_action_routes_to_handle_open_link() {
+        let err = dispatch(&make_step("open_link"))
+            .await
+            .expect_err("open_link without url SHALL error");
+        assert!(
+            format!("{err}").contains("open_link action requires 'url' param"),
+            "open_link SHALL route to handle_open_link",
+        );
+    }
+
+    // 9. Every HTTP verb alias is wired to handle_http: each of the five
+    //    distinct dispatch match arms reaches the shared missing-`url` guard
+    //    and surfaces handle_http's own error (keyed off `step.action`) with
+    //    ParseMissingParam. Note: the per-arm `method` label ("GET"/"POST"/…)
+    //    only becomes observable on the live-request path (the `HTTP {method}
+    //    {url}` failure) or the unsupported-method `bail!`, neither reachable
+    //    here without a network call or an invalid method — so this test proves
+    //    routing + the missing-`url` error contract, not the method label.
+    #[tokio::test]
+    async fn http_verb_aliases_each_route_to_handle_http() {
+        for action in [
+            "http_get",
+            "http_post",
+            "http_put",
+            "http_patch",
+            "http_delete",
+        ] {
+            let result = dispatch(&make_step(action)).await;
+            let err = result.expect_err("http verb without url SHALL error");
+            let msg = format!("{err}");
+            assert!(
+                msg.contains(&format!("{action} action requires 'url' param")),
+                "{action} SHALL route to handle_http and surface its own action label, got: {msg}",
+            );
+            assert_eq!(
+                golem_events::extract_code(&err),
+                Some(golem_events::FailureCode::ParseMissingParam),
+                "{action} missing url SHALL carry ParseMissingParam",
+            );
+        }
+    }
 }

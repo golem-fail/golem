@@ -1011,4 +1011,81 @@ mod tests {
             "error should point at the cross-platform pattern, got: {msg}",
         );
     }
+
+    // 1. Empty string is not a known shorthand and SHALL error (the
+    //    match has no empty-string arm — it falls through to `other`).
+    #[test]
+    fn normalize_rejects_empty_string() {
+        let err = normalize_ios_permission("")
+            .expect_err("empty shorthand SHALL error");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("Known shorthands"),
+            "empty input SHALL still list the known set, got: {msg}",
+        );
+    }
+
+    // 2. Matching is exact and case-sensitive — an uppercased token is
+    //    NOT accepted (simctl tokens are lowercase by design).
+    #[test]
+    fn normalize_is_case_sensitive() {
+        assert!(
+            normalize_ios_permission("Camera").is_err(),
+            "uppercased `Camera` SHALL NOT match the lowercase `camera` token",
+        );
+        assert!(
+            normalize_ios_permission("CAMERA").is_err(),
+            "all-caps `CAMERA` SHALL NOT match",
+        );
+    }
+
+    // 3. No trimming — surrounding whitespace makes the token unknown
+    //    rather than being silently normalized.
+    #[test]
+    fn normalize_does_not_trim_whitespace() {
+        assert!(
+            normalize_ios_permission(" camera").is_err(),
+            "leading space SHALL NOT be trimmed away",
+        );
+        assert!(
+            normalize_ios_permission("camera ").is_err(),
+            "trailing space SHALL NOT be trimmed away",
+        );
+    }
+
+    // 4. The unknown-shorthand error echoes the offending input with
+    //    debug quoting (`{other:?}`), so a token containing a quote is
+    //    rendered escaped — confirms the `:?` formatting path.
+    #[test]
+    fn normalize_unknown_error_uses_debug_quoting() {
+        let err = normalize_ios_permission("we\"ird")
+            .expect_err("unknown shorthand SHALL error");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("we\\\"ird"),
+            "debug-quoted input SHALL escape the embedded quote, got: {msg}",
+        );
+    }
+
+    // 5. Post-stop grace SHALL be a real, bounded teardown window: nonzero
+    //    (a zero grace would race the WKWebView release and reintroduce the
+    //    half-initialised WebView bug the sleep guards against) yet short
+    //    enough to keep stop+launch cycles cheap. Asserting the property
+    //    rather than restating the literal keeps the invariant meaningful.
+    #[test]
+    fn ios_post_stop_grace_is_a_bounded_nonzero_window() {
+        // 5a. Nonzero — the sleep must actually yield teardown time.
+        assert!(
+            IOS_POST_STOP_GRACE > std::time::Duration::ZERO,
+            "post-stop grace SHALL be nonzero so simctl teardown can complete \
+             before the next launch (got {IOS_POST_STOP_GRACE:?})",
+        );
+        // 5b. Bounded — a grace this large would make stop+launch cycles
+        //     needlessly slow; the documented window is sub-second.
+        assert!(
+            IOS_POST_STOP_GRACE < std::time::Duration::from_secs(1),
+            "post-stop grace SHALL stay under 1s to keep stop+launch cycles \
+             cheap (got {IOS_POST_STOP_GRACE:?})",
+        );
+    }
 }

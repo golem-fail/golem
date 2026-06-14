@@ -843,6 +843,470 @@ mod tests {
         );
     }
 
+    // 13. Warning step renders its failure code -----------------------
+
+    #[test]
+    fn warning_step_includes_code() {
+        let mut step = warning_step("assert_visible", "Promo", 15, "element not found");
+        step.outcome = StepOutcome::Warning {
+            message: "element not found".to_string(),
+            code: golem_events::FailureCode::FlowStepTimeout,
+        };
+        let report = FlowReport {
+            first_failure_code: None,
+            flow_name: "warn_flow".to_string(),
+            success: true,
+            step_results: vec![step],
+            warnings: vec![],
+            duration_ms: 15,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            os_major: None,
+            perf_snapshots: vec![],
+            skipped_reason: None,
+            covered_axes: Vec::new(),
+            recordings: Vec::new(),
+            repeat: None,
+            started_at: None,
+            finished_at: None,
+        };
+
+        let json_str = format_flow_json(&report).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        let step = &v["steps"][0];
+        // Warning renders code with Warning severity (W-domain).
+        assert_eq!(step["code"], "WF408", "warning step SHALL carry its code");
+    }
+
+    // 14. Success/skipped steps omit code/error/warning ---------------
+
+    #[test]
+    fn success_and_skipped_steps_omit_optional_fields() {
+        let report = FlowReport {
+            first_failure_code: None,
+            flow_name: "mixed_flow".to_string(),
+            success: true,
+            step_results: vec![success_step("launch", "", 10), skipped_step("tap", "X")],
+            warnings: vec![],
+            duration_ms: 10,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            os_major: None,
+            perf_snapshots: vec![],
+            skipped_reason: None,
+            covered_axes: Vec::new(),
+            recordings: Vec::new(),
+            repeat: None,
+            started_at: None,
+            finished_at: None,
+        };
+
+        let json_str = format_flow_json(&report).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        for idx in 0..2 {
+            let step = &v["steps"][idx];
+            assert!(step.get("code").is_none(), "step {idx} SHALL omit code");
+            assert!(step.get("error").is_none(), "step {idx} SHALL omit error");
+            assert!(step.get("warning").is_none(), "step {idx} SHALL omit warning");
+        }
+    }
+
+    // 15. first_failure_code suppressed when flow succeeded -----------
+
+    #[test]
+    fn flow_code_suppressed_when_success() {
+        let mut report = sample_flow();
+        // A success flow that still carries a failure code (e.g. a
+        // recovered warning) SHALL NOT surface the code at flow level.
+        report.success = true;
+        report.first_failure_code = Some(golem_events::FailureCode::FlowStepTimeout);
+
+        let json_str = format_flow_json(&report).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        assert!(v.get("code").is_none(), "successful flow SHALL omit code");
+    }
+
+    // 16. Wall-clock timestamps render at flow + step level -----------
+
+    #[test]
+    fn timestamps_rendered_when_present() {
+        let mut report = sample_flow();
+        report.started_at = Some("2026-06-15T12:00:00Z".to_string());
+        report.finished_at = Some("2026-06-15T12:00:10Z".to_string());
+        report.step_results[0].started_at = Some("2026-06-15T12:00:00Z".to_string());
+        report.step_results[0].finished_at = Some("2026-06-15T12:00:00.120Z".to_string());
+
+        let json_str = format_flow_json(&report).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        assert_eq!(v["started_at"], "2026-06-15T12:00:00Z");
+        assert_eq!(v["finished_at"], "2026-06-15T12:00:10Z");
+        assert_eq!(v["steps"][0]["started_at"], "2026-06-15T12:00:00Z");
+        assert_eq!(v["steps"][0]["finished_at"], "2026-06-15T12:00:00.120Z");
+    }
+
+    // 17. os_major + skipped_reason render when present ---------------
+
+    #[test]
+    fn os_major_and_skipped_reason_rendered() {
+        let mut report = sample_flow();
+        report.success = true;
+        report.os_major = Some(26);
+        report.skipped_reason = Some("coverage group already satisfied".to_string());
+
+        let json_str = format_flow_json(&report).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        assert_eq!(v["os_major"], 26, "os_major SHALL render when present");
+        assert_eq!(
+            v["skipped_reason"], "coverage group already satisfied",
+            "skipped_reason SHALL render when present"
+        );
+    }
+
+    // 18. Step retry/tree stats propagate to JSON ---------------------
+
+    #[test]
+    fn step_retry_and_tree_stats_rendered() {
+        let mut report = sample_flow();
+        report.step_results[0].retry_count = 3;
+        report.step_results[0].tree_stats = golem_events::TreeStats {
+            fetches: 7,
+            min_nodes: 10,
+            max_nodes: 152,
+        };
+
+        let json_str = format_flow_json(&report).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        let step = &v["steps"][0];
+        assert_eq!(step["retries"], 3, "retries SHALL propagate");
+        assert_eq!(step["tree_fetches"], 7, "tree_fetches SHALL propagate");
+        assert_eq!(step["tree_nodes"], 152, "tree_nodes SHALL propagate");
+    }
+
+    // 19. block name rendered, omitted when empty ---------------------
+
+    #[test]
+    fn step_block_name_render_and_omit() {
+        let mut report = sample_flow();
+        report.step_results[0].block_name = "main".to_string();
+        // step 1 keeps an empty block name.
+
+        let json_str = format_flow_json(&report).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        assert_eq!(v["steps"][0]["block"], "main", "non-empty block SHALL render");
+        assert!(
+            v["steps"][1].get("block").is_none(),
+            "empty block SHALL be omitted"
+        );
+    }
+
+    // 20. Substeps render as an array, omitted when empty -------------
+
+    #[test]
+    fn substeps_rendered_and_omitted() {
+        let mut report = sample_flow();
+        report.step_results[1].substeps = vec![
+            crate::SubstepDetail::Tap {
+                point: golem_events::Point { x: 10, y: 20 },
+                element_bounds: None,
+            },
+            crate::SubstepDetail::Backspace { count: 2 },
+        ];
+
+        let json_str = format_flow_json(&report).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        let subs = v["steps"][1]["substeps"]
+            .as_array()
+            .expect("substeps SHALL be an array");
+        assert_eq!(subs.len(), 2, "both substeps SHALL render");
+        // step 0 has no substeps and SHALL omit the key entirely.
+        assert!(
+            v["steps"][0].get("substeps").is_none(),
+            "empty substeps SHALL be omitted"
+        );
+    }
+
+    // 21. Recordings render as objects, omitted when empty ------------
+
+    #[test]
+    fn recordings_rendered_and_omitted() {
+        let mut report = sample_flow();
+        report.recordings = vec![crate::RecordingEntry {
+            block: "checkout".to_string(),
+            iteration: 2,
+            path: ".golem/recordings/checkout_2.mp4".to_string(),
+        }];
+
+        let json_str = format_flow_json(&report).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        let recs = v["recordings"].as_array().expect("recordings SHALL be array");
+        assert_eq!(recs.len(), 1);
+        assert_eq!(recs[0]["block"], "checkout");
+        assert_eq!(recs[0]["iteration"], 2);
+        assert_eq!(recs[0]["path"], ".golem/recordings/checkout_2.mp4");
+    }
+
+    #[test]
+    fn recordings_omitted_when_empty() {
+        let report = sample_flow();
+        let json_str = format_flow_json(&report).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        assert!(
+            v.get("recordings").is_none(),
+            "empty recordings SHALL be omitted"
+        );
+    }
+
+    // 22. Perf snapshot omits its None metrics ------------------------
+
+    #[test]
+    fn perf_snapshot_omits_none_metrics() {
+        let mut report = sample_flow();
+        report.perf_snapshots = vec![PerfSnapshot {
+            label: "launch:0".into(),
+            memory_mb: Some(100.0),
+            cpu_percent: None,
+            threads: None,
+            file_descriptors: None,
+            disk_mb: None,
+            net_rx_kb: None,
+            net_tx_kb: None,
+            launch_ms: None,
+            timestamp: "999".into(),
+        }];
+
+        let json_str = format_flow_json(&report).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        let snap = &v["perf_snapshots"][0];
+        assert_eq!(snap["memory_mb"], 100.0, "set metric SHALL render");
+        assert_eq!(snap["timestamp"], "999", "timestamp SHALL render");
+        assert!(snap.get("cpu_percent").is_none(), "None cpu_percent SHALL be omitted");
+        assert!(snap.get("threads").is_none(), "None threads SHALL be omitted");
+        assert!(snap.get("launch_ms").is_none(), "None launch_ms SHALL be omitted");
+    }
+
+    // 23. Suite renders installs; omits when empty --------------------
+
+    #[test]
+    fn suite_json_renders_installs() {
+        let mut suite = sample_suite();
+        suite.installs = vec![InstallReport {
+            app_name: "MyApp".to_string(),
+            bundle_id: "com.example.app".to_string(),
+            device_name: "iPhone 15 Pro".to_string(),
+            os_major: Some(18),
+            success: false,
+            duration_ms: 4200,
+            exit_code: Some(1),
+            error: Some("provisioning profile missing".to_string()),
+            code: None,
+            started_at: None,
+            finished_at: None,
+        }];
+
+        let json_str = format_suite_json(&suite).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        let installs = v["installs"].as_array().expect("installs SHALL be array");
+        assert_eq!(installs.len(), 1);
+        let inst = &installs[0];
+        assert_eq!(inst["app_name"], "MyApp");
+        assert_eq!(inst["bundle_id"], "com.example.app");
+        assert_eq!(inst["device"], "iPhone 15 Pro");
+        assert_eq!(inst["os_major"], 18);
+        assert_eq!(inst["success"], false);
+        assert_eq!(inst["duration_ms"], 4200);
+        assert_eq!(inst["exit_code"], 1);
+        assert_eq!(inst["error"], "provisioning profile missing");
+    }
+
+    #[test]
+    fn suite_json_omits_installs_when_empty() {
+        let suite = sample_suite();
+        let json_str = format_suite_json(&suite).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        assert!(v.get("installs").is_none(), "empty installs SHALL be omitted");
+    }
+
+    // 24. Install omits None optional fields --------------------------
+
+    #[test]
+    fn install_json_omits_none_fields() {
+        let mut suite = sample_suite();
+        suite.installs = vec![InstallReport {
+            app_name: "MyApp".to_string(),
+            bundle_id: "com.example.app".to_string(),
+            device_name: "Pixel".to_string(),
+            os_major: None,
+            success: true,
+            duration_ms: 1000,
+            exit_code: None,
+            error: None,
+            code: None,
+            started_at: None,
+            finished_at: None,
+        }];
+
+        let json_str = format_suite_json(&suite).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        let inst = &v["installs"][0];
+        assert!(inst.get("os_major").is_none(), "None os_major SHALL be omitted");
+        assert!(inst.get("exit_code").is_none(), "None exit_code SHALL be omitted");
+        assert!(inst.get("error").is_none(), "None error SHALL be omitted");
+        assert!(inst.get("started_at").is_none(), "None started_at SHALL be omitted");
+    }
+
+    // 25. Suite skipped count: all-steps-skipped flow counts as skipped
+
+    #[test]
+    fn suite_counts_all_steps_skipped_flow() {
+        let mut suite = sample_suite();
+        // A flow whose every step is Skipped but which is NOT a
+        // coverage-group skip (skipped_reason = None) SHALL still count
+        // toward the suite's skipped tally via the all-steps branch.
+        suite.flows.push(FlowReport {
+            first_failure_code: None,
+            flow_name: "all_skipped_flow".to_string(),
+            success: true,
+            step_results: vec![skipped_step("tap", "A"), skipped_step("tap", "B")],
+            warnings: vec![],
+            duration_ms: 0,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            os_major: None,
+            perf_snapshots: vec![],
+            skipped_reason: None,
+            covered_axes: Vec::new(),
+            recordings: Vec::new(),
+            repeat: None,
+            started_at: None,
+            finished_at: None,
+        });
+
+        let json_str = format_suite_json(&suite).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        assert_eq!(v["suite"]["total"], 5);
+        assert_eq!(v["suite"]["skipped"], 1, "all-steps-skipped flow SHALL count as skipped");
+    }
+
+    // 26. Coverage-group skip counts as skipped, not passed -----------
+
+    #[test]
+    fn suite_counts_coverage_group_skip() {
+        let mut suite = sample_suite();
+        suite.flows.push(FlowReport {
+            first_failure_code: None,
+            flow_name: "spared_flow".to_string(),
+            success: true,
+            step_results: vec![],
+            warnings: vec![],
+            duration_ms: 0,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            os_major: None,
+            perf_snapshots: vec![],
+            skipped_reason: Some("peer run satisfied coverage".to_string()),
+            covered_axes: Vec::new(),
+            recordings: Vec::new(),
+            repeat: None,
+            started_at: None,
+            finished_at: None,
+        });
+
+        let json_str = format_suite_json(&suite).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        // 3 real passes from sample_suite remain; spared flow is not a pass.
+        assert_eq!(v["suite"]["passed"], 3, "coverage skip SHALL NOT count as passed");
+        assert_eq!(v["suite"]["skipped"], 1, "coverage skip SHALL count as skipped");
+    }
+
+    // 27. flake_summary populated when repeat is set ------------------
+
+    #[test]
+    fn suite_json_includes_flake_summary() {
+        let mut suite = sample_suite();
+        // Two repeat runs of the same flow+device: one pass, one fail =>
+        // a flake entry SHALL surface.
+        let mk = |success: bool, idx: u32| FlowReport {
+            first_failure_code: None,
+            flow_name: "flaky".to_string(),
+            success,
+            step_results: vec![success_step("launch", "", 10)],
+            warnings: vec![],
+            duration_ms: 10,
+            seed: None,
+            screenshot_path: None,
+            device_name: Some("Pixel".to_string()),
+            os_major: None,
+            perf_snapshots: vec![],
+            skipped_reason: None,
+            covered_axes: Vec::new(),
+            recordings: Vec::new(),
+            repeat: Some(golem_events::RepeatContext { index: idx, total: 2 }),
+            started_at: None,
+            finished_at: None,
+        };
+        suite.flows = vec![mk(true, 0), mk(false, 1)];
+
+        let json_str = format_suite_json(&suite).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        let flakes = v["flake_summary"].as_array().expect("flake_summary SHALL be array");
+        assert_eq!(flakes.len(), 1);
+        let e = &flakes[0];
+        assert_eq!(e["flow"], "flaky (Pixel)");
+        assert_eq!(e["passed"], 1);
+        assert_eq!(e["failed"], 1);
+        assert_eq!(e["total"], 2);
+    }
+
+    #[test]
+    fn suite_json_omits_flake_summary_without_repeat() {
+        let suite = sample_suite();
+        let json_str = format_suite_json(&suite).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        assert!(
+            v.get("flake_summary").is_none(),
+            "single-run suite SHALL omit flake_summary"
+        );
+    }
+
+    // 28. Empty suite produces zeroed summary -------------------------
+
+    #[test]
+    fn empty_suite_zeroed_summary() {
+        let suite = SuiteReport::default();
+        let json_str = format_suite_json(&suite).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+
+        let s = &v["suite"];
+        assert_eq!(s["total"], 0);
+        assert_eq!(s["passed"], 0);
+        assert_eq!(s["failed"], 0);
+        assert_eq!(s["skipped"], 0);
+        let flows = v["flows"].as_array().expect("flows SHALL be array");
+        assert!(flows.is_empty(), "empty suite SHALL have no flows");
+    }
+
     #[test]
     fn json_omits_perf_when_empty() {
         let report = FlowReport {

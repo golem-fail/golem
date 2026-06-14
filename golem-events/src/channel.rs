@@ -160,6 +160,164 @@ mod tests {
             "SHALL tag second event with Android device ID");
     }
 
+    // 1. Late subscribers SHALL only receive events emitted after they subscribe,
+    //    not events that were emitted before the subscription existed.
+    #[tokio::test]
+    async fn late_subscriber_misses_prior_events() {
+        let (sender, subs) = event_channel();
+        let dev = DeviceId("dev".into());
+
+        // Emitted before anyone subscribed — dropped (no receivers).
+        sender.emit(dev.clone(), EventKind::SuiteStarted { flow_count: 1 });
+
+        let mut rx = subs.subscribe();
+
+        // Emitted after subscribe — visible to this receiver.
+        sender.emit(dev.clone(), EventKind::SuiteFinished { duration_ms: 1, passed: 1, failed: 0, skipped: 0 });
+
+        let e = rx.recv().await.expect("SHALL receive the post-subscribe event");
+        assert_eq!(e.seq, 1, "SHALL skip the pre-subscribe event yet keep its seq slot");
+        assert!(
+            matches!(e.kind, EventKind::SuiteFinished { .. }),
+            "SHALL deliver the event emitted after subscription"
+        );
+    }
+
+    // 2. The sequence counter SHALL keep advancing even while there are no
+    //    receivers (emit drops the event but still bumps seq).
+    #[tokio::test]
+    async fn seq_advances_without_receivers() {
+        let (sender, subs) = event_channel();
+        let dev = DeviceId("dev".into());
+
+        // No subscribers: these are dropped but consume seq slots 0 and 1.
+        sender.emit(dev.clone(), EventKind::SuiteStarted { flow_count: 1 });
+        sender.emit(dev.clone(), EventKind::SuiteStarted { flow_count: 2 });
+
+        let mut rx = subs.subscribe();
+        sender.emit(dev.clone(), EventKind::SuiteStarted { flow_count: 3 });
+
+        let e = rx.recv().await.expect("SHALL receive the only live event");
+        assert_eq!(e.seq, 2, "seq SHALL have advanced past the two dropped events");
+    }
+
+    // 3. Both clocks SHALL be captured at emit (not at send/recv): each event's
+    //    timestamp and wall_time fall within a window bracketing the emit calls.
+    #[tokio::test]
+    async fn emit_captures_both_clocks_at_emit_time() {
+        let (sender, subs) = event_channel();
+        let mut rx = subs.subscribe();
+        let dev = DeviceId("dev".into());
+
+        // 1. Bracket the emits with locally-sampled clocks.
+        let mono_before = Instant::now();
+        let wall_before = SystemTime::now();
+        sender.emit(dev.clone(), EventKind::SuiteStarted { flow_count: 1 });
+        sender.emit(dev.clone(), EventKind::SuiteStarted { flow_count: 2 });
+        let mono_after = Instant::now();
+        let wall_after = SystemTime::now();
+
+        let e0 = rx.recv().await.expect("SHALL receive event 0");
+        let e1 = rx.recv().await.expect("SHALL receive event 1");
+
+        // 2. Each event's monotonic timestamp SHALL be captured at emit, so it
+        //    falls inside the bracketing window — proving emit, not recv, stamps it.
+        assert!(
+            e0.timestamp >= mono_before && e0.timestamp <= mono_after,
+            "event-0 timestamp SHALL be captured during the emit window"
+        );
+        assert!(
+            e1.timestamp >= mono_before && e1.timestamp <= mono_after,
+            "event-1 timestamp SHALL be captured during the emit window"
+        );
+
+        // 3. Likewise each event's wall_time SHALL fall inside the wall-clock window.
+        assert!(
+            e0.wall_time >= wall_before && e0.wall_time <= wall_after,
+            "event-0 wall_time SHALL be captured during the emit window"
+        );
+        assert!(
+            e1.wall_time >= wall_before && e1.wall_time <= wall_after,
+            "event-1 wall_time SHALL be captured during the emit window"
+        );
+
+        // 4. Emit order SHALL be preserved on the monotonic clock (same-thread,
+        //    no clock adjustment can reorder Instant).
+        assert!(
+            e1.timestamp >= e0.timestamp,
+            "monotonic timestamp SHALL NOT go backwards across emits"
+        );
+    }
+
+    // 4. Overflowing the broadcast buffer SHALL surface as a Lagged error to a
+    //    receiver that did not drain in time; subsequent recv then resumes.
+    #[tokio::test]
+    async fn slow_receiver_lags_when_buffer_overflows() {
+        use tokio::sync::broadcast::error::RecvError;
+
+        let (sender, subs) = event_channel();
+        let mut rx = subs.subscribe();
+        let dev = DeviceId("dev".into());
+
+        // Emit one more than the channel can hold without draining.
+        for _ in 0..(CHANNEL_CAPACITY + 1) {
+            sender.emit(dev.clone(), EventKind::SuiteStarted { flow_count: 1 });
+        }
+
+        match rx.recv().await {
+            Err(RecvError::Lagged(n)) => {
+                assert!(n >= 1, "SHALL report at least one skipped message");
+            }
+            other => panic!("SHALL report Lagged after overflow, got {other:?}"),
+        }
+
+        // After observing Lagged the receiver SHALL recover to the oldest retained event.
+        let recovered = rx.recv().await.expect("SHALL recover after lag");
+        assert!(
+            matches!(recovered.kind, EventKind::SuiteStarted { .. }),
+            "recovered event SHALL be a retained SuiteStarted"
+        );
+    }
+
+    // 5. The have-a-receiver -> drop -> none -> re-subscribe transition: the
+    //    event emitted during the receiver-less gap SHALL be dropped (not buffered
+    //    for a future subscriber), yet SHALL still consume its seq slot.
+    #[tokio::test]
+    async fn emit_during_receiverless_gap_drops_event_but_keeps_seq() {
+        use tokio::sync::broadcast::error::TryRecvError;
+
+        let (sender, subs) = event_channel();
+        let rx = subs.subscribe();
+        let dev = DeviceId("dev".into());
+
+        // 1. seq 0 emitted while rx is live, then rx is dropped.
+        sender.emit(dev.clone(), EventKind::SuiteStarted { flow_count: 1 });
+        drop(rx);
+
+        // 2. seq 1 emitted with zero live receivers: dropped, but seq still bumped.
+        sender.emit(dev.clone(), EventKind::SuiteStarted { flow_count: 2 });
+
+        // 3. New subscriber joins, then seq 2 is emitted.
+        let mut rx2 = subs.subscribe();
+        sender.emit(dev.clone(), EventKind::SuiteStarted { flow_count: 3 });
+
+        // 4. rx2's FIRST event is seq 2 — not the seq 1 from the gap — proving the
+        //    gap event was dropped, not retained for late subscribers, while the
+        //    seq counter advanced through the gap.
+        let e = rx2.recv().await.expect("SHALL receive post-resubscribe event");
+        assert_eq!(e.seq, 2, "rx2's first event SHALL be seq 2 (gap event dropped, seq slot consumed)");
+        assert!(
+            matches!(e.kind, EventKind::SuiteStarted { flow_count: 3 }),
+            "rx2's first event SHALL be the post-resubscribe emit, not the gap emit"
+        );
+
+        // 5. rx2 SHALL have nothing further buffered — the gap event never reached it.
+        match rx2.try_recv() {
+            Err(TryRecvError::Empty) => {}
+            other => panic!("rx2 SHALL have no further buffered events, got {other:?}"),
+        }
+    }
+
     #[tokio::test]
     async fn sequence_shared_across_cloned_senders() {
         let (sender, subs) = event_channel();

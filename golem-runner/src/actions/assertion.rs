@@ -273,6 +273,49 @@ mod tests {
         );
     }
 
+    // ── assert_alert: textless alert matches wildcard pattern ─────────
+
+    #[tokio::test]
+    async fn assert_alert_textless_alert_matches_wildcard() {
+        // 1. An alert element with no text of its own and no descendant
+        //    text leaves `alert.text == None`; the handler treats that as
+        //    the empty string, which a `*` pattern SHALL still match.
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let alert = make_element("Alert", Bounds::new(50, 200, 275, 150));
+        root.children.push(alert);
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("assert_alert");
+        step.on_text = Some("*".to_string());
+
+        handle_assert_alert(&step, &driver)
+            .await
+            .expect("assert_alert SHALL succeed when wildcard matches empty alert text");
+    }
+
+    // ── assert_alert: textless alert fails a literal pattern ──────────
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn assert_alert_textless_alert_fails_literal_pattern() {
+        // 2. With the alert text resolving to the empty string, a literal
+        //    pattern SHALL NOT match, producing the mismatch failure.
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let alert = make_element("Alert", Bounds::new(50, 200, 275, 150));
+        root.children.push(alert);
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("assert_alert");
+        step.on_text = Some("Delete*".to_string());
+
+        let result = handle_assert_alert(&step, &driver).await;
+        assert!(result.is_err(), "assert_alert SHALL fail when empty text does not match literal");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("does not match"),
+            "error SHALL mention pattern mismatch, got: {err_msg}"
+        );
+    }
+
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn assert_alert_times_out_when_no_alert_displayed() {
         // The action now polls for an alert until the surrounding

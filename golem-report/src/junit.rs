@@ -1196,4 +1196,467 @@ mod tests {
         assert!(xml.contains("<testsuites"));
         assert!(xml.contains("</testsuites>"));
     }
+
+    // 13. ms_to_secs rounds to three decimal places --------------------
+
+    #[test]
+    fn ms_to_secs_formats_three_decimals() {
+        assert_eq!(ms_to_secs(0), "0.000", "zero ms SHALL render 0.000");
+        assert_eq!(ms_to_secs(1), "0.001", "1ms SHALL render 0.001");
+        assert_eq!(ms_to_secs(1000), "1.000", "1000ms SHALL render 1.000");
+        assert_eq!(ms_to_secs(1500), "1.500", "1500ms SHALL render 1.500");
+        // Sub-millisecond precision is truncated to 3 decimals.
+        assert_eq!(ms_to_secs(1234), "1.234", "1234ms SHALL render 1.234");
+    }
+
+    // 14. step_name joins action and target, or action alone -----------
+
+    #[test]
+    fn step_name_joins_or_uses_action_only() {
+        assert_eq!(step_name("tap", "Submit"), "tap: Submit",
+            "non-empty target SHALL be appended after a colon");
+        assert_eq!(step_name("launch", ""), "launch",
+            "empty target SHALL yield action alone");
+    }
+
+    // 15. Successful step with substeps emits a system-out block -------
+
+    #[test]
+    fn success_step_with_substeps_has_system_out() {
+        let mut step = success_step("tap", "Submit", 40);
+        step.substeps = vec![SubstepDetail::Tap {
+            point: golem_events::Point { x: 10, y: 20 },
+            element_bounds: None,
+        }];
+        let flow = FlowReport {
+            flow_name: "sub_flow".to_string(),
+            success: true,
+            step_results: vec![step],
+            first_failure_code: None,
+            ..sample_flow()
+        };
+        let xml = format_flow_junit(&flow);
+        // Success with substeps SHALL open the testcase and emit system-out.
+        assert!(xml.contains("<system-out>tap (10,20)</system-out>"),
+            "success step with substeps SHALL emit <system-out>, got: {xml}");
+        assert!(xml.contains("</testcase>"),
+            "success step with substeps SHALL close the testcase explicitly");
+    }
+
+    // 16. Successful step without substeps is a self-closing testcase --
+
+    #[test]
+    fn success_step_without_substeps_is_self_closing() {
+        let flow = FlowReport {
+            flow_name: "sc_flow".to_string(),
+            success: true,
+            step_results: vec![success_step("launch", "", 100)],
+            first_failure_code: None,
+            ..sample_flow()
+        };
+        let xml = format_flow_junit(&flow);
+        assert!(xml.contains("time=\"0.100\"/>"),
+            "success step without substeps SHALL be a self-closing testcase, got: {xml}");
+        assert!(!xml.contains("<system-out>"),
+            "success step without substeps SHALL NOT emit <system-out>");
+    }
+
+    // 17. Warning step with substeps prepends substep text -------------
+
+    #[test]
+    fn warning_step_with_substeps_combines_text() {
+        let mut step = warning_step("assert_visible", "Promo", 15, "not found");
+        step.substeps = vec![SubstepDetail::Tap {
+            point: golem_events::Point { x: 5, y: 6 },
+            element_bounds: None,
+        }];
+        let flow = FlowReport {
+            flow_name: "warn_flow".to_string(),
+            success: true,
+            step_results: vec![step],
+            first_failure_code: None,
+            ..sample_flow()
+        };
+        let xml = format_flow_junit(&flow);
+        // Substep text is prepended, then the rendered warning line.
+        assert!(xml.contains("<system-out>tap (5,6)\n[WF000] not found</system-out>"),
+            "warning step with substeps SHALL combine substep text then message, got: {xml}");
+    }
+
+    // 18. Failed step with substeps prepends substep text to detail ----
+
+    #[test]
+    fn failed_step_with_substeps_prepends_detail() {
+        let mut step = failed_step("assert_visible", "Welcome", 100, "timed out");
+        step.substeps = vec![SubstepDetail::ElementNotFound {
+            selector: "text=Welcome".into(),
+            timeout_ms: 5000,
+        }];
+        let flow = FlowReport {
+            flow_name: "fail_sub".to_string(),
+            success: false,
+            step_results: vec![step],
+            first_failure_code: None,
+            ..sample_flow()
+        };
+        let xml = format_flow_junit(&flow);
+        // The whole detail (substeps + "Step failed:") is XML-escaped, so the
+        // selector's quotes become &quot;.
+        assert!(xml.contains("element_not_found &quot;text=Welcome&quot; after 5000ms\nStep failed:"),
+            "failed step with substeps SHALL prepend (escaped) substep text to the failure detail, got: {xml}");
+    }
+
+    // 19. Synthetic failure without reason/code uses defaults ----------
+
+    #[test]
+    fn synthetic_failure_defaults_when_no_reason_or_code() {
+        let flow = FlowReport {
+            flow_name: "bare_fail".to_string(),
+            success: false,
+            step_results: vec![],
+            skipped_reason: None,
+            first_failure_code: None,
+            ..sample_flow()
+        };
+        let xml = format_flow_junit(&flow);
+        // No first_failure_code → not infrastructure → <failure>, no type attr.
+        assert!(xml.contains("tests=\"1\" failures=\"1\" errors=\"0\""),
+            "no-code synthetic failure SHALL count as one <failure>, got: {xml}");
+        assert!(xml.contains("name=\"flow could not run\""),
+            "synthetic testcase SHALL be named 'flow could not run'");
+        assert!(xml.contains("<failure message=\"flow could not run\"/>"),
+            "synthetic failure SHALL use the default reason and omit type, got: {xml}");
+    }
+
+    // 20. timestamp attributes appear when started_at is set -----------
+
+    #[test]
+    fn timestamps_emitted_when_started_at_present() {
+        let mut step = success_step("launch", "", 100);
+        step.started_at = Some("2026-06-15T10:00:01Z".to_string());
+        let flow = FlowReport {
+            flow_name: "ts_flow".to_string(),
+            success: true,
+            step_results: vec![step],
+            first_failure_code: None,
+            started_at: Some("2026-06-15T10:00:00Z".to_string()),
+            ..sample_flow()
+        };
+        let xml = format_flow_junit(&flow);
+        assert!(xml.contains("timestamp=\"2026-06-15T10:00:00Z\""),
+            "testsuite SHALL carry the flow timestamp, got: {xml}");
+        assert!(xml.contains("timestamp=\"2026-06-15T10:00:01Z\""),
+            "testcase SHALL carry the step timestamp, got: {xml}");
+    }
+
+    // 21. recordings render as recording.<block>.<iter> properties -----
+
+    #[test]
+    fn recordings_render_as_properties() {
+        let flow = FlowReport {
+            flow_name: "rec_flow".to_string(),
+            success: true,
+            step_results: vec![success_step("launch", "", 100)],
+            first_failure_code: None,
+            recordings: vec![crate::RecordingEntry {
+                block: "checkout".to_string(),
+                iteration: 2,
+                path: "/tmp/rec.mp4".to_string(),
+            }],
+            ..sample_flow()
+        };
+        let xml = format_flow_junit(&flow);
+        assert!(xml.contains("<properties>"),
+            "recordings SHALL trigger a <properties> block");
+        assert!(xml.contains(r#"<property name="recording.checkout.2" value="/tmp/rec.mp4"/>"#),
+            "recording SHALL render block.iteration name and path value, got: {xml}");
+    }
+
+    // 22. perf snapshot threads / fds / launch_ms properties -----------
+
+    #[test]
+    fn perf_snapshot_renders_all_integer_metrics() {
+        let flow = FlowReport {
+            flow_name: "perf2".to_string(),
+            success: true,
+            step_results: vec![success_step("launch", "", 100)],
+            first_failure_code: None,
+            perf_snapshots: vec![sample_perf_snapshot()],
+            ..sample_flow()
+        };
+        let xml = format_flow_junit(&flow);
+        assert!(xml.contains(r#"<property name="perf.login:iPhone_16:0.cpu_percent" value="23.1"/>"#),
+            "cpu_percent SHALL render with one decimal, got: {xml}");
+        assert!(xml.contains(r#"<property name="perf.login:iPhone_16:0.threads" value="42"/>"#),
+            "threads SHALL render as integer");
+        assert!(xml.contains(r#"<property name="perf.login:iPhone_16:0.file_descriptors" value="87"/>"#),
+            "file_descriptors SHALL render as integer");
+        assert!(xml.contains(r#"<property name="perf.login:iPhone_16:0.launch_ms" value="1240"/>"#),
+            "launch_ms SHALL render as integer");
+    }
+
+    // 23. perf snapshot with all-None metrics emits no perf properties -
+
+    #[test]
+    fn perf_snapshot_with_no_metrics_emits_no_perf_properties() {
+        let snap = crate::PerfSnapshot {
+            label: "empty".into(),
+            memory_mb: None,
+            cpu_percent: None,
+            threads: None,
+            file_descriptors: None,
+            disk_mb: None,
+            net_rx_kb: None,
+            net_tx_kb: None,
+            launch_ms: None,
+            timestamp: "0".into(),
+        };
+        let flow = FlowReport {
+            flow_name: "empty_perf".to_string(),
+            success: true,
+            step_results: vec![success_step("launch", "", 100)],
+            first_failure_code: None,
+            perf_snapshots: vec![snap],
+            ..sample_flow()
+        };
+        let xml = format_flow_junit(&flow);
+        // has_props is true (perf_snapshots non-empty) so <properties> opens,
+        // but no perf.* lines are emitted since every metric is None.
+        assert!(xml.contains("<properties>"),
+            "non-empty perf_snapshots SHALL open <properties>");
+        assert!(!xml.contains("perf.empty"),
+            "all-None snapshot SHALL emit no perf.* properties, got: {xml}");
+    }
+
+    // 24. os_major renders as a property -------------------------------
+
+    #[test]
+    fn os_major_renders_as_property() {
+        let flow = FlowReport {
+            flow_name: "os_flow".to_string(),
+            success: true,
+            step_results: vec![success_step("launch", "", 100)],
+            first_failure_code: None,
+            os_major: Some(26),
+            ..sample_flow()
+        };
+        let xml = format_flow_junit(&flow);
+        assert!(xml.contains(r#"<property name="os_major" value="26"/>"#),
+            "os_major SHALL render as a property, got: {xml}");
+    }
+
+    // ── Install suite tests ─────────────────────────────────────────
+
+    fn install(success: bool) -> crate::InstallReport {
+        crate::InstallReport {
+            app_name: "MyApp".to_string(),
+            bundle_id: "com.example.app".to_string(),
+            device_name: "Pixel_7a".to_string(),
+            os_major: Some(34),
+            success,
+            duration_ms: 3000,
+            exit_code: if success { Some(0) } else { Some(1) },
+            error: if success { None } else { Some("gradle exploded".to_string()) },
+            code: if success {
+                None
+            } else {
+                Some(golem_events::FailureCode::AppInstallFailed)
+            },
+            started_at: Some("2026-06-15T09:00:00Z".to_string()),
+            finished_at: None,
+        }
+    }
+
+    // 25. Successful install renders a clean testcase under its suite --
+
+    #[test]
+    fn install_success_renders_clean_testcase() {
+        let suite = SuiteReport {
+            installs: vec![install(true)],
+            ..sample_suite()
+        };
+        let xml = format_suite_junit(&suite);
+        assert!(xml.contains("<testsuite name=\"install\""),
+            "installs SHALL form a dedicated 'install' testsuite, got: {xml}");
+        assert!(xml.contains("name=\"MyApp (com.example.app)\""),
+            "install testcase name SHALL combine app and bundle");
+        assert!(xml.contains("classname=\"Pixel_7a\""),
+            "install classname SHALL be the device name");
+        assert!(xml.contains("os_major=\"34\""),
+            "install testcase SHALL carry os_major attribute");
+        assert!(xml.contains("timestamp=\"2026-06-15T09:00:00Z\""),
+            "install suite SHALL use earliest install started_at as timestamp");
+        // Successful install SHALL have no <error>.
+        assert!(!xml.contains("<error message=\"install script failed\""),
+            "successful install SHALL NOT emit an error");
+    }
+
+    // 26. Failed install becomes a JUnit error counted suite-wide ------
+
+    #[test]
+    fn install_failure_renders_error_and_counts() {
+        let suite = SuiteReport {
+            installs: vec![install(false)],
+            ..sample_suite()
+        };
+        let xml = format_suite_junit(&suite);
+        assert!(xml.contains("<error message=\"install script failed\" type=\"EA500\">gradle exploded</error>"),
+            "failed install SHALL emit an <error> carrying the code and message, got: {xml}");
+        // Suite errors = flow_errors (0 here) + install_failures (1).
+        // sample_suite has 4 flow tests + 1 install test = 5, 1 flow failure.
+        assert!(xml.contains("tests=\"5\" failures=\"1\" errors=\"1\""),
+            "install failure SHALL add to total tests and errors, got: {xml}");
+    }
+
+    // 27. Failed install without error message uses default text -------
+
+    #[test]
+    fn install_failure_defaults_error_message() {
+        let mut inst = install(false);
+        inst.error = None;
+        inst.code = None;
+        let suite = SuiteReport {
+            installs: vec![inst],
+            flows: vec![],
+            ..sample_suite()
+        };
+        let xml = format_suite_junit(&suite);
+        // No code → no type attribute; missing error → default body text.
+        assert!(xml.contains("<error message=\"install script failed\">install failed</error>"),
+            "missing install error SHALL default to 'install failed' with no type, got: {xml}");
+    }
+
+    // ── Flake summary tests ─────────────────────────────────────────
+
+    fn repeated_flow(name: &str, success: bool) -> FlowReport {
+        FlowReport {
+            flow_name: name.to_string(),
+            success,
+            step_results: vec![],
+            first_failure_code: None,
+            repeat: Some(golem_events::RepeatContext { index: 0, total: 2 }),
+            ..sample_flow()
+        }
+    }
+
+    // 28. A flow that flakes (some pass, some fail) renders a flake row -
+
+    #[test]
+    fn flake_summary_renders_flake_failure() {
+        let suite = SuiteReport {
+            flows: vec![
+                repeated_flow("login", true),
+                repeated_flow("login", false),
+            ],
+            installs: vec![],
+            ..sample_suite()
+        };
+        let xml = format_suite_junit(&suite);
+        assert!(xml.contains("<testsuite name=\"flake-summary\""),
+            "repeat suites SHALL emit a flake-summary testsuite, got: {xml}");
+        assert!(xml.contains(r#"passed="1" failed="1" skipped="0" total="2""#),
+            "flake testcase SHALL carry the run tallies");
+        assert!(xml.contains(r#"<failure message="flake: 1/2 runs failed"/>"#),
+            "a flow with both passes and fails SHALL be marked a flake, got: {xml}");
+    }
+
+    // 29. A flow that fails every run is a stable-fail, not a flake -----
+
+    #[test]
+    fn flake_summary_stable_fail_when_no_pass() {
+        let suite = SuiteReport {
+            flows: vec![
+                repeated_flow("broken", false),
+                repeated_flow("broken", false),
+            ],
+            installs: vec![],
+            ..sample_suite()
+        };
+        let xml = format_suite_junit(&suite);
+        assert!(xml.contains(r#"<failure message="stable-fail: 2/2 runs failed"/>"#),
+            "an all-fail repeated flow SHALL be a stable-fail, got: {xml}");
+    }
+
+    // ── Remaining substep formatters ────────────────────────────────
+
+    // 30. Each substep variant renders its expected line.
+    #[test]
+    fn substeps_text_covers_remaining_variants() {
+        let p = golem_events::Point { x: 1, y: 2 };
+        let q = golem_events::Point { x: 3, y: 4 };
+        let cases = vec![
+            (
+                SubstepDetail::DoubleTap { point: p, element_bounds: None },
+                "double_tap (1,2)",
+            ),
+            (
+                SubstepDetail::Swipe { from: p, to: q },
+                "swipe (1,2)\u{2192}(3,4)",
+            ),
+            (
+                SubstepDetail::ScrollStarted { selector: "text=X".into(), direction: "down".into() },
+                "scroll_started \"text=X\" direction=down",
+            ),
+            (
+                SubstepDetail::ScrollFound { selector: "text=X".into(), position: p, total_attempts: 3 },
+                "scroll_found \"text=X\" at (1,2) after 3 attempts",
+            ),
+            (
+                SubstepDetail::ScrollDirectionReversed { to_direction: "up".into(), reason: "edge".into() },
+                "scroll_reversed \u{2192}up edge",
+            ),
+            (
+                SubstepDetail::ScrollStrategySwitch { to_index: 1, reason: "stuck".into() },
+                "scroll_strategy_switch \u{2192}2 stuck",
+            ),
+            (
+                SubstepDetail::AppStop { bundle: "com.x".into() },
+                "app_stop bundle=com.x",
+            ),
+            (
+                SubstepDetail::DriverWarning { message: "slow".into() },
+                "[warning] slow",
+            ),
+            (
+                SubstepDetail::RetryAttempt { attempt: 1, max: 3, delay_ms: 500, error: "boom".into() },
+                "retry 1/3 delay=500ms: boom",
+            ),
+            (
+                SubstepDetail::Screenshot { path: "/tmp/s.png".into() },
+                "screenshot /tmp/s.png",
+            ),
+        ];
+        for (substep, expected) in cases {
+            let out = format_substeps_text(&[substep]);
+            assert_eq!(out, expected, "substep SHALL render as '{expected}'");
+        }
+    }
+
+    // 31. HttpRequest / BashCommand render '?' when status/exit is None.
+    #[test]
+    fn substeps_text_http_and_bash_handle_missing_status() {
+        let http_some = format_substeps_text(&[SubstepDetail::HttpRequest {
+            method: "GET".into(),
+            url: "http://x".into(),
+            status: Some(200),
+            duration_ms: 12,
+        }]);
+        assert_eq!(http_some, "http GET http://x \u{2192} 200 [12ms]",
+            "HttpRequest with status SHALL render the code");
+        let http_none = format_substeps_text(&[SubstepDetail::HttpRequest {
+            method: "GET".into(),
+            url: "http://x".into(),
+            status: None,
+            duration_ms: 12,
+        }]);
+        assert_eq!(http_none, "http GET http://x \u{2192} ? [12ms]",
+            "HttpRequest without status SHALL render '?'");
+        let bash_none = format_substeps_text(&[SubstepDetail::BashCommand {
+            command: "ls".into(),
+            exit_code: None,
+            duration_ms: 5,
+        }]);
+        assert_eq!(bash_none, "bash \"ls\" exit=? [5ms]",
+            "BashCommand without exit code SHALL render '?'");
+    }
 }

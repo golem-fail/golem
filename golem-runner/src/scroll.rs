@@ -1430,4 +1430,259 @@ mod tests {
         let absorber = golem_element::Bounds::new(0, 0, 1080, 2400);
         assert!(pick_outside_absorber(absorber, Direction::Down, &safe_vp).is_none());
     }
+
+    // ── reverse_direction ──────────────────────────────────────────
+
+    // 1. Each direction reverses to its opposite and round-trips back.
+    #[test]
+    fn reverse_direction_maps_each_axis_pair() {
+        assert!(matches!(reverse_direction(Direction::Up), Direction::Down), "Up SHALL reverse to Down");
+        assert!(matches!(reverse_direction(Direction::Down), Direction::Up), "Down SHALL reverse to Up");
+        assert!(matches!(reverse_direction(Direction::Left), Direction::Right), "Left SHALL reverse to Right");
+        assert!(matches!(reverse_direction(Direction::Right), Direction::Left), "Right SHALL reverse to Left");
+        // Round-trip: reversing twice yields the original.
+        for d in [Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
+            assert!(
+                std::mem::discriminant(&reverse_direction(reverse_direction(d))) == std::mem::discriminant(&d),
+                "double reverse SHALL return the original direction"
+            );
+        }
+    }
+
+    // ── stall_retries_for ──────────────────────────────────────────
+
+    // 2. Down gets the most retries (dynamic content loads at bottom),
+    //    Up the least, and the cross-axis directions get the default.
+    #[test]
+    fn stall_retries_per_direction() {
+        // 1. Pin the concrete intended budgets as hand-written literals so a
+        //    change to the constant VALUE is caught, not just a swapped arm.
+        assert_eq!(stall_retries_for(Direction::Down), 3, "Down SHALL get 3 retries (dynamic content loads at bottom)");
+        assert_eq!(stall_retries_for(Direction::Up), 1, "Up SHALL get 1 retry");
+        assert_eq!(stall_retries_for(Direction::Left), 2, "Left SHALL get the default 2 retries");
+        assert_eq!(stall_retries_for(Direction::Right), 2, "Right SHALL get the default 2 retries");
+        // 2. Down SHALL have strictly more retries than Up by design.
+        assert!(stall_retries_for(Direction::Down) > stall_retries_for(Direction::Up), "Down budget SHALL exceed Up budget");
+    }
+
+    // ── swipe_strategies ───────────────────────────────────────────
+
+    // 3. Every direction yields exactly five ordered strategies, each
+    //    with a positive swipe percentage and a start inside the viewport.
+    #[test]
+    fn swipe_strategies_count_and_bounds() {
+        let vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        for d in [Direction::Down, Direction::Up, Direction::Left, Direction::Right] {
+            let strats = swipe_strategies(&vp, d);
+            assert_eq!(strats.len(), 5, "each direction SHALL produce 5 strategies");
+            for s in &strats {
+                assert!(s.pct > 0 && s.pct <= 100, "pct SHALL be in (0,100], got {}", s.pct);
+                assert!(s.start.0 >= 0 && s.start.0 <= vp.width, "start x SHALL be within viewport width");
+                assert!(s.start.1 >= 0 && s.start.1 <= vp.height, "start y SHALL be within viewport height");
+            }
+        }
+    }
+
+    // 4. The first Down strategy starts in the lower-middle (65%) of the
+    //    viewport at the horizontal center — the long primary swipe.
+    #[test]
+    fn swipe_strategies_down_primary_geometry() {
+        let vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        let strats = swipe_strategies(&vp, Direction::Down);
+        assert_eq!(strats[0].start, (540, 2400 * 65 / 100), "Down primary SHALL start at center, 65% down");
+        assert_eq!(strats[0].pct, 55, "Down primary SHALL be a long (55%) swipe");
+    }
+
+    // ── swipe_from ─────────────────────────────────────────────────
+
+    // 5. A Down swipe (finger moves up) keeps x fixed and decreases y by
+    //    pct% of the safe-viewport height, both points clamped to the
+    //    10%..90% inner margin.
+    #[test]
+    fn swipe_from_down_moves_finger_up() {
+        let safe_vp = Viewport { x: 0, y: 0, width: 1000, height: 1000 };
+        let (fx, fy, tx, ty) = swipe_from(&safe_vp, Direction::Down, 500, 700, 50);
+        assert_eq!(fx, 500, "x SHALL be unchanged on a vertical swipe");
+        assert_eq!(tx, 500, "x SHALL be unchanged on a vertical swipe");
+        assert!(ty < fy, "Down (finger up) SHALL produce a smaller end y");
+        // dy = 50% of 1000 = 500; raw end = 700 - 500 = 200, within margin.
+        assert_eq!(fy, 700);
+        assert_eq!(ty, 200);
+    }
+
+    // 6. Up/Left/Right move the finger the opposite way to their scroll
+    //    intent on the correct axis.
+    #[test]
+    fn swipe_from_other_directions_axis_and_sign() {
+        let safe_vp = Viewport { x: 0, y: 0, width: 1000, height: 1000 };
+        // Up: finger moves down (end y larger).
+        let (_, fy, _, ty) = swipe_from(&safe_vp, Direction::Up, 500, 300, 40);
+        assert!(ty > fy, "Up (finger down) SHALL produce a larger end y");
+        // Left: finger moves right (end x larger), y fixed.
+        let (fx, fyl, tx, tyl) = swipe_from(&safe_vp, Direction::Left, 300, 500, 40);
+        assert!(tx > fx, "Left (finger right) SHALL produce a larger end x");
+        assert_eq!(fyl, tyl, "Left SHALL keep y fixed");
+        // Right: finger moves left (end x smaller).
+        let (fxr, _, txr, _) = swipe_from(&safe_vp, Direction::Right, 700, 500, 40);
+        assert!(txr < fxr, "Right (finger left) SHALL produce a smaller end x");
+    }
+
+    // 7. Start/end points are clamped to the 10%..90% inner margin so the
+    //    finger never grazes the safe-area edge.
+    #[test]
+    fn swipe_from_clamps_to_inner_margin() {
+        let safe_vp = Viewport { x: 0, y: 0, width: 1000, height: 1000 };
+        // Start far above the top margin and a large swipe; both points
+        // must clamp into [100, 900].
+        let (fx, fy, tx, ty) = swipe_from(&safe_vp, Direction::Down, 5, 50, 100);
+        for (label, v) in [("fx", fx), ("fy", fy), ("tx", tx), ("ty", ty)] {
+            assert!((100..=900).contains(&v), "{label}={v} SHALL clamp into 10%..90% margin");
+        }
+    }
+
+    // 8. Clamp respects a non-zero viewport origin (x/y offset).
+    #[test]
+    fn swipe_from_clamp_respects_origin_offset() {
+        let safe_vp = Viewport { x: 200, y: 100, width: 1000, height: 1000 };
+        // min_x = 200 + 100 = 300, max_x = 200 + 900 = 1100.
+        let (fx, _, _, _) = swipe_from(&safe_vp, Direction::Down, 0, 500, 20);
+        assert_eq!(fx, 300, "x SHALL clamp to the offset min, not 0");
+    }
+
+    // ── default_swipe_start ────────────────────────────────────────
+
+    // 9. Default start sits 65% down for Down, 35% down for Up, both at
+    //    horizontal center; Left/Right mirror that on the x axis at center y.
+    #[test]
+    fn default_swipe_start_per_direction() {
+        let vp = Viewport { x: 0, y: 0, width: 1000, height: 1000 };
+        assert_eq!(default_swipe_start(&vp, Direction::Down), (500, 650));
+        assert_eq!(default_swipe_start(&vp, Direction::Up), (500, 350));
+        assert_eq!(default_swipe_start(&vp, Direction::Left), (350, 500));
+        assert_eq!(default_swipe_start(&vp, Direction::Right), (650, 500));
+    }
+
+    // ── make_safe_viewport — left/right edge cutouts & clamp ───────
+
+    // 10. A cutout abutting the left edge pushes the left bound to its
+    //     right edge; one abutting the right edge pulls the right bound in.
+    #[test]
+    fn safe_viewport_subtracts_side_edge_cutouts() {
+        let vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        // Left cutout 0..60, right cutout 1000..1080.
+        let meta = meta_with(0, 0, 0, vec![cutout(0, 1000, 60, 100), cutout(1000, 1000, 80, 100)]);
+        let s = make_safe_viewport(&vp, &meta);
+        assert_eq!(s.x, 60, "left edge SHALL move to left-cutout's right edge");
+        // right bound becomes 1000, width = 1000 - 60.
+        assert_eq!(s.width, 1000 - 60, "right edge SHALL pull in to right-cutout's left edge");
+    }
+
+    // 11. A bottom-edge cutout pulls the bottom bound up to the cutout top.
+    #[test]
+    fn safe_viewport_subtracts_bottom_edge_cutout() {
+        let vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        // Cutout at very bottom: y=2350..2400.
+        let meta = meta_with(0, 0, 0, vec![cutout(490, 2350, 100, 50)]);
+        let s = make_safe_viewport(&vp, &meta);
+        assert_eq!(s.height, 2350, "bottom SHALL clamp to bottom-cutout's top");
+    }
+
+    // 12. When insets exceed the viewport, width/height never go below 1.
+    #[test]
+    fn safe_viewport_clamps_to_minimum_one() {
+        let vp = Viewport { x: 0, y: 0, width: 100, height: 100 };
+        // Top + bottom insets sum to more than the height.
+        let meta = meta_with(80, 80, 0, vec![]);
+        let s = make_safe_viewport(&vp, &meta);
+        assert_eq!(s.height, 1, "height SHALL clamp to a minimum of 1");
+        assert!(s.width >= 1, "width SHALL never be below 1");
+    }
+
+    // ── find_absorbing_bounds — area floor ─────────────────────────
+
+    // 13. An element smaller than 20% of the safe viewport is below the
+    //     absorber floor and is not picked (likely a button/label).
+    #[test]
+    fn absorber_ignores_too_small_element() {
+        let vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        let mut root = make_element("View", Bounds::new(0, 0, 1080, 2400));
+        // 100x100 = 10k area, far below 20% of 2.59M.
+        root.children.push(make_element("button", Bounds::new(450, 1150, 100, 100)));
+        assert!(
+            find_absorbing_bounds(&root, 500, 1200, &vp).is_none(),
+            "sub-threshold element SHALL NOT be picked as absorber"
+        );
+    }
+
+    // 14. No element under the point yields None.
+    #[test]
+    fn absorber_none_when_point_outside_all() {
+        let vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        let mut root = make_element("View", Bounds::new(0, 0, 1080, 2400));
+        root.children.push(make_element("div", Bounds::new(40, 800, 1000, 1000)));
+        // Point (10, 10) is in the root wrapper only (excluded), not the div.
+        assert!(find_absorbing_bounds(&root, 10, 10, &vp).is_none());
+    }
+
+    // ── pick_outside_absorber — Up / Left / Right ──────────────────
+
+    // 15. Up scroll with a full-width absorber in the top half falls back
+    //     to the strip BELOW the absorber (finger needs room below).
+    #[test]
+    fn pick_outside_absorber_up_falls_back_below() {
+        let safe_vp = Viewport { x: 0, y: 0, width: 1080, height: 2400 };
+        // Full width, top half — no side room.
+        let absorber = golem_element::Bounds::new(0, 0, 1080, 1200);
+        let p = pick_outside_absorber(absorber, Direction::Up, &safe_vp)
+            .expect("below strip exists");
+        assert!(p.1 > 1200, "Up SHALL fall back to a start below the absorber, got y={}", p.1);
+    }
+
+    // 16. Left/Right scrolls prefer an above/below strip when the absorber
+    //     leaves no vertical room for a same-axis side start.
+    #[test]
+    fn pick_outside_absorber_horizontal_prefers_above() {
+        let safe_vp = Viewport { x: 0, y: 0, width: 2400, height: 1080 };
+        // Tall absorber spanning the full height's middle band but leaving
+        // an above strip: y=300..1080 leaves 300px above.
+        let absorber = golem_element::Bounds::new(600, 300, 1200, 780);
+        let p = pick_outside_absorber(absorber, Direction::Left, &safe_vp)
+            .expect("above strip exists");
+        assert!(p.1 < 300, "horizontal scroll SHALL prefer the above strip, got y={}", p.1);
+    }
+
+    // 17. Right scroll with a full-height absorber on the right side falls
+    //     back to the strip to its LEFT.
+    #[test]
+    fn pick_outside_absorber_right_falls_back_left() {
+        let safe_vp = Viewport { x: 0, y: 0, width: 2400, height: 1080 };
+        // Full height so no above/below room; occupies right portion,
+        // leaving a left strip.
+        let absorber = golem_element::Bounds::new(1200, 0, 1200, 1080);
+        let p = pick_outside_absorber(absorber, Direction::Right, &safe_vp)
+            .expect("left strip exists");
+        assert!(p.0 < 1200, "Right SHALL fall back to a left-side start, got x={}", p.0);
+    }
+
+    // ── horizon_fingerprint — empty edges ──────────────────────────
+
+    // 18. A page with content only in the dead-center (outside both the
+    //     top and bottom strips) yields an empty horizon fingerprint, so
+    //     two such pages with differing center content compare equal.
+    #[test]
+    fn horizon_fingerprint_ignores_center_only_content() {
+        let vp = Viewport { x: 0, y: 0, width: 375, height: 812 };
+        let mut p1 = make_element("View", default_bounds());
+        // Center band only: strip height = 812/8 ~= 101; center at ~400.
+        p1.children.push(make_element_with_text("Mid", "Alpha", Bounds::new(0, 350, 375, 50)));
+        let mut p2 = make_element("View", default_bounds());
+        p2.children.push(make_element_with_text("Mid", "Omega", Bounds::new(0, 350, 375, 50)));
+        // The root itself spans the full viewport, so it appears in both;
+        // center children differ but sit outside both strips.
+        assert_eq!(
+            horizon_fingerprint(&p1, &vp),
+            horizon_fingerprint(&p2, &vp),
+            "center-only differences SHALL NOT affect the horizon fingerprint"
+        );
+    }
 }

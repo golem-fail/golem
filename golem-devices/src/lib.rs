@@ -278,4 +278,70 @@ mod tests {
         assert_eq!(resolved.apps[1], "com.test.runner");
         assert!(resolved.created);
     }
+
+    // 10. Platform serializes to the exact lowercase wire format (rename_all).
+    #[test]
+    fn platform_serializes_to_lowercase_wire_format() {
+        assert_eq!(
+            serde_json::to_string(&Platform::Ios).expect("serialize ios"),
+            "\"ios\"",
+            "Platform::Ios SHALL serialize as lowercase \"ios\""
+        );
+        assert_eq!(
+            serde_json::to_string(&Platform::Android).expect("serialize android"),
+            "\"android\"",
+            "Platform::Android SHALL serialize as lowercase \"android\""
+        );
+    }
+
+    // 11. Platform deserializes from lowercase strings and rejects unknown/cased values.
+    #[test]
+    fn platform_deserializes_lowercase_and_rejects_unknown() {
+        let ios: Platform = serde_json::from_str("\"ios\"").expect("deserialize ios");
+        assert_eq!(ios, Platform::Ios, "\"ios\" SHALL deserialize to Ios");
+
+        assert!(
+            serde_json::from_str::<Platform>("\"iOS\"").is_err(),
+            "cased \"iOS\" SHALL NOT deserialize (rename_all is lowercase)"
+        );
+        assert!(
+            serde_json::from_str::<Platform>("\"windows\"").is_err(),
+            "unknown platform SHALL fail to deserialize"
+        );
+    }
+
+    // 12. DeviceType serializes to lowercase and round-trips.
+    #[test]
+    fn device_type_serde_round_trip_and_wire_format() {
+        assert_eq!(
+            serde_json::to_string(&DeviceType::Phone).expect("serialize phone"),
+            "\"phone\"",
+            "DeviceType::Phone SHALL serialize as \"phone\""
+        );
+        assert_eq!(
+            serde_json::to_string(&DeviceType::Tablet).expect("serialize tablet"),
+            "\"tablet\"",
+            "DeviceType::Tablet SHALL serialize as \"tablet\""
+        );
+        let back: DeviceType =
+            serde_json::from_str("\"tablet\"").expect("deserialize tablet");
+        assert_eq!(back, DeviceType::Tablet, "\"tablet\" SHALL round-trip");
+    }
+
+    // 13. DeviceState serializes to lowercase for every variant and round-trips.
+    #[test]
+    fn device_state_serde_wire_format_all_variants() {
+        for (state, wire) in [
+            (DeviceState::Booted, "\"booted\""),
+            (DeviceState::Shutdown, "\"shutdown\""),
+            (DeviceState::Connected, "\"connected\""),
+            (DeviceState::NeedsCreation, "\"needscreation\""),
+        ] {
+            let json = serde_json::to_string(&state).expect("serialize state");
+            assert_eq!(json, wire, "DeviceState SHALL serialize to lowercase wire form");
+            let back: DeviceState = serde_json::from_str(&json).expect("deserialize state");
+            assert_eq!(back, state, "DeviceState SHALL round-trip through JSON");
+        }
+    }
+
 }

@@ -857,3 +857,294 @@ fn format_tree_stats(stats: &golem_events::TreeStats) -> String {
     };
     format!("{{{} trees, {} nodes}}", stats.fetches, nodes)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 1. flow_index_width: 0 total still needs one digit (max(1)).
+    #[test]
+    fn flow_index_width_zero_yields_one() {
+        assert_eq!(flow_index_width(0), 1, "0 total SHALL still need 1 digit");
+    }
+
+    // 2. flow_index_width: single-digit totals are width 1.
+    #[test]
+    fn flow_index_width_single_digit() {
+        assert_eq!(flow_index_width(1), 1, "1 SHALL be width 1");
+        assert_eq!(flow_index_width(9), 1, "9 SHALL be width 1");
+    }
+
+    // 3. flow_index_width: decimal boundaries (10, 100) bump the width.
+    #[test]
+    fn flow_index_width_decimal_boundaries() {
+        assert_eq!(flow_index_width(10), 2, "10 SHALL be width 2");
+        assert_eq!(flow_index_width(99), 2, "99 SHALL be width 2");
+        assert_eq!(flow_index_width(100), 3, "100 SHALL be width 3");
+        assert_eq!(flow_index_width(195), 3, "195 SHALL be width 3");
+    }
+
+    // 4. format_flow_prefix: single-device mode yields empty string regardless
+    //    of other args.
+    #[test]
+    fn format_flow_prefix_single_device_is_empty() {
+        assert_eq!(
+            format_flow_prefix(3, 3, false, true),
+            "",
+            "single-device mode SHALL produce no prefix"
+        );
+        assert_eq!(
+            format_flow_prefix(0, 1, false, false),
+            "",
+            "single-device mode SHALL produce no prefix without color"
+        );
+    }
+
+    // 5. format_flow_prefix: no-color multi-device renders 1-based, right-padded.
+    #[test]
+    fn format_flow_prefix_no_color_one_based_padded() {
+        // idx 0 → display 1, width 3 → "  1 " (trailing space).
+        assert_eq!(
+            format_flow_prefix(0, 3, true, false),
+            "  1 ",
+            "idx 0 SHALL display as 1, right-padded to width 3 plus trailing space"
+        );
+        // idx 194 → display 195, width 3 → no extra padding.
+        assert_eq!(
+            format_flow_prefix(194, 3, true, false),
+            "195 ",
+            "idx 194 SHALL display as 195"
+        );
+    }
+
+    // 6. format_flow_prefix: color path wraps with DIM + a device color + RESET.
+    #[test]
+    fn format_flow_prefix_color_wraps_with_device_color() {
+        // idx 0 → display 1, width 1, color index 0 → cyan.
+        // Expected bytes pinned independently of the named constants:
+        // DIM=\x1b[2m, DEVICE_COLORS[0] (cyan)=\x1b[36m, RESET=\x1b[0m.
+        let out = format_flow_prefix(0, 1, true, true);
+        assert_eq!(
+            out,
+            "\x1b[2m\x1b[36m1\x1b[0m ",
+            "color prefix SHALL wrap padded number in DIM+device color+RESET"
+        );
+    }
+
+    // 7. format_flow_prefix: color index wraps around DEVICE_COLORS by modulo.
+    #[test]
+    fn format_flow_prefix_color_index_wraps_modulo() {
+        // idx == len(6) → display 7; color index 6 % 6 == 0 → cyan (first
+        // entry), proving the modulo wrap. Bytes pinned independently:
+        // DIM=\x1b[2m, cyan=\x1b[36m, RESET=\x1b[0m.
+        let out = format_flow_prefix(DEVICE_COLORS.len(), 1, true, true);
+        assert_eq!(
+            out,
+            "\x1b[2m\x1b[36m7\x1b[0m ",
+            "color index SHALL wrap around DEVICE_COLORS via modulo to the first color"
+        );
+    }
+
+    // 8. fmt_dur: no-color path renders fixed 8-wide seconds with 3 decimals.
+    #[test]
+    fn fmt_dur_no_color_fixed_width() {
+        assert_eq!(
+            fmt_dur(1500, false),
+            "[   1.500s]",
+            "1500ms SHALL render as right-aligned 1.500s in 8 cols"
+        );
+        assert_eq!(fmt_dur(0, false), "[   0.000s]", "0ms SHALL render as 0.000s");
+    }
+
+    // 9. fmt_dur: color path wraps the bracketed duration in DIM/RESET.
+    #[test]
+    fn fmt_dur_color_wraps_dim() {
+        assert_eq!(
+            fmt_dur(1500, true),
+            format!("{DIM}[   1.500s]{RESET}"),
+            "color duration SHALL be wrapped in DIM and RESET"
+        );
+    }
+
+    // 10. keyword: no-color path left-pads label to 4 chars.
+    #[test]
+    fn keyword_no_color_left_pads_to_four() {
+        assert_eq!(keyword("ok", BOLD_GREEN, false), "ok  ", "short label SHALL left-pad to 4");
+        assert_eq!(keyword("PASS", BOLD_GREEN, false), "PASS", "4-char label SHALL not over-pad");
+    }
+
+    // 11. keyword: color path applies color then 4-wide label then RESET.
+    #[test]
+    fn keyword_color_wraps_color_and_pad() {
+        assert_eq!(
+            keyword("NG", BOLD_RED, true),
+            format!("{BOLD_RED}NG  {RESET}"),
+            "color keyword SHALL wrap left-padded label in color+RESET"
+        );
+    }
+
+    // 12. fmt_step_path: no-color, empty block degrades to {global}::{local}.
+    #[test]
+    fn fmt_step_path_no_color_empty_block() {
+        let block = (String::new(), 0u32);
+        assert_eq!(
+            fmt_step_path(7, &block, 2, false),
+            "    7::2",
+            "empty block SHALL degrade to right-padded global::local"
+        );
+    }
+
+    // 13. fmt_step_path: no-color, named block with iteration 0 omits parens.
+    #[test]
+    fn fmt_step_path_no_color_named_block_no_iter() {
+        let block = ("loginblk".to_string(), 0u32);
+        assert_eq!(
+            fmt_step_path(3, &block, 5, false),
+            "    3::loginblk::5",
+            "iteration 0 SHALL omit the (n) part"
+        );
+    }
+
+    // 14. fmt_step_path: no-color, named block with iteration > 0 includes parens.
+    #[test]
+    fn fmt_step_path_no_color_named_block_with_iter() {
+        let block = ("retryblk".to_string(), 2u32);
+        assert_eq!(
+            fmt_step_path(12, &block, 1, false),
+            "   12::retryblk(2)::1",
+            "iteration > 0 SHALL render as (n) between block and ::local"
+        );
+    }
+
+    // 15. fmt_step_path: color, named block with iteration wraps each segment.
+    #[test]
+    fn fmt_step_path_color_named_block_with_iter() {
+        let block = ("blk".to_string(), 3u32);
+        let out = fmt_step_path(1, &block, 4, true);
+        let expected = format!(
+            "{DIM}{:>5}::{RESET}{CYAN}blk{RESET}{DIM}(3){RESET}{DIM}::{RESET}{BOLD_BLUE}4{RESET}",
+            1
+        );
+        assert_eq!(out, expected, "color path SHALL wrap each segment per spec");
+    }
+
+    // 16. fmt_step_path: color, empty block uses the degraded color form.
+    #[test]
+    fn fmt_step_path_color_empty_block() {
+        let block = (String::new(), 0u32);
+        let out = fmt_step_path(9, &block, 0, true);
+        let expected = format!("{DIM}{:>5}::{RESET}{BOLD_BLUE}0{RESET}", 9);
+        assert_eq!(out, expected, "color empty block SHALL use degraded global::local form");
+    }
+
+    // 17. tag: no-color returns the label verbatim; color wraps in color+RESET.
+    #[test]
+    fn tag_color_and_no_color() {
+        assert_eq!(tag("[plan]", CYAN, false), "[plan]", "no-color tag SHALL be verbatim");
+        assert_eq!(
+            tag("[plan]", CYAN, true),
+            format!("{CYAN}[plan]{RESET}"),
+            "color tag SHALL wrap label in color+RESET"
+        );
+    }
+
+    // 18. bold_numbers: no-color returns the input unchanged.
+    #[test]
+    fn bold_numbers_no_color_unchanged() {
+        assert_eq!(
+            bold_numbers("2 device(s)", false),
+            "2 device(s)",
+            "no-color SHALL leave the string untouched"
+        );
+    }
+
+    // 19. bold_numbers: digit run after whitespace/paren/start is bolded;
+    //     a run embedded in an identifier (preceded by a letter) is not.
+    #[test]
+    fn bold_numbers_bolds_only_leading_runs() {
+        // Leading run at start, after space, and after '(' is bolded;
+        // the "34" in "v34" is preceded by 'v' so it stays plain.
+        let out = bold_numbers("2 booted (1 of v34)", true);
+        let expected = format!(
+            "{BOLD}2{RESET} booted ({BOLD}1{RESET} of v34)"
+        );
+        assert_eq!(out, expected, "only whitespace/paren/start-preceded digit runs SHALL bold");
+    }
+
+    // 20. bold_numbers: a multi-digit leading run is bolded as a single unit.
+    #[test]
+    fn bold_numbers_multidigit_run_single_unit() {
+        let out = bold_numbers("128 nodes", true);
+        assert_eq!(
+            out,
+            format!("{BOLD}128{RESET} nodes"),
+            "a contiguous digit run SHALL be wrapped once, not per digit"
+        );
+    }
+
+    // 21. fmt_flow_name: no-color returns the name verbatim.
+    #[test]
+    fn fmt_flow_name_no_color_verbatim() {
+        assert_eq!(
+            fmt_flow_name("e2e/cross/tap", false),
+            "e2e/cross/tap",
+            "no-color flow name SHALL be verbatim"
+        );
+    }
+
+    // 22. fmt_flow_name: color with a slash dims the dir (incl. slash) and
+    //     bold-blues the leaf.
+    #[test]
+    fn fmt_flow_name_color_with_slash() {
+        let out = fmt_flow_name("e2e/cross/tap", true);
+        assert_eq!(
+            out,
+            format!("{DIM}e2e/cross/{RESET}{BOLD_BLUE}tap{RESET}"),
+            "dir up to and including the last slash SHALL be dim, leaf bold-blue"
+        );
+    }
+
+    // 23. fmt_flow_name: color with no slash bold-blues the whole name.
+    #[test]
+    fn fmt_flow_name_color_no_slash() {
+        let out = fmt_flow_name("tap", true);
+        assert_eq!(
+            out,
+            format!("{BOLD_BLUE}tap{RESET}"),
+            "a slashless name SHALL be entirely bold-blue"
+        );
+    }
+
+    // 24. format_tree_stats: zero fetches yields an empty string.
+    #[test]
+    fn format_tree_stats_zero_fetches_empty() {
+        let stats = golem_events::TreeStats { fetches: 0, min_nodes: 0, max_nodes: 0 };
+        assert_eq!(
+            format_tree_stats(&stats),
+            "",
+            "zero fetches SHALL produce no summary"
+        );
+    }
+
+    // 25. format_tree_stats: equal min/max renders a single node count.
+    #[test]
+    fn format_tree_stats_equal_min_max() {
+        let stats = golem_events::TreeStats { fetches: 3, min_nodes: 181, max_nodes: 181 };
+        assert_eq!(
+            format_tree_stats(&stats),
+            "{3 trees, 181 nodes}",
+            "equal min/max SHALL render a single node count"
+        );
+    }
+
+    // 26. format_tree_stats: differing min/max renders a min~max range.
+    #[test]
+    fn format_tree_stats_range() {
+        let stats = golem_events::TreeStats { fetches: 3, min_nodes: 181, max_nodes: 190 };
+        assert_eq!(
+            format_tree_stats(&stats),
+            "{3 trees, 181~190 nodes}",
+            "differing min/max SHALL render a min~max range"
+        );
+    }
+}

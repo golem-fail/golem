@@ -326,4 +326,164 @@ mod tests {
         assert!(mgr.device_ids().is_empty());
         assert_eq!(mgr.read_global_var("anything"), None);
     }
+
+    // ---------------------------------------------------------------
+    // 14. get_device_store returns the SAME store on repeat calls
+    //     (or_default must not overwrite an existing store)
+    // ---------------------------------------------------------------
+    #[test]
+    fn get_device_store_is_idempotent_and_preserves_state() {
+        let mut mgr = DeviceVarManager::new();
+
+        // First access: seed a variable.
+        {
+            let store = mgr.get_device_store("device_a");
+            store.push_scope(Scope::new(ScopeLevel::Flow));
+            store.set("kept", VarValue::string("v1"));
+        }
+
+        // Second access of the same device must return the existing store,
+        // not a fresh empty one.
+        {
+            let store = mgr.get_device_store("device_a");
+            store.set("added", VarValue::string("v2"));
+        }
+
+        assert_eq!(
+            mgr.read_device_var("device_a", "kept"),
+            Some(&VarValue::string("v1")),
+            "repeat get_device_store SHALL preserve earlier variables",
+        );
+        assert_eq!(
+            mgr.read_device_var("device_a", "added"),
+            Some(&VarValue::string("v2")),
+            "repeat get_device_store SHALL accept new variables on the same store",
+        );
+        assert_eq!(
+            mgr.device_ids().len(),
+            1,
+            "repeat get_device_store SHALL NOT register a duplicate device id",
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 15. get_device_store after init_device returns the seeded store,
+    //     not a freshly created empty one
+    // ---------------------------------------------------------------
+    #[test]
+    fn get_device_store_after_init_returns_seeded_store() {
+        let mut mgr = DeviceVarManager::new();
+
+        let mut base = VariableStore::new();
+        let mut scope = Scope::new(ScopeLevel::Flow);
+        scope.set("seeded", VarValue::string("from_base"));
+        base.push_scope(scope);
+        mgr.init_device("dev", &base);
+
+        // Touching the store via get_device_store must not wipe seeded vars.
+        let store = mgr.get_device_store("dev");
+        store.set("late", VarValue::string("after_init"));
+
+        assert_eq!(
+            mgr.read_device_var("dev", "seeded"),
+            Some(&VarValue::string("from_base")),
+            "get_device_store SHALL return the init_device-seeded store",
+        );
+        assert_eq!(
+            mgr.read_device_var("dev", "late"),
+            Some(&VarValue::string("after_init")),
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 16. Device and global stores do not leak into each other
+    // ---------------------------------------------------------------
+    #[test]
+    fn device_and_global_stores_are_independent() {
+        let mut mgr = DeviceVarManager::new();
+
+        {
+            let store = mgr.get_device_store("device_a");
+            store.push_scope(Scope::new(ScopeLevel::Flow));
+            store.set("only_device", VarValue::string("d"));
+        }
+        {
+            let global = mgr.global_store();
+            global.push_scope(Scope::new(ScopeLevel::Flow));
+            global.set("only_global", VarValue::string("g"));
+        }
+
+        // Device var is not visible globally.
+        assert_eq!(
+            mgr.read_global_var("only_device"),
+            None,
+            "a device variable SHALL NOT leak into the global store",
+        );
+        // Global var is not visible on the device.
+        assert_eq!(
+            mgr.read_device_var("device_a", "only_global"),
+            None,
+            "a global variable SHALL NOT leak into a device store",
+        );
+        // Writing to the global store SHALL NOT register a device id.
+        assert_eq!(
+            mgr.device_ids(),
+            vec!["device_a"],
+            "global writes SHALL NOT create device entries",
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 17. global_store() returns the one persistent store across
+    //     separate accesses, and read_global_var observes the same store
+    // ---------------------------------------------------------------
+    #[test]
+    fn global_store_persists_across_accesses() {
+        let mut mgr = DeviceVarManager::new();
+
+        // First access: seed a value, then drop the borrow.
+        {
+            let global = mgr.global_store();
+            global.push_scope(Scope::new(ScopeLevel::Flow));
+            global.set("token", VarValue::string("first"));
+        }
+
+        // Separate access must hand back the SAME store, so the value seeded
+        // in the first access is still visible. This is the module-level
+        // behavior under test: global_store() exposes the single persistent
+        // global field, not a fresh store per call.
+        {
+            let global = mgr.global_store();
+            assert_eq!(
+                global.get("token"),
+                Some(&VarValue::string("first")),
+                "global_store SHALL return the same persistent store across separate accesses",
+            );
+        }
+
+        // read_global_var reads that same persistent store (not a copy).
+        assert_eq!(
+            mgr.read_global_var("token"),
+            Some(&VarValue::string("first")),
+            "read_global_var SHALL observe the store mutated via global_store",
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 18. init_device on a fresh device registers it in device_ids
+    // ---------------------------------------------------------------
+    #[test]
+    fn init_device_registers_new_device_id() {
+        let mut mgr = DeviceVarManager::new();
+        assert!(mgr.device_ids().is_empty());
+
+        let base = VariableStore::new();
+        mgr.init_device("seeded_dev", &base);
+
+        assert_eq!(
+            mgr.device_ids(),
+            vec!["seeded_dev"],
+            "init_device SHALL register the device id even with an empty base",
+        );
+    }
 }

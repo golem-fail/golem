@@ -835,4 +835,375 @@ mod tests {
         assert_eq!(results.len(), 3);
     }
 
+    // ── 33. checked filter keeps only matching state ─────────────────
+
+    #[test]
+    fn checked_filter() {
+        let mut root = elem("View");
+        let mut on = elem("Checkbox");
+        on.checked = true;
+        let mut off = elem("Checkbox");
+        off.checked = false;
+        root.children.push(on);
+        root.children.push(off);
+
+        let s = Selector {
+            checked: Some(true),
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        // root is unchecked, off is unchecked; only `on` qualifies.
+        assert_eq!(results.len(), 1, "checked=true SHALL keep only checked elements");
+        assert!(results[0].element.checked);
+    }
+
+    // ── 34. text selector skips elements with no text ────────────────
+
+    #[test]
+    fn text_selector_skips_textless_elements() {
+        let mut root = elem("View"); // no text
+        root.children.push(elem("Image")); // no text
+        root.children.push(elem_with_text("Button", "Go"));
+
+        let s = Selector {
+            text: Some("Go".to_string()),
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        assert_eq!(results.len(), 1, "elements without text SHALL not match a text selector");
+        assert_eq!(results[0].element.text.as_deref(), Some("Go"));
+    }
+
+    // ── 35. accessibility_label selector skips labelless elements ────
+
+    #[test]
+    fn accessibility_label_skips_labelless_elements() {
+        let mut root = elem("View"); // no label
+        let mut labelled = elem("Button");
+        labelled.accessibility_label = Some("ok".to_string());
+        root.children.push(labelled);
+        root.children.push(elem("Label")); // no label
+
+        let s = Selector {
+            accessibility_label: Some("ok".to_string()),
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        assert_eq!(results.len(), 1, "elements without a label SHALL not match a label selector");
+    }
+
+    // ── 36. resolve_anchor with a full selector ──────────────────────
+
+    #[test]
+    fn resolve_anchor_full_selector() {
+        let mut root = elem("View");
+        let mut btn = elem_with_text("Button", "Anchor");
+        btn.accessibility_label = Some("anchor-id".to_string());
+        root.children.push(btn);
+
+        let anchor = AnchorSelector::Full(Box::new(Selector {
+            accessibility_label: Some("anchor-id".to_string()),
+            ..sel()
+        }));
+        let found = resolve_anchor(&root, &anchor).expect("full-selector anchor SHALL resolve");
+        assert_eq!(found.element.text.as_deref(), Some("Anchor"));
+    }
+
+    // ── 37. resolve_anchor text matches first element depth-first ────
+
+    #[test]
+    fn resolve_anchor_text_returns_first_match() {
+        let mut root = elem("View");
+        // 1. Two siblings share the text "Title" but carry distinct labels so
+        //    that the *order* of resolution is observable.
+        let mut first = elem_with_text("Label", "Title");
+        first.accessibility_label = Some("first".to_string());
+        let mut second = elem_with_text("Label", "Title");
+        second.accessibility_label = Some("second".to_string());
+        root.children.push(first);
+        root.children.push(second);
+
+        let anchor = AnchorSelector::Text("Title".to_string());
+        let found = resolve_anchor(&root, &anchor).expect("text anchor SHALL resolve");
+        // 2. resolve_anchor SHALL return the FIRST depth-first match, i.e. the
+        //    earlier sibling — proven by its distinct "first" label.
+        assert_eq!(found.element.text.as_deref(), Some("Title"));
+        assert_eq!(
+            found.element.accessibility_label.as_deref(),
+            Some("first"),
+            "resolve_anchor SHALL return the first depth-first match"
+        );
+    }
+
+    // ── 38. resolve_anchor returns None when absent ──────────────────
+
+    #[test]
+    fn resolve_anchor_none_when_absent() {
+        let root = elem("View");
+        let anchor = AnchorSelector::Text("Missing".to_string());
+        assert!(resolve_anchor(&root, &anchor).is_none(), "absent anchor SHALL resolve to None");
+    }
+
+    // ── 39. relational filter empty when anchor off-screen ───────────
+
+    #[test]
+    fn relational_below_offscreen_anchor_returns_empty() {
+        let mut root = elem("View");
+        root.bounds = bounds(0, 0, 400, 600);
+        // Header present but off-screen: zero-area visible_bounds signals
+        // an element scrolled out of the viewport.
+        let mut header = elem_at("Label", "Header", 0, 0, 400, 50);
+        header.visible_bounds = Some(bounds(0, 0, 0, 0));
+        root.children.push(header);
+        // A real candidate that WOULD be below if the anchor were visible.
+        root.children.push(elem_at("Button", "Content", 0, 60, 400, 40));
+
+        let s = Selector {
+            below: Some(AnchorSelector::Text("Header".to_string())),
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        assert!(results.is_empty(), "off-screen anchor SHALL yield an empty relational result");
+    }
+
+    // ── 40. visible_bounds None trusts on-screen bounds for anchor ───
+
+    #[test]
+    fn relational_anchor_visible_bounds_none_uses_bounds() {
+        let mut root = elem("View");
+        root.bounds = bounds(0, 0, 400, 600);
+        // visible_bounds None (native a11y); bounds are non-zero => on screen.
+        root.children.push(elem_at("Label", "Header", 0, 0, 400, 50));
+        root.children.push(elem_at("Button", "Content", 0, 60, 400, 40));
+
+        let s = Selector {
+            below: Some(AnchorSelector::Text("Header".to_string())),
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        assert_eq!(results.len(), 1, "None visible_bounds SHALL trust the anchor's bounds");
+        assert_eq!(results[0].element.text.as_deref(), Some("Content"));
+    }
+
+    // ── 41. relational filter uses effective (visible) bounds ────────
+
+    #[test]
+    fn relational_uses_effective_bounds_of_candidate() {
+        let mut root = elem("View");
+        root.bounds = bounds(0, 0, 400, 600);
+        // Anchor: bottom = 50.
+        root.children.push(elem_at("Label", "Header", 0, 0, 400, 50));
+        // Candidate whose raw bounds.y=10 (above anchor bottom) but whose
+        // visible_bounds.y=60 (below). effective_bounds SHALL win.
+        let mut cand = elem_at("Button", "Content", 0, 10, 400, 40);
+        cand.visible_bounds = Some(bounds(0, 60, 400, 40));
+        root.children.push(cand);
+
+        let s = Selector {
+            below: Some(AnchorSelector::Text("Header".to_string())),
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        assert_eq!(results.len(), 1, "relational filter SHALL compare effective_bounds");
+        assert_eq!(results[0].element.text.as_deref(), Some("Content"));
+    }
+
+    // ── 42. trait: button matches button and link types ─────────────
+
+    #[test]
+    fn trait_button_matches_button_and_link() {
+        assert!(element_has_trait(&elem("Button"), "button"));
+        assert!(element_has_trait(&elem("link"), "button"));
+        // Case-insensitive: iOS lowercase vs Android PascalCase.
+        assert!(element_has_trait(&elem("LINK"), "button"), "trait check SHALL be case-insensitive");
+        assert!(!element_has_trait(&elem("Label"), "button"));
+    }
+
+    // ── 43. trait: input matches all field/edittext variants ────────
+
+    #[test]
+    fn trait_input_matches_field_variants() {
+        for t in [
+            "text_field",
+            "secure_text_field",
+            "search_field",
+            "text_view",
+            "EditText",
+            "AutoCompleteTextView",
+        ] {
+            assert!(element_has_trait(&elem(t), "input"), "{t} SHALL satisfy the input trait");
+        }
+        assert!(!element_has_trait(&elem("Button"), "input"));
+    }
+
+    // ── 44. trait: toggle matches switch/checkbox/radio variants ────
+
+    #[test]
+    fn trait_toggle_matches_variants() {
+        for t in [
+            "Switch",
+            "Toggle",
+            "Checkbox",
+            "radio_button",
+            "ToggleButton",
+            "RadioButton",
+            "CompoundButton",
+        ] {
+            assert!(element_has_trait(&elem(t), "toggle"), "{t} SHALL satisfy the toggle trait");
+        }
+        assert!(!element_has_trait(&elem("Label"), "toggle"));
+    }
+
+    // ── 45. trait: has_text / text / no_text ────────────────────────
+
+    #[test]
+    fn trait_text_presence() {
+        let with = elem_with_text("Label", "hi");
+        let without = elem("Label");
+        assert!(element_has_trait(&with, "has_text"));
+        assert!(element_has_trait(&with, "text"));
+        assert!(!element_has_trait(&with, "no_text"));
+        assert!(!element_has_trait(&without, "has_text"));
+        assert!(!element_has_trait(&without, "text"));
+        assert!(element_has_trait(&without, "no_text"));
+    }
+
+    // ── 46. trait: short_text boundary at len 10 ────────────────────
+
+    #[test]
+    fn trait_short_text_boundary() {
+        // Empty is not short (requires len > 0).
+        assert!(!element_has_trait(&elem("Label"), "short_text"));
+        // len 10 => short.
+        assert!(element_has_trait(&elem_with_text("Label", "0123456789"), "short_text"));
+        // len 11 => not short.
+        assert!(!element_has_trait(&elem_with_text("Label", "0123456789X"), "short_text"));
+    }
+
+    // ── 47. trait: long_text boundary at len 50 ─────────────────────
+
+    #[test]
+    fn trait_long_text_boundary() {
+        let fifty = "a".repeat(50);
+        let fifty_one = "a".repeat(51);
+        // len 50 => NOT long (requires > 50).
+        assert!(!element_has_trait(&elem_with_text("Label", &fifty), "long_text"));
+        // len 51 => long.
+        assert!(element_has_trait(&elem_with_text("Label", &fifty_one), "long_text"));
+    }
+
+    // ── 48. trait: square ratio window and zero-dim guard ───────────
+
+    #[test]
+    fn trait_square() {
+        let mut sq = elem("View");
+        sq.bounds = bounds(0, 0, 100, 100); // ratio 1.0
+        assert!(element_has_trait(&sq, "square"));
+
+        let mut near = elem("View");
+        near.bounds = bounds(0, 0, 119, 100); // ratio 1.19 < 1.2
+        assert!(element_has_trait(&near, "square"));
+
+        let mut wide = elem("View");
+        wide.bounds = bounds(0, 0, 130, 100); // ratio 1.3 => not square
+        assert!(!element_has_trait(&wide, "square"));
+
+        let mut zero = elem("View");
+        zero.bounds = bounds(0, 0, 0, 100); // zero width => guarded false
+        assert!(!element_has_trait(&zero, "square"), "zero dimension SHALL not be square");
+    }
+
+    // ── 49. trait: wide / tall ──────────────────────────────────────
+
+    #[test]
+    fn trait_wide_and_tall() {
+        let mut wide = elem("View");
+        wide.bounds = bounds(0, 0, 300, 100); // 300 > 2*100
+        assert!(element_has_trait(&wide, "wide"));
+        assert!(!element_has_trait(&wide, "tall"));
+
+        let mut tall = elem("View");
+        tall.bounds = bounds(0, 0, 100, 300); // 300 > 2*100
+        assert!(element_has_trait(&tall, "tall"));
+        assert!(!element_has_trait(&tall, "wide"));
+
+        // Boundary: exactly 2x is NOT wide (strict >).
+        let mut exact = elem("View");
+        exact.bounds = bounds(0, 0, 200, 100);
+        assert!(!element_has_trait(&exact, "wide"), "exactly 2x SHALL not be wide");
+    }
+
+    // ── 50. trait: small / large area windows ───────────────────────
+
+    #[test]
+    fn trait_small_and_large() {
+        let mut small = elem("View");
+        small.bounds = bounds(0, 0, 40, 40); // area 1600 < 2500
+        assert!(element_has_trait(&small, "small"));
+        assert!(!element_has_trait(&small, "large"));
+
+        // Zero-area is not small (requires area > 0).
+        let mut zero = elem("View");
+        zero.bounds = bounds(0, 0, 0, 0);
+        assert!(!element_has_trait(&zero, "small"), "zero area SHALL not be small");
+
+        let mut large = elem("View");
+        large.bounds = bounds(0, 0, 400, 300); // area 120000 > 100000
+        assert!(element_has_trait(&large, "large"));
+        assert!(!element_has_trait(&large, "small"));
+
+        // Boundary: area exactly 2500 is NOT small (strict <).
+        let mut edge = elem("View");
+        edge.bounds = bounds(0, 0, 50, 50);
+        assert!(!element_has_trait(&edge, "small"), "area exactly 2500 SHALL not be small");
+    }
+
+    // ── 51. trait: unknown trait never matches ──────────────────────
+
+    #[test]
+    fn trait_unknown_never_matches() {
+        assert!(!element_has_trait(&elem_with_text("Button", "x"), "bogus_trait"));
+    }
+
+    // ── 52. traits in selector AND-combine and filter ───────────────
+
+    #[test]
+    fn selector_traits_and_combine() {
+        let mut root = elem("View");
+        // Square button with text.
+        let mut sq_btn = elem_with_text("Button", "X");
+        sq_btn.bounds = bounds(0, 0, 100, 100);
+        root.children.push(sq_btn);
+        // Square button WITHOUT text (fails has_text).
+        let mut sq_notext = elem("Button");
+        sq_notext.bounds = bounds(0, 0, 100, 100);
+        root.children.push(sq_notext);
+        // Wide button with text (fails square).
+        let mut wide_btn = elem_with_text("Button", "Wide");
+        wide_btn.bounds = bounds(0, 0, 300, 100);
+        root.children.push(wide_btn);
+
+        let s = Selector {
+            traits: vec!["button".to_string(), "square".to_string(), "has_text".to_string()],
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        assert_eq!(results.len(), 1, "all traits SHALL be AND-combined");
+        assert_eq!(results[0].element.text.as_deref(), Some("X"));
+    }
+
+    // ── 53. unknown trait in selector filters everything out ────────
+
+    #[test]
+    fn selector_unknown_trait_excludes_all() {
+        let mut root = elem("View");
+        root.children.push(elem_with_text("Button", "A"));
+
+        let s = Selector {
+            traits: vec!["nope".to_string()],
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        assert!(results.is_empty(), "an unknown trait SHALL match no element");
+    }
 }

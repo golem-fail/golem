@@ -137,4 +137,188 @@ bundle = "com.x"
         assert!(path.is_some(), "SHALL find golem.toml in ancestor");
         assert_eq!(cfg.apps.len(), 1);
     }
+
+    // 4. Malformed TOML SHALL surface a parse error (not a silent default),
+    //    and the error context SHALL name the offending file path.
+    #[test]
+    fn load_invalid_toml_errors_with_path_context() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("golem.toml");
+        std::fs::write(&path, "this is = = not valid toml").expect("write");
+        let err = ProjectConfig::load_from(tmp.path()).expect_err("parse SHALL fail");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("failed to parse"),
+            "error SHALL mention parse failure, got: {msg}"
+        );
+        assert!(
+            msg.contains("golem.toml"),
+            "error SHALL name the offending file, got: {msg}"
+        );
+    }
+
+    // 5. An empty golem.toml SHALL load as the default config (all sections
+    //    empty) while still reporting the discovered path.
+    #[test]
+    fn load_empty_file_yields_defaults_with_path() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(tmp.path().join("golem.toml"), "").expect("write");
+        let (cfg, path) = ProjectConfig::load_from(tmp.path()).expect("load");
+        assert!(path.is_some(), "discovered file SHALL report its path");
+        assert!(cfg.apps.is_empty(), "default apps SHALL be empty");
+        assert!(cfg.options.record.is_none(), "default record SHALL be None");
+        assert!(
+            cfg.device_settings.android.is_empty(),
+            "default android settings SHALL be empty"
+        );
+        assert!(
+            cfg.device_settings.ios.is_empty(),
+            "default ios settings SHALL be empty"
+        );
+    }
+
+    // 6. The [options] section's `record` flag SHALL parse into
+    //    ProjectOptions::record.
+    #[test]
+    fn load_parses_options_record() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            tmp.path().join("golem.toml"),
+            "[options]\nrecord = true\n",
+        )
+        .expect("write");
+        let (cfg, _) = ProjectConfig::load_from(tmp.path()).expect("load");
+        assert_eq!(
+            cfg.options.record,
+            Some(true),
+            "record = true SHALL parse to Some(true)"
+        );
+    }
+
+    // 7. The [device_settings] section SHALL populate per-platform key/value
+    //    maps for both android and ios namespaces.
+    #[test]
+    fn load_parses_device_settings_both_platforms() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            tmp.path().join("golem.toml"),
+            r#"
+[device_settings.android]
+"system.show_touches" = "1"
+"global.window_animation_scale" = "0"
+
+[device_settings.ios]
+"com_apple_keyboard.KeyboardAutocorrection" = "0"
+"#,
+        )
+        .expect("write");
+        let (cfg, _) = ProjectConfig::load_from(tmp.path()).expect("load");
+        assert_eq!(
+            cfg.device_settings.android.get("system.show_touches"),
+            Some(&"1".to_string()),
+            "android key SHALL parse"
+        );
+        assert_eq!(
+            cfg.device_settings.android.get("global.window_animation_scale"),
+            Some(&"0".to_string()),
+            "second android key SHALL parse"
+        );
+        assert_eq!(
+            cfg.device_settings.ios.get("com_apple_keyboard.KeyboardAutocorrection"),
+            Some(&"0".to_string()),
+            "ios key SHALL parse"
+        );
+    }
+
+    // 8. install_script with an android entry SHALL resolve via for_platform,
+    //    covering the non-ios branch of the platform map.
+    #[test]
+    fn load_install_script_resolves_android_platform() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            tmp.path().join("golem.toml"),
+            r#"
+[[apps]]
+name = "a"
+bundle = "com.a"
+install_script = { ios = "i.sh", android = "a.sh" }
+"#,
+        )
+        .expect("write");
+        let (cfg, _) = ProjectConfig::load_from(tmp.path()).expect("load");
+        assert_eq!(
+            cfg.apps[0]
+                .install_script
+                .as_ref()
+                .and_then(|v| v.for_platform("android")),
+            Some("a.sh"),
+            "android install_script SHALL resolve"
+        );
+    }
+
+    // 9. find_project_root SHALL return None when no ancestor (up to the
+    //    filesystem root) contains a golem.toml. A freshly created tempdir
+    //    tree has no golem.toml in it; using its real (canonicalized) path
+    //    exercises the walk-to-root-then-None path.
+    #[test]
+    fn find_project_root_none_when_absent() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let nested = tmp.path().join("a").join("b");
+        std::fs::create_dir_all(&nested).expect("mkdir");
+        // No golem.toml anywhere under tmp, and the system temp dir's
+        // ancestors (/var/folders/... on macOS, /tmp/... on Linux) carry
+        // none either, so the walk SHALL terminate at the FS root with None.
+        let found = find_project_root(&nested);
+        assert!(
+            found.is_none(),
+            "no golem.toml from tmp up to FS root → SHALL be None, got {found:?}"
+        );
+    }
+
+    // 10. find_project_root SHALL return the directory itself when it
+    //     directly contains golem.toml (no walking required).
+    #[test]
+    fn find_project_root_self_directory() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        std::fs::write(tmp.path().join("golem.toml"), "").expect("write");
+        let found = find_project_root(tmp.path()).expect("SHALL find root");
+        let canon = tmp.path().canonicalize().expect("canonicalize");
+        assert_eq!(found, canon, "root SHALL be the canonicalized self dir");
+    }
+
+    // 11. find_project_root SHALL tolerate a non-existent start path
+    //     (canonicalize fails) by falling back to the literal path and
+    //     walking up its lexical ancestors.
+    #[test]
+    fn find_project_root_nonexistent_start_does_not_panic() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let bogus = tmp.path().join("does").join("not").join("exist");
+        // canonicalize() fails on the non-existent path, so the fallback at
+        // line 75 keeps the literal path and walks its lexical ancestors.
+        // No golem.toml exists anywhere up to the FS root, so the walk SHALL
+        // terminate with None (and SHALL NOT panic).
+        let found = find_project_root(&bogus);
+        assert!(
+            found.is_none(),
+            "non-existent start with no golem.toml ancestor → SHALL be None, got {found:?}"
+        );
+    }
+
+    // 12. A nested golem.toml SHALL win over a higher ancestor: the walk
+    //     stops at the *closest* directory containing the file.
+    #[test]
+    fn find_project_root_stops_at_closest() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let outer = tmp.path();
+        let inner = outer.join("inner");
+        std::fs::create_dir_all(&inner).expect("mkdir");
+        std::fs::write(outer.join("golem.toml"), "").expect("write outer");
+        std::fs::write(inner.join("golem.toml"), "").expect("write inner");
+        let found = find_project_root(&inner).expect("SHALL find root");
+        assert_eq!(
+            found,
+            inner.canonicalize().expect("canonicalize"),
+            "closest ancestor with golem.toml SHALL win"
+        );
+    }
 }

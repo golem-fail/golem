@@ -642,4 +642,269 @@ mod tests {
             &VarValue::string("project")
         );
     }
+
+    // --- VarValue::object and get_path edge cases ---
+
+    // 1. object with no entries produces an empty Object map.
+    #[test]
+    fn var_value_object_empty_entries_is_empty_map() {
+        let val = VarValue::object(Vec::<(&str, VarValue)>::new());
+        let map = val.as_object().expect("object SHALL yield a map");
+        assert!(map.is_empty(), "empty entries SHALL produce empty map");
+    }
+
+    // 2. object with multiple entries retains all keys.
+    #[test]
+    fn var_value_object_retains_all_entries() {
+        let val = VarValue::object(vec![
+            ("a", VarValue::string("1")),
+            ("b", VarValue::string("2")),
+        ]);
+        let map = val.as_object().expect("object SHALL yield a map");
+        assert_eq!(map.get("a"), Some(&VarValue::string("1")));
+        assert_eq!(map.get("b"), Some(&VarValue::string("2")));
+    }
+
+    // 3. get_path with a single segment returns the direct child.
+    #[test]
+    fn var_value_get_path_single_segment_returns_child() {
+        let val = VarValue::object(vec![("name", VarValue::string("Bob"))]);
+        assert_eq!(val.get_path("name"), Some(&VarValue::string("Bob")));
+    }
+
+    // 4. A scalar String root rejects any path: the first segment hits the
+    //    `VarValue::String(_) => return None` arm before any lookup. This holds
+    //    both for a real segment and for the empty-string path (whose single
+    //    empty segment still meets the String arm first).
+    #[test]
+    fn var_value_get_path_on_string_root_returns_none() {
+        let val = VarValue::string("scalar");
+        assert!(
+            val.get_path("anything").is_none(),
+            "string root SHALL NOT resolve a real path segment"
+        );
+        assert!(
+            val.get_path("").is_none(),
+            "string root SHALL NOT resolve the empty path"
+        );
+    }
+
+    // 5. get_path that bottoms out on a nested object returns the object itself.
+    #[test]
+    fn var_value_get_path_can_return_an_object() {
+        let inner = VarValue::object(vec![("city", VarValue::string("Reno"))]);
+        let val = VarValue::object(vec![("addr", inner.clone())]);
+        assert_eq!(val.get_path("addr"), Some(&inner));
+    }
+
+    // --- Scope name / construction ---
+
+    // 6. new() yields an unnamed scope; with_name() carries the name through.
+    #[test]
+    fn scope_new_is_unnamed_with_name_carries_name() {
+        let unnamed = Scope::new(ScopeLevel::Cli);
+        assert_eq!(unnamed.name, None, "new() SHALL be unnamed");
+
+        let named = Scope::with_name(ScopeLevel::Fixture, "login");
+        assert_eq!(named.name.as_deref(), Some("login"));
+        assert_eq!(named.level, ScopeLevel::Fixture);
+    }
+
+    // 7. Scope::get returns None for a key that was never set.
+    #[test]
+    fn scope_get_returns_none_for_missing_key() {
+        let scope = Scope::new(ScopeLevel::Project);
+        assert!(scope.get("nope").is_none(), "missing key SHALL be None");
+    }
+
+    // --- VariableStore::set / push_scope ordering ---
+
+    // 8. set() writes into the first (front) scope only.
+    #[test]
+    fn store_set_writes_into_front_scope() {
+        let mut store = VariableStore::new();
+        store.push_scope(Scope::new(ScopeLevel::Project));
+        store.push_scope(Scope::new(ScopeLevel::Cli));
+
+        store.set("k", VarValue::string("v"));
+
+        // Front scope is the Cli scope (pushed last).
+        assert_eq!(store.scopes()[0].level, ScopeLevel::Cli);
+        assert_eq!(store.scopes()[0].get("k"), Some(&VarValue::string("v")));
+        assert!(
+            store.scopes()[1].get("k").is_none(),
+            "set SHALL NOT touch lower scopes"
+        );
+    }
+
+    // 9. set() on an empty store is a silent no-op.
+    #[test]
+    fn store_set_on_empty_store_is_noop() {
+        let mut store = VariableStore::new();
+        store.set("k", VarValue::string("v"));
+        assert!(store.get("k").is_none(), "set with no scopes SHALL be a no-op");
+        assert!(store.scopes().is_empty(), "no scope SHALL be created");
+    }
+
+    // 10. push_scope places the newest scope at the front of the list.
+    #[test]
+    fn push_scope_inserts_at_front() {
+        let mut store = VariableStore::new();
+        store.push_scope(Scope::new(ScopeLevel::Project));
+        store.push_scope(Scope::new(ScopeLevel::Flow));
+
+        assert_eq!(store.scopes()[0].level, ScopeLevel::Flow);
+        assert_eq!(store.scopes()[1].level, ScopeLevel::Project);
+    }
+
+    // --- resolve uses ScopeLevel priority, not list position ---
+
+    // 11. resolve picks the highest-priority scope even when a lower-priority
+    //     scope sits at the front of the list (diverging from get()).
+    #[test]
+    fn resolve_uses_priority_not_list_order() {
+        let mut store = VariableStore::new();
+
+        // Cli (highest priority) pushed first => ends up at the back.
+        let mut cli = Scope::new(ScopeLevel::Cli);
+        cli.set("x", VarValue::string("cli"));
+        store.push_scope(cli);
+
+        // Generator (lowest priority) pushed last => sits at the front.
+        let mut generator = Scope::new(ScopeLevel::Generator);
+        generator.set("x", VarValue::string("generator"));
+        store.push_scope(generator);
+
+        // get() follows list order and returns the front (generator) value.
+        assert_eq!(store.get("x"), Some(&VarValue::string("generator")));
+        // resolve() follows priority and returns the Cli value.
+        assert_eq!(
+            store.resolve("x").expect("should resolve"),
+            &VarValue::string("cli"),
+            "resolve SHALL pick highest ScopeLevel priority"
+        );
+    }
+
+    // 12. resolve from a single scope returns that scope's value.
+    #[test]
+    fn resolve_single_scope_returns_value() {
+        let mut store = VariableStore::new();
+        let mut scope = Scope::new(ScopeLevel::Project);
+        scope.set("only", VarValue::string("here"));
+        store.push_scope(scope);
+
+        assert_eq!(
+            store.resolve("only").expect("should resolve"),
+            &VarValue::string("here")
+        );
+    }
+
+    // --- ScopeLevel priority ordering (private fn, reachable in-module) ---
+
+    // 13. priority is strictly descending Cli > Flow > Fixture > Project > Generator.
+    #[test]
+    fn scope_level_priority_is_strictly_descending() {
+        assert!(ScopeLevel::Cli.priority() > ScopeLevel::Flow.priority());
+        assert!(ScopeLevel::Flow.priority() > ScopeLevel::Fixture.priority());
+        assert!(ScopeLevel::Fixture.priority() > ScopeLevel::Project.priority());
+        assert!(ScopeLevel::Project.priority() > ScopeLevel::Generator.priority());
+    }
+
+    // --- remove on a store that never had the key ---
+
+    // 14. remove() of an absent key leaves the store untouched and is safe.
+    #[test]
+    fn remove_absent_key_is_safe() {
+        let mut store = VariableStore::new();
+        let mut scope = Scope::new(ScopeLevel::Project);
+        scope.set("kept", VarValue::string("v"));
+        store.push_scope(scope);
+
+        store.remove("never_set");
+        assert!(store.has("kept"), "unrelated key SHALL remain after remove");
+    }
+
+    // --- merge_scope overwrites colliding keys ---
+
+    // 15. merging into an existing same-level scope overwrites colliding keys
+    //     with the incoming value.
+    #[test]
+    fn merge_scope_overwrites_colliding_keys() {
+        let mut store = VariableStore::new();
+
+        let mut existing = Scope::new(ScopeLevel::Project);
+        existing.set("shared", VarValue::string("old"));
+        store.push_scope(existing);
+
+        let mut incoming = Scope::new(ScopeLevel::Project);
+        incoming.set("shared", VarValue::string("new"));
+        store.merge_scope(incoming);
+
+        assert_eq!(store.scopes().len(), 1, "SHALL stay a single scope");
+        assert_eq!(
+            store.resolve("shared").expect("should resolve"),
+            &VarValue::string("new"),
+            "incoming value SHALL win on collision"
+        );
+    }
+
+    // --- VariableStore::default ---
+
+    // 16. Default produces an empty store equivalent to new().
+    #[test]
+    fn variable_store_default_is_empty() {
+        let store = VariableStore::default();
+        assert!(store.scopes().is_empty(), "default store SHALL have no scopes");
+        assert!(store.get("any").is_none());
+    }
+
+    // --- GeneratorDef::parse edge cases ---
+
+    // 17. empty parens yield a named generator with no params.
+    #[test]
+    fn generator_def_parse_empty_parens_no_params() {
+        let gen = GeneratorDef::parse("fake:uuid()").expect("should parse");
+        assert_eq!(gen.name, "uuid");
+        assert!(gen.params.is_empty(), "empty parens SHALL yield no params");
+    }
+
+    // 18. an unclosed paren (no trailing ')') fails to parse.
+    #[test]
+    fn generator_def_parse_unclosed_paren_returns_none() {
+        assert!(
+            GeneratorDef::parse("fake:name(prefix=x").is_none(),
+            "missing closing paren SHALL fail to parse"
+        );
+    }
+
+    // 19. a param with no '=' fails to parse (missing value side).
+    #[test]
+    fn generator_def_parse_param_without_equals_returns_none() {
+        assert!(
+            GeneratorDef::parse("fake:name(bare)").is_none(),
+            "param lacking '=' SHALL fail to parse"
+        );
+    }
+
+    // 20. surrounding whitespace in params is trimmed from keys and values.
+    #[test]
+    fn generator_def_parse_trims_param_whitespace() {
+        let gen = GeneratorDef::parse("fake:name( prefix = test )").expect("should parse");
+        assert_eq!(gen.params.get("prefix"), Some(&"test".to_string()));
+    }
+
+    // 21. an empty generator name after "fake:" is still accepted.
+    #[test]
+    fn generator_def_parse_empty_name_is_accepted() {
+        let gen = GeneratorDef::parse("fake:").expect("should parse");
+        assert_eq!(gen.name, "", "empty name SHALL parse to empty string");
+        assert!(gen.params.is_empty());
+    }
+
+    // 22. a value containing '=' keeps everything after the first '=' (splitn(2)).
+    #[test]
+    fn generator_def_parse_value_with_equals_is_preserved() {
+        let gen = GeneratorDef::parse("fake:token(seed=a=b=c)").expect("should parse");
+        assert_eq!(gen.params.get("seed"), Some(&"a=b=c".to_string()));
+    }
 }

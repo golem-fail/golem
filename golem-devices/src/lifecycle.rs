@@ -1237,4 +1237,215 @@ mod tests {
         let cmds = clear_app_data_commands(&d, "com.example.MyApp", None);
         assert_eq!(cmds.len(), 2);
     }
+
+    // 16. Android build companion is a no-op (pre-built APK).
+    #[test]
+    fn android_build_companion_command_is_empty() {
+        let d = android_device();
+        let cmd = build_companion_command(&d, "/path/to/companion.apk");
+        assert!(cmd.is_empty(), "Android build SHALL produce no command");
+    }
+
+    // 17. iOS build companion for an embedded (non-.xcodeproj) path is a
+    //     no-op — the products are already built.
+    #[test]
+    fn ios_build_companion_command_embedded_is_empty() {
+        let d = ios_device();
+        let cmd = build_companion_command(&d, "/path/to/products");
+        assert!(
+            cmd.is_empty(),
+            "embedded iOS build SHALL produce no command"
+        );
+    }
+
+    // 18. Android start companion with reg_port uses reg_port (not legacy
+    //     port). The legacy port arg SHALL NOT appear.
+    #[test]
+    fn android_start_companion_with_reg_uses_reg_port() {
+        let d = android_device();
+        let cmd =
+            start_companion_command_with_reg(&d, "/path/to/companion.apk", 8225, Some(9999));
+        assert_eq!(
+            cmd,
+            vec![
+                "adb",
+                "-s",
+                "emulator-5554",
+                "shell",
+                "am",
+                "instrument",
+                "-w",
+                "-e",
+                "device_serial",
+                "emulator-5554",
+                "-e",
+                "reg_port",
+                "9999",
+                "fail.golem.companion.test/androidx.test.runner.AndroidJUnitRunner",
+            ]
+        );
+    }
+
+    // 19. iOS source-based start companion ignores reg_port — the
+    //     xcodebuild invocation is identical whether or not reg_port is set
+    //     (the port is passed via env var elsewhere, not on the cmdline).
+    #[test]
+    fn ios_source_start_companion_with_reg_matches_legacy() {
+        let d = ios_device();
+        let with_reg = start_companion_command_with_reg(
+            &d,
+            "/path/to/Companion.xcodeproj",
+            8222,
+            Some(9999),
+        );
+        let legacy = start_companion_command(&d, "/path/to/Companion.xcodeproj", 8222);
+        assert_eq!(
+            with_reg, legacy,
+            "iOS source command SHALL be reg_port-independent"
+        );
+    }
+
+    // 20. iOS embedded start companion with no .xctestrun in the directory
+    //     falls back to an empty -xctestrun argument (find_xctestrun → None
+    //     → unwrap_or_default).
+    #[test]
+    fn ios_embedded_start_companion_empty_xctestrun_when_missing() {
+        let dir = unique_temp_dir("golem-no-xctestrun");
+        std::fs::create_dir_all(&dir).expect("create temp dir SHALL succeed");
+        let path = dir.to_string_lossy().into_owned();
+
+        let cmd = start_companion_command(&ios_device(), &path, 8222);
+
+        std::fs::remove_dir_all(&dir).ok();
+        // The arg following "-xctestrun" SHALL be empty when none is found.
+        let idx = cmd
+            .iter()
+            .position(|a| a == "-xctestrun")
+            .expect("command SHALL contain -xctestrun");
+        assert_eq!(cmd[idx + 1], "", "missing xctestrun SHALL yield empty arg");
+    }
+
+    // 21. find_xctestrun locates a .xctestrun file when present.
+    #[test]
+    fn find_xctestrun_finds_present_file() {
+        let dir = unique_temp_dir("golem-find-xctestrun");
+        std::fs::create_dir_all(&dir).expect("create temp dir SHALL succeed");
+        let file = dir.join("Companion.xctestrun");
+        std::fs::write(&file, b"x").expect("write fixture SHALL succeed");
+
+        let found = find_xctestrun(&dir);
+
+        std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(
+            found.as_deref(),
+            Some(file.to_string_lossy().as_ref()),
+            "find_xctestrun SHALL return the .xctestrun path"
+        );
+    }
+
+    // 22. find_xctestrun returns None when no .xctestrun is present.
+    #[test]
+    fn find_xctestrun_none_when_absent() {
+        let dir = unique_temp_dir("golem-find-xctestrun-empty");
+        std::fs::create_dir_all(&dir).expect("create temp dir SHALL succeed");
+        std::fs::write(dir.join("other.txt"), b"x").expect("write fixture SHALL succeed");
+
+        let found = find_xctestrun(&dir);
+
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(found.is_none(), "no .xctestrun SHALL yield None");
+    }
+
+    // 23. find_xctestrun returns None for a nonexistent directory
+    //     (read_dir errors → ok()? short-circuits).
+    #[test]
+    fn find_xctestrun_none_for_missing_dir() {
+        let dir = unique_temp_dir("golem-find-xctestrun-missing");
+        assert!(
+            find_xctestrun(&dir).is_none(),
+            "missing dir SHALL yield None"
+        );
+    }
+
+    // 24. is_already_booted_error recognises the exact CoreSimulator
+    //     message and the code=405 form, but not unrelated errors.
+    #[test]
+    fn is_already_booted_error_detection() {
+        let booted = anyhow::anyhow!(
+            "Unable to boot device in current state: Booted"
+        );
+        assert!(
+            is_already_booted_error(&booted),
+            "the Booted-state message SHALL be recognised"
+        );
+
+        let code405 = anyhow::anyhow!("SimError, code=405): something");
+        assert!(is_already_booted_error(&code405), "code=405 SHALL match");
+
+        let other = anyhow::anyhow!("Unable to boot device: no such device");
+        assert!(
+            !is_already_booted_error(&other),
+            "unrelated boot errors SHALL NOT match"
+        );
+    }
+
+    // 25. is_already_booted_error inspects the full error chain, so a
+    //     wrapped/contextualised cause still matches.
+    #[test]
+    fn is_already_booted_error_matches_wrapped_cause() {
+        let wrapped = anyhow::anyhow!(
+            "Unable to boot device in current state: Booted"
+        )
+        .context("boot iPhone 15");
+        assert!(
+            is_already_booted_error(&wrapped),
+            "wrapped Booted cause SHALL be recognised via {{:#}}"
+        );
+    }
+
+    // 26. run_command on an empty arg slice fails with an "empty command"
+    //     error rather than panicking on split_first.
+    #[tokio::test]
+    async fn run_command_empty_args_errors() {
+        let err = run_command(&[], "ctx")
+            .await
+            .expect_err("empty args SHALL error");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("empty command"),
+            "error SHALL mention empty command, got: {msg}"
+        );
+    }
+
+    // 27. run_command surfaces a non-zero exit as an error carrying the
+    //     context prefix.
+    #[tokio::test]
+    async fn run_command_nonzero_exit_errors() {
+        let err = run_command(&["false".into()], "deliberate failure")
+            .await
+            .expect_err("a non-zero exit SHALL error");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("deliberate failure"),
+            "error SHALL carry the context, got: {msg}"
+        );
+    }
+
+    // 28. run_command returns captured stdout on success.
+    #[tokio::test]
+    async fn run_command_success_returns_stdout() {
+        let out = run_command(&["echo".into(), "hello".into()], "echo")
+            .await
+            .expect("echo SHALL succeed");
+        assert_eq!(out.trim(), "hello", "stdout SHALL be captured verbatim");
+    }
+
+    // Helper: a process-unique temp directory path under the system temp
+    // dir. Avoids a tempfile dev-dependency while keeping tests isolated.
+    fn unique_temp_dir(prefix: &str) -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!("{prefix}-{}-{n}", std::process::id()))
+    }
 }

@@ -252,4 +252,87 @@ mod tests {
         assert_eq!(written.len(), 3);
         assert!(dir.path().join("results.xml").exists());
     }
+
+    // 6. write_results_to_dir returns paths in json, toon, junit order pointing at expected filenames
+    #[test]
+    fn write_results_returns_ordered_paths() {
+        let suite = sample_suite();
+        let dir = tempfile::tempdir().expect("tempdir");
+
+        let written = write_results_to_dir(&suite, dir.path(), true).expect("write");
+        assert_eq!(written.len(), 3, "json+toon+junit SHALL produce three paths");
+        assert!(written[0].ends_with("results.json"), "first path SHALL be results.json");
+        assert!(written[1].ends_with("results.toon"), "second path SHALL be results.toon");
+        assert!(written[2].ends_with("results.xml"), "junit path SHALL be appended last");
+    }
+
+    // 7. write_results_to_dir creates nested directories that do not yet exist
+    #[test]
+    fn write_results_creates_nested_dirs() {
+        let suite = sample_suite();
+        let dir = tempfile::tempdir().expect("tempdir");
+        let nested = dir.path().join("a").join("b").join("c");
+        assert!(!nested.exists(), "nested dir SHALL NOT pre-exist");
+
+        let written = write_results_to_dir(&suite, &nested, false).expect("write");
+        assert_eq!(written.len(), 2);
+        assert!(nested.join("results.json").exists(), "json SHALL be written into created nested dir");
+        assert!(nested.join("results.toon").exists(), "toon SHALL be written into created nested dir");
+    }
+
+    // 8. write_results_to_dir into a pre-existing directory does not error
+    #[test]
+    fn write_results_into_existing_dir_succeeds() {
+        let suite = sample_suite();
+        let dir = tempfile::tempdir().expect("tempdir");
+
+        // First write creates the files; second write into the same existing dir must still succeed (overwrite).
+        write_results_to_dir(&suite, dir.path(), false).expect("first write");
+        let written = write_results_to_dir(&suite, dir.path(), false).expect("second write");
+        assert_eq!(written.len(), 2, "repeated write into existing dir SHALL succeed");
+    }
+
+    // 9. parse_output_format rejects empty string
+    #[test]
+    fn parse_empty_string_is_error() {
+        let result = parse_output_format("");
+        assert!(result.is_err(), "empty format spec SHALL be an error");
+        assert!(
+            result.expect_err("empty is err").to_string().contains("Unknown output format"),
+            "empty spec SHALL report Unknown output format"
+        );
+    }
+
+    // 10. parse_output_format is case-sensitive (uppercase is not accepted)
+    #[test]
+    fn parse_is_case_sensitive() {
+        assert!(parse_output_format("JSON").is_err(), "uppercase JSON SHALL NOT parse");
+        assert!(parse_output_format("Human").is_err(), "capitalized Human SHALL NOT parse");
+    }
+
+    // 11. render of an empty suite (no flows) succeeds for every format
+    #[test]
+    fn render_empty_suite_succeeds() {
+        let empty = SuiteReport {
+            flows: vec![],
+            installs: Vec::new(),
+            total_duration_ms: 0,
+            started_at: None,
+            finished_at: None,
+        };
+
+        for fmt in &[OutputFormat::Human, OutputFormat::Json, OutputFormat::Junit, OutputFormat::Toon] {
+            let out = render(&empty, fmt).unwrap_or_else(|e| panic!("render of empty suite SHALL succeed: {e}"));
+            assert!(!out.is_empty(), "render of empty suite SHALL produce non-empty output");
+        }
+    }
+
+    // 12. json render of a failed flow carries the failure message
+    #[test]
+    fn render_json_includes_failure_message() {
+        let suite = sample_suite();
+        let json = render(&suite, &OutputFormat::Json).expect("render json");
+        assert!(json.contains("signup_flow"), "json SHALL include the failed flow name");
+        assert!(json.contains("not found"), "json SHALL include the step failure message");
+    }
 }

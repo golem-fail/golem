@@ -61,4 +61,92 @@ mod tests {
             "expected 'Unknown structured generator' error, got: {msg}"
         );
     }
+
+    // 12. Unknown type error echoes the offending generator name.
+    #[test]
+    fn unknown_type_error_includes_name() {
+        let mut rng = seeded_rng();
+        let err = generate_structured(&def("wobble"), &mut rng)
+            .expect_err("unknown generator SHALL error");
+        let msg = golem_events::clean_msg(&err);
+        assert!(
+            msg.contains("wobble"),
+            "error SHALL name the unknown generator, got: {msg}"
+        );
+    }
+
+    // 13. Unknown type error carries the ParseVariable failure code.
+    #[test]
+    fn unknown_type_error_carries_parse_variable_code() {
+        let mut rng = seeded_rng();
+        let err = generate_structured(&def("nonexistent"), &mut rng)
+            .expect_err("unknown generator SHALL error");
+        assert_eq!(
+            golem_events::extract_code(&err),
+            Some(golem_events::FailureCode::ParseVariable),
+            "unknown generator error SHALL carry ParseVariable code"
+        );
+    }
+
+    // 14. The empty generator name is treated as unknown (no implicit default).
+    #[test]
+    fn empty_name_is_unknown() {
+        let mut rng = seeded_rng();
+        let err = generate_structured(&def(""), &mut rng)
+            .expect_err("empty generator name SHALL error");
+        let msg = golem_events::clean_msg(&err);
+        assert!(
+            msg.contains("Unknown structured generator"),
+            "empty name SHALL be rejected as unknown, got: {msg}"
+        );
+    }
+
+    // 15. The `person` dispatch arm routes to the person generator and yields an object.
+    #[test]
+    fn person_dispatches_to_object() {
+        let mut rng = seeded_rng();
+        let value = generate_structured(&def("person"), &mut rng)
+            .expect("person generator SHALL succeed");
+        assert!(
+            value.as_object().is_some(),
+            "person SHALL produce an Object value"
+        );
+    }
+
+    // 16. The `address` dispatch arm routes to the address generator and yields an object.
+    #[test]
+    fn address_dispatches_to_object() {
+        let mut rng = seeded_rng();
+        let value = generate_structured(&def("address"), &mut rng)
+            .expect("address generator SHALL succeed");
+        assert!(
+            value.as_object().is_some(),
+            "address SHALL produce an Object value"
+        );
+    }
+
+    // 17. The `credit_card` dispatch arm routes to the credit_card generator and yields an object.
+    #[test]
+    fn credit_card_dispatches_to_object() {
+        let mut rng = seeded_rng();
+        let value = generate_structured(&def("credit_card"), &mut rng)
+            .expect("credit_card generator SHALL succeed");
+        assert!(
+            value.as_object().is_some(),
+            "credit_card SHALL produce an Object value"
+        );
+    }
+
+    // 18. Dispatch is case-sensitive: a capitalized known name is unknown.
+    #[test]
+    fn dispatch_is_case_sensitive() {
+        let mut rng = seeded_rng();
+        let err = generate_structured(&def("Person"), &mut rng)
+            .expect_err("capitalized name SHALL not match the lowercase arm");
+        let msg = golem_events::clean_msg(&err);
+        assert!(
+            msg.contains("Unknown structured generator"),
+            "dispatch SHALL be case-sensitive, got: {msg}"
+        );
+    }
 }

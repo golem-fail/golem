@@ -430,4 +430,255 @@ mod tests {
             unique.len()
         );
     }
+
+    // 18. email local part (before prefix/domain) uses only [a-z0-9] charset
+    #[test]
+    fn email_random_part_charset() {
+        let mut rng = seeded_rng();
+        let result = generate_simple(&def("email"), &mut rng).expect("should generate");
+        let email = result.as_str().expect("should be string");
+        let local = email
+            .strip_suffix("@example.com")
+            .expect("SHALL end with @example.com");
+        assert!(!local.is_empty(), "SHALL have a non-empty local part");
+        assert!(
+            local.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()),
+            "random part SHALL be lowercase letters and digits only, got: {local}"
+        );
+    }
+
+    // 19. password with explicit symbols=true draws from a charset that includes symbols
+    #[test]
+    fn password_with_symbols_can_include_symbols() {
+        // Probe many seeds: at least one SHALL produce a symbol when symbols enabled.
+        let symbols = "!@#$%^&*()-_=+";
+        let mut saw_symbol = false;
+        for seed in 0u64..50 {
+            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            let d = def_with_params("password", &[("symbols", "true"), ("length", "20")]);
+            let result = generate_simple(&d, &mut rng).expect("should generate");
+            let pw = result.as_str().expect("should be string").to_string();
+            if pw.chars().any(|c| symbols.contains(c)) {
+                saw_symbol = true;
+                break;
+            }
+        }
+        assert!(
+            saw_symbol,
+            "symbols=true SHALL be able to emit symbol characters"
+        );
+    }
+
+    // 20. password symbols param treats any non-"false" value as enabling symbols
+    #[test]
+    fn password_symbols_non_false_enables_symbols() {
+        // Only the literal "false" disables symbols; e.g. "no" keeps them on.
+        let symbols = "!@#$%^&*()-_=+";
+        let mut saw_symbol = false;
+        for seed in 0u64..50 {
+            let mut r = ChaCha8Rng::seed_from_u64(seed);
+            let d = def_with_params("password", &[("symbols", "no"), ("length", "20")]);
+            let result = generate_simple(&d, &mut r).expect("should generate");
+            let pw = result.as_str().expect("should be string").to_string();
+            if pw.chars().any(|c| symbols.contains(c)) {
+                saw_symbol = true;
+                break;
+            }
+        }
+        assert!(
+            saw_symbol,
+            "symbols param other than \"false\" SHALL keep symbols enabled"
+        );
+    }
+
+    // 21. password length=0 yields an empty string
+    #[test]
+    fn password_zero_length_is_empty() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("password", &[("length", "0")]);
+        let result = generate_simple(&d, &mut rng).expect("should generate");
+        let pw = result.as_str().expect("should be string");
+        assert!(pw.is_empty(), "length=0 SHALL produce empty password, got: {pw}");
+    }
+
+    // 22. password invalid (non-numeric) length is an error mentioning length
+    #[test]
+    fn password_invalid_length_errors() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("password", &[("length", "abc")]);
+        let err = generate_simple(&d, &mut rng).expect_err("SHALL error on bad length");
+        assert!(
+            err.to_string().contains("invalid length"),
+            "SHALL report invalid length, got: {err}"
+        );
+    }
+
+    // 23. number with no params uses default range 0..=100
+    #[test]
+    fn number_default_range() {
+        let mut rng = seeded_rng();
+        let result = generate_simple(&def("number"), &mut rng).expect("should generate");
+        let n: i64 = result
+            .as_str()
+            .expect("should be string")
+            .parse()
+            .expect("should parse as integer");
+        assert!((0..=100).contains(&n), "default SHALL be 0..=100, got {n}");
+    }
+
+    // 24. number with min == max always returns that exact value
+    #[test]
+    fn number_min_equals_max() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("number", &[("min", "7"), ("max", "7")]);
+        let result = generate_simple(&d, &mut rng).expect("should generate");
+        assert_eq!(
+            result.as_str().expect("should be string"),
+            "7",
+            "min==max SHALL pin the value"
+        );
+    }
+
+    // 25. number supports negative ranges
+    #[test]
+    fn number_negative_range() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("number", &[("min", "-10"), ("max", "-5")]);
+        let result = generate_simple(&d, &mut rng).expect("should generate");
+        let n: i64 = result
+            .as_str()
+            .expect("should be string")
+            .parse()
+            .expect("should parse as integer");
+        assert!((-10..=-5).contains(&n), "expected -10..=-5, got {n}");
+    }
+
+    // 26. number with min > max is an error
+    #[test]
+    fn number_min_greater_than_max_errors() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("number", &[("min", "50"), ("max", "10")]);
+        let err = generate_simple(&d, &mut rng).expect_err("SHALL error when min > max");
+        assert!(
+            err.to_string().contains("must be <= max"),
+            "SHALL report ordering constraint, got: {err}"
+        );
+    }
+
+    // 27. number with invalid (non-numeric) min is an error
+    #[test]
+    fn number_invalid_min_errors() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("number", &[("min", "xyz")]);
+        let err = generate_simple(&d, &mut rng).expect_err("SHALL error on bad min");
+        assert!(
+            err.to_string().contains("invalid min"),
+            "SHALL report invalid min, got: {err}"
+        );
+    }
+
+    // 28. number with invalid (non-numeric) max is an error
+    #[test]
+    fn number_invalid_max_errors() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("number", &[("max", "1.5")]);
+        let err = generate_simple(&d, &mut rng).expect_err("SHALL error on bad max");
+        assert!(
+            err.to_string().contains("invalid max"),
+            "SHALL report invalid max, got: {err}"
+        );
+    }
+
+    // 29. sentence follows "The <adj> <noun> <verb>." structure (4 words)
+    #[test]
+    fn sentence_structure() {
+        let mut rng = seeded_rng();
+        let result = generate_simple(&def("sentence"), &mut rng).expect("should generate");
+        let s = result.as_str().expect("should be string");
+        assert!(s.starts_with("The "), "SHALL start with 'The ', got: {s}");
+        let trimmed = s.strip_suffix('.').expect("SHALL end with a period");
+        assert_eq!(
+            trimmed.split(' ').count(),
+            4,
+            "SHALL be 'The <adj> <noun> <verb>' (4 words), got: {s}"
+        );
+    }
+
+    // 30. timestamp is within the last year and not in the future
+    #[test]
+    fn timestamp_within_last_year() {
+        let mut rng = seeded_rng();
+        let result = generate_simple(&def("timestamp"), &mut rng).expect("should generate");
+        let ts = result.as_str().expect("should be string");
+        let parsed = chrono::DateTime::parse_from_rfc3339(ts)
+            .expect("SHALL parse as RFC3339")
+            .with_timezone(&Utc);
+        let now = Utc::now();
+        assert!(parsed <= now, "timestamp SHALL not be in the future, got: {ts}");
+        let one_year_ago = now - Duration::seconds(365 * 24 * 3600);
+        // allow a small slack for the second boundary
+        assert!(
+            parsed >= one_year_ago - Duration::seconds(2),
+            "timestamp SHALL be within the last year, got: {ts}"
+        );
+    }
+
+    // 31. uuid generation is unique across calls and each output is a valid v4 UUID.
+    #[test]
+    fn uuid_successive_calls_unique() {
+        // 1. generate_uuid ignores the rng entirely (entropy comes from uuid::new_v4),
+        //    so two calls with the same seed SHALL still differ.
+        let a = generate_simple(&def("uuid"), &mut seeded_rng()).expect("should generate");
+        let b = generate_simple(&def("uuid"), &mut seeded_rng()).expect("should generate");
+        assert_ne!(a, b, "successive uuid calls SHALL produce distinct values");
+
+        // 2. Both outputs SHALL be the module's hyphenated v4 string form, not just
+        //    any non-empty string (this exercises the to_string() formatting).
+        for value in [&a, &b] {
+            let id = value.as_str().expect("uuid SHALL be a string");
+            let parsed = Uuid::parse_str(id).expect("uuid output SHALL parse as a UUID");
+            assert_eq!(
+                parsed.get_version(),
+                Some(uuid::Version::Random),
+                "uuid output SHALL be v4, got: {id}"
+            );
+            assert_eq!(id.len(), 36, "hyphenated v4 SHALL be 36 chars, got: {id}");
+            assert_eq!(
+                id.matches('-').count(),
+                4,
+                "hyphenated v4 SHALL have four hyphens, got: {id}"
+            );
+        }
+    }
+
+    // 32. dispatch routes "phone" to geo::generate_phone, producing a phone-shaped value.
+    #[test]
+    fn dispatch_routes_phone() {
+        let mut rng = seeded_rng();
+        let result = generate_simple(&def("phone"), &mut rng).expect("phone SHALL generate");
+        let s = result.as_str().expect("should be string");
+        // 1. Every phone format expands at least one '#' into a digit, so the routed
+        //    phone arm SHALL yield a value containing digits (a wrong arm — e.g. city —
+        //    would not be guaranteed to).
+        assert!(
+            s.chars().any(|c| c.is_ascii_digit()),
+            "phone SHALL contain digits, got: {s}"
+        );
+    }
+
+    // 33. dispatch routes "city" to geo::generate_city, producing a city-shaped value.
+    #[test]
+    fn dispatch_routes_city() {
+        let mut rng = seeded_rng();
+        let result = generate_simple(&def("city"), &mut rng).expect("city SHALL generate");
+        let s = result.as_str().expect("should be string");
+        // 1. City names always carry alphabetic characters; the routed city arm SHALL
+        //    yield a value with letters (distinguishing it from the digit-only phone arm
+        //    or an empty/non-city result).
+        assert!(
+            s.chars().any(|c| c.is_ascii_alphabetic()),
+            "city SHALL contain letters, got: {s}"
+        );
+        assert!(!s.is_empty(), "city SHALL produce a non-empty value, got: {s}");
+    }
 }

@@ -670,4 +670,195 @@ user     12345   ??    0.0 S    31T   0:00.02   0:00.05 /path/to/app
     fn ios_launchctl_pid_empty() {
         assert!(parse_ios_launchctl_pid("", "fail.golem.test").is_none());
     }
+
+    // ── Companion JSON error paths ────────────────────────────────────
+
+    // 1. Malformed JSON SHALL surface as an Err, not a panic.
+    #[test]
+    fn companion_perf_json_invalid() {
+        assert!(parse_companion_perf_json("not json at all").is_err());
+    }
+
+    // 2. Empty input SHALL be an Err (serde rejects empty document).
+    #[test]
+    fn companion_perf_json_empty() {
+        assert!(parse_companion_perf_json("").is_err());
+    }
+
+    // 3. Valid JSON missing the perf keys SHALL parse with all fields None.
+    #[test]
+    fn companion_perf_json_missing_keys() {
+        let r = parse_companion_perf_json("{}").expect("SHALL parse empty object");
+        assert!(r.file_descriptors.is_none());
+        assert!(r.disk_kb.is_none());
+        assert!(r.net_rx_bytes.is_none());
+        assert!(r.net_tx_bytes.is_none());
+    }
+
+    // 4. Non-numeric values for numeric keys SHALL be treated as absent (None).
+    #[test]
+    fn companion_perf_json_wrong_types() {
+        let json = r#"{"file_descriptors":"abc","disk_kb":true,"net_rx_bytes":[],"net_tx_bytes":1.5}"#;
+        let r = parse_companion_perf_json(json).expect("SHALL parse JSON with wrong types");
+        assert!(r.file_descriptors.is_none());
+        assert!(r.disk_kb.is_none());
+        assert!(r.net_rx_bytes.is_none());
+        assert!(r.net_tx_bytes.is_none());
+    }
+
+    // ── Android parser boundary / error paths ─────────────────────────
+
+    // 1. A TOTAL line whose value is non-numeric SHALL yield None.
+    #[test]
+    fn android_memory_total_non_numeric() {
+        assert!(parse_android_memory("        TOTAL:  not_a_number\n").is_none());
+    }
+
+    // 2. A TOTAL line with no value after the colon SHALL yield None.
+    #[test]
+    fn android_memory_total_no_value() {
+        assert!(parse_android_memory("        TOTAL:\n").is_none());
+    }
+
+    // 3. A line containing the package but an unparseable percentage SHALL yield None.
+    #[test]
+    fn android_cpu_unparseable_percent() {
+        let output = "  abc% 1234/com.example.app: 15% user\n";
+        assert!(parse_android_cpu(output, "com.example.app").is_none());
+    }
+
+    // 4. A Threads line with a non-numeric value SHALL yield None.
+    #[test]
+    fn android_threads_non_numeric() {
+        assert!(parse_android_threads("Threads:        many\n").is_none());
+    }
+
+    // ── iOS parser boundary / error paths ─────────────────────────────
+
+    // 1. A disk line whose first field is non-numeric SHALL yield None.
+    #[test]
+    fn ios_disk_non_numeric() {
+        assert!(parse_ios_disk("xyz\t/some/path\n").is_none());
+    }
+
+    // 2. A launchctl line for the matching bundle with a non-numeric PID SHALL yield None.
+    #[test]
+    fn ios_launchctl_pid_non_numeric() {
+        let output = "notapid\t0\tUIKitApplication:fail.golem.test[7351][rb-legacy]\n";
+        assert!(parse_ios_launchctl_pid(output, "fail.golem.test").is_none());
+    }
+
+    // 3. nettop lines with >=3 fields but unparseable byte counts SHALL yield (None, None).
+    #[test]
+    fn ios_network_unparseable_bytes() {
+        let output = "time,interface,bytes_in,bytes_out\n,en0,foo,bar\n";
+        let (rx, tx) = parse_ios_network(output);
+        assert!(rx.is_none());
+        assert!(tx.is_none());
+    }
+
+    // 4. nettop SHALL scan from the bottom and return the last parseable data row.
+    #[test]
+    fn ios_network_uses_last_data_row() {
+        let output = "header,a,b\n,en0,1024,2048\n,en0,4096,8192\n";
+        let (rx, tx) = parse_ios_network(output);
+        let rx = rx.expect("SHALL parse last row bytes_in");
+        let tx = tx.expect("SHALL parse last row bytes_out");
+        assert!((rx - 4.0).abs() < 0.01, "last row bytes_in SHALL win");
+        assert!((tx - 8.0).abs() < 0.01, "last row bytes_out SHALL win");
+    }
+
+    // ── PerfCollectorSet state management ─────────────────────────────
+
+    // 1. new SHALL default the active bundle to the first app in the list.
+    #[test]
+    fn collector_set_first_app_active() {
+        let apps = vec![
+            ("Main".to_string(), "com.example.main".to_string()),
+            ("Other".to_string(), "com.example.other".to_string()),
+        ];
+        let set = PerfCollectorSet::new(&apps, Platform::Android, "device-1".to_string(), None);
+        assert_eq!(
+            set.active_bundle_id().as_deref(),
+            Some("com.example.main"),
+            "first app SHALL be active by default"
+        );
+    }
+
+    // 2. An empty app list SHALL leave the active bundle unset.
+    #[test]
+    fn collector_set_empty_has_no_active() {
+        let set = PerfCollectorSet::new(&[], Platform::Ios, "device-1".to_string(), None);
+        assert!(
+            set.active_bundle_id().is_none(),
+            "empty set SHALL have no active bundle"
+        );
+    }
+
+    // 3. set_active SHALL switch the active bundle.
+    #[test]
+    fn collector_set_set_active_switches() {
+        let apps = vec![
+            ("Main".to_string(), "com.example.main".to_string()),
+            ("Other".to_string(), "com.example.other".to_string()),
+        ];
+        let set = PerfCollectorSet::new(&apps, Platform::Android, "device-1".to_string(), None);
+        set.set_active("com.example.other");
+        assert_eq!(
+            set.active_bundle_id().as_deref(),
+            Some("com.example.other"),
+            "set_active SHALL change the active bundle"
+        );
+    }
+
+    // 4. clear_active SHALL clear only when the cleared bundle is the active one.
+    #[test]
+    fn collector_set_clear_active_matching() {
+        let apps = vec![("Main".to_string(), "com.example.main".to_string())];
+        let set = PerfCollectorSet::new(&apps, Platform::Android, "device-1".to_string(), None);
+        set.clear_active("com.example.main");
+        assert!(
+            set.active_bundle_id().is_none(),
+            "clearing the active bundle SHALL unset it"
+        );
+    }
+
+    // 5. clear_active for a non-active bundle SHALL leave the active bundle intact.
+    #[test]
+    fn collector_set_clear_active_non_matching() {
+        let apps = vec![
+            ("Main".to_string(), "com.example.main".to_string()),
+            ("Other".to_string(), "com.example.other".to_string()),
+        ];
+        let set = PerfCollectorSet::new(&apps, Platform::Android, "device-1".to_string(), None);
+        set.clear_active("com.example.other");
+        assert_eq!(
+            set.active_bundle_id().as_deref(),
+            Some("com.example.main"),
+            "clearing a non-active bundle SHALL not change the active one"
+        );
+    }
+
+    // 6. capture with no active bundle SHALL return default data without touching a device.
+    #[tokio::test]
+    async fn collector_set_capture_no_active() {
+        let set = PerfCollectorSet::new(&[], Platform::Android, "device-1".to_string(), None);
+        let data = set.capture().await;
+        assert!(data.memory_mb.is_none(), "no active bundle SHALL yield empty data");
+        assert!(data.cpu_percent.is_none());
+        assert!(data.threads.is_none());
+    }
+
+    // 7. capture when the active bundle has no registered collector SHALL return default data.
+    #[tokio::test]
+    async fn collector_set_capture_unknown_bundle() {
+        let set = PerfCollectorSet::new(&[], Platform::Android, "device-1".to_string(), None);
+        set.set_active("com.example.unregistered");
+        let data = set.capture().await;
+        assert!(
+            data.memory_mb.is_none(),
+            "unknown active bundle SHALL yield empty data"
+        );
+        assert!(data.file_descriptors.is_none());
+    }
 }

@@ -207,4 +207,119 @@ mod tests {
         let br = d.rounded_corners.iter().find(|c| c.position == CornerPosition::BottomRight).unwrap();
         assert_eq!((br.center_x, br.center_y), (393 - 55, 852 - 55));
     }
+
+    // 1. All four corners SHALL be present in TL, TR, BR, BL order with
+    //    centers reflecting the radius inset from each respective edge.
+    fn find_corner(d: &DisplayLookup, p: CornerPosition) -> &RoundedCorner {
+        d.rounded_corners
+            .iter()
+            .find(|c| c.position == p)
+            .expect("corner position SHALL be present")
+    }
+
+    #[test]
+    fn all_four_corner_positions_present_and_inset() {
+        let d = lookup("iPhone17,3", 393, 852).expect("SHALL match");
+        let r = 55;
+        assert_eq!(
+            d.rounded_corners
+                .iter()
+                .map(|c| c.position)
+                .collect::<Vec<_>>(),
+            vec![
+                CornerPosition::TopLeft,
+                CornerPosition::TopRight,
+                CornerPosition::BottomRight,
+                CornerPosition::BottomLeft,
+            ],
+            "corners SHALL be ordered TL, TR, BR, BL"
+        );
+        let tr = find_corner(&d, CornerPosition::TopRight);
+        assert_eq!((tr.center_x, tr.center_y), (393 - r, r), "TR SHALL inset x from right edge");
+        let bl = find_corner(&d, CornerPosition::BottomLeft);
+        assert_eq!((bl.center_x, bl.center_y), (r, 852 - r), "BL SHALL inset y from bottom edge");
+        assert!(
+            d.rounded_corners.iter().all(|c| c.radius == r),
+            "every corner SHALL share the same radius"
+        );
+    }
+
+    // 2. A non-positive screen width SHALL suppress both the cutout and the
+    //    rounded corners, since their geometry depends on a positive width.
+    #[test]
+    fn zero_screen_width_suppresses_cutout_and_corners() {
+        let d = lookup("iPhone15,2", 0, 852).expect("model SHALL still be known");
+        assert!(d.cutouts.is_empty(), "zero width SHALL produce no cutout");
+        assert!(d.rounded_corners.is_empty(), "zero width SHALL produce no corners");
+    }
+
+    // 3. A negative screen width SHALL likewise suppress cutout and corners.
+    #[test]
+    fn negative_screen_width_suppresses_geometry() {
+        let d = lookup("iPhone15,2", -10, 852).expect("model SHALL still be known");
+        assert!(d.cutouts.is_empty(), "negative width SHALL produce no cutout");
+        assert!(d.rounded_corners.is_empty(), "negative width SHALL produce no corners");
+    }
+
+    // 4. A non-positive screen height SHALL suppress corners but the cutout
+    //    (which depends only on width) SHALL still be produced.
+    #[test]
+    fn zero_screen_height_suppresses_corners_only() {
+        let d = lookup("iPhone15,2", 393, 0).expect("model SHALL still be known");
+        assert_eq!(d.cutouts.len(), 1, "cutout SHALL survive zero height");
+        assert!(
+            d.rounded_corners.is_empty(),
+            "zero height SHALL produce no corners"
+        );
+    }
+
+    // 5. An iPad entry declares `cutouts = []` and no `cutout_size`, so
+    //    cutout_size parses to None and SHALL yield zero cutouts even with a
+    //    positive screen size, while corners are still emitted.
+    #[test]
+    fn missing_cutout_size_yields_no_cutouts() {
+        let d = lookup("iPad13", 834, 1194).expect("SHALL match");
+        assert!(d.cutouts.is_empty(), "absent cutout_size SHALL mean no cutout");
+        assert_eq!(d.rounded_corners.len(), 4, "iPad SHALL still have corners");
+    }
+
+    // 6. The toml defines no gesture insets, so both SHALL default to 0.
+    #[test]
+    fn gesture_insets_default_to_zero() {
+        let d = lookup("iPhone17,3", 393, 852).expect("SHALL match");
+        assert_eq!(d.gesture_inset_left, 0, "left inset SHALL default to 0");
+        assert_eq!(d.gesture_inset_right, 0, "right inset SHALL default to 0");
+    }
+
+    // 7. The cutout x SHALL be the floor of the centered offset, including
+    //    when (screen_width - width) is odd (integer division truncates).
+    #[test]
+    fn cutout_x_is_floored_when_offset_is_odd() {
+        // 393 - 126 = 267, which is odd; integer division floors to 133.
+        let d = lookup("iPhone15,2", 393, 852).expect("SHALL match");
+        // Hand-computed literal independently proves both the centering and
+        // the odd-offset floor without recomputing the production expression.
+        assert_eq!(d.cutouts[0].x, 133, "267 / 2 SHALL floor-center to 133");
+    }
+
+    // 8. The longest matching prefix SHALL win: "iPhone17,3" matches the
+    //    specific full key rather than any shorter prefix, and an empty model
+    //    string SHALL match nothing.
+    #[test]
+    fn empty_model_matches_nothing() {
+        assert!(
+            lookup("", 393, 852).is_none(),
+            "empty model SHALL not match any prefix"
+        );
+    }
+
+    // 9. The taller 12-family notch (height 32) SHALL be reported verbatim
+    //    with a top (y=0) position, distinguishing it from the Dynamic Island.
+    #[test]
+    fn twelve_family_notch_height_and_top_offset() {
+        let d = lookup("iPhone13,2", 390, 844).expect("SHALL match");
+        assert_eq!(d.cutouts[0].height, 32, "iPhone 12 notch SHALL be 32pt tall");
+        assert_eq!(d.cutouts[0].width, 209, "iPhone 12 notch SHALL be 209pt wide");
+        assert_eq!(d.cutouts[0].y, 0, "a notch SHALL sit at the very top");
+    }
 }

@@ -994,4 +994,642 @@ mod tests {
             ]
         );
     }
+
+    // ── 9. resolve_param_coord: integer pixels passed through ─────────
+
+    #[test]
+    fn resolve_param_coord_integer_is_passed_through() {
+        let val = toml::Value::Integer(123);
+        assert_eq!(
+            resolve_param_coord(Some(&val), 1000),
+            123,
+            "integer param SHALL be returned verbatim as pixels"
+        );
+    }
+
+    // ── 10. resolve_param_coord: valid percentage of viewport ─────────
+
+    #[test]
+    fn resolve_param_coord_percentage_is_fraction_of_viewport() {
+        let val = toml::Value::String("25%".to_string());
+        assert_eq!(
+            resolve_param_coord(Some(&val), 800),
+            200,
+            "'25%' SHALL resolve to a quarter of the viewport size"
+        );
+    }
+
+    // ── 11. resolve_param_coord: malformed percentage falls back to center ──
+
+    #[test]
+    fn resolve_param_coord_bad_percentage_falls_back_to_center() {
+        let val = toml::Value::String("abc%".to_string());
+        assert_eq!(
+            resolve_param_coord(Some(&val), 600),
+            300,
+            "unparsable percentage SHALL fall back to viewport center"
+        );
+    }
+
+    // ── 12. resolve_param_coord: None / non-coord types → center ──────
+
+    #[test]
+    fn resolve_param_coord_none_and_other_types_fall_back_to_center() {
+        assert_eq!(
+            resolve_param_coord(None, 400),
+            200,
+            "missing param SHALL fall back to viewport center"
+        );
+        // A non-percent string (no trailing '%') hits the catch-all arm.
+        let plain = toml::Value::String("nope".to_string());
+        assert_eq!(
+            resolve_param_coord(Some(&plain), 400),
+            200,
+            "non-percent string SHALL fall back to viewport center"
+        );
+        // A boolean (neither Integer nor String) hits the catch-all arm.
+        let b = toml::Value::Boolean(true);
+        assert_eq!(
+            resolve_param_coord(Some(&b), 400),
+            200,
+            "non-coordinate type SHALL fall back to viewport center"
+        );
+    }
+
+    // ── 13. collect_toggles gathers switch/toggle bounds recursively ──
+
+    #[test]
+    fn collect_toggles_gathers_switches_and_toggles_recursively() {
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let switch = make_element("Switch", Bounds::new(300, 100, 40, 24));
+        let mut group = make_element("View", Bounds::new(0, 200, 375, 60));
+        let toggle = make_element("Toggle", Bounds::new(320, 210, 40, 24));
+        group.children.push(toggle);
+        let plain = make_element("Button", Bounds::new(10, 400, 100, 44));
+        root.children.push(switch);
+        root.children.push(group);
+        root.children.push(plain);
+
+        let mut out = Vec::new();
+        collect_toggles(&root, &mut out);
+        assert_eq!(
+            out.len(),
+            2,
+            "collect_toggles SHALL find both the top-level switch and the nested toggle"
+        );
+        assert!(
+            out.iter().any(|b| b.x == 300),
+            "the top-level switch bounds SHALL be collected"
+        );
+        assert!(
+            out.iter().any(|b| b.x == 320),
+            "the nested toggle bounds SHALL be collected"
+        );
+    }
+
+    // ── 14. tap on a Switch row retargets to the inner toggle control ──
+
+    #[tokio::test]
+    async fn tap_on_switch_row_retargets_to_inner_toggle() {
+        // Outer Switch row spans full width; a smaller inner Switch sits on
+        // the right half. find_inner_toggle SHALL pick the inner control.
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let mut outer = make_element_with_text("Switch", "Wifi", Bounds::new(0, 200, 375, 60));
+        let inner = make_element("Switch", Bounds::new(320, 218, 40, 24));
+        outer.children.push(inner);
+        root.children.push(outer);
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("tap");
+        step.on_text = Some("Wifi".to_string());
+
+        let ctx = test_ctx(Path::new("."));
+        handle_tap(&step, &driver, &ctx)
+            .await
+            .expect("tap on switch SHALL succeed");
+
+        let calls = driver.get_calls();
+        let tap_calls: Vec<_> = calls.iter().filter(|c| c.0 == "tap").collect();
+        assert_eq!(tap_calls.len(), 1);
+        // Inner toggle center = (320 + 40/2, 218 + 24/2) = (340, 230)
+        assert_eq!(
+            tap_calls[0].1,
+            vec!["340", "230"],
+            "tap SHALL retarget to the inner toggle's center, not the row center"
+        );
+    }
+
+    // ── 15. tap on a Switch with no inner control taps the matched center ──
+
+    #[tokio::test]
+    async fn tap_on_switch_without_inner_toggle_uses_matched_center() {
+        // A lone Switch with no smaller inner control: find_inner_toggle
+        // returns None, so the tap falls back to the matched coords.
+        let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let outer = make_element_with_text("Switch", "Alone", Bounds::new(100, 200, 100, 44));
+        root.children.push(outer);
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("tap");
+        step.on_text = Some("Alone".to_string());
+
+        let ctx = test_ctx(Path::new("."));
+        handle_tap(&step, &driver, &ctx)
+            .await
+            .expect("tap on lone switch SHALL succeed");
+
+        let calls = driver.get_calls();
+        let tap_calls: Vec<_> = calls.iter().filter(|c| c.0 == "tap").collect();
+        assert_eq!(tap_calls.len(), 1);
+        // Matched center = (100 + 100/2, 200 + 44/2) = (150, 222)
+        assert_eq!(
+            tap_calls[0].1,
+            vec!["150", "222"],
+            "with no inner toggle the tap SHALL hit the matched element center"
+        );
+    }
+
+    // ── 16. pinch without scale returns ParseMissingParam error ───────
+
+    #[tokio::test]
+    async fn pinch_without_scale_returns_error() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+
+        let step = make_step("pinch"); // no scale set
+
+        let result = handle_pinch(&step, &driver).await;
+        assert!(result.is_err(), "pinch without scale SHALL error");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("scale"),
+            "error SHALL mention the missing scale param, got: {err_msg}"
+        );
+    }
+
+    // ── 17. pinch at x/y params uses those coords and default velocity ──
+
+    #[tokio::test]
+    async fn pinch_with_coords_uses_params_and_default_velocity() {
+        let root = make_element("View", Bounds::new(0, 0, 800, 600));
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("pinch");
+        step.scale = Some(2.0);
+        step.params.insert("x".to_string(), toml::Value::Integer(123));
+        step.params.insert("y".to_string(), toml::Value::Integer(456));
+        // No velocity -> default 5.0
+
+        handle_pinch(&step, &driver)
+            .await
+            .expect("pinch SHALL succeed");
+
+        let calls = driver.get_calls();
+        let pinch_calls: Vec<_> = calls.iter().filter(|c| c.0 == "pinch").collect();
+        assert_eq!(pinch_calls.len(), 1);
+        // mock records [x, y, scale, velocity]
+        assert_eq!(pinch_calls[0].1[0], "123");
+        assert_eq!(pinch_calls[0].1[1], "456");
+        assert_eq!(pinch_calls[0].1[2], "2");
+        assert_eq!(
+            pinch_calls[0].1[3], "5",
+            "velocity SHALL default to 5.0 when unset"
+        );
+    }
+
+    // ── 18. pinch centered on a resolved element ──────────────────────
+
+    #[tokio::test]
+    async fn pinch_on_element_uses_element_center() {
+        let root = root_with_button("Map");
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("pinch");
+        step.scale = Some(0.5);
+        step.velocity = Some(3.0);
+        step.on_text = Some("Map".to_string());
+
+        handle_pinch(&step, &driver)
+            .await
+            .expect("pinch on element SHALL succeed");
+
+        let calls = driver.get_calls();
+        let pinch_calls: Vec<_> = calls.iter().filter(|c| c.0 == "pinch").collect();
+        assert_eq!(pinch_calls.len(), 1);
+        // Button center = (150, 222)
+        assert_eq!(pinch_calls[0].1[0], "150");
+        assert_eq!(pinch_calls[0].1[1], "222");
+        assert_eq!(pinch_calls[0].1[3], "3");
+    }
+
+    // ── 19. pinch on a missing element selector errors ────────────────
+
+    #[tokio::test]
+    async fn pinch_on_missing_element_returns_error() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("pinch");
+        step.scale = Some(2.0);
+        step.on_text = Some("Nope".to_string());
+
+        let result = handle_pinch(&step, &driver).await;
+        assert!(result.is_err(), "pinch on missing element SHALL error");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("No element found"),
+            "error SHALL mention no element found, got: {err_msg}"
+        );
+    }
+
+    // ── 20. rotate without rotation param returns error ───────────────
+
+    #[tokio::test]
+    async fn rotate_without_rotation_returns_error() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+
+        let step = make_step("rotate"); // no rotation set
+
+        let result = handle_rotate_gesture(&step, &driver).await;
+        assert!(result.is_err(), "rotate without rotation SHALL error");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("rotation"),
+            "error SHALL mention the missing rotation param, got: {err_msg}"
+        );
+    }
+
+    // ── 21. rotate emits a two-finger gesture ─────────────────────────
+
+    #[tokio::test]
+    async fn rotate_emits_two_finger_gesture() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("rotate");
+        step.rotation = Some(90.0);
+        step.params.insert("x".to_string(), toml::Value::Integer(100));
+        step.params.insert("y".to_string(), toml::Value::Integer(100));
+
+        handle_rotate_gesture(&step, &driver)
+            .await
+            .expect("rotate SHALL succeed");
+
+        let calls = driver.get_calls();
+        let g_calls: Vec<_> = calls.iter().filter(|c| c.0 == "gesture").collect();
+        assert_eq!(g_calls.len(), 1);
+        assert_eq!(
+            g_calls[0].1.len(),
+            2,
+            "rotate SHALL drive exactly two fingers"
+        );
+    }
+
+    // ── 22. rotate point count scales with the angle ──────────────────
+
+    #[tokio::test]
+    async fn rotate_point_count_floor_for_small_angle() {
+        // For a small angle (<30deg), the per-finger step count floors at 3,
+        // yielding steps+1 = 4 points per finger.
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("rotate");
+        step.rotation = Some(5.0);
+
+        handle_rotate_gesture(&step, &driver)
+            .await
+            .expect("rotate SHALL succeed");
+
+        let calls = driver.get_calls();
+        let g_calls: Vec<_> = calls.iter().filter(|c| c.0 == "gesture").collect();
+        assert_eq!(g_calls.len(), 1);
+        // mock formats each finger as "<n>pts@<dur>ms"; steps floors at 3 -> 4 pts.
+        assert!(
+            g_calls[0].1[0].starts_with("4pts@"),
+            "small angle SHALL floor at 4 points per finger, got: {}",
+            g_calls[0].1[0]
+        );
+    }
+
+    // ── 23. gesture with empty fingers returns error ──────────────────
+
+    #[tokio::test]
+    async fn gesture_with_no_fingers_returns_error() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+
+        let step = make_step("gesture"); // fingers empty by default
+
+        let result = handle_gesture(&step, &driver).await;
+        assert!(result.is_err(), "gesture with no fingers SHALL error");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("at least one finger"),
+            "error SHALL mention the finger requirement, got: {err_msg}"
+        );
+    }
+
+    // ── 24. gesture with a finger of <2 points returns error ──────────
+
+    #[tokio::test]
+    async fn gesture_with_short_finger_returns_error() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("gesture");
+        step.fingers = vec![golem_parser::Finger {
+            points: vec![golem_parser::SelectorGroup {
+                x: Some(golem_parser::CoordValue::Pixels(10)),
+                y: Some(golem_parser::CoordValue::Pixels(10)),
+                ..Default::default()
+            }],
+        }];
+
+        let result = handle_gesture(&step, &driver).await;
+        assert!(result.is_err(), "single-point finger SHALL error");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("at least 2 points"),
+            "error SHALL mention the 2-point minimum, got: {err_msg}"
+        );
+    }
+
+    // ── 25. gesture resolves coordinate points and drives the driver ──
+
+    #[tokio::test]
+    async fn gesture_with_coordinate_points_drives_driver() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("gesture");
+        step.duration = Some(500);
+        step.fingers = vec![golem_parser::Finger {
+            points: vec![
+                golem_parser::SelectorGroup {
+                    x: Some(golem_parser::CoordValue::Pixels(10)),
+                    y: Some(golem_parser::CoordValue::Pixels(20)),
+                    ..Default::default()
+                },
+                golem_parser::SelectorGroup {
+                    x: Some(golem_parser::CoordValue::Pixels(30)),
+                    y: Some(golem_parser::CoordValue::Pixels(40)),
+                    ..Default::default()
+                },
+            ],
+        }];
+
+        handle_gesture(&step, &driver)
+            .await
+            .expect("gesture SHALL succeed");
+
+        let calls = driver.get_calls();
+        let g_calls: Vec<_> = calls.iter().filter(|c| c.0 == "gesture").collect();
+        assert_eq!(g_calls.len(), 1);
+        assert_eq!(
+            g_calls[0].1,
+            vec!["2pts@500ms"],
+            "gesture SHALL forward the 2 points with the requested duration"
+        );
+    }
+
+    // ── 26. gesture point with no element or coords falls back to center ──
+
+    #[tokio::test]
+    async fn gesture_point_without_element_or_coords_uses_viewport_center() {
+        // A point with no selector and no x/y resolves to viewport center;
+        // the resolution still succeeds (no error).
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("gesture");
+        step.fingers = vec![golem_parser::Finger {
+            points: vec![
+                golem_parser::SelectorGroup::default(),
+                golem_parser::SelectorGroup {
+                    x: Some(golem_parser::CoordValue::Pixels(5)),
+                    y: Some(golem_parser::CoordValue::Pixels(5)),
+                    ..Default::default()
+                },
+            ],
+        }];
+
+        handle_gesture(&step, &driver)
+            .await
+            .expect("gesture with center-fallback point SHALL succeed");
+
+        let calls = driver.get_calls();
+        let g_calls: Vec<_> = calls.iter().filter(|c| c.0 == "gesture").collect();
+        assert_eq!(g_calls.len(), 1);
+        // default duration is 300ms
+        assert_eq!(g_calls[0].1, vec!["2pts@300ms"]);
+    }
+
+    // ── 27. swipe with a 3+ point coordinate path uses a continuous gesture ──
+
+    #[tokio::test]
+    async fn swipe_with_three_points_uses_gesture_not_swipe_coords() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("swipe");
+        step.duration = Some(250);
+        step.start = Some(golem_parser::SelectorGroup {
+            x: Some(golem_parser::CoordValue::Pixels(10)),
+            y: Some(golem_parser::CoordValue::Pixels(10)),
+            ..Default::default()
+        });
+        step.points = vec![golem_parser::SelectorGroup {
+            x: Some(golem_parser::CoordValue::Pixels(100)),
+            y: Some(golem_parser::CoordValue::Pixels(100)),
+            ..Default::default()
+        }];
+        step.end = Some(golem_parser::SelectorGroup {
+            x: Some(golem_parser::CoordValue::Pixels(200)),
+            y: Some(golem_parser::CoordValue::Pixels(200)),
+            ..Default::default()
+        });
+
+        let ctx = test_ctx(Path::new("."));
+        handle_swipe(&step, &driver, &ctx)
+            .await
+            .expect("3-point swipe SHALL succeed");
+
+        let calls = driver.get_calls();
+        let swipe_calls: Vec<_> = calls.iter().filter(|c| c.0 == "swipe_coords").collect();
+        let g_calls: Vec<_> = calls.iter().filter(|c| c.0 == "gesture").collect();
+        assert!(
+            swipe_calls.is_empty(),
+            "3+ point swipe SHALL NOT use the 2-point swipe_coords path"
+        );
+        assert_eq!(g_calls.len(), 1, "3+ point swipe SHALL emit a continuous gesture");
+        assert_eq!(g_calls[0].1, vec!["3pts@250ms"]);
+    }
+
+    // ── 28. swipe with two coordinate points uses swipe_coords ────────
+
+    #[tokio::test]
+    async fn swipe_with_two_coord_points_uses_swipe_coords() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("swipe");
+        step.start = Some(golem_parser::SelectorGroup {
+            x: Some(golem_parser::CoordValue::Pixels(10)),
+            y: Some(golem_parser::CoordValue::Pixels(20)),
+            ..Default::default()
+        });
+        step.end = Some(golem_parser::SelectorGroup {
+            x: Some(golem_parser::CoordValue::Pixels(30)),
+            y: Some(golem_parser::CoordValue::Pixels(40)),
+            ..Default::default()
+        });
+
+        let ctx = test_ctx(Path::new("."));
+        handle_swipe(&step, &driver, &ctx)
+            .await
+            .expect("2-point swipe SHALL succeed");
+
+        let calls = driver.get_calls();
+        let swipe_calls: Vec<_> = calls.iter().filter(|c| c.0 == "swipe_coords").collect();
+        assert_eq!(swipe_calls.len(), 1);
+        assert_eq!(
+            swipe_calls[0].1,
+            vec!["10", "20", "30", "40"],
+            "the two explicit points SHALL be forwarded verbatim"
+        );
+    }
+
+    // ── 29. swipe with one point + direction computes the second point ──
+
+    #[tokio::test]
+    async fn swipe_with_one_point_plus_direction_computes_end() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("swipe");
+        step.start = Some(golem_parser::SelectorGroup {
+            x: Some(golem_parser::CoordValue::Pixels(100)),
+            y: Some(golem_parser::CoordValue::Pixels(400)),
+            ..Default::default()
+        });
+        step.params.insert(
+            "direction".to_string(),
+            toml::Value::String("up".to_string()),
+        );
+
+        let ctx = test_ctx(Path::new("."));
+        handle_swipe(&step, &driver, &ctx)
+            .await
+            .expect("one-point + direction swipe SHALL succeed");
+
+        let calls = driver.get_calls();
+        let swipe_calls: Vec<_> = calls.iter().filter(|c| c.0 == "swipe_coords").collect();
+        assert_eq!(swipe_calls.len(), 1);
+        // dist = vp.height * 2 / 5 = 812 * 2 / 5 = 324; up => y - dist
+        assert_eq!(
+            swipe_calls[0].1,
+            vec!["100", "400", "100", "76"],
+            "up direction SHALL move the end point upward by 2/5 of the viewport"
+        );
+    }
+
+    // ── 30. swipe with one point but no direction returns error ───────
+
+    #[tokio::test]
+    async fn swipe_with_one_point_no_direction_returns_error() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("swipe");
+        step.start = Some(golem_parser::SelectorGroup {
+            x: Some(golem_parser::CoordValue::Pixels(100)),
+            y: Some(golem_parser::CoordValue::Pixels(400)),
+            ..Default::default()
+        });
+
+        let ctx = test_ctx(Path::new("."));
+        let result = handle_swipe(&step, &driver, &ctx).await;
+        assert!(result.is_err(), "one point without direction SHALL error");
+        let err_msg = format!("{}", result.expect_err("should be error"));
+        assert!(
+            err_msg.contains("one point requires direction"),
+            "error SHALL mention the direction requirement, got: {err_msg}"
+        );
+    }
+
+    // ── 31. swipe with an element start point uses its center ─────────
+
+    #[tokio::test]
+    async fn swipe_from_element_uses_element_center() {
+        let root = root_with_button("Card");
+        let driver = MockPlatformDriver::new(root);
+
+        let mut step = make_step("swipe");
+        step.start = Some(golem_parser::SelectorGroup {
+            text: Some("Card".to_string()),
+            ..Default::default()
+        });
+        step.end = Some(golem_parser::SelectorGroup {
+            x: Some(golem_parser::CoordValue::Pixels(0)),
+            y: Some(golem_parser::CoordValue::Pixels(0)),
+            ..Default::default()
+        });
+
+        let ctx = test_ctx(Path::new("."));
+        handle_swipe(&step, &driver, &ctx)
+            .await
+            .expect("element-anchored swipe SHALL succeed");
+
+        let calls = driver.get_calls();
+        let swipe_calls: Vec<_> = calls.iter().filter(|c| c.0 == "swipe_coords").collect();
+        assert_eq!(swipe_calls.len(), 1);
+        // Button center = (150, 222); end = (0, 0)
+        assert_eq!(swipe_calls[0].1, vec!["150", "222", "0", "0"]);
+    }
+
+    // ── 32. nudge_into_view swipes up when container overflows the bottom ──
+
+    #[tokio::test]
+    async fn nudge_into_view_swipes_up_on_bottom_overflow() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        let vp = golem_element::Viewport::new(375, 812);
+        // Container starts well below the top and extends past the bottom.
+        let bounds = Bounds::new(0, 400, 375, 600);
+
+        nudge_into_view(&driver, &bounds, &vp).await;
+
+        let calls = driver.get_calls();
+        let swipe_calls: Vec<_> = calls.iter().filter(|c| c.0 == "swipe_coords").collect();
+        assert_eq!(
+            swipe_calls.len(),
+            1,
+            "bottom overflow SHALL trigger exactly one swipe to reveal more"
+        );
+        // Swipe is upward: from_y > to_y
+        let from_y: i32 = swipe_calls[0].1[1].parse().expect("from_y int");
+        let to_y: i32 = swipe_calls[0].1[3].parse().expect("to_y int");
+        assert!(from_y > to_y, "bottom overflow SHALL swipe upward (from_y > to_y)");
+    }
+
+    // ── 33. nudge_into_view does nothing for a fully-visible container ──
+
+    #[tokio::test]
+    async fn nudge_into_view_noop_when_fully_visible() {
+        let root = make_element("View", Bounds::new(0, 0, 375, 812));
+        let driver = MockPlatformDriver::new(root);
+        let vp = golem_element::Viewport::new(375, 812);
+        // Fully on-screen, small container — neither overflow branch fires.
+        let bounds = Bounds::new(20, 100, 300, 200);
+
+        nudge_into_view(&driver, &bounds, &vp).await;
+
+        let calls = driver.get_calls();
+        assert!(
+            calls.is_empty(),
+            "a fully-visible container SHALL trigger no driver calls, got: {calls:?}"
+        );
+    }
 }

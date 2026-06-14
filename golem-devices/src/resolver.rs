@@ -1525,4 +1525,279 @@ mod tests {
         let result = resolve_devices(&constraints, &available, &ResolveOptions::default());
         assert!(result.is_err());
     }
+
+    // 33. In expand=Full mode, a device selected by an earlier constraint gets
+    //     credit for a later constraint's combo (the `already_covered` branch),
+    //     so it is not selected a second time.
+    #[test]
+    fn full_mode_earlier_device_credits_later_constraint() {
+        let available = vec![make_device(
+            "iPhone 16",
+            "uid-1",
+            Platform::Ios,
+            DeviceType::Phone,
+            18,
+        )];
+        // First constraint pulls in the iPhone 16. The second (Full) constraint
+        // asks for the same (ios:18, phone) combo — already covered.
+        let constraints = vec![
+            DeviceConstraint {
+                name: Some("iPhone 16".to_string()),
+                os_versions: vec![],
+                device_types: vec![],
+                expand: ExpandMode::Full,
+            },
+            DeviceConstraint {
+                name: None,
+                os_versions: vec!["ios:18".to_string()],
+                device_types: vec![DeviceType::Phone],
+                expand: ExpandMode::Full,
+            },
+        ];
+
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
+        assert_eq!(
+            result.len(),
+            1,
+            "an earlier-selected device SHALL credit a later Full combo"
+        );
+        assert_eq!(result[0].device.name, "iPhone 16");
+    }
+
+    // 34. expand=Full errors when no device matches and create_if_missing is off.
+    #[test]
+    fn full_mode_no_match_errors() {
+        let available = vec![make_device(
+            "iPhone 16",
+            "uid-1",
+            Platform::Ios,
+            DeviceType::Phone,
+            18,
+        )];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["android:34".to_string()],
+            device_types: vec![DeviceType::Tablet],
+            expand: ExpandMode::Full,
+        }];
+
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default());
+        assert!(result.is_err());
+    }
+
+    // 35. expand=Full with ignore_missing_physical skips a combo when the pool
+    //     holds only physical devices that don't match (the requires_physical
+    //     skip branch in resolve_full).
+    #[test]
+    fn full_mode_ignore_missing_physical_skips() {
+        let available = vec![make_physical_device(
+            "Pixel 8",
+            "uid-1",
+            Platform::Android,
+            DeviceType::Phone,
+            33,
+            DeviceState::Connected,
+        )];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["android:34".to_string()],
+            device_types: vec![],
+            expand: ExpandMode::Full,
+        }];
+        let opts = ResolveOptions {
+            create_if_missing: false,
+            ignore_missing_physical: true,
+        };
+
+        let result = resolve_devices(&constraints, &available, &opts).expect("should resolve");
+        assert!(
+            result.is_empty(),
+            "unmatched physical combo SHALL be skipped silently in Full mode"
+        );
+    }
+
+    // 36. expand=Full with create_if_missing on a type-only combo synthesizes a
+    //     device with that type and the default iOS platform (os_opt is None).
+    #[test]
+    fn full_mode_create_if_missing_type_only_synthetic() {
+        let available: Vec<DeviceInfo> = vec![];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec![],
+            device_types: vec![DeviceType::Tablet],
+            expand: ExpandMode::Full,
+        }];
+        let opts = ResolveOptions {
+            create_if_missing: true,
+            ignore_missing_physical: false,
+        };
+
+        let result = resolve_devices(&constraints, &available, &opts).expect("should resolve");
+        assert_eq!(result.len(), 1);
+        assert!(result[0].created);
+        assert_eq!(result[0].device.state, DeviceState::NeedsCreation);
+        assert_eq!(result[0].device.device_type, DeviceType::Tablet);
+        assert_eq!(
+            result[0].device.platform,
+            Platform::Ios,
+            "type-only synthetic SHALL default to the iOS platform"
+        );
+    }
+
+    // 37. min_coverage with create_if_missing on a type-only requirement
+    //     synthesizes via make_synthetic_for_requirement's DeviceType branch.
+    #[test]
+    fn min_coverage_create_if_missing_type_requirement_synthetic() {
+        let available: Vec<DeviceInfo> = vec![];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec![],
+            device_types: vec![DeviceType::Tablet],
+            expand: ExpandMode::MinCoverage,
+        }];
+        let opts = ResolveOptions {
+            create_if_missing: true,
+            ignore_missing_physical: false,
+        };
+
+        let result = resolve_devices(&constraints, &available, &opts).expect("should resolve");
+        assert_eq!(result.len(), 1);
+        assert!(result[0].created);
+        assert_eq!(result[0].device.device_type, DeviceType::Tablet);
+        assert_eq!(result[0].device.state, DeviceState::NeedsCreation);
+    }
+
+    // 38. min_coverage with create_if_missing synthesizes one device per
+    //     uncovered OS requirement when nothing is available.
+    #[test]
+    fn min_coverage_create_if_missing_multiple_os_synthetics() {
+        let available: Vec<DeviceInfo> = vec![];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["ios:17".to_string(), "ios:18".to_string()],
+            device_types: vec![],
+            expand: ExpandMode::MinCoverage,
+        }];
+        let opts = ResolveOptions {
+            create_if_missing: true,
+            ignore_missing_physical: false,
+        };
+
+        let result = resolve_devices(&constraints, &available, &opts).expect("should resolve");
+        assert_eq!(result.len(), 2);
+        assert!(result.iter().all(|r| r.created));
+        let majors: HashSet<u32> = result.iter().map(|r| r.device.os_major).collect();
+        assert!(majors.contains(&17));
+        assert!(majors.contains(&18));
+    }
+
+    // 39. min_coverage with ignore_missing_physical breaks when the only
+    //     remaining requirement can't be satisfied by any virtual device
+    //     (uncovered_reqs_are_physical_only is true), leaving a partial result.
+    #[test]
+    fn min_coverage_ignore_missing_physical_partial_result() {
+        // A virtual iOS phone covers ios:18; the android:34 requirement has no
+        // virtual candidate, so it is treated as physical-only and skipped.
+        let available = vec![make_device(
+            "iPhone 16",
+            "uid-1",
+            Platform::Ios,
+            DeviceType::Phone,
+            18,
+        )];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["ios:18".to_string(), "android:34".to_string()],
+            device_types: vec![],
+            expand: ExpandMode::MinCoverage,
+        }];
+        let opts = ResolveOptions {
+            create_if_missing: false,
+            ignore_missing_physical: true,
+        };
+
+        let result = resolve_devices(&constraints, &available, &opts).expect("should resolve");
+        assert_eq!(
+            result.len(),
+            1,
+            "only the satisfiable requirement SHALL resolve; the physical-only one is skipped"
+        );
+        assert_eq!(result[0].device.os_major, 18);
+    }
+
+    // 40. expand=Full with `:latest` pins to the highest available major before
+    //     building the cartesian product.
+    #[test]
+    fn full_mode_latest_pins_highest_major() {
+        let available = vec![
+            make_device("iPhone 18", "uid-1", Platform::Ios, DeviceType::Phone, 18),
+            make_device("iPhone 26", "uid-2", Platform::Ios, DeviceType::Phone, 26),
+        ];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["ios:latest".to_string()],
+            device_types: vec![DeviceType::Phone],
+            expand: ExpandMode::Full,
+        }];
+
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result[0].device.os_major, 26,
+            "Full + `:latest` SHALL pin the highest available major"
+        );
+    }
+
+    // 41. An unparseable OS spec satisfies no device — a constraint built on it
+    //     resolves to nothing matchable and errors.
+    #[test]
+    fn unparseable_os_spec_matches_nothing() {
+        let available = vec![make_device(
+            "iPhone 16",
+            "uid-1",
+            Platform::Ios,
+            DeviceType::Phone,
+            18,
+        )];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["garbage-no-colon".to_string()],
+            device_types: vec![],
+            expand: ExpandMode::MinCoverage,
+        }];
+
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default());
+        assert!(
+            result.is_err(),
+            "an unparseable OS spec SHALL satisfy no device and error"
+        );
+    }
+
+    // 42. A spec whose platform differs from the device's platform does not
+    //     match (the spec_platform != device.platform guard in device_satisfies).
+    #[test]
+    fn os_spec_platform_mismatch_does_not_match() {
+        // Device is Android API 18; spec asks for iOS 18. Same major, wrong platform.
+        let available = vec![make_device(
+            "Pixel",
+            "uid-1",
+            Platform::Android,
+            DeviceType::Phone,
+            18,
+        )];
+        let constraints = vec![DeviceConstraint {
+            name: None,
+            os_versions: vec!["ios:18".to_string()],
+            device_types: vec![],
+            expand: ExpandMode::MinCoverage,
+        }];
+
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default());
+        assert!(
+            result.is_err(),
+            "a same-major different-platform device SHALL NOT satisfy the spec"
+        );
+    }
 }

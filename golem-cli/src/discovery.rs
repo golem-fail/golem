@@ -437,4 +437,203 @@ mod tests {
         let flows = discover_flows(tmp.path(), &[]).expect("discover");
         assert!(flows.is_empty());
     }
+
+    // ---------------------------------------------------------------
+    // 15. Skip target directory
+    // ---------------------------------------------------------------
+    #[test]
+    fn skip_target_directory() {
+        let tmp = TempDir::new().expect("tempdir");
+        write_flow(tmp.path(), "real.test.toml", &flow_toml("real", &[]));
+        write_flow(
+            tmp.path(),
+            "target/built.test.toml",
+            &flow_toml("built", &[]),
+        );
+
+        let flows = discover_flows(tmp.path(), &[]).expect("discover");
+        assert_eq!(flows.len(), 1, "target dir SHALL be excluded from discovery");
+        assert_eq!(flows[0].name, "real");
+    }
+
+    // ---------------------------------------------------------------
+    // 16. Discovered flows are sorted by path for determinism
+    // ---------------------------------------------------------------
+    #[test]
+    fn flows_sorted_by_path() {
+        let tmp = TempDir::new().expect("tempdir");
+        write_flow(tmp.path(), "zebra.test.toml", &flow_toml("zebra", &[]));
+        write_flow(tmp.path(), "alpha.test.toml", &flow_toml("alpha", &[]));
+        write_flow(tmp.path(), "mid/beta.test.toml", &flow_toml("beta", &[]));
+
+        let flows = discover_flows(tmp.path(), &[]).expect("discover");
+        let paths: Vec<PathBuf> = flows.iter().map(|f| f.path.clone()).collect();
+        let mut sorted = paths.clone();
+        sorted.sort();
+        assert_eq!(paths, sorted, "flows SHALL be sorted by path");
+    }
+
+    // ---------------------------------------------------------------
+    // 17. Discovery preserves flow tags from parsed file
+    // ---------------------------------------------------------------
+    #[test]
+    fn discovery_preserves_tags() {
+        let tmp = TempDir::new().expect("tempdir");
+        write_flow(
+            tmp.path(),
+            "tagged.test.toml",
+            &flow_toml("tagged", &["smoke", "auth"]),
+        );
+
+        let flows = discover_flows(tmp.path(), &[]).expect("discover");
+        assert_eq!(flows.len(), 1);
+        assert_eq!(
+            flows[0].tags,
+            vec!["smoke".to_string(), "auth".to_string()],
+            "discovered flow SHALL carry parsed tags"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 18. Non-existent root directory yields an error
+    // ---------------------------------------------------------------
+    #[test]
+    fn nonexistent_root_errors() {
+        let tmp = TempDir::new().expect("tempdir");
+        let missing = tmp.path().join("does_not_exist");
+
+        let result = discover_flows(&missing, &[]);
+        assert!(result.is_err(), "missing root SHALL produce an error");
+        let msg = format!("{:#}", result.err().expect("error present"));
+        assert!(
+            msg.contains("failed to read directory"),
+            "error SHALL carry read-directory context, got: {msg}"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 19. Malformed flow TOML yields a parse error with path context
+    // ---------------------------------------------------------------
+    #[test]
+    fn malformed_flow_file_errors() {
+        let tmp = TempDir::new().expect("tempdir");
+        // Missing required [flow].name field.
+        write_flow(tmp.path(), "bad.test.toml", "[flow]\n");
+
+        let result = discover_flows(tmp.path(), &[]);
+        assert!(result.is_err(), "unparseable flow SHALL produce an error");
+        let msg = format!("{:#}", result.err().expect("error present"));
+        assert!(
+            msg.contains("failed to parse flow") && msg.contains("bad.test.toml"),
+            "error SHALL carry the offending file path context, got: {msg}"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 20. Syntactically invalid TOML yields an error
+    // ---------------------------------------------------------------
+    #[test]
+    fn invalid_toml_syntax_errors() {
+        let tmp = TempDir::new().expect("tempdir");
+        write_flow(tmp.path(), "broken.test.toml", "this is not = = toml");
+
+        let result = discover_flows(tmp.path(), &[]);
+        assert!(result.is_err(), "invalid TOML SHALL produce an error");
+        let msg = format!("{:#}", result.err().expect("error present"));
+        // 1. Syntactic-TOML failures take the same parse branch and SHALL be
+        //    wrapped with both the parse context and the offending file path.
+        assert!(
+            msg.contains("failed to parse flow") && msg.contains("broken.test.toml"),
+            "syntax-error SHALL carry parse + file-path context, got: {msg}"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 21. TagFilter::parse trims whitespace around alternatives
+    // ---------------------------------------------------------------
+    #[test]
+    fn tag_filter_parse_trims_whitespace() {
+        let filter = TagFilter::parse("  smoke  |  regression ");
+        assert_eq!(
+            filter.alternatives,
+            vec!["smoke".to_string(), "regression".to_string()],
+            "parse SHALL trim whitespace around each alternative"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 22. TagFilter::parse drops empty alternatives
+    // ---------------------------------------------------------------
+    #[test]
+    fn tag_filter_parse_drops_empty_alternatives() {
+        let filter = TagFilter::parse("smoke||  |regression");
+        assert_eq!(
+            filter.alternatives,
+            vec!["smoke".to_string(), "regression".to_string()],
+            "parse SHALL drop empty/whitespace-only alternatives"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 23. TagFilter::parse on empty/blank string yields no alternatives
+    // ---------------------------------------------------------------
+    #[test]
+    fn tag_filter_parse_empty_string() {
+        assert!(
+            TagFilter::parse("").alternatives.is_empty(),
+            "empty string SHALL parse to no alternatives"
+        );
+        assert!(
+            TagFilter::parse("   ").alternatives.is_empty(),
+            "blank string SHALL parse to no alternatives"
+        );
+        assert!(
+            TagFilter::parse("|").alternatives.is_empty(),
+            "lone pipe SHALL parse to no alternatives"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 24. TagFilter::matches with empty alternatives never matches
+    // ---------------------------------------------------------------
+    #[test]
+    fn tag_filter_empty_never_matches() {
+        let filter = TagFilter::parse("");
+        assert!(
+            !filter.matches(&["smoke".to_string()]),
+            "empty filter SHALL NOT match any tags"
+        );
+        assert!(
+            !filter.matches(&[]),
+            "empty filter SHALL NOT match empty tags"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 25. TagFilter::matches against empty flow tags
+    // ---------------------------------------------------------------
+    #[test]
+    fn tag_filter_matches_empty_flow_tags() {
+        let filter = TagFilter::parse("smoke");
+        assert!(
+            !filter.matches(&[]),
+            "non-empty filter SHALL NOT match a flow with no tags"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 26. TagFilter::matches requires exact tag (no substring/prefix)
+    // ---------------------------------------------------------------
+    #[test]
+    fn tag_filter_requires_exact_match() {
+        let filter = TagFilter::parse("smoke");
+        assert!(
+            !filter.matches(&["smoketest".to_string()]),
+            "filter SHALL match tags exactly, not by substring"
+        );
+        assert!(
+            filter.matches(&["smoke".to_string()]),
+            "filter SHALL match an exact tag"
+        );
+    }
 }

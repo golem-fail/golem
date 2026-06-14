@@ -745,4 +745,183 @@ mod tests {
             .expect("should not error");
         assert_eq!(result, Some("empty_screen".to_string()));
     }
+
+    // ---------------------------------------------------------------
+    // 32. if_visible takes precedence over if_var on the same condition.
+    //     The screen check runs first and returns, so if_var/equals are
+    //     never consulted even though they would match.
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn if_visible_short_circuits_before_if_var() {
+        // Screen does NOT contain the target text, so if_visible -> false
+        // and the condition is skipped, despite the var equals matching.
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["Get Started"]));
+        let vars = make_vars(&[("variant", "premium")]);
+        let conditions = vec![BranchCondition {
+            if_visible: Some("Try Premium Free".to_string()),
+            if_not_visible: None,
+            if_var: Some("variant".to_string()),
+            equals: Some("premium".to_string()),
+            matches: None,
+            gte: None,
+            goto: "target".to_string(),
+        }];
+
+        let result = evaluate_branch(&conditions, &driver, &vars)
+            .await
+            .expect("should not error");
+        assert_eq!(
+            result, None,
+            "if_visible SHALL be evaluated before if_var and short-circuit it"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 33. if_not_visible takes precedence over if_var on the same
+    //     condition. The screen check returns first; if_var is ignored.
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn if_not_visible_short_circuits_before_if_var() {
+        // Screen contains the text, so if_not_visible -> false and the
+        // condition is skipped, despite the var equals matching.
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["Try Premium Free"]));
+        let vars = make_vars(&[("variant", "free")]);
+        let conditions = vec![BranchCondition {
+            if_visible: None,
+            if_not_visible: Some("Try Premium Free".to_string()),
+            if_var: Some("variant".to_string()),
+            equals: Some("free".to_string()),
+            matches: None,
+            gte: None,
+            goto: "target".to_string(),
+        }];
+
+        let result = evaluate_branch(&conditions, &driver, &vars)
+            .await
+            .expect("should not error");
+        assert_eq!(
+            result, None,
+            "if_not_visible SHALL be evaluated before if_var and short-circuit it"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 34. With equals + matches + gte all set on one if_var condition,
+    //     equals is checked first and its result is returned — matches
+    //     and gte are never consulted.
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn equals_takes_precedence_over_matches_and_gte() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let vars = make_vars(&[("variant", "free")]);
+        // equals="premium" fails. matches="*" and gte would otherwise
+        // affect the result, but equals returns first.
+        let conditions = vec![BranchCondition {
+            if_visible: None,
+            if_not_visible: None,
+            if_var: Some("variant".to_string()),
+            equals: Some("premium".to_string()),
+            matches: Some("*".to_string()),
+            gte: Some(0),
+            goto: "target".to_string(),
+        }];
+
+        let result = evaluate_branch(&conditions, &driver, &vars)
+            .await
+            .expect("should not error");
+        assert_eq!(
+            result, None,
+            "equals SHALL be evaluated before matches/gte and short-circuit them"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 35. With matches + gte set (no equals), matches is checked first
+    //     and its result is returned — gte is never consulted.
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn matches_takes_precedence_over_gte() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        // 1. Value "5" is chosen so the two operators disagree: matches="JP*"
+        //    fails on "5", but gte=0 WOULD match because 5 >= 0. Only the
+        //    short-circuit (matches checked first, returns its false) explains
+        //    a None result; if gte were consulted the goto would be returned.
+        let vars = make_vars(&[("variant", "5")]);
+        let conditions = vec![BranchCondition {
+            if_visible: None,
+            if_not_visible: None,
+            if_var: Some("variant".to_string()),
+            equals: None,
+            matches: Some("JP*".to_string()),
+            gte: Some(0),
+            goto: "target".to_string(),
+        }];
+
+        let result = evaluate_branch(&conditions, &driver, &vars)
+            .await
+            .expect("should not error");
+        assert_eq!(
+            result, None,
+            "matches SHALL be evaluated before gte and short-circuit it"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 36. if_var equals matches an empty-string value against an
+    //     empty-string expected value.
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn if_var_equals_empty_string_matches() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let vars = make_vars(&[("note", "")]);
+        let conditions = vec![cond_if_var_equals("note", "", "blank_flow")];
+
+        let result = evaluate_branch(&conditions, &driver, &vars)
+            .await
+            .expect("should not error");
+        assert_eq!(
+            result,
+            Some("blank_flow".to_string()),
+            "empty stored value SHALL equal empty expected value"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 37. if_var gte at exact boundary (value == threshold) matches.
+    //     Confirms the comparison is >= and not strictly >.
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn if_var_gte_at_exact_boundary_matches() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let vars = make_vars(&[("count", "0")]);
+        let conditions = vec![cond_if_var_gte("count", 0, "boundary")];
+
+        let result = evaluate_branch(&conditions, &driver, &vars)
+            .await
+            .expect("should not error");
+        assert_eq!(
+            result,
+            Some("boundary".to_string()),
+            "value equal to threshold SHALL satisfy gte"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 38. if_var gte one below a negative threshold does not match,
+    //     confirming signed comparison.
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn if_var_gte_below_negative_threshold_skips() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let vars = make_vars(&[("score", "-6")]);
+        let conditions = vec![cond_if_var_gte("score", -5, "above_min")];
+
+        let result = evaluate_branch(&conditions, &driver, &vars)
+            .await
+            .expect("should not error");
+        assert_eq!(
+            result, None,
+            "value below a negative threshold SHALL NOT satisfy gte"
+        );
+    }
 }

@@ -453,5 +453,110 @@ mod tests {
             "SHALL sort flakes first, then stable failures, then stable passes",
         );
     }
+
+    fn entry(flow: &str, passed: u32, failed: u32, skipped: u32, total: u32) -> FlakeEntry {
+        FlakeEntry { flow: flow.to_string(), passed, failed, skipped, total }
+    }
+
+    // render_flake_summary runs under nextest with a non-terminal stderr,
+    // so `use_color` is false and the assertions below target the plain
+    // (no-ANSI) branch deterministically.
+
+    // 1. Empty entries → header reports 0/0/0 across 0 runs and the
+    //    "all flows passed" line (no flakes, no stable fails).
+    #[test]
+    fn render_empty_entries_reports_all_passed() {
+        let out = render_flake_summary(&[]);
+        assert!(
+            out.contains("0 flakes, 0 fails, 0 stable across 0 runs"),
+            "empty input SHALL render a zeroed header, got: {out}",
+        );
+        assert!(
+            out.contains("all flows passed in every run"),
+            "no flakes + no stable fails SHALL emit the all-passed line, got: {out}",
+        );
+    }
+
+    // 2. All-stable-pass entries → all-passed line, total taken from the
+    //    first entry's `total`, never the count of ANSI codes.
+    #[test]
+    fn render_all_stable_pass_uses_first_entry_total() {
+        let entries = vec![entry("a (dev)", 3, 0, 0, 3), entry("b (dev)", 3, 0, 0, 3)];
+        let out = render_flake_summary(&entries);
+        assert!(
+            out.contains("0 flakes, 0 fails, 2 stable across 3 runs"),
+            "two stable passes over 3 runs SHALL be summarized, got: {out}",
+        );
+        assert!(
+            out.contains("all flows passed in every run"),
+            "all-stable-pass SHALL short-circuit to the all-passed line, got: {out}",
+        );
+        // The early-return path SHALL NOT list any per-flow PASS rows.
+        assert!(
+            !out.contains("PASS"),
+            "all-passed short-circuit SHALL omit per-flow rows, got: {out}",
+        );
+    }
+
+    // 3. Singular pluralization: exactly one flake and one stable fail →
+    //    "flake" and "fail" with no trailing 's'.
+    #[test]
+    fn render_header_singular_pluralization() {
+        let entries = vec![entry("flaky (dev)", 1, 2, 0, 3), entry("broken (dev)", 0, 3, 0, 3)];
+        let out = render_flake_summary(&entries);
+        assert!(
+            out.contains("1 flake, 1 fail, 0 stable across 3 runs"),
+            "single flake + single fail SHALL render singular nouns, got: {out}",
+        );
+    }
+
+    // 4. Plural pluralization: two flakes and two stable fails → "flakes"
+    //    and "fails" with trailing 's'.
+    #[test]
+    fn render_header_plural_pluralization() {
+        let entries = vec![
+            entry("f1 (dev)", 1, 2, 0, 3),
+            entry("f2 (dev)", 2, 1, 0, 3),
+            entry("x1 (dev)", 0, 3, 0, 3),
+            entry("x2 (dev)", 0, 3, 0, 3),
+        ];
+        let out = render_flake_summary(&entries);
+        assert!(
+            out.contains("2 flakes, 2 fails, 0 stable across 3 runs"),
+            "two flakes + two fails SHALL render plural nouns, got: {out}",
+        );
+    }
+
+    // 5. Per-entry labels: a flake row, a stable-fail row, and a stable-pass
+    //    row each get their distinct label and `passed/total  flow` body.
+    #[test]
+    fn render_rows_label_each_category() {
+        let entries = vec![
+            entry("flaky (dev)", 1, 2, 0, 3),
+            entry("broken (dev)", 0, 3, 0, 3),
+            entry("good (dev)", 3, 0, 0, 3),
+        ];
+        let out = render_flake_summary(&entries);
+        assert!(out.contains("FLAKE    1/3    flaky (dev)"), "flake row SHALL be labelled FLAKE with passed/total body, got: {out}");
+        assert!(out.contains("FAIL     0/3    broken (dev)"), "stable-fail row SHALL be labelled FAIL, got: {out}");
+        assert!(out.contains("PASS     3/3    good (dev)"), "stable-pass row SHALL be labelled PASS, got: {out}");
+        // Header counts the categories correctly: 1 flake, 1 fail, 1 stable.
+        assert!(out.contains("1 flake, 1 fail, 1 stable across 3 runs"), "header SHALL tally one of each category, got: {out}");
+    }
+
+    // 6. A skipped-only entry (passed=0, failed=0) is neither flake nor
+    //    stable-fail, so the header counts no flakes/fails, but because a
+    //    stable-pass also exists the per-flow rows still render (no early
+    //    return) — the skipped row is labelled PASS (the else branch).
+    #[test]
+    fn render_skipped_only_entry_takes_pass_label_branch() {
+        let entries = vec![entry("skip (dev)", 0, 0, 3, 3), entry("flaky (dev)", 1, 2, 0, 3)];
+        let out = render_flake_summary(&entries);
+        // total_runs comes from the FIRST entry.
+        assert!(out.contains("1 flake, 0 fails,"), "one flake, no stable fails SHALL be tallied, got: {out}");
+        // skip row: passed==0 && failed==0 → else branch → PASS label.
+        assert!(out.contains("PASS     0/3    skip (dev)"), "a fully-skipped entry SHALL fall to the PASS label branch, got: {out}");
+        assert!(out.contains("FLAKE    1/3    flaky (dev)"), "flake row SHALL render, got: {out}");
+    }
 }
 

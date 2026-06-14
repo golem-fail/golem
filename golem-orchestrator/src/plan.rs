@@ -2021,4 +2021,464 @@ mod tests {
         let _ = app;
         assert!(result.is_err(), "no reachable box SHALL error");
     }
+
+    // ── shape_label / describe_slot rendering ───────────────────────
+
+    fn empty_slot() -> DeviceSlot {
+        DeviceSlot {
+            platform: None,
+            os_version: None,
+            device_type: None,
+            physical: None,
+            name: None,
+            playstore: None,
+            accessibility_label: None,
+            booted: None,
+            apps: Vec::new(),
+        }
+    }
+
+    // 1. A fully-unset slot renders as the platform-agnostic marker only.
+    #[test]
+    fn shape_label_all_none_is_any_platform() {
+        let slot = empty_slot();
+        assert_eq!(shape_label(&slot), "any-platform",
+            "all-None slot SHALL render as just the any-platform marker");
+    }
+
+    // 2. Exact os version renders bare major; Minimum appends `+`.
+    #[test]
+    fn shape_label_exact_and_minimum_versions() {
+        let mut exact = empty_slot();
+        exact.platform = Some(Platform::Ios);
+        exact.os_version = Some(OsVersionSpec::Exact { platform: Platform::Ios, major: 18 });
+        assert_eq!(shape_label(&exact), "ios/v18",
+            "Exact version SHALL render as v<major>");
+
+        let mut min = empty_slot();
+        min.platform = Some(Platform::Android);
+        min.os_version = Some(OsVersionSpec::Minimum { platform: Platform::Android, major: 34 });
+        assert_eq!(shape_label(&min), "android/v34+",
+            "Minimum version SHALL render as v<major>+");
+    }
+
+    // 3. Latest renders `latest` for count<=1 and `latest:N` for count>1.
+    #[test]
+    fn shape_label_latest_count_variants() {
+        let mut one = empty_slot();
+        one.platform = Some(Platform::Ios);
+        one.os_version = Some(OsVersionSpec::Latest { platform: Platform::Ios, count: 1 });
+        assert_eq!(shape_label(&one), "ios/latest",
+            "Latest count=1 SHALL render as bare `latest`");
+
+        let mut two = empty_slot();
+        two.platform = Some(Platform::Ios);
+        two.os_version = Some(OsVersionSpec::Latest { platform: Platform::Ios, count: 2 });
+        assert_eq!(shape_label(&two), "ios/latest:2",
+            "Latest count>1 SHALL render as `latest:<count>`");
+    }
+
+    // 4. type, physical=false (sim), name, and booted=true segments all
+    //    render in order; physical=true renders `physical`.
+    #[test]
+    fn shape_label_full_segment_order() {
+        let mut slot = empty_slot();
+        slot.platform = Some(Platform::Ios);
+        slot.os_version = Some(OsVersionSpec::Exact { platform: Platform::Ios, major: 26 });
+        slot.device_type = Some(DeviceType::Tablet);
+        slot.physical = Some(false);
+        slot.name = Some("iPad".into());
+        slot.booted = Some(true);
+        assert_eq!(shape_label(&slot), "ios/v26/tablet/sim/name=iPad/booted",
+            "segments SHALL render platform/version/type/physical/name/booted in order");
+
+        let mut phys = empty_slot();
+        phys.platform = Some(Platform::Android);
+        phys.physical = Some(true);
+        assert_eq!(shape_label(&phys), "android/physical",
+            "physical=true SHALL render as `physical`");
+    }
+
+    // 5. booted=Some(false) is NOT rendered (only Some(true) shows).
+    #[test]
+    fn shape_label_booted_false_omitted() {
+        let mut slot = empty_slot();
+        slot.platform = Some(Platform::Ios);
+        slot.booted = Some(false);
+        assert_eq!(shape_label(&slot), "ios",
+            "booted=Some(false) SHALL NOT add a `booted` segment");
+    }
+
+    // 6. describe_slot appends an apps suffix; empty apps reads `no apps`.
+    #[test]
+    fn describe_slot_apps_suffix() {
+        let mut slot = empty_slot();
+        slot.platform = Some(Platform::Ios);
+        assert_eq!(describe_slot(&slot), "ios no apps",
+            "empty apps SHALL render `no apps`");
+
+        slot.apps = vec!["a".into(), "b".into()];
+        assert_eq!(describe_slot(&slot), "ios apps=[a,b]",
+            "apps SHALL render comma-joined inside apps=[...]");
+    }
+
+    // ── device_matches_slot per-axis ────────────────────────────────
+
+    // 7. A slot with all-None fields matches any device.
+    #[test]
+    fn device_matches_slot_all_none_matches_anything() {
+        let d = mk_device("iPhone", "u1", Platform::Ios, 26, DeviceType::Phone, true);
+        assert!(device_matches_slot(&d, &empty_slot()),
+            "all-None slot SHALL match every device");
+    }
+
+    // 8. Platform mismatch rejects.
+    #[test]
+    fn device_matches_slot_platform_mismatch() {
+        let d = mk_device("iPhone", "u1", Platform::Ios, 26, DeviceType::Phone, true);
+        let mut slot = empty_slot();
+        slot.platform = Some(Platform::Android);
+        assert!(!device_matches_slot(&d, &slot),
+            "platform mismatch SHALL reject");
+    }
+
+    // 9. Exact version requires equality; Minimum requires >=.
+    #[test]
+    fn device_matches_slot_version_exact_and_minimum() {
+        let d = mk_device("iPhone", "u1", Platform::Ios, 18, DeviceType::Phone, true);
+
+        let mut exact_ok = empty_slot();
+        exact_ok.os_version = Some(OsVersionSpec::Exact { platform: Platform::Ios, major: 18 });
+        assert!(device_matches_slot(&d, &exact_ok), "Exact equal major SHALL match");
+
+        let mut exact_no = empty_slot();
+        exact_no.os_version = Some(OsVersionSpec::Exact { platform: Platform::Ios, major: 26 });
+        assert!(!device_matches_slot(&d, &exact_no), "Exact unequal major SHALL reject");
+
+        let mut min_ok = empty_slot();
+        min_ok.os_version = Some(OsVersionSpec::Minimum { platform: Platform::Ios, major: 16 });
+        assert!(device_matches_slot(&d, &min_ok), "Minimum below device major SHALL match");
+
+        let mut min_no = empty_slot();
+        min_no.os_version = Some(OsVersionSpec::Minimum { platform: Platform::Ios, major: 26 });
+        assert!(!device_matches_slot(&d, &min_no), "Minimum above device major SHALL reject");
+    }
+
+    // 10. Latest version spec is permissive — matches any major.
+    #[test]
+    fn device_matches_slot_latest_is_permissive() {
+        let d = mk_device("iPhone", "u1", Platform::Ios, 18, DeviceType::Phone, true);
+        let mut slot = empty_slot();
+        slot.os_version = Some(OsVersionSpec::Latest { platform: Platform::Ios, count: 1 });
+        assert!(device_matches_slot(&d, &slot),
+            "Latest SHALL match any major (resolution happens upstream)");
+    }
+
+    // 11. device_type, name, and booted axes each reject on mismatch.
+    #[test]
+    fn device_matches_slot_type_name_booted_axes() {
+        let d = mk_device("iPhone", "u1", Platform::Ios, 26, DeviceType::Phone, true);
+
+        let mut wrong_type = empty_slot();
+        wrong_type.device_type = Some(DeviceType::Tablet);
+        assert!(!device_matches_slot(&d, &wrong_type), "device_type mismatch SHALL reject");
+
+        let mut wrong_name = empty_slot();
+        wrong_name.name = Some("iPad".into());
+        assert!(!device_matches_slot(&d, &wrong_name), "name mismatch SHALL reject");
+
+        let mut want_shutdown = empty_slot();
+        want_shutdown.booted = Some(false);
+        assert!(!device_matches_slot(&d, &want_shutdown),
+            "booted device against booted=Some(false) SHALL reject");
+
+        let mut want_booted = empty_slot();
+        want_booted.booted = Some(true);
+        assert!(device_matches_slot(&d, &want_booted),
+            "booted device against booted=Some(true) SHALL match");
+    }
+
+    // 12. playstore / accessibility_label on a slot are not on DeviceInfo,
+    //     so they NEVER reject — any device passes.
+    #[test]
+    fn device_matches_slot_ignores_playstore_and_a11y() {
+        let d = mk_device("iPhone", "u1", Platform::Ios, 26, DeviceType::Phone, true);
+        let mut slot = empty_slot();
+        slot.playstore = Some(true);
+        slot.accessibility_label = Some("label".into());
+        assert!(device_matches_slot(&d, &slot),
+            "playstore/accessibility_label SHALL not gate plan-time matching");
+    }
+
+    // ── compute_device_availability ─────────────────────────────────
+
+    // 13. Each unique slot shape yields one line with booted/shutdown/
+    //     physical counts; identical shapes are deduped to one line.
+    #[test]
+    fn compute_device_availability_counts_and_dedups() {
+        let mut slot = empty_slot();
+        slot.platform = Some(Platform::Ios);
+        let runs = vec![
+            FlowRun { flow_idx: 0, slots: vec![slot.clone()], coverage_group: None, covers_boxes: Vec::new(), repeat_index: 0 },
+            // Second run with identical slot shape — must dedup to one line.
+            FlowRun { flow_idx: 0, slots: vec![slot.clone()], coverage_group: None, covers_boxes: Vec::new(), repeat_index: 0 },
+        ];
+        let mut shutdown_ios = mk_device("iPhone-off", "u2", Platform::Ios, 18, DeviceType::Phone, false);
+        shutdown_ios.state = DeviceState::Shutdown;
+        let snap = vec![
+            mk_device("iPhone", "u1", Platform::Ios, 26, DeviceType::Phone, true),
+            shutdown_ios,
+            // Android device must NOT match an ios slot.
+            mk_device("Pixel", "u3", Platform::Android, 34, DeviceType::Phone, true),
+        ];
+        let lines = compute_device_availability(&runs, &snap);
+        assert_eq!(lines.len(), 1, "identical slot shapes SHALL dedup to one line");
+        let line = &lines[0];
+        assert!(line.contains("ios"), "line SHALL be labelled for the ios shape: {line}");
+        assert!(line.contains("2 device(s)"), "SHALL count 2 matching ios devices: {line}");
+        assert!(line.contains("1 booted"), "SHALL report 1 booted: {line}");
+        assert!(line.contains("1 shutdown"), "SHALL report 1 shutdown: {line}");
+    }
+
+    // 14. physical segment only appears when at least one physical device
+    //     matches; absent otherwise.
+    #[test]
+    fn compute_device_availability_omits_physical_when_none() {
+        let mut slot = empty_slot();
+        slot.platform = Some(Platform::Ios);
+        let runs = vec![FlowRun {
+            flow_idx: 0, slots: vec![slot], coverage_group: None,
+            covers_boxes: Vec::new(), repeat_index: 0,
+        }];
+        let snap = vec![mk_device("iPhone", "u1", Platform::Ios, 26, DeviceType::Phone, true)];
+        let lines = compute_device_availability(&runs, &snap);
+        assert_eq!(lines.len(), 1);
+        assert!(!lines[0].contains("physical"),
+            "no physical match SHALL omit the physical segment: {}", lines[0]);
+    }
+
+    // ── merge_project_apps ──────────────────────────────────────────
+
+    fn flow_with_app(app: AppConfig) -> FlowFile {
+        let mut flow = parse_flow("[flow]\nname = \"f\"\n")
+            .expect("base flow SHALL parse");
+        flow.flow.apps = vec![app];
+        flow
+    }
+
+    // 15. Flow values always win — a flow that already set bundle keeps it
+    //     even when the project entry differs.
+    #[test]
+    fn merge_project_apps_flow_value_wins() {
+        let mut app = mk_app_with_devices("a", vec![]);
+        app.bundle = Some("com.flow.win".into());
+        let mut flow = flow_with_app(app);
+        let projects = vec![project_app("a", "com.project.lose", Some("scripts/p.sh"))];
+        merge_project_apps(&mut flow, &projects);
+        assert_eq!(flow.flow.apps[0].bundle.as_deref(), Some("com.flow.win"),
+            "flow-set bundle SHALL win over project bundle");
+        // install_script was None on the flow → filled from project.
+        assert!(flow.flow.apps[0].install_script.is_some(),
+            "absent flow install_script SHALL be filled from project");
+    }
+
+    // 16. install_timeout_ms and devices gaps are filled from the project
+    //     entry when the flow leaves them empty.
+    #[test]
+    fn merge_project_apps_fills_timeout_and_devices() {
+        let mut app = mk_app_with_devices("a", vec![]);
+        app.bundle = None;
+        app.install_timeout_ms = None;
+        let mut flow = flow_with_app(app);
+        let mut proj = project_app("a", "com.a", None);
+        proj.install_timeout_ms = Some(9000);
+        proj.devices = vec![dc(Some(vec!["ios"]), None)];
+        merge_project_apps(&mut flow, &[proj]);
+        assert_eq!(flow.flow.apps[0].install_timeout_ms, Some(9000),
+            "absent flow install_timeout_ms SHALL be filled from project");
+        assert_eq!(flow.flow.apps[0].devices.len(), 1,
+            "empty flow devices SHALL be filled from project devices");
+    }
+
+    // 17. An app with no matching project entry is left untouched.
+    #[test]
+    fn merge_project_apps_no_matching_name_no_change() {
+        let app = mk_app_with_devices("orphan", vec![]);
+        let mut flow = flow_with_app(app);
+        let before = flow.flow.apps[0].bundle.clone();
+        merge_project_apps(&mut flow, &[project_app("other", "com.other", None)]);
+        assert_eq!(flow.flow.apps[0].bundle, before,
+            "an app with no project match SHALL be unchanged");
+    }
+
+    // ── union_requirements / slot_compatible_with ───────────────────
+
+    // 18. union takes the first Some(_) per axis across the inputs.
+    #[test]
+    fn union_requirements_takes_first_some_per_axis() {
+        let a = AppRequirement {
+            platform: None,
+            os_version: Some(OsVersionSpec::Exact { platform: Platform::Ios, major: 26 }),
+            device_type: None, physical: None, name: None, playstore: None,
+            accessibility_label: None, booted: None,
+        };
+        let b = AppRequirement {
+            platform: Some(Platform::Ios),
+            os_version: Some(OsVersionSpec::Exact { platform: Platform::Ios, major: 18 }),
+            device_type: Some(DeviceType::Tablet),
+            physical: Some(true), name: None, playstore: None,
+            accessibility_label: None, booted: None,
+        };
+        let u = union_requirements(&[&a, &b]);
+        // platform: a is None → take b's Some.
+        assert_eq!(u.platform, Some(Platform::Ios), "platform SHALL take first Some (b)");
+        // os_version: a's Some wins (first in iteration order).
+        assert!(matches!(u.os_version, Some(OsVersionSpec::Exact { major: 26, .. })),
+            "os_version SHALL keep the first Some (a's major 26)");
+        assert_eq!(u.device_type, Some(DeviceType::Tablet), "device_type SHALL take b's Some");
+        assert_eq!(u.physical, Some(true));
+    }
+
+    // 19. slot_compatible_with requires exact equality on every axis —
+    //     a single differing field rejects packing.
+    #[test]
+    fn slot_compatible_with_requires_exact_match() {
+        let mut slot = empty_slot();
+        slot.platform = Some(Platform::Ios);
+        slot.device_type = Some(DeviceType::Phone);
+        let req_match = AppRequirement {
+            platform: Some(Platform::Ios),
+            os_version: None,
+            device_type: Some(DeviceType::Phone),
+            physical: None, name: None, playstore: None,
+            accessibility_label: None, booted: None,
+        };
+        assert!(slot_compatible_with(&slot, &req_match),
+            "identical axes SHALL be compatible");
+        let mut req_diff = req_match.clone();
+        req_diff.device_type = Some(DeviceType::Tablet);
+        assert!(!slot_compatible_with(&slot, &req_diff),
+            "a single differing axis SHALL block packing");
+    }
+
+    // ── cover_and_union short-circuits ──────────────────────────────
+
+    // 20. Empty reqs → empty output, no uncovered claim.
+    #[test]
+    fn cover_and_union_empty_reqs_short_circuits() {
+        let snap = vec![mk_device("iPhone", "u1", Platform::Ios, 26, DeviceType::Phone, true)];
+        let (reduced, uncovered) = cover_and_union(&[], &snap);
+        assert!(reduced.is_empty(), "empty reqs SHALL yield no reduced reqs");
+        assert!(uncovered.is_empty(), "empty reqs SHALL claim nothing uncovered");
+    }
+
+    // 21. Empty snapshot → reqs passed through unchanged, nothing uncovered
+    //     (scheduler resolves at execute time).
+    #[test]
+    fn cover_and_union_empty_snapshot_passes_reqs_through() {
+        let reqs = vec![AppRequirement {
+            platform: Some(Platform::Ios),
+            os_version: Some(OsVersionSpec::Latest { platform: Platform::Ios, count: 1 }),
+            device_type: None, physical: None, name: None, playstore: None,
+            accessibility_label: None, booted: None,
+        }];
+        let (reduced, uncovered) = cover_and_union(&reqs, &[]);
+        assert_eq!(reduced.len(), 1, "empty snapshot SHALL pass reqs through unchanged");
+        assert!(uncovered.is_empty(),
+            "empty snapshot SHALL NOT claim uncovered boxes");
+    }
+
+    // ── expand_os_pairs ─────────────────────────────────────────────
+
+    // 22. No `os` field, no override → one pair per platform (any version).
+    #[test]
+    fn expand_os_pairs_no_os_defaults_to_both_platforms() {
+        let d = dc(None, None);
+        let pairs = expand_os_pairs(&d, &[], None, CoverageStrategy::Min)
+            .expect("no-os SHALL succeed");
+        assert_eq!(pairs.len(), 2, "no-os no-override SHALL emit a pair per platform");
+        let plats: std::collections::HashSet<_> = pairs.iter().map(|(p, _)| *p).collect();
+        assert!(plats.contains(&Platform::Ios) && plats.contains(&Platform::Android));
+        assert!(pairs.iter().all(|(_, v)| v.is_none()), "default SHALL pin no version");
+    }
+
+    // 23. No `os` field WITH platform override → single pair on that platform.
+    #[test]
+    fn expand_os_pairs_no_os_with_override() {
+        let d = dc(None, None);
+        let pairs = expand_os_pairs(&d, &[], Some(Platform::Android), CoverageStrategy::Min)
+            .expect("no-os override SHALL succeed");
+        assert_eq!(pairs, vec![(Platform::Android, None)],
+            "override SHALL collapse no-os default to the forced platform");
+    }
+
+    // 24. `os = "any"` expands to both platforms, any version.
+    #[test]
+    fn expand_os_pairs_any_expands_both_platforms() {
+        let d = dc(Some(vec!["any"]), None);
+        let pairs = expand_os_pairs(&d, &[], None, CoverageStrategy::Min)
+            .expect("`any` SHALL succeed");
+        assert_eq!(pairs.len(), 2, "`any` SHALL emit both platforms");
+        assert!(pairs.iter().all(|(_, v)| v.is_none()), "`any` SHALL pin no version");
+    }
+
+    // 25. Bare `os = "android"` → one Android pair with no version.
+    #[test]
+    fn expand_os_pairs_bare_platform_name() {
+        let d = dc(Some(vec!["android"]), None);
+        let pairs = expand_os_pairs(&d, &[], None, CoverageStrategy::Min)
+            .expect("bare platform SHALL succeed");
+        assert_eq!(pairs, vec![(Platform::Android, None)],
+            "bare `android` SHALL emit one Android pair, any version");
+    }
+
+    // 26. Unrecognised os constraint → error.
+    #[test]
+    fn expand_os_pairs_unrecognised_errors() {
+        let d = dc(Some(vec!["windows"]), None);
+        let result = expand_os_pairs(&d, &[], None, CoverageStrategy::Min);
+        assert!(result.is_err(), "unrecognised os SHALL error");
+        let msg = format!("{}", result.expect_err("expected error"));
+        assert!(msg.contains("windows"), "error SHALL include the offending value: {msg}");
+    }
+
+    // 27. `ios:latest` with no matching iOS device in snapshot → falls back
+    //     to an abstract Latest pair (scheduler retries at execute time).
+    #[test]
+    fn expand_os_pairs_latest_empty_snapshot_falls_back_to_abstract() {
+        let d = dc(Some(vec!["ios:latest"]), None);
+        let pairs = expand_os_pairs(&d, &[], None, CoverageStrategy::Min)
+            .expect("latest with empty snapshot SHALL succeed (abstract fallback)");
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].0, Platform::Ios);
+        assert!(matches!(pairs[0].1, Some(OsVersionSpec::Latest { .. })),
+            "no matching majors SHALL keep an abstract Latest spec for execute-time retry");
+    }
+
+    // ── default_any_booted_requirements ─────────────────────────────
+
+    // 28. Platform override filters the default booted boxes to the chosen
+    //     platform even when both are booted.
+    #[test]
+    fn default_any_booted_requirements_respects_override() {
+        let snap = vec![
+            mk_device("iPhone", "u1", Platform::Ios, 26, DeviceType::Phone, true),
+            mk_device("Pixel", "u2", Platform::Android, 34, DeviceType::Phone, true),
+        ];
+        let reqs = default_any_booted_requirements(&snap, Some(Platform::Android))
+            .expect("override with a booted match SHALL succeed");
+        assert_eq!(reqs.len(), 1, "override SHALL keep only the forced platform");
+        assert_eq!(reqs[0].platform, Some(Platform::Android));
+        assert_eq!(reqs[0].physical, Some(false),
+            "default booted box SHALL require a virtual device");
+    }
+
+    // 29. Override to a platform with no booted device → error.
+    #[test]
+    fn default_any_booted_requirements_override_no_match_errors() {
+        let snap = vec![mk_device("iPhone", "u1", Platform::Ios, 26, DeviceType::Phone, true)];
+        let result = default_any_booted_requirements(&snap, Some(Platform::Android));
+        assert!(result.is_err(),
+            "override to a platform with no booted device SHALL error");
+    }
 }

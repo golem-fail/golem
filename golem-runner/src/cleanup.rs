@@ -509,4 +509,273 @@ mod tests {
             "SHALL NOT call remove_port_forwards in per-flow cleanup, got: {calls:?}",
         );
     }
+
+    // 11. Steps run in a fixed order: dark mode, then location, then recording.
+    //     A reordering would change which device state is reset first; lock it.
+    #[tokio::test]
+    async fn auto_cleanup_runs_steps_in_order() {
+        let driver = FailableMockDriver::new();
+        let device = test_device();
+        let options = CleanupOptions { keep_devices: true };
+
+        let _ = auto_cleanup(&driver, &device, &options).await;
+
+        let calls = driver.get_calls();
+        assert_eq!(
+            calls,
+            vec![
+                "set_dark_mode:false".to_string(),
+                "set_location:0,0".to_string(),
+                "stop_recording".to_string(),
+            ],
+            "SHALL run dark mode, then location, then recording, got: {calls:?}"
+        );
+    }
+
+    // 12. A failing step does not short-circuit later steps — all three are
+    //     attempted even when the first fails (best-effort semantics).
+    #[tokio::test]
+    async fn auto_cleanup_continues_after_early_failure() {
+        let driver = FailableMockDriver {
+            fail_dark_mode: true,
+            ..FailableMockDriver::new()
+        };
+        let device = test_device();
+        let options = CleanupOptions { keep_devices: true };
+
+        let _ = auto_cleanup(&driver, &device, &options).await;
+
+        let calls = driver.get_calls();
+        assert!(
+            calls.contains(&"set_location:0,0".to_string())
+                && calls.contains(&"stop_recording".to_string()),
+            "SHALL still attempt location + recording after dark mode fails, got: {calls:?}"
+        );
+    }
+
+    /// A mock driver whose dark-mode/location/recording calls hang forever,
+    /// to exercise the per-step timeout arms. Other methods are unused here.
+    struct HangingMockDriver {
+        hang_dark_mode: bool,
+        hang_set_location: bool,
+        hang_stop_recording: bool,
+    }
+
+    #[async_trait]
+    impl PlatformDriver for HangingMockDriver {
+        async fn get_hierarchy(
+            &self,
+        ) -> anyhow::Result<(Element, golem_driver::common::HierarchyMeta)> {
+            Ok((
+                Element {
+                    element_type: "View".into(),
+                    text: None,
+                    accessibility_label: None,
+                    placeholder: None,
+                    enabled: true,
+                    checked: false,
+                    clickable: false,
+                    focused: false,
+                    bounds: Bounds::new(0, 0, 375, 812),
+                    visible_bounds: None,
+                    children: vec![],
+                },
+                golem_driver::common::HierarchyMeta::default(),
+            ))
+        }
+
+        async fn tap(&self, _x: i32, _y: i32) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn long_press(&self, _x: i32, _y: i32, _duration_ms: u64) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn type_text(&self, _text: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn backspace(&self, _count: u32) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn swipe_coords(
+            &self,
+            _from_x: i32,
+            _from_y: i32,
+            _to_x: i32,
+            _to_y: i32,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn screenshot(&self) -> anyhow::Result<ScreenshotResult> {
+            Ok(ScreenshotResult {
+                path: "mock.png".into(),
+                data: vec![],
+            })
+        }
+
+        async fn hide_keyboard(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn launch_app(&self, _bundle_id: &str) -> anyhow::Result<Option<String>> {
+            Ok(None)
+        }
+
+        async fn stop_app(&self, _bundle_id: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn clear_app_data(&self, _bundle_id: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn press_button(&self, _button: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn set_dark_mode(&self, _enabled: bool) -> anyhow::Result<()> {
+            if self.hang_dark_mode {
+                std::future::pending::<()>().await;
+            }
+            Ok(())
+        }
+
+        async fn set_location(&self, _lat: f64, _lon: f64) -> anyhow::Result<()> {
+            if self.hang_set_location {
+                std::future::pending::<()>().await;
+            }
+            Ok(())
+        }
+
+        async fn open_url(&self, _url: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn push_notification(
+            &self,
+            _title: &str,
+            _body: &str,
+            _payload: Option<&str>,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn add_media(&self, _path: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn grant_permission(
+            &self,
+            _bundle_id: &str,
+            _permission: &str,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn revoke_permission(
+            &self,
+            _bundle_id: &str,
+            _permission: &str,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn start_recording(&self, _name: &str) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn stop_recording(&self) -> anyhow::Result<String> {
+            if self.hang_stop_recording {
+                std::future::pending::<()>().await;
+            }
+            Ok("recording.mp4".into())
+        }
+
+        async fn pinch(&self, _x: i32, _y: i32, _scale: f64, _velocity: f64) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn gesture(&self, _fingers: Vec<golem_driver::GestureFinger>) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn remove_port_forwards(&self) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+
+    // 13. A hung dark-mode reset trips the per-step timeout and becomes a
+    //     "Timed out resetting dark mode" warning rather than blocking forever.
+    //     Paused time auto-advances past CLEANUP_STEP_TIMEOUT instantly.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn auto_cleanup_dark_mode_timeout_is_warning() {
+        let driver = HangingMockDriver {
+            hang_dark_mode: true,
+            hang_set_location: false,
+            hang_stop_recording: false,
+        };
+        let device = test_device();
+        let options = CleanupOptions { keep_devices: true };
+
+        let result = auto_cleanup(&driver, &device, &options).await;
+
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.contains("Timed out resetting dark mode")),
+            "SHALL collect a dark mode timeout warning, got: {:?}",
+            result.warnings
+        );
+    }
+
+    // 14. A hung location reset trips the per-step timeout warning.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn auto_cleanup_location_timeout_is_warning() {
+        let driver = HangingMockDriver {
+            hang_dark_mode: false,
+            hang_set_location: true,
+            hang_stop_recording: false,
+        };
+        let device = test_device();
+        let options = CleanupOptions { keep_devices: true };
+
+        let result = auto_cleanup(&driver, &device, &options).await;
+
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.contains("Timed out resetting location")),
+            "SHALL collect a location timeout warning, got: {:?}",
+            result.warnings
+        );
+    }
+
+    // 15. A hung stop_recording trips the per-step timeout warning.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn auto_cleanup_stop_recording_timeout_is_warning() {
+        let driver = HangingMockDriver {
+            hang_dark_mode: false,
+            hang_set_location: false,
+            hang_stop_recording: true,
+        };
+        let device = test_device();
+        let options = CleanupOptions { keep_devices: true };
+
+        let result = auto_cleanup(&driver, &device, &options).await;
+
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|w| w.contains("Timed out stopping recording")),
+            "SHALL collect a stop_recording timeout warning, got: {:?}",
+            result.warnings
+        );
+    }
 }

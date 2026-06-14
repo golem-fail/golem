@@ -111,3 +111,128 @@ pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
         inherited_record_default: false,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 1. take_launch_ms returns None when nothing was recorded (initial 0).
+    #[test]
+    fn take_launch_ms_none_when_unset() {
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let ctx = test_ctx(tmp.path());
+        assert_eq!(
+            ctx.take_launch_ms(),
+            None,
+            "unrecorded launch SHALL yield None"
+        );
+    }
+
+    // 2. set_launch_ms then take returns the stored value once.
+    #[test]
+    fn set_then_take_launch_ms_returns_value() {
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let ctx = test_ctx(tmp.path());
+        ctx.set_launch_ms(42);
+        assert_eq!(
+            ctx.take_launch_ms(),
+            Some(42),
+            "recorded launch SHALL be returned"
+        );
+    }
+
+    // 3. take_launch_ms resets to 0 — a second take yields None.
+    #[test]
+    fn take_launch_ms_resets_after_take() {
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let ctx = test_ctx(tmp.path());
+        ctx.set_launch_ms(7);
+        let _ = ctx.take_launch_ms();
+        assert_eq!(
+            ctx.take_launch_ms(),
+            None,
+            "second take SHALL yield None after reset"
+        );
+    }
+
+    // 4. set_launch_ms overwrites a previous unread value (last writer wins).
+    #[test]
+    fn set_launch_ms_overwrites_previous() {
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let ctx = test_ctx(tmp.path());
+        ctx.set_launch_ms(10);
+        ctx.set_launch_ms(20);
+        assert_eq!(
+            ctx.take_launch_ms(),
+            Some(20),
+            "latest set SHALL overwrite the prior value"
+        );
+    }
+
+    // 5. set_launch_ms(0) is treated as "no measurement" (boundary: 0 -> None).
+    #[test]
+    fn set_launch_ms_zero_is_none() {
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let ctx = test_ctx(tmp.path());
+        ctx.set_launch_ms(0);
+        assert_eq!(
+            ctx.take_launch_ms(),
+            None,
+            "zero launch ms SHALL be treated as no measurement"
+        );
+    }
+
+    // 6. take_tree_stats on a fresh context returns the default (no fetches).
+    #[test]
+    fn take_tree_stats_default_when_empty() {
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let ctx = test_ctx(tmp.path());
+        let stats = ctx.take_tree_stats();
+        assert_eq!(stats.fetches, 0, "fresh context SHALL have no fetches");
+        assert_eq!(stats.min_nodes, 0, "fresh context SHALL have zero min");
+        assert_eq!(stats.max_nodes, 0, "fresh context SHALL have zero max");
+    }
+
+    // 7. record_tree_fetch forwards each node_count through the mutex and
+    //    accumulates into one shared TreeStats (the part context.rs owns; the
+    //    min/max ordering algorithm itself is covered in golem-events).
+    #[test]
+    fn record_tree_fetch_accumulates_forwarded_counts() {
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let ctx = test_ctx(tmp.path());
+        // 7a. Three separate calls SHALL all land in the same locked accumulator.
+        ctx.record_tree_fetch(30);
+        ctx.record_tree_fetch(10);
+        ctx.record_tree_fetch(50);
+        let stats = ctx.take_tree_stats();
+        assert_eq!(
+            stats.fetches, 3,
+            "each record_tree_fetch call SHALL increment the shared count"
+        );
+        // 7b. The smallest and largest distinct values are only reachable if the
+        //     exact node_count was forwarded faithfully (not dropped/altered).
+        assert_eq!(
+            stats.min_nodes, 10,
+            "smallest node_count SHALL be forwarded intact to stats"
+        );
+        assert_eq!(
+            stats.max_nodes, 50,
+            "largest node_count SHALL be forwarded intact to stats"
+        );
+    }
+
+    // 8. take_tree_stats drains the accumulated stats (reset between steps).
+    #[test]
+    fn take_tree_stats_resets_accumulator() {
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let ctx = test_ctx(tmp.path());
+        ctx.record_tree_fetch(5);
+        let first = ctx.take_tree_stats();
+        assert_eq!(first.fetches, 1, "first take SHALL report the recorded fetch");
+        let second = ctx.take_tree_stats();
+        assert_eq!(
+            second.fetches, 0,
+            "stats SHALL be reset after take"
+        );
+    }
+}

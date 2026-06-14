@@ -1172,4 +1172,504 @@ mod tests {
         assert!(elem.enabled);
         assert!(elem.clickable);
     }
+
+    // ── 11. resolve_coord: pixel value with no element is absolute ───
+
+    #[test]
+    fn resolve_coord_pixels_absolute_without_element() {
+        let v = golem_parser::CoordValue::Pixels(150);
+        // No element: pixel SHALL be returned as an absolute screen coordinate.
+        assert_eq!(resolve_coord_public(&v, 400, None, None, None), 150);
+    }
+
+    // ── 12. resolve_coord: pixel value with element is offset from center ─
+
+    #[test]
+    fn resolve_coord_pixels_offset_from_element_center() {
+        let v = golem_parser::CoordValue::Pixels(10);
+        // With an element center at 200, +10px SHALL offset to 210.
+        assert_eq!(resolve_coord_public(&v, 400, Some(200), Some(80), Some(160)), 210);
+        // A negative pixel offset SHALL subtract from the center.
+        let neg = golem_parser::CoordValue::Pixels(-30);
+        assert_eq!(resolve_coord_public(&neg, 400, Some(200), Some(80), Some(160)), 170);
+    }
+
+    // ── 13. resolve_coord: percent of viewport without element ──────
+
+    #[test]
+    fn resolve_coord_percent_of_viewport() {
+        let v = golem_parser::CoordValue::Percent("50%".to_string());
+        // 50% of a 400px viewport SHALL be 200.
+        assert_eq!(resolve_coord_public(&v, 400, None, None, None), 200);
+        // 25% of 400 SHALL be 100.
+        let q = golem_parser::CoordValue::Percent("25%".to_string());
+        assert_eq!(resolve_coord_public(&q, 400, None, None, None), 100);
+    }
+
+    // ── 14. resolve_coord: percent of element dimensions from center ──
+
+    #[test]
+    fn resolve_coord_percent_of_element_dimensions() {
+        let v = golem_parser::CoordValue::Percent("50%".to_string());
+        // element center 200, size 80: 50% SHALL move +40 to the edge => 240.
+        assert_eq!(resolve_coord_public(&v, 400, Some(200), Some(80), Some(160)), 240);
+        // -50% SHALL move to the opposite edge => 160.
+        let neg = golem_parser::CoordValue::Percent("-50%".to_string());
+        assert_eq!(resolve_coord_public(&neg, 400, Some(200), Some(80), Some(160)), 160);
+        // 0% SHALL stay at the center.
+        let zero = golem_parser::CoordValue::Percent("0%".to_string());
+        assert_eq!(resolve_coord_public(&zero, 400, Some(200), Some(80), Some(160)), 200);
+    }
+
+    // ── 15. resolve_coord: percent falls back to viewport when only pos known ─
+
+    #[test]
+    fn resolve_coord_percent_element_pos_without_size_uses_viewport() {
+        let v = golem_parser::CoordValue::Percent("50%".to_string());
+        // element_pos set but element_size None => percent-of-element branch
+        // requires BOTH; SHALL fall back to percent-of-viewport => 200.
+        assert_eq!(resolve_coord_public(&v, 400, Some(200), None, None), 200);
+    }
+
+    // ── 16. resolve_coord: malformed percent string parses to 0% ─────
+
+    #[test]
+    fn resolve_coord_malformed_percent_defaults_to_zero() {
+        let v = golem_parser::CoordValue::Percent("abc%".to_string());
+        // Unparseable percent SHALL default to 0.0 => 0 of viewport.
+        assert_eq!(resolve_coord_public(&v, 400, None, None, None), 0);
+        // And 0% of an element SHALL stay at the center.
+        assert_eq!(resolve_coord_public(&v, 400, Some(200), Some(80), Some(160)), 200);
+    }
+
+    // ── 17. build_selector_from_group maps flat fields and traits ────
+
+    #[test]
+    fn build_selector_from_group_maps_fields() {
+        let g = golem_parser::SelectorGroup {
+            text: Some("Submit".to_string()),
+            accessibility_label: Some("btn".to_string()),
+            index: Some(3),
+            enabled: Some(true),
+            checked: Some(false),
+            clickable: Some(true),
+            below: Some(Anchor::Text("Header".to_string())),
+            above: None,
+            right_of: None,
+            left_of: None,
+            traits: vec!["button".to_string(), "square".to_string()],
+            x: None,
+            y: None,
+        };
+        let sel = build_selector_from_group(&g);
+        assert_eq!(sel.text.as_deref(), Some("Submit"));
+        assert_eq!(sel.accessibility_label.as_deref(), Some("btn"));
+        assert_eq!(sel.index, Some(3));
+        assert_eq!(sel.enabled, Some(true));
+        assert_eq!(sel.checked, Some(false));
+        assert_eq!(sel.clickable, Some(true));
+        assert!(matches!(&sel.below, Some(AnchorSelector::Text(s)) if s == "Header"));
+        assert_eq!(sel.traits, vec!["button".to_string(), "square".to_string()]);
+    }
+
+    // ── 18. build_selector_from_group handles a nested-selector anchor ─
+
+    #[test]
+    fn build_selector_from_group_nested_anchor() {
+        let inner = golem_parser::SelectorGroup {
+            text: Some("Theme:".to_string()),
+            enabled: Some(true),
+            ..Default::default()
+        };
+        let g = golem_parser::SelectorGroup {
+            text: Some("On".to_string()),
+            right_of: Some(Anchor::Selector(Box::new(inner))),
+            ..Default::default()
+        };
+        let sel = build_selector_from_group(&g);
+        // A nested-selector anchor SHALL convert to AnchorSelector::Full.
+        match &sel.right_of {
+            Some(AnchorSelector::Full(boxed)) => {
+                assert_eq!(boxed.text.as_deref(), Some("Theme:"));
+                assert_eq!(boxed.enabled, Some(true));
+            }
+            other => panic!("expected Full anchor, got {other:?}"),
+        }
+    }
+
+    // ── 19. build_selector: grouped `on` fields override flat `on_*` ──
+
+    #[test]
+    fn build_selector_grouped_overrides_flat() {
+        let mut step = make_step("tap");
+        step.on_text = Some("FlatText".to_string());
+        step.on_index = Some(1);
+        step.on = Some(golem_parser::SelectorGroup {
+            text: Some("GroupedText".to_string()),
+            index: Some(9),
+            ..Default::default()
+        });
+        let sel = build_selector(&step);
+        // Grouped fields SHALL take precedence over flat fields.
+        assert_eq!(sel.text.as_deref(), Some("GroupedText"));
+        assert_eq!(sel.index, Some(9));
+    }
+
+    // ── 20. build_selector: flat fields used when group field is None ─
+
+    #[test]
+    fn build_selector_falls_back_to_flat_when_group_field_absent() {
+        let mut step = make_step("tap");
+        step.on_text = Some("FlatText".to_string());
+        step.on_below = Some("FlatAnchor".to_string());
+        // Group present but without `text`/`below` — flat SHALL fill in.
+        step.on = Some(golem_parser::SelectorGroup {
+            accessibility_label: Some("grouped-id".to_string()),
+            ..Default::default()
+        });
+        let sel = build_selector(&step);
+        assert_eq!(sel.text.as_deref(), Some("FlatText"));
+        assert_eq!(sel.accessibility_label.as_deref(), Some("grouped-id"));
+        assert!(matches!(&sel.below, Some(AnchorSelector::Text(s)) if s == "FlatAnchor"));
+    }
+
+    // ── 21. build_selector: no group means empty traits ─────────────
+
+    #[test]
+    fn build_selector_no_group_has_empty_traits() {
+        let mut step = make_step("tap");
+        step.on_text = Some("X".to_string());
+        let sel = build_selector(&step);
+        // Without a group, traits SHALL default to empty.
+        assert!(sel.traits.is_empty());
+    }
+
+    // ── 22. resolve_element: coordinate-only selector returns a point ─
+
+    #[tokio::test]
+    async fn resolve_element_coordinate_only_selector() {
+        let root = make_element("View", Bounds::new(0, 0, 400, 800));
+        let driver = MockPlatformDriver::new(root);
+        let mut step = make_step("tap");
+        // Pure coordinate selector — no text/id/relational, just x/y.
+        step.on = Some(golem_parser::SelectorGroup {
+            x: Some(golem_parser::CoordValue::Pixels(150)),
+            y: Some(golem_parser::CoordValue::Pixels(300)),
+            ..Default::default()
+        });
+        let (elem, (x, y)) = resolve_element(&step, &driver, None)
+            .await
+            .expect("coordinate selector SHALL resolve without an element");
+        assert_eq!(elem.element_type, "point");
+        // Standalone pixels SHALL be absolute coordinates.
+        assert_eq!((x, y), (150, 300));
+    }
+
+    // ── 23. resolve_element: percent coordinate-only is viewport-relative ─
+
+    #[tokio::test]
+    async fn resolve_element_coordinate_only_percent() {
+        let root = make_element("View", Bounds::new(0, 0, 400, 800));
+        let driver = MockPlatformDriver::new(root);
+        let mut step = make_step("tap");
+        step.on = Some(golem_parser::SelectorGroup {
+            x: Some(golem_parser::CoordValue::Percent("50%".to_string())),
+            y: Some(golem_parser::CoordValue::Percent("25%".to_string())),
+            ..Default::default()
+        });
+        let (_elem, (x, y)) = resolve_element(&step, &driver, None)
+            .await
+            .expect("percent coordinate selector SHALL resolve");
+        // 50% of 400 width, 25% of 800 height.
+        assert_eq!((x, y), (200, 200));
+    }
+
+    // ── 24. resolve_element: x-only adjustment keeps base y on a found element ─
+
+    #[tokio::test]
+    async fn resolve_element_x_adjustment_offsets_from_element_center() {
+        let mut root = make_element("View", Bounds::new(0, 0, 400, 800));
+        // Button center is (50, 30); width 80.
+        root.children.push(make_element_with_text(
+            "Button",
+            "Tap",
+            Bounds::new(10, 10, 80, 40),
+        ));
+        let driver = MockPlatformDriver::new(root);
+        let mut step = make_step("tap");
+        // Group carries both a text selector and an x offset.
+        step.on = Some(golem_parser::SelectorGroup {
+            text: Some("Tap".to_string()),
+            x: Some(golem_parser::CoordValue::Percent("50%".to_string())),
+            ..Default::default()
+        });
+        let (_elem, (x, y)) = resolve_element(&step, &driver, None)
+            .await
+            .expect("should resolve with x adjustment");
+        // x = center 50 + 50% of width 80 (=40) => 90.
+        assert_eq!(x, 90);
+        // y has no adjustment => safe-tap center y = 30.
+        assert_eq!(y, 30);
+    }
+
+    // ── 25. poll_for_absence returns Ok immediately when element is gone ─
+
+    #[tokio::test]
+    async fn poll_for_absence_ok_when_absent() {
+        let root = make_element("View", Bounds::new(0, 0, 400, 800));
+        let driver = MockPlatformDriver::new(root);
+        let mut step = make_step("assert_not_visible");
+        step.on_text = Some("Missing".to_string());
+        step.timeout = Some(50);
+        poll_for_absence(&step, &driver)
+            .await
+            .expect("absent element SHALL resolve to Ok");
+    }
+
+    // ── 26. poll_for_absence errors when element stays present ───────
+
+    #[tokio::test]
+    async fn poll_for_absence_errors_when_present() {
+        let mut root = make_element("View", Bounds::new(0, 0, 400, 800));
+        root.children.push(make_element_with_text(
+            "Label",
+            "StillHere",
+            Bounds::new(0, 0, 100, 30),
+        ));
+        let driver = MockPlatformDriver::new(root);
+        let mut step = make_step("assert_not_visible");
+        step.on_text = Some("StillHere".to_string());
+        step.timeout = Some(50);
+        let result = poll_for_absence(&step, &driver).await;
+        let err = result.expect_err("present element SHALL error");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("Expected no element"),
+            "error SHALL mention unexpected presence, got: {msg}"
+        );
+    }
+
+    // ── 27. poll_for_absence finds element off-screen too (full tree) ─
+
+    #[tokio::test]
+    async fn poll_for_absence_searches_full_tree_offscreen() {
+        let mut root = make_element("View", Bounds::new(0, 0, 400, 800));
+        // Element far off-screen (y = 5000) — viewport filter would hide it,
+        // but poll_for_absence searches the full tree, so it counts present.
+        root.children.push(make_element_with_text(
+            "Label",
+            "OffScreen",
+            Bounds::new(0, 5000, 100, 30),
+        ));
+        let driver = MockPlatformDriver::new(root);
+        let mut step = make_step("assert_not_visible");
+        step.on_text = Some("OffScreen".to_string());
+        step.timeout = Some(50);
+        let result = poll_for_absence(&step, &driver).await;
+        assert!(
+            result.is_err(),
+            "off-screen element SHALL count as present in full-tree absence poll"
+        );
+    }
+
+    // ── 28. resolve_element_full_tree finds an off-screen element ────
+
+    #[tokio::test]
+    async fn resolve_element_full_tree_finds_offscreen() {
+        let mut root = make_element("View", Bounds::new(0, 0, 400, 800));
+        // Off-screen element that resolve_element (viewport-filtered) would miss.
+        root.children.push(make_element_with_text(
+            "Button",
+            "Hidden",
+            Bounds::new(10, 9000, 80, 40),
+        ));
+        let driver = MockPlatformDriver::new(root);
+        let mut step = make_step("scroll");
+        step.on_text = Some("Hidden".to_string());
+        let (elem, (tap_x, tap_y)) = resolve_element_full_tree(&step, &driver)
+            .await
+            .expect("full-tree resolve SHALL find off-screen element");
+        assert_eq!(elem.text.as_deref(), Some("Hidden"));
+        // tap point is the element center: (10+40, 9000+20).
+        assert_eq!((tap_x, tap_y), (50, 9020));
+    }
+
+    // ── 29. resolve_element_full_tree errors when nothing matches ────
+
+    #[tokio::test]
+    async fn resolve_element_full_tree_no_match_errors() {
+        let root = make_element("View", Bounds::new(0, 0, 400, 800));
+        let driver = MockPlatformDriver::new(root);
+        let mut step = make_step("scroll");
+        step.on_text = Some("Nope".to_string());
+        let result = resolve_element_full_tree(&step, &driver).await;
+        let err = result.expect_err("missing element SHALL error");
+        assert!(
+            format!("{err}").contains("No element found"),
+            "error SHALL mention no element found"
+        );
+    }
+
+    // ── 30. resolve_element off-screen match yields offscreen hint ───
+
+    #[tokio::test]
+    async fn resolve_element_offscreen_error_hints_autoscroll() {
+        let mut root = make_element("View", Bounds::new(0, 0, 400, 800));
+        // Element exists only far below the viewport; no auto_scroll set.
+        root.children.push(make_element_with_text(
+            "Button",
+            "FarDown",
+            Bounds::new(10, 9000, 80, 40),
+        ));
+        let driver = MockPlatformDriver::new(root);
+        let mut step = make_step("tap");
+        step.on_text = Some("FarDown".to_string());
+        step.timeout = Some(50);
+        let result = resolve_element(&step, &driver, None).await;
+        let err = result.expect_err("off-screen element SHALL error without auto_scroll");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("auto_scroll"),
+            "off-screen error SHALL hint at auto_scroll, got: {msg}"
+        );
+    }
+
+    // ── 31. selector_label prefers text, then a11y label, then '?' ───
+
+    #[test]
+    fn selector_label_priority() {
+        let mut sel = Selector::default();
+        // Empty selector SHALL render as "?".
+        assert_eq!(selector_label(&sel), "?");
+        // a11y label only.
+        sel.accessibility_label = Some("the-id".to_string());
+        assert_eq!(selector_label(&sel), "the-id");
+        // text takes precedence over a11y label.
+        sel.text = Some("Visible".to_string());
+        assert_eq!(selector_label(&sel), "Visible");
+    }
+
+    // ── 32. safe_tap_coords taps the safe-zone center when partially safe ─
+
+    #[test]
+    fn safe_tap_coords_uses_safe_zone_center() {
+        let viewport = Viewport::new(400, 800);
+        // Element spans the full height; safe zone trims top 100 / bottom 100.
+        let bounds = Bounds::new(100, 0, 200, 800);
+        let (x, y) = safe_tap_coords(&bounds, &viewport, 100, 100)
+            .expect("element with a safe portion SHALL be tappable");
+        // x: visible 100..300 (margin-clamped) center = 200.
+        assert_eq!(x, 200);
+        // safe_top = max(0,100,5)=100; safe_bottom = min(800, 700, 795)=700 => center 400.
+        assert_eq!(y, 400);
+    }
+
+    // ── 33. safe_tap_coords returns None when visible portion is tiny ─
+
+    #[test]
+    fn safe_tap_coords_none_when_too_small() {
+        let viewport = Viewport::new(400, 800);
+        // Width 3 < TAP_MARGIN (5) => not tappable.
+        let bounds = Bounds::new(10, 10, 3, 40);
+        assert!(
+            safe_tap_coords(&bounds, &viewport, 0, 0).is_none(),
+            "sub-margin element SHALL be untappable"
+        );
+    }
+
+    // ── 34. safe_tap_coords falls back to visible center in danger zone ─
+
+    #[test]
+    fn safe_tap_coords_danger_zone_fallback() {
+        let viewport = Viewport::new(400, 800);
+        // Element fully inside the bottom safe-area (nav bar): y 760..795.
+        let bounds = Bounds::new(100, 760, 200, 35);
+        // safe_area_bottom 100 pushes safe_bottom to 700, below the element's
+        // top — no safe portion — so it SHALL fall back to the visible center.
+        let (x, y) = safe_tap_coords(&bounds, &viewport, 0, 100)
+            .expect("danger-zone element SHALL still get a tap point");
+        // visible 100..300 center 200; vis_top 760, vis_bottom min(795,800)=795 => center 777.
+        assert_eq!(x, 200);
+        assert_eq!(y, 777);
+    }
+
+    // ── 35. has_empty_webview detects a childless web_view anywhere ──
+
+    #[test]
+    fn has_empty_webview_detects_unenriched() {
+        // Childless web_view at the root.
+        let wv = make_element("web_view", Bounds::new(0, 0, 400, 800));
+        assert!(has_empty_webview(&wv), "childless web_view SHALL be empty");
+
+        // web_view nested under a container.
+        let mut root = make_element("View", Bounds::new(0, 0, 400, 800));
+        root.children.push(make_element("web_view", Bounds::new(0, 0, 400, 800)));
+        assert!(has_empty_webview(&root), "nested empty web_view SHALL be detected");
+
+        // Enriched web_view (has children) SHALL NOT be flagged.
+        let mut enriched = make_element("web_view", Bounds::new(0, 0, 400, 800));
+        enriched.children.push(make_element("div", Bounds::new(0, 0, 100, 50)));
+        assert!(!has_empty_webview(&enriched), "enriched web_view SHALL NOT be empty");
+
+        // Tree with no web_view at all.
+        let plain = make_element("View", Bounds::new(0, 0, 400, 800));
+        assert!(!has_empty_webview(&plain), "no web_view SHALL NOT be flagged");
+    }
+
+    // ── 36. bounds_fingerprint ignores text but reflects bounds ──────
+
+    #[test]
+    fn bounds_fingerprint_ignores_text_tracks_bounds() {
+        let a = make_element_with_text("Button", "Live 1", Bounds::new(0, 0, 100, 40));
+        let mut b = make_element("Button", Bounds::new(0, 0, 100, 40));
+        b.text = Some("Live 2".to_string());
+        // Same bounds + type, differing text SHALL fingerprint identically.
+        assert_eq!(
+            bounds_fingerprint(&a),
+            bounds_fingerprint(&b),
+            "text changes SHALL NOT affect the bounds fingerprint"
+        );
+
+        // A bounds change SHALL change the fingerprint.
+        let moved = make_element("Button", Bounds::new(0, 10, 100, 40));
+        assert_ne!(
+            bounds_fingerprint(&a),
+            bounds_fingerprint(&moved),
+            "a bounds shift SHALL change the fingerprint"
+        );
+    }
+
+    // ── 37. bounds_fingerprint reflects child structure ──────────────
+
+    #[test]
+    fn bounds_fingerprint_reflects_children() {
+        let leaf = make_element("View", Bounds::new(0, 0, 100, 40));
+        let mut parent = make_element("View", Bounds::new(0, 0, 100, 40));
+        parent.children.push(make_element("Child", Bounds::new(5, 5, 10, 10)));
+        // Adding a child SHALL change the fingerprint.
+        assert_ne!(
+            bounds_fingerprint(&leaf),
+            bounds_fingerprint(&parent),
+            "structural changes SHALL change the fingerprint"
+        );
+    }
+
+    // ── 38. convert_anchor (via group) maps Text and Selector variants ─
+
+    #[test]
+    fn build_selector_from_group_text_anchor_variants() {
+        // All four relational positions accept a plain text anchor.
+        let g = golem_parser::SelectorGroup {
+            below: Some(Anchor::Text("B".to_string())),
+            above: Some(Anchor::Text("A".to_string())),
+            right_of: Some(Anchor::Text("R".to_string())),
+            left_of: Some(Anchor::Text("L".to_string())),
+            ..Default::default()
+        };
+        let sel = build_selector_from_group(&g);
+        assert!(matches!(&sel.below, Some(AnchorSelector::Text(s)) if s == "B"));
+        assert!(matches!(&sel.above, Some(AnchorSelector::Text(s)) if s == "A"));
+        assert!(matches!(&sel.right_of, Some(AnchorSelector::Text(s)) if s == "R"));
+        assert!(matches!(&sel.left_of, Some(AnchorSelector::Text(s)) if s == "L"));
+    }
 }
