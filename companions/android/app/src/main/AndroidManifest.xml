@@ -14,5 +14,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Headless IME for Unicode text entry (see GolemImeService).
+             Activated by the host only when a flow types non-ASCII. -->
+        <service
+            android:name=".GolemImeService"
+            android:label="Golem IME"
+            android:permission="android.permission.BIND_INPUT_METHOD"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/method" />
+        </service>
     </application>
 </manifest>

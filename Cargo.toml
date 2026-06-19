@@ -17,7 +17,7 @@ exclude = ["test-app/src-tauri"]
 resolver = "2"
 
 [workspace.package]
-version = "0.6.31"
+version = "0.6.32"
 
 [workspace.lints.clippy]
 unwrap_used = "deny"

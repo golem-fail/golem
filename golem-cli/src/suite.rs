@@ -765,6 +765,11 @@ impl SuiteRunner {
         let _ = acc_handle.await;
         if let Some(h) = fwd_handle { let _ = h.await; }
 
+        // Restore the original keyboard on any device whose IME we
+        // switched to golem's Unicode IME this run (primary in-session
+        // restore; self-heal at next init is the crash fallback).
+        golem_driver::ime::restore_all().await;
+
         // Merge step data from suite-level accumulator into flow reports.
         let acc_report = {
             let taken = std::mem::replace(
@@ -1503,6 +1508,14 @@ async fn setup_slot(
             ).await;
             for w in setting_warnings {
                 eprintln!("  [device_settings] {w}");
+            }
+
+            // Next-run self-heal: if a prior run left golem's Unicode IME
+            // active on this device (e.g. crash / Ctrl-C before restore),
+            // put the original keyboard back now. No-op unless golem's IME
+            // is the current default.
+            if platform == Platform::Android {
+                golem_driver::ime::self_heal(&device_for_init.udid).await;
             }
 
             // In-session cache: a winning flow already registered.

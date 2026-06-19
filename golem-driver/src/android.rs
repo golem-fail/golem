@@ -28,6 +28,12 @@ pub struct AndroidDriver {
     /// + child handle; `stop_recording` signals the child, waits for
     /// flush, and pulls the .mp4 to host tmp.
     recording: tokio::sync::Mutex<Option<RecordingState>>,
+    /// Set once the golem Unicode IME has been activated on this device
+    /// (lazily, the first time a flow types non-ASCII). Fast-path guard
+    /// so later types in the same flow skip the `ime enable`/`ime set`
+    /// roundtrips. The cross-process record lives in `.golem/` (see
+    /// `ime` module).
+    ime_active: std::sync::atomic::AtomicBool,
 }
 
 struct RecordingState {
@@ -189,6 +195,7 @@ impl AndroidDriver {
             physical,
             cdp: std::sync::Mutex::new(CdpLifecycle::Idle),
             recording: tokio::sync::Mutex::new(None),
+            ime_active: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -517,20 +524,29 @@ impl PlatformDriver for AndroidDriver {
         Ok(())
     }
 
+    async fn prepare_type(&self, text: &str) -> Result<()> {
+        // `input text` is ASCII-only. When the text has non-ASCII, switch
+        // to golem's Unicode IME BEFORE the runner taps the field, so the
+        // field's input connection binds to it. ASCII stays on the fast
+        // `input text` path (works regardless of the active IME).
+        if first_untypeable_char(text).is_some() {
+            crate::ime::ensure_active(&self.device_serial, &self.ime_active).await?;
+        }
+        Ok(())
+    }
+
     async fn type_text(&self, text: &str) -> Result<()> {
-        // Android types via `input text`, which is ASCII-only. Reject
-        // up-front with a coded authoring error — the companion has the
-        // same check as a backstop, but failing host-side attaches a
-        // proper failure code instead of a bare HTTP 400. (Real Unicode
-        // typing needs an IME-based path — roadmapped.)
-        if let Some((i, c)) = first_untypeable_char(text) {
-            return Err(golem_events::coded(
-                golem_events::FailureCode::ParseMissingParam,
-                anyhow::anyhow!(
-                    "Android `input text` is ASCII-only; cannot type {c:?} (U+{:04X}) at index {i}",
-                    c as u32
-                ),
-            ));
+        // Non-ASCII text routes through the golem IME (activated in
+        // `prepare_type`); the IME commits any text, so once active it
+        // handles ASCII lines too. ASCII-only text keeps the faster
+        // `input text` companion path.
+        if first_untypeable_char(text).is_some() {
+            if !self.ime_active.load(std::sync::atomic::Ordering::Relaxed) {
+                // prepare_type should have activated it; guard in case a
+                // caller types non-ASCII without the prepare hook.
+                crate::ime::ensure_active(&self.device_serial, &self.ime_active).await?;
+            }
+            return crate::ime::commit_text(&self.device_serial, text).await;
         }
         let body = build_type_body(text)?;
         self.client.post_json("/type", &body).await?;

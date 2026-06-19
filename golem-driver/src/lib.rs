@@ -2,6 +2,7 @@ pub mod android;
 pub mod cdp;
 pub mod common;
 pub mod commands;
+pub mod ime;
 pub mod ios;
 
 pub mod ios_display;
@@ -138,6 +139,18 @@ pub trait PlatformDriver: Send + Sync {
     /// why we can't query SpringBoard directly. Default: no-op (the
     /// concept is iOS-XCUITest-specific).
     async fn poke_for_system_alert(&self) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Prepare to type `text` into the next-focused field. Called by the
+    /// runner BEFORE the focus tap, so any input-method switch is in
+    /// place when the field gains focus. Android uses this to lazily
+    /// activate its Unicode IME when `text` contains non-ASCII (the
+    /// `input text` shell path is ASCII-only); the activation must
+    /// precede the focus tap so the field's input connection binds to
+    /// the golem IME. Default: no-op (iOS `typeText` is Unicode-capable;
+    /// mock drivers need nothing).
+    async fn prepare_type(&self, _text: &str) -> anyhow::Result<()> {
         Ok(())
     }
 

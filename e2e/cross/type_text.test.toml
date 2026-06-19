@@ -25,8 +25,15 @@ steps = [
   { action = "backspace", on_text = "hello world", count = 5 },
   { action = "type", on_text = "hello ", input = "earth" },
 
-  # Type into the multiline text area
-  { action = "type", on_text = "Multi-line text", input = "Line one\nLine two\nLine three" },
+  # Multi-line text area, mixed ASCII + Unicode (Enter between lines).
+  # iOS types Unicode natively via XCUITest `typeText`; Android's
+  # `input text` is ASCII-only, so the non-ASCII line routes through the
+  # bundled golem IME (activated for the session, original keyboard
+  # restored at teardown). The textarea is a single node holding the
+  # whole value and matching is anchored, so assert the exact two-line
+  # string (a partial would need a glob like "行一 line*").
+  { action = "type", on_text = "Multi-line text", input = "行一 line\nline two" },
+  { action = "assert_visible", on_text = "行一 line\nline two" },
 
   # Hide the keyboard after typing
   { action = "hide_keyboard" },

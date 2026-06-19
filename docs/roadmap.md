@@ -75,69 +75,21 @@ both clippy.toml lines and migrate test `.unwrap()` → `.expect("… SHALL …"
 failing test prints *why* rather than "called unwrap on None". Mechanical, fannable
 one-agent-per-file. Not critical.
 
-## Android type can't do Unicode (uses `input text`)
+## Android Unicode IME: restore on SIGINT/Ctrl-C
 
-`CompanionServer.handleType` types via `executeShell("input text <line>")`
-(splitting on `\n`, KEYCODE_ENTER between lines). `adb shell input text` is
-**ASCII-only** — the same mechanism behind Maestro's #146. Non-ASCII input is
-rejected up-front with `EP422` ("Android `input text` is ASCII-only; cannot
-type …") — host-side in `android.rs::type_text` (`first_untypeable_char`),
-with a companion-side 400 as backstop. So golem has **no Unicode advantage on
-Android** — it's a parity limitation with Maestro, not a differentiator. (No
-talk claim should say otherwise.)
+The bundled Unicode IME (`GolemImeService`) is restored two ways: the
+in-session primary (`ime::restore_all` at suite teardown) and next-run
+self-heal (`ime::self_heal` at device init, backed by the `.golem/`
+original-IME record, with `ime reset` as the backstop when the record is
+gone). The gap: a Ctrl-C **mid-run** skips `restore_all`, so golem's
+(invisible) IME stays the default until the next golem run self-heals it.
+Functionally safe — the device is never permanently stuck, ASCII typing
+still works, and self-heal + `ime reset` recover it — but the keyboard is
+wrong in the meantime.
 
-**Recommended fix — bundle a Unicode IME (set-once + broadcast).** This is how
-Appium does Android Unicode (`unicodeKeyboard` / `io.appium.settings`), and it's
-the only option that works **universally** — native *and* WebView — because the
-IME commits text via `InputConnection.commitText()` (the standard input path),
-so a focused HTML input in a WebView or a native EditText both receive it. Full
-Unicode + emoji. Bundling it gives golem a real "just works, even Unicode" edge
-over Maestro (whose users wire ADBKeyBoard by hand).
-
-Design:
-- **Where:** add an `InputMethodService` + `BroadcastReceiver` to the companion's
-  **main** app (`companions/android/app/src/main`) — already installed alongside
-  the instrumentation, so no extra APK. IMEs must live in a normal (non-test)
-  package to be discoverable.
-- **Activate (set-once per session):** record the current default IME, switch to
-  golem's (`ime enable` + `ime set`), then route all `/type` through a broadcast
-  (`am broadcast -a GOLEM_INPUT --es text "…"`). Keep `input text` only as an
-  ASCII fast-path if desired — `first_untypeable_char` in `android.rs::type_text`
-  is the natural routing point (ASCII → `input text`, non-ASCII → IME broadcast
-  instead of today's reject).
-- **Teardown — layered, so the device's keyboard is always restored:**
-  1. **Primary (host):** golem restores the original IME at flow/session teardown
-     (incl. on SIGINT/Ctrl-C if caught). Host owns the **durable** record.
-  2. **Fallback A (companion):** golem passes the original IME id to the companion
-     when it switches; the companion holds it **in memory** and restores on its
-     graceful self-shutdown (the 5h-inactivity exit and the `/shutdown` POST).
-     Covers "host died but companion still alive." No companion-side persistence
-     needed (it'd be wiped on the version-bump reinstall anyway).
-  3. **Fallback B (next-run self-heal):** golem persists the original host-side
-     (`.golem/`). On the next run, if the current default IME *is* golem's
-     keyboard and a stored original exists, restore immediately — covers the
-     hard-kill gap (SIGKILL / device reboot / adb restart run no companion code).
-- **Corruption guard + backstop:** never record golem's own IME as "original"
-  (`if current != golem_ime { capture }`), so a leftover can't poison the record.
-  Whenever the original is unknown/corrupt, **`adb shell ime reset`** restores the
-  system default — no need to know the user's specific IME. This is the universal
-  safety valve.
-
-**Alternatives** (narrower; keep as fallbacks, not the primary): CDP
-`Input.insertText` for WebView fields only (golem already has the transport, but
-it doesn't cover native); `UiObject2.setText()` / `ACTION_SET_TEXT` for native
-fields (Unicode-capable but unreliable on WebView virtual nodes); clipboard +
-`KEYCODE_PASTE` (Android 10+ blocks background clipboard writes — brittle).
-
-iOS note: XCUITest `typeText` is Unicode-capable — verified live (typed
-`こんにちは` into the test app and asserted it visible, iPhone 17/iOS 26). Any
-"Unicode" claim is iOS-scoped until the Android IME lands (after which it's a
-genuine cross-platform differentiator vs Maestro's #146).
-
-**Files:** `companions/android/app/src/main/…` (new `InputMethodService` +
-`BroadcastReceiver` + manifest), `golem-driver/src/android.rs` (IME
-enable/set/restore + broadcast type path), `golem-cli/src/suite.rs` (session
-teardown restore + next-run self-heal from `.golem/`).
+Fix: a SIGINT handler that calls `ime::restore_all` before exit (pairs
+with any other teardown the handler should own). Lower priority than the
+self-heal path, which already guarantees eventual recovery.
 
 ## Input-mutation verify for `/type` and `/backspace`
 

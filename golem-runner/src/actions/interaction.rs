@@ -161,6 +161,11 @@ pub(crate) async fn handle_type(step: &Step, driver: &dyn PlatformDriver, ctx: &
         .or(step.on_text.as_deref())
         .unwrap_or("");
 
+    // Prepare the input method BEFORE focusing the field — Android may
+    // need to switch to its Unicode IME, which must be active when the
+    // field's input connection binds (i.e. before the tap below).
+    driver.prepare_type(value).await?;
+
     // Tap to focus, then verify focus before typing. Under heavy load
     // or mid-animation (keyboard opening from a prior step), the tap
     // can land on the keyboard's top edge → field loses focus → the
