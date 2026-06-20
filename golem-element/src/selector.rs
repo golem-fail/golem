@@ -343,16 +343,6 @@ pub fn element_has_trait(element: &Element, trait_name: &str) -> bool {
     match trait_name {
         // Content type traits
         "button" => et == "button" || et == "link",
-        "input" => matches!(
-            et.as_str(),
-            "text_field" | "secure_text_field" | "search_field" | "text_view"
-                | "edittext" | "autocompletetextview"
-        ),
-        "toggle" => matches!(
-            et.as_str(),
-            "switch" | "toggle" | "checkbox" | "radio_button"
-                | "togglebutton" | "radiobutton" | "compoundbutton"
-        ),
 
         // Text traits
         "has_text" | "text" => text_len > 0,
@@ -1244,41 +1234,6 @@ mod tests {
         // Case-insensitive: iOS lowercase vs Android PascalCase.
         assert!(element_has_trait(&elem("LINK"), "button"), "trait check SHALL be case-insensitive");
         assert!(!element_has_trait(&elem("Label"), "button"));
-    }
-
-    // ── 43. trait: input matches all field/edittext variants ────────
-
-    #[test]
-    fn trait_input_matches_field_variants() {
-        for t in [
-            "text_field",
-            "secure_text_field",
-            "search_field",
-            "text_view",
-            "EditText",
-            "AutoCompleteTextView",
-        ] {
-            assert!(element_has_trait(&elem(t), "input"), "{t} SHALL satisfy the input trait");
-        }
-        assert!(!element_has_trait(&elem("Button"), "input"));
-    }
-
-    // ── 44. trait: toggle matches switch/checkbox/radio variants ────
-
-    #[test]
-    fn trait_toggle_matches_variants() {
-        for t in [
-            "Switch",
-            "Toggle",
-            "Checkbox",
-            "radio_button",
-            "ToggleButton",
-            "RadioButton",
-            "CompoundButton",
-        ] {
-            assert!(element_has_trait(&elem(t), "toggle"), "{t} SHALL satisfy the toggle trait");
-        }
-        assert!(!element_has_trait(&elem("Label"), "toggle"));
     }
 
     // ── 45. trait: has_text / text / no_text ────────────────────────

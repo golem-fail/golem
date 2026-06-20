@@ -319,7 +319,7 @@ For complex queries, use `on = {}` instead of flat `on_*` fields:
 { action = "assert_visible", on = { text = "Submit", traits = ["button", "has_text"] } }
 ```
 
-Traits are computed predicates on element geometry and content (`button`, `input`, `toggle`, `has_text`, `short_text`, `long_text`, `square`, `wide`, `tall`, `small`, `large`). See [`golem-element/src/selector.rs`](../golem-element/src/selector.rs) for the exact definitions and thresholds.
+Traits are computed predicates on element geometry and content (`button`, `has_text`, `text`, `no_text`, `short_text`, `long_text`, `square`, `wide`, `tall`, `small`, `large`). See [`golem-element/src/selector.rs`](../golem-element/src/selector.rs) for the exact definitions and thresholds.
 
 ### Step Options
 

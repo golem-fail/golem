@@ -265,13 +265,6 @@ preserved below for context.
   of visible child content, not the raw bounds centre, so a `tap`/container-scroll
   on a padded container doesn't hit dead space. `container_swipe_start` in
   `golem-runner/src/scroll.rs`. Pure geometry.
-- **Reconsider `input`/`toggle` traits.** They only match **native** element
-  types (`EditText`/`Switch`/`<input>`-as-native); in the Tauri **webview** the
-  DOM types don't match the umbrella lists, so `·input·`/`·toggle·` never appear
-  (confirmed via `golem tree` on test-app — only `·button·` + geometric/text
-  traits surface). They may not earn their keep, or need webview-DOM type mapping.
-  Decide: drop them, or extend the umbrellas to cover webview input/role types.
-  (Would also want a `test-app-b` native traits flow if kept.)
 - **Deliberately-fragile test-app case** still worth adding (wrap `ScrollList` in
   a padded wrapper with siblings) to prove `contains`/centroid beat raw
   `.first()`/centre under adversarial layout.

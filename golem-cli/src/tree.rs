@@ -9,7 +9,7 @@ use golem_element::{filter_viewport, Element, Viewport};
 /// text → shape → size. `text` is an alias of `has_text` and is omitted to
 /// avoid duplicate rendering.
 const RENDERED_TRAITS: &[&str] = &[
-    "button", "input", "toggle",
+    "button",
     "has_text", "no_text", "short_text", "long_text",
     "square", "wide", "tall",
     "small", "large",
@@ -330,8 +330,6 @@ fn is_selectable(e: &Element) -> bool {
         || has_label
         || e.clickable
         || element_has_trait(e, "button")
-        || element_has_trait(e, "input")
-        || element_has_trait(e, "toggle")
 }
 
 fn collect_selectable<'a>(e: &'a Element, out: &mut Vec<&'a Element>) {
@@ -562,26 +560,6 @@ mod tests {
         assert!(
             is_selectable(&e),
             "button-trait element SHALL be selectable"
-        );
-    }
-
-    // 12. An input-type element (via the "input" trait) is selectable.
-    #[test]
-    fn input_trait_is_selectable() {
-        let e = elem("text_field");
-        assert!(
-            is_selectable(&e),
-            "input-trait element SHALL be selectable"
-        );
-    }
-
-    // 13. A toggle-type element (via the "toggle" trait) is selectable.
-    #[test]
-    fn toggle_trait_is_selectable() {
-        let e = elem("switch");
-        assert!(
-            is_selectable(&e),
-            "toggle-trait element SHALL be selectable"
         );
     }
 
