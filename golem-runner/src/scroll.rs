@@ -1095,7 +1095,7 @@ mod tests {
 
     // ── 4. Bounce detection triggers direction reversal ─────────────
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn bounce_detection_triggers_direction_reversal() {
         let base = {
             let mut root = make_element("View", default_bounds());
@@ -1138,7 +1138,7 @@ mod tests {
 
     // ── 5. Element found after direction reversal ───────────────────
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn element_found_after_direction_reversal() {
         let base = {
             let mut root = make_element("View", default_bounds());

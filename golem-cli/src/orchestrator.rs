@@ -954,7 +954,7 @@ mod tests {
 
     // 14. for_test exposes the caller's active_clients counter, and
     //     wait_for_clients returns once that counter reaches zero.
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn for_test_wait_for_clients_returns_when_counter_drains() {
         use std::sync::atomic::Ordering;
         // Point HOME at a throwaway dir so the Drop-time socket cleanup

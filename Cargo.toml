@@ -32,7 +32,7 @@ tokio = { version = "1", features = ["full"] }
 clap = { version = "4", features = ["derive"] }
 uuid = { version = "1", features = ["v4"] }
 rand = "0.8"
-reqwest = "0.12"
+reqwest = { version = "0.12", default-features = false, features = ["charset", "http2", "rustls-tls"] }
 chrono = "0.4"
 async-trait = "0.1"
 sha1 = "0.10"

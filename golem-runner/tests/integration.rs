@@ -121,7 +121,7 @@ fn assert_success(result: &FlowResult) {
 // ---------------------------------------------------------------------------
 // 1. Linear flow: 3 blocks in order, all succeed
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_linear_flow_three_blocks_succeed() {
     let toml = r#"
 [flow]
@@ -169,7 +169,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 2. Flow with next: block 1 -> next="block_3", skips block 2
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_flow_with_next_skips_block() {
     let toml = r#"
 [flow]
@@ -217,7 +217,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 3. Flow with branch: if_visible matches, jumps to target
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_flow_with_branch_if_visible() {
     let toml = r#"
 [flow]
@@ -269,7 +269,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 4. Variable interpolation in steps (flow vars referenced in step text)
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_variable_interpolation_in_tap_text() {
     // This test verifies that when flow vars are set and an element matching
     // the var value exists, the tap action can find it. We set a variable
@@ -327,7 +327,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 5. Fake data generation: flow vars with fake:email, fake:first_name
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_fake_data_generation_in_flow_vars() {
     let toml = r#"
 [flow]
@@ -389,7 +389,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 6. Teardown after pass: teardown steps execute after successful flow
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_teardown_after_pass() {
     let toml = r#"
 [flow]
@@ -444,7 +444,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 7. Teardown after fail: teardown steps execute after failed flow
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_teardown_after_fail() {
     let toml = r#"
 [flow]
@@ -500,7 +500,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 8. Step warning doesn't fail flow: if_fail="warn" step fails, flow continues
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_on_fail_warn_continues_flow() {
     let toml = r#"
 [flow]
@@ -547,7 +547,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 9. Step ignore continues: if_fail="ignore" step fails, flow continues silently
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_on_fail_ignore_continues_silently() {
     let toml = r#"
 [flow]
@@ -588,7 +588,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 10. Branch with no match falls through to next block
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_branch_no_match_falls_through() {
     let toml = r#"
 [flow]
@@ -640,7 +640,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 11. Tap on element that exists in hierarchy succeeds
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_tap_on_existing_element() {
     let toml = r#"
 [flow]
@@ -673,7 +673,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 12. Tap on nonexistent element fails the flow
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_tap_on_missing_element_fails() {
     let toml = r#"
 [flow]
@@ -718,7 +718,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 13. Multiple warnings accumulated across blocks
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_multiple_warnings_across_blocks() {
     let toml = r#"
 [flow]
@@ -758,7 +758,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 14. Branch with if_var equals
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_branch_if_var_equals() {
     let toml = r#"
 [flow]
@@ -822,7 +822,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 15. Empty flow (no blocks) succeeds via TOML parse + execute
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_empty_flow_succeeds() {
     let toml = r#"
 [flow]
@@ -845,7 +845,7 @@ name = "empty flow"
 // 16. Parse + execute flow with teardown that has failing steps (if_fail
 //     defaults to "ignore" in teardown context)
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_teardown_failing_steps_default_to_ignore() {
     let toml = r#"
 [flow]
@@ -892,7 +892,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 17. Invalid TOML fails to parse
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_invalid_toml_fails_to_parse() {
     let toml = r#"
 this is not valid toml {{{
@@ -904,7 +904,7 @@ this is not valid toml {{{
 // ---------------------------------------------------------------------------
 // 18. Flow with start block via flow.start
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_flow_start_block() {
     let toml = r#"
 [flow]
@@ -953,7 +953,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 19. Full pipeline: parse TOML with vars + fake data, tap elements, teardown
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_full_pipeline_with_vars_tap_and_teardown() {
     let toml = r#"
 [flow]

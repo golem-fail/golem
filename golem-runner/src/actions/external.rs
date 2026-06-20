@@ -747,7 +747,7 @@ mod tests {
 
     // ── dismiss_alert tests ───────────────────────────────────────────
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn dismiss_alert_taps_first_button() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         let mut alert = make_element("Alert", Bounds::new(50, 200, 275, 150));
@@ -773,7 +773,7 @@ mod tests {
 
     // ── accept_alert tests ───────────────────────────────────────────
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn accept_alert_taps_last_button() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         let mut alert = make_element("Alert", Bounds::new(50, 200, 275, 150));
@@ -797,7 +797,7 @@ mod tests {
         assert_eq!(tap_calls[0].1, vec!["240", "325"], "SHALL tap last button (positive)");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn dismiss_alert_fails_when_no_alert() {
         let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
@@ -1224,7 +1224,7 @@ mod tests {
     // ── accept_alert with single button taps that button ───────────────
 
     // 7. A single-button alert SHALL have its only button tapped by accept.
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn accept_alert_single_button_taps_only_button() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
         let mut alert = make_element("Alert", Bounds::new(50, 200, 275, 150));

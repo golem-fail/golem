@@ -136,7 +136,7 @@ fn assert_success(result: &FlowResult) {
 // ---------------------------------------------------------------------------
 // 1. if_fail="error" propagates error and stops flow
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn on_fail_error_propagates_and_stops_flow() {
     let toml = r#"
 [flow]
@@ -179,7 +179,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 2. if_fail="warn" collects warning and continues
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn on_fail_warn_collects_warning_and_continues() {
     let toml = r#"
 [flow]
@@ -219,7 +219,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 3. if_fail="ignore" silently continues
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn on_fail_ignore_silently_continues() {
     let toml = r#"
 [flow]
@@ -256,7 +256,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 4. Combined: warn + error in same flow (warn collected, error stops)
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn warn_then_error_in_same_flow() {
     let toml = r#"
 [flow]
@@ -298,7 +298,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 5. Default if_fail is "error" (no if_fail field specified)
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn default_on_fail_is_error() {
     let toml = r#"
 [flow]
@@ -340,7 +340,7 @@ steps = [
 // 6. Step with retry > 0 succeeds when element appears in hierarchy
 //    (retry on a step that always fails still exhausts retries)
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn retry_exhausted_then_on_fail_applies() {
     let toml = r#"
 [flow]
@@ -378,7 +378,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 7. Step fails all retries with if_fail="error" -> error propagates
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn retry_exhausted_with_error_propagates() {
     let toml = r#"
 [flow]
@@ -411,7 +411,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 8. retry=0 means no retries (single attempt, same as default)
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn retry_zero_means_single_attempt() {
     let toml = r#"
 [flow]
@@ -448,7 +448,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 9. Step-level timeout: a step that takes too long fails
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn step_timeout_causes_failure() {
     // Test timeout at the flow level by using a very short timeout on a step
     // that requires element resolution (which polls get_hierarchy until the
@@ -486,7 +486,7 @@ steps = [
 // 14. if_fail="warn" in flow -> warning collected -> can build screenshot
 //     path for the warning step
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn warn_outcome_feeds_screenshot_path_generation() {
     let toml = r#"
 [flow]
@@ -540,7 +540,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 15. if_fail="error" -> can build screenshot path for the error step
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn error_outcome_feeds_screenshot_path_generation() {
     let toml = r#"
 [flow]
@@ -594,7 +594,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 16. Multiple warnings across blocks each get distinct screenshot paths
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn multiple_warnings_generate_distinct_screenshot_paths() {
     let toml = r#"
 [flow]
@@ -655,7 +655,7 @@ steps = [
 // 17. if_fail="ignore" in multi-block flow: no warnings, no failures,
 //     and ignore steps do not affect subsequent blocks
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn ignore_in_multi_block_flow_does_not_affect_subsequent_blocks() {
     let toml = r#"
 [flow]
@@ -708,7 +708,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 18. Retry with if_fail="ignore" — retries exhaust, then silently ignored
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn retry_with_on_fail_ignore_silently_continues() {
     let toml = r#"
 [flow]
@@ -744,7 +744,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 19. Successful step with retry set does not produce warnings
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn successful_step_with_retry_produces_no_warnings() {
     let toml = r#"
 [flow]
@@ -780,7 +780,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 20. capture_failure_screenshot writes file to disk via mock driver
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn capture_failure_screenshot_writes_to_disk() {
     use golem_runner::capture::capture_failure_screenshot;
 
@@ -817,7 +817,7 @@ async fn capture_failure_screenshot_writes_to_disk() {
 // ---------------------------------------------------------------------------
 // 21. capture_failure_screenshot returns error when disabled
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn capture_failure_screenshot_disabled_returns_error() {
     use golem_runner::capture::capture_failure_screenshot;
 
@@ -851,7 +851,7 @@ async fn capture_failure_screenshot_disabled_returns_error() {
 // ---------------------------------------------------------------------------
 // 22. if_fail="error" triggers screenshot capture via driver
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn on_fail_error_triggers_screenshot_capture() {
     let toml = r#"
 [flow]
@@ -912,7 +912,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 23. if_fail="warn" triggers screenshot capture via driver
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn on_fail_warn_triggers_screenshot_capture() {
     let toml = r#"
 [flow]
@@ -973,7 +973,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 24. if_fail="ignore" does NOT trigger screenshot capture
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn on_fail_ignore_does_not_trigger_screenshot_capture() {
     let toml = r#"
 [flow]
@@ -1033,7 +1033,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 25. Screenshot failure does not mask the step error
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn screenshot_failure_does_not_mask_step_error() {
     let toml = r#"
 [flow]
@@ -1093,7 +1093,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 26. Screenshot file is written to disk on error failure
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn screenshot_file_written_to_disk_on_error() {
     let toml = r#"
 [flow]
@@ -1161,7 +1161,7 @@ steps = [
 // ---------------------------------------------------------------------------
 // 27. Screenshot disabled in config skips capture but step error still works
 // ---------------------------------------------------------------------------
-#[tokio::test]
+#[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn screenshot_disabled_skips_capture_but_error_propagates() {
     let toml = r#"
 [flow]
