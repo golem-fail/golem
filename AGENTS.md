@@ -25,6 +25,9 @@
 Any non-test code change (even a fn → `pub`) = its real category, not "tests only".
 Prefer e2e relevant to the change; else any generic flow (`e2e/cross/tap.test.toml`).
 
+## Core invariant: visible tree judges, full tree only hints
+golem tests like a human — target/assert ONLY against the visible (filtered) tree (`filter_viewport` on `effective_bounds`/`visible_bounds`, ancestor-clip-aware via IntersectionObserver in webviews). The full (unfiltered) tree is for hints that speed/steer but never decide pass/fail: auto-scroll direction, overshoot reversal, settle fingerprints. Reading the full tree to judge a step succeeded = bug (passes on what the user can't see). See [Visibility model](docs/architecture.md#visibility-model--the-visible-tree-decides-coverage-the-full-tree-only-hints).
+
 ## Run e2e
 ```
 # fast (no companion change): reuses installed app+companion

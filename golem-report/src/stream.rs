@@ -806,19 +806,23 @@ fn print_substep_to(w: &mut dyn Write, ts: &str, dp: &str, sub: &SubstepEvent, u
         SubstepEvent::ScrollStarted { selector, direction } => {
             let _ = writeln!(w, "{ts}  {dp}    {d}{b} scroll_started \"{selector}\" direction={direction}{r}");
         }
-        SubstepEvent::ScrollAttempt { attempt: _, direction, strategy_index, from, to, result, tree_stats } => {
+        SubstepEvent::ScrollAttempt { attempt: _, direction, strategy_index, container, from, to, result, tree_stats } => {
             let dir_arrow = match direction.as_str() {
                 "Down" => "↓", "Up" => "↑", "Left" => "←", "Right" => "→", _ => "?",
             };
             let result_str = match result {
                 ScrollAttemptResult::PageScrolled => "page scrolled".to_string(),
-                ScrollAttemptResult::InnerScrollableDetected => format!("inner scrollable → strategy {}", strategy_index + 2),
+                ScrollAttemptResult::InnerScrollableDetected => format!("inner scrollable consumed swipe → switching to preset {}", strategy_index + 2),
+                ScrollAttemptResult::ContainerAdvanced => "container advanced".to_string(),
                 ScrollAttemptResult::Stall { count, max } => format!("stall {count}/{max}"),
                 ScrollAttemptResult::BoundaryReached => "boundary reached".to_string(),
             };
             let stats = format_tree_stats(tree_stats);
-            let _ = writeln!(w, "{ts}  {dp}      {d}[scroll] {dir_arrow} strategy {} ({},{})→({},{}) → {result_str} {stats}{r}",
-                strategy_index + 1, from.x, from.y, to.x, to.y);
+            // Container scrolls use fixed geometry, not presets — naming a
+            // preset would be meaningless (it's always preset 1).
+            let label = if *container { "container".to_string() } else { format!("preset {}", strategy_index + 1) };
+            let _ = writeln!(w, "{ts}  {dp}      {d}[scroll] {dir_arrow} {label} ({},{})→({},{}) → {result_str} {stats}{r}",
+                from.x, from.y, to.x, to.y);
         }
         SubstepEvent::ScrollFound { selector, position, total_attempts } => {
             let _ = writeln!(w, "{ts}  {dp}    {d}{b} scroll_found \"{selector}\" at ({},{}) after {total_attempts} attempts{r}",
@@ -828,7 +832,7 @@ fn print_substep_to(w: &mut dyn Write, ts: &str, dp: &str, sub: &SubstepEvent, u
             let _ = writeln!(w, "{ts}  {dp}    {d}{b} scroll_reversed →{to_direction} {reason}{r}");
         }
         SubstepEvent::ScrollStrategySwitch { to_index, reason } => {
-            let _ = writeln!(w, "{ts}  {dp}    {d}{b} scroll_strategy_switch →{} {reason}{r}", to_index + 1);
+            let _ = writeln!(w, "{ts}  {dp}    {d}{b} scroll_preset_switch →{} {reason}{r}", to_index + 1);
         }
         SubstepEvent::AppLaunch { bundle, duration_ms } => {
             let _ = writeln!(w, "{ts}  {dp}    {d}{b} app_launch bundle={bundle} {duration_ms}ms{r}");

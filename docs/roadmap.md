@@ -176,43 +176,173 @@ escalation, not the routine fix.
 (`handleHideKeyboard`); `golem-driver/src/android.rs::hide_keyboard`;
 recovery glue in `golem-runner` if not already in place.
 
-## Inner-container scroll: absorber thrash locating container + no forward progress inside it
+## Inner-container scroll: status after 2026-06-17 investigation
 
-A demo run hit this hard on both platforms. `scroll to "Item 25" within {below
-"Scroll List"}` (an `overflow-y:auto` inner list):
+The original report here described a "33-attempt absorber thrash" locating a
+`within` container plus no forward progress inside it (`scroll to "Item 25"
+within {below "Scroll List"}`, Android EF408 120s timeout, iOS ~73s slow). That
+was **suspected, never confirmed**. A full investigation against
+`e2e/cross/scroll.test.toml` (`scroll_within_list`, Item 45) and a fresh
+off-screen repro (`scroll to "Item 25" within {below "Scroll List"}` with no
+warm-up) found:
 
-- **Android: timed out (EF408, 120s).** Two pathological phases in the verbose log:
-  1. *Locating the "Scroll List" container* took **33 swipe attempts** — nearly
-     every dynamic-start logged "preset landed inside absorber bounds", cycling
-     `scroll_strategy_switch →1/2/3/4/5` and a direction reversal before the
-     container was finally found.
-  2. *Scrolling inside the container* never progressed — an endless run of
-     `inner scrollable → strategy 2` with intermittent stalls, until the step
-     timed out.
-- **iOS: succeeded but took ~73s for one inner scroll** (and ~50s for an
-  `auto_scroll` assert against the gesture widget's off-screen state labels) —
-  same root area, slow rather than stuck.
+- **The thrash does NOT reproduce on current code** when the app DOM is loaded.
+  Phase-1 locate finds the container in **1 attempt**; phase-2 scrolls inside and
+  finds the deep item in **~4 swipes / ~13s**. The locate-loop hardening
+  (dwell-before-lift, overshoot guard, dynamic-start) already landed and absorbed
+  the common case. Coverage is real (target resolves in the *visible* tree — see
+  [Visibility model](architecture.md), the load-bearing invariant: visible tree
+  judges, full tree only hints).
+- **Container resolution works** on the test layouts. Ground-truth diagnostic:
+  `within = {below "Scroll List"}` returns the real `overflow-y:auto` `<div>`
+  (the items' container) as the first candidate — *NOT* an oversized wrapper.
+  (Earlier "wrong container" reads were a device-px vs CSS-px mistake: 480dpi =
+  3.0×, so the 787-device-px box = ~262 CSS px = the `max-height:300px` list.)
+- **The EF408 *does* reproduce** — but only when the Tauri **webview barely
+  renders** (`{2 trees, 12 nodes}` vs 211 when loaded). With a sparse DOM,
+  `within` locate finds nothing → `container=None` → page-scroll thrash →
+  timeout. So the real Android EF408 is a **webview-readiness race**, not a
+  scroll-algorithm bug. See the dedicated entry below.
 
-This compounds the existing inertial-momentum issue (below) with two further
-problems. **Suspected cause (from the log + a read of `scroll.rs`, not yet
-confirmed):** (a) the dynamic-start / absorber-routing path loops when a `within`
-target's container must first be located — each retry re-lands in an absorber and
-resets progress; (b) container-scroll stall handling resets the stall counter on
-every full-hierarchy change without advancing strategy, then eventually falls
-through to a boundary reversal that scrolls the wrong way.
+**Done this session (committed):**
+- Renamed `scroll.rs` locals `*_fp` → `*_fingerprint` (full/horizon), pure local.
+- Fixed misleading scroll **labels**: human stream said `strategy N` (always
+  "1" for container scrolls, meaningless) and `inner scrollable → strategy {+2}`.
+  Added `container: bool` to `golem_events::SubstepEvent::ScrollAttempt` +
+  mirror `SubstepDetail` + a `ScrollAttemptResult::ContainerAdvanced` variant.
+  Now container scrolls log `[scroll] ↓ container (…)→(…) → container advanced`
+  and page scrolls log `preset N`. Renamed `scroll_strategy_switch` →
+  `scroll_preset_switch` in human output. junit shows `container` vs `preset=N`.
+  Touched: `golem-events/src/lib.rs`, `golem-runner/src/scroll.rs`,
+  `golem-report/src/{lib,stream,toon,junit}.rs`. Verified live on Android (phone)
+  + iOS (iPad).
+- Wrote the [Visibility model](architecture.md) section + an AGENTS.md pointer
+  (the visible-tree-judges / full-tree-hints invariant).
 
-**Shape to investigate:** cap dynamic-start retries before falling through to a
-strategy switch (kill the 33-attempt thrash); for `container.is_some()` scrolls,
-don't zero the stall counter on every full-fp change (let it accumulate so the
-exit/strategy logic fires), and don't reverse direction while the container is
-still making forward progress. Pair with the move-phase slowdown from the
-inertial entry below.
+**What actually remains** (the rest spun into the entries below):
+1. **Relational-selector fragility** — `within` picks `.first()` of *everything*
+   below the anchor; works here only by pre-order luck + geometric overlap. See
+   "Relational selector overhaul".
+2. **Webview-readiness EF408** — see "Webview-readiness: sparse-tree scroll
+   thrash".
+3. **iOS ~73s slowness** — unverified on current code; may also be a
+   readiness/settle effect. Re-measure `scroll.test` on an iOS sim; if it's slow
+   with a *loaded* tree, investigate the move-phase / inertial entry below.
 
-**Files:** `golem-runner/src/scroll.rs` (dynamic-start retry cap; container
-stall + reversal logic), `golem-runner/src/resolution.rs` (`scroll_swipe_bounded`).
+**Files:** `golem-runner/src/scroll.rs`, `golem-runner/src/actions/interaction.rs`
+(`handle_scroll` `within` resolution), `golem-runner/src/resolution.rs`
+(`scroll_swipe_bounded`), `golem-element/src/selector.rs` (relational filters).
 
-**Coverage gap:** no e2e flow reliably exercises a deep inner-container scroll —
-the demo flow had to drop its `Scroll List` / `Carousel` blocks because of this.
+## Relational selector overhaul: `contains`/`inside` + cross-axis overlap filter + geometric sort
+
+**Motivation.** `within = { below = "Scroll List" }` (and relational selectors
+generally) resolve via `find_elements`: a selector with no own-criteria
+(text/label/trait all `None`) matches **every** element, then `below` retains
+those with `y > anchor.bottom`, and the caller takes **`.first()`** in tree
+pre-order. It lands on the right scrollable today only because pre-order happens
+to place the container first and it geometrically overlaps. **Latent bug:** wrap
+the scrollable in one more non-scrollable `<div>` (extra siblings / uneven
+padding) and `.first()` picks the wrapper; a `tap`/swipe at its geometric centre
+can then hit dead space. Selectors are deliberately uniform across
+tap/assert/swipe, and "is this scrollable?" is **not** a usable signal — a
+`<canvas>` scrolls without the flag, an empty `overflow:auto` has it but isn't
+scrollable, and the human can't *see* scrollability anyway. So scrollability may
+only ever be an internal *hint/tiebreak*, never a filter (consistent with the
+[Visibility model](architecture.md): coords/visible-bounds judge, not DOM/CSS
+metadata).
+
+**Decision (aligned 2026-06-17): geometric predicates, not DOM structure.**
+Maestro's `childOf`/`containsChild` ([relational selectors](https://docs.maestro.dev/reference/selectors/relational-selectors))
+were rejected — they make the test reason about a DOM tree the human can't
+perceive, the opposite of golem's "test like a human" thesis. Geometric
+containment (`contains`/`inside`) is pure coords/dims = how a human localizes
+things spatially ("the thing inside that box"), independent of DOM. Honest
+caveat to document: a border-less, same-background container isn't visually
+perceptible — `contains` is "what a human infers from where the content sits,"
+fine for scrolling, shakier for an exact-bounds assertion.
+
+**New selection model** (`golem-element/src/selector.rs`
+`apply_relational_filters` + a new sort step; `Selector` gains `contains`/
+`inside`; `golem-parser` `SelectorGroup` + `build_selector_from_group` in
+`golem-runner/src/resolution.rs` gain the fields):
+
+1. **Filter (set intersection over pre-order matches):**
+   - Directional (`below`/`above`/`left_of`/`right_of`): keep half-plane match
+     **AND require cross-axis overlap** with the anchor — `below`/`above` need
+     horizontal (x) overlap; `left_of`/`right_of` need vertical (y) overlap.
+     Threshold = **any positive overlap (≥1px)**. Transparent for the common
+     full-width anchor (overlaps everything → no change); only bites for narrow
+     anchors (e.g. a left-column heading on a tablet correctly ignores a
+     right-column element). A wide element spanning both columns still matches a
+     narrow anchor — accepted; author scopes with `contains`/`index` if unwanted
+     (no overlap-percentage knob). Anchors still resolved via
+     `resolve_visible_anchor` (must be on-screen).
+   - Containment (`contains = <selector>` / `inside = <selector>`): keep
+     candidates whose bounds fully enclose (`contains`) / are fully enclosed by
+     (`inside`) the referenced target's effective bounds.
+2. **Sort survivors** by fixed, documented priority (lexicographic, one natural
+   key per predicate — keys never cross-contaminate, so a pure `below` never
+   cares about size and a pure `contains` never cares about ordinal position):
+   - **a. Containment** (if `contains`/`inside` active): tightest first (smallest
+     area) — strongest spatial signal.
+   - **b. Proximity** (if directional active): nearest first by **primary-axis
+     gap only** (not Euclidean) — `below` ranks by vertical gap, etc.
+   - **c. Tie-break: tree pre-order** (today's behavior) — keeps `--seed` replay
+     deterministic. Genuine ties (e.g. a horizontal row of equal-y icons under a
+     full-width heading) fall here intentionally; we do NOT guess "smart" — the
+     author disambiguates with `index` or a second predicate.
+3. `.first()`.
+
+**`within` then becomes robust:** `within = { contains = { text = "Item 0" } }`
+= "scroll inside the box that holds Item 0" → smallest enclosing element = the
+list (skips the page wrapper *and* a single item), no pre-order luck.
+
+**Behavior changes to validate (greenfield, allowed, but re-run e2e):**
+- `above`/`left_of`/`right_of` change from pre-order to nearest-first (this
+  *fixes* them — pre-order gave farthest-first). `below` ≈ unchanged in practice
+  (DOM order is top-to-bottom).
+- Directional filters now require cross-axis overlap → can return empty where the
+  old half-plane matched a far-column element (correct). Empty `within` locate →
+  existing "scroll page to bring anchor into view" fallback still applies.
+- Re-run `e2e/cross/accessibility_label.test.toml`, any positional flows, and
+  `scroll.test`. Add a **deliberately-fragile test-app case** (wrap `ScrollList`
+  in a padded wrapper with sibling content) to prove `contains` beats `.first()`.
+
+**Swipe-/tap-centroid tweak (pairs with this):** even with the right region,
+aiming a gesture at the raw bounds *centre* can hit padding/dead space. Aim
+through the **centroid of the visible child content** (matched item bounds we
+already have), not the container centre. Pure geometry, no DOM. Applies to
+`tap` on a container and to container-scroll start points
+(`container_swipe_start` in `golem-runner/src/scroll.rs`).
+
+**Docs to update in tandem:** `docs/actions-reference.md` (selectors section),
+the [Visibility model](architecture.md) cross-reference, and any selector
+reference. A new feature SHALL add Rust unit tests (filter overlap math, sort
+priority, containment) + e2e.
+
+## Webview-readiness: sparse-tree scroll thrash (the real Android EF408)
+
+`e2e/cross/scroll.test.toml` / the off-screen `within` repro **intermittently**
+fails `EF408` on Android — but only when the run shows `{2 trees, 12 nodes}`
+(the Tauri webview DOM had not rendered; a loaded run shows ~211 nodes and
+passes in ~13s). With a sparse tree, `within` locate finds no anchor →
+`container=None` → page-scroll thrash (stall/reverse cycle) → 120s/timeout.
+
+**Suspected cause:** the post-launch settle gate (`await_first_frame` /
+tree-stability poll) passes on a near-empty DOM before the webview hydrates, so
+the flow starts interacting too early. Not a scroll bug — a readiness race.
+
+**Shape to investigate:** make the settle gate robust to an empty/sparse webview
+(e.g. require a minimum node count or a content signal, not just frame
+stability; or detect "webview present but DOM empty" and wait for hydration).
+Reproduce by launching repeatedly until a sparse-tree run appears (it's load/
+timing dependent — more likely right after a rebuild/reinstall or under emulator
+load).
+
+**Files:** `golem-driver/src/` (companion launch + first-frame/settle),
+`golem-runner/src/` (launch settle glue). **Coverage gap:** no test detects a
+sparse-tree start; consider a guard that fails fast with a clear "DOM not ready"
+diagnostic instead of a 120s scroll timeout.
 
 ## Inner-list inertial scroll suppression
 

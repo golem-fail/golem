@@ -1331,6 +1331,7 @@ mod tests {
             attempt: 2,
             direction: "down".into(),
             strategy_index: 0,
+            container: false,
             from: golem_events::Point { x: 1, y: 2 },
             to: golem_events::Point { x: 3, y: 4 },
             result: "moved".into(),

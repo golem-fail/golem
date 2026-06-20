@@ -99,6 +99,18 @@ flowchart TD
 
 Plan lives in `golem-orchestrator` (`plan`, `coverage`, `install_matrix`); per-flow and per-step execution lives in `golem-runner`; device acquisition in `golem-devices`; and the on-device step work goes through `golem-driver` to the [companions](companions.md). Throughout, `golem-events` carries the narrative that `golem-report` renders.
 
+## Visibility model — the visible tree decides coverage, the full tree only hints
+
+A load-bearing invariant that is easy to forget when touching scrolling, selectors, or assertions:
+
+- **The visible (filtered) tree is the source of truth for everything the test targets or asserts.** golem tests like a human: it taps, scrolls to, reads, and asserts against *only what is actually on screen*. The visible tree is produced by `filter_viewport`, which filters on each element's **`effective_bounds()`** — `visible_bounds` (the rectangle **clipped to ancestor containers**) when present, else raw `bounds` (`golem-element/src/lib.rs`).
+  - **Webviews** populate `visible_bounds` via **IntersectionObserver** (`golem-driver/src/dom_traversal.js`): the post-clip intersection rect. An item scrolled out of an `overflow:hidden`/`auto` container gets a zero-area `visible_bounds` and is correctly **absent** from the visible tree — so it can't be tapped or satisfy `assert_visible`, exactly as a human can't see it. `getBoundingClientRect()` alone would wrongly report it as on-screen.
+  - **Native** companions clip `visible_bounds` to ancestor containers the same way, so the model is platform-agnostic.
+
+- **The full (unfiltered) tree is for *hints only* — it must never decide pass/fail or coverage.** Raw `bounds` for off-screen / clipped elements are legitimate input for *guesses* that make a test faster or smarter but don't change its outcome: e.g. inferring auto-scroll direction (is the target above or below?), the overshoot-reversal hint in `golem-runner/src/scroll.rs`, and settle/idle fingerprinting. If a code path reads the full tree to decide whether a step *succeeded*, that's a bug — it would pass on elements the user can't see.
+
+When in doubt: **resolve and assert on the visible tree; reach for the full tree only to speed up or steer, never to judge.**
+
 ## Where things live
 
 | To change… | Look in |

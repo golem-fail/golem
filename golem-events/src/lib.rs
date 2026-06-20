@@ -452,7 +452,12 @@ pub enum SubstepEvent {
     ScrollAttempt {
         attempt: u32,
         direction: String,
+        /// Page-scroll preset index. Meaningless for container scrolls
+        /// (`container = true`), which use fixed container geometry, not presets.
         strategy_index: usize,
+        /// True when scrolling inside a `within` container (fixed geometry),
+        /// false for page-level preset scrolling. Drives label vocabulary.
+        container: bool,
         from: Point,
         to: Point,
         result: ScrollAttemptResult,
@@ -579,6 +584,9 @@ impl TreeStats {
 pub enum ScrollAttemptResult {
     PageScrolled,
     InnerScrollableDetected,
+    /// Container content advanced — real progress for a `within` scroll
+    /// (the inner list/carousel moved). Not a wasted swipe.
+    ContainerAdvanced,
     Stall { count: u32, max: u32 },
     BoundaryReached,
 }
@@ -848,6 +856,7 @@ mod tests {
             attempt: 1,
             direction: "down".into(),
             strategy_index: 0,
+            container: false,
             from: Point { x: 10, y: 200 },
             to: Point { x: 10, y: 50 },
             result: ScrollAttemptResult::Stall { count: 2, max: 3 },
@@ -856,7 +865,7 @@ mod tests {
         let json = serde_json::to_string(&s).expect("serialize SHALL succeed");
         assert_eq!(
             json,
-            r#"{"ScrollAttempt":{"attempt":1,"direction":"down","strategy_index":0,"from":{"x":10,"y":200},"to":{"x":10,"y":50},"result":{"Stall":{"count":2,"max":3}},"tree_stats":{"fetches":0,"min_nodes":0,"max_nodes":0}}}"#,
+            r#"{"ScrollAttempt":{"attempt":1,"direction":"down","strategy_index":0,"container":false,"from":{"x":10,"y":200},"to":{"x":10,"y":50},"result":{"Stall":{"count":2,"max":3}},"tree_stats":{"fetches":0,"min_nodes":0,"max_nodes":0}}}"#,
             "SubstepEvent SHALL be externally tagged with x/y Points and a tagged Stall result"
         );
         let back: SubstepEvent = serde_json::from_str(&json).expect("deserialize SHALL succeed");

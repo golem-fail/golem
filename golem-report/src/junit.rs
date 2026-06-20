@@ -101,10 +101,12 @@ fn format_substeps_text(substeps: &[SubstepDetail]) -> String {
                 lines.push(format!("swipe ({},{})→({},{})", from.x, from.y, to.x, to.y)),
             SubstepDetail::ScrollStarted { selector, direction } =>
                 lines.push(format!("scroll_started \"{}\" direction={}", selector, direction)),
-            SubstepDetail::ScrollAttempt { attempt, direction, strategy_index, from, to, result, tree_stats } =>
-                lines.push(format!("scroll_attempt #{} strategy={} {} ({},{})→({},{}) {} {{{} trees, {} nodes}}",
-                    attempt, strategy_index + 1, direction, from.x, from.y, to.x, to.y, result,
-                    tree_stats.fetches, tree_stats.max_nodes)),
+            SubstepDetail::ScrollAttempt { attempt, direction, strategy_index, container, from, to, result, tree_stats } => {
+                let scope = if *container { "container".to_string() } else { format!("preset={}", strategy_index + 1) };
+                lines.push(format!("scroll_attempt #{} {} {} ({},{})→({},{}) {} {{{} trees, {} nodes}}",
+                    attempt, scope, direction, from.x, from.y, to.x, to.y, result,
+                    tree_stats.fetches, tree_stats.max_nodes))
+            }
             SubstepDetail::ScrollFound { selector, position, total_attempts } =>
                 lines.push(format!("scroll_found \"{}\" at ({},{}) after {} attempts",
                     selector, position.x, position.y, total_attempts)),
@@ -1123,6 +1125,7 @@ mod tests {
             attempt: 2,
             direction: "down".into(),
             strategy_index: 0,
+            container: false,
             from: golem_events::Point { x: 200, y: 800 },
             to: golem_events::Point { x: 200, y: 400 },
             result: "PageScrolled".into(),
@@ -1131,8 +1134,28 @@ mod tests {
         let out = format_substeps_text(&substeps);
         assert_eq!(
             out,
-            "scroll_attempt #2 strategy=1 down (200,800)\u{2192}(200,400) PageScrolled {0 trees, 0 nodes}",
-            "SHALL format ScrollAttempt with strategy (1-indexed), direction, coords, result, and tree stats"
+            "scroll_attempt #2 preset=1 down (200,800)\u{2192}(200,400) PageScrolled {0 trees, 0 nodes}",
+            "SHALL format a page ScrollAttempt with preset (1-indexed), direction, coords, result, and tree stats"
+        );
+    }
+
+    #[test]
+    fn substeps_text_scroll_attempt_container_omits_preset() {
+        let substeps = vec![SubstepDetail::ScrollAttempt {
+            attempt: 1,
+            direction: "down".into(),
+            strategy_index: 0,
+            container: true,
+            from: golem_events::Point { x: 200, y: 800 },
+            to: golem_events::Point { x: 200, y: 560 },
+            result: "ContainerAdvanced".into(),
+            tree_stats: golem_events::TreeStats::default(),
+        }];
+        let out = format_substeps_text(&substeps);
+        assert_eq!(
+            out,
+            "scroll_attempt #1 container down (200,800)\u{2192}(200,560) ContainerAdvanced {0 trees, 0 nodes}",
+            "container scrolls SHALL label as 'container', not a meaningless preset index"
         );
     }
 

@@ -531,8 +531,8 @@ pub async fn scroll_to_element(
 
     let mut direction = initial_direction;
     let mut reversed = false;
-    let mut prev_full_fp = hierarchy_fingerprint(&root);
-    let mut prev_horizon_fp = horizon_fingerprint(&root, &viewport);
+    let mut prev_full_fingerprint = hierarchy_fingerprint(&root);
+    let mut prev_horizon_fingerprint = horizon_fingerprint(&root, &viewport);
     let deadline = timeout_ms.map(|ms| Instant::now() + Duration::from_millis(ms));
 
     // Strategy state (page-level scrolling only; containers use fixed geometry)
@@ -652,23 +652,31 @@ pub async fn scroll_to_element(
         }
 
         // Two-tier fingerprint analysis
-        let new_full_fp = hierarchy_fingerprint(&root);
-        let new_horizon_fp = horizon_fingerprint(&root, &vp);
+        let new_full_fingerprint = hierarchy_fingerprint(&root);
+        let new_horizon_fingerprint = horizon_fingerprint(&root, &vp);
 
-        if new_horizon_fp != prev_horizon_fp {
+        if new_horizon_fingerprint != prev_horizon_fingerprint {
             if let Some(e) = emitter {
                 e.substep(golem_events::SubstepEvent::ScrollAttempt {
                     attempt: scroll_attempt,
                     direction: format!("{direction:?}"),
                     strategy_index: strategy_idx,
+                    container: container.is_some(),
                     from: golem_events::Point { x: fx, y: fy },
                     to: golem_events::Point { x: tx, y: ty },
-                    result: golem_events::ScrollAttemptResult::PageScrolled,
+                    // For a `within` scroll we don't distinguish page vs inner
+                    // movement — any horizon change means the container content
+                    // advanced.
+                    result: if container.is_some() {
+                        golem_events::ScrollAttemptResult::ContainerAdvanced
+                    } else {
+                        golem_events::ScrollAttemptResult::PageScrolled
+                    },
                     tree_stats: iter_stats,
                 });
             }
-            prev_full_fp = new_full_fp;
-            prev_horizon_fp = new_horizon_fp;
+            prev_full_fingerprint = new_full_fingerprint;
+            prev_horizon_fingerprint = new_horizon_fingerprint;
             stall_count = 0;
             // A swipe that worked invalidates any pinned dynamic-start —
             // the page has moved, so the absorber-at-(fx,fy) inference
@@ -678,8 +686,8 @@ pub async fn scroll_to_element(
             continue;
         }
 
-        if new_full_fp != prev_full_fp {
-            prev_full_fp = new_full_fp;
+        if new_full_fingerprint != prev_full_fingerprint {
+            prev_full_fingerprint = new_full_fingerprint;
             if container.is_none() && strategy_idx + 1 < strategies.len() {
                 strategy_idx += 1;
                 if let Some(e) = emitter {
@@ -691,18 +699,28 @@ pub async fn scroll_to_element(
                 continue;
             }
             if let Some(e) = emitter {
+                // For a `within` container, the full-tree change means the
+                // inner list/carousel advanced — real progress, not a wasted
+                // swipe. For a page scroll with no presets left, it's an inner
+                // scrollable eating the gesture.
+                let result = if container.is_some() {
+                    golem_events::ScrollAttemptResult::ContainerAdvanced
+                } else {
+                    golem_events::ScrollAttemptResult::InnerScrollableDetected
+                };
                 e.substep(golem_events::SubstepEvent::ScrollAttempt {
                     attempt: scroll_attempt,
                     direction: format!("{direction:?}"),
                     strategy_index: strategy_idx,
+                    container: container.is_some(),
                     from: golem_events::Point { x: fx, y: fy },
                     to: golem_events::Point { x: tx, y: ty },
-                    result: golem_events::ScrollAttemptResult::InnerScrollableDetected,
+                    result,
                     tree_stats: iter_stats,
                 });
             }
             // When a `within` container is set, scrolling INSIDE the
-            // inner scrollable is the explicit intent — full_fp
+            // inner scrollable is the explicit intent — full_fingerprint
             // changing means the carousel / list advanced, which is
             // real progress. Reset stall_count and try the same
             // strategy again on the next iteration. Without this
@@ -723,6 +741,7 @@ pub async fn scroll_to_element(
                     attempt: scroll_attempt,
                     direction: format!("{direction:?}"),
                     strategy_index: strategy_idx,
+                    container: container.is_some(),
                     from: golem_events::Point { x: fx, y: fy },
                     to: golem_events::Point { x: tx, y: ty },
                     result: golem_events::ScrollAttemptResult::Stall { count: stall_count, max: max_stalls },

@@ -59,6 +59,7 @@ pub enum SubstepDetail {
         attempt: u32,
         direction: String,
         strategy_index: usize,
+        container: bool,
         from: golem_events::Point,
         to: golem_events::Point,
         result: String,
@@ -152,9 +153,10 @@ impl From<&golem_events::SubstepEvent> for SubstepDetail {
                 SubstepDetail::Swipe { from: *from, to: *to },
             golem_events::SubstepEvent::ScrollStarted { selector, direction } =>
                 SubstepDetail::ScrollStarted { selector: selector.clone(), direction: direction.clone() },
-            golem_events::SubstepEvent::ScrollAttempt { attempt, direction, strategy_index, from, to, result, tree_stats } =>
+            golem_events::SubstepEvent::ScrollAttempt { attempt, direction, strategy_index, container, from, to, result, tree_stats } =>
                 SubstepDetail::ScrollAttempt {
                     attempt: *attempt, direction: direction.clone(), strategy_index: *strategy_index,
+                    container: *container,
                     from: *from, to: *to, result: format!("{result:?}"),
                     tree_stats: *tree_stats,
                 },
@@ -677,6 +679,7 @@ mod tests {
             attempt: 3,
             direction: "down".into(),
             strategy_index: 2,
+            container: false,
             from: Point { x: 100, y: 700 },
             to: Point { x: 100, y: 300 },
             result: golem_events::ScrollAttemptResult::Stall { count: 2, max: 3 },
@@ -684,11 +687,12 @@ mod tests {
         };
         match SubstepDetail::from(&event) {
             SubstepDetail::ScrollAttempt {
-                attempt, direction, strategy_index, from, to, result, tree_stats,
+                attempt, direction, strategy_index, container, from, to, result, tree_stats,
             } => {
                 assert_eq!(attempt, 3, "SHALL preserve attempt");
                 assert_eq!(direction, "down", "SHALL preserve direction");
                 assert_eq!(strategy_index, 2, "SHALL preserve strategy_index");
+                assert!(!container, "SHALL preserve container flag");
                 assert_eq!(from.y, 700, "SHALL preserve from.y");
                 assert_eq!(to.y, 300, "SHALL preserve to.y");
                 assert_eq!(result, "Stall { count: 2, max: 3 }",
@@ -709,6 +713,7 @@ mod tests {
             attempt: 1,
             direction: "up".into(),
             strategy_index: 0,
+            container: false,
             from: Point { x: 0, y: 0 },
             to: Point { x: 0, y: 100 },
             result: golem_events::ScrollAttemptResult::BoundaryReached,
