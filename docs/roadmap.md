@@ -1114,30 +1114,19 @@ Also roadmap-adjacent: consider whether `golem_events::StepOutcome::Skipped` sho
 - Add an iOS-side grace probe after `bootstatus -b` (e.g. `xcrun simctl getenv <udid> HOME` until fast) to potentially eliminate the Mach -308 case at source rather than retrying after.
 - Expand the classifier as new transient patterns surface in CI logs. Conservative — adding patterns that aren't actually recoverable just masks real errors behind a 3s delay.
 
-## iOS companion drops connection mid-flow, SOLO (EX000) — suspected regression
+## iOS companion EX000 drop — confirm the write-path fix under load
 
-Seen on iPhone 17e (iOS 26) running the demo flow **solo** (`--platform ios`,
-one device, no Android concurrency): the companion's HTTP server closed the
-connection mid-request during `type on_text="Search"` — `EX000 … connection
-closed before message completed`. Because it's solo, this is NOT the cross-device
-contention of [[iOS concurrent flows: cross-flow focus / state corruption]] — the
-companion is dropping on its own. iOS runs are also markedly slow (per-step 2-5s;
-`auto_scroll` 7-50s). Intermittent: reproduced once in two solo runs (the other
-completed cleanly in ~98s).
-
-Suspected **regression** from the recent Android-focused work (companion /
-off-main / a11y changes). ANR recovery now reboots it correctly (~17s), but the
-underlying drop needs fixing, not just recovering.
-
-**Investigate:** bisect the last ~2 weeks of companion / driver changes against a
-solo iOS demo run; inspect the iOS companion HTTP server / request router for a
-lifecycle/threading regression that closes the socket under load (the
-`type`/keyboard path is a recurring trigger). Capture the companion-side log at
-the drop. Ruled out: the Android companion's Content-Length char-vs-byte body
-bug has no iOS counterpart — `HTTPServer.swift` reads the body as raw bytes.
-
-**Files:** `companions/ios/GolemRunnerUITests/` (HTTP server + `RequestRouter.swift`),
-`golem-driver/src/ios.rs`.
+Root-caused and structurally fixed (the iOS companion's `writeResponse` did two
+unchecked `send()`s for header then body and discarded the return values, so a
+short write or a write/close race truncated the response → the host's hyper
+client saw `EX000 … connection closed before message completed`; the `type` path
+was the usual trigger as the longest main-thread op). Fixed: serialize the whole
+response into one buffer, `sendAll` it with a checked loop, add `SO_NOSIGPIPE`
+on the client socket and `shutdown(SHUT_WR)` before close. Verified no regression
+(type_text ×3 solo iOS clean). The original drop was **intermittent**, so this
+hasn't been observed-then-confirmed-gone — watch for any recurrence, especially
+under concurrent load (where the write path is most stressed; see the related
+startup-drop note in [[iOS concurrent flows: cross-flow focus / state corruption]]).
 
 ## iOS concurrent flows: cross-flow focus / state corruption
 
@@ -1146,7 +1135,7 @@ When iPhone + iPad run flows in parallel, occasional state leaks between sims:
 - **Wrong-field type:** observed once on iPhone 17 — typing for `Password` landed in the `Search` input. The next field's focus snapshot apparently lagged by one step, so `typeText` delivered keystrokes to the previously-focused field instead.
 - **Step-6 backspace flake:** one of the two flows occasionally times out at `backspace on_text="golem testt"` — element resolves but the action stalls past the step deadline. Solo runs never trigger.
 - **Step-19 auto_scroll for Submit:** scroll loop enters strategy 2 stalls under concurrent load even after our scroll-strategy fix.
-- **Companion connection dropped on startup under concurrent load (EX000):** running two iOS *versions* concurrently (`os = "ios:latest:2"` → e.g. iPhone 17e/iOS 26 + iPhone 16/iOS 18) plus an Android emulator, the iPhone 17e companion reported `ready` then its first `/hierarchy` returned `EX000 — connection closed before message completed` (companion HTTP server dropped mid-response during the concurrent install+launch burst). ANR recovery correctly fired and rebooted the sim. **Reproducible** — recurred on a second run, including with `--no-build` (so not an install-race artifact). Two concurrent iOS sims is the most fragile config; one iOS + one Android is stable.
+- **Companion connection dropped on startup under concurrent load (EX000):** running two iOS *versions* concurrently (`os = "ios:latest:2"` → e.g. iPhone 17e/iOS 26 + iPhone 16/iOS 18) plus an Android emulator, the iPhone 17e companion reported `ready` then its first `/hierarchy` returned `EX000 — connection closed before message completed` (companion HTTP server dropped mid-response during the concurrent install+launch burst). ANR recovery correctly fired and rebooted the sim. **Reproducible** — recurred on a second run, including with `--no-build` (so not an install-race artifact). Two concurrent iOS sims is the most fragile config; one iOS + one Android is stable. (The `writeResponse` short-write/close fix — see the iOS companion EX000 write-path note above — may have addressed this `mid-response` drop too; re-check this repro under concurrent load.)
 
 The companion-side off-main fix (commit on this entry's removal) prevents one wedge from cascading into all later requests, but doesn't address the underlying issue: XCUITest's HID injection and accessibility-snapshot paths are process-global. When two sims drive XCUITest concurrently from the same host, they interleave on shared `simctl` / `usbmuxd` / `IOHIDEvent` plumbing. Apple's official guidance is one XCUITest run per host process — we're stretching that.
 

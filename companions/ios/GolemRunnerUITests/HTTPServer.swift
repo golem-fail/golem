@@ -55,6 +55,24 @@ struct HTTPResponse {
         default: return "Unknown"
         }
     }
+
+    /// The full HTTP/1.1 wire bytes: status line, headers, blank line, body.
+    ///
+    /// Built as ONE contiguous buffer so the whole response goes out through
+    /// a single send loop. Writing the header and body as two separate
+    /// `send()`s (the previous approach) could short-write or interleave with
+    /// the connection close, truncating the response — the client then sees
+    /// "connection closed before message completed".
+    func serialized() -> Data {
+        var head = "HTTP/1.1 \(statusCode) \(statusText)\r\n"
+        head += "Content-Type: \(contentType)\r\n"
+        head += "Content-Length: \(body.count)\r\n"
+        head += "Connection: close\r\n"
+        head += "\r\n"
+        var out = Data(head.utf8)
+        out.append(body)
+        return out
+    }
 }
 
 /// Type alias for the request handler closure.
@@ -159,6 +177,12 @@ final class HTTPServer {
             guard clientSocket >= 0 else {
                 continue
             }
+            // Don't let a write to a peer that already closed raise SIGPIPE
+            // (default action kills the process). With SO_NOSIGPIPE, `send`
+            // returns EPIPE instead, which the write loop handles.
+            var noSigPipe: Int32 = 1
+            setsockopt(clientSocket, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe,
+                       socklen_t(MemoryLayout<Int32>.size))
             let handler = self.handler
             Thread.detachNewThread {
                 self.handleConnection(socket: clientSocket, handler: handler)
@@ -246,19 +270,28 @@ final class HTTPServer {
     }
 
     private func writeResponse(socket: Int32, response: HTTPResponse) {
-        var header = "HTTP/1.1 \(response.statusCode) \(response.statusText)\r\n"
-        header += "Content-Type: \(response.contentType)\r\n"
-        header += "Content-Length: \(response.body.count)\r\n"
-        header += "Connection: close\r\n"
-        header += "\r\n"
+        sendAll(socket: socket, data: response.serialized())
+        // Half-close our write side so the client gets a clean FIN after the
+        // full response is flushed, rather than racing the bare `close()`.
+        shutdown(socket, SHUT_WR)
+    }
 
-        let headerData = Data(header.utf8)
-        headerData.withUnsafeBytes { ptr in
-            _ = send(socket, ptr.baseAddress!, headerData.count, 0)
-        }
-        response.body.withUnsafeBytes { ptr in
-            if response.body.count > 0 {
-                _ = send(socket, ptr.baseAddress!, response.body.count, 0)
+    /// Write `data` in full, looping until every byte is sent. A single
+    /// `send()` may short-write (return < count); the old code discarded the
+    /// return value and dropped the remainder, truncating the response.
+    private func sendAll(socket: Int32, data: Data) {
+        data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
+            guard let base = raw.baseAddress, raw.count > 0 else { return }
+            var offset = 0
+            while offset < raw.count {
+                let n = send(socket, base + offset, raw.count - offset, 0)
+                if n > 0 {
+                    offset += n
+                } else {
+                    // 0 = peer closed; -1 = error (EPIPE etc.). Nothing more
+                    // we can do for this connection.
+                    break
+                }
             }
         }
     }

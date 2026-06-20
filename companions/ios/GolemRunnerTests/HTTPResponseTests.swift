@@ -56,4 +56,43 @@ struct HTTPResponseTests {
         // `statusText(for:)` is private; exercise it through a builder.
         #expect(HTTPResponse.jsonData(Data(), status: c.code).statusText == c.text)
     }
+
+    // MARK: - serialized() wire bytes (single-buffer write)
+
+    @Test func serializedContainsStatusLineHeadersBlankLineThenBody() {
+        let r = HTTPResponse.jsonData(Data(#"{"a":1}"#.utf8), status: 200)
+        let wire = String(data: r.serialized(), encoding: .utf8)!
+        #expect(wire.hasPrefix("HTTP/1.1 200 OK\r\n"))
+        #expect(wire.contains("Content-Type: application/json\r\n"))
+        #expect(wire.contains("Content-Length: 7\r\n"))   // {"a":1} = 7 bytes
+        #expect(wire.contains("Connection: close\r\n"))
+        // Headers terminated by a blank line, then the body verbatim.
+        #expect(wire.hasSuffix("\r\n\r\n{\"a\":1}"))
+    }
+
+    @Test func serializedContentLengthMatchesBodyByteCount() {
+        // Multi-byte UTF-8 body: Content-Length is BYTES, not characters.
+        let body = Data("café 世界".utf8)
+        let r = HTTPResponse.jsonData(body, status: 200)
+        let wire = r.serialized()
+        #expect(wire.range(of: Data("Content-Length: \(body.count)\r\n".utf8)) != nil)
+        // The body bytes appear unmodified at the tail.
+        #expect(wire.suffix(body.count) == body)
+    }
+
+    @Test func serializedEmptyBodyIsHeaderOnlyWithZeroLength() {
+        let r = HTTPResponse.jsonData(Data(), status: 404)
+        let wire = String(data: r.serialized(), encoding: .utf8)!
+        #expect(wire.contains("HTTP/1.1 404 Not Found\r\n"))
+        #expect(wire.contains("Content-Length: 0\r\n"))
+        #expect(wire.hasSuffix("\r\n\r\n"))
+    }
+
+    @Test func serializedPreservesBinaryBody() {
+        // PNG magic bytes must survive serialization intact (no UTF-8 coercion).
+        let png = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+        let wire = HTTPResponse.png(png).serialized()
+        #expect(wire.suffix(png.count) == png)
+        #expect(wire.range(of: Data("Content-Type: image/png\r\n".utf8)) != nil)
+    }
 }
