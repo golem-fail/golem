@@ -696,7 +696,7 @@ mod tests {
             "failure should have message attribute"
         );
         assert!(
-            xml.contains("type=\"EF000\""),
+            xml.contains("type=\"EX000\""),
             "failure should have type attribute carrying the failure code"
         );
         assert!(
@@ -799,7 +799,7 @@ mod tests {
         let flow = sample_flow();
         let xml = format_flow_junit(&flow);
         assert!(
-            xml.contains("<system-out>[WF000] element not found</system-out>"),
+            xml.contains("<system-out>[WX000] element not found</system-out>"),
             "warning step should have <system-out> with message"
         );
     }
@@ -1279,7 +1279,7 @@ mod tests {
         };
         let xml = format_flow_junit(&flow);
         // Substep text is prepended, then the rendered warning line.
-        assert!(xml.contains("<system-out>tap (5,6)\n[WF000] not found</system-out>"),
+        assert!(xml.contains("<system-out>tap (5,6)\n[WX000] not found</system-out>"),
             "warning step with substeps SHALL combine substep text then message, got: {xml}");
     }
 

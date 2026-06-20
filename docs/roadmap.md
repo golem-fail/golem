@@ -147,7 +147,7 @@ on Android doesn't manifest the same way — iOS impl can stay as-is.
 
 Pixel 7a-class devices under multi-flow load occasionally wedge on
 `/hide-keyboard` — the companion's `dumpsys input_method` shell call
-hangs past the driver's HTTP timeout (~11-12s), returning EF000 and
+hangs past the driver's HTTP timeout (~11-12s), returning EX000 and
 sometimes propagating the wedge to the next flow (the underlying
 UiAutomation handle stays stuck even after the HTTP request times out).
 
@@ -168,7 +168,7 @@ UiAutomation handle stays stuck even after the HTTP request times out).
    `adb reboot` recovery per existing wedge-recovery path
    (see `[[project_pixel_7a_wedge.md]]`).
 
-Combined effect: `/hide-keyboard` EF000s become a single-flow soft
+Combined effect: `/hide-keyboard` EX000s become a single-flow soft
 failure rather than a multi-flow cascade. Reboot becomes the rare
 escalation, not the routine fix.
 
@@ -191,7 +191,7 @@ single-flow suite was already finishing).
 
 The recovery probe should only engage for failure codes that plausibly indicate
 a device/companion health problem — `DeviceCompanionWedged`, transport/HTTP
-errors (`EF000`), hierarchy-fetch timeouts — NOT ordinary flow-logic codes
+errors (`EX000`), hierarchy-fetch timeouts — NOT ordinary flow-logic codes
 (`EF408` step timeout, `EF404` not-found, `EF412` assertion mismatch, `EF400`
 explicit fail). A test asserting something absent is a normal failure, not a wedge.
 
@@ -516,7 +516,7 @@ state corruption]]**. There the contended class isn't I/O bursts but the
 process-global XCUITest plumbing (`simctl` / HID synthesis / window-snapshot).
 Adding those to the queued op-classes (a host-wide `Semaphore(1)` around
 tap-synthesis + snapshot probes) would serialise exactly the operations that
-corrupt when two sims drive XCUITest at once — the EF000 companion drop observed
+corrupt when two sims drive XCUITest at once — the EX000 companion drop observed
 running `ios:latest:2`. The failure *character* differs (iOS-concurrent is
 deterministic/structural — process-global XCUITest; Android multi-emu is
 stochastic/load-driven — host RAM/CPU/GPU + shared adb server), but one host-wide
@@ -1180,11 +1180,11 @@ Also roadmap-adjacent: consider whether `golem_events::StepOutcome::Skipped` sho
 - Add an iOS-side grace probe after `bootstatus -b` (e.g. `xcrun simctl getenv <udid> HOME` until fast) to potentially eliminate the Mach -308 case at source rather than retrying after.
 - Expand the classifier as new transient patterns surface in CI logs. Conservative — adding patterns that aren't actually recoverable just masks real errors behind a 3s delay.
 
-## iOS companion drops connection mid-flow, SOLO (EF000) — suspected regression
+## iOS companion drops connection mid-flow, SOLO (EX000) — suspected regression
 
 Seen on iPhone 17e (iOS 26) running the demo flow **solo** (`--platform ios`,
 one device, no Android concurrency): the companion's HTTP server closed the
-connection mid-request during `type on_text="Search"` — `EF000 … connection
+connection mid-request during `type on_text="Search"` — `EX000 … connection
 closed before message completed`. Because it's solo, this is NOT the cross-device
 contention of [[iOS concurrent flows: cross-flow focus / state corruption]] — the
 companion is dropping on its own. iOS runs are also markedly slow (per-step 2-5s;
@@ -1212,7 +1212,7 @@ When iPhone + iPad run flows in parallel, occasional state leaks between sims:
 - **Wrong-field type:** observed once on iPhone 17 — typing for `Password` landed in the `Search` input. The next field's focus snapshot apparently lagged by one step, so `typeText` delivered keystrokes to the previously-focused field instead.
 - **Step-6 backspace flake:** one of the two flows occasionally times out at `backspace on_text="golem testt"` — element resolves but the action stalls past the step deadline. Solo runs never trigger.
 - **Step-19 auto_scroll for Submit:** scroll loop enters strategy 2 stalls under concurrent load even after our scroll-strategy fix.
-- **Companion connection dropped on startup under concurrent load (EF000):** running two iOS *versions* concurrently (`os = "ios:latest:2"` → e.g. iPhone 17e/iOS 26 + iPhone 16/iOS 18) plus an Android emulator, the iPhone 17e companion reported `ready` then its first `/hierarchy` returned `EF000 — connection closed before message completed` (companion HTTP server dropped mid-response during the concurrent install+launch burst). ANR recovery correctly fired and rebooted the sim. **Reproducible** — recurred on a second run, including with `--no-build` (so not an install-race artifact). Two concurrent iOS sims is the most fragile config; one iOS + one Android is stable.
+- **Companion connection dropped on startup under concurrent load (EX000):** running two iOS *versions* concurrently (`os = "ios:latest:2"` → e.g. iPhone 17e/iOS 26 + iPhone 16/iOS 18) plus an Android emulator, the iPhone 17e companion reported `ready` then its first `/hierarchy` returned `EX000 — connection closed before message completed` (companion HTTP server dropped mid-response during the concurrent install+launch burst). ANR recovery correctly fired and rebooted the sim. **Reproducible** — recurred on a second run, including with `--no-build` (so not an install-race artifact). Two concurrent iOS sims is the most fragile config; one iOS + one Android is stable.
 
 The companion-side off-main fix (commit on this entry's removal) prevents one wedge from cascading into all later requests, but doesn't address the underlying issue: XCUITest's HID injection and accessibility-snapshot paths are process-global. When two sims drive XCUITest concurrently from the same host, they interleave on shared `simctl` / `usbmuxd` / `IOHIDEvent` plumbing. Apple's official guidance is one XCUITest run per host process — we're stretching that.
 

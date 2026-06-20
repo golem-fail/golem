@@ -23,6 +23,11 @@ pub enum Domain {
     Flow,
     /// Test file, params, or suite config invalid (test writer).
     Parsing,
+    /// Unclassified — an error reached output without being tagged with a
+    /// cause. Ownership is genuinely unknown (the engine didn't classify it),
+    /// so it gets its own domain rather than being guessed into Flow. A live
+    /// `X` code is a coverage gap: something threw without a `.code(...)`.
+    Unknown,
 }
 
 impl Domain {
@@ -33,6 +38,7 @@ impl Domain {
             Self::App => 'A',
             Self::Flow => 'F',
             Self::Parsing => 'P',
+            Self::Unknown => 'X',
         }
     }
 
@@ -41,6 +47,8 @@ impl Domain {
     /// mean the test couldn't run properly (the environment broke); Flow and
     /// Parsing failures mean the test logic or its definition is wrong. Used
     /// by JUnit to map onto `<error>` (infrastructure) vs `<failure>` (test).
+    /// `Unknown` is reported as a test-side `<failure>` (we can't claim the
+    /// environment broke without evidence).
     pub fn is_infrastructure(self) -> bool {
         matches!(self, Self::Host | Self::Device | Self::App)
     }
@@ -89,8 +97,9 @@ pub enum FailureCode {
     FlowMaxRuntime,
     /// F508: max_steps exceeded (loop guard).
     FlowMaxSteps,
-    /// F000: fallback for errors that reached output without a tag —
-    /// renders so coverage gaps stay visible.
+    /// X000: fallback for errors that reached output without a tag —
+    /// renders in the `Unknown` domain so coverage gaps stay visible
+    /// instead of being absorbed into the Flow bucket.
     Uncoded,
 
     // ── P: parsing / test authoring ──
@@ -155,7 +164,8 @@ impl FailureCode {
             FlowExplicitFail | FlowElementNotFound | FlowElementOffscreen
             | FlowStepTimeout | FlowUnexpectedlyPresent | FlowAssertionMismatch
             | FlowAlertInteraction | FlowExternalFailed | FlowMaxRuntime
-            | FlowMaxSteps | Uncoded => Domain::Flow,
+            | FlowMaxSteps => Domain::Flow,
+            Uncoded => Domain::Unknown,
             ParseUnknownAction | ParseMissingReference | ParseMissingParam
             | ParseVariable | ParseFlowFile | ParseDeviceConstraint => Domain::Parsing,
             AppInstallPathBlocked | AppInstallScriptNotFound | AppInstallTimeout
@@ -288,8 +298,8 @@ mod tests {
 
     #[test]
     fn uncoded_renders_zero_padded() {
-        assert_eq!(FailureCode::Uncoded.render(Severity::Error), "EF000");
-        assert_eq!(FailureCode::Uncoded.render(Severity::Warning), "WF000");
+        assert_eq!(FailureCode::Uncoded.render(Severity::Error), "EX000");
+        assert_eq!(FailureCode::Uncoded.render(Severity::Warning), "WX000");
     }
 
     #[test]
@@ -376,7 +386,7 @@ mod tests {
     #[test]
     fn domain_classification_per_group() {
         assert_eq!(FailureCode::FlowExplicitFail.domain(), Domain::Flow);
-        assert_eq!(FailureCode::Uncoded.domain(), Domain::Flow);
+        assert_eq!(FailureCode::Uncoded.domain(), Domain::Unknown);
         assert_eq!(FailureCode::ParseUnknownAction.domain(), Domain::Parsing);
         assert_eq!(FailureCode::AppInstallPathBlocked.domain(), Domain::App);
         assert_eq!(FailureCode::DeviceNotFound.domain(), Domain::Device);
@@ -387,7 +397,7 @@ mod tests {
     #[test]
     fn fragment_omits_severity_and_zero_pads() {
         assert_eq!(FailureCode::FlowElementNotFound.fragment(), "F404");
-        assert_eq!(FailureCode::Uncoded.fragment(), "F000");
+        assert_eq!(FailureCode::Uncoded.fragment(), "X000");
         assert_eq!(FailureCode::ParseMissingParam.fragment(), "P422");
         assert_eq!(FailureCode::DeviceDriverOpFailed.fragment(), "D520");
     }

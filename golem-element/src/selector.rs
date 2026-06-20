@@ -14,6 +14,10 @@ pub enum AnchorSelector {
 ///
 /// All non-None fields are combined with AND logic:
 /// an element must satisfy every specified criterion to match.
+//
+// This struct and the trait predicates in `element_has_trait` (below) are the source of truth
+// for the selectors/traits tables in docs/test-structure.md. Update that doc when the fields or
+// trait thresholds change.
 #[derive(Debug, Clone, Default)]
 pub struct Selector {
     pub text: Option<String>,

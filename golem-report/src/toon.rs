@@ -477,7 +477,7 @@ mod tests {
     fn step_failure_format() {
         let step = failed_step("assert_visible", "Welcome", 10012, "timed out");
         let out = format_step_toon(&step);
-        assert_eq!(out, " !assert_visible:Welcome d:10012 EF000 timed out");
+        assert_eq!(out, " !assert_visible:Welcome d:10012 EX000 timed out");
     }
 
     #[test]
@@ -497,7 +497,7 @@ mod tests {
     fn step_warning_format() {
         let step = warning_step("assert_visible", "Promo", 15, "element not found");
         let out = format_step_toon(&step);
-        assert_eq!(out, " ~assert_visible:Promo d:15 WF000 element not found");
+        assert_eq!(out, " ~assert_visible:Promo d:15 WX000 element not found");
     }
 
     // 4. Step skipped format: ` -action:target` ------------------------
@@ -1018,7 +1018,7 @@ mod tests {
         let out = format_step_toon(&step);
         assert_eq!(
             out,
-            " ~scroll:Promo d:15 WF000 element not found warn:\"slow\"",
+            " ~scroll:Promo d:15 WX000 element not found warn:\"slow\"",
             "warning step SHALL append substep notation"
         );
     }

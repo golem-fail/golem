@@ -1,6 +1,9 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
+// These clap structs are the source of truth for docs/cli-reference.md. When you add,
+// remove, or rename a command or flag, update that doc to match.
+
 #[derive(Parser, Debug)]
 #[command(name = "golem", about = "Mobile UI testing framework")]
 pub struct Cli {

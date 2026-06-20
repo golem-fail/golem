@@ -99,7 +99,7 @@ fn action_multiplier(step: &Step) -> u64 {
         // stabilisation; a 1x = 5s budget consistently underflows).
         "tap" | "double_tap" | "backspace" | "long_press" | "swipe"
         | "pinch" | "gesture" | "rotate"
-        | "type" | "assert_visible" | "assert_checked" | "assert_not_visible"
+        | "type" | "assert_visible" | "assert_not_visible"
         | "assert_alert" | "accept_alert" | "dismiss_alert"
         | "read" => 2,
 
@@ -1060,7 +1060,7 @@ mod tests {
         }
 
         for action in [
-            "assert_visible", "assert_not_visible", "assert_checked", "read",
+            "assert_visible", "assert_not_visible", "read",
             "screenshot", "log", "set_variable", "http_get", "await_email",
         ] {
             let step = Step { action: action.into(), ..Default::default() };

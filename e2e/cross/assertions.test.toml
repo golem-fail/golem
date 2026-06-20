@@ -41,9 +41,9 @@ steps = [
 
   { action = "assert_visible", on_text = "Dark Mode", auto_scroll = true },
   { action = "assert_visible", on_text = "Dark Mode", on_enabled = true },
-  { action = "assert_checked", on_accessibility_label = "agree-checkbox", on_checked = false, auto_scroll = true },
+  { action = "assert_visible", on_accessibility_label = "agree-checkbox", on_checked = false, auto_scroll = true },
   { action = "tap", on_text = "I agree" },
-  { action = "assert_checked", on_accessibility_label = "agree-checkbox", on_checked = true },
+  { action = "assert_visible", on_accessibility_label = "agree-checkbox", on_checked = true },
 
   # Scroll List items — further down. Auto_scroll handles the
   # inner-scrollable too. We auto_scroll both because the engine's

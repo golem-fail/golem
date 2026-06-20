@@ -43,6 +43,9 @@ pub async fn execute_action(
     ctx: &ExecutionContext<'_>,
     apps: &[AppConfig],
 ) -> Result<()> {
+    // This match is the canonical list of action keywords. When you add, remove, or
+    // rename an arm here, update docs/actions-reference.md to match — the
+    // `actions_reference_doc_lists_every_action` test enforces that the two stay in sync.
     let action = step.action.as_str();
     match action {
         "tap" => handle_tap(step, driver, ctx).await,
@@ -56,8 +59,7 @@ pub async fn execute_action(
         "scroll" => handle_scroll(step, driver, ctx).await,
         "read" => handle_read(step, driver, vars, ctx).await,
         "hide_keyboard" => handle_hide_keyboard(driver).await,
-        "assert_visible" | "assert_text" | "assert_enabled" | "assert_checked" =>
-            handle_assert_visible(step, driver, ctx).await,
+        "assert_visible" => handle_assert_visible(step, driver, ctx).await,
         "assert_not_visible" => handle_assert_not_visible(step, driver).await,
         "assert_alert" => handle_assert_alert(step, driver).await,
         "accept_alert" => handle_accept_alert(step, driver, ctx).await,
@@ -97,6 +99,74 @@ mod tests {
     use golem_element::Bounds;
     use std::path::Path;
     use test_helpers::*;
+
+    // ── docs/actions-reference.md stays in sync with the dispatch match ──
+    //
+    // Guards the *list* of action keywords, not their prose. Fails when an action is
+    // added, removed, or renamed in the `match` above without the doc being updated to
+    // match (or vice versa). It does NOT catch a wrong description or param — that still
+    // needs human review; this only catches drift in which actions exist.
+    #[test]
+    fn actions_reference_doc_lists_every_action() {
+        use std::collections::BTreeSet;
+
+        // Lowercase `[a-z_]+` tokens that sit between occurrences of `delim` on a line.
+        fn tokens(line: &str, delim: char) -> Vec<String> {
+            line.split(delim)
+                .enumerate()
+                .filter(|(i, _)| i % 2 == 1) // odd segments are the bits between delimiters
+                .map(|(_, s)| s.to_string())
+                .filter(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_lowercase() || c == '_'))
+                .collect()
+        }
+
+        // 1. Keywords from the dispatch match (between `match action {` and the `_ =>` arm).
+        let code = include_str!("actions.rs");
+        let mut in_code = BTreeSet::new();
+        let mut in_match = false;
+        for line in code.lines() {
+            let t = line.trim_start();
+            if t.starts_with("match action {") {
+                in_match = true;
+                continue;
+            }
+            if !in_match {
+                continue;
+            }
+            if t.starts_with("_ =>") {
+                break;
+            }
+            if line.contains("=>") {
+                for tok in tokens(line, '"') {
+                    in_code.insert(tok);
+                }
+            }
+        }
+
+        // 2. Keywords from doc action headers: `### `name` — ...` (every backticked token
+        //    before the em dash; covers grouped headers like the http_* family).
+        let doc = include_str!("../../docs/actions-reference.md");
+        let mut in_doc = BTreeSet::new();
+        for line in doc.lines() {
+            let t = line.trim_start();
+            if !t.starts_with("### `") {
+                continue; // only action entries lead with a backticked keyword
+            }
+            let head = t.split(" — ").next().unwrap_or(t);
+            for tok in tokens(head, '`') {
+                in_doc.insert(tok);
+            }
+        }
+
+        let code_only: Vec<_> = in_code.difference(&in_doc).collect();
+        let doc_only: Vec<_> = in_doc.difference(&in_code).collect();
+        assert!(
+            code_only.is_empty() && doc_only.is_empty(),
+            "actions.rs dispatch and docs/actions-reference.md are out of sync.\n  \
+             in code but undocumented: {code_only:?}\n  \
+             documented but not in code: {doc_only:?}",
+        );
+    }
 
     // ── unknown action returns error ──────────────────────────────
 
