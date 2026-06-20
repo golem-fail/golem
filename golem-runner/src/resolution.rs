@@ -128,6 +128,8 @@ pub fn build_selector_from_group(g: &golem_parser::SelectorGroup) -> Selector {
         above: g.above.as_ref().map(convert_anchor),
         right_of: g.right_of.as_ref().map(convert_anchor),
         left_of: g.left_of.as_ref().map(convert_anchor),
+        contains: g.contains.as_ref().map(convert_anchor),
+        inside: g.inside.as_ref().map(convert_anchor),
         traits: g.traits.clone(),
     }
 }
@@ -153,6 +155,8 @@ pub fn build_selector(step: &Step) -> Selector {
             .or(step.on_right_of.as_ref().map(|s| AnchorSelector::Text(s.clone()))),
         left_of: g.and_then(|g| g.left_of.as_ref().map(convert_anchor))
             .or(step.on_left_of.as_ref().map(|s| AnchorSelector::Text(s.clone()))),
+        contains: g.and_then(|g| g.contains.as_ref().map(convert_anchor)),
+        inside: g.and_then(|g| g.inside.as_ref().map(convert_anchor)),
         traits: g.map(|g| g.traits.clone()).unwrap_or_default(),
     }
 }
@@ -1257,6 +1261,8 @@ mod tests {
             above: None,
             right_of: None,
             left_of: None,
+            contains: None,
+            inside: None,
             traits: vec!["button".to_string(), "square".to_string()],
             x: None,
             y: None,

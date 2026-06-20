@@ -100,3 +100,26 @@ div[role="listitem"] {
 div[role="listitem"]:last-child {
   border-bottom: none;
 }
+
+/* Tablet / wide viewports: use the whole screen and flow the sections into a
+   multi-column flex-wrap grid. Phone layout (below 700px) is unchanged. This
+   deliberately *shifts* the layout so e2e can prove selectors resolve the same
+   elements regardless of arrangement (relational selectors are coordinate-
+   driven, not DOM-structural). */
+@media (min-width: 700px) {
+  #app {
+    max-width: 100%;
+  }
+  main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  main > h1 {
+    flex-basis: 100%;
+  }
+  main > [id^="section-"] {
+    flex: 1 1 340px;
+  }
+}

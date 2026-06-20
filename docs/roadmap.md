@@ -233,7 +233,56 @@ warm-up) found:
 (`handle_scroll` `within` resolution), `golem-runner/src/resolution.rs`
 (`scroll_swipe_bounded`), `golem-element/src/selector.rs` (relational filters).
 
-## Relational selector overhaul: `contains`/`inside` + cross-axis overlap filter + geometric sort
+## Relational selector overhaul — core DONE 2026-06-17; follow-ups below
+
+**Shipped** (`golem-element/src/selector.rs`, `golem-parser/src/lib.rs` +
+`mixin.rs`, `golem-runner/src/resolution.rs`): added `contains`/`inside`
+geometric predicates; directional filters (`below`/`above`/`left_of`/
+`right_of`) now require **cross-axis overlap** (≥1px) with the anchor; survivors
+are **sorted** containment-tightest → proximity-nearest (primary-axis gap) →
+tree-pre-order tie-break, then `.first()`. Unit tests in `selector.rs` (overlap
+exclusion, nearest-first, contains smallest-enclosing w/ self-exclusion, inside,
+containment-beats-proximity). E2e `e2e/cross/selectors.test.toml` covers every
+selector facet (text, accessibility_label, index, 7 traits, all 4 directionals,
+contains, inside, nested anchor) — green on Android + iOS. `scroll.test`
+re-verified on iOS (no regression to `within={below}`). Design rationale (why
+geometric not Maestro's DOM `childOf`; scrollability is a hint not a filter) is
+preserved below for context.
+
+**Follow-ups still open:**
+- **`within = { contains }` is fragile for *scrolling*** (works for *selection*).
+  Smallest-enclosing of a *single* item can resolve a non-scrollable per-item
+  wrapper rather than the list — observed live: `within={contains "Item 0"}`
+  scrolled fine on Android but timed out on iOS (the iOS tree had an intermediate
+  per-item wrapper that won as smallest-enclosing). So `contains` is for picking
+  the box *around* X (tap/assert); the robust scroll idiom remains
+  `within = { below = "<heading>" }`. **Idea to make `within={contains}` robust:**
+  let a size trait disambiguate, e.g. `within = { contains = "Item 0", traits =
+  ["large"] }` / `["tall"]` — filters out the small per-item wrapper, leaving the
+  scrollable list. Cheap, geometric, cross-platform. Build when `within={contains}`
+  is actually wanted.
+- **Swipe-/tap-centroid tweak** (not yet done): aim gestures through the centroid
+  of visible child content, not the raw bounds centre, so a `tap`/container-scroll
+  on a padded container doesn't hit dead space. `container_swipe_start` in
+  `golem-runner/src/scroll.rs`. Pure geometry.
+- **Reconsider `input`/`toggle` traits.** They only match **native** element
+  types (`EditText`/`Switch`/`<input>`-as-native); in the Tauri **webview** the
+  DOM types don't match the umbrella lists, so `·input·`/`·toggle·` never appear
+  (confirmed via `golem tree` on test-app — only `·button·` + geometric/text
+  traits surface). They may not earn their keep, or need webview-DOM type mapping.
+  Decide: drop them, or extend the umbrellas to cover webview input/role types.
+  (Would also want a `test-app-b` native traits flow if kept.)
+- **Deliberately-fragile test-app case** still worth adding (wrap `ScrollList` in
+  a padded wrapper with siblings) to prove `contains`/centroid beat raw
+  `.first()`/centre under adversarial layout.
+- **Tablet-responsive test-app** (offered by user): two-column flex-wrap on wide
+  viewports would let `selectors.test` assert the cross-column overlap-exclusion
+  on a real tablet layout (currently only unit-tested). Test-app change, e2e per
+  matrix, no version bump.
+
+---
+
+### Original design notes (rationale, retained)
 
 **Motivation.** `within = { below = "Scroll List" }` (and relational selectors
 generally) resolve via `find_elements`: a selector with no own-criteria

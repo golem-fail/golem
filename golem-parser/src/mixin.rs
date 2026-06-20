@@ -226,6 +226,8 @@ fn remap_selector_group(g: &crate::SelectorGroup, vars: &HashMap<String, String>
         above: g.above.as_ref().map(|a| remap_anchor(a, vars)),
         right_of: g.right_of.as_ref().map(|a| remap_anchor(a, vars)),
         left_of: g.left_of.as_ref().map(|a| remap_anchor(a, vars)),
+        contains: g.contains.as_ref().map(|a| remap_anchor(a, vars)),
+        inside: g.inside.as_ref().map(|a| remap_anchor(a, vars)),
         traits: g.traits.clone(),
         x: g.x.clone(),
         y: g.y.clone(),

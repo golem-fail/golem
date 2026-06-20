@@ -1,5 +1,5 @@
 use crate::glob::GlobMatcher;
-use crate::{Element, FindResult};
+use crate::{Bounds, Element, FindResult};
 
 /// An anchor for relational selectors — either a simple text pattern or a full selector.
 #[derive(Debug, Clone)]
@@ -34,6 +34,13 @@ pub struct Selector {
     pub right_of: Option<AnchorSelector>,
     /// Keep only elements whose bounds.right() < anchor.x
     pub left_of: Option<AnchorSelector>,
+    /// Keep only elements whose bounds fully enclose the anchor element's
+    /// bounds (geometric containment — "the box that holds X"). Coordinate-
+    /// based, not DOM-structural.
+    pub contains: Option<AnchorSelector>,
+    /// Keep only elements whose bounds are fully enclosed by the anchor
+    /// element's bounds (inverse of `contains` — "the X that sits inside Y").
+    pub inside: Option<AnchorSelector>,
     /// Observable traits that the element must have. All must match (AND logic).
     /// E.g. ["button", "has_text", "square"]
     pub traits: Vec<String>,
@@ -110,43 +117,151 @@ fn find_by_text_recursive<'a>(element: &'a Element, matcher: &GlobMatcher) -> Op
     None
 }
 
-/// Apply all relational filters to the results.
+/// True when `a` and `b` overlap by at least 1px horizontally.
+fn overlaps_x(a: &Bounds, b: &Bounds) -> bool {
+    a.x < b.right() && b.x < a.right()
+}
+
+/// True when `a` and `b` overlap by at least 1px vertically.
+fn overlaps_y(a: &Bounds, b: &Bounds) -> bool {
+    a.y < b.bottom() && b.y < a.bottom()
+}
+
+/// True when `outer` fully encloses `inner`.
+fn encloses(outer: &Bounds, inner: &Bounds) -> bool {
+    outer.x <= inner.x
+        && outer.y <= inner.y
+        && outer.right() >= inner.right()
+        && outer.bottom() >= inner.bottom()
+}
+
+/// Apply all relational filters to the results, then sort the survivors.
 ///
-/// A positional anchor (`below`, `above`, `right_of`, `left_of`) is
-/// only meaningful when the human can see the anchor element — "the
-/// thing just below the Carousel text" requires Carousel itself to be
-/// on screen. If the anchor exists in the tree but is currently
-/// off-screen (zero-area visible_bounds from IntersectionObserver),
-/// we treat the relational match as unresolved and return an empty
-/// list. Callers (typically `within` resolution) interpret empty as
-/// "scroll the page to bring the anchor into view first".
+/// A relational anchor (`below`/`above`/`right_of`/`left_of`/`contains`/
+/// `inside`) is only meaningful when the human can see the anchor element —
+/// "the thing just below the Carousel text" requires Carousel itself to be
+/// on screen. If the anchor exists in the tree but is currently off-screen
+/// (zero-area visible_bounds from IntersectionObserver), we treat the
+/// relational match as unresolved and return an empty list. Callers
+/// (typically `within` resolution) interpret empty as "scroll the page to
+/// bring the anchor into view first".
+///
+/// Directional predicates require not just the half-plane relation but a
+/// **cross-axis overlap** with the anchor (`below`/`above` → horizontal
+/// overlap; `left_of`/`right_of` → vertical overlap), so "below a heading"
+/// means below *and in the heading's column*, not a far-off element in
+/// another column. A full-width anchor overlaps everything, so this is
+/// transparent in the common case and only constrains narrow anchors.
+///
+/// Survivors are then sorted (lexicographically, one natural key per
+/// predicate): containment tightest-first (smallest area), then proximity
+/// nearest-first (smallest primary-axis gap, summed over active directional
+/// predicates), with the original tree pre-order as a stable tie-break. See
+/// the visibility/selection notes in `docs/architecture.md`.
 fn apply_relational_filters(
     root: &Element,
     selector: &Selector,
     mut results: Vec<FindResult>,
 ) -> Vec<FindResult> {
+    // Resolved anchor bounds, kept for both filtering and proximity sorting.
+    let mut below_anchor: Option<Bounds> = None;
+    let mut above_anchor: Option<Bounds> = None;
+    let mut right_anchor: Option<Bounds> = None;
+    let mut left_anchor: Option<Bounds> = None;
+
     if let Some(ref anchor) = selector.below {
         let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
-        let anchor_bottom = found.element.effective_bounds().bottom();
-        results.retain(|r| r.element.effective_bounds().y > anchor_bottom);
+        let a = *found.element.effective_bounds();
+        results.retain(|r| {
+            let b = r.element.effective_bounds();
+            b.y > a.bottom() && overlaps_x(b, &a)
+        });
+        below_anchor = Some(a);
     }
 
     if let Some(ref anchor) = selector.above {
         let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
-        let anchor_y = found.element.effective_bounds().y;
-        results.retain(|r| r.element.effective_bounds().bottom() < anchor_y);
+        let a = *found.element.effective_bounds();
+        results.retain(|r| {
+            let b = r.element.effective_bounds();
+            b.bottom() < a.y && overlaps_x(b, &a)
+        });
+        above_anchor = Some(a);
     }
 
     if let Some(ref anchor) = selector.right_of {
         let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
-        let anchor_right = found.element.effective_bounds().right();
-        results.retain(|r| r.element.effective_bounds().x > anchor_right);
+        let a = *found.element.effective_bounds();
+        results.retain(|r| {
+            let b = r.element.effective_bounds();
+            b.x > a.right() && overlaps_y(b, &a)
+        });
+        right_anchor = Some(a);
     }
 
     if let Some(ref anchor) = selector.left_of {
         let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
-        let anchor_x = found.element.effective_bounds().x;
-        results.retain(|r| r.element.effective_bounds().right() < anchor_x);
+        let a = *found.element.effective_bounds();
+        results.retain(|r| {
+            let b = r.element.effective_bounds();
+            b.right() < a.x && overlaps_y(b, &a)
+        });
+        left_anchor = Some(a);
+    }
+
+    if let Some(ref anchor) = selector.contains {
+        let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
+        let t = *found.element.effective_bounds();
+        // Strictly enclose: an element trivially contains itself, and a
+        // zero-margin wrapper coincident with the anchor isn't a meaningful
+        // "container" — exclude coincident bounds so `contains` yields the
+        // box *around* the anchor, not the anchor.
+        results.retain(|r| {
+            let b = r.element.effective_bounds();
+            *b != t && encloses(b, &t)
+        });
+    }
+
+    if let Some(ref anchor) = selector.inside {
+        let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
+        let t = *found.element.effective_bounds();
+        results.retain(|r| {
+            let b = r.element.effective_bounds();
+            *b != t && encloses(&t, b)
+        });
+    }
+
+    let containment_active = selector.contains.is_some() || selector.inside.is_some();
+    let proximity_active = below_anchor.is_some()
+        || above_anchor.is_some()
+        || right_anchor.is_some()
+        || left_anchor.is_some();
+
+    if containment_active || proximity_active {
+        // Sum of primary-axis gaps over active directional predicates.
+        let proximity_gap = |b: &Bounds| -> i64 {
+            let mut gap: i64 = 0;
+            if let Some(a) = below_anchor { gap += (b.y - a.bottom()) as i64; }
+            if let Some(a) = above_anchor { gap += (a.y - b.bottom()) as i64; }
+            if let Some(a) = right_anchor { gap += (b.x - a.right()) as i64; }
+            if let Some(a) = left_anchor { gap += (a.x - b.right()) as i64; }
+            gap
+        };
+        // Stable sort → equal keys preserve the original tree pre-order, which
+        // keeps `--seed` replay deterministic and is the documented tie-break.
+        results.sort_by(|x, y| {
+            use std::cmp::Ordering::Equal;
+            if containment_active {
+                let c = x.element.effective_bounds().area().cmp(&y.element.effective_bounds().area());
+                if c != Equal { return c; }
+            }
+            if proximity_active {
+                let c = proximity_gap(x.element.effective_bounds())
+                    .cmp(&proximity_gap(y.element.effective_bounds()));
+                if c != Equal { return c; }
+            }
+            Equal
+        });
     }
 
     results
@@ -782,6 +897,114 @@ mod tests {
         };
         let results = find_elements(&root, &s);
         assert!(results.is_empty());
+    }
+
+    // ── below requires horizontal overlap (column-aware) ───────────
+
+    #[test]
+    fn below_requires_horizontal_overlap() {
+        let mut root = elem("View");
+        root.bounds = bounds(0, 0, 800, 600);
+        // Narrow heading in the LEFT column: x=0..300.
+        root.children.push(elem_at("Label", "Heading", 0, 0, 300, 50));
+        // Element below AND in the heading's column (overlaps x).
+        root.children.push(elem_at("Button", "InColumn", 0, 100, 300, 40));
+        // Element below but in the RIGHT column (x=400..700, no x-overlap).
+        root.children.push(elem_at("Button", "OtherColumn", 400, 100, 300, 40));
+
+        let s = Selector { below: Some(AnchorSelector::Text("Heading".to_string())), ..sel() };
+        let results = find_elements(&root, &s);
+        let texts: Vec<_> = results.iter().filter_map(|r| r.element.text.as_deref()).collect();
+        assert!(texts.contains(&"InColumn"), "SHALL keep the in-column element below");
+        assert!(!texts.contains(&"OtherColumn"),
+            "SHALL exclude an element below but in a different column (no horizontal overlap)");
+    }
+
+    // ── below sorts nearest-first (primary-axis gap) ────────────────
+
+    #[test]
+    fn below_sorts_nearest_first() {
+        let mut root = elem("View");
+        root.bounds = bounds(0, 0, 400, 800);
+        root.children.push(elem_at("Label", "Anchor", 0, 0, 400, 50));
+        // Far one first in tree order, near one second — sort must reorder.
+        root.children.push(elem_at("Label", "Far", 0, 400, 400, 40));
+        root.children.push(elem_at("Label", "Near", 0, 100, 400, 40));
+
+        let s = Selector { below: Some(AnchorSelector::Text("Anchor".to_string())), ..sel() };
+        let results = find_elements(&root, &s);
+        assert_eq!(results[0].element.text.as_deref(), Some("Near"),
+            "nearest-by-vertical-gap SHALL sort first, regardless of tree order");
+    }
+
+    // ── contains: smallest enclosing element, excluding the anchor ──
+
+    #[test]
+    fn contains_picks_smallest_enclosing() {
+        let mut root = elem("View");
+        root.bounds = bounds(0, 0, 400, 600);
+        // The target item.
+        root.children.push(elem_at("Label", "Item", 100, 200, 50, 20));
+        // Tight list container around the item.
+        root.children.push(elem_at("List", "list", 90, 180, 100, 200));
+        // Bigger section wrapper also enclosing the item.
+        root.children.push(elem_at("Section", "section", 0, 100, 400, 400));
+        // A box that does NOT enclose the item (left column only).
+        root.children.push(elem_at("Aside", "aside", 0, 0, 80, 600));
+
+        let s = Selector { contains: Some(AnchorSelector::Text("Item".to_string())), ..sel() };
+        let results = find_elements(&root, &s);
+        let texts: Vec<_> = results.iter().filter_map(|r| r.element.text.as_deref()).collect();
+        assert!(!texts.contains(&"Item"), "SHALL exclude the anchor element itself");
+        assert!(!texts.contains(&"aside"), "SHALL exclude non-enclosing elements");
+        assert_eq!(results[0].element.text.as_deref(), Some("list"),
+            "smallest enclosing element SHALL sort first");
+    }
+
+    // ── inside: elements fully enclosed by the anchor region ────────
+
+    #[test]
+    fn inside_keeps_only_enclosed_elements() {
+        let mut root = elem("View");
+        root.bounds = bounds(0, 0, 400, 600);
+        // The container region.
+        root.children.push(elem_at("List", "Region", 50, 50, 200, 200));
+        // Inside the region.
+        root.children.push(elem_at("Label", "InsideA", 60, 60, 50, 20));
+        root.children.push(elem_at("Label", "InsideB", 60, 100, 80, 20));
+        // Outside the region.
+        root.children.push(elem_at("Label", "Outside", 300, 60, 50, 20));
+
+        let s = Selector { inside: Some(AnchorSelector::Text("Region".to_string())), ..sel() };
+        let results = find_elements(&root, &s);
+        let texts: Vec<_> = results.iter().filter_map(|r| r.element.text.as_deref()).collect();
+        assert!(texts.contains(&"InsideA") && texts.contains(&"InsideB"),
+            "SHALL keep elements enclosed by the anchor");
+        assert!(!texts.contains(&"Outside"), "SHALL exclude elements outside the anchor");
+        assert!(!texts.contains(&"Region"), "SHALL exclude the anchor element itself");
+    }
+
+    // ── containment sort dominates proximity (priority order) ───────
+
+    #[test]
+    fn containment_sort_precedes_proximity() {
+        let mut root = elem("View");
+        root.bounds = bounds(0, 0, 400, 800);
+        root.children.push(elem_at("Label", "Head", 0, 0, 400, 40));
+        root.children.push(elem_at("Label", "Target", 100, 500, 50, 20));
+        // Near the head but a large enclosing box.
+        root.children.push(elem_at("Box", "BigNear", 0, 60, 400, 480));
+        // Farther from head but a tighter enclosing box.
+        root.children.push(elem_at("Box", "SmallFar", 90, 480, 100, 60));
+
+        let s = Selector {
+            below: Some(AnchorSelector::Text("Head".to_string())),
+            contains: Some(AnchorSelector::Text("Target".to_string())),
+            ..sel()
+        };
+        let results = find_elements(&root, &s);
+        assert_eq!(results[0].element.text.as_deref(), Some("SmallFar"),
+            "containment (smallest) SHALL outrank proximity (nearest) in the sort");
     }
 
     // ── 31. Combined type + below + enabled ─────────────────────────

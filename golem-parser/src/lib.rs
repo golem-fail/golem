@@ -246,6 +246,11 @@ pub struct SelectorGroup {
     pub above: Option<Anchor>,
     pub right_of: Option<Anchor>,
     pub left_of: Option<Anchor>,
+    /// Geometric containment: match the element whose bounds enclose the
+    /// anchor ("the box that holds X"). Accepts a text pattern or nested group.
+    pub contains: Option<Anchor>,
+    /// Inverse of `contains`: match the element fully enclosed by the anchor.
+    pub inside: Option<Anchor>,
     /// Observable traits: ["button", "has_text", "square"], etc.
     #[serde(default)]
     pub traits: Vec<String>,
