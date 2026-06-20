@@ -1,0 +1,40 @@
+[flow]
+name = "Branch loop counter"
+tags = ["cross-platform", "control-flow", "loop"]
+
+# A bounded GOTO loop: the block re-enters itself until the reserved
+# `_loop` counter (0-based per-block iteration) reaches the threshold.
+# Each entry taps the counter's "+", so a terminating loop leaves the
+# counter at exactly the iteration count. Without a working `_loop`
+# the branch would never match and the loop would run until max_steps —
+# so a clean PASS at this low cap proves the counter bounds the loop.
+
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[flow.options]
+max_steps = 50
+
+[[block]]
+name = "increment_loop"
+steps = [
+  { action = "tap", on_text = "+" },
+]
+# Break out after 3 entries (_loop = 0, 1, 2 → three "+" taps).
+[[block.branch]]
+if_var = "_loop"
+gte = 2
+goto = "verify_count"
+# Default (no condition) — loop back to the same block.
+[[block.branch]]
+goto = "increment_loop"
+
+[[block]]
+name = "verify_count"
+steps = [
+  # Counter shows 3 after three increments.
+  { action = "assert_visible", on_text = "3", on_below = "Counter" },
+]

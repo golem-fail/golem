@@ -348,36 +348,15 @@ falls back to it when no step owns the failure. Remaining:
 **Files:** `golem-report/src/human.rs` (`format_flow`),
 `golem-report/src/stream.rs` (extract FAIL-line helper + test).
 
-## Branch loops can't terminate on a counter (`_loop` not wired)
+## `set_variable` action is listed but not dispatched
 
-GOTO-style looping via branches is meant to work — a block can `goto` itself
-(or another) and the executor re-enters it correctly: block re-entry and
-per-block iteration tracking already function, and the human stream even
-labels `loop_body (iteration N)`. What's missing is a way to *bound* such a
-loop — there's no working loop counter to branch on. (A bare `repeat = N`
-block field was never the plan; loops are expressed via branches. The gap is
-purely the missing bounded counter.)
-
-- The per-block `_loop` counter (`golem-runner/src/loops.rs` `LoopTracker`)
-  is never called by the executor, and `_loop` is never injected into the
-  variable store — so `[[block.branch]] if_var = "_loop", gte = N` reads
-  nothing, never matches, and the loop falls through to its fallback `goto`
-  forever (until `max_steps`/`max_runtime` aborts it). Confirmed live: a
-  3-iteration branch loop ran until the `max_steps` guard.
-- `set_variable` is listed in `policy.rs` but has no arm in the
-  `actions.rs` dispatch, so a counter can't be incremented manually either.
-
-**Fix:** inject the per-block iteration count into the var store as `_loop`
-before branch evaluation (wire `block_iterations` / `LoopTracker` → vars), so
-`if_var = "_loop", gte = N` works. Optionally wire `set_variable` into the
-action dispatch for general-purpose counters. Add an e2e flow for a bounded
-branch loop — none exists today (`for_each` is the only loop with coverage,
-and it iterates an app's devices, not a count).
-
-**Files:** `golem-runner/src/executor.rs` (inject `_loop` into vars before
-`evaluate_branch`), `golem-runner/src/loops.rs` (use `LoopTracker` or fold
-into the executor), optionally `golem-runner/src/actions.rs`
-(`set_variable` dispatch).
+`set_variable` appears in `policy.rs` (timeout/settle classification) but has
+no arm in the `actions.rs` dispatch `match`, so a flow using it fails with
+`EP400 Unknown action: set_variable`. Either wire it (needs parser fields for
+the target var name + a literal/expression value, plus the var-store write and
+scope choice) or drop it from `policy.rs` if general-purpose mutable vars
+aren't wanted. Bounded branch loops no longer need it — the `_loop` counter
+covers loop termination; this is only for manual counters/accumulators.
 
 ## `fake:` generators only evaluated in fixtures, not flow/block vars
 

@@ -343,6 +343,17 @@ pub async fn execute_flow<'a>(
         let iteration = block_iterations.entry(current_idx).or_insert(0);
         let block_label = block.name.clone().unwrap_or_else(|| format!("block_{current_idx}"));
         let block_iter_for_recording = *iteration;
+        // Expose the 0-based per-block iteration as the reserved `_loop`
+        // variable: 0 on first entry, 1 on the second, etc. This is what
+        // bounds a branch loop — `[[block.branch]] if_var = "_loop", gte = N`
+        // breaks out once the block has re-entered enough times. Re-set on
+        // every block entry (each block reflects its own count, no stale
+        // value leaks across blocks). Generator scope mirrors `_perf` below.
+        vars.set_in_scope(
+            ScopeLevel::Generator,
+            "_loop",
+            VarValue::String(iteration.to_string()),
+        );
         ctx.emit(golem_events::EventKind::BlockStarted {
             block_name: block_label.clone(),
             block_index: current_idx,
@@ -1142,6 +1153,30 @@ mod tests {
         }
     }
 
+    fn cond_if_var_gte(var: &str, threshold: i64, goto: &str) -> BranchCondition {
+        BranchCondition {
+            if_visible: None,
+            if_not_visible: None,
+            if_var: Some(var.to_string()),
+            equals: None,
+            matches: None,
+            gte: Some(threshold),
+            goto: goto.to_string(),
+        }
+    }
+
+    fn cond_if_var_equals(var: &str, value: &str, goto: &str) -> BranchCondition {
+        BranchCondition {
+            if_visible: None,
+            if_not_visible: None,
+            if_var: Some(var.to_string()),
+            equals: Some(value.to_string()),
+            matches: None,
+            gte: None,
+            goto: goto.to_string(),
+        }
+    }
+
     const DEFAULT_TIMEOUT: u64 = 10_000;
 
     // ---------------------------------------------------------------
@@ -1463,6 +1498,84 @@ mod tests {
             screenshot_calls.len(),
             3,
             "no branch match should fall through to next block"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 12b. Bounded branch loop terminates on the `_loop` counter
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn branch_loop_terminates_on_loop_counter() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+
+        // loop_body re-enters itself until `_loop` (0-based per-block
+        // iteration) reaches 2 — i.e. it runs at _loop = 0, 1, 2 (three
+        // times) then jumps to `done`. Without the `_loop` injection the
+        // gte never matches and the loop runs until max_steps.
+        let flow = make_flow(vec![
+            make_block_with_branch(
+                Some("loop_body"),
+                vec![make_success_step()],
+                vec![
+                    cond_if_var_gte("_loop", 2, "done"),
+                    cond_default("loop_body"),
+                ],
+            ),
+            make_block(Some("done"), vec![make_success_step()]),
+        ]);
+
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
+            .await
+            .expect("execute_flow should not error");
+
+        assert!(result.success, "bounded branch loop SHALL terminate cleanly");
+        let calls = driver.get_calls();
+        let screenshots = calls.iter().filter(|c| c.0 == "screenshot").count();
+        assert_eq!(
+            screenshots, 4,
+            "loop body SHALL run 3x (_loop 0,1,2) then `done` once"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 12c. `_loop` is 0-based on first entry (injected before branch)
+    // ---------------------------------------------------------------
+    #[tokio::test]
+    async fn loop_counter_is_zero_on_first_entry() {
+        let driver = MockPlatformDriver::new(empty_hierarchy());
+        let mut vars = VariableStore::new();
+        let mut ctx = test_ctx(Path::new("."));
+
+        // First entry sees `_loop == "0"`, so it jumps to `done`
+        // immediately — `body` runs once, `done` once, `never` not at all.
+        let flow = make_flow(vec![
+            make_block_with_branch(
+                Some("body"),
+                vec![make_success_step()],
+                vec![cond_if_var_equals("_loop", "0", "done")],
+            ),
+            make_block(Some("never"), vec![make_success_step()]),
+            make_block(Some("done"), vec![make_success_step()]),
+        ]);
+
+        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
+            .await
+            .expect("execute_flow should not error");
+
+        assert!(result.success);
+        let calls = driver.get_calls();
+        let screenshots = calls.iter().filter(|c| c.0 == "screenshot").count();
+        assert_eq!(
+            screenshots, 2,
+            "`_loop`==0 on first entry SHALL jump straight to done (body + done = 2)"
+        );
+        // And the var is observable in the store after the run.
+        assert_eq!(
+            vars.get("_loop").and_then(|v| v.as_str()),
+            Some("0"),
+            "`_loop` SHALL be exposed in the variable store"
         );
     }
 

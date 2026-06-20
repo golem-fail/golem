@@ -57,7 +57,6 @@ pub mod executor;
 pub mod fingerprint;
 pub mod installed_state;
 pub mod installer;
-pub mod loops;
 pub mod policy;
 pub mod resolution;
 pub mod scroll;
