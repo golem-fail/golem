@@ -944,6 +944,32 @@ enum HierarchyProbe {
     FetchError,
 }
 
+/// Whether a flow's first failure code plausibly implicates the
+/// device/companion (and so warrants the ANR/wedge recovery probe).
+///
+/// Recovery reboots are only useful for device-level problems. Gating on
+/// the code's domain keeps spurious reboots from firing after ordinary
+/// failures: an element-not-found / assertion-mismatch / app-timeout
+/// (`Flow`), a bad install (`App`), or an invalid flow file (`Parsing`)
+/// is the test's or app's fault — a reboot wastes time and adds CI noise.
+///
+/// Device/companion wedges surface as `Device`/`Host`-domain codes; the
+/// `Unknown` domain (`Uncoded`, rendered `EX000`) covers transport drops
+/// like "connection closed before message completed", which are the
+/// genuine companion-dropped signal. `None` (e.g. a barrier-aborted
+/// sibling) does not warrant recovery.
+fn code_warrants_recovery(code: Option<golem_events::FailureCode>) -> bool {
+    match code {
+        Some(c) => matches!(
+            c.domain(),
+            golem_events::Domain::Device
+                | golem_events::Domain::Host
+                | golem_events::Domain::Unknown
+        ),
+        None => false,
+    }
+}
+
 /// Decide whether a failed `FlowReport` warrants a device reboot, and the
 /// human-readable reason to surface. Pure: takes the report's
 /// `first_failure_code` and the (lazily computed) hierarchy probe.
@@ -1227,14 +1253,27 @@ async fn execute_flow_run(
         }
     }
 
-    // ANR detection + reboot recovery. When any FlowReport failed,
-    // probe the device's current hierarchy for the "isn't responding"
-    // system dialog. On hit: annotate the last failed step, mark the
-    // device unhealthy so no further FlowRuns get allocated to it,
-    // and fire-and-forget a background reboot task that clears the
-    // flag once the device is back. Cheap on success: never probes.
+    // ANR detection + reboot recovery. When a FlowReport failed *for a
+    // reason that implicates the device/companion*, probe the device's
+    // current hierarchy for the "isn't responding" system dialog. On
+    // hit: annotate the last failed step, mark the device unhealthy so
+    // no further FlowRuns get allocated to it, and fire-and-forget a
+    // background reboot task that clears the flag once the device is
+    // back. Cheap on success: never probes.
     for (idx, report) in reports.iter_mut().enumerate() {
         if report.success {
+            continue;
+        }
+        // Only flow failures that plausibly indicate an unhealthy device
+        // get the probe. Flow-logic / app / parse failures (element not
+        // found, assertion mismatch, timeouts waiting on the app, bad
+        // install, bad flow file) are the test's or app's fault — a
+        // reboot can't fix them, and probing a slow device after an
+        // ordinary failure can transiently error and trigger a spurious
+        // reboot (CI noise + delay). Real device wedges surface as
+        // Device/Host-domain codes (or Unknown/EX000 transport drops),
+        // which still pass.
+        if !code_warrants_recovery(report.first_failure_code) {
             continue;
         }
         let Some((device, port)) = picked_with_ports.get(idx) else { continue };
@@ -4098,5 +4137,71 @@ mod tests {
             "SHALL NOT recover for a non-wedge failure with no probe result"
         );
         assert_eq!(reason, "");
+    }
+
+    // ---------------------------------------------------------------
+    // code_warrants_recovery — gate the probe on failure-code domain
+    // ---------------------------------------------------------------
+
+    // 7. Flow-logic failures don't warrant recovery — a reboot can't fix
+    //    a missing element / assertion mismatch / app-timeout, and the
+    //    probe after such a failure is the spurious-reboot source.
+    #[test]
+    fn recovery_gate_skips_flow_logic_failures() {
+        use golem_events::FailureCode::*;
+        for code in [
+            FlowElementNotFound,   // EF404
+            FlowElementOffscreen,  // EF405
+            FlowStepTimeout,       // EF408
+            FlowUnexpectedlyPresent, // EF409
+            FlowAssertionMismatch, // EF412
+            FlowExplicitFail,      // EF400
+            FlowMaxRuntime,        // EF504
+            FlowMaxSteps,          // EF508
+        ] {
+            assert!(
+                !code_warrants_recovery(Some(code)),
+                "{code:?} is flow-logic and SHALL NOT trigger recovery"
+            );
+        }
+    }
+
+    // 8. App-install / parse failures don't warrant recovery either.
+    #[test]
+    fn recovery_gate_skips_app_and_parse_failures() {
+        use golem_events::FailureCode::*;
+        assert!(!code_warrants_recovery(Some(AppInstallFailed)));
+        assert!(!code_warrants_recovery(Some(AppLifecycleFailed)));
+        assert!(!code_warrants_recovery(Some(ParseUnknownAction)));
+        assert!(!code_warrants_recovery(Some(ParseFlowFile)));
+    }
+
+    // 9. Device/host-domain codes DO warrant recovery.
+    #[test]
+    fn recovery_gate_allows_device_and_host_failures() {
+        use golem_events::FailureCode::*;
+        assert!(code_warrants_recovery(Some(DeviceCompanionWedged)));
+        assert!(code_warrants_recovery(Some(DeviceDriverOpFailed)));
+        assert!(code_warrants_recovery(Some(DeviceRegistrationTimeout)));
+        assert!(code_warrants_recovery(Some(HostOrchestratorIpc)));
+    }
+
+    // 10. Uncoded (Unknown domain, EX000) covers transport drops like a
+    //     dropped companion connection — these DO warrant recovery.
+    #[test]
+    fn recovery_gate_allows_uncoded_transport_drops() {
+        assert!(
+            code_warrants_recovery(Some(golem_events::FailureCode::Uncoded)),
+            "EX000/Uncoded (e.g. connection closed) SHALL trigger recovery"
+        );
+    }
+
+    // 11. No code at all (e.g. a barrier-aborted sibling) does not recover.
+    #[test]
+    fn recovery_gate_skips_none() {
+        assert!(
+            !code_warrants_recovery(None),
+            "a failure with no code SHALL NOT trigger recovery"
+        );
     }
 }

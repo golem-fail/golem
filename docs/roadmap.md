@@ -176,33 +176,6 @@ escalation, not the routine fix.
 (`handleHideKeyboard`); `golem-driver/src/android.rs::hide_keyboard`;
 recovery glue in `golem-runner` if not already in place.
 
-## ANR recovery over-triggers on ordinary flow failures (e.g. EF408 assert timeout)
-
-The post-flow recovery sweep (`golem-cli/src/suite.rs` ~line 1186) runs for
-**every** failed flow (`if report.success { continue }`), then probes
-`driver.get_hierarchy()`; if that probe errors it concludes "companion
-unresponsive at recovery time" and schedules a device reboot. So a perfectly
-normal test failure — e.g. `assert_visible` on a deliberately-absent element
-timing out (`EF408`) — engages the recovery path, and on a slow/struggling
-device the recovery-time probe times out → spurious `ANR recovery: rebooting
-device`. Observed on an iOS-solo demo run: the intentional-failure block's
-`EF408` printed the reboot line (the reboot didn't even execute — the
-single-flow suite was already finishing).
-
-The recovery probe should only engage for failure codes that plausibly indicate
-a device/companion health problem — `DeviceCompanionWedged`, transport/HTTP
-errors (`EX000`), hierarchy-fetch timeouts — NOT ordinary flow-logic codes
-(`EF408` step timeout, `EF404` not-found, `EF412` assertion mismatch, `EF400`
-explicit fail). A test asserting something absent is a normal failure, not a wedge.
-
-**Fix:** gate the recovery loop on the failure *class*: skip the hierarchy probe
-+ reboot unless `report.first_failure_code` is in the device-health set (or the
-step already carried `DeviceCompanionWedged`). Keep trigger (1) wedge-already-seen
-and (2) ANR-dialog-detected; drop the blanket "any failure → probe → reboot-if-
-probe-fails".
-
-**Files:** `golem-cli/src/suite.rs` (recovery loop gate ~1186-1235).
-
 ## Inner-container scroll: absorber thrash locating container + no forward progress inside it
 
 A demo run hit this hard on both platforms. `scroll to "Item 25" within {below
@@ -581,8 +554,7 @@ Android ANR detection + reboot recovery is shipped. Outstanding:
   responding" text; iOS system dialogs have different shapes (Touch ID,
   location prompts, etc). Wire an iOS-side detection path. (The iOS reboot
   *mechanism* is done — `reboot_ios_device` does `simctl shutdown && boot`
-  + `bootstatus`, verified ~17s live.) See also
-  [[ANR recovery over-triggers on ordinary flow failures (e.g. EF408 assert timeout)]].
+  + `bootstatus`, verified ~17s live.)
 - **Post-reboot validation.** After the reboot task clears
   unhealthy, the first flow assigned to the device may hit an
   uninitialised state. Add a sanity probe (single hierarchy fetch,
