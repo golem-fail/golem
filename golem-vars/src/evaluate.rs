@@ -5,144 +5,103 @@ use rand::Rng;
 
 use crate::generators::generate_simple;
 use crate::structured::generate_structured;
-use crate::{GeneratorDef, VarValue};
+use crate::{GeneratorDef, VarError, VarValue};
 
-/// Evaluate all variable declarations, processing generators and cross-references.
+/// Generate a value from a `fake:NAME(args)` definition string (with NO
+/// trailing `.field` — split that off with [`split_fake_ref`] first).
+/// Tries structured generators (person/address/credit_card/…) first, then
+/// simple ones (email/uuid/…). Public so callers that own an RNG (the
+/// runner) can supply generation to the interpolation context.
+pub fn generate_fake(def_str: &str, rng: &mut impl Rng) -> Result<VarValue, VarError> {
+    let def = GeneratorDef::parse(def_str)
+        .ok_or_else(|| VarError::Other(format!("invalid generator: {def_str}")))?;
+    match generate_structured(&def, rng) {
+        Ok(val) => Ok(val),
+        Err(_) => generate_simple(&def, rng),
+    }
+}
+
+/// Split a `fake:` reference into the generator definition and an optional
+/// trailing `.field.path`. Parenthesis-aware so a `.` inside args (e.g.
+/// `fake:address(format=a.b)`) is not mistaken for a field separator.
 ///
-/// Variables are evaluated in the order provided (which should match declaration order).
-/// Values starting with `fake:` are treated as generator definitions and are evaluated.
-/// Generator params may reference already-evaluated variables using `${var}` or
-/// `${var.field}` syntax. All other values are stored as plain `VarValue::String`.
+/// - `"fake:email"` → (`"fake:email"`, None)
+/// - `"fake:person(country=JP)"` → (`"fake:person(country=JP)"`, None)
+/// - `"fake:person(country=JP).first"` → (`"fake:person(country=JP)"`, Some("first"))
+/// - `"fake:uuid.short"` → (`"fake:uuid"`, Some("short"))
+pub fn split_fake_ref(reference: &str) -> (&str, Option<&str>) {
+    // Find where the generator definition ends. With args, that's the
+    // matching close paren; without, the first '.'.
+    if let Some(open) = reference.find('(') {
+        let mut depth = 0usize;
+        for (i, c) in reference.char_indices().skip(open) {
+            match c {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        let def = &reference[..=i];
+                        let rest = &reference[i + 1..];
+                        return match rest.strip_prefix('.') {
+                            Some(field) if !field.is_empty() => (def, Some(field)),
+                            _ => (def, None),
+                        };
+                    }
+                }
+                _ => {}
+            }
+        }
+        // Unbalanced parens — let the generator parser report it.
+        (reference, None)
+    } else {
+        match reference.split_once('.') {
+            Some((def, field)) if !field.is_empty() => (def, Some(field)),
+            _ => (reference, None),
+        }
+    }
+}
+
+/// Evaluate variable declarations, processing `${…}` references and
+/// `${fake:…}` generators, in the order provided (which should match
+/// declaration order so cross-references resolve).
+///
+/// A whole-value reference keeps its shape — `card = "${fake:credit_card()}"`
+/// or `alias = "${card}"` stores the object. Embedded references
+/// (`id = "u-${fake:uuid}"`) and plain values stringify; an object used in a
+/// string context is an error. Generators draw from `rng`; `${var}` inside
+/// generator args resolves against already-evaluated vars (correlated data).
 pub fn evaluate_generators(
     vars: &[(String, String)],
     rng: &mut impl Rng,
 ) -> Result<HashMap<String, VarValue>> {
+    use crate::interpolation::{evaluate_value, GeneratorResolver, InterpolationContext};
+    use crate::{Scope, ScopeLevel, VariableStore};
+    use std::cell::RefCell;
+
+    // The generator callback owns the RNG via a RefCell so it can be a plain
+    // `Fn` inside the (immutable) interpolation context.
+    let rng_cell = RefCell::new(rng);
+    let gen = |def: &str| generate_fake(def, &mut **rng_cell.borrow_mut());
+    let gen_ref: &GeneratorResolver = &gen;
+
+    // Evaluate each var against a store of those already evaluated, so later
+    // declarations can reference earlier ones (incl. object fields).
+    let mut store = VariableStore::new();
+    store.push_scope(Scope::new(ScopeLevel::Generator));
     let mut results: HashMap<String, VarValue> = HashMap::new();
 
     for (name, value) in vars {
-        if value.starts_with("fake:") {
-            // Resolve any ${var} references in the value string first
-            let resolved_value = resolve_references(value, &results)?;
-            // Parse the generator def from the resolved string
-            let def = GeneratorDef::parse(&resolved_value)
-                .ok_or_else(|| anyhow!("failed to parse generator definition: {resolved_value}"))?;
-            // Try structured first, then simple
-            let generated = match generate_structured(&def, rng) {
-                Ok(val) => val,
-                Err(_) => generate_simple(&def, rng)?,
-            };
-            results.insert(name.clone(), generated);
-        } else {
-            // Plain string value — also resolve references in case someone writes
-            // a plain value that references another variable
-            let resolved = resolve_references(value, &results)?;
-            results.insert(name.clone(), VarValue::String(resolved));
-        }
+        let evaluated = {
+            let mut ctx = InterpolationContext::new(&store);
+            ctx.generator = Some(gen_ref);
+            evaluate_value(value, &ctx)
+                .map_err(|e| anyhow!("evaluating variable \"{name}\": {e}"))?
+        };
+        store.set_in_scope(ScopeLevel::Generator, name.clone(), evaluated.clone());
+        results.insert(name.clone(), evaluated);
     }
 
     Ok(results)
-}
-
-/// Resolve `${var}` and `${var.field}` references in a string using already-evaluated variables.
-///
-/// Returns an error if:
-/// - A referenced variable has not been evaluated yet (including forward references)
-/// - A dot-path navigates through a non-object or into a missing field
-/// - A `${...}` reference is unclosed
-fn resolve_references(template: &str, vars: &HashMap<String, VarValue>) -> Result<String> {
-    let mut result = String::with_capacity(template.len());
-    let mut chars = template.chars().peekable();
-
-    while let Some(c) = chars.next() {
-        if c == '$' && chars.peek() == Some(&'{') {
-            // Consume the '{'
-            chars.next();
-
-            // Read until '}'
-            let mut ref_name = String::new();
-            let mut found_close = false;
-            for ch in chars.by_ref() {
-                if ch == '}' {
-                    found_close = true;
-                    break;
-                }
-                ref_name.push(ch);
-            }
-
-            if !found_close {
-                return Err(golem_events::coded(
-                    golem_events::FailureCode::ParseVariable,
-                    anyhow!("unclosed variable reference: ${{{ref_name}"),
-                ));
-            }
-
-            // An empty reference `${}` is malformed: there is no variable name to
-            // look up, so reject it as a parse error rather than treating it as a
-            // lookup of the empty-named variable.
-            if ref_name.is_empty() {
-                return Err(golem_events::coded(
-                    golem_events::FailureCode::ParseVariable,
-                    anyhow!("malformed variable reference: empty ${{}}"),
-                ));
-            }
-
-            // Resolve the reference: split on first '.' to get var name and optional path
-            let resolved = resolve_var_path(&ref_name, vars)?;
-            result.push_str(&resolved);
-        } else {
-            result.push(c);
-        }
-    }
-
-    Ok(result)
-}
-
-/// Resolve a variable reference like `"addr"` or `"addr.country_code"`.
-///
-/// For simple references (`addr`), returns the string representation of the variable.
-/// For dot-path references (`addr.country_code`), navigates into the object.
-fn resolve_var_path(ref_path: &str, vars: &HashMap<String, VarValue>) -> Result<String> {
-    let (var_name, field_path) = match ref_path.split_once('.') {
-        Some((name, path)) => (name, Some(path)),
-        None => (ref_path, None),
-    };
-
-    let var_value = vars
-        .get(var_name)
-        .ok_or_else(|| golem_events::coded(
-            golem_events::FailureCode::ParseVariable,
-            anyhow!("undefined variable: {var_name}"),
-        ))?;
-
-    match field_path {
-        Some(path) => {
-            // Navigate the dot-path within the variable value
-            let target = var_value
-                .get_path(path)
-                .ok_or_else(|| golem_events::coded(
-                    golem_events::FailureCode::ParseVariable,
-                    anyhow!("path \"{path}\" not found on variable \"{var_name}\""),
-                ))?;
-            match target {
-                VarValue::String(s) => Ok(s.clone()),
-                VarValue::Object(_) => {
-                    return Err(golem_events::coded(
-                        golem_events::FailureCode::ParseVariable,
-                        anyhow!("path \"{path}\" on variable \"{var_name}\" resolved to an object, not a string"),
-                    ))
-                }
-            }
-        }
-        None => match var_value {
-            VarValue::String(s) => Ok(s.clone()),
-            VarValue::Object(_) => {
-                return Err(golem_events::coded(
-                    golem_events::FailureCode::ParseVariable,
-                    anyhow!("variable \"{var_name}\" is an object; use dot-path syntax like ${{{var_name}.field}}"),
-                ))
-            }
-        },
-    }
 }
 
 #[cfg(test)]
@@ -184,7 +143,7 @@ mod tests {
     #[test]
     fn generator_vars_are_evaluated() {
         let mut rng = seeded_rng();
-        let vars = vec![("email".to_string(), "fake:email".to_string())];
+        let vars = vec![("email".to_string(), "${fake:email}".to_string())];
         let result = evaluate_generators(&vars, &mut rng).expect("should succeed");
 
         let email_val = result.get("email").expect("should have email");
@@ -198,7 +157,7 @@ mod tests {
         let mut rng = seeded_rng();
         let vars = vec![
             ("domain".to_string(), "acme.com".to_string()),
-            ("email".to_string(), "fake:email(domain=${domain})".to_string()),
+            ("email".to_string(), "${fake:email(domain=${domain})}".to_string()),
         ];
         let result = evaluate_generators(&vars, &mut rng).expect("should succeed");
 
@@ -215,10 +174,10 @@ mod tests {
     fn cross_reference_object_field_dot_path() {
         let mut rng = seeded_rng();
         let vars = vec![
-            ("addr".to_string(), "fake:address(country=JP)".to_string()),
+            ("addr".to_string(), "${fake:address(country=JP)}".to_string()),
             (
                 "phone".to_string(),
-                "fake:phone(country=${addr.country_code})".to_string(),
+                "${fake:phone(country=${addr.country_code})}".to_string(),
             ),
         ];
         let result = evaluate_generators(&vars, &mut rng).expect("should succeed");
@@ -242,18 +201,18 @@ mod tests {
     fn multiple_generators_chained() {
         let mut rng = seeded_rng();
         let vars = vec![
-            ("addr".to_string(), "fake:address(country=JP)".to_string()),
+            ("addr".to_string(), "${fake:address(country=JP)}".to_string()),
             (
                 "phone".to_string(),
-                "fake:phone(country=${addr.country_code})".to_string(),
+                "${fake:phone(country=${addr.country_code})}".to_string(),
             ),
             (
                 "city2".to_string(),
-                "fake:city(country=${addr.country_code})".to_string(),
+                "${fake:city(country=${addr.country_code})}".to_string(),
             ),
             (
                 "person".to_string(),
-                "fake:person(country=${addr.country_code})".to_string(),
+                "${fake:person(country=${addr.country_code})}".to_string(),
             ),
         ];
         let result = evaluate_generators(&vars, &mut rng).expect("should succeed");
@@ -284,7 +243,7 @@ mod tests {
         let mut rng = seeded_rng();
         let vars = vec![(
             "email".to_string(),
-            "fake:email(domain=${missing_var})".to_string(),
+            "${fake:email(domain=${missing_var})}".to_string(),
         )];
         let result = evaluate_generators(&vars, &mut rng);
 
@@ -304,9 +263,9 @@ mod tests {
         let vars = vec![
             (
                 "phone".to_string(),
-                "fake:phone(country=${addr.country_code})".to_string(),
+                "${fake:phone(country=${addr.country_code})}".to_string(),
             ),
-            ("addr".to_string(), "fake:address(country=JP)".to_string()),
+            ("addr".to_string(), "${fake:address(country=JP)}".to_string()),
         ];
         let result = evaluate_generators(&vars, &mut rng);
 
@@ -324,9 +283,9 @@ mod tests {
         let mut rng = seeded_rng();
         let vars = vec![
             ("base_url".to_string(), "https://example.com".to_string()),
-            ("user_email".to_string(), "fake:email".to_string()),
+            ("user_email".to_string(), "${fake:email}".to_string()),
             ("greeting".to_string(), "Hello!".to_string()),
-            ("addr".to_string(), "fake:address(country=GB)".to_string()),
+            ("addr".to_string(), "${fake:address(country=GB)}".to_string()),
         ];
         let result = evaluate_generators(&vars, &mut rng).expect("should succeed");
 
@@ -352,9 +311,9 @@ mod tests {
     #[test]
     fn deterministic_with_same_seed() {
         let vars = vec![
-            ("addr".to_string(), "fake:address(country=JP)".to_string()),
-            ("email".to_string(), "fake:email".to_string()),
-            ("name".to_string(), "fake:first_name".to_string()),
+            ("addr".to_string(), "${fake:address(country=JP)}".to_string()),
+            ("email".to_string(), "${fake:email}".to_string()),
+            ("name".to_string(), "${fake:first_name}".to_string()),
         ];
 
         let mut rng1 = seeded_rng();
@@ -381,7 +340,7 @@ mod tests {
         let mut rng = seeded_rng();
         let vars = vec![(
             "email".to_string(),
-            "fake:email(domain=${missing".to_string(),
+            "${fake:email(domain=${missing}".to_string(),
         )];
         let result = evaluate_generators(&vars, &mut rng);
 
@@ -410,32 +369,12 @@ mod tests {
         );
     }
 
-    // 13. resolve_references with no references returns string unchanged
-    #[test]
-    fn resolve_references_no_refs_unchanged() {
-        let vars: HashMap<String, VarValue> = HashMap::new();
-        let result = resolve_references("plain string with no refs", &vars)
-            .expect("should succeed");
-        assert_eq!(result, "plain string with no refs");
-    }
-
-    // 14. resolve_references with multiple references in one string
-    #[test]
-    fn resolve_references_multiple_refs() {
-        let mut vars: HashMap<String, VarValue> = HashMap::new();
-        vars.insert("a".to_string(), VarValue::string("AAA"));
-        vars.insert("b".to_string(), VarValue::string("BBB"));
-
-        let result = resolve_references("${a} and ${b}", &vars).expect("should succeed");
-        assert_eq!(result, "AAA and BBB");
-    }
-
     // 15. Attempting to reference an object variable without dot-path yields error
     #[test]
     fn error_referencing_object_without_dot_path() {
         let mut rng = seeded_rng();
         let vars = vec![
-            ("addr".to_string(), "fake:address(country=JP)".to_string()),
+            ("addr".to_string(), "${fake:address(country=JP)}".to_string()),
             ("bad".to_string(), "value=${addr}".to_string()),
         ];
         let result = evaluate_generators(&vars, &mut rng);
@@ -444,82 +383,9 @@ mod tests {
         let err = result.expect_err("should be error");
         let msg = golem_events::clean_msg(&err);
         assert!(
-            msg.contains("is an object"),
-            "expected 'is an object' error, got: {msg}"
+            msg.contains("not a structured object"),
+            "expected object-in-string error, got: {msg}"
         );
-    }
-
-    // 16. Dot-path that resolves to a nested object (not a string) yields error
-    #[test]
-    fn error_dot_path_resolves_to_object() {
-        let mut vars: HashMap<String, VarValue> = HashMap::new();
-        vars.insert(
-            "addr".to_string(),
-            VarValue::object(vec![(
-                "geo",
-                VarValue::object(vec![("lat", VarValue::string("35.6"))]),
-            )]),
-        );
-
-        let result = resolve_var_path("addr.geo", &vars);
-        assert!(result.is_err());
-        let err = result.expect_err("should be error");
-        let msg = golem_events::clean_msg(&err);
-        assert!(
-            msg.contains("resolved to an object, not a string"),
-            "expected object-not-string error, got: {msg}"
-        );
-    }
-
-    // 17. Dot-path to a missing field yields a "path not found" error
-    #[test]
-    fn error_dot_path_field_not_found() {
-        let mut vars: HashMap<String, VarValue> = HashMap::new();
-        vars.insert(
-            "addr".to_string(),
-            VarValue::object(vec![("country_code", VarValue::string("JP"))]),
-        );
-
-        let result = resolve_var_path("addr.nonexistent", &vars);
-        assert!(result.is_err());
-        let err = result.expect_err("should be error");
-        let msg = golem_events::clean_msg(&err);
-        assert!(
-            msg.contains("not found") && msg.contains("addr"),
-            "expected 'path not found' error mentioning the variable, got: {msg}"
-        );
-    }
-
-    // 18. Dot-path on a string variable navigates into a non-object and is not found
-    #[test]
-    fn error_dot_path_through_string_variable() {
-        let mut vars: HashMap<String, VarValue> = HashMap::new();
-        vars.insert("name".to_string(), VarValue::string("Alice"));
-
-        let result = resolve_var_path("name.first", &vars);
-        assert!(result.is_err());
-        let err = result.expect_err("should be error");
-        let msg = golem_events::clean_msg(&err);
-        assert!(
-            msg.contains("not found"),
-            "expected 'path not found' error for path into a string, got: {msg}"
-        );
-    }
-
-    // 19. Dot-path navigating multiple segments down to a leaf string succeeds
-    #[test]
-    fn dot_path_multi_segment_leaf_string() {
-        let mut vars: HashMap<String, VarValue> = HashMap::new();
-        vars.insert(
-            "user".to_string(),
-            VarValue::object(vec![(
-                "addr",
-                VarValue::object(vec![("city", VarValue::string("Tokyo"))]),
-            )]),
-        );
-
-        let resolved = resolve_var_path("user.addr.city", &vars).expect("should succeed");
-        assert_eq!(resolved, "Tokyo", "deep dot-path SHALL resolve to leaf string");
     }
 
     // 20. Malformed generator def (unterminated parens) yields a parse error
@@ -527,69 +393,15 @@ mod tests {
     fn error_on_unparseable_generator_def() {
         let mut rng = seeded_rng();
         // Opening paren but no closing paren -> GeneratorDef::parse returns None.
-        let vars = vec![("bad".to_string(), "fake:email(domain=x".to_string())];
+        let vars = vec![("bad".to_string(), "${fake:email(domain=x}".to_string())];
         let result = evaluate_generators(&vars, &mut rng);
 
         assert!(result.is_err());
         let err = result.expect_err("should be error");
         assert!(
-            err.to_string().contains("failed to parse generator definition"),
+            err.to_string().contains("invalid generator"),
             "expected parse-failure error, got: {err}"
         );
     }
 
-    // 21. Empty reference ${} is rejected as a malformed parse error, not
-    //     treated as a lookup of the empty-named variable.
-    #[test]
-    fn error_on_empty_reference() {
-        let vars: HashMap<String, VarValue> = HashMap::new();
-        let result = resolve_references("prefix-${}-suffix", &vars);
-        assert!(result.is_err());
-        let err = result.expect_err("should be error");
-        let msg = golem_events::clean_msg(&err);
-        assert!(
-            msg.contains("malformed variable reference"),
-            "empty reference SHALL be rejected as malformed, got: {msg}"
-        );
-        assert!(
-            !msg.contains("undefined variable"),
-            "empty reference SHALL NOT be treated as an undefined variable, got: {msg}"
-        );
-    }
-
-    // 24. Empty reference ${} carries the ParseVariable failure code (same as
-    //     the unclosed-brace case), confirming it is classified as malformed.
-    #[test]
-    fn empty_reference_uses_parse_variable_code() {
-        let vars: HashMap<String, VarValue> = HashMap::new();
-        let err = resolve_references("${}", &vars).expect_err("empty ref SHALL error");
-        assert_eq!(
-            golem_events::extract_code(&err),
-            Some(golem_events::FailureCode::ParseVariable),
-            "empty ${{}} SHALL be coded as ParseVariable"
-        );
-    }
-
-    // 22. A '$' not followed by '{' is emitted literally
-    #[test]
-    fn lone_dollar_is_literal() {
-        let vars: HashMap<String, VarValue> = HashMap::new();
-        let result = resolve_references("cost is $5 and $ alone", &vars)
-            .expect("should succeed");
-        assert_eq!(result, "cost is $5 and $ alone");
-    }
-
-    // 23. Resolved reference value is inserted literally (no recursive re-resolution)
-    #[test]
-    fn resolved_value_is_not_re_resolved() {
-        let mut vars: HashMap<String, VarValue> = HashMap::new();
-        // 'a' itself contains a ${b} sequence; resolution does not recurse into it.
-        vars.insert("a".to_string(), VarValue::string("${b}"));
-
-        let result = resolve_references("${a}", &vars).expect("should succeed");
-        assert_eq!(
-            result, "${b}",
-            "resolved value SHALL be inserted literally without re-resolution"
-        );
-    }
 }

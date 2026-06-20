@@ -309,23 +309,23 @@ mod tests {
     fn parse_fixture_with_vars() {
         let toml_str = r#"
 [vars]
-email = "fake:email(prefix=test,domain=acme-qa.com)"
-password = "fake:password(length=12)"
-first = "fake:first_name"
+email = "${fake:email(prefix=test,domain=acme-qa.com)}"
+password = "${fake:password(length=12)}"
+first = "${fake:first_name}"
 "#;
         let fixture = parse_fixture(toml_str).expect("Should parse fixture with vars");
         assert_eq!(fixture.vars.len(), 3);
         assert_eq!(
             fixture.vars.get("email").map(|s| s.as_str()),
-            Some("fake:email(prefix=test,domain=acme-qa.com)")
+            Some("${fake:email(prefix=test,domain=acme-qa.com)}")
         );
         assert_eq!(
             fixture.vars.get("password").map(|s| s.as_str()),
-            Some("fake:password(length=12)")
+            Some("${fake:password(length=12)}")
         );
         assert_eq!(
             fixture.vars.get("first").map(|s| s.as_str()),
-            Some("fake:first_name")
+            Some("${fake:first_name}")
         );
     }
 

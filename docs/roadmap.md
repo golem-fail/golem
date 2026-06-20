@@ -314,39 +314,32 @@ scope choice) or drop it from `policy.rs` if general-purpose mutable vars
 aren't wanted. Bounded branch loops no longer need it — the `_loop` counter
 covers loop termination; this is only for manual counters/accumulators.
 
-## `fake:` generators only evaluated in fixtures, not flow/block vars
+## Step interpolation: wire device/builtin prefixes (`${_device}`, `${self:…}`, cross-device)
 
-`fake:*` generators (email, person, address, credit_card, geo, …) are wired
-into exactly one runtime path: `fixture_loader.rs`, which calls
-`golem_vars::evaluate::evaluate_generators` with the seeded RNG when a
-`load_fixture` step pulls a `__fixtures__/*.toml`. There they work and are
-seed-deterministic.
+`${…}` interpolation is now wired into step execution (`golem-runner/src/interp.rs`,
+called per-step in the executor) over the variable store + `${fake:…}` generators,
+so `${var}`, `${obj.field}`, `${_loop}` (store-injected) and inline generators all
+resolve. But the step-time `InterpolationContext` only sets `store` + `generator` —
+it leaves `device`, `device_stores`, `global_store`, `each_vars`, `builtins` as
+`None`. So the prefixed/builtin forms `interpolation.rs` supports — `${_device}`,
+`${_os}`, `${_udid}`, `${self:var}`, `${global:var}`, `${iphone_17:var}`,
+`${_each.x}` — error if used in a step.
 
-But variables declared directly in `[flow.vars]` / `[block.vars]` are seeded
-as the **raw string** — the executor does:
+Most are tied to features that are themselves roadmap (multi-device flow
+coordination, `for_each` over devices), so this wasn't needed for the core var
+work. To wire it: build the builtins map (`_device`/`_os`/`_platform`/`_type`/
+`_udid`/`_app` from `ctx.device` + the app) and pass `device`/`device_stores`/
+`each_vars` into the context the executor constructs in `interp.rs`. Add an e2e
+that types `${_device}` / `${_os}` into a field.
 
-```rust
-child_vars.set_in_scope(ScopeLevel::Flow, key, VarValue::String(value.clone()))
-```
+## `fake:uuid` ignores `--seed` (not reproducible)
 
-with no generator evaluation. So `[flow.vars] email = "fake:email"` stores the
-literal text `"fake:email"`, and `${email}` interpolates to `"fake:email"`,
-not a generated address. This contradicts `evaluate.rs`'s own docstring
-("values starting with `fake:` are treated as generator definitions") — reads
-as a wiring gap, not a fixtures-only design choice.
-
-No e2e flow uses `fake:` at all, so neither path has end-to-end coverage
-(generators + fixture loader have unit/integration tests only).
-
-**Fix:** run `[flow.vars]` and `[block.vars]` through `evaluate_generators`
-(seeded from the flow's RNG, same as fixtures) when seeding the store, so
-`fake:` works wherever vars are declared. Then add an e2e flow that declares a
-`fake:` var, types it into a field, and asserts a non-literal value — and
-verify `--seed` replay reproduces it.
-
-**Files:** `golem-runner/src/executor.rs` (flow/block var seeding — call
-`evaluate_generators` instead of storing raw), `golem-runner/src/subflow.rs`
-(`prepare_child_vars` path), `e2e/` (new fake-data coverage flow).
+`generators.rs::generate_uuid` calls `Uuid::new_v4()`, which draws from OS
+entropy rather than the passed seeded RNG — so a flow using `${fake:uuid}` does
+not reproduce under `--seed N` (every other generator does; verified
+`${fake:email}` reproduces). Fix: generate the UUID bytes from the seeded `rng`
+(`rng.fill_bytes` into a 16-byte buffer, set the v4 version/variant bits) so it
+joins the deterministic stream. Pre-existing; surfaced wiring up `${fake:…}`.
 
 ## "Save on failure" for recordings + --trace screenshots
 

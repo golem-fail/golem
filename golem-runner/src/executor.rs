@@ -85,6 +85,13 @@ pub async fn execute_flow<'a>(
 ) -> Result<FlowResult> {
     let blocks = &flow.block;
 
+    // Seed [flow.vars], evaluating `fake:` generators with the flow RNG so
+    // generated data works wherever vars are declared (not just fixtures).
+    // Runs for the top-level flow and — via the recursive call in the
+    // run_flow branch — for sub-flows. CLI `--var` overrides sit in a
+    // higher-priority Cli scope, so they still win.
+    seed_vars_with_generators(&flow.flow.vars, vars, ScopeLevel::Flow, &ctx.rng)?;
+
     // Refine the inherited record-default for this flow level. The
     // current flow's `[flow.options].record` wins over what the caller
     // (parent flow, or top-level resolver) handed in. Project-level
@@ -241,17 +248,19 @@ pub async fn execute_flow<'a>(
                 .with_context(|| format!("failed to read sub-flow: {}", child_path.display()))?;
             let child_flow = golem_parser::parse_flow(&child_content)?;
 
+            // Inherit the parent store, then seed the block-level overrides
+            // passed to the sub-flow — evaluating `fake:` generators with the
+            // (parent) flow RNG. The child flow's own `[flow.vars]` are seeded
+            // by the recursive `execute_flow` below, so they're not applied
+            // here.
             let block_vars = config.as_ref().map_or(&block.vars, |c| &c.vars);
-            let mut child_vars = crate::subflow::prepare_child_vars(vars, block_vars);
-
-            // Apply the child flow's own flow-level variables.
-            for (key, value) in &child_flow.flow.vars {
-                child_vars.set_in_scope(
-                    golem_vars::ScopeLevel::Flow,
-                    key,
-                    golem_vars::VarValue::String(value.clone()),
-                );
-            }
+            let mut child_vars = crate::subflow::prepare_child_vars(vars, &HashMap::new());
+            seed_vars_with_generators(
+                block_vars,
+                &mut child_vars,
+                golem_vars::ScopeLevel::Flow,
+                &ctx.rng,
+            )?;
 
             // Build a child execution context scoped to the child flow's lifetime.
             let child_flow_dir = child_path
@@ -462,6 +471,24 @@ pub async fn execute_flow<'a>(
                     });
                 }
             }
+
+            // Resolve `${…}` variable references and inline `${fake:…}`
+            // generators in this step's fields (selectors, input, params)
+            // before it runs. Errors — undefined var, object-in-string,
+            // malformed generator — fail the flow with a ParseVariable code.
+            let step_owned = {
+                let rng = &ctx.rng;
+                let generator = |def: &str| {
+                    golem_vars::evaluate::generate_fake(
+                        def,
+                        &mut *rng.lock().expect("flow rng mutex poisoned"),
+                    )
+                };
+                let mut ictx = golem_vars::interpolation::InterpolationContext::new(&*vars);
+                ictx.generator = Some(&generator);
+                crate::interp::interpolate_step(step, &ictx)?
+            };
+            let step = &step_owned;
 
             let block_name_str = block.name.clone().unwrap_or_default();
             ctx.emit(golem_events::EventKind::StepStarted {
@@ -964,6 +991,37 @@ pub async fn execute_flow_with_data<'a>(
         perf_snapshots: vec![],
         recordings: Vec::new(),
     }))
+}
+
+/// Seed a `[*.vars]` map into `target` at `scope`, evaluating `fake:`
+/// generators with the flow RNG (`${var}` cross-references resolve against
+/// already-evaluated vars). Plain values pass through as strings.
+///
+/// `flow.vars` / `block.vars` are `HashMap`s (unordered), so the pairs are
+/// **sorted by key** before evaluation — without a stable order, two
+/// `fake:` vars could draw each other's RNG values and `--seed` replay
+/// would not reproduce. (Cross-references therefore only resolve when the
+/// referenced var sorts earlier; same best-effort contract as fixtures.)
+fn seed_vars_with_generators(
+    raw: &HashMap<String, String>,
+    target: &mut VariableStore,
+    scope: ScopeLevel,
+    rng: &std::sync::Mutex<rand_chacha::ChaCha8Rng>,
+) -> Result<()> {
+    if raw.is_empty() {
+        return Ok(());
+    }
+    let mut pairs: Vec<(String, String)> =
+        raw.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    pairs.sort_by(|a, b| a.0.cmp(&b.0));
+    let evaluated = {
+        let mut guard = rng.lock().expect("flow rng mutex poisoned");
+        golem_vars::evaluate::evaluate_generators(&pairs, &mut *guard)?
+    };
+    for (key, value) in evaluated {
+        target.set_in_scope(scope, key, value);
+    }
+    Ok(())
 }
 
 /// Find the index of a block by name. Returns an error if not found.
@@ -1676,6 +1734,86 @@ mod tests {
         assert!(result.is_err());
         let err_msg = result.expect_err("should be error").to_string();
         assert!(err_msg.contains("missing"));
+    }
+
+    // ---------------------------------------------------------------
+    // 16b. seed_vars_with_generators — fake: eval + seed determinism
+    // ---------------------------------------------------------------
+    fn seeded_rng(seed: u64) -> std::sync::Mutex<rand_chacha::ChaCha8Rng> {
+        use rand::SeedableRng;
+        std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(seed))
+    }
+
+    #[test]
+    fn seed_vars_evaluates_fake_and_passes_plain_through() {
+        let mut raw = HashMap::new();
+        raw.insert("email".to_string(), "${fake:email}".to_string());
+        raw.insert("literal".to_string(), "hello".to_string());
+
+        let mut store = VariableStore::new();
+        seed_vars_with_generators(&raw, &mut store, ScopeLevel::Flow, &seeded_rng(42))
+            .expect("seeding SHALL succeed");
+
+        let email = store.get("email").and_then(|v| v.as_str()).expect("email set");
+        assert!(email.contains('@'), "fake:email SHALL generate an address, got {email:?}");
+        assert_ne!(email, "${fake:email}", "fake: SHALL NOT be stored as the literal");
+        assert_eq!(
+            store.get("literal").and_then(|v| v.as_str()),
+            Some("hello"),
+            "plain values SHALL pass through unchanged"
+        );
+    }
+
+    #[test]
+    fn seed_vars_is_seed_deterministic_regardless_of_map_order() {
+        // Two fake vars inserted in OPPOSITE orders. Sorting by key makes
+        // evaluation order — and thus the RNG draw each var gets — identical,
+        // so the same seed reproduces the same values (replay determinism).
+        let mut raw1 = HashMap::new();
+        raw1.insert("a_addr".to_string(), "${fake:email}".to_string());
+        raw1.insert("z_addr".to_string(), "${fake:email}".to_string());
+        let mut raw2 = HashMap::new();
+        raw2.insert("z_addr".to_string(), "${fake:email}".to_string());
+        raw2.insert("a_addr".to_string(), "${fake:email}".to_string());
+
+        let mut s1 = VariableStore::new();
+        seed_vars_with_generators(&raw1, &mut s1, ScopeLevel::Flow, &seeded_rng(7)).expect("s1");
+        let mut s2 = VariableStore::new();
+        seed_vars_with_generators(&raw2, &mut s2, ScopeLevel::Flow, &seeded_rng(7)).expect("s2");
+
+        assert_eq!(
+            s1.get("a_addr").and_then(|v| v.as_str()),
+            s2.get("a_addr").and_then(|v| v.as_str()),
+            "same seed SHALL reproduce a_addr regardless of map insertion order"
+        );
+        assert_eq!(
+            s1.get("z_addr").and_then(|v| v.as_str()),
+            s2.get("z_addr").and_then(|v| v.as_str()),
+            "same seed SHALL reproduce z_addr regardless of map insertion order"
+        );
+        assert_ne!(
+            s1.get("a_addr").and_then(|v| v.as_str()),
+            s1.get("z_addr").and_then(|v| v.as_str()),
+            "two distinct fake vars SHALL get distinct draws"
+        );
+    }
+
+    #[test]
+    fn seed_vars_empty_map_is_noop() {
+        let mut store = VariableStore::new();
+        seed_vars_with_generators(&HashMap::new(), &mut store, ScopeLevel::Flow, &seeded_rng(1))
+            .expect("empty SHALL succeed");
+        assert!(store.get("anything").is_none());
+    }
+
+    #[test]
+    fn seed_vars_bad_generator_errors() {
+        let mut raw = HashMap::new();
+        raw.insert("x".to_string(), "${fake:}".to_string()); // empty generator name
+        let mut store = VariableStore::new();
+        let result =
+            seed_vars_with_generators(&raw, &mut store, ScopeLevel::Flow, &seeded_rng(1));
+        assert!(result.is_err(), "a malformed fake: def SHALL surface an error");
     }
 
     // ---------------------------------------------------------------

@@ -111,7 +111,7 @@ mod tests {
         write_fixture(
             dir,
             "gen_user",
-            "[vars]\nemail = \"fake:email\"\nfirst = \"fake:first_name\"\n",
+            "[vars]\nemail = \"${fake:email}\"\nfirst = \"${fake:first_name}\"\n",
         );
 
         let mut store = VariableStore::new();
@@ -311,7 +311,7 @@ mod tests {
     fn same_seed_produces_same_generated_value() {
         let tmp = TempDir::new().expect("temp dir");
         let dir = tmp.path();
-        write_fixture(dir, "gen", "[vars]\nemail = \"fake:email\"\n");
+        write_fixture(dir, "gen", "[vars]\nemail = \"${fake:email}\"\n");
 
         let load_email = || {
             let mut store = VariableStore::new();
@@ -441,7 +441,7 @@ mod tests {
         let dir = tmp.path();
         // `fake:` parses fine (GeneratorDef with an empty name); the error originates in
         // generate_simple, whose `_` arm rejects an empty/unknown name as "unknown generator".
-        write_fixture(dir, "badgen", "[vars]\nx = \"fake:\"\n");
+        write_fixture(dir, "badgen", "[vars]\nx = \"${fake:}\"\n");
 
         let mut store = VariableStore::new();
         let mut rng = seeded_rng();
@@ -472,7 +472,7 @@ mod tests {
     fn distinct_generated_keys_advance_rng() {
         let tmp = TempDir::new().expect("temp dir");
         let dir = tmp.path();
-        write_fixture(dir, "multi", "[vars]\na = \"fake:email\"\nb = \"fake:email\"\n");
+        write_fixture(dir, "multi", "[vars]\na = \"${fake:email}\"\nb = \"${fake:email}\"\n");
 
         let mut store = VariableStore::new();
         let mut rng = seeded_rng();

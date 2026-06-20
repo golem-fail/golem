@@ -334,8 +334,8 @@ async fn test_fake_data_generation_in_flow_vars() {
 name = "fake data test"
 
 [flow.vars]
-user_email = "fake:email"
-user_name = "fake:first_name"
+user_email = "${fake:email}"
+user_name = "${fake:first_name}"
 
 [[block]]
 name = "verify"

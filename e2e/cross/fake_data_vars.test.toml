@@ -1,0 +1,32 @@
+[flow]
+name = "Variables and fake-data generators"
+tags = ["cross-platform", "fake-data", "text-input", "variables"]
+
+# Exercises `${…}` interpolation in step fields (which is wired through the
+# executor): a plain variable, a named `${fake:…}` generator var, and an
+# inline generator with literal text. Generators are seed-deterministic.
+[flow.vars]
+label = "GolemQA"
+gen_email = "${fake:email}"
+
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "vars_and_generators"
+steps = [
+  # 1. Plain ${var} interpolation.
+  { action = "type", on_text = "Search", input = "${label}" },
+  { action = "assert_visible", on_text = "GolemQA" },
+
+  # 2. Named generator var → a real email (has '@'; never the literal text).
+  { action = "type", on_text = "Enter email", input = "${gen_email}" },
+  { action = "assert_visible", on_text = "*@*" },
+
+  # 3. Inline generator with surrounding literal text, no var declaration.
+  { action = "type", on_text = "Multi-line text", input = "id-${fake:uuid}", auto_scroll = true },
+  { action = "assert_visible", on_text = "id-*" },
+]

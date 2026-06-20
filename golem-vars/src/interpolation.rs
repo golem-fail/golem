@@ -1,6 +1,12 @@
 use crate::{VarError, VarValue, VariableStore};
 use std::collections::HashMap;
 
+/// Resolves a `fake:NAME(args)` generator definition (no trailing `.field`)
+/// to a value. Supplied by the caller that owns the RNG (the runner); the
+/// `golem-vars` crate stays RNG-agnostic. `None` when generators aren't
+/// available in this context, in which case a `${fake:…}` reference errors.
+pub type GeneratorResolver<'a> = dyn Fn(&str) -> Result<VarValue, VarError> + 'a;
+
 /// Context for variable resolution during interpolation.
 pub struct InterpolationContext<'a> {
     /// The main variable store.
@@ -15,6 +21,24 @@ pub struct InterpolationContext<'a> {
     pub each_vars: Option<&'a VariableStore>,
     /// Built-in variables (_device, _os, _platform, _type, _udid, _app, _loop).
     pub builtins: Option<&'a HashMap<String, String>>,
+    /// Resolver for `${fake:…}` generator references (runner-supplied).
+    pub generator: Option<&'a GeneratorResolver<'a>>,
+}
+
+impl<'a> InterpolationContext<'a> {
+    /// A context over a single store with no device/global/each/builtins
+    /// and no generator support. Convenience for the common case.
+    pub fn new(store: &'a VariableStore) -> Self {
+        InterpolationContext {
+            store,
+            device: None,
+            device_stores: None,
+            global_store: None,
+            each_vars: None,
+            builtins: None,
+            generator: None,
+        }
+    }
 }
 
 /// Resolve a dot-path against a `VarValue`, returning a string result.
@@ -68,9 +92,166 @@ fn resolve_from_store(full_key: &str, store: &VariableStore) -> Result<String, V
     }
 }
 
+/// Navigate a dot-path against a `VarValue`, returning the leaf **value**
+/// (object or string preserved — unlike [`resolve_dot_path`], which coerces
+/// to a string and errors on an object leaf). Used by the value-returning
+/// resolver so whole-value declarations keep objects.
+fn navigate_value(root_key: &str, rest: &[&str], value: &VarValue) -> Result<VarValue, VarError> {
+    let mut current = value;
+    let mut traversed = root_key.to_string();
+    for &segment in rest {
+        match current {
+            VarValue::Object(map) => {
+                current = map.get(segment).ok_or_else(|| VarError::PropertyNotFound {
+                    object: traversed.clone(),
+                    property: segment.to_string(),
+                })?;
+                traversed.push('.');
+                traversed.push_str(segment);
+            }
+            VarValue::String(_) => return Err(VarError::NotAnObject(traversed)),
+        }
+    }
+    Ok(current.clone())
+}
+
+/// Resolve a single `${…}` reference to a **value** (objects preserved).
+///
+/// Handles `${fake:…}` generators and bare `${var}` / `${var.field}` paths —
+/// the forms used in variable *declarations*, where a whole-value reference
+/// should keep an object (`card = "${fake:credit_card(...)}"`). Prefixed
+/// refs (`self:`/`global:`/`device:`/`_each.`) fall back to the string
+/// resolver wrapped as a `VarValue::String` (object copy through a prefix
+/// isn't needed for declarations).
+fn resolve_reference_value(reference: &str, ctx: &InterpolationContext) -> Result<VarValue, VarError> {
+    if reference.starts_with("fake:") {
+        let resolver = ctx.generator.ok_or_else(|| {
+            VarError::Other("fake: generators are not available in this context".to_string())
+        })?;
+        // Resolve `${var}` inside the generator args first (correlated data).
+        let resolved = interpolate(reference, ctx)?;
+        let (def, field) = crate::evaluate::split_fake_ref(&resolved);
+        let value = resolver(def)?;
+        return match field {
+            Some(path) => navigate_value(def, &path.split('.').collect::<Vec<_>>(), &value),
+            None => Ok(value),
+        };
+    }
+    if reference.contains("${") {
+        return Err(VarError::Other(
+            "nested interpolation is not supported".to_string(),
+        ));
+    }
+    // Bare var path (no prefix) → preserve the value/object.
+    let is_prefixed = reference.starts_with("self:")
+        || reference.starts_with("global:")
+        || reference.starts_with("_each.")
+        || reference.contains(':');
+    if !is_prefixed {
+        let parts: Vec<&str> = reference.split('.').collect();
+        // Builtins are always strings; fall through to the string resolver.
+        let is_builtin = ctx
+            .builtins
+            .map(|b| b.contains_key(parts[0]))
+            .unwrap_or(false);
+        if !is_builtin {
+            if let Ok(value) = ctx.store.resolve(parts[0]) {
+                return navigate_value(parts[0], &parts[1..], value);
+            }
+        }
+    }
+    // Prefixed / builtin / not-in-main-store → string form.
+    resolve_reference(reference, ctx).map(VarValue::String)
+}
+
+/// Evaluate a declared variable value, preserving objects.
+///
+/// If the value is exactly one whole-value reference (`"${EXPR}"` with no
+/// surrounding text), resolve it to a `VarValue` — so `${fake:person(...)}`
+/// or `${some_object}` keeps its object shape. Otherwise the value is a
+/// template: interpolate it to a `VarValue::String` (embedded refs and
+/// inline `${fake:…}` must resolve to scalars).
+pub fn evaluate_value(value: &str, ctx: &InterpolationContext) -> Result<VarValue, VarError> {
+    if let Some(expr) = whole_value_reference(value) {
+        resolve_reference_value(expr, ctx)
+    } else {
+        Ok(VarValue::String(interpolate(value, ctx)?))
+    }
+}
+
+/// If `value` is exactly one `${…}` reference spanning the whole string
+/// (no leading/trailing text, not two adjacent refs), return the inner
+/// expression. Otherwise `None` (the value is a template or plain text).
+///
+/// Brace-depth aware so a generator carrying nested `${…}` in its args
+/// (`${fake:phone(country=${addr.country_code})}`) is still recognised as
+/// whole-value — the naive "contains '}'" check would mis-reject it.
+fn whole_value_reference(value: &str) -> Option<&str> {
+    if !value.starts_with("${") || !value.ends_with('}') {
+        return None;
+    }
+    let mut depth = 0usize;
+    let mut prev = '\0';
+    let count = value.chars().count();
+    for (idx, c) in value.chars().enumerate() {
+        if c == '{' && prev == '$' {
+            depth += 1;
+        } else if c == '}' {
+            depth -= 1;
+            if depth == 0 {
+                // The opening `${` closes here. Whole-value only if that's
+                // the final char (else it's `${a}${b}` or `${a} text`).
+                return if idx == count - 1 {
+                    Some(&value[2..value.len() - 1])
+                } else {
+                    None
+                };
+            }
+        }
+        prev = c;
+    }
+    None
+}
+
+/// Resolve a `${fake:…}` generator reference to a scalar string.
+///
+/// Generates the value via the context's resolver, then either extracts the
+/// requested `.field` (objects) or coerces a scalar. A bare object with no
+/// field selector errors — text can only hold scalars (e.g. use a named var
+/// + `${card.number}`, not `${fake:credit_card(...)}` on its own).
+fn resolve_generator_ref(reference: &str, ctx: &InterpolationContext) -> Result<String, VarError> {
+    let resolver = ctx.generator.ok_or_else(|| {
+        VarError::Other("fake: generators are not available in this context".to_string())
+    })?;
+    // Resolve any `${var}` inside the generator's args first (correlated
+    // data, e.g. `fake:phone(country=${addr.country_code})`). The `fake:…`
+    // text itself carries no `${}`, so this only touches the args.
+    let resolved = interpolate(reference, ctx)?;
+    let (def, field) = crate::evaluate::split_fake_ref(&resolved);
+    let value = resolver(def)?;
+    match field {
+        Some(path) => {
+            let parts: Vec<&str> = path.split('.').collect();
+            resolve_dot_path(def, &parts, &value)
+        }
+        None => match value {
+            VarValue::String(s) => Ok(s),
+            VarValue::Object(_) => Err(VarError::NotAnObject(def.to_string())),
+        },
+    }
+}
+
 /// Resolve a single `${...}` reference using the interpolation context.
 fn resolve_reference(reference: &str, ctx: &InterpolationContext) -> Result<String, VarError> {
-    // Check for nested interpolation: ${${...}}
+    // Generator reference: ${fake:NAME(args)} or ${fake:NAME(args).field}.
+    // Checked before the nested-`${}` guard because a generator may carry
+    // `${var}` inside its args (correlated data) — the resolver interpolates
+    // them. Resolves to a scalar string; a bare object (no `.field`) errors.
+    if reference.starts_with("fake:") {
+        return resolve_generator_ref(reference, ctx);
+    }
+
+    // Check for nested interpolation: ${${...}} (not allowed for non-generators)
     if reference.contains("${") {
         return Err(VarError::Other(
             "nested interpolation is not supported".to_string(),
@@ -208,7 +389,11 @@ pub fn interpolate(template: &str, ctx: &InterpolationContext) -> Result<String,
 
                 let reference: String = chars[start..j].iter().collect();
 
-                if has_nested {
+                // Nested `${…}` is only meaningful inside a generator's args
+                // (e.g. `${fake:phone(country=${addr.country_code})}` for
+                // correlated fake data); the generator resolver interpolates
+                // its own args. Anywhere else it's unsupported.
+                if has_nested && !reference.starts_with("fake:") {
                     return Err(VarError::Other(
                         "nested interpolation is not supported".to_string(),
                     ));
@@ -250,14 +435,7 @@ mod tests {
 
     /// Minimal context pointing at a single store with no device/global/each.
     fn simple_ctx(store: &VariableStore) -> InterpolationContext<'_> {
-        InterpolationContext {
-            store,
-            device: None,
-            device_stores: None,
-            global_store: None,
-            each_vars: None,
-            builtins: None,
-        }
+        InterpolationContext::new(store)
     }
 
     // 1. Simple substitution
@@ -388,7 +566,7 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-        };
+            generator: None,        };
         let result = interpolate("${self:email}", &ctx).unwrap();
         assert_eq!(result, "device@example.com");
     }
@@ -411,7 +589,7 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-        };
+            generator: None,        };
         let result = interpolate("${self:email}", &ctx);
         assert!(result.is_err());
     }
@@ -432,7 +610,7 @@ mod tests {
             global_store: Some(&global_store),
             each_vars: None,
             builtins: None,
-        };
+            generator: None,        };
         let result = interpolate("${global:email}", &ctx).unwrap();
         assert_eq!(result, "global@example.com");
     }
@@ -455,7 +633,7 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-        };
+            generator: None,        };
         let result = interpolate("${iphone_17:quote_ref}", &ctx).unwrap();
         assert_eq!(result, "QR-12345");
     }
@@ -473,7 +651,7 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-        };
+            generator: None,        };
         let result = interpolate("${nonexistent_device:var}", &ctx);
         assert!(result.is_err());
     }
@@ -494,7 +672,7 @@ mod tests {
             global_store: None,
             each_vars: Some(&each_store),
             builtins: None,
-        };
+            generator: None,        };
         let result = interpolate("${_each.item}", &ctx).unwrap();
         assert_eq!(result, "apple");
     }
@@ -511,7 +689,7 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-        };
+            generator: None,        };
         let result = interpolate("${_each.item}", &ctx);
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -561,7 +739,7 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: Some(&builtins),
-        };
+            generator: None,        };
         let result = interpolate("${_device}", &ctx).unwrap();
         assert_eq!(result, "Pixel 9");
     }
@@ -580,7 +758,7 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: Some(&builtins),
-        };
+            generator: None,        };
         let result = interpolate("${_loop}", &ctx).unwrap();
         assert_eq!(result, "3");
     }
@@ -660,7 +838,7 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-        };
+            generator: None,        };
         let result = interpolate("${email}", &ctx).unwrap();
         assert_eq!(result, "device@example.com");
     }
@@ -757,7 +935,7 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-        };
+            generator: None,        };
         let result = interpolate("${self:email}", &ctx);
         let err = result.expect_err("self: without device stores SHALL error");
         assert!(
@@ -778,7 +956,7 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-        };
+            generator: None,        };
         let result = interpolate("${self:email}", &ctx);
         let err = result.expect_err("self: for absent device SHALL error");
         assert!(
@@ -836,7 +1014,7 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-        };
+            generator: None,        };
         let result = interpolate("${only_in_main}", &ctx).expect("SHALL fall through to main");
         assert_eq!(result, "main-value");
     }
@@ -855,7 +1033,7 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: Some(&builtins),
-        };
+            generator: None,        };
         let result = interpolate("${_device.field}", &ctx);
         let err = result.expect_err("dot access on a builtin SHALL error");
         assert!(
@@ -964,7 +1142,7 @@ mod tests {
             global_store: None,
             each_vars: Some(&each_store),
             builtins: None,
-        };
+            generator: None,        };
         let result = interpolate("${_each.item.name}", &ctx).expect("nested _each SHALL resolve");
         assert_eq!(result, "apple");
     }
@@ -987,7 +1165,7 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-        };
+            generator: None,        };
         let result = interpolate("${iphone_17:absent}", &ctx);
         let err = result.expect_err("missing cross-device var SHALL error");
         assert!(
@@ -1028,11 +1206,116 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: Some(&builtins),
-        };
+            generator: None,        };
         let result = interpolate("${_device}", &ctx).expect("SHALL resolve");
         assert_eq!(
             result, "builtin-value",
             "builtin SHALL win over device store"
         );
+    }
+
+    // ── Generator (`${fake:…}`) interpolation in the string path ──────────
+
+    /// Build a generator callback backed by a seeded RNG (kept alive by the
+    /// caller's RefCell). Mirrors what the runner supplies.
+    fn seeded_rng_cell(seed: u64) -> std::cell::RefCell<rand_chacha::ChaCha8Rng> {
+        use rand::SeedableRng;
+        std::cell::RefCell::new(rand_chacha::ChaCha8Rng::seed_from_u64(seed))
+    }
+
+    // 45. Inline generator resolves to a scalar within surrounding text.
+    #[test]
+    fn generator_inline_scalar() {
+        let store = VariableStore::new();
+        let rng = seeded_rng_cell(1);
+        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut *rng.borrow_mut());
+        let mut ctx = InterpolationContext::new(&store);
+        ctx.generator = Some(&gen);
+        let out = interpolate("user=${fake:email}", &ctx).expect("inline generator");
+        assert!(out.starts_with("user="), "literal prefix preserved: {out}");
+        assert!(out.contains('@'), "generated an email: {out}");
+        assert!(!out.contains("fake:"), "generator was evaluated, not literal: {out}");
+    }
+
+    // 46. Generator object field selector yields the field's scalar.
+    #[test]
+    fn generator_object_field() {
+        let store = VariableStore::new();
+        let rng = seeded_rng_cell(2);
+        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut *rng.borrow_mut());
+        let mut ctx = InterpolationContext::new(&store);
+        ctx.generator = Some(&gen);
+        let out = interpolate("${fake:person(country=JP).first}", &ctx).expect("field access");
+        assert!(!out.is_empty(), "person.first SHALL be a non-empty string");
+    }
+
+    // 47. A bare generator object (no `.field`) in a string is an error.
+    #[test]
+    fn generator_bare_object_errors() {
+        let store = VariableStore::new();
+        let rng = seeded_rng_cell(3);
+        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut *rng.borrow_mut());
+        let mut ctx = InterpolationContext::new(&store);
+        ctx.generator = Some(&gen);
+        let err = interpolate("${fake:person(country=JP)}", &ctx)
+            .expect_err("bare object in a string SHALL error");
+        assert!(matches!(err, VarError::NotAnObject(_)), "got: {err}");
+    }
+
+    // 48. `${var}` inside generator args resolves first (correlated data).
+    #[test]
+    fn generator_args_interpolate_against_store() {
+        let store = store_with(
+            ScopeLevel::Project,
+            vec![(
+                "addr",
+                VarValue::object(vec![("country_code", VarValue::string("JP"))]),
+            )],
+        );
+        let rng = seeded_rng_cell(4);
+        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut *rng.borrow_mut());
+        let mut ctx = InterpolationContext::new(&store);
+        ctx.generator = Some(&gen);
+        let out = interpolate("${fake:phone(country=${addr.country_code})}", &ctx)
+            .expect("nested generator args");
+        assert!(out.starts_with("+81"), "JP phone from correlated arg, got: {out}");
+    }
+
+    // 49. A `${fake:…}` reference with no generator in the context errors.
+    #[test]
+    fn generator_without_resolver_errors() {
+        let store = VariableStore::new();
+        let ctx = InterpolationContext::new(&store); // generator: None
+        let err = interpolate("${fake:email}", &ctx)
+            .expect_err("no generator SHALL error");
+        assert!(
+            matches!(err, VarError::Other(ref m) if m.contains("not available")),
+            "got: {err}"
+        );
+    }
+
+    // 50. evaluate_value preserves a whole-value generator object.
+    #[test]
+    fn evaluate_value_preserves_whole_value_object() {
+        let store = VariableStore::new();
+        let rng = seeded_rng_cell(5);
+        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut *rng.borrow_mut());
+        let mut ctx = InterpolationContext::new(&store);
+        ctx.generator = Some(&gen);
+        let v = evaluate_value("${fake:person(country=JP)}", &ctx).expect("whole-value object");
+        assert!(v.as_object().is_some(), "whole-value generator SHALL keep its object");
+    }
+
+    // 51. evaluate_value stringifies an embedded reference.
+    #[test]
+    fn evaluate_value_embedded_is_string() {
+        let store = VariableStore::new();
+        let rng = seeded_rng_cell(6);
+        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut *rng.borrow_mut());
+        let mut ctx = InterpolationContext::new(&store);
+        ctx.generator = Some(&gen);
+        let v = evaluate_value("id-${fake:uuid}", &ctx).expect("embedded");
+        let s = v.as_str().expect("embedded SHALL be a string");
+        assert!(s.starts_with("id-") && s.len() > 3);
     }
 }

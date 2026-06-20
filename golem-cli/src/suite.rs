@@ -2554,14 +2554,8 @@ async fn run_flow_on_device(
 
     let mut vars = VariableStore::new();
 
-    // Inject flow-level variables ([flow.vars]).
-    if !flow.flow.vars.is_empty() {
-        let mut flow_scope = golem_vars::Scope::new(golem_vars::ScopeLevel::Flow);
-        for (k, v) in &flow.flow.vars {
-            flow_scope.set(k.clone(), golem_vars::VarValue::String(v.clone()));
-        }
-        vars.push_scope(flow_scope);
-    }
+    // [flow.vars] are seeded by `execute_flow` itself (so `fake:` generators
+    // are evaluated with the flow RNG, for both top-level and sub-flows).
 
     // Inject CLI --var overrides (higher priority than flow vars).
     if !cli_vars.is_empty() {

@@ -8,7 +8,7 @@
 [[block]]
 name = "login"
 steps = [
-  { action = "type", on_text = "Email", input = "fake:email" },
+  { action = "type", on_text = "Email", input = "${fake:email}" },
   { action = "type", on_text = "Password", input = "secret" },
   { action = "tap", on_text = "Sign In" },
   { action = "assert_visible", on_text = "Dashboard", timeout = 10000 },
@@ -92,7 +92,7 @@ golem tree
 - **Rich selectors** — match by text, accessibility label, index, enabled/checked/clickable state, relative position (`on_below`, `on_right_of`, …), and computed traits.
 - **Gestures** — tap, double-tap, long-press, swipe, scroll-until-found, pinch, multi-touch, rotation.
 - **Assertions & reads** — wait for elements to appear/disappear, check state, read values into variables.
-- **Fake data** — `fake:person`, `fake:address`, `fake:credit_card`, and more, locale-aware and seedable.
+- **Fake data** — `${fake:person}`, `${fake:address}`, `${fake:credit_card}`, and more, locale-aware and seedable.
 - **Multi-app flows** — drive several apps in one scenario (e.g. a main app and a companion).
 - **Data-driven tests** — run a flow once per data row.
 - **Device control** — dark mode, GPS location, permissions, hardware buttons, push notifications (sim/emu).

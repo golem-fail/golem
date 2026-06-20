@@ -51,6 +51,7 @@ pub mod cleanup;
 pub mod context;
 pub mod branch;
 pub mod fixture_loader;
+pub mod interp;
 pub mod data_driven;
 pub mod device_vars;
 pub mod executor;
