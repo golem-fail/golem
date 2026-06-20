@@ -99,6 +99,23 @@ pub fn format_step(step: &StepReport) -> String {
 ///
 /// Includes the flow header, all steps, a summary line, and optional
 /// metadata (seed, screenshot path).
+/// The failure code to show on a flow's summary line, or `None` when the
+/// flow didn't fail. Prefers the report's `first_failure_code`; falls back
+/// to the first failed step's code. Pure helper so the FAIL-line code
+/// rendering can be unit-tested and stays in parity with the live stream
+/// renderer (which also surfaces the code on the flow-finished line).
+fn flow_fail_code(report: &FlowReport) -> Option<golem_events::FailureCode> {
+    if report.success || report.is_skipped() {
+        return None;
+    }
+    report.first_failure_code.or_else(|| {
+        report.step_results.iter().find_map(|s| match &s.outcome {
+            StepOutcome::Failed { code, .. } => Some(*code),
+            _ => None,
+        })
+    })
+}
+
 pub fn format_flow(report: &FlowReport) -> String {
     let mut out = String::new();
 
@@ -164,9 +181,15 @@ pub fn format_flow(report: &FlowReport) -> String {
     };
 
     let timing = format_duration(report.duration_ms);
+    // Surface the flow-level failure code on the summary line (parity
+    // with the live stream renderer), e.g. `✗ FAILED  login  [10.1s]  EF408`.
+    let code_suffix = match flow_fail_code(report) {
+        Some(code) => format!("  {}", code.render(golem_events::Severity::Error)),
+        None => String::new(),
+    };
     let _ = writeln!(
         out,
-        "{status_symbol} {status_word}  {}{counts_str}  [{timing}]",
+        "{status_symbol} {status_word}  {}{counts_str}  [{timing}]{code_suffix}",
         report.flow_name
     );
 
@@ -441,6 +464,99 @@ mod tests {
         assert!(
             out.contains("Screenshot: .golem/screenshots/login_flow_main_step5_error.png"),
             "should show screenshot path"
+        );
+    }
+
+    // 5b. format_flow surfaces the flow-level failure code -------------
+
+    fn make_failed_flow(
+        first_failure_code: Option<golem_events::FailureCode>,
+        step_results: Vec<StepReport>,
+    ) -> FlowReport {
+        FlowReport {
+            first_failure_code,
+            flow_name: "checkout".to_string(),
+            success: false,
+            step_results,
+            warnings: vec![],
+            duration_ms: 4200,
+            seed: None,
+            screenshot_path: None,
+            device_name: None,
+            os_major: None,
+            perf_snapshots: vec![],
+            skipped_reason: None,
+            covered_axes: Vec::new(),
+            recordings: Vec::new(),
+            repeat: None,
+            started_at: None,
+            finished_at: None,
+        }
+    }
+
+    fn failed_step_coded(
+        action: &str,
+        msg: &str,
+        code: golem_events::FailureCode,
+    ) -> StepReport {
+        let mut s = failed_step(action, "", 100, msg);
+        s.outcome = StepOutcome::Failed { message: msg.to_string(), code };
+        s
+    }
+
+    #[test]
+    fn fail_line_uses_first_failure_code() {
+        let report = make_failed_flow(
+            Some(golem_events::FailureCode::FlowStepTimeout),
+            vec![failed_step("assert_visible", "Welcome", 3000, "timed out")],
+        );
+        assert_eq!(
+            flow_fail_code(&report),
+            Some(golem_events::FailureCode::FlowStepTimeout),
+            "SHALL prefer the report's first_failure_code"
+        );
+        let out = format_flow(&report);
+        let summary = out.lines().find(|l| l.contains("FAILED")).expect("FAILED line");
+        assert!(
+            summary.contains("EF408"),
+            "FAILED summary line SHALL carry the code, got: {summary}"
+        );
+    }
+
+    #[test]
+    fn fail_line_falls_back_to_failed_step_code() {
+        // No flow-level code recorded — derive from the first failed step.
+        let report = make_failed_flow(
+            None,
+            vec![
+                success_step("launch", "", 50),
+                failed_step_coded("tap", "not found", golem_events::FailureCode::FlowElementNotFound),
+            ],
+        );
+        assert_eq!(
+            flow_fail_code(&report),
+            Some(golem_events::FailureCode::FlowElementNotFound)
+        );
+        assert!(
+            format_flow(&report).contains("EF404"),
+            "SHALL fall back to the first failed step's code"
+        );
+    }
+
+    #[test]
+    fn fail_line_has_no_code_on_success() {
+        let report = FlowReport {
+            success: true,
+            ..make_failed_flow(Some(golem_events::FailureCode::FlowStepTimeout), vec![
+                success_step("tap", "OK", 30),
+            ])
+        };
+        assert_eq!(flow_fail_code(&report), None, "passing flow SHALL have no code");
+        let out = format_flow(&report);
+        let summary = out.lines().find(|l| l.contains("PASSED")).expect("PASSED line");
+        assert!(
+            !summary.contains("EF408") && !summary.contains("EX000"),
+            "PASSED summary line SHALL NOT carry a failure code, got: {summary}"
         );
     }
 

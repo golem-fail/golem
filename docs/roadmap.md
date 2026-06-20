@@ -304,23 +304,6 @@ when there's spare cycles. Not blocking.
 **Files:** `golem-report/src/stream.rs` (suite-summary block), maybe
 `golem-report/src/human.rs`.
 
-## Human output: flow-level code in non-stream formatter + regression test
-
-The live **stream** renderer now shows flow-level abort codes on the human FAIL
-line (`FAIL … EF508` / `EF504`): `FlowFinished` carries a `code` and `stream.rs`
-falls back to it when no step owns the failure. Remaining:
-
-- **Non-stream path:** `golem-report/src/human.rs::format_flow` (operates on
-  `FlowReport`, which already has `first_failure_code`) still omits the code on
-  its `FAILED` line. Render it there too for parity.
-- **Regression test:** extract the stream FAIL-line string-building into a pure
-  helper and assert the flow-level code is shown (and a step-level code still
-  wins) — guards against regression. Stream output is `eprintln!`, so it needs
-  the small extract-to-helper refactor to be unit-testable.
-
-**Files:** `golem-report/src/human.rs` (`format_flow`),
-`golem-report/src/stream.rs` (extract FAIL-line helper + test).
-
 ## `set_variable` action is listed but not dispatched
 
 `set_variable` appears in `policy.rs` (timeout/settle classification) but has
