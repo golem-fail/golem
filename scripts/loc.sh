@@ -45,7 +45,12 @@ count_lines() {
 }
 
 # ── Collect git-tracked files ───────────────────────────────────────
-mapfile -t ALL_FILES < <(git ls-files)
+# Filter to paths that still exist: `git ls-files` lists deleted-but-uncommitted
+# files, which would crash `wc -l` and abort under `set -e pipefail`.
+ALL_FILES=()
+while IFS= read -r f; do
+  [[ -f "$f" ]] && ALL_FILES+=("$f")
+done < <(git ls-files)
 
 # ── Classify files ──────────────────────────────────────────────────
 declare -A PROG_FILES=()    # lang -> newline-separated file list
