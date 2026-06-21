@@ -213,6 +213,17 @@ fn remap_anchor(a: &crate::Anchor, vars: &HashMap<String, String>) -> crate::Anc
     }
 }
 
+/// Remap variables in a ContainsAnchor (preserves `min_matches`).
+fn remap_contains_anchor(a: &crate::ContainsAnchor, vars: &HashMap<String, String>) -> crate::ContainsAnchor {
+    match a {
+        crate::ContainsAnchor::Text(s) => crate::ContainsAnchor::Text(remap_string(s, vars)),
+        crate::ContainsAnchor::Spec(s) => crate::ContainsAnchor::Spec(Box::new(crate::ContainsSpec {
+            group: remap_selector_group(&s.group, vars),
+            min_matches: s.min_matches,
+        })),
+    }
+}
+
 /// Remap variables in a grouped SelectorGroup.
 fn remap_selector_group(g: &crate::SelectorGroup, vars: &HashMap<String, String>) -> crate::SelectorGroup {
     crate::SelectorGroup {
@@ -226,7 +237,7 @@ fn remap_selector_group(g: &crate::SelectorGroup, vars: &HashMap<String, String>
         above: g.above.as_ref().map(|a| remap_anchor(a, vars)),
         right_of: g.right_of.as_ref().map(|a| remap_anchor(a, vars)),
         left_of: g.left_of.as_ref().map(|a| remap_anchor(a, vars)),
-        contains: g.contains.as_ref().map(|a| remap_anchor(a, vars)),
+        contains: g.contains.as_ref().map(|a| remap_contains_anchor(a, vars)),
         inside: g.inside.as_ref().map(|a| remap_anchor(a, vars)),
         traits: g.traits.clone(),
         x: g.x.clone(),

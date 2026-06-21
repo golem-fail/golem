@@ -1,0 +1,26 @@
+[flow]
+name = "within contains min_matches"
+tags = ["cross-platform", "selectors", "scroll", "contains"]
+
+# The Wrapped List section is a scrollable list whose items each sit inside a
+# per-row <li> wrapper. The smallest box enclosing a single "Row N" is its
+# wrapper (not scrollable), so scoping a scroll to the list needs
+# `contains = { ..., min_matches = 2 }` — the smallest element enclosing ≥2
+# matches is the scrollable container. This flow fails without that semantic.
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "scroll_wrapped_list_via_contains"
+steps = [
+  # Jump the wrapped list to the top so several rows are visible at once
+  # (min_matches needs ≥2 visible matches to identify the container).
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-wrapped-list" },
+  # Scope the scroll to the repeated-item container, not a per-row wrapper.
+  { action = "scroll", to = { text = "Row 45" }, within = { contains = { text = "Row *", min_matches = 2 } } },
+  { action = "assert_visible", on_text = "Row 45", timeout = 15000 },
+]

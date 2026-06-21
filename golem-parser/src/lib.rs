@@ -221,6 +221,68 @@ pub enum Anchor {
     Selector(Box<SelectorGroup>),
 }
 
+/// Anchor for the `contains` predicate. Like [`Anchor`] but the group form
+/// also accepts `min_matches`, so a `within = { contains = { text = "Row *",
+/// min_matches = 2 } }` resolves to the smallest element enclosing **≥N**
+/// matches (the repeated-item *container*, e.g. the `<ul>`, not a single
+/// `<li>` wrapper). `min_matches` lives only here — it is meaningless on the
+/// main selector or the positional anchors, so it is structurally
+/// impossible to write there.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum ContainsAnchor {
+    Text(String),
+    Spec(Box<ContainsSpec>),
+}
+
+/// The group form of a `contains` anchor: every [`SelectorGroup`] field plus
+/// `min_matches` (default 1 = the smallest single enclosing box, today's
+/// behaviour).
+#[derive(Deserialize, Debug, Clone)]
+pub struct ContainsSpec {
+    #[serde(flatten)]
+    pub group: SelectorGroup,
+    #[serde(default, deserialize_with = "deserialize_min_matches")]
+    pub min_matches: Option<usize>,
+}
+
+/// Sanity cap on `min_matches`. Disambiguating a container from a per-item
+/// wrapper only ever needs 2–3 enclosed matches; a value beyond this is a
+/// mistake, and a huge one would just silently never resolve (every candidate
+/// encloses far fewer matches). Reject it at parse time with a clear message
+/// instead. Generous so no realistic on-screen list is constrained.
+pub const MAX_CONTAINS_MIN_MATCHES: usize = 100;
+
+fn deserialize_min_matches<'de, D>(deserializer: D) -> Result<Option<usize>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<usize>::deserialize(deserializer)?;
+    if let Some(n) = value {
+        if n == 0 {
+            return Err(serde::de::Error::custom(
+                "min_matches must be at least 1",
+            ));
+        }
+        if n > MAX_CONTAINS_MIN_MATCHES {
+            return Err(serde::de::Error::custom(format!(
+                "min_matches = {n} is unreasonably large (max {MAX_CONTAINS_MIN_MATCHES}); 2–3 is typical for disambiguating a container"
+            )));
+        }
+    }
+    Ok(value)
+}
+
+impl ContainsAnchor {
+    /// Minimum number of anchor matches a container must enclose (default 1).
+    pub fn min_matches(&self) -> usize {
+        match self {
+            ContainsAnchor::Text(_) => 1,
+            ContainsAnchor::Spec(s) => s.min_matches.unwrap_or(1),
+        }
+    }
+}
+
 /// Grouped selector for `on = { ... }` / `to = { ... }` syntax.
 ///
 /// All fields match the flat `on_*` fields on Step but without the prefix.
@@ -247,8 +309,10 @@ pub struct SelectorGroup {
     pub right_of: Option<Anchor>,
     pub left_of: Option<Anchor>,
     /// Geometric containment: match the element whose bounds enclose the
-    /// anchor ("the box that holds X"). Accepts a text pattern or nested group.
-    pub contains: Option<Anchor>,
+    /// anchor ("the box that holds X"). Accepts a text pattern or a nested
+    /// group; the group form also accepts `min_matches` to target the
+    /// smallest container of ≥N matches (the repeated-item container).
+    pub contains: Option<ContainsAnchor>,
     /// Inverse of `contains`: match the element fully enclosed by the anchor.
     pub inside: Option<Anchor>,
     /// Observable traits: ["button", "has_text", "square"], etc.
@@ -776,6 +840,89 @@ steps = [
             }
             other => panic!("expected nested Anchor::Selector, got {other:?}"),
         }
+    }
+
+    // ---------------------------------------------------------------
+    // 8d2. `contains` anchor: bare text, group, and group + min_matches
+    // ---------------------------------------------------------------
+    #[test]
+    fn step_with_contains_text_and_min_matches() {
+        let toml_str = r#"
+[flow]
+name = "contains"
+
+[[block]]
+steps = [
+  { action = "tap", on = { contains = "Row 0" } },
+  { action = "tap", on = { contains = { text = "Row *" } } },
+  { action = "scroll", to = { text = "Row 9" }, within = { contains = { text = "Row *", min_matches = 2 } } },
+]
+"#;
+        let flow = parse_flow(toml_str).expect("contains forms should parse");
+        let steps = &flow.block[0].steps;
+
+        // Bare string → Text, default min_matches 1.
+        let c0 = steps[0].on.as_ref().unwrap().contains.as_ref().unwrap();
+        assert!(matches!(c0, ContainsAnchor::Text(s) if s == "Row 0"));
+        assert_eq!(c0.min_matches(), 1, "bare text contains SHALL default to 1");
+
+        // Group without min_matches → Spec, default min_matches 1, flatten keeps `text`.
+        let c1 = steps[1].on.as_ref().unwrap().contains.as_ref().unwrap();
+        match c1 {
+            ContainsAnchor::Spec(s) => {
+                assert_eq!(s.group.text.as_deref(), Some("Row *"), "flatten SHALL keep group fields");
+                assert_eq!(c1.min_matches(), 1, "group without min_matches SHALL default to 1");
+            }
+            other => panic!("expected Spec, got {other:?}"),
+        }
+
+        // Group with min_matches → parsed.
+        let c2 = steps[2].within.as_ref().unwrap().contains.as_ref().unwrap();
+        match c2 {
+            ContainsAnchor::Spec(s) => {
+                assert_eq!(s.group.text.as_deref(), Some("Row *"));
+                assert_eq!(c2.min_matches(), 2, "min_matches SHALL parse");
+            }
+            other => panic!("expected Spec, got {other:?}"),
+        }
+    }
+
+    // min_matches outside [1, MAX] is a parse error (clear message, fail-fast).
+    #[test]
+    fn contains_min_matches_rejects_zero_and_huge() {
+        for bad in [0usize, MAX_CONTAINS_MIN_MATCHES + 1, 1_000_000] {
+            let toml_str = format!(
+                r#"
+[flow]
+name = "bad"
+
+[[block]]
+steps = [
+  {{ action = "scroll", to = {{ text = "Row 9" }}, within = {{ contains = {{ text = "Row *", min_matches = {bad} }} }} }},
+]
+"#
+            );
+            let err = parse_flow(&toml_str)
+                .expect_err(&format!("min_matches = {bad} SHALL be rejected"));
+            assert!(
+                err.to_string().contains("min_matches"),
+                "error SHALL name min_matches: {err}"
+            );
+        }
+        // The boundary value is accepted.
+        let ok = format!(
+            r#"
+[flow]
+name = "ok"
+
+[[block]]
+steps = [
+  {{ action = "scroll", to = {{ text = "Row 9" }}, within = {{ contains = {{ text = "Row *", min_matches = {} }} }} }},
+]
+"#,
+            MAX_CONTAINS_MIN_MATCHES
+        );
+        parse_flow(&ok).expect("min_matches at the cap SHALL parse");
     }
 
     // ---------------------------------------------------------------

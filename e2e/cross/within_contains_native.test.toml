@@ -1,0 +1,23 @@
+[flow]
+name = "within contains min_matches (native)"
+tags = ["cross-platform", "selectors", "scroll", "contains", "native"]
+
+# Native counterpart of within_contains.test: test-app-b's "Native Item N"
+# list (SwiftUI List / Compose LazyColumn) wraps each item in a cell/row, so
+# the smallest box enclosing one item is its row, not the scroll container.
+# `min_matches = 2` targets the repeated-item container on a NATIVE tree
+# (no webview DOM), proving the resolution is platform-agnostic.
+[[flow.apps]]
+name = "app-b"
+bundle = "fail.golem.testb"
+install_script = { ios = "scripts/install-app-b-ios.sh", android = "scripts/install-app-b-android.sh" }
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "scroll_native_list_via_contains"
+steps = [
+  { action = "scroll", to = { text = "Native Item 30" }, within = { contains = { text = "Native Item *", min_matches = 2 } } },
+  { action = "assert_visible", on_text = "Native Item 30", timeout = 15000 },
+]

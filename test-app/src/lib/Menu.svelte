@@ -11,6 +11,7 @@ const links = [
   { id: "counter",         label: "Counter" },
   { id: "buttons",         label: "Buttons" },
   { id: "scroll-list",     label: "Scroll List" },
+  { id: "wrapped-list",    label: "Wrapped List" },
   { id: "selector-grid",   label: "Selector Grid" },
   { id: "text-fields",     label: "Text Fields" },
   { id: "gesture-target",  label: "Gesture Target" },

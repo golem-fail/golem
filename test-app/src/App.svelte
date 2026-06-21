@@ -4,6 +4,7 @@ import Buttons from "./lib/Buttons.svelte";
 import Toggles from "./lib/Toggles.svelte";
 import Counter from "./lib/Counter.svelte";
 import ScrollList from "./lib/ScrollList.svelte";
+import WrappedList from "./lib/WrappedList.svelte";
 import Carousel from "./lib/Carousel.svelte";
 import NestedLayout from "./lib/NestedLayout.svelte";
 import AlertTriggers from "./lib/AlertTriggers.svelte";
@@ -28,6 +29,7 @@ import SelectorGrid from "./lib/SelectorGrid.svelte";
   <div id="section-counter"><Counter /></div>
   <div id="section-buttons"><Buttons /></div>
   <div id="section-scroll-list"><ScrollList /></div>
+  <div id="section-wrapped-list"><WrappedList /></div>
   <div id="section-selector-grid"><SelectorGrid /></div>
   <div id="section-text-fields"><TextFields /></div>
   <div id="section-gesture-target"><GestureTarget /></div>

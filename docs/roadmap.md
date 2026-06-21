@@ -226,9 +226,6 @@ warm-up) found:
 1. **Relational-selector fragility** — `within` picks `.first()` of *everything*
    below the anchor; works here only by pre-order luck + geometric overlap. See
    "Relational selector overhaul".
-2. **iOS ~73s slowness** — unverified on current code; may also be a
-   readiness/settle effect. Re-measure `scroll.test` on an iOS sim; if it's slow
-   with a *loaded* tree, investigate the move-phase / inertial entry below.
 
 **Files:** `golem-runner/src/scroll.rs`, `golem-runner/src/actions/interaction.rs`
 (`handle_scroll` `within` resolution), `golem-runner/src/resolution.rs`
@@ -261,14 +258,6 @@ no_text). Green Android + iOS phone/tablet. The deliberately-fragile case and th
 tablet cross-column proof are both covered by the grid now.
 
 **Follow-ups still open:**
-- **`within = { contains }` is fragile for *scrolling*** (works for *selection*).
-  Smallest-enclosing of a *single* item can resolve a non-scrollable per-item
-  wrapper rather than the list — observed live: `within={contains "Item 0"}`
-  scrolled fine on Android but timed out on iOS. So `contains` is for picking the
-  box *around* X (tap/assert); the robust scroll idiom remains
-  `within = { below = "<heading>" }`. **Idea:** a size trait could disambiguate
-  (`within = { contains = "Item 0", traits = ["tall"] }`) — but see the size-trait
-  caveat below.
 - **`small`/`large` traits are platform-unit-dependent.** They threshold raw
   `bounds.area()`, but Android reports device px (≈3× on 480dpi) and iOS reports
   points (≈dp), so the same element is `large` on Android, not on iOS (hit live:
@@ -309,6 +298,14 @@ tablet cross-column proof are both covered by the grid now.
   resolved it at +3 nodes). Investigate whether the source-fingerprint covers all
   test-app files / nested component edits. Low-frequency but causes confusing
   ghost failures; analogous to the companion stale-build trap.
+- **`SelectorGroup` has no `deny_unknown_fields` (low priority, future).** A
+  typo'd or misplaced selector key (`contais = …`, a count on a non-`contains`
+  anchor, etc.) is **silently ignored** by serde rather than rejected, so the
+  step quietly does the wrong thing. Adding `#[serde(deny_unknown_fields)]` to
+  `SelectorGroup` (and peers) in `golem-parser` would turn typos into clear
+  parse errors. Surfaced while adding `contains.min_matches` (which sidesteps
+  the issue via a dedicated type). Not urgent — no current breakage — but a real
+  authoring footgun worth closing some session.
 
 ---
 

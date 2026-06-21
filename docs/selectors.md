@@ -147,12 +147,32 @@ positions, not the document tree).
 `contains` excludes the anchor itself (an element trivially contains itself) and
 coincident zero-margin wrappers, and resolves **smallest-enclosing first**.
 
-> **Caveat — `contains` is for *selection*, not picking a *scroll* container.**
-> The smallest box enclosing a *single* item can be a per-item wrapper, not the
-> scrollable list (and this differs across platforms). To scroll inside a list,
-> prefer `within = { below = "<heading>" }`. (A size trait — e.g.
-> `contains = "Item 0", traits = ["large"]` — can disambiguate toward the
-> scrollable container; see the roadmap.)
+### `min_matches` — the container of *repeated* items
+
+The smallest box enclosing a *single* item is often a per-item wrapper (a
+`<li>`, a list cell), not the scrollable list one level up. To target the
+**container of several repeated items**, give the `contains` group form a
+`min_matches`:
+
+```toml
+# the smallest element that encloses ≥2 "Row *" matches — i.e. the list,
+# not a single row's wrapper. The idiomatic way to scope a scroll to a list:
+{ action = "scroll", to = { text = "Row 45" }, within = { contains = { text = "Row *", min_matches = 2 } } }
+```
+
+Semantics: *the smallest visible element whose bounds enclose ≥ `min_matches`
+elements matching the anchor.* A human recognises a list by **repetition**
+(several similar items grouped), not by invisible scrollability — so this keeps
+`contains` purely about what's visible. It counts only **visible** matches
+(off-screen items are filtered), so the result is the scroll region's on-screen
+box. `min_matches` defaults to `1` (today's smallest-single-enclosing
+behaviour) and must be `1`–`100` (a larger value is rejected at parse time;
+2–3 is all you ever need). `min_matches` is valid **only** on `contains` — it is
+meaningless, and unwritable, elsewhere.
+
+> If a list is so short that only one item is visible, `min_matches = 2` can't
+> resolve it — but neither could a human see it's a scrollable list. Make the
+> list taller, or fall back to `within = { below = "<heading>" }`.
 
 ## Nesting and chaining
 
@@ -205,11 +225,16 @@ severity model is the right home for it — not a per-step tag.
 ## `within` (scoping a scroll)
 
 `scroll`'s `within = { … }` names the region to scroll inside. It uses the same
-selector grammar; the robust idiom for an inner list is a heading-relative
-anchor:
+selector grammar. Two robust idioms for an inner list:
 
 ```toml
+# 1. heading-relative — scope to what's below a heading
 { action = "scroll", to = { text = "Item 45" }, within = { below = "Scroll List" } }
+
+# 2. repeated-item container — scope to the box holding ≥2 matching items
+#    (use when items are wrapped, e.g. <li>, and `below` isn't convenient)
+{ action = "scroll", to = { text = "Row 45" }, within = { contains = { text = "Row *", min_matches = 2 } } }
 ```
 
-See [Actions Reference → scroll](actions-reference.md) for the full action.
+See [`min_matches`](#min_matches--the-container-of-repeated-items) above and
+[Actions Reference → scroll](actions-reference.md) for the full action.

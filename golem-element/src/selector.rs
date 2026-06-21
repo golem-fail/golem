@@ -38,6 +38,11 @@ pub struct Selector {
     /// bounds (geometric containment — "the box that holds X"). Coordinate-
     /// based, not DOM-structural.
     pub contains: Option<AnchorSelector>,
+    /// Minimum number of `contains`-anchor matches a candidate must enclose.
+    /// `None`/1 = today's behaviour (smallest box around the single first
+    /// match). `≥2` selects the smallest element enclosing that many matches —
+    /// the repeated-item *container* (the `<ul>`), not a per-item `<li>`.
+    pub contains_min_matches: Option<usize>,
     /// Keep only elements whose bounds are fully enclosed by the anchor
     /// element's bounds (inverse of `contains` — "the X that sits inside Y").
     pub inside: Option<AnchorSelector>,
@@ -96,11 +101,33 @@ pub fn resolve_anchor(root: &Element, anchor: &AnchorSelector) -> Option<FindRes
 /// element.
 fn resolve_visible_anchor(root: &Element, anchor: &AnchorSelector) -> Option<FindResult> {
     let found = resolve_anchor(root, anchor)?;
-    let on_screen = match found.element.visible_bounds {
+    if anchor_on_screen(&found.element) { Some(found) } else { None }
+}
+
+/// True when the element has a non-zero visible footprint (on screen).
+fn anchor_on_screen(el: &Element) -> bool {
+    match el.visible_bounds {
         Some(b) => b.width > 0 && b.height > 0,
-        None => found.element.bounds.width > 0 && found.element.bounds.height > 0,
+        None => el.bounds.width > 0 && el.bounds.height > 0,
+    }
+}
+
+/// Resolve **all** on-screen matches of an anchor to their effective bounds.
+/// Used by `contains` with `min_matches ≥ 2` to find the container enclosing
+/// several repeated items. Returns one entry per visible match.
+fn resolve_visible_anchors_all(root: &Element, anchor: &AnchorSelector) -> Vec<Bounds> {
+    let selector = match anchor {
+        AnchorSelector::Text(pattern) => Selector {
+            text: Some(pattern.clone()),
+            ..Selector::default()
+        },
+        AnchorSelector::Full(s) => (**s).clone(),
     };
-    if on_screen { Some(found) } else { None }
+    find_elements(root, &selector)
+        .into_iter()
+        .filter(|r| anchor_on_screen(&r.element))
+        .map(|r| *r.element.effective_bounds())
+        .collect()
 }
 
 fn find_by_text_recursive<'a>(element: &'a Element, matcher: &GlobMatcher) -> Option<&'a Element> {
@@ -210,16 +237,43 @@ fn apply_relational_filters(
     }
 
     if let Some(ref anchor) = selector.contains {
-        let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
-        let t = *found.element.effective_bounds();
-        // Strictly enclose: an element trivially contains itself, and a
-        // zero-margin wrapper coincident with the anchor isn't a meaningful
-        // "container" — exclude coincident bounds so `contains` yields the
-        // box *around* the anchor, not the anchor.
-        results.retain(|r| {
-            let b = r.element.effective_bounds();
-            *b != t && encloses(b, &t)
-        });
+        let min = selector.contains_min_matches.unwrap_or(1);
+        if min <= 1 {
+            // Default: the smallest box around the single first visible match.
+            let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
+            let t = *found.element.effective_bounds();
+            // Strictly enclose: an element trivially contains itself, and a
+            // zero-margin wrapper coincident with the anchor isn't a meaningful
+            // "container" — exclude coincident bounds so `contains` yields the
+            // box *around* the anchor, not the anchor.
+            results.retain(|r| {
+                let b = r.element.effective_bounds();
+                *b != t && encloses(b, &t)
+            });
+        } else {
+            // ≥N: the smallest element enclosing at least `min` visible matches
+            // of the anchor — the repeated-item *container* (e.g. the `<ul>`),
+            // since a per-item `<li>` wrapper encloses only its own 1 match.
+            // Match against the visible tree only (off-screen items already
+            // filtered) — consistent with the visible-tree-judges invariant.
+            let match_bounds = resolve_visible_anchors_all(root, anchor);
+            if match_bounds.len() < min {
+                return Vec::new();
+            }
+            results.retain(|r| {
+                let b = r.element.effective_bounds();
+                let mut n = 0usize;
+                for t in &match_bounds {
+                    if b != t && encloses(b, t) {
+                        n += 1;
+                        if n >= min {
+                            break;
+                        }
+                    }
+                }
+                n >= min
+            });
+        }
     }
 
     if let Some(ref anchor) = selector.inside {
@@ -950,6 +1004,71 @@ mod tests {
         assert!(!texts.contains(&"aside"), "SHALL exclude non-enclosing elements");
         assert_eq!(results[0].element.text.as_deref(), Some("list"),
             "smallest enclosing element SHALL sort first");
+    }
+
+    // ── contains + min_matches: the repeated-item container ─────────
+
+    // A wrapped list: each `Row N` sits inside its own per-row wrapper, and all
+    // wrappers sit inside the scrollable list. `contains` smallest-first would
+    // pick a wrapper (encloses 1 item); `min_matches = 2` must climb to the
+    // list (the smallest box enclosing ≥2 items).
+    fn wrapped_list_tree() -> Element {
+        let mut root = elem("View");
+        root.bounds = bounds(0, 0, 400, 800);
+        let mut list = elem("List");
+        list.bounds = bounds(50, 100, 300, 240); // encloses all rows
+        for i in 0..4 {
+            let y = 100 + i * 60;
+            let mut wrapper = elem("Row"); // per-item wrapper, no text
+            wrapper.bounds = bounds(50, y, 300, 50);
+            wrapper
+                .children
+                .push(elem_at("Label", &format!("Row {i}"), 60, y + 5, 100, 30));
+            list.children.push(wrapper);
+        }
+        root.children.push(list);
+        root
+    }
+
+    #[test]
+    fn contains_min_matches_climbs_to_repeated_container() {
+        let root = wrapped_list_tree();
+
+        // Default (min_matches = 1): smallest box around the first Row → the
+        // per-item wrapper, NOT the list.
+        let s1 = Selector {
+            contains: Some(AnchorSelector::Text("Row *".to_string())),
+            ..sel()
+        };
+        assert_eq!(
+            find_elements(&root, &s1)[0].element.element_type, "Row",
+            "min_matches=1 SHALL pick the smallest enclosing box (the wrapper)"
+        );
+
+        // min_matches = 2: smallest box enclosing ≥2 Row matches → the list.
+        let s2 = Selector {
+            contains: Some(AnchorSelector::Text("Row *".to_string())),
+            contains_min_matches: Some(2),
+            ..sel()
+        };
+        assert_eq!(
+            find_elements(&root, &s2)[0].element.element_type, "List",
+            "min_matches=2 SHALL climb to the smallest container of ≥2 items"
+        );
+    }
+
+    #[test]
+    fn contains_min_matches_unsatisfiable_yields_empty() {
+        let root = wrapped_list_tree(); // only 4 rows
+        let s = Selector {
+            contains: Some(AnchorSelector::Text("Row *".to_string())),
+            contains_min_matches: Some(5),
+            ..sel()
+        };
+        assert!(
+            find_elements(&root, &s).is_empty(),
+            "a min_matches above the available match count SHALL resolve to nothing"
+        );
     }
 
     // ── inside: elements fully enclosed by the anchor region ────────
