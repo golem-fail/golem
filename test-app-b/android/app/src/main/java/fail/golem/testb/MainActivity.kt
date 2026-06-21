@@ -7,6 +7,8 @@ import android.content.IntentFilter
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,6 +16,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
@@ -76,6 +80,7 @@ fun TestScreen() {
     var counter by remember { mutableStateOf(0) }
     var status by remember { mutableStateOf("Ready") }
     var toggleOn by remember { mutableStateOf(false) }
+    var occTapped by remember { mutableStateOf("none") }
     val notification by NotificationStore.latestBody.collectAsState()
 
     Column(
@@ -90,6 +95,35 @@ fun TestScreen() {
             fontSize = 28.sp,
             modifier = Modifier.semantics { contentDescription = "app-b-title" }
         )
+
+        // Native occlusion routing fixture. An opaque overlay (drawn on top via
+        // zIndex, clickable so it catches taps) covers the left + centre of the
+        // button, leaving the right edge clear. A naive centre tap lands on the
+        // overlay ("occ:overlay"); the occlusion-aware tap must route to the
+        // clear right edge and fire the button ("occ:button"). Near the top so
+        // it's on-screen at launch.
+        Text("occ:$occTapped", fontSize = 16.sp)
+        Box {
+            Button(
+                onClick = { occTapped = "button" },
+                modifier = Modifier
+                    .width(240.dp)
+                    .height(80.dp)
+                    .semantics { contentDescription = "occ-button" }
+            ) {
+                Text("OCC Native")
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .width(80.dp)
+                    .height(80.dp)
+                    .zIndex(1f)
+                    .background(Color(0xCCCC0000))
+                    .clickable { occTapped = "overlay" }
+                    .semantics { contentDescription = "occ-overlay" }
+            )
+        }
 
         // Updated by the BroadcastReceiver above on every
         // push_notification broadcast. push_notification.test asserts

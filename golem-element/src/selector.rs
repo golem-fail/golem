@@ -446,6 +446,7 @@ mod tests {
             bounds: bounds(0, 0, 100, 40),
             visible_bounds: None,
             hit_points: vec![],
+            drawing_order: None,
             children: Vec::new(),
         }
     }

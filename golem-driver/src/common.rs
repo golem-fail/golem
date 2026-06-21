@@ -178,7 +178,13 @@ pub fn parse_hierarchy(json: &str) -> Result<(Element, HierarchyMeta)> {
         normalize_json(&mut val);
     }
 
-    let element: Element = serde_json::from_value(val).context("failed to deserialize hierarchy into Element")?;
+    let mut element: Element = serde_json::from_value(val).context("failed to deserialize hierarchy into Element")?;
+    // Native occlusion: hit-test tap targets against the tree's paint order so
+    // `tap_point()` routes around occluders the same way it does for webview
+    // (where hit_points arrive pre-computed from the DOM). No-op for nodes that
+    // already carry hit_points (webview) and for trees with no native tap
+    // targets. Heuristic — see `compute_native_hit_points`.
+    element.compute_native_hit_points();
     meta.node_count = count_nodes(&element);
 
     // iOS: look up display data from device model using screen dimensions from the parsed tree

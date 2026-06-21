@@ -195,8 +195,9 @@ extra predicate. The pre-order tie-break also keeps `--seed` replay deterministi
 
 The visible tree (via IntersectionObserver) tells golem what's *clipped/off-screen*,
 but not what's *covered* by something painted on top (a `position: sticky` header,
-a `z-index` overlay). For webview targets, golem additionally **hit-tests** sample
-points within the visible bounds (`document.elementFromPoint`) and:
+a `z-index` overlay). golem additionally **hit-tests** sample points within the
+visible bounds — `document.elementFromPoint` for webview targets, a host-side
+geometric hit-test against the tree's paint order for native ones (see below) — and:
 
 - **Routes around DOM occluders.** A plain `tap` lands on the first occlusion-clear
   sample point (centre → arms → corners), so tapping a button whose centre is under
@@ -208,11 +209,21 @@ points within the visible bounds (`document.elementFromPoint`) and:
   element's geometric centre, never the occlusion-routed point — so they remain
   predictable regardless of what's covering the element.
 
-Notes: this is **webview-only** (native trees have no `elementFromPoint`) and detects
-**DOM** occlusion only — an element under the OS status bar (system-level) is a
-separate concern. Surfacing occlusion as a *warning/error* (e.g. fully-covered or an
-offset on a covered target) is deferred to the planned accessibility audit, whose
-severity model is the right home for it — not a per-step tag.
+**Native** targets get the same routing from a host-side hit-test: golem determines
+the topmost element at each sample point from the tree's **paint order** — sibling
+`getDrawingOrder` on Android (captures Material elevation that raw tree order misses),
+tree order on iOS — and routes around a later-painted, non-enclosing occluder. This
+is a **heuristic** (cross-hierarchy elevation / iOS `zPosition` aren't captured), so
+treat a reported occlusion as *"may be occluded"*; the tap still routes but never
+blocks. Note Android's own accessibility framework already prunes nodes whose bounds
+are fully occluded (e.g. a covered text label disappears) and may trim an interactive's
+reachable region — so the host hit-test mostly adds value where the platform keeps a
+covered element at full bounds.
+
+Notes: detects layout/paint occlusion only — an element under the OS status bar
+(system-level) is a separate concern. Surfacing occlusion as a *warning/error* (e.g.
+fully-covered or an offset on a covered target) is deferred to the planned
+accessibility audit, whose severity model is the right home for it — not a per-step tag.
 
 ## `within` (scoping a scroll)
 

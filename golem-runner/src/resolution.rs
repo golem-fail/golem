@@ -483,6 +483,7 @@ pub async fn resolve_element(
                 bounds: golem_element::Bounds::new(x, y, 1, 1),
                 visible_bounds: None,
                 hit_points: vec![],
+                drawing_order: None,
                 children: vec![],
             };
             return Ok((dummy, (x, y)));
@@ -827,6 +828,7 @@ mod tests {
             bounds,
             visible_bounds: None,
             hit_points: vec![],
+            drawing_order: None,
             children: Vec::new(),
         }
     }

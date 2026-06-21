@@ -207,7 +207,7 @@ public class CompanionServer {
                     JSONObject respBody = new JSONObject()
                         .put("status", uiReady ? "ok" : "warming_up")
                         .put("platform", "android")
-                        .put("version", "0.6.34")
+                        .put("version", "0.6.35")
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
@@ -754,6 +754,10 @@ public class CompanionServer {
         json.put("scrollable", node.isScrollable());
         json.put("selected", node.isSelected());
         json.put("checked", node.isChecked());
+        // Sibling draw order (incl. elevation/z) for the host-side native
+        // occlusion hit-test — captures Material elevation that raw tree order
+        // misses (e.g. a Toolbar declared before content but drawn on top).
+        json.put("drawing_order", node.getDrawingOrder());
 
         android.graphics.Rect bounds = new android.graphics.Rect();
         node.getBoundsInScreen(bounds);

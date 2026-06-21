@@ -27,6 +27,12 @@ pub struct Element {
     /// arms, then corners. Empty when not computed (native / non-targetable).
     #[serde(default)]
     pub hit_points: Vec<HitPoint>,
+    /// Sibling paint order (Android `getDrawingOrderInParent`): higher = painted
+    /// later (on top), capturing elevation/z that raw tree order misses. `None`
+    /// on iOS/webview (no per-node signal) → callers fall back to tree order.
+    /// Used by the host-side native occlusion hit-test.
+    #[serde(default)]
+    pub drawing_order: Option<i32>,
     #[serde(default)]
     pub children: Vec<Element>,
 }
@@ -86,6 +92,12 @@ impl Bounds {
     /// Area of this bounds in square pixels.
     pub fn area(&self) -> i64 {
         self.width as i64 * self.height as i64
+    }
+
+    /// True when `(px, py)` falls within these bounds (half-open: left/top
+    /// inclusive, right/bottom exclusive).
+    pub fn contains_point(&self, px: i32, py: i32) -> bool {
+        px >= self.x && px < self.right() && py >= self.y && py < self.bottom()
     }
 }
 
@@ -151,6 +163,162 @@ impl Element {
             return Some(self.node_count());
         }
         self.children.iter().find_map(Element::webview_subtree_count)
+    }
+
+    /// Canonical occlusion sample points within `b` — centre → arms → corners,
+    /// matching the webview sampler: centre always; vertical/horizontal arms
+    /// once the dimension exceeds a fingertip; corners only when both exceed a
+    /// larger bound. Yields 1, 3, 5, or 9 points.
+    fn occlusion_sample_points(b: &Bounds) -> Vec<(i32, i32)> {
+        const FINGER: i32 = 44;
+        const LARGE: i32 = 88;
+        let (cx, cy) = (b.center_x(), b.center_y());
+        let mut pts = vec![(cx, cy)];
+        if b.height > FINGER {
+            pts.push((cx, b.y + b.height / 4));
+            pts.push((cx, b.y + b.height * 3 / 4));
+        }
+        if b.width > FINGER {
+            pts.push((b.x + b.width / 4, cy));
+            pts.push((b.x + b.width * 3 / 4, cy));
+        }
+        if b.width > LARGE && b.height > LARGE {
+            pts.push((b.x + b.width / 4, b.y + b.height / 4));
+            pts.push((b.x + b.width * 3 / 4, b.y + b.height / 4));
+            pts.push((b.x + b.width / 4, b.y + b.height * 3 / 4));
+            pts.push((b.x + b.width * 3 / 4, b.y + b.height * 3 / 4));
+        }
+        pts
+    }
+
+    /// Populate `hit_points` for native targets (clickable, or text/label-
+    /// bearing — anything a selector may resolve to) via a host-side
+    /// geometric hit-test — the native analogue of the webview
+    /// `elementFromPoint` sampling, so `tap_point()`/occlusion routing work
+    /// uniformly across native and webview. A sample point is "hit" when the
+    /// target (or a descendant) is the topmost element painted there, and
+    /// "occluded" when an unrelated, later-painted element covers it.
+    ///
+    /// Paint order is sibling `drawing_order` (Android `getDrawingOrderInParent`)
+    /// or tree order (iOS / no signal). It is therefore a HEURISTIC —
+    /// cross-hierarchy elevation and iOS `zPosition` aren't captured — so a
+    /// reported occlusion means "may be occluded", never authoritative. The
+    /// tap still routes to a clear point but never blocks on this.
+    ///
+    /// No-op for nodes already carrying `hit_points` (webview, from the DOM
+    /// hit-test). Bounded: O(targets × samples × nodes).
+    pub fn compute_native_hit_points(&mut self) {
+        let mut meta: Vec<HitMeta> = Vec::new();
+        collect_hit_meta(self, &mut meta);
+        // Fast out: nothing to do unless some native tap target lacks hit_points.
+        if meta.iter().all(|m| !m.target || m.has_hit_points) {
+            return;
+        }
+        let mut paint_rank = vec![0usize; meta.len()];
+        let mut next_rank = 0usize;
+        assign_paint_rank(0, &meta, &mut paint_rank, &mut next_rank);
+
+        let mut computed: Vec<Option<Vec<HitPoint>>> = vec![None; meta.len()];
+        for i in 0..meta.len() {
+            if !meta[i].target || meta[i].has_hit_points {
+                continue;
+            }
+            let b = meta[i].bounds;
+            if b.width <= 0 || b.height <= 0 {
+                continue;
+            }
+            let hp = Element::occlusion_sample_points(&b)
+                .into_iter()
+                .map(|(x, y)| {
+                    let occluded = meta.iter().enumerate().any(|(j, mj)| {
+                        j != i
+                            && paint_rank[j] > paint_rank[i]
+                            // not a descendant of the target (pre-order range)
+                            && !(j > i && j < meta[i].subtree_end)
+                            // not a coincident/enclosing wrapper: a real occluder
+                            // partially covers the target. A later node with the
+                            // SAME-or-larger bounds (e.g. Compose's separate
+                            // clickable vs label nodes at identical bounds, or an
+                            // ancestor-shaped sibling) isn't occluding — skip it.
+                            && !encloses(&mj.bounds, &b)
+                            && mj.bounds.contains_point(x, y)
+                    });
+                    HitPoint { x, y, hit: !occluded }
+                })
+                .collect();
+            computed[i] = Some(hp);
+        }
+
+        let mut idx = 0usize;
+        write_hit_points(self, &mut idx, &computed);
+    }
+}
+
+/// Per-node scratch for the native hit-test, in pre-order.
+struct HitMeta {
+    bounds: Bounds,
+    drawing_order: Option<i32>,
+    target: bool,
+    has_hit_points: bool,
+    /// Exclusive pre-order index just past this node's subtree.
+    subtree_end: usize,
+    /// Pre-order indices of direct children (natural order).
+    children: Vec<usize>,
+}
+
+/// True when `outer` fully encloses `inner` (used to skip wrapper/coincident
+/// "occluders" — a real occluder only partially covers the target).
+fn encloses(outer: &Bounds, inner: &Bounds) -> bool {
+    outer.x <= inner.x
+        && outer.y <= inner.y
+        && outer.right() >= inner.right()
+        && outer.bottom() >= inner.bottom()
+}
+
+fn collect_hit_meta(el: &Element, out: &mut Vec<HitMeta>) -> usize {
+    let my = out.len();
+    out.push(HitMeta {
+        bounds: *el.effective_bounds(),
+        drawing_order: el.drawing_order,
+        // A target is anything golem might tap or assert on — clickable, or
+        // carrying text / an accessibility label. Mirrors the webview
+        // "selectable" set, so occlusion routing applies to whatever a
+        // selector resolves to (a label may sit on a node distinct from the
+        // clickable wrapper, e.g. a Compose Button's merged semantics node).
+        target: el.clickable || el.text.is_some() || el.accessibility_label.is_some(),
+        has_hit_points: !el.hit_points.is_empty(),
+        subtree_end: 0,
+        children: Vec::new(),
+    });
+    let mut kids = Vec::new();
+    for child in &el.children {
+        kids.push(collect_hit_meta(child, out));
+    }
+    out[my].subtree_end = out.len();
+    out[my].children = kids;
+    my
+}
+
+/// Assign paint rank: a node paints before its children, and siblings paint in
+/// ascending `drawing_order` (stable → natural order when the signal is absent).
+fn assign_paint_rank(i: usize, meta: &[HitMeta], paint_rank: &mut [usize], next: &mut usize) {
+    paint_rank[i] = *next;
+    *next += 1;
+    let mut kids = meta[i].children.clone();
+    kids.sort_by_key(|&c| meta[c].drawing_order.unwrap_or(0));
+    for c in kids {
+        assign_paint_rank(c, meta, paint_rank, next);
+    }
+}
+
+fn write_hit_points(el: &mut Element, idx: &mut usize, computed: &[Option<Vec<HitPoint>>]) {
+    let my = *idx;
+    *idx += 1;
+    if let Some(hp) = &computed[my] {
+        el.hit_points = hp.clone();
+    }
+    for child in &mut el.children {
+        write_hit_points(child, idx, computed);
     }
 }
 
@@ -222,6 +390,7 @@ pub fn filter_viewport(root: &Element, viewport: &Viewport) -> Element {
         bounds: root.bounds,
         visible_bounds: root.visible_bounds,
         hit_points: vec![],
+        drawing_order: None,
         children: visible,
     }
 }
@@ -271,8 +440,88 @@ mod tests {
             bounds,
             visible_bounds: None,
             hit_points: vec![],
+            drawing_order: None,
             children: Vec::new(),
         }
+    }
+
+    // ── native occlusion hit-test ───────────────────────────────────
+
+    /// root container (non-target) holding a target button `B` and an
+    /// `overlay`. `B` spans (0,0,200,100); `overlay` (added per `overlay_first`)
+    /// covers x<150 — i.e. B's centre and left, leaving the right edge clear.
+    fn occlusion_tree(overlay_first: bool, b_order: Option<i32>, o_order: Option<i32>) -> Element {
+        let mut root = make_element("Root", make_bounds(0, 0, 400, 400));
+        root.clickable = false; // container, not a tap target
+        let mut b = make_element("Button", make_bounds(0, 0, 200, 100));
+        b.drawing_order = b_order;
+        let mut overlay = make_element("Overlay", make_bounds(0, 0, 150, 200));
+        overlay.drawing_order = o_order;
+        if overlay_first {
+            root.children = vec![overlay, b];
+        } else {
+            root.children = vec![b, overlay];
+        }
+        root
+    }
+
+    fn find_button(root: &Element) -> &Element {
+        root.children.iter().find(|c| c.element_type == "Button").expect("button")
+    }
+
+    #[test]
+    fn native_hit_test_routes_around_a_later_painted_overlay() {
+        // Overlay is a later sibling → paints on top → occludes B's centre.
+        let mut tree = occlusion_tree(false, None, None);
+        tree.compute_native_hit_points();
+        let b = find_button(&tree);
+        assert_eq!(b.center_hittable(), Some(false), "centre is under the overlay");
+        assert!(
+            b.hittable_fraction().is_some_and(|f| f > 0.0 && f < 1.0),
+            "partially occluded: some points clear, some not"
+        );
+        // Routes to a clear point on the uncovered right edge (x >= 150).
+        let (tx, _ty) = b.tap_point();
+        assert!(tx >= 150, "tap SHALL route to the clear right edge, got x={tx}");
+    }
+
+    #[test]
+    fn native_hit_test_drawing_order_overrides_tree_order() {
+        // Same geometry, but B has a HIGHER drawing_order than the overlay →
+        // B paints on top → NOT occluded, even though the overlay is a later
+        // sibling in tree order.
+        let mut tree = occlusion_tree(false, Some(1), Some(0));
+        tree.compute_native_hit_points();
+        let b = find_button(&tree);
+        assert_eq!(
+            b.center_hittable(), Some(true),
+            "higher drawing_order SHALL paint B above the overlay (no occlusion)"
+        );
+    }
+
+    #[test]
+    fn native_hit_test_unoccluded_target_is_all_clear() {
+        let mut root = make_element("Root", make_bounds(0, 0, 400, 400));
+        root.clickable = false;
+        root.children = vec![make_element("Button", make_bounds(10, 10, 120, 120))];
+        root.compute_native_hit_points();
+        let b = find_button(&root);
+        assert_eq!(b.hittable_fraction(), Some(1.0), "lone target SHALL be fully clear");
+    }
+
+    #[test]
+    fn native_hit_test_preserves_existing_webview_hit_points() {
+        let mut root = make_element("Root", make_bounds(0, 0, 400, 400));
+        root.clickable = false;
+        let mut wv = make_element("div", make_bounds(0, 0, 50, 50));
+        wv.hit_points = vec![HitPoint { x: 1, y: 2, hit: true }];
+        root.children = vec![wv];
+        root.compute_native_hit_points();
+        assert_eq!(
+            root.children[0].hit_points,
+            vec![HitPoint { x: 1, y: 2, hit: true }],
+            "nodes that already carry hit_points (webview) SHALL not be recomputed"
+        );
     }
 
     #[test]
@@ -354,6 +603,7 @@ mod tests {
             bounds: make_bounds(5, 10, 300, 44),
             visible_bounds: None,
             hit_points: vec![],
+            drawing_order: None,
             children: Vec::new(),
         };
 

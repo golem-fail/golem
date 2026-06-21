@@ -1,0 +1,30 @@
+[flow]
+name = "Native occlusion routing"
+tags = ["android", "occlusion", "native"]
+
+# test-app-b's occlusion fixture: an opaque, clickable overlay (drawn on top via
+# zIndex) covers the left + centre of the "OCC Native" button, leaving the right
+# edge clear. A naive centre tap lands on the overlay → readout "occ:overlay";
+# the host-side native occlusion hit-test (paint order from getDrawingOrder)
+# must route the tap to the clear right edge → "occ:button". Android-only —
+# drawing_order is Android's signal; iOS native uses snapshot tree order
+# (unit-tested) and a SwiftUI overlay fixture is a follow-up.
+[[flow.apps]]
+name = "app-b"
+bundle = "fail.golem.testb"
+install_script = { ios = "scripts/install-app-b-ios.sh", android = "scripts/install-app-b-android.sh" }
+[[flow.apps.devices]]
+os = ["android:latest"]
+type = "phone"
+
+[[block]]
+name = "route_around_native_overlay"
+steps = [
+  { action = "assert_visible", on_text = "occ:none" },
+  # Target by accessibility_label: Android prunes the occluded TEXT node (the
+  # button label sits under the centre overlay), but keeps the button itself a
+  # full-bounds clickable element — so the host-side hit-test routes the tap to
+  # a clear edge and fires it.
+  { action = "tap", on_accessibility_label = "occ-button" },
+  { action = "assert_visible", on_text = "occ:button", timeout = 5000 },
+]

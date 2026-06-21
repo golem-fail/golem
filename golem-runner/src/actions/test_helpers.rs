@@ -24,6 +24,7 @@ pub fn make_element(element_type: &str, bounds: Bounds) -> Element {
         bounds,
         visible_bounds: None,
         hit_points: vec![],
+        drawing_order: None,
         children: Vec::new(),
     }
 }

@@ -262,25 +262,27 @@ tablet cross-column proof are both covered by the grid now.
   centre is the correct, predictable contract; if the centre is dead space, the
   author should select the actual child (`contains`/`inside`/relational) or use
   the `x`/`y` offsets. Auto-redirecting to a child centroid is surprising magic.
-- **Occlusion by sticky/overlapping elements — webview DETECTION+ROUTING DONE; native + severity are follow-ups.**
-  Webview taps hit-test sample points (`elementFromPoint`, stored as `Element.hit_points`)
-  and route around DOM occluders to a clear point; the routed coord shows neutrally in
-  the `--verbose` `element_resolved` substep (no warning tag — routing isn't a warning).
-  Webview content incl. Tauri on *both* platforms uses this path, so it's cross-platform
-  already. Remaining:
-  - **(a) native occlusion.** Native a11y trees don't pre-filter occluded views (they
-    report by hierarchy, not paint order). iOS: `XCUIElement.isHittable` is a clean signal
-    (occlusion + on-screen) the companion could report per element — a boolean, not 9-point
-    sampling, but the real "is it tappable" answer. Android: no direct equivalent;
-    `AccessibilityNodeInfo.isVisibleToUser()` is the coarse closest, precise needs a
-    companion-side paint-order/bounds heuristic.
-  - **(b) severity (warn/error).** Surfacing occlusion as a warning/error belongs on the
+- **Occlusion by sticky/overlapping elements — DETECTION+ROUTING DONE (webview + native); severity is the follow-up.**
+  Taps hit-test sample points (stored as `Element.hit_points`) and route around occluders
+  to a clear point; routed coord shows neutrally in `--verbose` `element_resolved` (no
+  warning tag — routing isn't a warning). Webview uses `elementFromPoint`; native uses a
+  host-side geometric hit-test against the tree's paint order (Android `getDrawingOrder`
+  for elevation, iOS tree order), with an `encloses`-exclusion so Compose's coincident
+  label/clickable nodes aren't treated as occluders. Heuristic → "may be occluded", never
+  blocks. Live-validated on Android (centre overlay → tap routes to a clear edge);
+  iOS uses the same code path (tree order) — an iOS SwiftUI overlay fixture is a small
+  follow-up (today only test-app-b *Android* has the overlay). **Finding:** Android's a11y
+  already prunes nodes whose bounds are fully occluded (covered text disappears) and may
+  trim an interactive's reachable region — so the host hit-test mostly earns its keep
+  where the platform keeps a covered element at full bounds (and on iOS, whose snapshots
+  retain occluded elements).
+  - **Remaining — severity (warn/error).** Surfacing occlusion as a warning/error belongs on the
     *step* (substeps are neutral info), and the natural home is the planned a11y audit
     (`findings/plan_a11y.md`): its `overlapping_interactive`/`occluded_element` checks
     should consume `hit_points` ground truth instead of bounds-intersection, governed by
     its level + `a11y_max_errors/warnings` model.
   (System-status-bar occlusion of the menu button is a *separate* layer — see "Android:
-  sticky menu tap target only half-clickable" below; `elementFromPoint` can't see the OS bar.)
+  sticky menu tap target only half-clickable" below; the hit-test can't see the OS bar.)
 - **Install-cache may miss a test-app component edit.** Adding the DIS button +
   checkbox to `SelectorGrid.svelte` didn't reinstall until `--rebuild` (a non-
   rebuild run served the stale app — `on_text="DIS"` EF404, then `--rebuild`
