@@ -34,12 +34,10 @@ steps = [
 [[block]]
 name = "traits"
 steps = [
-  # square + button cell (small/large vary by device px, so not asserted here —
-  # those thresholds are unit-tested).
+  # square + button cell.
   { action = "tap", on = { text = "C3", traits = ["button", "square", "short_text"] } },
   { action = "assert_visible", on_text = "tapped:C3" },
-  # wide full-width button (ratio-based trait; unit-independent across
-  # platforms — unlike small/large which use raw bounds units).
+  # wide full-width button (ratio traits are dimensionless → cross-platform).
   { action = "tap", on = { text = "WIDE", traits = ["wide"] } },
   { action = "assert_visible", on_text = "tapped:WIDE" },
   # tall button.

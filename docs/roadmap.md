@@ -258,17 +258,6 @@ no_text). Green Android + iOS phone/tablet. The deliberately-fragile case and th
 tablet cross-column proof are both covered by the grid now.
 
 **Follow-ups still open:**
-- **`small`/`large` traits are platform-unit-dependent.** They threshold raw
-  `bounds.area()`, but Android reports device px (≈3× on 480dpi) and iOS reports
-  points (≈dp), so the same element is `large` on Android, not on iOS (hit live:
-  a WIDE button passed `large` on Android, failed on iOS). Fix: evaluate in
-  **density-independent units (dp)** — but `element_has_trait` only sees raw
-  `Element` bounds, so density/scale must be threaded through
-  `find_elements → matches_selector → element_has_trait` (touches every
-  find_elements caller — not a one-liner), or make the thresholds viewport-
-  relative, or **drop `small`/`large`** (currently unused in any flow, same
-  rationale as input/toggle). Ratio traits (`square`/`wide`/`tall`) are unaffected.
-  Until fixed, don't assert `small`/`large` in cross-platform e2e.
 - **A2 (tap/swipe centroid) — decided NOT to do.** Tapping the resolved element's
   centre is the correct, predictable contract; if the centre is dead space, the
   author should select the actual child (`contains`/`inside`/relational) or use
@@ -395,36 +384,6 @@ already have), not the container centre. Pure geometry, no DOM. Applies to
 the [Visibility model](architecture.md) cross-reference, and any selector
 reference. A new feature SHALL add Rust unit tests (filter overlap math, sort
 priority, containment) + e2e.
-
-## Inner-list inertial scroll suppression
-
-The dwell-before-lift scroll swipe (in `golem-runner/src/scroll.rs` via
-the multi-touch gesture endpoint) successfully kills *native* fling
-momentum for page-level scrolls — visually confirmed: 0 overshoot
-events on the post-fix sweep. But scrolling INSIDE an
-`overflow-y:auto` inner container still hitches/flings: JS-level
-inertial scroll computes velocity from move events independent of
-release. Even with the finger held still at release, the inner list's
-JS scroll code reads the move-phase velocity and applies its own
-momentum.
-
-Affects `scroll within=<inner list>` flows — `scroll.test
-scroll_within_list` (Item 45) is the canonical example.
-
-**Shape:** for `within` scrolls, also slow the move phase (not just
-the dwell), e.g. stretch the gesture's move portion to 600ms instead
-of 300ms while keeping the total around 900-1200ms with dwell. Lower
-move velocity → JS-side inertial scroll either doesn't trigger or
-adds less momentum.
-
-Alternative: chunk a target scroll distance into several smaller
-swipes back-to-back. Each gesture is short enough that JS-inertial
-adds little, but accumulated effect reaches the target.
-
-**Files:** `golem-runner/src/resolution.rs::scroll_swipe_bounded`
-(maybe add a `within_inner_list` variant or a duration multiplier),
-`golem-runner/src/scroll.rs` (caller passes the hint when `container`
-is set).
 
 ## set_location: drop WebView JS hook, grant permission + real geolocation
 
@@ -1296,13 +1255,13 @@ When iPhone + iPad run flows in parallel, occasional state leaks between sims:
 - **Wrong-field type:** observed once on iPhone 17 — typing for `Password` landed in the `Search` input. The next field's focus snapshot apparently lagged by one step, so `typeText` delivered keystrokes to the previously-focused field instead.
 - **Step-6 backspace flake:** one of the two flows occasionally times out at `backspace on_text="golem testt"` — element resolves but the action stalls past the step deadline. Solo runs never trigger.
 - **Step-19 auto_scroll for Submit:** scroll loop enters strategy 2 stalls under concurrent load even after our scroll-strategy fix.
-- **Startup EX000 — root-caused + fixed for the solo case; re-verify concurrent.** The companion reported `ready` then its first request dropped (`EX000`) or its first `/hierarchy` timed out (`EF408`). Root cause: iOS `/health` returned `ok` the instant the HTTP socket bound, with **no XCUITest readiness probe** — so the host declared ready and fired the first request into a cold harness. (Android already gated `/health` on a UiAutomation warm-up; iOS didn't.) Fixed by a one-time XCUITest warm-up (screenshot, no cross-app SpringBoard query) gating `/health` to `503 warming_up` until warm. **Proven solo:** a 10× cold-start loop went 50% EX000/EF408 → 0/10. The concurrent two-sim case shares this cause and is very likely fixed too, but wasn't re-measured under concurrency — re-verify.
+- **Startup-readiness EX000 — FIXED (57b0c97), re-verified.** The companion reported `ready` then its first request dropped (`EX000`) or its first `/hierarchy` timed out (`EF408`) because iOS `/health` returned `ok` the instant the socket bound, with no XCUITest readiness probe (Android already gated on a UiAutomation warm-up; iOS didn't). Fixed by a one-time XCUITest warm-up (screenshot) gating `/health` to `503` until warm. Solo: 50% → **0/10**. Concurrent two-sim re-verify (2026-06-18): once both sims are booted, **0/8** concurrent cold companion starts. **Residual (still open here):** 1/12 device-starts dropped EX000 — but on a freshly **cold-booted** sim, *during launch-settle* (`await_first_frame` `/hierarchy` polling), not at the readiness handshake. That's a transport drop on a settling sim under the boot+launch burst — the deeper process-global / cold-boot contention this entry is about, not the (now-fixed) readiness gap.
 
 The companion-side off-main fix (commit on this entry's removal) prevents one wedge from cascading into all later requests, but doesn't address the underlying issue: XCUITest's HID injection and accessibility-snapshot paths are process-global. When two sims drive XCUITest concurrently from the same host, they interleave on shared `simctl` / `usbmuxd` / `IOHIDEvent` plumbing. Apple's official guidance is one XCUITest run per host process — we're stretching that.
 
 Likely shape of the real fix: serialise the host-side simctl-touching operations (mainly tap synthesis + window-snapshot probes) behind a host-wide mutex, or run each sim's companion in a separate XCUITest process so OS-level state is per-process. The **[[Selective host-wide queue for heavy device ops]]** entry is the natural vehicle — extend it to gate the contended iOS startup/HID/snapshot ops, not just the Android I/O-heavy ones.
 
-Determinism contrast (observed): the iOS-concurrent wedge is **highly reproducible / near-deterministic** — it's structural (process-global XCUITest HID + snapshot plumbing), so two concurrent iOS sims reliably trip it (it recurred every run, incl. `--no-build`). Android multi-emu failures are **stochastic / load-driven** — `adb` is per-device so there's no structural collision; the trigger is host RAM/CPU/GPU saturation (plus the shared `adb` server) during heavy bursts, hence probabilistic and worse with more emus. Different root *character*, but a host-wide queue/serialisation mitigates both: iOS by serialising the colliding process-global ops, Android by capping the concurrent resource burst.
+Determinism contrast (observed): the iOS-concurrent wedge is **structural** (process-global XCUITest HID + snapshot plumbing). The *startup-EX000* that used to make it recur every run is now fixed (readiness gate, see above) — post-fix it's down to an occasional cold-boot transport drop (1/12). The remaining cross-flow corruption (wrong-field type, backspace stall) is the genuinely structural residue. Android multi-emu failures are **stochastic / load-driven** — `adb` is per-device so there's no structural collision; the trigger is host RAM/CPU/GPU saturation (plus the shared `adb` server) during heavy bursts, hence probabilistic and worse with more emus. Different root *character*, but a host-wide queue/serialisation mitigates both: iOS by serialising the colliding process-global ops, Android by capping the concurrent resource burst.
 
 Not blocking — single-device runs are stable, multi-device retry-flaky. **This is the talk's "multi-device is still flaky" caveat, reproduced.**
 

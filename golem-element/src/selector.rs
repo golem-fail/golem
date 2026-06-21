@@ -412,15 +412,12 @@ pub fn element_has_trait(element: &Element, trait_name: &str) -> bool {
         }
         "wide" => w > 0 && h > 0 && w > 2 * h,
         "tall" => w > 0 && h > 0 && h > 2 * w,
-        "small" => {
-            let area = w as u64 * h as u64;
-            area > 0 && area < 2500
-        }
-        "large" => {
-            let area = w as u64 * h as u64;
-            area > 100_000
-        }
-
+        // Note: absolute-size traits (`small`/`large`) were removed — raw
+        // bounds area is in device px on Android but points on iOS, so the
+        // same element classified differently per platform. Size assertions
+        // belong in the (density-aware) a11y audit, not selector traits. The
+        // ratio traits above (`square`/`wide`/`tall`) are dimensionless and
+        // cross-platform.
         _ => false, // Unknown trait — doesn't match
     }
 }
@@ -1433,31 +1430,6 @@ mod tests {
         let mut exact = elem("View");
         exact.bounds = bounds(0, 0, 200, 100);
         assert!(!element_has_trait(&exact, "wide"), "exactly 2x SHALL not be wide");
-    }
-
-    // ── 50. trait: small / large area windows ───────────────────────
-
-    #[test]
-    fn trait_small_and_large() {
-        let mut small = elem("View");
-        small.bounds = bounds(0, 0, 40, 40); // area 1600 < 2500
-        assert!(element_has_trait(&small, "small"));
-        assert!(!element_has_trait(&small, "large"));
-
-        // Zero-area is not small (requires area > 0).
-        let mut zero = elem("View");
-        zero.bounds = bounds(0, 0, 0, 0);
-        assert!(!element_has_trait(&zero, "small"), "zero area SHALL not be small");
-
-        let mut large = elem("View");
-        large.bounds = bounds(0, 0, 400, 300); // area 120000 > 100000
-        assert!(element_has_trait(&large, "large"));
-        assert!(!element_has_trait(&large, "small"));
-
-        // Boundary: area exactly 2500 is NOT small (strict <).
-        let mut edge = elem("View");
-        edge.bounds = bounds(0, 0, 50, 50);
-        assert!(!element_has_trait(&edge, "small"), "area exactly 2500 SHALL not be small");
     }
 
     // ── 51. trait: unknown trait never matches ──────────────────────

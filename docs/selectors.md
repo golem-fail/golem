@@ -85,16 +85,8 @@ cross-platform — they don't encode platform element types.
 | `square` | Width/height ratio between 0.8 and 1.2. |
 | `wide` | Width > 2 × height. |
 | `tall` | Height > 2 × width. |
-| `small` | Area < 2 500 px². |
-| `large` | Area > 100 000 px². |
 
 (`golem-element/src/selector.rs` is the source of truth for thresholds.)
-
-> **Note:** `small`/`large` threshold raw bounds area, whose units differ by
-> platform (Android device px vs iOS points), so the same element may be `large`
-> on one platform and not the other. Avoid them in cross-platform assertions
-> until they're density-normalized (roadmap). The ratio traits (`square`/`wide`/
-> `tall`) are dimensionless and unaffected.
 
 ## Relational (positional) selectors
 
