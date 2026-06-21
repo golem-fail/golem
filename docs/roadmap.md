@@ -1289,20 +1289,6 @@ Also roadmap-adjacent: consider whether `golem_events::StepOutcome::Skipped` sho
 - Add an iOS-side grace probe after `bootstatus -b` (e.g. `xcrun simctl getenv <udid> HOME` until fast) to potentially eliminate the Mach -308 case at source rather than retrying after.
 - Expand the classifier as new transient patterns surface in CI logs. Conservative — adding patterns that aren't actually recoverable just masks real errors behind a 3s delay.
 
-## iOS companion EX000 drop — confirm the write-path fix under load
-
-Root-caused and structurally fixed (the iOS companion's `writeResponse` did two
-unchecked `send()`s for header then body and discarded the return values, so a
-short write or a write/close race truncated the response → the host's hyper
-client saw `EX000 … connection closed before message completed`; the `type` path
-was the usual trigger as the longest main-thread op). Fixed: serialize the whole
-response into one buffer, `sendAll` it with a checked loop, add `SO_NOSIGPIPE`
-on the client socket and `shutdown(SHUT_WR)` before close. Verified no regression
-(type_text ×3 solo iOS clean). The original drop was **intermittent**, so this
-hasn't been observed-then-confirmed-gone — watch for any recurrence, especially
-under concurrent load (where the write path is most stressed; see the related
-startup-drop note in [[iOS concurrent flows: cross-flow focus / state corruption]]).
-
 ## iOS concurrent flows: cross-flow focus / state corruption
 
 When iPhone + iPad run flows in parallel, occasional state leaks between sims:
@@ -1310,7 +1296,7 @@ When iPhone + iPad run flows in parallel, occasional state leaks between sims:
 - **Wrong-field type:** observed once on iPhone 17 — typing for `Password` landed in the `Search` input. The next field's focus snapshot apparently lagged by one step, so `typeText` delivered keystrokes to the previously-focused field instead.
 - **Step-6 backspace flake:** one of the two flows occasionally times out at `backspace on_text="golem testt"` — element resolves but the action stalls past the step deadline. Solo runs never trigger.
 - **Step-19 auto_scroll for Submit:** scroll loop enters strategy 2 stalls under concurrent load even after our scroll-strategy fix.
-- **Companion connection dropped on startup under concurrent load (EX000):** running two iOS *versions* concurrently (`os = "ios:latest:2"` → e.g. iPhone 17e/iOS 26 + iPhone 16/iOS 18) plus an Android emulator, the iPhone 17e companion reported `ready` then its first `/hierarchy` returned `EX000 — connection closed before message completed` (companion HTTP server dropped mid-response during the concurrent install+launch burst). ANR recovery correctly fired and rebooted the sim. **Reproducible** — recurred on a second run, including with `--no-build` (so not an install-race artifact). Two concurrent iOS sims is the most fragile config; one iOS + one Android is stable. (The `writeResponse` short-write/close fix — see the iOS companion EX000 write-path note above — may have addressed this `mid-response` drop too; re-check this repro under concurrent load.)
+- **Startup EX000 — root-caused + fixed for the solo case; re-verify concurrent.** The companion reported `ready` then its first request dropped (`EX000`) or its first `/hierarchy` timed out (`EF408`). Root cause: iOS `/health` returned `ok` the instant the HTTP socket bound, with **no XCUITest readiness probe** — so the host declared ready and fired the first request into a cold harness. (Android already gated `/health` on a UiAutomation warm-up; iOS didn't.) Fixed by a one-time XCUITest warm-up (screenshot, no cross-app SpringBoard query) gating `/health` to `503 warming_up` until warm. **Proven solo:** a 10× cold-start loop went 50% EX000/EF408 → 0/10. The concurrent two-sim case shares this cause and is very likely fixed too, but wasn't re-measured under concurrency — re-verify.
 
 The companion-side off-main fix (commit on this entry's removal) prevents one wedge from cascading into all later requests, but doesn't address the underlying issue: XCUITest's HID injection and accessibility-snapshot paths are process-global. When two sims drive XCUITest concurrently from the same host, they interleave on shared `simctl` / `usbmuxd` / `IOHIDEvent` plumbing. Apple's official guidance is one XCUITest run per host process — we're stretching that.
 

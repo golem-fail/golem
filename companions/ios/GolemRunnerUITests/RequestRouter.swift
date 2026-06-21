@@ -166,6 +166,19 @@ final class RequestRouter {
     private static let kTimeoutFast: TimeInterval = 5.0
     private static let kTimeoutLaunch: TimeInterval = 20.0
     private static let kTimeoutType: TimeInterval = 30.0
+    /// Warm-up probe budget. Kept under the host's 5s `/health` GET timeout so
+    /// a slow first probe surfaces as `warming_up` (host retries) rather than a
+    /// host-side connection timeout.
+    private static let kTimeoutHealthWarmup: TimeInterval = 4.0
+
+    /// XCUITest readiness, gated behind a one-time warm-up. The HTTP socket
+    /// binds and answers `/health` well before XCUITest's first framework
+    /// engagement completes; replying `ok` immediately makes the host declare
+    /// readiness and fire `/launch`/`/hierarchy` into a cold harness, which
+    /// drops the connection (EX000) or times out the first snapshot (EF408).
+    /// Mirrors Android's UiAutomation warm-up probe.
+    private let readyLock = NSLock()
+    private var xcuiReady = false
 
     private func gatewayTimeout(_ what: String) -> HTTPResponse {
         .error("\(what) timed out on main thread", status: 504)
@@ -217,9 +230,15 @@ final class RequestRouter {
     // MARK: - Route handlers
 
     private func handleHealth() -> HTTPResponse {
-        // /health intentionally does NOT touch the main thread — it should
-        // stay responsive even when XCUITest is wedged so the runner can
-        // distinguish "harness alive but stuck" from "harness dead".
+        // Gate readiness on a one-time XCUITest warm-up (see `xcuiReady`).
+        // Until warm, report 503 `warming_up` so the host's `wait_for_health`
+        // keeps polling instead of firing the first real request into a cold
+        // harness. Once warm, this short-circuits to a pure-liveness `ok` that
+        // never touches the main thread again — so `/health` stays responsive
+        // even if XCUITest later wedges (the runner can still tell "alive but
+        // stuck" from "dead").
+        let ready = ensureXcuiReady()
+
         let device = UIDevice.current
         // Prefer the simulator's UDID (set by CoreSimulator in
         // `SIMULATOR_UDID`) over `identifierForVendor`. The latter is
@@ -231,14 +250,40 @@ final class RequestRouter {
             ?? device.identifierForVendor?.uuidString
             ?? "unknown"
         return .json([
-            "status": "ok",
+            "status": ready ? "ok" : "warming_up",
             "platform": "ios",
-            "version": "0.6.33",
+            "version": "0.6.34",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
             "device_id": deviceId,
-        ])
+        ], status: ready ? 200 : 503)
+    }
+
+    /// Returns true once XCUITest has completed a warm-up; caches the result.
+    /// The warm-up takes a screenshot on the main thread — that forces the
+    /// XCUITest framework to attach (the cost that otherwise races the host's
+    /// first request) WITHOUT any cross-app SpringBoard query, which
+    /// terminates the harness on iOS 26. If the probe times out or raises
+    /// (NSException caught inside `runOnMain`), readiness stays false and the
+    /// next `/health` retries it.
+    private func ensureXcuiReady() -> Bool {
+        readyLock.lock()
+        let already = xcuiReady
+        readyLock.unlock()
+        if already { return true }
+
+        let warmed = runOnMain(timeout: Self.kTimeoutHealthWarmup) { () -> Bool in
+            _ = XCUIScreen.main.screenshot()
+            return true
+        } ?? false
+
+        if warmed {
+            readyLock.lock()
+            xcuiReady = true
+            readyLock.unlock()
+        }
+        return warmed
     }
 
     private func handleHierarchy(query: [String: String]) -> HTTPResponse {
