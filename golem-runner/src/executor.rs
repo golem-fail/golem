@@ -1063,6 +1063,7 @@ mod tests {
             focused: false,
             bounds: Bounds::new(0, 0, 375, 812),
             visible_bounds: None,
+            hit_points: vec![],
             children: Vec::new(),
         }
     }
@@ -1082,6 +1083,7 @@ mod tests {
                 focused: false,
                 bounds: Bounds::new(10, (i as i32) * 50, 200, 40),
                 visible_bounds: None,
+                hit_points: vec![],
                 children: Vec::new(),
             })
             .collect();
@@ -1096,6 +1098,7 @@ mod tests {
             focused: false,
             bounds: Bounds::new(0, 0, 375, 812),
             visible_bounds: None,
+            hit_points: vec![],
             children,
         }
     }

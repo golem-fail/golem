@@ -394,6 +394,7 @@ mod tests {
             focused: false,
             bounds: bounds(0, 0, 100, 40),
             visible_bounds: None,
+            hit_points: vec![],
             children: Vec::new(),
         }
     }

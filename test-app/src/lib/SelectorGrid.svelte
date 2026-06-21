@@ -34,6 +34,14 @@
        grid is a self-contained surface for state-filter selectors too. -->
   <button class="sel-cell" disabled>DIS</button>
   <label><input type="checkbox" aria-label="grid-check" bind:checked={gridChecked} /> Check</label>
+  <!-- OCC: a wide button whose CENTRE is covered by an opaque overlay (a
+       sibling painted on top). A naive centre tap hits the overlay; the
+       occlusion-aware tap must route to a clear horizontal point and still
+       fire OCC. -->
+  <div class="occ-wrap">
+    <button class="occ-btn" on:click={() => tap("OCC")}>OCC</button>
+    <div class="occ-cover"></div>
+  </div>
   <!-- Readout matched purely by text content; deliberately NO aria-label —
        an aria-label would become the accessible name and mask the text on iOS,
        breaking on_text matching. -->

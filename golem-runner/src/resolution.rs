@@ -469,6 +469,7 @@ pub async fn resolve_element(
                 focused: false,
                 bounds: golem_element::Bounds::new(x, y, 1, 1),
                 visible_bounds: None,
+                hit_points: vec![],
                 children: vec![],
             };
             return Ok((dummy, (x, y)));
@@ -495,8 +496,17 @@ pub async fn resolve_element(
 
         if !results.is_empty() {
             let first = &results[0];
-            let base = safe_tap_coords(first.element.effective_bounds(), &viewport, meta.safe_area_top, meta.safe_area_bottom.max(meta.keyboard_height))
+            let mut base = safe_tap_coords(first.element.effective_bounds(), &viewport, meta.safe_area_top, meta.safe_area_bottom.max(meta.keyboard_height))
                 .unwrap_or((first.tap_x, first.tap_y));
+            // Occlusion-aware: when the element's centre is covered (e.g. by a
+            // sticky header) but a sample point is clear, tap the clear point
+            // so we hit the target, not the occluder. Only for plain taps —
+            // explicit x/y offsets stay centre-relative (handled below) so they
+            // remain predictable.
+            let has_offset = step.on.as_ref().is_some_and(|g| g.x.is_some() || g.y.is_some());
+            if !has_offset && first.element.center_hittable() == Some(false) {
+                base = (first.tap_x, first.tap_y);
+            }
             let coords = apply_coord_adjustments(step, base.0, base.1, &viewport, Some(first.element.effective_bounds()));
             if let Some(e) = emitter {
                 let eb = first.element.effective_bounds();
@@ -803,6 +813,7 @@ mod tests {
             focused: false,
             bounds,
             visible_bounds: None,
+            hit_points: vec![],
             children: Vec::new(),
         }
     }

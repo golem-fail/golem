@@ -179,6 +179,29 @@ Genuine ties (e.g. a row of equal-distance icons under a full-width heading)
 resolve by pre-order — golem does **not** guess; disambiguate with `index` or an
 extra predicate. The pre-order tie-break also keeps `--seed` replay deterministic.
 
+## Occlusion-aware tapping
+
+The visible tree (via IntersectionObserver) tells golem what's *clipped/off-screen*,
+but not what's *covered* by something painted on top (a `position: sticky` header,
+a `z-index` overlay). For webview targets, golem additionally **hit-tests** sample
+points within the visible bounds (`document.elementFromPoint`) and:
+
+- **Routes around DOM occluders.** A plain `tap` lands on the first occlusion-clear
+  sample point (centre → arms → corners), so tapping a button whose centre is under
+  a sticky header still hits the button (a clear edge), not the header. The routed
+  coordinate shows in the `--verbose` `element_resolved` substep (`tap=(x,y)`).
+- **Never blocks.** Occlusion is a heuristic — golem always attempts the tap (if no
+  sampled point is clear it falls back to the centre).
+- **Offsets stay centre-relative.** `x`/`y` offsets are always measured from the
+  element's geometric centre, never the occlusion-routed point — so they remain
+  predictable regardless of what's covering the element.
+
+Notes: this is **webview-only** (native trees have no `elementFromPoint`) and detects
+**DOM** occlusion only — an element under the OS status bar (system-level) is a
+separate concern. Surfacing occlusion as a *warning/error* (e.g. fully-covered or an
+offset on a covered target) is deferred to the planned accessibility audit, whose
+severity model is the right home for it — not a per-step tag.
+
 ## `within` (scoping a scroll)
 
 `scroll`'s `within = { … }` names the region to scroll inside. It uses the same

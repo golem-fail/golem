@@ -23,6 +23,7 @@ pub fn make_element(element_type: &str, bounds: Bounds) -> Element {
         focused: false,
         bounds,
         visible_bounds: None,
+        hit_points: vec![],
         children: Vec::new(),
     }
 }

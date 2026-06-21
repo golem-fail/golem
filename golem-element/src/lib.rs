@@ -21,8 +21,22 @@ pub struct Element {
     /// Visible bounds clipped to ancestor containers. Falls back to bounds.
     #[serde(default)]
     pub visible_bounds: Option<Bounds>,
+    /// Occlusion hit-test samples within the visible bounds (webview only).
+    /// Each point records whether a tap there would actually reach this
+    /// element (vs an element painted on top). Canonical order: centre, then
+    /// arms, then corners. Empty when not computed (native / non-targetable).
+    #[serde(default)]
+    pub hit_points: Vec<HitPoint>,
     #[serde(default)]
     pub children: Vec<Element>,
+}
+
+/// A sampled point (device coords) and whether a tap there reaches the element.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub struct HitPoint {
+    pub x: i32,
+    pub y: i32,
+    pub hit: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -79,6 +93,35 @@ impl Element {
     /// Return visible bounds if available, otherwise fall back to full bounds.
     pub fn effective_bounds(&self) -> &Bounds {
         self.visible_bounds.as_ref().unwrap_or(&self.bounds)
+    }
+
+    /// The point to tap: the first occlusion-clear sample point (canonical
+    /// order: centre → arms → corners), so a tap routes around an occluder
+    /// (e.g. a sticky header covering the element's centre). Falls back to the
+    /// visible-bounds centre when no hit-test data exists (native / non-target)
+    /// or nothing sampled clear (still attempt — hittability is a heuristic).
+    pub fn tap_point(&self) -> (i32, i32) {
+        if let Some(p) = self.hit_points.iter().find(|p| p.hit) {
+            return (p.x, p.y);
+        }
+        let b = self.effective_bounds();
+        (b.center_x(), b.center_y())
+    }
+
+    /// Fraction (0.0–1.0) of sampled points that are occlusion-clear, or `None`
+    /// when no hit-test was done. 0.0 = fully occluded; <1.0 = partially.
+    pub fn hittable_fraction(&self) -> Option<f32> {
+        if self.hit_points.is_empty() {
+            return None;
+        }
+        let clear = self.hit_points.iter().filter(|p| p.hit).count();
+        Some(clear as f32 / self.hit_points.len() as f32)
+    }
+
+    /// Whether the element's centre (the first sample point) is occlusion-clear.
+    /// `None` when no hit-test data exists.
+    pub fn center_hittable(&self) -> Option<bool> {
+        self.hit_points.first().map(|p| p.hit)
     }
 
     /// Recursively count all elements in the tree, including the root.
@@ -156,6 +199,7 @@ pub fn filter_viewport(root: &Element, viewport: &Viewport) -> Element {
         focused: root.focused,
         bounds: root.bounds,
         visible_bounds: root.visible_bounds,
+        hit_points: vec![],
         children: visible,
     }
 }
@@ -173,8 +217,9 @@ fn collect_visible(element: &Element, viewport: &Viewport, out: &mut Vec<Element
 
 impl FindResult {
     pub fn new(element: Element) -> Self {
-        let tap_x = element.effective_bounds().center_x();
-        let tap_y = element.effective_bounds().center_y();
+        // Occlusion-aware: tap the first clear sample point (routes around a
+        // sticky/overlapping element), falling back to the visible centre.
+        let (tap_x, tap_y) = element.tap_point();
         Self {
             element,
             tap_x,
@@ -203,8 +248,52 @@ mod tests {
             focused: false,
             bounds,
             visible_bounds: None,
+            hit_points: vec![],
             children: Vec::new(),
         }
+    }
+
+    #[test]
+    fn tap_point_falls_back_to_center_without_hit_points() {
+        let e = make_element("Button", make_bounds(0, 0, 100, 40));
+        assert_eq!(e.tap_point(), (50, 20), "no hit_points → visible-bounds centre");
+        assert_eq!(e.hittable_fraction(), None);
+        assert_eq!(e.center_hittable(), None);
+    }
+
+    #[test]
+    fn tap_point_uses_first_clear_sample() {
+        let mut e = make_element("Button", make_bounds(0, 0, 100, 40));
+        // Centre occluded, an arm clear → tap the clear arm, not the centre.
+        e.hit_points = vec![
+            HitPoint { x: 50, y: 20, hit: false }, // centre (canonical first)
+            HitPoint { x: 50, y: 10, hit: false }, // top
+            HitPoint { x: 50, y: 30, hit: true },  // bottom — first clear
+        ];
+        assert_eq!(e.tap_point(), (50, 30), "SHALL route to the first clear sample");
+        assert_eq!(e.center_hittable(), Some(false));
+        assert!((e.hittable_fraction().unwrap() - 1.0 / 3.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn tap_point_clear_center_wins() {
+        let mut e = make_element("Button", make_bounds(0, 0, 100, 40));
+        e.hit_points = vec![
+            HitPoint { x: 50, y: 20, hit: true },
+            HitPoint { x: 50, y: 30, hit: true },
+        ];
+        assert_eq!(e.tap_point(), (50, 20), "clear centre is preferred (canonical first)");
+        assert_eq!(e.center_hittable(), Some(true));
+        assert_eq!(e.hittable_fraction(), Some(1.0));
+    }
+
+    #[test]
+    fn tap_point_fully_occluded_falls_back_to_center() {
+        let mut e = make_element("Button", make_bounds(0, 0, 100, 40));
+        e.hit_points = vec![HitPoint { x: 50, y: 20, hit: false }];
+        // No clear point → still attempt at centre (heuristic, never blocks).
+        assert_eq!(e.tap_point(), (50, 20));
+        assert_eq!(e.hittable_fraction(), Some(0.0));
     }
 
     #[test]
@@ -242,6 +331,7 @@ mod tests {
             focused: true,
             bounds: make_bounds(5, 10, 300, 44),
             visible_bounds: None,
+            hit_points: vec![],
             children: Vec::new(),
         };
 

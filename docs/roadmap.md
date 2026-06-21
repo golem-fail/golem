@@ -283,16 +283,25 @@ tablet cross-column proof are both covered by the grid now.
   centre is the correct, predictable contract; if the centre is dead space, the
   author should select the actual child (`contains`/`inside`/relational) or use
   the `x`/`y` offsets. Auto-redirecting to a child centroid is surprising magic.
-- **Occlusion by sticky/overlapping elements isn't detected.** IntersectionObserver
-  marks an element "visible" when it intersects the viewport, but not when another
-  element (z-order / `position: sticky` header) covers it. Hit live: after a scroll
-  left grid cell "B2" *under* the sticky menu bar, golem tapped B2's centre and
-  actually hit the "Logs" button occluding it (the tap "succeeded" on the wrong
-  element). A human can't see/tap an occluded element, so per the visibility model
-  it shouldn't be tappable there. Fix options: hit-test the tap point against the
-  topmost element at those coords (tap only if it's the target or a descendant),
-  or treat occluded area as non-visible. Workaround today: menu-nav / scroll so the
-  target clears the sticky header. (`golem-element` visibility + tap resolution.)
+- **Occlusion by sticky/overlapping elements — webview DETECTION+ROUTING DONE; native + severity are follow-ups.**
+  Webview taps hit-test sample points (`elementFromPoint`, stored as `Element.hit_points`)
+  and route around DOM occluders to a clear point; the routed coord shows neutrally in
+  the `--verbose` `element_resolved` substep (no warning tag — routing isn't a warning).
+  Webview content incl. Tauri on *both* platforms uses this path, so it's cross-platform
+  already. Remaining:
+  - **(a) native occlusion.** Native a11y trees don't pre-filter occluded views (they
+    report by hierarchy, not paint order). iOS: `XCUIElement.isHittable` is a clean signal
+    (occlusion + on-screen) the companion could report per element — a boolean, not 9-point
+    sampling, but the real "is it tappable" answer. Android: no direct equivalent;
+    `AccessibilityNodeInfo.isVisibleToUser()` is the coarse closest, precise needs a
+    companion-side paint-order/bounds heuristic.
+  - **(b) severity (warn/error).** Surfacing occlusion as a warning/error belongs on the
+    *step* (substeps are neutral info), and the natural home is the planned a11y audit
+    (`findings/plan_a11y.md`): its `overlapping_interactive`/`occluded_element` checks
+    should consume `hit_points` ground truth instead of bounds-intersection, governed by
+    its level + `a11y_max_errors/warnings` model.
+  (System-status-bar occlusion of the menu button is a *separate* layer — see "Android:
+  sticky menu tap target only half-clickable" below; `elementFromPoint` can't see the OS bar.)
 - **Install-cache may miss a test-app component edit.** Adding the DIS button +
   checkbox to `SelectorGrid.svelte` didn't reinstall until `--rebuild` (a non-
   rebuild run served the stale app — `on_text="DIS"` EF404, then `--rebuild`

@@ -97,4 +97,9 @@ steps = [
   { action = "assert_visible", on = { accessibility_label = "grid-check", checked = false } },
   { action = "tap", on_accessibility_label = "grid-check" },
   { action = "assert_visible", on = { accessibility_label = "grid-check", checked = true } },
+  # occlusion: OCC's centre is covered by an opaque overlay. A naive centre
+  # tap hits the overlay; the occlusion-aware tap must route to a clear point
+  # and still fire OCC (the readout proves it landed on OCC, not the overlay).
+  { action = "tap", on_text = "OCC" },
+  { action = "assert_visible", on_text = "tapped:OCC" },
 ]

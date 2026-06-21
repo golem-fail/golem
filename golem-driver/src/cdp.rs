@@ -278,6 +278,16 @@ pub fn scale_bounds_by_dpr(node: &mut serde_json::Value, dpr: f64) {
             }
         }
     }
+    // hit_points carry x/y in CSS px — scale them the same way.
+    if let Some(points) = node.get_mut("hit_points").and_then(|p| p.as_array_mut()) {
+        for pt in points.iter_mut().filter_map(|p| p.as_object_mut()) {
+            for field in &["x", "y"] {
+                if let Some(v) = pt.get(*field).and_then(|v| v.as_i64()) {
+                    pt.insert(field.to_string(), serde_json::json!((v as f64 * dpr).round() as i32));
+                }
+            }
+        }
+    }
     if let Some(children) = node.get_mut("children").and_then(|c| c.as_array_mut()) {
         for child in children {
             scale_bounds_by_dpr(child, dpr);
@@ -301,6 +311,17 @@ pub fn offset_bounds(node: &mut serde_json::Value, dx: i32, dy: i32) {
             }
             if let Some(v) = bounds.get("bottom").and_then(|v| v.as_i64()) {
                 bounds.insert("bottom".to_string(), serde_json::json!(v as i32 + dy));
+            }
+        }
+    }
+    // hit_points carry x/y screen coords — offset them by the WebView origin.
+    if let Some(points) = node.get_mut("hit_points").and_then(|p| p.as_array_mut()) {
+        for pt in points.iter_mut().filter_map(|p| p.as_object_mut()) {
+            if let Some(v) = pt.get("x").and_then(|v| v.as_i64()) {
+                pt.insert("x".to_string(), serde_json::json!(v as i32 + dx));
+            }
+            if let Some(v) = pt.get("y").and_then(|v| v.as_i64()) {
+                pt.insert("y".to_string(), serde_json::json!(v as i32 + dy));
             }
         }
     }

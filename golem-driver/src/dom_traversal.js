@@ -131,6 +131,41 @@
     elMap.forEach((_, el) => observer.observe(el));
   });
 
+  // ── Occlusion hit-test (hit_points) ───────────────────────────────────
+  //
+  // IntersectionObserver tells us the post-clip visible rect, but NOT whether
+  // something is painted on top (a sticky header, z-indexed overlay). Only the
+  // layout engine knows that, via `elementFromPoint`. We sample points within
+  // the visible rect and record, for each, whether a tap there would actually
+  // reach this element (or a descendant). Rust uses the FIRST clear point as
+  // the tap target (canonical order: center → arms → corners) and the clear-
+  // fraction for an occlusion warning.
+  //
+  // Sampling scales with size (a fingertip-sized target needs only its centre):
+  //   center always; +vertical arms if tall enough; +horizontal arms if wide
+  //   enough; +corners only if both dimensions are large. Yields 1/3/5/9 points.
+  // Only computed for elements a selector can target (skips pure layout
+  // containers); full sampling for interactables (tap targets), centre-only for
+  // text/label elements (asserts only need "is it occluded").
+  const FINGER = 44;
+  const LARGE = 88;
+  function samplePoints(rect, full) {
+    const { left: L, top: T, width: w, height: h } = rect;
+    const cx = L + w / 2;
+    const cy = T + h / 2;
+    const pts = [[cx, cy]]; // centre first — the default tap point
+    if (!full) return pts;
+    if (h > FINGER) pts.push([cx, T + h * 0.25], [cx, T + h * 0.75]); // top, bottom
+    if (w > FINGER) pts.push([L + w * 0.25, cy], [L + w * 0.75, cy]); // left, right
+    if (w > LARGE && h > LARGE) {
+      pts.push(
+        [L + w * 0.25, T + h * 0.25], [L + w * 0.75, T + h * 0.25],
+        [L + w * 0.25, T + h * 0.75], [L + w * 0.75, T + h * 0.75],
+      );
+    }
+    return pts;
+  }
+
   visRects.forEach((rect, el) => {
     const node = elMap.get(el);
     if (!node) return;
@@ -140,6 +175,22 @@
       right: Math.round(rect.left + rect.width),
       bottom: Math.round(rect.top + rect.height),
     };
+
+    if (rect.width <= 0 || rect.height <= 0) return; // not visible — no hit-test
+    const interactable =
+      node.clickable ||
+      el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT';
+    const selectable = interactable || !!node.text || !!node.contentDescription;
+    if (!selectable) return;
+
+    node.hit_points = samplePoints(rect, interactable).map(([x, y]) => {
+      const hit = document.elementFromPoint(Math.round(x), Math.round(y));
+      return {
+        x: Math.round(x),
+        y: Math.round(y),
+        hit: !!hit && (hit === el || el.contains(hit)),
+      };
+    });
   });
 
   // ── Visual viewport snapshot ──────────────────────────────────────────
