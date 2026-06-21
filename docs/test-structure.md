@@ -286,40 +286,28 @@ A step is a single action with optional selectors, timeouts, and error handling.
 
 ### Selectors
 
-Find elements by visible text, accessibility labels, position, or state:
+Find elements by visible text, position, containment, traits, or state. Common
+selectors:
 
 | Selector | Description |
 |----------|-------------|
-| `on_text` | Match by visible text (glob pattern, case-insensitive) |
-| `on_accessibility_label` | Match by accessibility identifier |
+| `on_text` | Match by visible text (glob, case-insensitive). **Preferred.** |
+| `on_accessibility_label` | Match by accessibility id. Use only when *testing* the a11y label (screen readers) or as a throwaway shortcut to navigate — prefer `on_text` otherwise. |
 | `on_index` | Match the Nth element (0-based) |
-| `on_enabled` | Filter by enabled state (`true`/`false`) |
-| `on_checked` | Filter by checked state (`true`/`false`) |
-| `on_clickable` | Filter by clickability |
-| `on_below` | Element must be below this anchor text |
-| `on_above` | Element must be above this anchor text |
-| `on_right_of` | Element must be right of this anchor text |
-| `on_left_of` | Element must be left of this anchor text |
+| `on_enabled` / `on_checked` / `on_clickable` | Filter by state |
+| `on_below` / `on_above` / `on_right_of` / `on_left_of` | Position relative to an anchor (column/row-aware) |
 
-### Grouped Selector Syntax
-
-For complex queries, use `on = {}` instead of flat `on_*` fields:
+Use the grouped form (`on = { … }`) for `traits`, geometric `contains`/`inside`,
+and nested anchors:
 
 ```toml
-# Flat (simple cases)
-{ action = "tap", on_text = "Submit", on_below = "Counter" }
-
-# Grouped (complex selectors, nested anchors)
 { action = "tap", on = { text = "Submit", below = "Counter", enabled = true } }
-
-# Nested anchor with its own selectors
-{ action = "assert_visible", on = { text = "Portrait", right_of = { text = "Orientation:" } } }
-
-# Traits filtering
-{ action = "assert_visible", on = { text = "Submit", traits = ["button", "has_text"] } }
+{ action = "assert_visible", on = { contains = { text = "Item 0" } } }
 ```
 
-Traits are computed predicates on element geometry and content (`button`, `has_text`, `text`, `no_text`, `short_text`, `long_text`, `square`, `wide`, `tall`, `small`, `large`). See [`golem-element/src/selector.rs`](../golem-element/src/selector.rs) for the exact definitions and thresholds.
+**See [Selectors](selectors.md)** for the full reference: every selector and
+trait, the column/row-overlap and nearest-first relational rules, `contains`/
+`inside`, nesting/chaining, and the match→filter→sort resolution order.
 
 ### Step Options
 
