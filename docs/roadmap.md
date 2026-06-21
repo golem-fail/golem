@@ -198,11 +198,14 @@ warm-up) found:
   (the items' container) as the first candidate — *NOT* an oversized wrapper.
   (Earlier "wrong container" reads were a device-px vs CSS-px mistake: 480dpi =
   3.0×, so the 787-device-px box = ~262 CSS px = the `max-height:300px` list.)
-- **The EF408 *does* reproduce** — but only when the Tauri **webview barely
-  renders** (`{2 trees, 12 nodes}` vs 211 when loaded). With a sparse DOM,
-  `within` locate finds nothing → `container=None` → page-scroll thrash →
-  timeout. So the real Android EF408 is a **webview-readiness race**, not a
-  scroll-algorithm bug. See the dedicated entry below.
+- **The EF408 *did* reproduce** — but only when the Tauri **webview barely
+  rendered** (`{2 trees, ~8 nodes}` vs 211 when loaded): a sparse DOM made
+  `within` locate find nothing → `container=None` → page-scroll thrash →
+  timeout. The real Android EF408 was a **webview-readiness race**, not a
+  scroll-algorithm bug — **FIXED** (the post-launch settle gate is now
+  webview-aware: it waits for the webview DOM subtree to hydrate, on an
+  extended deadline, and surfaces a "webview DOM not ready" launch warning if
+  it never does, instead of proceeding on a sparse tree).
 
 **Done this session (committed):**
 - Renamed `scroll.rs` locals `*_fp` → `*_fingerprint` (full/horizon), pure local.
@@ -223,9 +226,7 @@ warm-up) found:
 1. **Relational-selector fragility** — `within` picks `.first()` of *everything*
    below the anchor; works here only by pre-order luck + geometric overlap. See
    "Relational selector overhaul".
-2. **Webview-readiness EF408** — see "Webview-readiness: sparse-tree scroll
-   thrash".
-3. **iOS ~73s slowness** — unverified on current code; may also be a
+2. **iOS ~73s slowness** — unverified on current code; may also be a
    readiness/settle effect. Re-measure `scroll.test` on an iOS sim; if it's slow
    with a *loaded* tree, investigate the move-phase / inertial entry below.
 
@@ -397,30 +398,6 @@ already have), not the container centre. Pure geometry, no DOM. Applies to
 the [Visibility model](architecture.md) cross-reference, and any selector
 reference. A new feature SHALL add Rust unit tests (filter overlap math, sort
 priority, containment) + e2e.
-
-## Webview-readiness: sparse-tree scroll thrash (the real Android EF408)
-
-`e2e/cross/scroll.test.toml` / the off-screen `within` repro **intermittently**
-fails `EF408` on Android — but only when the run shows `{2 trees, 12 nodes}`
-(the Tauri webview DOM had not rendered; a loaded run shows ~211 nodes and
-passes in ~13s). With a sparse tree, `within` locate finds no anchor →
-`container=None` → page-scroll thrash (stall/reverse cycle) → 120s/timeout.
-
-**Suspected cause:** the post-launch settle gate (`await_first_frame` /
-tree-stability poll) passes on a near-empty DOM before the webview hydrates, so
-the flow starts interacting too early. Not a scroll bug — a readiness race.
-
-**Shape to investigate:** make the settle gate robust to an empty/sparse webview
-(e.g. require a minimum node count or a content signal, not just frame
-stability; or detect "webview present but DOM empty" and wait for hydration).
-Reproduce by launching repeatedly until a sparse-tree run appears (it's load/
-timing dependent — more likely right after a rebuild/reinstall or under emulator
-load).
-
-**Files:** `golem-driver/src/` (companion launch + first-frame/settle),
-`golem-runner/src/` (launch settle glue). **Coverage gap:** no test detects a
-sparse-tree start; consider a guard that fails fast with a clear "DOM not ready"
-diagnostic instead of a 120s scroll timeout.
 
 ## Inner-list inertial scroll suppression
 

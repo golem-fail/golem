@@ -130,6 +130,28 @@ impl Element {
     pub fn node_count(&self) -> usize {
         1 + self.children.iter().map(Element::node_count).sum::<usize>()
     }
+
+    /// True when this element is a WebView host — iOS `web_view` or Android
+    /// `WebView` (the simplified `android.webkit.WebView` class). Its children
+    /// are the merged DOM (CDP on Android / WebKit Inspector on iOS).
+    pub fn is_webview(&self) -> bool {
+        self.element_type == "web_view" || self.element_type.contains("WebView")
+    }
+
+    /// If the tree contains a WebView host, return the node count of its
+    /// subtree (the WebView node + the merged DOM beneath it); `None` when
+    /// there is no WebView (a native screen — webview-readiness is N/A).
+    ///
+    /// Used by the post-launch settle gate: a WebView present with only a
+    /// tiny subtree means the page hasn't hydrated yet (the native a11y tree
+    /// settles long before the webview DOM renders), so the gate must keep
+    /// waiting rather than let the first action run against an empty page.
+    pub fn webview_subtree_count(&self) -> Option<usize> {
+        if self.is_webview() {
+            return Some(self.node_count());
+        }
+        self.children.iter().find_map(Element::webview_subtree_count)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -520,6 +542,56 @@ mod tests {
             .push(make_element("Sibling", make_bounds(0, 0, 10, 10)));
         // root(1) + mid(1) + 2 leaves(2) + sibling(1) = 5
         assert_eq!(root.node_count(), 5, "node_count SHALL sum the whole tree");
+    }
+
+    // ── webview detection tests ───────────────────────────────────────
+
+    // No WebView anywhere → None (native screen, readiness N/A).
+    #[test]
+    fn webview_subtree_count_none_when_no_webview() {
+        let mut root = make_element("View", make_bounds(0, 0, 100, 100));
+        root.children
+            .push(make_element("Button", make_bounds(0, 0, 10, 10)));
+        assert_eq!(
+            root.webview_subtree_count(),
+            None,
+            "a native tree SHALL report no webview subtree"
+        );
+    }
+
+    // iOS `web_view` and Android `WebView` are both recognised; the count is
+    // the webview node plus its merged DOM descendants.
+    #[test]
+    fn webview_subtree_count_counts_dom_subtree() {
+        for ty in ["web_view", "WebView"] {
+            let mut root = make_element("View", make_bounds(0, 0, 100, 100));
+            let mut wv = make_element(ty, make_bounds(0, 0, 100, 100));
+            let mut dom = make_element("body", make_bounds(0, 0, 100, 100));
+            dom.children
+                .push(make_element("div", make_bounds(0, 0, 10, 10)));
+            wv.children.push(dom);
+            root.children.push(wv);
+            // wv(1) + body(1) + div(1) = 3
+            assert_eq!(
+                root.webview_subtree_count(),
+                Some(3),
+                "{ty} SHALL be detected and its DOM subtree counted"
+            );
+        }
+    }
+
+    // An unhydrated WebView (no DOM children yet) counts as just itself — the
+    // signal the settle gate uses to keep waiting.
+    #[test]
+    fn webview_subtree_count_is_one_when_dom_empty() {
+        let mut root = make_element("View", make_bounds(0, 0, 100, 100));
+        root.children
+            .push(make_element("web_view", make_bounds(0, 0, 100, 100)));
+        assert_eq!(
+            root.webview_subtree_count(),
+            Some(1),
+            "an empty WebView SHALL count as 1 (not hydrated)"
+        );
     }
 
     // ── Viewport tests ────────────────────────────────────────────────

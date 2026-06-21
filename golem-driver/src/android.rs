@@ -640,10 +640,10 @@ impl PlatformDriver for AndroidDriver {
         // not when the app is interactive. Poll the UI tree until the
         // first interactive frame stabilises so the next action doesn't
         // race accessibility tree population.
-        self.await_first_frame().await?;
-        // Android doesn't have an iOS-style soft settle warning today —
-        // `await_first_frame` either stabilises or returns an error.
-        Ok(None)
+        // Surfaces a "webview DOM not ready" warning when the gate proceeds
+        // at its deadline with the page still unhydrated; otherwise `None`.
+        let warning = self.await_first_frame().await?;
+        Ok(warning)
     }
 
     async fn stop_app(&self, bundle_id: &str) -> Result<()> {

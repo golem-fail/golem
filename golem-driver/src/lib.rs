@@ -178,10 +178,12 @@ pub trait PlatformDriver: Send + Sync {
     /// - same count observed across 2 consecutive polls (UI has stopped
     ///   re-rendering)
     ///
-    /// Returns `Ok(())` on settle OR on deadline. Doesn't fail launch
-    /// — if the gate is wrong, the downstream action's own timeout
+    /// Returns `Ok(None)` on settle OR on deadline. Returns `Ok(Some(warning))`
+    /// when the gate proceeded at its deadline with a WebView still unhydrated
+    /// — a launch warning the caller surfaces instead of a silent stall. Never
+    /// fails launch: if the gate is wrong, the downstream action's own timeout
     /// catches genuinely broken cases.
-    async fn await_first_frame(&self) -> anyhow::Result<()> {
+    async fn await_first_frame(&self) -> anyhow::Result<Option<String>> {
         await_first_frame_default(self).await
     }
 }
@@ -198,10 +200,26 @@ pub const AWAIT_FIRST_FRAME_MIN_NODES: usize = 20;
 pub const AWAIT_FIRST_FRAME_POLL_INTERVAL: std::time::Duration =
     std::time::Duration::from_millis(200);
 
-/// Hard deadline. Beyond this we proceed anyway — the downstream action's
-/// own timeout will catch genuinely broken UI states.
+/// Hard deadline for native screens. Beyond this we proceed anyway — the
+/// downstream action's own timeout will catch genuinely broken UI states.
 pub const AWAIT_FIRST_FRAME_DEADLINE: std::time::Duration =
     std::time::Duration::from_secs(10);
+
+/// Extended deadline used once a WebView node is detected. The native
+/// accessibility tree settles long before the webview DOM hydrates (CDP /
+/// WebKit Inspector enrichment), so a webview-bearing launch is given more
+/// budget to render its first page before the gate gives up. A page that
+/// never hydrates within this window proceeds with a launch warning.
+pub const AWAIT_FIRST_FRAME_WEBVIEW_DEADLINE: std::time::Duration =
+    std::time::Duration::from_secs(30);
+
+/// Minimum WebView-subtree node count to consider the page hydrated. An
+/// unrendered WebView is just the host node (and at most an empty document
+/// shell); a real first screen has many more DOM nodes. Below this the gate
+/// treats the webview as not-yet-ready and keeps waiting. Heuristic — the
+/// extended deadline + launch warning is the backstop if a genuinely tiny
+/// page never crosses it.
+pub const AWAIT_FIRST_FRAME_WEBVIEW_MIN_NODES: usize = 10;
 
 /// Number of consecutive stable polls required to declare settle.
 const STABLE_POLLS_REQUIRED: u32 = 2;
@@ -213,32 +231,69 @@ const STABLE_POLLS_REQUIRED: u32 = 2;
 /// flows this is sufficient.
 async fn await_first_frame_default(
     driver: &(impl PlatformDriver + ?Sized),
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Option<String>> {
     // Use `tokio::time::Instant` (not `std::time`) so this respects
     // tokio's paused-time test mode. Otherwise unit tests that simulate
-    // the 10s deadline would burn real wall-clock.
+    // the deadline would burn real wall-clock.
     let start = tokio::time::Instant::now();
-    let deadline = start + AWAIT_FIRST_FRAME_DEADLINE;
     let mut prev_count: usize = 0;
     let mut stable_polls: u32 = 0;
+    // Whether any poll has seen a WebView node, and that webview's most
+    // recent subtree size. Drives the extended deadline + the not-ready
+    // warning. The native a11y tree settles long before the webview DOM
+    // hydrates, so a webview launch needs both a longer budget and an
+    // explicit hydration check — not just native-frame stability.
+    let mut webview_seen = false;
+    let mut last_webview_count: usize = 0;
     loop {
-        if tokio::time::Instant::now() >= deadline {
+        // The deadline extends once a WebView is detected: webview launches
+        // legitimately take longer to render their first page than native.
+        let deadline = if webview_seen {
+            AWAIT_FIRST_FRAME_WEBVIEW_DEADLINE
+        } else {
+            AWAIT_FIRST_FRAME_DEADLINE
+        };
+        if start.elapsed() >= deadline {
+            // A webview that never hydrated within the window: proceed (the
+            // downstream action still gets its own timeout) but surface a
+            // warning so a sparse-tree start is a labelled diagnostic, not a
+            // mystery 120s scroll thrash.
+            if webview_seen && last_webview_count < AWAIT_FIRST_FRAME_WEBVIEW_MIN_NODES {
+                let warning = format!(
+                    "webview DOM not ready after {:?} ({last_webview_count} nodes) — first action may run against an unrendered page",
+                    start.elapsed()
+                );
+                if golem_common::is_debug() {
+                    eprintln!("  [launch] {warning}");
+                }
+                return Ok(Some(warning));
+            }
             if golem_common::is_debug() {
                 eprintln!(
                     "  [launch] settle deadline reached after {:?}, last seen {prev_count} nodes — proceeding anyway",
                     start.elapsed()
                 );
             }
-            return Ok(());
+            return Ok(None);
         }
-        let count = match driver.get_hierarchy().await {
-            Ok((tree, _)) => tree.node_count(),
+        let (count, webview_count) = match driver.get_hierarchy().await {
+            Ok((tree, _)) => (tree.node_count(), tree.webview_subtree_count()),
             // Tree-fetch errors mid-launch are common (companion port
             // briefly unresponsive). Treat as 0 nodes and keep polling
             // — bubbling the error would fail launch entirely.
-            Err(_) => 0,
+            Err(_) => (0, None),
         };
-        if count >= AWAIT_FIRST_FRAME_MIN_NODES && count == prev_count {
+        if let Some(wc) = webview_count {
+            webview_seen = true;
+            last_webview_count = wc;
+        }
+        // A webview screen is "ready" only once its DOM subtree is non-trivial;
+        // a native screen (no webview) is always ready on this axis.
+        let webview_ready = match webview_count {
+            Some(wc) => wc >= AWAIT_FIRST_FRAME_WEBVIEW_MIN_NODES,
+            None => true,
+        };
+        if count >= AWAIT_FIRST_FRAME_MIN_NODES && count == prev_count && webview_ready {
             stable_polls += 1;
             if stable_polls >= STABLE_POLLS_REQUIRED {
                 if golem_common::is_debug() {
@@ -247,7 +302,7 @@ async fn await_first_frame_default(
                         start.elapsed()
                     );
                 }
-                return Ok(());
+                return Ok(None);
             }
         } else {
             stable_polls = 0;
@@ -861,6 +916,77 @@ mod tests {
         AWAIT_FIRST_FRAME_MIN_NODES.saturating_sub(5)
     }
 
+    /// Build a tree with `native` plain children PLUS a WebView node whose DOM
+    /// subtree has `dom` descendants. Total native count = native + 1 (root)
+    /// + 1 (webview node); webview_subtree_count = 1 + dom.
+    fn tree_with_webview(native: usize, dom: usize) -> Element {
+        let mut root = tree_with_children(native);
+        let mut wv = make_element("web_view", Bounds::new(0, 0, 300, 600));
+        wv.children = (0..dom)
+            .map(|_| make_element("div", Bounds::new(0, 0, 10, 10)))
+            .collect();
+        root.children.push(wv);
+        root
+    }
+
+    /// Like `SequencedMock` but each frame is a webview tree: the progression
+    /// gives the DOM-descendant count per poll (native chrome held above the
+    /// node threshold so only webview hydration is under test).
+    struct WebviewSequencedMock {
+        queue: Mutex<Vec<Element>>,
+    }
+
+    impl WebviewSequencedMock {
+        fn new(dom_progression: Vec<usize>) -> Self {
+            let mut frames: Vec<Element> = dom_progression
+                .into_iter()
+                .map(|dom| tree_with_webview(above_threshold(), dom))
+                .collect();
+            frames.reverse();
+            Self {
+                queue: Mutex::new(frames),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl PlatformDriver for WebviewSequencedMock {
+        async fn get_hierarchy(&self) -> anyhow::Result<(Element, common::HierarchyMeta)> {
+            let tree = {
+                let mut q = self.queue.lock().expect("lock poisoned");
+                if q.len() > 1 {
+                    q.pop().expect("non-empty")
+                } else {
+                    q.last().cloned().unwrap_or_else(|| tree_with_webview(above_threshold(), 0))
+                }
+            };
+            Ok((tree, common::HierarchyMeta::default()))
+        }
+        async fn tap(&self, _x: i32, _y: i32) -> anyhow::Result<()> { unimplemented!() }
+        async fn long_press(&self, _x: i32, _y: i32, _d: u64) -> anyhow::Result<()> { unimplemented!() }
+        async fn type_text(&self, _t: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn backspace(&self, _c: u32) -> anyhow::Result<()> { unimplemented!() }
+        async fn swipe_coords(&self, _: i32, _: i32, _: i32, _: i32) -> anyhow::Result<()> { unimplemented!() }
+        async fn pinch(&self, _x: i32, _y: i32, _s: f64, _v: f64) -> anyhow::Result<()> { unimplemented!() }
+        async fn gesture(&self, _f: Vec<GestureFinger>) -> anyhow::Result<()> { unimplemented!() }
+        async fn screenshot(&self) -> anyhow::Result<ScreenshotResult> { unimplemented!() }
+        async fn hide_keyboard(&self) -> anyhow::Result<()> { unimplemented!() }
+        async fn launch_app(&self, _b: &str) -> anyhow::Result<Option<String>> { unimplemented!() }
+        async fn stop_app(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn clear_app_data(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn press_button(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn set_dark_mode(&self, _e: bool) -> anyhow::Result<()> { unimplemented!() }
+        async fn set_location(&self, _: f64, _: f64) -> anyhow::Result<()> { unimplemented!() }
+        async fn open_url(&self, _u: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn push_notification(&self, _: &str, _: &str, _: Option<&str>) -> anyhow::Result<()> { unimplemented!() }
+        async fn add_media(&self, _p: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn grant_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn revoke_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn start_recording(&self, _n: &str) -> anyhow::Result<()> { unimplemented!() }
+        async fn stop_recording(&self) -> anyhow::Result<String> { unimplemented!() }
+        async fn remove_port_forwards(&self) -> anyhow::Result<()> { unimplemented!() }
+    }
+
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn await_first_frame_returns_when_count_stabilises_above_threshold() {
         // Splash (0) → small below-threshold render → real screen (high
@@ -913,6 +1039,53 @@ mod tests {
             start.elapsed() >= AWAIT_FIRST_FRAME_DEADLINE,
             "below-threshold tree SHALL wait until deadline: {:?}",
             start.elapsed()
+        );
+    }
+
+    // ── settle gate: webview hydration ─────────────────────────────
+
+    // A webview whose DOM hydrates (sparse → above the webview threshold,
+    // then stable) settles cleanly with no warning, even though the native
+    // node count was above-threshold the whole time. Guards the scenario
+    // where native chrome alone would have settled the gate too early.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn await_first_frame_waits_for_webview_dom_then_settles() {
+        let ready = AWAIT_FIRST_FRAME_WEBVIEW_MIN_NODES + 20;
+        // DOM: empty for several polls, then hydrates and holds.
+        let driver = WebviewSequencedMock::new(vec![0, 0, 0, ready, ready, ready]);
+        let start = tokio::time::Instant::now();
+        let warning = driver.await_first_frame().await.unwrap();
+        assert!(warning.is_none(), "a hydrated webview SHALL not warn: {warning:?}");
+        assert!(
+            start.elapsed() >= AWAIT_FIRST_FRAME_POLL_INTERVAL * 3,
+            "settle SHALL wait through the unhydrated polls: {:?}",
+            start.elapsed()
+        );
+        assert!(
+            start.elapsed() < AWAIT_FIRST_FRAME_WEBVIEW_DEADLINE,
+            "a webview that hydrates SHALL settle before the extended deadline: {:?}",
+            start.elapsed()
+        );
+    }
+
+    // A native-stable tree with a webview that never hydrates SHALL NOT settle
+    // at the 10s native deadline — it waits for the extended webview deadline,
+    // then proceeds with a "webview DOM not ready" warning.
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn await_first_frame_extends_deadline_and_warns_for_sparse_webview() {
+        // DOM stays empty (below the webview threshold) forever.
+        let driver = WebviewSequencedMock::new(vec![0]);
+        let start = tokio::time::Instant::now();
+        let warning = driver.await_first_frame().await.unwrap();
+        assert!(
+            start.elapsed() >= AWAIT_FIRST_FRAME_WEBVIEW_DEADLINE,
+            "a sparse webview SHALL wait the extended deadline, not the 10s native one: {:?}",
+            start.elapsed()
+        );
+        let warning = warning.expect("a never-hydrated webview SHALL surface a launch warning");
+        assert!(
+            warning.contains("webview DOM not ready"),
+            "warning SHALL name the cause: {warning}"
         );
     }
 

@@ -542,8 +542,10 @@ impl PlatformDriver for IosDriver {
         // the app, not when the UI is interactive. Wait for the first
         // interactive frame so the next action doesn't race accessibility
         // tree population.
-        self.await_first_frame().await?;
-        Ok(warning)
+        // The gate may also report a "webview DOM not ready" warning; prefer
+        // the companion's own settle-probe warning when both fire.
+        let gate_warning = self.await_first_frame().await?;
+        Ok(warning.or(gate_warning))
     }
 
     async fn stop_app(&self, bundle_id: &str) -> Result<()> {
