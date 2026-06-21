@@ -90,6 +90,12 @@ cross-platform — they don't encode platform element types.
 
 (`golem-element/src/selector.rs` is the source of truth for thresholds.)
 
+> **Note:** `small`/`large` threshold raw bounds area, whose units differ by
+> platform (Android device px vs iOS points), so the same element may be `large`
+> on one platform and not the other. Avoid them in cross-platform assertions
+> until they're density-normalized (roadmap). The ratio traits (`square`/`wide`/
+> `tall`) are dimensionless and unaffected.
+
 ## Relational (positional) selectors
 
 Locate an element by its position relative to a visible **anchor**:

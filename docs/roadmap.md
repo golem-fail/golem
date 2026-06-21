@@ -249,29 +249,56 @@ re-verified on iOS (no regression to `within={below}`). Design rationale (why
 geometric not Maestro's DOM `childOf`; scrollability is a hint not a filter) is
 preserved below for context.
 
+**Done since (this session):** `input`/`toggle` traits removed (f2da21d, unused +
+webview-incompatible); `docs/selectors.md` added; test-app made responsive
+(two-column on tablet) and a **Selector Grid** section added (`SelectorGrid.svelte`
+— A1..D4 cells + WIDE/TALL/DUP/DIS/checkbox + a `tapped:<label>` readout) driving
+a comprehensive `e2e/cross/selectors.test.toml` (text, accessibility_label, index,
+glob, traits, all 4 directionals + overlap-exclusion + nearest-first, nested AND
+**chained** relational anchors, contains/inside, enabled/checked/clickable,
+no_text). Green Android + iOS phone/tablet. The deliberately-fragile case and the
+tablet cross-column proof are both covered by the grid now.
+
 **Follow-ups still open:**
 - **`within = { contains }` is fragile for *scrolling*** (works for *selection*).
   Smallest-enclosing of a *single* item can resolve a non-scrollable per-item
   wrapper rather than the list — observed live: `within={contains "Item 0"}`
-  scrolled fine on Android but timed out on iOS (the iOS tree had an intermediate
-  per-item wrapper that won as smallest-enclosing). So `contains` is for picking
-  the box *around* X (tap/assert); the robust scroll idiom remains
-  `within = { below = "<heading>" }`. **Idea to make `within={contains}` robust:**
-  let a size trait disambiguate, e.g. `within = { contains = "Item 0", traits =
-  ["large"] }` / `["tall"]` — filters out the small per-item wrapper, leaving the
-  scrollable list. Cheap, geometric, cross-platform. Build when `within={contains}`
-  is actually wanted.
-- **Swipe-/tap-centroid tweak** (not yet done): aim gestures through the centroid
-  of visible child content, not the raw bounds centre, so a `tap`/container-scroll
-  on a padded container doesn't hit dead space. `container_swipe_start` in
-  `golem-runner/src/scroll.rs`. Pure geometry.
-- **Deliberately-fragile test-app case** still worth adding (wrap `ScrollList` in
-  a padded wrapper with siblings) to prove `contains`/centroid beat raw
-  `.first()`/centre under adversarial layout.
-- **Tablet-responsive test-app** (offered by user): two-column flex-wrap on wide
-  viewports would let `selectors.test` assert the cross-column overlap-exclusion
-  on a real tablet layout (currently only unit-tested). Test-app change, e2e per
-  matrix, no version bump.
+  scrolled fine on Android but timed out on iOS. So `contains` is for picking the
+  box *around* X (tap/assert); the robust scroll idiom remains
+  `within = { below = "<heading>" }`. **Idea:** a size trait could disambiguate
+  (`within = { contains = "Item 0", traits = ["tall"] }`) — but see the size-trait
+  caveat below.
+- **`small`/`large` traits are platform-unit-dependent.** They threshold raw
+  `bounds.area()`, but Android reports device px (≈3× on 480dpi) and iOS reports
+  points (≈dp), so the same element is `large` on Android, not on iOS (hit live:
+  a WIDE button passed `large` on Android, failed on iOS). Fix: evaluate in
+  **density-independent units (dp)** — but `element_has_trait` only sees raw
+  `Element` bounds, so density/scale must be threaded through
+  `find_elements → matches_selector → element_has_trait` (touches every
+  find_elements caller — not a one-liner), or make the thresholds viewport-
+  relative, or **drop `small`/`large`** (currently unused in any flow, same
+  rationale as input/toggle). Ratio traits (`square`/`wide`/`tall`) are unaffected.
+  Until fixed, don't assert `small`/`large` in cross-platform e2e.
+- **A2 (tap/swipe centroid) — decided NOT to do.** Tapping the resolved element's
+  centre is the correct, predictable contract; if the centre is dead space, the
+  author should select the actual child (`contains`/`inside`/relational) or use
+  the `x`/`y` offsets. Auto-redirecting to a child centroid is surprising magic.
+- **Occlusion by sticky/overlapping elements isn't detected.** IntersectionObserver
+  marks an element "visible" when it intersects the viewport, but not when another
+  element (z-order / `position: sticky` header) covers it. Hit live: after a scroll
+  left grid cell "B2" *under* the sticky menu bar, golem tapped B2's centre and
+  actually hit the "Logs" button occluding it (the tap "succeeded" on the wrong
+  element). A human can't see/tap an occluded element, so per the visibility model
+  it shouldn't be tappable there. Fix options: hit-test the tap point against the
+  topmost element at those coords (tap only if it's the target or a descendant),
+  or treat occluded area as non-visible. Workaround today: menu-nav / scroll so the
+  target clears the sticky header. (`golem-element` visibility + tap resolution.)
+- **Install-cache may miss a test-app component edit.** Adding the DIS button +
+  checkbox to `SelectorGrid.svelte` didn't reinstall until `--rebuild` (a non-
+  rebuild run served the stale app — `on_text="DIS"` EF404, then `--rebuild`
+  resolved it at +3 nodes). Investigate whether the source-fingerprint covers all
+  test-app files / nested component edits. Low-frequency but causes confusing
+  ghost failures; analogous to the companion stale-build trap.
 
 ---
 

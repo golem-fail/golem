@@ -2,64 +2,99 @@
 name = "Selector coverage"
 tags = ["cross-platform", "selectors"]
 
-# Exercises every selector facet at least once: text, accessibility_label,
-# index, traits, the four directional relationals (with their column/row
-# overlap requirement), the geometric `contains`/`inside`, a nested anchor
-# (selector group, not bare text), and `within = { contains }` for scrolling
-# inside the box that holds a target. Sections are visited top→down so page
-# scrolls always move forward.
+# The Selector Grid (A1..D4 square cells + WIDE/TALL/DUP buttons + a
+# `tapped:<label>` readout) is a dedicated surface for every selector facet.
+# Tapping VIA a selector and asserting the readout proves the selector resolved
+# to the RIGHT element — a stronger check than assert_visible alone. Runs on
+# phone AND tablet (the app reflows on wide viewports) to prove resolution is
+# layout-independent.
 [[flow.apps]]
 name = "app"
-# Run on both form factors: on tablet the app reflows into a multi-column
-# grid, so passing here proves selectors resolve the same elements under a
-# shifted layout (coordinate-driven, not DOM-structural).
 [[flow.apps.devices]]
 os = ["ios:latest", "android:latest"]
 type = ["phone", "tablet"]
 
-# Top of page: Counter + Buttons.
 [[block]]
-name = "basic"
+name = "basics"
 steps = [
-  # text (visible label) — Counter heading is on screen at launch.
-  { action = "assert_visible", on_text = "Counter" },
-  # accessibility_label — the Counter's increment control (aria-label, not text).
-  { action = "assert_visible", on_accessibility_label = "Increment" },
-  # accessibility_label + geometric/content traits — the square "-" button.
-  { action = "assert_visible", on = { accessibility_label = "Decrement", traits = ["button", "square"] } },
-  # large / tall / no_text traits — the full-app container.
-  { action = "assert_visible", on = { accessibility_label = "app", traits = ["large", "tall", "no_text"] } },
-  # Bring the Buttons section into view.
-  { action = "scroll", to = { text = "Submit" } },
-  # text + multiple traits (AND) — Submit is a wide, short-text button.
-  { action = "assert_visible", on = { text = "Submit", traits = ["button", "wide", "short_text"] } },
-  # index — the Buttons section has two "Action" buttons; pick the second.
-  { action = "assert_visible", on = { text = "Action", index = 1 } },
+  # Jump the grid section to the top of the viewport via the menu (deterministic
+  # scrollTo) so the whole compact section — cells at the top, readout at the
+  # bottom — is visible at once. The tap→assert-readout pattern needs both ends
+  # visible simultaneously; a plain scroll-to lands one edge off-screen.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-selector-grid" },
+  # text → tap a cell, readout confirms the resolved target.
+  { action = "tap", on_text = "B2" },
+  { action = "assert_visible", on_text = "tapped:B2" },
+  # index → two DUP buttons; pick the second.
+  { action = "tap", on = { text = "DUP", index = 1 } },
+  { action = "assert_visible", on_text = "tapped:DUP-2" },
 ]
 
-# Middle of page: the Scroll List — geometric containment + within scroll.
 [[block]]
-name = "containment"
+name = "traits"
 steps = [
-  { action = "scroll", to = { text = "Item 0" } },
-  # contains — resolves the box that encloses "Item 0" (smallest enclosing
-  # element; here the list container). Selection, not scrolling.
-  { action = "assert_visible", on = { contains = { text = "Item 0" } } },
-  # inside — an item enclosed by the labelled scroll-list section.
-  { action = "assert_visible", on = { text = "Item 0", inside = { accessibility_label = "section-scroll-list" } } },
+  # square + button cell (small/large vary by device px, so not asserted here —
+  # those thresholds are unit-tested).
+  { action = "tap", on = { text = "C3", traits = ["button", "square", "short_text"] } },
+  { action = "assert_visible", on_text = "tapped:C3" },
+  # wide full-width button (ratio-based trait; unit-independent across
+  # platforms — unlike small/large which use raw bounds units).
+  { action = "tap", on = { text = "WIDE", traits = ["wide"] } },
+  { action = "assert_visible", on_text = "tapped:WIDE" },
+  # tall button.
+  { action = "tap", on = { text = "TALL", traits = ["tall"] } },
+  { action = "assert_visible", on_text = "tapped:TALL" },
 ]
 
-# Lower on page: Nested Layout — directional relationals + nested anchor.
 [[block]]
 name = "relational"
 steps = [
-  { action = "scroll", to = { text = "Footer Text" } },
-  # right_of / left_of — Left and Right sit side by side (row overlap holds).
-  { action = "assert_visible", on = { text = "Right", right_of = "Left" } },
-  { action = "assert_visible", on = { text = "Left", left_of = "Right" } },
-  # below / above — App Title above Footer Text within the section.
-  { action = "assert_visible", on = { text = "Footer Text", below = "App Title" } },
-  { action = "assert_visible", on = { text = "App Title", above = "Footer Text" } },
-  # nested anchor (one level): the anchor is a selector group, not bare text.
-  { action = "assert_visible", on = { text = "Left", below = { text = "Nested Layout", traits = ["has_text"] } } },
+  # right_of → B1 is immediately right of A1 (same row).
+  { action = "tap", on = { right_of = "A1", traits = ["button"] } },
+  { action = "assert_visible", on_text = "tapped:B1" },
+  # below + overlap exclusion → A2 (same column), NOT the diagonal B2.
+  { action = "tap", on = { below = "A1", traits = ["button"] } },
+  { action = "assert_visible", on_text = "tapped:A2" },
+  # above → A3 is nearest above A4 (same column).
+  { action = "tap", on = { above = "A4", traits = ["button"] } },
+  { action = "assert_visible", on_text = "tapped:A3" },
+  # left_of → C1 is nearest left of D1 (same row).
+  { action = "tap", on = { left_of = "D1", traits = ["button"] } },
+  { action = "assert_visible", on_text = "tapped:C1" },
+  # nested anchor (a selector group, not bare text) → nearest button below the
+  # heading is the top-left cell A1.
+  { action = "tap", on = { below = { text = "Selector Grid", traits = ["has_text"] }, traits = ["button"] } },
+  { action = "assert_visible", on_text = "tapped:A1" },
+  # chained relational anchor: right_of { the element below B2 }. below B2 = B3,
+  # right_of B3 = C3 — exercises a relational selector AS an anchor.
+  { action = "tap", on = { right_of = { below = "B2" }, traits = ["button"] } },
+  { action = "assert_visible", on_text = "tapped:C3" },
+]
+
+[[block]]
+name = "containment"
+steps = [
+  # contains → the box that ENCLOSES "D4" (D4's own button is the anchor, so
+  # contains yields the container around it — the grid container).
+  { action = "assert_visible", on = { contains = { text = "D4" } } },
+  # inside → a cell enclosed by the labelled grid section.
+  { action = "assert_visible", on = { text = "B3", inside = { accessibility_label = "section-selector-grid" } } },
+]
+
+[[block]]
+name = "facets"
+steps = [
+  # glob text match (matches A1..A4).
+  { action = "assert_visible", on_text = "A*" },
+  # clickable filter.
+  { action = "assert_visible", on = { text = "A1", clickable = true } },
+  # no_text trait — the grid container enclosing D4 has no own text.
+  { action = "assert_visible", on = { contains = { text = "D4" }, traits = ["no_text"] } },
+  # enabled = false → the disabled button.
+  { action = "assert_visible", on = { text = "DIS", enabled = false } },
+  # checked state → the grid checkbox, which toggles on tap.
+  { action = "assert_visible", on = { accessibility_label = "grid-check", checked = false } },
+  { action = "tap", on_accessibility_label = "grid-check" },
+  { action = "assert_visible", on = { accessibility_label = "grid-check", checked = true } },
 ]

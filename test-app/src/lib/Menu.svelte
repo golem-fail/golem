@@ -5,21 +5,24 @@ let open = $state(false);
 let logsOpen = $state(false);
 let menuEl;
 
+// Order matches App.svelte's section order (tuned for the two-column tablet
+// layout). Keep the two in sync.
 const links = [
   { id: "counter",         label: "Counter" },
   { id: "buttons",         label: "Buttons" },
-  { id: "text-fields",     label: "Text Fields" },
-  { id: "toggles",         label: "Toggles" },
   { id: "scroll-list",     label: "Scroll List" },
-  { id: "carousel",        label: "Carousel" },
-  { id: "nested-layout",   label: "Nested Layout" },
+  { id: "selector-grid",   label: "Selector Grid" },
+  { id: "text-fields",     label: "Text Fields" },
   { id: "gesture-target",  label: "Gesture Target" },
+  { id: "carousel",        label: "Carousel" },
+  { id: "toggles",         label: "Toggles" },
+  { id: "nested-layout",   label: "Nested Layout" },
   { id: "alert-triggers",  label: "Alert Triggers" },
-  { id: "permissions",     label: "Permissions" },
-  { id: "device-state",    label: "Device State" },
   { id: "delayed-element", label: "Delayed Element" },
-  { id: "position-test",   label: "Position Test" },
+  { id: "permissions",     label: "Permissions" },
   { id: "dialog-overlay",  label: "Dialog Overlay" },
+  { id: "position-test",   label: "Position Test" },
+  { id: "device-state",    label: "Device State" },
 ];
 
 function gotoSection(id) {

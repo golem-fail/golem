@@ -101,6 +101,37 @@ div[role="listitem"]:last-child {
   border-bottom: none;
 }
 
+/* Selector Grid: square 48px cells (square + small traits), a full-width
+   WIDE button (wide trait), and a TALL button (tall trait). */
+.sel-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 48px);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.sel-cell {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  margin: 0;
+}
+.sel-wide {
+  display: block;
+  width: 100%;
+  height: 48px;
+  margin: 4px 0;
+}
+.sel-tall {
+  width: 48px;
+  height: 120px;
+  margin: 4px 0;
+}
+.sel-dups {
+  display: flex;
+  gap: 6px;
+  margin: 4px 0;
+}
+
 /* Tablet / wide viewports: use the whole screen and flow the sections into a
    multi-column flex-wrap grid. Phone layout (below 700px) is unchanged. This
    deliberately *shifts* the layout so e2e can prove selectors resolve the same
@@ -121,5 +152,10 @@ div[role="listitem"]:last-child {
   }
   main > [id^="section-"] {
     flex: 1 1 340px;
+    /* Flex items default to min-width:auto, so a section with wide content
+       (e.g. the carousel track) refuses to shrink and overflows the screen.
+       min-width:0 lets the column shrink; the carousel's own overflow-x
+       handles its intrinsic width. */
+    min-width: 0;
   }
 }
