@@ -27,7 +27,7 @@ pub struct Element {
     /// arms, then corners. Empty when not computed (native / non-targetable).
     #[serde(default)]
     pub hit_points: Vec<HitPoint>,
-    /// Sibling paint order (Android `getDrawingOrderInParent`): higher = painted
+    /// Sibling paint order (Android `getDrawingOrder`): higher = painted
     /// later (on top), capturing elevation/z that raw tree order misses. `None`
     /// on iOS/webview (no per-node signal) → callers fall back to tree order.
     /// Used by the host-side native occlusion hit-test.
@@ -201,7 +201,7 @@ impl Element {
     /// target (or a descendant) is the topmost element painted there, and
     /// "occluded" when an unrelated, later-painted element covers it.
     ///
-    /// Paint order is sibling `drawing_order` (Android `getDrawingOrderInParent`)
+    /// Paint order is sibling `drawing_order` (Android `getDrawingOrder`)
     /// or tree order (iOS / no signal). It is therefore a HEURISTIC —
     /// cross-hierarchy elevation and iOS `zPosition` aren't captured — so a
     /// reported occlusion means "may be occluded", never authoritative. The
