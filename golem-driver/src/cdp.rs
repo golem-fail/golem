@@ -283,7 +283,10 @@ pub fn scale_bounds_by_dpr(node: &mut serde_json::Value, dpr: f64) {
         for pt in points.iter_mut().filter_map(|p| p.as_object_mut()) {
             for field in &["x", "y"] {
                 if let Some(v) = pt.get(*field).and_then(|v| v.as_i64()) {
-                    pt.insert(field.to_string(), serde_json::json!((v as f64 * dpr).round() as i32));
+                    pt.insert(
+                        field.to_string(),
+                        serde_json::json!((v as f64 * dpr).round() as i32),
+                    );
                 }
             }
         }
@@ -413,7 +416,10 @@ mod tests {
             "bounds": { "left": "x", "top": 4 }
         });
         scale_bounds_by_dpr(&mut node, 2.0);
-        assert_eq!(node["bounds"]["left"], "x", "non-i64 left SHALL be left as-is");
+        assert_eq!(
+            node["bounds"]["left"], "x",
+            "non-i64 left SHALL be left as-is"
+        );
         assert_eq!(node["bounds"]["top"], 8, "integer top SHALL be scaled");
     }
 

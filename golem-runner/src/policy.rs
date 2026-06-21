@@ -88,20 +88,17 @@ fn action_multiplier(step: &Step) -> u64 {
     match step.action.as_str() {
         // 1x — instant actions and capture-only steps that don't go
         // through the element resolver / settle path.
-        "screenshot" | "add_media"
-        | "fail" | "load_fixture" | "push_notification" | "set_variable"
-        | "log" | "clear_data" | "press" | "dark_mode" | "set_location"
+        "screenshot" | "add_media" | "fail" | "load_fixture" | "push_notification"
+        | "set_variable" | "log" | "clear_data" | "press" | "dark_mode" | "set_location"
         | "grant_permission" | "revoke_permission" | "hide_keyboard" => 1,
 
         // 2x — interactions that include element resolution + post-action
         // settle (the first tap after a fresh app launch on iOS 26 spends
         // multiple seconds on WebKit Inspector enrichment + tree
         // stabilisation; a 1x = 5s budget consistently underflows).
-        "tap" | "double_tap" | "backspace" | "long_press" | "swipe"
-        | "pinch" | "gesture" | "rotate"
-        | "type" | "assert_visible" | "assert_not_visible"
-        | "assert_alert" | "accept_alert" | "dismiss_alert"
-        | "read" => 2,
+        "tap" | "double_tap" | "backspace" | "long_press" | "swipe" | "pinch" | "gesture"
+        | "rotate" | "type" | "assert_visible" | "assert_not_visible" | "assert_alert"
+        | "accept_alert" | "dismiss_alert" | "read" => 2,
 
         // 5x — app lifecycle. Stop is fast (~1-2s) but its post-settle
         // animation can drag, leaving the next launch racing against a
@@ -119,8 +116,7 @@ fn action_multiplier(step: &Step) -> u64 {
         // 8x — scroll (the within_bump above bumps to 12x when a
         // container is set), network I/O.
         "scroll" => 8 + within_bump,
-        "http_get" | "http_post" | "http_put" | "http_patch"
-        | "http_delete" | "open_link" => 6,
+        "http_get" | "http_post" | "http_put" | "http_patch" | "http_delete" | "open_link" => 6,
 
         // 48x — email polling (240s at 5s base)
         "await_email" => 48,
@@ -136,12 +132,12 @@ fn action_multiplier(step: &Step) -> u64 {
 /// covers the gesture itself plus settle time.
 fn intrinsic_duration_ms(step: &Step) -> u64 {
     match step.action.as_str() {
-        "long_press" => {
-            step.params.get("duration")
-                .and_then(|v| v.as_integer())
-                .map(|d| d.max(0) as u64)
-                .unwrap_or(1_000)
-        }
+        "long_press" => step
+            .params
+            .get("duration")
+            .and_then(|v| v.as_integer())
+            .map(|d| d.max(0) as u64)
+            .unwrap_or(1_000),
         "swipe" => {
             // 3+ point swipe uses duration param; 2-point is instant
             let point_count = step.points.len()
@@ -180,14 +176,18 @@ fn intrinsic_duration_ms(step: &Step) -> u64 {
             // delay. For a 20-char email the 2x base = 10s alone
             // underflows (observed mid-paste timeouts leaving partial
             // text); per-char dominance kicks in around 17 chars.
-            let char_count = step.input.as_deref()
+            let char_count = step
+                .input
+                .as_deref()
                 .or(step.on_text.as_deref())
                 .map(|s| s.len())
                 .unwrap_or(0);
             (char_count as u64) * 500
         }
         "backspace" => {
-            let count = step.params.get("count")
+            let count = step
+                .params
+                .get("count")
                 .and_then(|v| v.as_integer())
                 .map(|n| n.max(0) as u64)
                 .unwrap_or(1);
@@ -335,8 +335,7 @@ pub async fn execute_step_with_policy(
         .await;
     }
 
-    let error =
-        last_error.unwrap_or_else(|| anyhow::anyhow!("step failed with no error details"));
+    let error = last_error.unwrap_or_else(|| anyhow::anyhow!("step failed with no error details"));
     match if_fail {
         "warn" => Ok(StepOutcome::Warning {
             code: extract_code(&error).unwrap_or(FailureCode::Uncoded),
@@ -352,11 +351,7 @@ pub async fn execute_step_with_policy(
 /// This is the testable core: the `executor` closure receives the step and
 /// returns a future that resolves to `Result<()>`.
 #[cfg(test)]
-async fn apply_policy<F, Fut>(
-    step: &Step,
-    base_timeout_ms: u64,
-    executor: F,
-) -> Result<StepOutcome>
+async fn apply_policy<F, Fut>(step: &Step, base_timeout_ms: u64, executor: F) -> Result<StepOutcome>
 where
     F: Fn(&Step) -> Fut,
     Fut: Future<Output = Result<()>>,
@@ -389,8 +384,7 @@ where
         }
     }
 
-    let error =
-        last_error.unwrap_or_else(|| anyhow::anyhow!("step failed with no error details"));
+    let error = last_error.unwrap_or_else(|| anyhow::anyhow!("step failed with no error details"));
     match if_fail {
         "warn" => Ok(StepOutcome::Warning {
             code: extract_code(&error).unwrap_or(FailureCode::Uncoded),
@@ -471,7 +465,11 @@ mod tests {
                     message.contains("something went wrong"),
                     "warning message should contain error: {message}"
                 );
-                assert_eq!(code, FailureCode::Uncoded, "untagged error SHALL fall back to Uncoded");
+                assert_eq!(
+                    code,
+                    FailureCode::Uncoded,
+                    "untagged error SHALL fall back to Uncoded"
+                );
             }
             other => panic!("expected Warning, got {other:?}"),
         }
@@ -652,7 +650,11 @@ mod tests {
         match result.expect("should be ok") {
             StepOutcome::Warning { message, code } => {
                 assert!(message.contains("timed out"));
-                assert_eq!(code, FailureCode::FlowStepTimeout, "timeout warn SHALL carry F408");
+                assert_eq!(
+                    code,
+                    FailureCode::FlowStepTimeout,
+                    "timeout warn SHALL carry F408"
+                );
             }
             other => panic!("expected Warning, got {other:?}"),
         }
@@ -687,22 +689,40 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn action_multiplier_values() {
-        let tap = Step { action: "tap".into(), ..Default::default() };
+        let tap = Step {
+            action: "tap".into(),
+            ..Default::default()
+        };
         assert_eq!(effective_timeout(&tap, 5_000), 10_000);
 
-        let assert_vis = Step { action: "assert_visible".into(), ..Default::default() };
+        let assert_vis = Step {
+            action: "assert_visible".into(),
+            ..Default::default()
+        };
         assert_eq!(effective_timeout(&assert_vis, 5_000), 10_000);
 
-        let scroll = Step { action: "scroll".into(), ..Default::default() };
+        let scroll = Step {
+            action: "scroll".into(),
+            ..Default::default()
+        };
         assert_eq!(effective_timeout(&scroll, 5_000), 40_000);
 
-        let launch = Step { action: "launch".into(), ..Default::default() };
+        let launch = Step {
+            action: "launch".into(),
+            ..Default::default()
+        };
         assert_eq!(effective_timeout(&launch, 5_000), 25_000);
 
-        let bash = Step { action: "bash".into(), ..Default::default() };
+        let bash = Step {
+            action: "bash".into(),
+            ..Default::default()
+        };
         assert_eq!(effective_timeout(&bash, 5_000), 20_000);
 
-        let email = Step { action: "await_email".into(), ..Default::default() };
+        let email = Step {
+            action: "await_email".into(),
+            ..Default::default()
+        };
         assert_eq!(effective_timeout(&email, 5_000), 240_000);
     }
 
@@ -711,7 +731,10 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn auto_scroll_forces_8x() {
-        let mut step = Step { action: "tap".into(), ..Default::default() };
+        let mut step = Step {
+            action: "tap".into(),
+            ..Default::default()
+        };
         step.auto_scroll = Some(true);
         // tap is normally 1x (5s), but auto_scroll forces 8x (40s)
         assert_eq!(effective_timeout(&step, 5_000), 40_000);
@@ -722,22 +745,41 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn within_adds_to_scroll_timeout() {
-        let within = golem_parser::SelectorGroup { text: Some("Carousel".into()), ..Default::default() };
+        let within = golem_parser::SelectorGroup {
+            text: Some("Carousel".into()),
+            ..Default::default()
+        };
 
         // scroll without within stays at 8x = 40s.
-        let scroll = Step { action: "scroll".into(), ..Default::default() };
+        let scroll = Step {
+            action: "scroll".into(),
+            ..Default::default()
+        };
         assert_eq!(effective_timeout(&scroll, 5_000), 40_000);
 
         // scroll with within bumps to 12x = 60s.
-        let scroll_within = Step { action: "scroll".into(), within: Some(within.clone()), ..Default::default() };
+        let scroll_within = Step {
+            action: "scroll".into(),
+            within: Some(within.clone()),
+            ..Default::default()
+        };
         assert_eq!(effective_timeout(&scroll_within, 5_000), 60_000);
 
         // auto_scroll alone stays at 8x = 40s.
-        let auto = Step { action: "tap".into(), auto_scroll: Some(true), ..Default::default() };
+        let auto = Step {
+            action: "tap".into(),
+            auto_scroll: Some(true),
+            ..Default::default()
+        };
         assert_eq!(effective_timeout(&auto, 5_000), 40_000);
 
         // auto_scroll + within bumps to 12x = 60s.
-        let auto_within = Step { action: "tap".into(), auto_scroll: Some(true), within: Some(within), ..Default::default() };
+        let auto_within = Step {
+            action: "tap".into(),
+            auto_scroll: Some(true),
+            within: Some(within),
+            ..Default::default()
+        };
         assert_eq!(effective_timeout(&auto_within, 5_000), 60_000);
     }
 
@@ -746,14 +788,18 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn long_press_duration_extends_timeout() {
-        let mut step = Step { action: "long_press".into(), ..Default::default() };
+        let mut step = Step {
+            action: "long_press".into(),
+            ..Default::default()
+        };
         // Default long_press duration=1000, intrinsic=1000, floor=3000.
         // Multiplied=10000 (2x). max(10000, 3000) = 10000.
         assert_eq!(effective_timeout(&step, 5_000), 10_000);
 
         // long_press with duration=8000: intrinsic=8000, floor=10000,
         // multiplied=10000. max(10000, 10000) = 10000.
-        step.params.insert("duration".to_string(), toml::Value::Integer(8_000));
+        step.params
+            .insert("duration".to_string(), toml::Value::Integer(8_000));
         assert_eq!(effective_timeout(&step, 5_000), 10_000);
     }
 
@@ -762,7 +808,10 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn slow_rotate_extends_timeout() {
-        let mut step = Step { action: "rotate".into(), ..Default::default() };
+        let mut step = Step {
+            action: "rotate".into(),
+            ..Default::default()
+        };
         step.rotation = Some(720.0);
         step.velocity = Some(45.0);
         // 720/45 * 1000 = 16000 path + 72 steps * 100 = 7200 inject = 23200 intrinsic.
@@ -776,7 +825,10 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn typical_rotate_uses_2x_bucket_floor() {
-        let mut step = Step { action: "rotate".into(), ..Default::default() };
+        let mut step = Step {
+            action: "rotate".into(),
+            ..Default::default()
+        };
         step.rotation = Some(90.0);
         // velocity defaults to 180°/s
         // path = 90/180 * 1000 = 500ms; steps = max(9, 3) = 9; inject = 900ms.
@@ -790,7 +842,10 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn rotate_270_clears_old_5s_failure() {
-        let mut step = Step { action: "rotate".into(), ..Default::default() };
+        let mut step = Step {
+            action: "rotate".into(),
+            ..Default::default()
+        };
         step.rotation = Some(-270.0);
         // path = 270/180 * 1000 = 1500ms; steps = 27; inject = 2700ms.
         // intrinsic = 4200ms → +2000 = 6200ms.
@@ -806,7 +861,10 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn step_timeout_overrides_multiplier() {
-        let mut step = Step { action: "await_email".into(), ..Default::default() };
+        let mut step = Step {
+            action: "await_email".into(),
+            ..Default::default()
+        };
         step.timeout = Some(500);
         // await_email is 48x but step.timeout=500 wins
         assert_eq!(effective_timeout(&step, 5_000), 500);
@@ -817,7 +875,10 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn unknown_action_gets_2x() {
-        let step = Step { action: "future_action".into(), ..Default::default() };
+        let step = Step {
+            action: "future_action".into(),
+            ..Default::default()
+        };
         assert_eq!(effective_timeout(&step, 5_000), 10_000);
     }
 
@@ -828,7 +889,10 @@ mod tests {
     fn type_scales_with_input_length() {
         // Short input: 5 chars * 500ms = 2500ms intrinsic + 2s = 4500ms,
         // under 2x base (10000), no effect.
-        let mut step = Step { action: "type".into(), ..Default::default() };
+        let mut step = Step {
+            action: "type".into(),
+            ..Default::default()
+        };
         step.input = Some("hello".to_string());
         assert_eq!(effective_timeout(&step, 5_000), 10_000); // 2x base
 
@@ -844,7 +908,10 @@ mod tests {
     #[test]
     fn type_uses_on_text_when_input_absent() {
         // No input, but a long on_text: per-char cost still applies.
-        let mut step = Step { action: "type".into(), ..Default::default() };
+        let mut step = Step {
+            action: "type".into(),
+            ..Default::default()
+        };
         step.on_text = Some("x".repeat(80));
         // 80 * 500 = 40000 intrinsic + 2000 settle = 42000 > 2x base.
         assert_eq!(effective_timeout(&step, 5_000), 42_000);
@@ -860,8 +927,18 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn http_and_open_link_get_6x() {
-        for action in ["http_get", "http_post", "http_put", "http_patch", "http_delete", "open_link"] {
-            let step = Step { action: action.into(), ..Default::default() };
+        for action in [
+            "http_get",
+            "http_post",
+            "http_put",
+            "http_patch",
+            "http_delete",
+            "open_link",
+        ] {
+            let step = Step {
+                action: action.into(),
+                ..Default::default()
+            };
             assert_eq!(
                 effective_timeout(&step, 5_000),
                 30_000,
@@ -876,11 +953,25 @@ mod tests {
     #[test]
     fn instant_actions_get_1x() {
         for action in [
-            "screenshot", "add_media", "fail", "load_fixture", "push_notification",
-            "set_variable", "log", "clear_data", "press", "dark_mode", "set_location",
-            "grant_permission", "revoke_permission", "hide_keyboard",
+            "screenshot",
+            "add_media",
+            "fail",
+            "load_fixture",
+            "push_notification",
+            "set_variable",
+            "log",
+            "clear_data",
+            "press",
+            "dark_mode",
+            "set_location",
+            "grant_permission",
+            "revoke_permission",
+            "hide_keyboard",
         ] {
-            let step = Step { action: action.into(), ..Default::default() };
+            let step = Step {
+                action: action.into(),
+                ..Default::default()
+            };
             assert_eq!(
                 effective_timeout(&step, 5_000),
                 5_000,
@@ -894,7 +985,10 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn stop_gets_5x() {
-        let step = Step { action: "stop".into(), ..Default::default() };
+        let step = Step {
+            action: "stop".into(),
+            ..Default::default()
+        };
         assert_eq!(effective_timeout(&step, 5_000), 25_000);
     }
 
@@ -904,8 +998,15 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn within_without_auto_scroll_on_tap_keeps_2x() {
-        let within = golem_parser::SelectorGroup { text: Some("Box".into()), ..Default::default() };
-        let step = Step { action: "tap".into(), within: Some(within), ..Default::default() };
+        let within = golem_parser::SelectorGroup {
+            text: Some("Box".into()),
+            ..Default::default()
+        };
+        let step = Step {
+            action: "tap".into(),
+            within: Some(within),
+            ..Default::default()
+        };
         // tap maps to 2x = 10000; within_bump is only added inside the
         // scroll / auto_scroll arms, not the tap arm.
         assert_eq!(effective_timeout(&step, 5_000), 10_000);
@@ -917,15 +1018,20 @@ mod tests {
     #[test]
     fn backspace_intrinsic_scales_with_count() {
         // Default count=1 → intrinsic 500 + 2000 = 2500, under 2x base.
-        let mut step = Step { action: "backspace".into(), ..Default::default() };
+        let mut step = Step {
+            action: "backspace".into(),
+            ..Default::default()
+        };
         assert_eq!(effective_timeout(&step, 5_000), 10_000);
 
         // count=20 → 20*500 = 10000 intrinsic + 2000 = 12000 > 2x base.
-        step.params.insert("count".to_string(), toml::Value::Integer(20));
+        step.params
+            .insert("count".to_string(), toml::Value::Integer(20));
         assert_eq!(effective_timeout(&step, 5_000), 12_000);
 
         // Negative count clamps to 0 → intrinsic 0, no floor effect.
-        step.params.insert("count".to_string(), toml::Value::Integer(-5));
+        step.params
+            .insert("count".to_string(), toml::Value::Integer(-5));
         assert_eq!(effective_timeout(&step, 5_000), 10_000);
     }
 
@@ -934,8 +1040,12 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn long_press_negative_duration_clamps() {
-        let mut step = Step { action: "long_press".into(), ..Default::default() };
-        step.params.insert("duration".to_string(), toml::Value::Integer(-100));
+        let mut step = Step {
+            action: "long_press".into(),
+            ..Default::default()
+        };
+        step.params
+            .insert("duration".to_string(), toml::Value::Integer(-100));
         // clamped to 0 intrinsic → no floor, 2x base = 10000.
         assert_eq!(effective_timeout(&step, 5_000), 10_000);
     }
@@ -945,7 +1055,10 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn swipe_intrinsic_depends_on_point_count() {
-        let sel = golem_parser::SelectorGroup { text: Some("a".into()), ..Default::default() };
+        let sel = golem_parser::SelectorGroup {
+            text: Some("a".into()),
+            ..Default::default()
+        };
 
         // 2-point swipe (start + end) → intrinsic 0 → 2x base = 10000.
         let two = Step {
@@ -986,10 +1099,16 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn gesture_intrinsic_uses_total_duration() {
-        let sel = golem_parser::SelectorGroup { text: Some("p".into()), ..Default::default() };
+        let sel = golem_parser::SelectorGroup {
+            text: Some("p".into()),
+            ..Default::default()
+        };
 
         // No fingers, default duration 300 intrinsic + 2000 = 2300, under 2x.
-        let empty = Step { action: "gesture".into(), ..Default::default() };
+        let empty = Step {
+            action: "gesture".into(),
+            ..Default::default()
+        };
         assert_eq!(effective_timeout(&empty, 5_000), 10_000);
 
         // A big total duration that clears the 2x floor regardless of how
@@ -998,7 +1117,13 @@ mod tests {
             action: "gesture".into(),
             duration: Some(20_000),
             fingers: vec![golem_parser::Finger {
-                points: vec![sel.clone(), sel.clone(), sel.clone(), sel.clone(), sel.clone()],
+                points: vec![
+                    sel.clone(),
+                    sel.clone(),
+                    sel.clone(),
+                    sel.clone(),
+                    sel.clone(),
+                ],
             }],
             ..Default::default()
         };
@@ -1011,7 +1136,10 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn gesture_intrinsic_independent_of_point_count() {
-        let sel = golem_parser::SelectorGroup { text: Some("p".into()), ..Default::default() };
+        let sel = golem_parser::SelectorGroup {
+            text: Some("p".into()),
+            ..Default::default()
+        };
 
         // A 6-point finger with duration 30000. If the intrinsic were the
         // old per-segment product (5 * 30000 = 150000), the floor would be
@@ -1020,7 +1148,14 @@ mod tests {
             action: "gesture".into(),
             duration: Some(30_000),
             fingers: vec![golem_parser::Finger {
-                points: vec![sel.clone(), sel.clone(), sel.clone(), sel.clone(), sel.clone(), sel.clone()],
+                points: vec![
+                    sel.clone(),
+                    sel.clone(),
+                    sel.clone(),
+                    sel.clone(),
+                    sel.clone(),
+                    sel.clone(),
+                ],
             }],
             ..Default::default()
         };
@@ -1036,7 +1171,10 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn rotate_without_rotation_has_zero_intrinsic() {
-        let step = Step { action: "rotate".into(), ..Default::default() };
+        let step = Step {
+            action: "rotate".into(),
+            ..Default::default()
+        };
         // rotation is None → intrinsic 0 → 2x base = 10000.
         assert_eq!(effective_timeout(&step, 5_000), 10_000);
     }
@@ -1047,12 +1185,30 @@ mod tests {
     #[test]
     fn needs_post_settle_mutating_vs_readonly() {
         for action in [
-            "tap", "double_tap", "type", "backspace", "long_press", "swipe",
-            "scroll", "hide_keyboard", "pinch", "rotate", "gesture", "press",
-            "launch", "stop", "accept_alert", "dismiss_alert", "dark_mode",
-            "set_location", "open_link",
+            "tap",
+            "double_tap",
+            "type",
+            "backspace",
+            "long_press",
+            "swipe",
+            "scroll",
+            "hide_keyboard",
+            "pinch",
+            "rotate",
+            "gesture",
+            "press",
+            "launch",
+            "stop",
+            "accept_alert",
+            "dismiss_alert",
+            "dark_mode",
+            "set_location",
+            "open_link",
         ] {
-            let step = Step { action: action.into(), ..Default::default() };
+            let step = Step {
+                action: action.into(),
+                ..Default::default()
+            };
             assert!(
                 needs_post_settle(&step),
                 "{action} SHALL require post-action settle",
@@ -1060,10 +1216,19 @@ mod tests {
         }
 
         for action in [
-            "assert_visible", "assert_not_visible", "read",
-            "screenshot", "log", "set_variable", "http_get", "await_email",
+            "assert_visible",
+            "assert_not_visible",
+            "read",
+            "screenshot",
+            "log",
+            "set_variable",
+            "http_get",
+            "await_email",
         ] {
-            let step = Step { action: action.into(), ..Default::default() };
+            let step = Step {
+                action: action.into(),
+                ..Default::default()
+            };
             assert!(
                 !needs_post_settle(&step),
                 "{action} SHALL NOT require post-action settle",
@@ -1077,7 +1242,10 @@ mod tests {
     // -----------------------------------------------------------------
     #[test]
     fn double_tap_gets_multiplier_and_post_settle() {
-        let step = Step { action: "double_tap".into(), ..Default::default() };
+        let step = Step {
+            action: "double_tap".into(),
+            ..Default::default()
+        };
         // 1. 2x action multiplier on the 5s base = 10_000ms.
         assert_eq!(
             effective_timeout(&step, 5_000),
@@ -1101,7 +1269,10 @@ mod tests {
         // 1. await_email is 48x; a huge base would overflow an unchecked
         //    multiply. saturating_mul avoids the panic, and the cap then
         //    clamps the result to MAX_AUTO_TIMEOUT_MS.
-        let email = Step { action: "await_email".into(), ..Default::default() };
+        let email = Step {
+            action: "await_email".into(),
+            ..Default::default()
+        };
         assert_eq!(
             effective_timeout(&email, u64::MAX),
             MAX_AUTO_TIMEOUT_MS,
@@ -1110,7 +1281,10 @@ mod tests {
 
         // 2. A long intrinsic (type) that would exceed the ceiling is also
         //    capped on the computed path.
-        let mut typing = Step { action: "type".into(), ..Default::default() };
+        let mut typing = Step {
+            action: "type".into(),
+            ..Default::default()
+        };
         typing.input = Some("x".repeat(1_000_000));
         assert_eq!(
             effective_timeout(&typing, 5_000),
@@ -1119,7 +1293,10 @@ mod tests {
         );
 
         // 3. An explicit user-set timeout is returned verbatim, never capped.
-        let mut explicit = Step { action: "await_email".into(), ..Default::default() };
+        let mut explicit = Step {
+            action: "await_email".into(),
+            ..Default::default()
+        };
         explicit.timeout = Some(MAX_AUTO_TIMEOUT_MS * 5);
         assert_eq!(
             effective_timeout(&explicit, 5_000),

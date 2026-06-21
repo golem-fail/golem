@@ -14,7 +14,10 @@ pub fn event_channel() -> (EventSender, EventSubscriptions) {
     let (tx, _rx) = broadcast::channel(CHANNEL_CAPACITY);
     let seq = Arc::new(AtomicU64::new(0));
     (
-        EventSender { tx: tx.clone(), seq: seq.clone() },
+        EventSender {
+            tx: tx.clone(),
+            seq: seq.clone(),
+        },
         EventSubscriptions { tx },
     )
 }
@@ -70,7 +73,10 @@ mod tests {
         let (sender, subs) = event_channel();
         let _rx = subs.subscribe();
         // Emitting should not panic even with no prior subscribers
-        sender.emit(DeviceId("dev1".into()), EventKind::SuiteStarted { flow_count: 1 });
+        sender.emit(
+            DeviceId("dev1".into()),
+            EventKind::SuiteStarted { flow_count: 1 },
+        );
     }
 
     #[tokio::test]
@@ -80,7 +86,11 @@ mod tests {
 
         sender.emit(
             DeviceId("pixel_7".into()),
-            EventKind::FlowStarted { flow_name: "login".into(), os_major: 0 , repeat: None},
+            EventKind::FlowStarted {
+                flow_name: "login".into(),
+                os_major: 0,
+                repeat: None,
+            },
         );
 
         let event = rx.recv().await.expect("SHALL receive the emitted event");
@@ -97,8 +107,23 @@ mod tests {
         let dev = DeviceId("dev".into());
 
         sender.emit(dev.clone(), EventKind::SuiteStarted { flow_count: 1 });
-        sender.emit(dev.clone(), EventKind::FlowStarted { flow_name: "a".into(), os_major: 0 , repeat: None});
-        sender.emit(dev.clone(), EventKind::SuiteFinished { duration_ms: 100, passed: 1, failed: 0, skipped: 0 });
+        sender.emit(
+            dev.clone(),
+            EventKind::FlowStarted {
+                flow_name: "a".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        );
+        sender.emit(
+            dev.clone(),
+            EventKind::SuiteFinished {
+                duration_ms: 100,
+                passed: 1,
+                failed: 0,
+                skipped: 0,
+            },
+        );
 
         let e0 = rx.recv().await.expect("SHALL receive event 0");
         let e1 = rx.recv().await.expect("SHALL receive event 1");
@@ -107,7 +132,10 @@ mod tests {
         assert_eq!(e0.seq, 0, "SHALL start at 0");
         assert_eq!(e1.seq, 1, "SHALL increment to 1");
         assert_eq!(e2.seq, 2, "SHALL increment to 2");
-        assert!(e0.seq < e1.seq && e1.seq < e2.seq, "SHALL be strictly monotonic");
+        assert!(
+            e0.seq < e1.seq && e1.seq < e2.seq,
+            "SHALL be strictly monotonic"
+        );
     }
 
     #[tokio::test]
@@ -118,18 +146,42 @@ mod tests {
 
         sender.emit(
             DeviceId("dev".into()),
-            EventKind::FlowStarted { flow_name: "f1".into(), os_major: 0 , repeat: None},
+            EventKind::FlowStarted {
+                flow_name: "f1".into(),
+                os_major: 0,
+                repeat: None,
+            },
         );
         sender.emit(
             DeviceId("dev".into()),
-            EventKind::FlowFinished { flow_name: "f1".into(), success: true, duration_ms: 50, seed: 0, os_major: 0 , code: None, repeat: None},
+            EventKind::FlowFinished {
+                flow_name: "f1".into(),
+                success: true,
+                duration_ms: 50,
+                seed: 0,
+                os_major: 0,
+                code: None,
+                repeat: None,
+            },
         );
 
         // Both subscribers SHALL receive both events
-        let r1_a = rx1.recv().await.expect("subscriber-1 SHALL receive event-0");
-        let r1_b = rx1.recv().await.expect("subscriber-1 SHALL receive event-1");
-        let r2_a = rx2.recv().await.expect("subscriber-2 SHALL receive event-0");
-        let r2_b = rx2.recv().await.expect("subscriber-2 SHALL receive event-1");
+        let r1_a = rx1
+            .recv()
+            .await
+            .expect("subscriber-1 SHALL receive event-0");
+        let r1_b = rx1
+            .recv()
+            .await
+            .expect("subscriber-1 SHALL receive event-1");
+        let r2_a = rx2
+            .recv()
+            .await
+            .expect("subscriber-2 SHALL receive event-0");
+        let r2_b = rx2
+            .recv()
+            .await
+            .expect("subscriber-2 SHALL receive event-1");
 
         assert_eq!(r1_a.seq, 0);
         assert_eq!(r1_b.seq, 1);
@@ -144,20 +196,34 @@ mod tests {
 
         sender.emit(
             DeviceId("ios/iPhone 15 Pro".into()),
-            EventKind::FlowStarted { flow_name: "test".into(), os_major: 0 , repeat: None},
+            EventKind::FlowStarted {
+                flow_name: "test".into(),
+                os_major: 0,
+                repeat: None,
+            },
         );
         sender.emit(
             DeviceId("android/Pixel 7".into()),
-            EventKind::FlowStarted { flow_name: "test".into(), os_major: 0 , repeat: None},
+            EventKind::FlowStarted {
+                flow_name: "test".into(),
+                os_major: 0,
+                repeat: None,
+            },
         );
 
         let e1 = rx.recv().await.expect("SHALL receive first event");
         let e2 = rx.recv().await.expect("SHALL receive second event");
 
-        assert_eq!(e1.device_id, DeviceId("ios/iPhone 15 Pro".into()),
-            "SHALL tag first event with iOS device ID");
-        assert_eq!(e2.device_id, DeviceId("android/Pixel 7".into()),
-            "SHALL tag second event with Android device ID");
+        assert_eq!(
+            e1.device_id,
+            DeviceId("ios/iPhone 15 Pro".into()),
+            "SHALL tag first event with iOS device ID"
+        );
+        assert_eq!(
+            e2.device_id,
+            DeviceId("android/Pixel 7".into()),
+            "SHALL tag second event with Android device ID"
+        );
     }
 
     // 1. Late subscribers SHALL only receive events emitted after they subscribe,
@@ -173,10 +239,24 @@ mod tests {
         let mut rx = subs.subscribe();
 
         // Emitted after subscribe — visible to this receiver.
-        sender.emit(dev.clone(), EventKind::SuiteFinished { duration_ms: 1, passed: 1, failed: 0, skipped: 0 });
+        sender.emit(
+            dev.clone(),
+            EventKind::SuiteFinished {
+                duration_ms: 1,
+                passed: 1,
+                failed: 0,
+                skipped: 0,
+            },
+        );
 
-        let e = rx.recv().await.expect("SHALL receive the post-subscribe event");
-        assert_eq!(e.seq, 1, "SHALL skip the pre-subscribe event yet keep its seq slot");
+        let e = rx
+            .recv()
+            .await
+            .expect("SHALL receive the post-subscribe event");
+        assert_eq!(
+            e.seq, 1,
+            "SHALL skip the pre-subscribe event yet keep its seq slot"
+        );
         assert!(
             matches!(e.kind, EventKind::SuiteFinished { .. }),
             "SHALL deliver the event emitted after subscription"
@@ -198,7 +278,10 @@ mod tests {
         sender.emit(dev.clone(), EventKind::SuiteStarted { flow_count: 3 });
 
         let e = rx.recv().await.expect("SHALL receive the only live event");
-        assert_eq!(e.seq, 2, "seq SHALL have advanced past the two dropped events");
+        assert_eq!(
+            e.seq, 2,
+            "seq SHALL have advanced past the two dropped events"
+        );
     }
 
     // 3. Both clocks SHALL be captured at emit (not at send/recv): each event's
@@ -304,8 +387,14 @@ mod tests {
         // 4. rx2's FIRST event is seq 2 — not the seq 1 from the gap — proving the
         //    gap event was dropped, not retained for late subscribers, while the
         //    seq counter advanced through the gap.
-        let e = rx2.recv().await.expect("SHALL receive post-resubscribe event");
-        assert_eq!(e.seq, 2, "rx2's first event SHALL be seq 2 (gap event dropped, seq slot consumed)");
+        let e = rx2
+            .recv()
+            .await
+            .expect("SHALL receive post-resubscribe event");
+        assert_eq!(
+            e.seq, 2,
+            "rx2's first event SHALL be seq 2 (gap event dropped, seq slot consumed)"
+        );
         assert!(
             matches!(e.kind, EventKind::SuiteStarted { flow_count: 3 }),
             "rx2's first event SHALL be the post-resubscribe emit, not the gap emit"
@@ -324,8 +413,14 @@ mod tests {
         let sender2 = sender.clone();
         let mut rx = subs.subscribe();
 
-        sender.emit(DeviceId("a".into()), EventKind::SuiteStarted { flow_count: 1 });
-        sender2.emit(DeviceId("b".into()), EventKind::SuiteStarted { flow_count: 1 });
+        sender.emit(
+            DeviceId("a".into()),
+            EventKind::SuiteStarted { flow_count: 1 },
+        );
+        sender2.emit(
+            DeviceId("b".into()),
+            EventKind::SuiteStarted { flow_count: 1 },
+        );
 
         let e0 = rx.recv().await.expect("SHALL receive event from sender");
         let e1 = rx.recv().await.expect("SHALL receive event from sender2");

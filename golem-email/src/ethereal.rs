@@ -103,11 +103,7 @@ impl HttpClient for ReqwestHttpClient {
             .context("failed to read Ethereal API response body")?;
 
         if !status.is_success() {
-            anyhow::bail!(
-                "Ethereal API returned HTTP {}: {}",
-                status.as_u16(),
-                body
-            );
+            anyhow::bail!("Ethereal API returned HTTP {}: {}", status.as_u16(), body);
         }
 
         Ok(body)
@@ -214,16 +210,14 @@ mod tests {
 
     #[test]
     fn parse_ethereal_api_response() {
-        let account =
-            EtherealAccount::from_api_response(FIXTURE_RESPONSE).expect("should parse");
+        let account = EtherealAccount::from_api_response(FIXTURE_RESPONSE).expect("should parse");
         assert_eq!(account.user, "abc123@ethereal.email");
         assert_eq!(account.pass, "s3cretP4ss");
     }
 
     #[test]
     fn ethereal_account_has_correct_hosts_and_ports() {
-        let account =
-            EtherealAccount::from_api_response(FIXTURE_RESPONSE).expect("should parse");
+        let account = EtherealAccount::from_api_response(FIXTURE_RESPONSE).expect("should parse");
         assert_eq!(account.smtp_host, "smtp.ethereal.email");
         assert_eq!(account.smtp_port, 587);
         assert_eq!(account.imap_host, "imap.ethereal.email");

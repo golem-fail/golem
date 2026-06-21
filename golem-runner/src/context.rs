@@ -51,7 +51,11 @@ impl ExecutionContext<'_> {
     /// Take the last launch timing (resets to 0).
     pub fn take_launch_ms(&self) -> Option<u64> {
         let val = self.last_launch_ms.swap(0, Ordering::Relaxed);
-        if val > 0 { Some(val) } else { None }
+        if val > 0 {
+            Some(val)
+        } else {
+            None
+        }
     }
 
     /// Emit a top-level event (step started, flow finished, etc.).
@@ -301,12 +305,12 @@ mod tests {
         let ctx = test_ctx(tmp.path());
         ctx.record_tree_fetch(5);
         let first = ctx.take_tree_stats();
-        assert_eq!(first.fetches, 1, "first take SHALL report the recorded fetch");
-        let second = ctx.take_tree_stats();
         assert_eq!(
-            second.fetches, 0,
-            "stats SHALL be reset after take"
+            first.fetches, 1,
+            "first take SHALL report the recorded fetch"
         );
+        let second = ctx.take_tree_stats();
+        assert_eq!(second.fetches, 0, "stats SHALL be reset after take");
     }
 
     // 9. TestHarness seam: the injected perf collector yields the supplied raw

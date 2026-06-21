@@ -59,15 +59,18 @@ impl CacheSummary {
 pub fn info() -> Result<()> {
     let path = PathBuf::from(CACHE_PATH);
     if !path.exists() {
-        println!("No install cache at {} (nothing built yet, or run from a different project root).", path.display());
+        println!(
+            "No install cache at {} (nothing built yet, or run from a different project root).",
+            path.display()
+        );
         return Ok(());
     }
 
     let bytes_len = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
-    let raw = std::fs::read_to_string(&path)
-        .with_context(|| format!("reading {}", path.display()))?;
-    let view: CacheFileView = serde_json::from_str(&raw)
-        .with_context(|| format!("parsing {}", path.display()))?;
+    let raw =
+        std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let view: CacheFileView =
+        serde_json::from_str(&raw).with_context(|| format!("parsing {}", path.display()))?;
 
     let summary = CacheSummary::from_view(&view);
 
@@ -80,11 +83,22 @@ pub fn info() -> Result<()> {
     }
 
     if let (Some(oldest), Some(newest)) = (&summary.oldest, &summary.newest) {
-        println!("  Oldest:  {}  {}", oldest.1.format("%Y-%m-%d %H:%M:%SZ"), oldest.0);
-        println!("  Newest:  {}  {}", newest.1.format("%Y-%m-%d %H:%M:%SZ"), newest.0);
+        println!(
+            "  Oldest:  {}  {}",
+            oldest.1.format("%Y-%m-%d %H:%M:%SZ"),
+            oldest.0
+        );
+        println!(
+            "  Newest:  {}  {}",
+            newest.1.format("%Y-%m-%d %H:%M:%SZ"),
+            newest.0
+        );
     }
 
-    println!("  With device install-time: {}/{}", summary.with_install_time, summary.total);
+    println!(
+        "  With device install-time: {}/{}",
+        summary.with_install_time, summary.total
+    );
 
     Ok(())
 }
@@ -98,7 +112,9 @@ mod tests {
     use serde::Serialize;
 
     fn ts(secs: i64) -> DateTime<Utc> {
-        Utc.timestamp_opt(secs, 0).single().expect("valid timestamp")
+        Utc.timestamp_opt(secs, 0)
+            .single()
+            .expect("valid timestamp")
     }
 
     fn entry(installed_at: i64, device_install_time: Option<i64>) -> PersistedInstall {
@@ -200,7 +216,10 @@ mod tests {
     }
 
     fn view(entries: HashMap<String, PersistedInstall>) -> CacheFileView {
-        CacheFileView { version: 1, entries }
+        CacheFileView {
+            version: 1,
+            entries,
+        }
     }
 
     // 6. An empty cache summarizes to zero totals with no oldest/newest — the
@@ -253,9 +272,15 @@ mod tests {
         assert_eq!(summary.total, 3, "all three entries SHALL be counted");
         let (oldest_key, oldest_t) = summary.oldest.expect("oldest present");
         let (newest_key, newest_t) = summary.newest.expect("newest present");
-        assert_eq!(oldest_key, "early", "oldest SHALL be the earliest installed_at");
+        assert_eq!(
+            oldest_key, "early",
+            "oldest SHALL be the earliest installed_at"
+        );
         assert_eq!(oldest_t, ts(100), "oldest time SHALL be the earliest");
-        assert_eq!(newest_key, "late", "newest SHALL be the latest installed_at");
+        assert_eq!(
+            newest_key, "late",
+            "newest SHALL be the latest installed_at"
+        );
         assert_eq!(newest_t, ts(300), "newest time SHALL be the latest");
         assert_eq!(
             summary.with_install_time, 2,

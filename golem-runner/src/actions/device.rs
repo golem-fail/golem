@@ -8,7 +8,12 @@ pub(crate) async fn handle_dark_mode(step: &Step, driver: &dyn PlatformDriver) -
         .params
         .get("enabled")
         .and_then(|v| v.as_bool())
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("dark_mode action requires 'enabled' param")))?;
+        .ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("dark_mode action requires 'enabled' param"),
+            )
+        })?;
     driver.set_dark_mode(enabled).await
 }
 
@@ -18,12 +23,22 @@ pub(crate) async fn handle_set_location(step: &Step, driver: &dyn PlatformDriver
         .params
         .get("latitude")
         .and_then(|v| v.as_float().or_else(|| v.as_integer().map(|i| i as f64)))
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("set_location action requires 'latitude' param")))?;
+        .ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("set_location action requires 'latitude' param"),
+            )
+        })?;
     let longitude = step
         .params
         .get("longitude")
         .and_then(|v| v.as_float().or_else(|| v.as_integer().map(|i| i as f64)))
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("set_location action requires 'longitude' param")))?;
+        .ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("set_location action requires 'longitude' param"),
+            )
+        })?;
     driver.set_location(latitude, longitude).await
 }
 
@@ -33,35 +48,60 @@ pub(crate) async fn handle_press(step: &Step, driver: &dyn PlatformDriver) -> Re
         .params
         .get("button")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("press action requires 'button' param")))?;
+        .ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("press action requires 'button' param"),
+            )
+        })?;
     driver.press_button(button).await
 }
 
 /// Grant an app permission.
-pub(crate) async fn handle_grant_permission(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let bundle_id = step
-        .app
-        .as_deref()
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("No app specified for {} action", step.action)))?;
+pub(crate) async fn handle_grant_permission(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+) -> Result<()> {
+    let bundle_id = step.app.as_deref().ok_or_else(|| {
+        golem_events::coded(
+            golem_events::FailureCode::ParseMissingParam,
+            anyhow::anyhow!("No app specified for {} action", step.action),
+        )
+    })?;
     let permission = step
         .params
         .get("permission")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("grant_permission action requires 'permission' param")))?;
+        .ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("grant_permission action requires 'permission' param"),
+            )
+        })?;
     driver.grant_permission(bundle_id, permission).await
 }
 
 /// Revoke an app permission.
-pub(crate) async fn handle_revoke_permission(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let bundle_id = step
-        .app
-        .as_deref()
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("No app specified for {} action", step.action)))?;
+pub(crate) async fn handle_revoke_permission(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+) -> Result<()> {
+    let bundle_id = step.app.as_deref().ok_or_else(|| {
+        golem_events::coded(
+            golem_events::FailureCode::ParseMissingParam,
+            anyhow::anyhow!("No app specified for {} action", step.action),
+        )
+    })?;
     let permission = step
         .params
         .get("permission")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("revoke_permission action requires 'permission' param")))?;
+        .ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("revoke_permission action requires 'permission' param"),
+            )
+        })?;
     driver.revoke_permission(bundle_id, permission).await
 }
 

@@ -5,7 +5,8 @@ use std::process::Command;
 
 fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"));
+    let manifest_dir =
+        PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"));
     let workspace_root = manifest_dir.parent().expect("workspace root");
 
     build_ios_companion(workspace_root, &out_dir);
@@ -21,7 +22,10 @@ fn build_ios_companion(workspace_root: &Path, out_dir: &Path) {
     let archive = out_dir.join("companion-ios.tar.gz");
 
     if !project.exists() {
-        println!("cargo:warning=iOS companion project not found at {}, skipping", project.display());
+        println!(
+            "cargo:warning=iOS companion project not found at {}, skipping",
+            project.display()
+        );
         write_empty_marker(out_dir, "companion-ios.tar.gz");
         return;
     }
@@ -83,7 +87,10 @@ fn build_ios_companion(workspace_root: &Path, out_dir: &Path) {
             if package_ios_products(&products_dir, &archive) {
                 let _ = fs::write(&hash_file, &source_hash);
                 let _ = fs::copy(&archive, stable_hash_dir.join("companion-ios.tar.gz"));
-                println!("cargo:warning=iOS companion built and packaged: {}", archive.display());
+                println!(
+                    "cargo:warning=iOS companion built and packaged: {}",
+                    archive.display()
+                );
             } else {
                 println!("cargo:warning=Failed to package iOS companion products");
                 write_empty_marker(out_dir, "companion-ios.tar.gz");
@@ -91,7 +98,10 @@ fn build_ios_companion(workspace_root: &Path, out_dir: &Path) {
         }
         Ok(output) => {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            println!("cargo:warning=iOS companion build failed: {}", stderr.lines().last().unwrap_or("unknown error"));
+            println!(
+                "cargo:warning=iOS companion build failed: {}",
+                stderr.lines().last().unwrap_or("unknown error")
+            );
             write_empty_marker(out_dir, "companion-ios.tar.gz");
         }
         Err(e) => {
@@ -99,7 +109,6 @@ fn build_ios_companion(workspace_root: &Path, out_dir: &Path) {
             write_empty_marker(out_dir, "companion-ios.tar.gz");
         }
     }
-
 }
 
 fn build_android_companion(workspace_root: &Path, out_dir: &Path) {
@@ -139,7 +148,8 @@ fn build_android_companion(workspace_root: &Path, out_dir: &Path) {
     }
 
     // Pre-built APK output paths (used after gradle build)
-    let prebuilt_test = android_dir.join("app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk");
+    let prebuilt_test =
+        android_dir.join("app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk");
     let prebuilt_main = android_dir.join("app/build/outputs/apk/debug/app-debug.apk");
 
     // Try building with gradlew
@@ -163,11 +173,19 @@ fn build_android_companion(workspace_root: &Path, out_dir: &Path) {
         Ok(output) if output.status.success() => {
             let mut ok = true;
             if prebuilt_test.exists() {
-                if fs::copy(&prebuilt_test, &target_test_apk).is_err() { ok = false; }
-            } else { ok = false; }
+                if fs::copy(&prebuilt_test, &target_test_apk).is_err() {
+                    ok = false;
+                }
+            } else {
+                ok = false;
+            }
             if prebuilt_main.exists() {
-                if fs::copy(&prebuilt_main, &target_main_apk).is_err() { ok = false; }
-            } else { ok = false; }
+                if fs::copy(&prebuilt_main, &target_main_apk).is_err() {
+                    ok = false;
+                }
+            } else {
+                ok = false;
+            }
 
             if ok {
                 let _ = fs::write(&hash_file, &source_hash);
@@ -182,7 +200,10 @@ fn build_android_companion(workspace_root: &Path, out_dir: &Path) {
         }
         Ok(output) => {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            println!("cargo:warning=Android companion build failed: {}", stderr.lines().last().unwrap_or("unknown error"));
+            println!(
+                "cargo:warning=Android companion build failed: {}",
+                stderr.lines().last().unwrap_or("unknown error")
+            );
             write_empty_marker(out_dir, "companion-android-test.apk");
             write_empty_marker(out_dir, "companion-android-main.apk");
         }
@@ -192,7 +213,6 @@ fn build_android_companion(workspace_root: &Path, out_dir: &Path) {
             write_empty_marker(out_dir, "companion-android-main.apk");
         }
     }
-
 }
 
 /// Package iOS build products into a tar.gz archive.
@@ -203,14 +223,12 @@ fn package_ios_products(products_dir: &Path, archive: &Path) -> bool {
     }
 
     // Find the .xctestrun file
-    let xctestrun = fs::read_dir(products_dir)
-        .ok()
-        .and_then(|entries| {
-            entries
-                .filter_map(|e| e.ok())
-                .find(|e| e.path().extension().is_some_and(|ext| ext == "xctestrun"))
-                .map(|e| e.path())
-        });
+    let xctestrun = fs::read_dir(products_dir).ok().and_then(|entries| {
+        entries
+            .filter_map(|e| e.ok())
+            .find(|e| e.path().extension().is_some_and(|ext| ext == "xctestrun"))
+            .map(|e| e.path())
+    });
 
     if xctestrun.is_none() {
         return false;
@@ -223,7 +241,12 @@ fn package_ios_products(products_dir: &Path, archive: &Path) -> bool {
         .arg("-C")
         .arg(products_dir)
         .arg("Debug-iphonesimulator")
-        .arg(xctestrun.expect("checked above").file_name().expect("has filename"))
+        .arg(
+            xctestrun
+                .expect("checked above")
+                .file_name()
+                .expect("has filename"),
+        )
         .output();
 
     matches!(status, Ok(output) if output.status.success())
@@ -242,7 +265,9 @@ fn hash_directories(dirs: &[PathBuf]) -> String {
     use std::hash::{Hash, Hasher};
 
     let mut hasher = DefaultHasher::new();
-    env::var("CARGO_PKG_VERSION").unwrap_or_default().hash(&mut hasher);
+    env::var("CARGO_PKG_VERSION")
+        .unwrap_or_default()
+        .hash(&mut hasher);
     for dir in dirs {
         if let Ok(entries) = walkdir(dir) {
             for path in entries {
@@ -262,7 +287,9 @@ fn hash_directory(dir: &Path) -> String {
 
     let mut hasher = DefaultHasher::new();
     // Include version so bumps trigger rebuild
-    env::var("CARGO_PKG_VERSION").unwrap_or_default().hash(&mut hasher);
+    env::var("CARGO_PKG_VERSION")
+        .unwrap_or_default()
+        .hash(&mut hasher);
     if let Ok(entries) = walkdir(dir) {
         for path in entries {
             if let Ok(contents) = fs::read(&path) {

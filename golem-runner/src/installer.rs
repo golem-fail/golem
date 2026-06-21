@@ -81,10 +81,16 @@ pub struct BuildSlot {
 
 impl BuildSlot {
     pub async fn record_success(self) {
-        self.outcomes.lock().await.insert(self.key.clone(), BuildOutcome::Succeeded);
+        self.outcomes
+            .lock()
+            .await
+            .insert(self.key.clone(), BuildOutcome::Succeeded);
     }
     pub async fn record_failure(self, err: String) {
-        self.outcomes.lock().await.insert(self.key.clone(), BuildOutcome::Failed(err));
+        self.outcomes
+            .lock()
+            .await
+            .insert(self.key.clone(), BuildOutcome::Failed(err));
     }
 }
 
@@ -282,8 +288,7 @@ impl InstallCache {
         // Atomic write: tmp + rename so a crash mid-write can't corrupt
         // the cache file. The rename is atomic on the same filesystem.
         let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, json)
-            .with_context(|| format!("write cache tmp {}", tmp.display()))?;
+        std::fs::write(&tmp, json).with_context(|| format!("write cache tmp {}", tmp.display()))?;
         std::fs::rename(&tmp, path)
             .with_context(|| format!("rename cache tmp -> {}", path.display()))?;
         Ok(())
@@ -379,7 +384,10 @@ pub async fn run_install_script(
     let mut child = match spawn_result {
         Ok(c) => c,
         Err(e) => {
-            let err = format!("failed to spawn install script {}: {e}", script_path.display());
+            let err = format!(
+                "failed to spawn install script {}: {e}",
+                script_path.display()
+            );
             if let Some(em) = emitter {
                 em.emit(EventKind::InstallFinished {
                     app_name: app_name.to_string(),
@@ -393,12 +401,18 @@ pub async fn run_install_script(
                     os_major,
                 });
             }
-            return Err(golem_events::coded(golem_events::FailureCode::AppInstallScriptNotFound, anyhow!(err)));
+            return Err(golem_events::coded(
+                golem_events::FailureCode::AppInstallScriptNotFound,
+                anyhow!(err),
+            ));
         }
     };
 
     // Stream stderr line-by-line via events; also keep a tail for error context.
-    let stderr = child.stderr.take().ok_or_else(|| anyhow!("no stderr pipe"))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow!("no stderr pipe"))?;
     let emitter_for_task: Option<DeviceEmitter> = emitter.cloned();
     let app_name_for_task = app_name.to_string();
     let stderr_task = tokio::spawn(async move {
@@ -419,37 +433,55 @@ pub async fn run_install_script(
         tail
     });
 
-    let wait_result = tokio::time::timeout(
-        Duration::from_millis(timeout_ms),
-        child.wait(),
-    ).await;
+    let wait_result = tokio::time::timeout(Duration::from_millis(timeout_ms), child.wait()).await;
 
     let (success, exit_code, error_msg, fail_code) = match wait_result {
         Ok(Ok(status)) => {
             let tail = stderr_task.await.unwrap_or_default();
             if status.success() {
-                (true, status.code(), None, golem_events::FailureCode::AppInstallFailed)
+                (
+                    true,
+                    status.code(),
+                    None,
+                    golem_events::FailureCode::AppInstallFailed,
+                )
             } else {
                 let tail_str = tail.join("\n");
                 let code = status.code();
                 let msg = format!(
                     "install script exited {} for {app_name} on {device_udid}:\n{tail_str}",
-                    code.map(|c| c.to_string()).unwrap_or_else(|| "signal".into()),
+                    code.map(|c| c.to_string())
+                        .unwrap_or_else(|| "signal".into()),
                 );
-                (false, code, Some(msg), golem_events::FailureCode::AppInstallFailed)
+                (
+                    false,
+                    code,
+                    Some(msg),
+                    golem_events::FailureCode::AppInstallFailed,
+                )
             }
         }
         Ok(Err(e)) => {
             let _ = stderr_task.await;
-            (false, None, Some(format!("install script wait failed: {e}")), golem_events::FailureCode::AppInstallFailed)
+            (
+                false,
+                None,
+                Some(format!("install script wait failed: {e}")),
+                golem_events::FailureCode::AppInstallFailed,
+            )
         }
         Err(_elapsed) => {
             let _ = child.kill().await;
             let _ = stderr_task.await;
-            (false, None, Some(format!(
-                "install script timed out after {}ms for {app_name} on {device_udid}",
-                timeout_ms
-            )), golem_events::FailureCode::AppInstallTimeout)
+            (
+                false,
+                None,
+                Some(format!(
+                    "install script timed out after {}ms for {app_name} on {device_udid}",
+                    timeout_ms
+                )),
+                golem_events::FailureCode::AppInstallTimeout,
+            )
         }
     };
 
@@ -470,7 +502,10 @@ pub async fn run_install_script(
     if success {
         Ok(())
     } else {
-        Err(golem_events::coded(fail_code, anyhow!(error_msg.unwrap_or_else(|| "install failed".into()))))
+        Err(golem_events::coded(
+            fail_code,
+            anyhow!(error_msg.unwrap_or_else(|| "install failed".into())),
+        ))
     }
 }
 
@@ -515,9 +550,14 @@ mod tests {
                 in_flight.fetch_sub(1, Ordering::SeqCst);
             }));
         }
-        for h in handles { h.await.unwrap(); }
-        assert_eq!(max_seen.load(Ordering::SeqCst), 1,
-            "same (root, script) install SHALL be serialised (at most 1 in-flight)");
+        for h in handles {
+            h.await.unwrap();
+        }
+        assert_eq!(
+            max_seen.load(Ordering::SeqCst),
+            1,
+            "same (root, script) install SHALL be serialised (at most 1 in-flight)"
+        );
     }
 
     #[tokio::test]
@@ -537,8 +577,12 @@ mod tests {
     async fn project_lock_independent_per_script_within_same_root() {
         let cache = InstallCache::new();
         let root = Path::new("/tmp/monorepo");
-        let a = cache.project_lock(root, Path::new("/tmp/monorepo/app-a.sh")).await;
-        let b = cache.project_lock(root, Path::new("/tmp/monorepo/app-b.sh")).await;
+        let a = cache
+            .project_lock(root, Path::new("/tmp/monorepo/app-a.sh"))
+            .await;
+        let b = cache
+            .project_lock(root, Path::new("/tmp/monorepo/app-b.sh"))
+            .await;
         let _ga = a.lock().await;
         // Different script within same root SHALL NOT block (monorepo case).
         let _gb = tokio::time::timeout(Duration::from_millis(100), b.lock())
@@ -562,7 +606,10 @@ mod tests {
         let cache = InstallCache::new();
         cache.load_persistent(path.clone()).await.unwrap();
         let entry = PersistedInstall {
-            fingerprint: Fingerprint::Git { rev: "abc".into(), porcelain: "def".into() },
+            fingerprint: Fingerprint::Git {
+                rev: "abc".into(),
+                porcelain: "def".into(),
+            },
             device_install_time: None,
             installed_version: Some("0.1.0".into()),
             installed_at: chrono::Utc::now(),
@@ -599,7 +646,10 @@ mod tests {
         let cache_b = InstallCache::new();
         cache_b.load_persistent(path).await.unwrap();
         let got = cache_b.get_persistent("u-9", "com.y").await.unwrap();
-        assert_eq!(got, entry, "fresh cache SHALL load entries written by another");
+        assert_eq!(
+            got, entry,
+            "fresh cache SHALL load entries written by another"
+        );
     }
 
     #[tokio::test]
@@ -609,8 +659,10 @@ mod tests {
         std::fs::write(&path, "{not json").unwrap();
         let cache = InstallCache::new();
         cache.load_persistent(path).await.unwrap();
-        assert!(cache.get_persistent("u-1", "com.x").await.is_none(),
-            "corrupt cache SHALL not block startup");
+        assert!(
+            cache.get_persistent("u-1", "com.x").await.is_none(),
+            "corrupt cache SHALL not block startup"
+        );
     }
 
     #[tokio::test]
@@ -633,10 +685,7 @@ mod tests {
             installed_at: chrono::Utc::now(),
         };
         // Should not error, just nothing happens.
-        cache
-            .set_persistent("u-1", "com.x", entry)
-            .await
-            .unwrap();
+        cache.set_persistent("u-1", "com.x", entry).await.unwrap();
         // get returns None because the in-memory map remains empty.
         assert!(cache.get_persistent("u-1", "com.x").await.is_none());
     }
@@ -664,45 +713,84 @@ mod tests {
         let key = ("udid-1".to_string(), "com.x".to_string());
         assert!(cache.get(&key).await.is_none());
         cache.set(key.clone(), InstallOutcome::Succeeded).await;
-        assert!(matches!(cache.get(&key).await, Some(InstallOutcome::Succeeded)));
+        assert!(matches!(
+            cache.get(&key).await,
+            Some(InstallOutcome::Succeeded)
+        ));
     }
 
     #[tokio::test]
     async fn script_exit_0_succeeds() {
         let tmp = tempdir().unwrap();
-        let script = write_script(tmp.path(),
-            "#!/bin/sh\necho running >&2\nexit 0\n");
+        let script = write_script(tmp.path(), "#!/bin/sh\necho running >&2\nexit 0\n");
         let result = run_install_script(
-            &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, false, None,
-        ).await;
+            &script,
+            tmp.path(),
+            "ios",
+            "udid-1",
+            "com.x",
+            "app",
+            5_000,
+            "test target",
+            0,
+            false,
+            None,
+        )
+        .await;
         assert!(result.is_ok(), "exit 0 SHALL be ok: {:?}", result);
     }
 
     #[tokio::test]
     async fn script_exit_nonzero_fails_with_stderr() {
         let tmp = tempdir().unwrap();
-        let script = write_script(tmp.path(),
-            "#!/bin/sh\necho 'build failed: missing signing' >&2\nexit 1\n");
+        let script = write_script(
+            tmp.path(),
+            "#!/bin/sh\necho 'build failed: missing signing' >&2\nexit 1\n",
+        );
         let result = run_install_script(
-            &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, false, None,
-        ).await;
+            &script,
+            tmp.path(),
+            "ios",
+            "udid-1",
+            "com.x",
+            "app",
+            5_000,
+            "test target",
+            0,
+            false,
+            None,
+        )
+        .await;
         assert!(result.is_err());
         let err = format!("{}", result.unwrap_err());
-        assert!(err.contains("exited 1"), "error SHALL include exit code: {err}");
-        assert!(err.contains("missing signing"), "error SHALL include stderr tail: {err}");
+        assert!(
+            err.contains("exited 1"),
+            "error SHALL include exit code: {err}"
+        );
+        assert!(
+            err.contains("missing signing"),
+            "error SHALL include stderr tail: {err}"
+        );
     }
 
     #[tokio::test]
     async fn script_timeout_kills_process() {
         let tmp = tempdir().unwrap();
-        let script = write_script(tmp.path(),
-            "#!/bin/sh\nsleep 10\n");
+        let script = write_script(tmp.path(), "#!/bin/sh\nsleep 10\n");
         let result = run_install_script(
-            &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 200, "test target", 0, false, None,
-        ).await;
+            &script,
+            tmp.path(),
+            "ios",
+            "udid-1",
+            "com.x",
+            "app",
+            200,
+            "test target",
+            0,
+            false,
+            None,
+        )
+        .await;
         assert!(result.is_err());
         assert!(format!("{}", result.unwrap_err()).contains("timed out"));
     }
@@ -717,9 +805,19 @@ mod tests {
         );
         let script = write_script(tmp.path(), &script_body);
         let result = run_install_script(
-            &script, tmp.path(),
-            "android", "emulator-5554", "com.example.app", "app", 5_000, "test target", 0, false, None,
-        ).await;
+            &script,
+            tmp.path(),
+            "android",
+            "emulator-5554",
+            "com.example.app",
+            "app",
+            5_000,
+            "test target",
+            0,
+            false,
+            None,
+        )
+        .await;
         assert!(result.is_ok());
         let args = std::fs::read_to_string(&out_file).unwrap();
         // $4 unset (install_only=false) SHALL produce empty trailing slot.
@@ -731,13 +829,29 @@ mod tests {
         let tmp = tempdir().unwrap();
         let marker = tmp.path().join("marker.txt");
         std::fs::write(&marker, "hello").unwrap();
-        let script = write_script(tmp.path(),
-            "#!/bin/sh\ntest -f ./marker.txt || { echo missing >&2; exit 1; }\n");
+        let script = write_script(
+            tmp.path(),
+            "#!/bin/sh\ntest -f ./marker.txt || { echo missing >&2; exit 1; }\n",
+        );
         let result = run_install_script(
-            &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, false, None,
-        ).await;
-        assert!(result.is_ok(), "SHALL run in provided working_dir: {:?}", result);
+            &script,
+            tmp.path(),
+            "ios",
+            "udid-1",
+            "com.x",
+            "app",
+            5_000,
+            "test target",
+            0,
+            false,
+            None,
+        )
+        .await;
+        assert!(
+            result.is_ok(),
+            "SHALL run in provided working_dir: {:?}",
+            result
+        );
     }
 
     #[tokio::test]
@@ -750,13 +864,26 @@ mod tests {
         );
         let script = write_script(tmp.path(), &script_body);
         let result = run_install_script(
-            &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, true, None,
-        ).await;
+            &script,
+            tmp.path(),
+            "ios",
+            "udid-1",
+            "com.x",
+            "app",
+            5_000,
+            "test target",
+            0,
+            true,
+            None,
+        )
+        .await;
         assert!(result.is_ok());
         let args = std::fs::read_to_string(&out_file).unwrap();
-        assert_eq!(args.trim(), "ios|udid-1|com.x|install-only",
-            "install_only=true SHALL pass \"install-only\" as $4");
+        assert_eq!(
+            args.trim(),
+            "ios|udid-1|com.x|install-only",
+            "install_only=true SHALL pass \"install-only\" as $4"
+        );
     }
 
     #[tokio::test]
@@ -770,13 +897,26 @@ mod tests {
         );
         let script = write_script(tmp.path(), &script_body);
         let result = run_install_script(
-            &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, false, None,
-        ).await;
+            &script,
+            tmp.path(),
+            "ios",
+            "udid-1",
+            "com.x",
+            "app",
+            5_000,
+            "test target",
+            0,
+            false,
+            None,
+        )
+        .await;
         assert!(result.is_ok());
         let marker = std::fs::read_to_string(&out_file).unwrap();
-        assert_eq!(marker.trim(), "NO4",
-            "install_only=false SHALL omit the 4th arg entirely");
+        assert_eq!(
+            marker.trim(),
+            "NO4",
+            "install_only=false SHALL omit the 4th arg entirely"
+        );
     }
 
     #[tokio::test]
@@ -805,12 +945,20 @@ mod tests {
                 }
             }));
         }
-        for h in handles { h.await.unwrap(); }
+        for h in handles {
+            h.await.unwrap();
+        }
 
-        assert_eq!(builder_count.load(Ordering::SeqCst), 1,
-            "exactly one Builder SHALL be elected");
-        assert_eq!(installed_count.load(Ordering::SeqCst), 4,
-            "other 4 callers SHALL see Installed");
+        assert_eq!(
+            builder_count.load(Ordering::SeqCst),
+            1,
+            "exactly one Builder SHALL be elected"
+        );
+        assert_eq!(
+            installed_count.load(Ordering::SeqCst),
+            4,
+            "other 4 callers SHALL see Installed"
+        );
     }
 
     #[tokio::test]
@@ -865,9 +1013,19 @@ mod tests {
         let tmp = tempdir().expect("tempdir");
         let missing = tmp.path().join("does-not-exist.sh");
         let result = run_install_script(
-            &missing, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, false, None,
-        ).await;
+            &missing,
+            tmp.path(),
+            "ios",
+            "udid-1",
+            "com.x",
+            "app",
+            5_000,
+            "test target",
+            0,
+            false,
+            None,
+        )
+        .await;
         let err = result.expect_err("spawning a missing script SHALL fail");
         assert_eq!(
             golem_events::extract_code(&err),
@@ -886,9 +1044,19 @@ mod tests {
         let tmp = tempdir().expect("tempdir");
         let script = write_script(tmp.path(), "#!/bin/sh\nexit 3\n");
         let result = run_install_script(
-            &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, false, None,
-        ).await;
+            &script,
+            tmp.path(),
+            "ios",
+            "udid-1",
+            "com.x",
+            "app",
+            5_000,
+            "test target",
+            0,
+            false,
+            None,
+        )
+        .await;
         let err = result.expect_err("nonzero exit SHALL fail");
         assert_eq!(
             golem_events::extract_code(&err),
@@ -904,9 +1072,19 @@ mod tests {
         let tmp = tempdir().expect("tempdir");
         let script = write_script(tmp.path(), "#!/bin/sh\nsleep 10\n");
         let result = run_install_script(
-            &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 200, "test target", 0, false, None,
-        ).await;
+            &script,
+            tmp.path(),
+            "ios",
+            "udid-1",
+            "com.x",
+            "app",
+            200,
+            "test target",
+            0,
+            false,
+            None,
+        )
+        .await;
         let err = result.expect_err("timeout SHALL fail");
         assert_eq!(
             golem_events::extract_code(&err),
@@ -929,19 +1107,36 @@ mod tests {
         let tmp = tempdir().expect("tempdir");
         let script = write_script(tmp.path(), "#!/bin/sh\nexit 0\n");
         let result = run_install_script(
-            &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 5_000, "iPhone 16e (ios/v18/phone)", 18, false,
+            &script,
+            tmp.path(),
+            "ios",
+            "udid-1",
+            "com.x",
+            "app",
+            5_000,
+            "iPhone 16e (ios/v18/phone)",
+            18,
+            false,
             Some(&emitter),
-        ).await;
+        )
+        .await;
         assert!(result.is_ok(), "exit 0 SHALL be ok: {result:?}");
 
         let first = rx.recv().await.expect("SHALL receive InstallStarted");
         match first.kind {
-            EventKind::InstallStarted { app_name, bundle_id, target, os_major, .. } => {
+            EventKind::InstallStarted {
+                app_name,
+                bundle_id,
+                target,
+                os_major,
+                ..
+            } => {
                 assert_eq!(app_name, "app", "InstallStarted SHALL carry app_name");
                 assert_eq!(bundle_id, "com.x", "InstallStarted SHALL carry bundle_id");
-                assert_eq!(target, "iPhone 16e (ios/v18/phone)",
-                    "InstallStarted SHALL carry the target string verbatim");
+                assert_eq!(
+                    target, "iPhone 16e (ios/v18/phone)",
+                    "InstallStarted SHALL carry the target string verbatim"
+                );
                 assert_eq!(os_major, 18, "InstallStarted SHALL carry os_major");
             }
             other => panic!("first event SHALL be InstallStarted, got {other:?}"),
@@ -950,7 +1145,15 @@ mod tests {
         // The next event(s) may include InstallOutput; find InstallFinished.
         loop {
             let ev = rx.recv().await.expect("SHALL receive InstallFinished");
-            if let EventKind::InstallFinished { success, exit_code, error, code, os_major, .. } = ev.kind {
+            if let EventKind::InstallFinished {
+                success,
+                exit_code,
+                error,
+                code,
+                os_major,
+                ..
+            } = ev.kind
+            {
                 assert!(success, "exit 0 SHALL emit success=true");
                 assert_eq!(exit_code, Some(0), "success SHALL report exit_code 0");
                 assert!(error.is_none(), "success SHALL carry no error");
@@ -972,13 +1175,24 @@ mod tests {
         let emitter = DeviceEmitter::new(sender, DeviceId("ios/sim".into()));
 
         let tmp = tempdir().expect("tempdir");
-        let script = write_script(tmp.path(),
-            "#!/bin/sh\necho line-one >&2\necho line-two >&2\nexit 0\n");
+        let script = write_script(
+            tmp.path(),
+            "#!/bin/sh\necho line-one >&2\necho line-two >&2\nexit 0\n",
+        );
         let result = run_install_script(
-            &script, tmp.path(),
-            "ios", "udid-1", "com.x", "myapp", 5_000, "test target", 0, false,
+            &script,
+            tmp.path(),
+            "ios",
+            "udid-1",
+            "com.x",
+            "myapp",
+            5_000,
+            "test target",
+            0,
+            false,
             Some(&emitter),
-        ).await;
+        )
+        .await;
         assert!(result.is_ok(), "exit 0 SHALL be ok: {result:?}");
 
         let mut output_lines = Vec::new();
@@ -989,8 +1203,11 @@ mod tests {
                 output_lines.push(line);
             }
         }
-        assert_eq!(output_lines, vec!["line-one".to_string(), "line-two".to_string()],
-            "every stderr line SHALL be streamed as InstallOutput in order");
+        assert_eq!(
+            output_lines,
+            vec!["line-one".to_string(), "line-two".to_string()],
+            "every stderr line SHALL be streamed as InstallOutput in order"
+        );
     }
 
     #[tokio::test]
@@ -1005,23 +1222,45 @@ mod tests {
         let emitter = DeviceEmitter::new(sender, DeviceId("ios/sim".into()));
 
         let tmp = tempdir().expect("tempdir");
-        let script = write_script(tmp.path(),
-            "#!/bin/sh\necho boom >&2\nexit 7\n");
+        let script = write_script(tmp.path(), "#!/bin/sh\necho boom >&2\nexit 7\n");
         let result = run_install_script(
-            &script, tmp.path(),
-            "ios", "udid-1", "com.x", "app", 5_000, "test target", 0, false,
+            &script,
+            tmp.path(),
+            "ios",
+            "udid-1",
+            "com.x",
+            "app",
+            5_000,
+            "test target",
+            0,
+            false,
             Some(&emitter),
-        ).await;
+        )
+        .await;
         assert!(result.is_err(), "exit 7 SHALL fail");
 
         loop {
             let ev = rx.recv().await.expect("SHALL receive InstallFinished");
-            if let EventKind::InstallFinished { success, exit_code, error, code, .. } = ev.kind {
+            if let EventKind::InstallFinished {
+                success,
+                exit_code,
+                error,
+                code,
+                ..
+            } = ev.kind
+            {
                 assert!(!success, "nonzero exit SHALL emit success=false");
-                assert_eq!(exit_code, Some(7), "InstallFinished SHALL report the exit code");
+                assert_eq!(
+                    exit_code,
+                    Some(7),
+                    "InstallFinished SHALL report the exit code"
+                );
                 assert!(error.is_some(), "failure SHALL carry an error message");
-                assert_eq!(code, Some(golem_events::FailureCode::AppInstallFailed),
-                    "failure SHALL carry AppInstallFailed code");
+                assert_eq!(
+                    code,
+                    Some(golem_events::FailureCode::AppInstallFailed),
+                    "failure SHALL carry AppInstallFailed code"
+                );
                 break;
             }
         }
@@ -1050,8 +1289,10 @@ mod tests {
             .forget_persistent("u-1", "com.absent")
             .await
             .expect("forgetting an absent entry SHALL be Ok");
-        assert!(!path.exists(),
-            "forgetting an absent entry SHALL NOT write the cache file");
+        assert!(
+            !path.exists(),
+            "forgetting an absent entry SHALL NOT write the cache file"
+        );
     }
 
     #[tokio::test]
@@ -1059,7 +1300,11 @@ mod tests {
         // 9. flush_persistent SHALL create missing parent directories so a
         //    set into a not-yet-existing cache dir succeeds.
         let tmp = tempdir().expect("tempdir");
-        let path = tmp.path().join("nested").join("dir").join("install-cache.json");
+        let path = tmp
+            .path()
+            .join("nested")
+            .join("dir")
+            .join("install-cache.json");
         let cache = InstallCache::new();
         cache.load_persistent(path.clone()).await.expect("load");
         let entry = PersistedInstall {
@@ -1072,8 +1317,10 @@ mod tests {
             .set_persistent("u-1", "com.x", entry)
             .await
             .expect("set into a missing parent dir SHALL create it and succeed");
-        assert!(path.exists(),
-            "set_persistent SHALL create parent dirs and write the file");
+        assert!(
+            path.exists(),
+            "set_persistent SHALL create parent dirs and write the file"
+        );
     }
 
     #[tokio::test]

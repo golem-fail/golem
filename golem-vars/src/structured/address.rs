@@ -76,10 +76,7 @@ fn generate_address_filtered(
     generate_address_from_state(geo, state, rng)
 }
 
-pub(crate) fn generate_address_from_geo(
-    geo: &GeoData,
-    rng: &mut impl Rng,
-) -> Result<VarValue> {
+pub(crate) fn generate_address_from_geo(geo: &GeoData, rng: &mut impl Rng) -> Result<VarValue> {
     // Pick a random state.
     let state_idx = rng.gen_range(0..geo.states.len());
     let state = &geo.states[state_idx];
@@ -92,7 +89,6 @@ fn generate_address_from_state(
     state: &GeoState,
     rng: &mut impl Rng,
 ) -> Result<VarValue> {
-
     // Pick a random city within the state.
     let city_idx = rng.gen_range(0..state.cities.len());
     let city = &state.cities[city_idx];
@@ -338,10 +334,7 @@ mod tests {
         let mut rng = seeded_rng();
         let d = def_with_params("address", &[("country", "JP"), ("state", "Narnia")]);
         let result = generate_structured(&d, &mut rng);
-        assert!(
-            result.is_err(),
-            "SHALL error for nonexistent state"
-        );
+        assert!(result.is_err(), "SHALL error for nonexistent state");
     }
 
     // 25. Address with nonexistent region returns error
@@ -350,10 +343,7 @@ mod tests {
         let mut rng = seeded_rng();
         let d = def_with_params("address", &[("country", "JP"), ("region", "Narnia")]);
         let result = generate_structured(&d, &mut rng);
-        assert!(
-            result.is_err(),
-            "SHALL error for nonexistent region"
-        );
+        assert!(result.is_err(), "SHALL error for nonexistent region");
     }
 
     // 26. Unknown country code falls back to a random geo country (None branch
@@ -378,8 +368,7 @@ mod tests {
     fn address_state_filter_is_case_insensitive() {
         let mut rng = seeded_rng();
         let d = def_with_params("address", &[("country", "JP"), ("state", "tokyo")]);
-        let result =
-            generate_structured(&d, &mut rng).expect("SHALL match case-insensitively");
+        let result = generate_structured(&d, &mut rng).expect("SHALL match case-insensitively");
         let state = field(&result, "state");
         assert_eq!(
             state, "Tokyo",
@@ -409,7 +398,11 @@ mod tests {
             .expect("JP SHALL be loaded")
             .states
             .iter()
-            .filter(|s| s.region_tags.iter().any(|t| t.eq_ignore_ascii_case("kanto")))
+            .filter(|s| {
+                s.region_tags
+                    .iter()
+                    .any(|t| t.eq_ignore_ascii_case("kanto"))
+            })
             .map(|s| s.name_en.as_str())
             .collect();
         assert!(
@@ -447,8 +440,8 @@ mod tests {
             "address",
             &[("country", "JP"), ("state", "Tokyo"), ("region", "Kansai")],
         );
-        let err = generate_structured(&d, &mut rng)
-            .expect_err("conflicting state+region SHALL error");
+        let err =
+            generate_structured(&d, &mut rng).expect_err("conflicting state+region SHALL error");
         let msg = err.to_string();
         assert!(
             msg.contains("state=Tokyo") && msg.contains("region=Kansai"),
@@ -509,8 +502,16 @@ mod tests {
         // 1. Geographic fields come straight from the synthetic fixture.
         assert_eq!(field(&result, "city"), "Testville", "city SHALL round-trip");
         assert_eq!(field(&result, "state"), "Region", "state SHALL round-trip");
-        assert_eq!(field(&result, "postcode"), "12345", "postcode SHALL round-trip");
-        assert_eq!(field(&result, "country"), "Testland", "country SHALL round-trip");
+        assert_eq!(
+            field(&result, "postcode"),
+            "12345",
+            "postcode SHALL round-trip"
+        );
+        assert_eq!(
+            field(&result, "country"),
+            "Testland",
+            "country SHALL round-trip"
+        );
         assert_eq!(
             field(&result, "country_code"),
             "ZZ",
@@ -567,7 +568,10 @@ mod tests {
     #[test]
     fn from_state_nonempty_fixed_picks_a_listed_entry() {
         let mut rng = seeded_rng();
-        let entries = vec!["10 Downing Street".to_string(), "221B Baker Street".to_string()];
+        let entries = vec![
+            "10 Downing Street".to_string(),
+            "221B Baker Street".to_string(),
+        ];
         let geo = synthetic_geo("ZZ", "00000", "Ignored", None, Some(entries.clone()));
         let state = &geo.states[0];
         let result = super::generate_address_from_state(&geo, state, &mut rng)
@@ -612,7 +616,13 @@ mod tests {
     //     same synthetic state (same street, same all-derived fields).
     #[test]
     fn from_state_is_deterministic_for_same_seed() {
-        let geo = synthetic_geo("ZZ", "00000", "Pine Street", Some("n{1,200} Pine Street"), None);
+        let geo = synthetic_geo(
+            "ZZ",
+            "00000",
+            "Pine Street",
+            Some("n{1,200} Pine Street"),
+            None,
+        );
         let state = &geo.states[0];
 
         let mut rng1 = seeded_rng();
@@ -621,6 +631,9 @@ mod tests {
             .expect("SHALL generate (run 1)");
         let b = super::generate_address_from_state(&geo, state, &mut rng2)
             .expect("SHALL generate (run 2)");
-        assert_eq!(a, b, "same seed + same state SHALL produce identical address");
+        assert_eq!(
+            a, b,
+            "same seed + same state SHALL produce identical address"
+        );
     }
 }

@@ -1,7 +1,7 @@
 pub mod android;
 pub mod cdp;
-pub mod common;
 pub mod commands;
+pub mod common;
 pub mod ime;
 pub mod ios;
 
@@ -202,8 +202,7 @@ pub const AWAIT_FIRST_FRAME_POLL_INTERVAL: std::time::Duration =
 
 /// Hard deadline for native screens. Beyond this we proceed anyway — the
 /// downstream action's own timeout will catch genuinely broken UI states.
-pub const AWAIT_FIRST_FRAME_DEADLINE: std::time::Duration =
-    std::time::Duration::from_secs(10);
+pub const AWAIT_FIRST_FRAME_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// Extended deadline used once a WebView node is detected. The native
 /// accessibility tree settles long before the webview DOM hydrates (CDP /
@@ -392,10 +391,10 @@ impl MockPlatformDriver {
     /// Accepts the real trait method names plus the shorthands
     /// `clear_data` (→ `clear_app_data`) and `swipe` (→ `swipe_coords`).
     pub fn set_error(&self, method: &str, message: &str) {
-        self.errors
-            .lock()
-            .expect("lock poisoned")
-            .insert(canonical_method_name(method).to_string(), message.to_string());
+        self.errors.lock().expect("lock poisoned").insert(
+            canonical_method_name(method).to_string(),
+            message.to_string(),
+        );
     }
 
     /// Clear a previously-injected error for the named method.
@@ -485,7 +484,6 @@ impl PlatformDriver for MockPlatformDriver {
         Ok(())
     }
 
-
     async fn swipe_coords(
         &self,
         from_x: i32,
@@ -507,7 +505,15 @@ impl PlatformDriver for MockPlatformDriver {
     }
 
     async fn pinch(&self, x: i32, y: i32, scale: f64, velocity: f64) -> anyhow::Result<()> {
-        self.record_call("pinch", vec![x.to_string(), y.to_string(), format!("{scale}"), format!("{velocity}")]);
+        self.record_call(
+            "pinch",
+            vec![
+                x.to_string(),
+                y.to_string(),
+                format!("{scale}"),
+                format!("{velocity}"),
+            ],
+        );
         Ok(())
     }
 
@@ -704,10 +710,7 @@ mod tests {
             .type_text("hello world")
             .await
             .expect("type_text failed");
-        driver
-            .type_text("goodbye")
-            .await
-            .expect("type_text failed");
+        driver.type_text("goodbye").await.expect("type_text failed");
 
         let calls = driver.get_calls();
         assert_eq!(calls.len(), 2);
@@ -728,7 +731,10 @@ mod tests {
         assert_eq!(err.to_string(), "boom");
 
         // Other methods stay Ok.
-        driver.launch_app("com.x").await.expect("launch SHALL be Ok");
+        driver
+            .launch_app("com.x")
+            .await
+            .expect("launch SHALL be Ok");
     }
 
     #[tokio::test]
@@ -856,10 +862,8 @@ mod tests {
         fn new(progression: Vec<usize>) -> Self {
             // Reverse so we can `pop()` cheaply from the end as the
             // queue advances.
-            let mut frames: Vec<Element> = progression
-                .into_iter()
-                .map(tree_with_children)
-                .collect();
+            let mut frames: Vec<Element> =
+                progression.into_iter().map(tree_with_children).collect();
             frames.reverse();
             Self {
                 queue: Mutex::new(frames),
@@ -882,29 +886,75 @@ mod tests {
             };
             Ok((tree, common::HierarchyMeta::default()))
         }
-        async fn tap(&self, _x: i32, _y: i32) -> anyhow::Result<()> { unimplemented!() }
-        async fn long_press(&self, _x: i32, _y: i32, _d: u64) -> anyhow::Result<()> { unimplemented!() }
-        async fn type_text(&self, _t: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn backspace(&self, _c: u32) -> anyhow::Result<()> { unimplemented!() }
-        async fn swipe_coords(&self, _: i32, _: i32, _: i32, _: i32) -> anyhow::Result<()> { unimplemented!() }
-        async fn pinch(&self, _x: i32, _y: i32, _s: f64, _v: f64) -> anyhow::Result<()> { unimplemented!() }
-        async fn gesture(&self, _f: Vec<GestureFinger>) -> anyhow::Result<()> { unimplemented!() }
-        async fn screenshot(&self) -> anyhow::Result<ScreenshotResult> { unimplemented!() }
-        async fn hide_keyboard(&self) -> anyhow::Result<()> { unimplemented!() }
-        async fn launch_app(&self, _b: &str) -> anyhow::Result<Option<String>> { unimplemented!() }
-        async fn stop_app(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn clear_app_data(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn press_button(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn set_dark_mode(&self, _e: bool) -> anyhow::Result<()> { unimplemented!() }
-        async fn set_location(&self, _: f64, _: f64) -> anyhow::Result<()> { unimplemented!() }
-        async fn open_url(&self, _u: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn push_notification(&self, _: &str, _: &str, _: Option<&str>) -> anyhow::Result<()> { unimplemented!() }
-        async fn add_media(&self, _p: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn grant_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn revoke_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn start_recording(&self, _n: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn stop_recording(&self) -> anyhow::Result<String> { unimplemented!() }
-        async fn remove_port_forwards(&self) -> anyhow::Result<()> { unimplemented!() }
+        async fn tap(&self, _x: i32, _y: i32) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn long_press(&self, _x: i32, _y: i32, _d: u64) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn type_text(&self, _t: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn backspace(&self, _c: u32) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn swipe_coords(&self, _: i32, _: i32, _: i32, _: i32) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn pinch(&self, _x: i32, _y: i32, _s: f64, _v: f64) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn gesture(&self, _f: Vec<GestureFinger>) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn screenshot(&self) -> anyhow::Result<ScreenshotResult> {
+            unimplemented!()
+        }
+        async fn hide_keyboard(&self) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn launch_app(&self, _b: &str) -> anyhow::Result<Option<String>> {
+            unimplemented!()
+        }
+        async fn stop_app(&self, _b: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn clear_app_data(&self, _b: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn press_button(&self, _b: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn set_dark_mode(&self, _e: bool) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn set_location(&self, _: f64, _: f64) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn open_url(&self, _u: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn push_notification(&self, _: &str, _: &str, _: Option<&str>) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn add_media(&self, _p: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn grant_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn revoke_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn start_recording(&self, _n: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn stop_recording(&self) -> anyhow::Result<String> {
+            unimplemented!()
+        }
+        async fn remove_port_forwards(&self) -> anyhow::Result<()> {
+            unimplemented!()
+        }
     }
 
     // Helper picks a child count safely above the MIN_NODES threshold so
@@ -958,34 +1008,82 @@ mod tests {
                 if q.len() > 1 {
                     q.pop().expect("non-empty")
                 } else {
-                    q.last().cloned().unwrap_or_else(|| tree_with_webview(above_threshold(), 0))
+                    q.last()
+                        .cloned()
+                        .unwrap_or_else(|| tree_with_webview(above_threshold(), 0))
                 }
             };
             Ok((tree, common::HierarchyMeta::default()))
         }
-        async fn tap(&self, _x: i32, _y: i32) -> anyhow::Result<()> { unimplemented!() }
-        async fn long_press(&self, _x: i32, _y: i32, _d: u64) -> anyhow::Result<()> { unimplemented!() }
-        async fn type_text(&self, _t: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn backspace(&self, _c: u32) -> anyhow::Result<()> { unimplemented!() }
-        async fn swipe_coords(&self, _: i32, _: i32, _: i32, _: i32) -> anyhow::Result<()> { unimplemented!() }
-        async fn pinch(&self, _x: i32, _y: i32, _s: f64, _v: f64) -> anyhow::Result<()> { unimplemented!() }
-        async fn gesture(&self, _f: Vec<GestureFinger>) -> anyhow::Result<()> { unimplemented!() }
-        async fn screenshot(&self) -> anyhow::Result<ScreenshotResult> { unimplemented!() }
-        async fn hide_keyboard(&self) -> anyhow::Result<()> { unimplemented!() }
-        async fn launch_app(&self, _b: &str) -> anyhow::Result<Option<String>> { unimplemented!() }
-        async fn stop_app(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn clear_app_data(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn press_button(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn set_dark_mode(&self, _e: bool) -> anyhow::Result<()> { unimplemented!() }
-        async fn set_location(&self, _: f64, _: f64) -> anyhow::Result<()> { unimplemented!() }
-        async fn open_url(&self, _u: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn push_notification(&self, _: &str, _: &str, _: Option<&str>) -> anyhow::Result<()> { unimplemented!() }
-        async fn add_media(&self, _p: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn grant_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn revoke_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn start_recording(&self, _n: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn stop_recording(&self) -> anyhow::Result<String> { unimplemented!() }
-        async fn remove_port_forwards(&self) -> anyhow::Result<()> { unimplemented!() }
+        async fn tap(&self, _x: i32, _y: i32) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn long_press(&self, _x: i32, _y: i32, _d: u64) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn type_text(&self, _t: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn backspace(&self, _c: u32) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn swipe_coords(&self, _: i32, _: i32, _: i32, _: i32) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn pinch(&self, _x: i32, _y: i32, _s: f64, _v: f64) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn gesture(&self, _f: Vec<GestureFinger>) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn screenshot(&self) -> anyhow::Result<ScreenshotResult> {
+            unimplemented!()
+        }
+        async fn hide_keyboard(&self) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn launch_app(&self, _b: &str) -> anyhow::Result<Option<String>> {
+            unimplemented!()
+        }
+        async fn stop_app(&self, _b: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn clear_app_data(&self, _b: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn press_button(&self, _b: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn set_dark_mode(&self, _e: bool) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn set_location(&self, _: f64, _: f64) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn open_url(&self, _u: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn push_notification(&self, _: &str, _: &str, _: Option<&str>) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn add_media(&self, _p: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn grant_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn revoke_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn start_recording(&self, _n: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn stop_recording(&self) -> anyhow::Result<String> {
+            unimplemented!()
+        }
+        async fn remove_port_forwards(&self) -> anyhow::Result<()> {
+            unimplemented!()
+        }
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -1056,7 +1154,10 @@ mod tests {
         let driver = WebviewSequencedMock::new(vec![0, 0, 0, ready, ready, ready]);
         let start = tokio::time::Instant::now();
         let warning = driver.await_first_frame().await.unwrap();
-        assert!(warning.is_none(), "a hydrated webview SHALL not warn: {warning:?}");
+        assert!(
+            warning.is_none(),
+            "a hydrated webview SHALL not warn: {warning:?}"
+        );
         assert!(
             start.elapsed() >= AWAIT_FIRST_FRAME_POLL_INTERVAL * 3,
             "settle SHALL wait through the unhydrated polls: {:?}",
@@ -1103,29 +1204,75 @@ mod tests {
         async fn get_hierarchy(&self) -> anyhow::Result<(Element, common::HierarchyMeta)> {
             anyhow::bail!("companion port unresponsive")
         }
-        async fn tap(&self, _x: i32, _y: i32) -> anyhow::Result<()> { unimplemented!() }
-        async fn long_press(&self, _x: i32, _y: i32, _d: u64) -> anyhow::Result<()> { unimplemented!() }
-        async fn type_text(&self, _t: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn backspace(&self, _c: u32) -> anyhow::Result<()> { unimplemented!() }
-        async fn swipe_coords(&self, _: i32, _: i32, _: i32, _: i32) -> anyhow::Result<()> { unimplemented!() }
-        async fn pinch(&self, _x: i32, _y: i32, _s: f64, _v: f64) -> anyhow::Result<()> { unimplemented!() }
-        async fn gesture(&self, _f: Vec<GestureFinger>) -> anyhow::Result<()> { unimplemented!() }
-        async fn screenshot(&self) -> anyhow::Result<ScreenshotResult> { unimplemented!() }
-        async fn hide_keyboard(&self) -> anyhow::Result<()> { unimplemented!() }
-        async fn launch_app(&self, _b: &str) -> anyhow::Result<Option<String>> { unimplemented!() }
-        async fn stop_app(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn clear_app_data(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn press_button(&self, _b: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn set_dark_mode(&self, _e: bool) -> anyhow::Result<()> { unimplemented!() }
-        async fn set_location(&self, _: f64, _: f64) -> anyhow::Result<()> { unimplemented!() }
-        async fn open_url(&self, _u: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn push_notification(&self, _: &str, _: &str, _: Option<&str>) -> anyhow::Result<()> { unimplemented!() }
-        async fn add_media(&self, _p: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn grant_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn revoke_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn start_recording(&self, _n: &str) -> anyhow::Result<()> { unimplemented!() }
-        async fn stop_recording(&self) -> anyhow::Result<String> { unimplemented!() }
-        async fn remove_port_forwards(&self) -> anyhow::Result<()> { unimplemented!() }
+        async fn tap(&self, _x: i32, _y: i32) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn long_press(&self, _x: i32, _y: i32, _d: u64) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn type_text(&self, _t: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn backspace(&self, _c: u32) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn swipe_coords(&self, _: i32, _: i32, _: i32, _: i32) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn pinch(&self, _x: i32, _y: i32, _s: f64, _v: f64) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn gesture(&self, _f: Vec<GestureFinger>) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn screenshot(&self) -> anyhow::Result<ScreenshotResult> {
+            unimplemented!()
+        }
+        async fn hide_keyboard(&self) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn launch_app(&self, _b: &str) -> anyhow::Result<Option<String>> {
+            unimplemented!()
+        }
+        async fn stop_app(&self, _b: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn clear_app_data(&self, _b: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn press_button(&self, _b: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn set_dark_mode(&self, _e: bool) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn set_location(&self, _: f64, _: f64) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn open_url(&self, _u: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn push_notification(&self, _: &str, _: &str, _: Option<&str>) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn add_media(&self, _p: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn grant_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn revoke_permission(&self, _b: &str, _p: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn start_recording(&self, _n: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        async fn stop_recording(&self) -> anyhow::Result<String> {
+            unimplemented!()
+        }
+        async fn remove_port_forwards(&self) -> anyhow::Result<()> {
+            unimplemented!()
+        }
     }
 
     // 1. A perpetually-erroring hierarchy fetch is treated as 0 nodes and
@@ -1174,7 +1321,10 @@ mod tests {
     #[tokio::test]
     async fn mock_records_long_press_with_duration() {
         let driver = MockPlatformDriver::new(default_hierarchy());
-        driver.long_press(12, 34, 750).await.expect("long_press failed");
+        driver
+            .long_press(12, 34, 750)
+            .await
+            .expect("long_press failed");
         let calls = driver.get_calls();
         assert_eq!(calls.len(), 1, "exactly one call SHALL be recorded");
         assert_eq!(calls[0].0, "long_press");
@@ -1217,8 +1367,14 @@ mod tests {
     async fn mock_records_gesture_finger_summary() {
         let driver = MockPlatformDriver::new(default_hierarchy());
         let fingers = vec![
-            GestureFinger { points: vec![(0, 0), (1, 1), (2, 2)], duration_ms: 300 },
-            GestureFinger { points: vec![(9, 9)], duration_ms: 100 },
+            GestureFinger {
+                points: vec![(0, 0), (1, 1), (2, 2)],
+                duration_ms: 300,
+            },
+            GestureFinger {
+                points: vec![(9, 9)],
+                duration_ms: 100,
+            },
         ];
         driver.gesture(fingers).await.expect("gesture failed");
         let calls = driver.get_calls();
@@ -1233,7 +1389,10 @@ mod tests {
         driver.screenshot().await.expect("screenshot failed");
         let calls = driver.get_calls();
         assert_eq!(calls.len(), 1, "exactly one call SHALL be recorded");
-        assert_eq!(calls[0].0, "screenshot", "the call SHALL be named screenshot");
+        assert_eq!(
+            calls[0].0, "screenshot",
+            "the call SHALL be named screenshot"
+        );
         assert!(
             calls[0].1.is_empty(),
             "screenshot SHALL record no arguments"
@@ -1277,7 +1436,10 @@ mod tests {
     #[tokio::test]
     async fn mock_stop_recording_records_noarg_call() {
         let driver = MockPlatformDriver::new(default_hierarchy());
-        driver.stop_recording().await.expect("stop_recording failed");
+        driver
+            .stop_recording()
+            .await
+            .expect("stop_recording failed");
         let calls = driver.get_calls();
         assert_eq!(calls.len(), 1, "exactly one call SHALL be recorded");
         assert_eq!(

@@ -216,8 +216,7 @@ impl SimulatorTransport {
     /// Send a plist value as a length-prefixed binary plist message.
     async fn send_plist(&mut self, msg: &plist::Value) -> Result<()> {
         let mut buf = Vec::new();
-        plist::to_writer_binary(&mut buf, msg)
-            .context("failed to serialize plist")?;
+        plist::to_writer_binary(&mut buf, msg).context("failed to serialize plist")?;
         let len = buf.len() as u32;
         self.writer.write_all(&len.to_be_bytes()).await?;
         self.writer.write_all(&buf).await?;
@@ -245,9 +244,8 @@ impl SimulatorTransport {
                 if let Some(final_part) = dict.get("WIRFinalMessageKey") {
                     if let Some(data) = final_part.as_data() {
                         self.partial_buf.extend_from_slice(data);
-                        let reassembled: plist::Value =
-                            plist::from_bytes(&self.partial_buf)
-                                .context("failed to parse reassembled plist")?;
+                        let reassembled: plist::Value = plist::from_bytes(&self.partial_buf)
+                            .context("failed to parse reassembled plist")?;
                         self.partial_buf.clear();
                         return Ok(reassembled);
                     }
@@ -399,7 +397,12 @@ impl WebKitInspector {
             match inspector.handshake().await {
                 Ok(()) => return Ok(inspector),
                 Err(e) => {
-                    if golem_common::is_debug() { eprintln!("  [webkit] handshake failed on {}: {e}", socket_path.display()); }
+                    if golem_common::is_debug() {
+                        eprintln!(
+                            "  [webkit] handshake failed on {}: {e}",
+                            socket_path.display()
+                        );
+                    }
                     last_err = Some(e);
                     continue;
                 }
@@ -409,7 +412,10 @@ impl WebKitInspector {
         Err(golem_events::coded(
             golem_events::FailureCode::DeviceWebviewComms,
             last_err.unwrap_or_else(|| {
-                anyhow::anyhow!("all {} inspector sockets failed to connect", candidates.len())
+                anyhow::anyhow!(
+                    "all {} inspector sockets failed to connect",
+                    candidates.len()
+                )
             }),
         ))
     }
@@ -477,14 +483,16 @@ impl WebKitInspector {
 
             if let Some((selector, rpc_args)) = parse_rpc(&msg) {
                 match selector {
-                    "_rpc_reportCurrentState:" | "_rpc_reportConnectedApplicationList:"
+                    "_rpc_reportCurrentState:"
+                    | "_rpc_reportConnectedApplicationList:"
                     | "_rpc_reportConnectedDriverList:" => {
                         // Acknowledged — continue receiving
                     }
                     "_rpc_applicationConnected:" | "_rpc_applicationUpdated:" => {
                         // Track app IDs — prefer non-WebContent processes
-                        if let Some(app_id) =
-                            rpc_args.get("WIRApplicationIdentifierKey").and_then(|v| v.as_string())
+                        if let Some(app_id) = rpc_args
+                            .get("WIRApplicationIdentifierKey")
+                            .and_then(|v| v.as_string())
                         {
                             let bundle = rpc_args
                                 .get("WIRApplicationBundleIdentifierKey")
@@ -503,8 +511,9 @@ impl WebKitInspector {
                             .and_then(|v| v.as_string())
                             .unwrap_or("");
 
-                        if let Some(listing) =
-                            rpc_args.get("WIRListingKey").and_then(|v| v.as_dictionary())
+                        if let Some(listing) = rpc_args
+                            .get("WIRListingKey")
+                            .and_then(|v| v.as_dictionary())
                         {
                             // Two-pass: prefer a real (non-blank) URL.
                             // Some Tauri plugin updates create an extra
@@ -516,7 +525,9 @@ impl WebKitInspector {
                             let mut fallback: Option<(u64, &str)> = None;
                             let mut chosen: Option<(u64, &str)> = None;
                             for (page_key, page_val) in listing {
-                                let Some(page_dict) = page_val.as_dictionary() else { continue };
+                                let Some(page_dict) = page_val.as_dictionary() else {
+                                    continue;
+                                };
                                 let page_type = page_dict
                                     .get("WIRTypeKey")
                                     .and_then(|v| v.as_string())
@@ -777,7 +788,10 @@ impl WebKitInspector {
         let eval_resp = self.recv_inspector_response(eval_id).await?;
 
         // Check for exception
-        if let Some(err) = eval_resp.get("result").and_then(|r| r.get("exceptionDetails")) {
+        if let Some(err) = eval_resp
+            .get("result")
+            .and_then(|r| r.get("exceptionDetails"))
+        {
             return Err(golem_events::coded(
                 golem_events::FailureCode::DeviceWebviewComms,
                 anyhow::anyhow!("WebKit JS evaluation error: {err}"),
@@ -789,7 +803,10 @@ impl WebKitInspector {
             .and_then(|r| r.get("result"))
             .context("missing result in evaluation response")?;
 
-        let result_type = result_obj.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        let result_type = result_obj
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
 
         // `undefined` / `null` are valid outcomes for fire-and-forget
         // evaluations (e.g. `window.__golemSetLocation(lat, lon)` whose
@@ -827,7 +844,10 @@ impl WebKitInspector {
             self.send_inspector_cmd(&await_cmd).await?;
             let await_resp = self.recv_inspector_response(await_id).await?;
 
-            if let Some(err) = await_resp.get("result").and_then(|r| r.get("exceptionDetails")) {
+            if let Some(err) = await_resp
+                .get("result")
+                .and_then(|r| r.get("exceptionDetails"))
+            {
                 return Err(golem_events::coded(
                     golem_events::FailureCode::DeviceWebviewComms,
                     anyhow::anyhow!("WebKit JS await error: {err}"),
@@ -894,7 +914,9 @@ pub(crate) async fn fetch_webview_dom(
     {
         Ok(json) => json,
         Err(e) => {
-            if golem_common::is_debug() { eprintln!("  [webkit] JS evaluation failed: {e}"); }
+            if golem_common::is_debug() {
+                eprintln!("  [webkit] JS evaluation failed: {e}");
+            }
             return None;
         }
     };
@@ -902,7 +924,9 @@ pub(crate) async fn fetch_webview_dom(
     let wrapper: serde_json::Value = match serde_json::from_str(&dom_json) {
         Ok(v) => v,
         Err(e) => {
-            if golem_common::is_debug() { eprintln!("  [webkit] failed to parse DOM JSON: {e}"); }
+            if golem_common::is_debug() {
+                eprintln!("  [webkit] failed to parse DOM JSON: {e}");
+            }
             return None;
         }
     };
@@ -1000,7 +1024,9 @@ mod tests {
         args.insert("k".to_string(), plist::Value::String("v".to_string()));
         let msg = build_rpc("_rpc_reportIdentifier:", args);
 
-        let dict = msg.as_dictionary().expect("build_rpc SHALL produce a dictionary");
+        let dict = msg
+            .as_dictionary()
+            .expect("build_rpc SHALL produce a dictionary");
         assert_eq!(
             dict.get("__selector").and_then(|v| v.as_string()),
             Some("_rpc_reportIdentifier:"),
@@ -1110,7 +1136,11 @@ mod tests {
 
     /// Helper: build an `_rpc_applicationSentData:` message with the given
     /// destination and a message-data value, ready for extract_message_data.
-    fn sent_data_msg(selector: &str, dest: Option<&str>, data: Option<plist::Value>) -> plist::Value {
+    fn sent_data_msg(
+        selector: &str,
+        dest: Option<&str>,
+        data: Option<plist::Value>,
+    ) -> plist::Value {
         let mut args = plist::Dictionary::new();
         if let Some(d) = dest {
             args.insert(

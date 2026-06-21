@@ -16,12 +16,20 @@ pub(crate) async fn handle_open_link(step: &Step, driver: &dyn PlatformDriver) -
         .params
         .get("url")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("open_link action requires 'url' param")))?;
+        .ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("open_link action requires 'url' param"),
+            )
+        })?;
     driver.open_url(url).await
 }
 
 /// Send a push notification to the device.
-pub(crate) async fn handle_push_notification(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+pub(crate) async fn handle_push_notification(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+) -> Result<()> {
     let title = step
         .params
         .get("title")
@@ -32,10 +40,7 @@ pub(crate) async fn handle_push_notification(step: &Step, driver: &dyn PlatformD
         .get("body")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    let payload = step
-        .params
-        .get("payload")
-        .and_then(|v| v.as_str());
+    let payload = step.params.get("payload").and_then(|v| v.as_str());
     driver.push_notification(title, body, payload).await
 }
 
@@ -47,7 +52,12 @@ pub(crate) async fn handle_bash(step: &Step, vars: &mut VariableStore) -> Result
         .params
         .get("run")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("bash action requires 'run' param")))?;
+        .ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("bash action requires 'run' param"),
+            )
+        })?;
 
     let output = tokio::process::Command::new("sh")
         .arg("-c")
@@ -90,11 +100,19 @@ pub(crate) async fn handle_run(
         .params
         .get("script")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("run action requires 'script' param")))?;
+        .ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("run action requires 'script' param"),
+            )
+        })?;
 
     // Reject path traversal
     if script.contains("..") {
-        crate::fail_code!(golem_events::FailureCode::ParseMissingParam, "run action: path traversal ('..') is not allowed in script path");
+        crate::fail_code!(
+            golem_events::FailureCode::ParseMissingParam,
+            "run action: path traversal ('..') is not allowed in script path"
+        );
     }
 
     // Resolve the script path
@@ -165,7 +183,12 @@ pub(crate) async fn handle_await_email(step: &Step, vars: &mut VariableStore) ->
         .params
         .get("inbox")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("await_email action requires 'inbox' param")))?;
+        .ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("await_email action requires 'inbox' param"),
+            )
+        })?;
 
     // Look up inbox credentials from variable store
     let inbox_val = vars
@@ -181,24 +204,42 @@ pub(crate) async fn handle_await_email(step: &Step, vars: &mut VariableStore) ->
     let imap_host = inbox_val
         .get_path("imap_host")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("await_email: {inbox_name}.imap_host not found")))?
+        .ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("await_email: {inbox_name}.imap_host not found"),
+            )
+        })?
         .to_string();
     let imap_port = inbox_val
         .get_path("imap_port")
         .and_then(|v| v.as_str())
         .and_then(|s| s.parse::<u16>().ok())
         .ok_or_else(|| {
-            golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("await_email: {inbox_name}.imap_port not found or invalid"))
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("await_email: {inbox_name}.imap_port not found or invalid"),
+            )
         })?;
     let user = inbox_val
         .get_path("user")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("await_email: {inbox_name}.user not found")))?
+        .ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("await_email: {inbox_name}.user not found"),
+            )
+        })?
         .to_string();
     let pass = inbox_val
         .get_path("pass")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("await_email: {inbox_name}.pass not found")))?
+        .ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("await_email: {inbox_name}.pass not found"),
+            )
+        })?
         .to_string();
 
     let to_filter = step.params.get("to").and_then(|v| v.as_str());
@@ -231,7 +272,10 @@ pub(crate) async fn handle_await_email(step: &Step, vars: &mut VariableStore) ->
         for (key, pattern_val) in extract_table {
             if let Some(pattern_str) = pattern_val.as_str() {
                 let re = Regex::new(pattern_str).map_err(|e| {
-                    golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("await_email: invalid regex for '{key}': {e}"))
+                    golem_events::coded(
+                        golem_events::FailureCode::ParseMissingParam,
+                        anyhow::anyhow!("await_email: invalid regex for '{key}': {e}"),
+                    )
                 })?;
                 if let Some(caps) = re.captures(&email.body) {
                     let captured = caps
@@ -274,15 +318,28 @@ pub(crate) async fn handle_load_fixture(
         .params
         .get("fixture")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("load_fixture action requires 'fixture' param")))?;
+        .ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("load_fixture action requires 'fixture' param"),
+            )
+        })?;
 
     let namespace = step
         .params
         .get("as")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("load_fixture action requires 'as' param")))?;
+        .ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("load_fixture action requires 'as' param"),
+            )
+        })?;
 
-    let mut rng = ctx.rng.lock().map_err(|e| anyhow::anyhow!("rng lock: {e}"))?;
+    let mut rng = ctx
+        .rng
+        .lock()
+        .map_err(|e| anyhow::anyhow!("rng lock: {e}"))?;
 
     crate::fixture_loader::load_fixture_into_store(
         fixture_name,
@@ -300,7 +357,12 @@ pub(crate) async fn handle_http(step: &Step, vars: &mut VariableStore, method: &
         .params
         .get("url")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("{} action requires 'url' param", step.action)))?;
+        .ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("{} action requires 'url' param", step.action),
+            )
+        })?;
 
     let client = reqwest::Client::new();
 
@@ -401,7 +463,10 @@ pub(crate) async fn handle_accept_alert(
         if let Some(alert) = golem_driver::common::find_alert(&root) {
             let buttons = golem_driver::common::find_alert_buttons(&alert);
             if buttons.is_empty() {
-                crate::fail_code!(golem_events::FailureCode::FlowAlertInteraction, "accept_alert failed: no buttons found in alert");
+                crate::fail_code!(
+                    golem_events::FailureCode::FlowAlertInteraction,
+                    "accept_alert failed: no buttons found in alert"
+                );
             }
             // Last button is the positive action (OK, Yes, Open).
             let btn = &buttons[buttons.len() - 1];
@@ -410,7 +475,10 @@ pub(crate) async fn handle_accept_alert(
             ctx.substep(golem_events::SubstepEvent::Tap {
                 point: golem_events::Point { x, y },
                 element_bounds: Some(golem_events::Rect {
-                    x: b.x, y: b.y, width: b.width, height: b.height,
+                    x: b.x,
+                    y: b.y,
+                    width: b.width,
+                    height: b.height,
                 }),
             });
             driver.tap(x, y).await?;
@@ -488,7 +556,10 @@ pub(crate) async fn handle_dismiss_alert(
         if let Some(alert) = golem_driver::common::find_alert(&root) {
             let buttons = golem_driver::common::find_alert_buttons(&alert);
             if buttons.is_empty() {
-                crate::fail_code!(golem_events::FailureCode::FlowAlertInteraction, "dismiss_alert failed: no buttons found in alert");
+                crate::fail_code!(
+                    golem_events::FailureCode::FlowAlertInteraction,
+                    "dismiss_alert failed: no buttons found in alert"
+                );
             }
             // First button is the negative action (Cancel, No).
             let btn = &buttons[0];
@@ -497,7 +568,10 @@ pub(crate) async fn handle_dismiss_alert(
             ctx.substep(golem_events::SubstepEvent::Tap {
                 point: golem_events::Point { x, y },
                 element_bounds: Some(golem_events::Rect {
-                    x: b.x, y: b.y, width: b.width, height: b.height,
+                    x: b.x,
+                    y: b.y,
+                    width: b.width,
+                    height: b.height,
                 }),
             });
             driver.tap(x, y).await?;
@@ -768,7 +842,11 @@ mod tests {
         let tap_calls: Vec<_> = calls.iter().filter(|c| c.0 == "tap").collect();
         assert_eq!(tap_calls.len(), 1, "SHALL tap exactly one button");
         // First button (Cancel) center: x=60+40=100, y=310+15=325
-        assert_eq!(tap_calls[0].1, vec!["100", "325"], "SHALL tap first button (negative)");
+        assert_eq!(
+            tap_calls[0].1,
+            vec!["100", "325"],
+            "SHALL tap first button (negative)"
+        );
     }
 
     // ── accept_alert tests ───────────────────────────────────────────
@@ -794,7 +872,11 @@ mod tests {
         let tap_calls: Vec<_> = calls.iter().filter(|c| c.0 == "tap").collect();
         assert_eq!(tap_calls.len(), 1, "SHALL tap exactly one button");
         // Last button (OK) center: x=200+40=240, y=310+15=325
-        assert_eq!(tap_calls[0].1, vec!["240", "325"], "SHALL tap last button (positive)");
+        assert_eq!(
+            tap_calls[0].1,
+            vec!["240", "325"],
+            "SHALL tap last button (positive)"
+        );
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -944,7 +1026,10 @@ mod tests {
         );
 
         let result = handle_await_email(&step, &mut vars).await;
-        assert!(result.is_err(), "await_email SHALL fail when inbox not in vars");
+        assert!(
+            result.is_err(),
+            "await_email SHALL fail when inbox not in vars"
+        );
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
             err_msg.contains("not found"),
@@ -963,7 +1048,10 @@ mod tests {
         // No fixture param
 
         let result = handle_load_fixture(&step, &mut vars, &ctx).await;
-        assert!(result.is_err(), "load_fixture SHALL require 'fixture' param");
+        assert!(
+            result.is_err(),
+            "load_fixture SHALL require 'fixture' param"
+        );
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
             err_msg.contains("fixture"),
@@ -1011,10 +1099,8 @@ mod tests {
             "fixture".to_string(),
             toml::Value::String("user".to_string()),
         );
-        step.params.insert(
-            "as".to_string(),
-            toml::Value::String("account".to_string()),
-        );
+        step.params
+            .insert("as".to_string(), toml::Value::String("account".to_string()));
 
         handle_load_fixture(&step, &mut vars, &ctx)
             .await
@@ -1072,10 +1158,8 @@ mod tests {
         let mut vars = make_vars();
 
         let mut step = make_step("bash");
-        step.params.insert(
-            "run".to_string(),
-            toml::Value::String("exit 3".to_string()),
-        );
+        step.params
+            .insert("run".to_string(), toml::Value::String("exit 3".to_string()));
 
         let result = handle_bash(&step, &mut vars).await;
         assert!(result.is_err(), "bash SHALL fail on non-zero exit");
@@ -1168,7 +1252,9 @@ mod tests {
         );
 
         // save_to SHALL be populated before the failure is reported.
-        let saved = vars.get("result").expect("result SHALL be saved on failure");
+        let saved = vars
+            .get("result")
+            .expect("result SHALL be saved on failure");
         let obj = saved.as_object().expect("result SHALL be an object");
         assert_eq!(
             obj.get("exit_code"),
@@ -1243,7 +1329,11 @@ mod tests {
         let tap_calls: Vec<_> = calls.iter().filter(|c| c.0 == "tap").collect();
         assert_eq!(tap_calls.len(), 1, "SHALL tap the only button");
         // Only button center: x=60+100=160, y=310+15=325
-        assert_eq!(tap_calls[0].1, vec!["160", "325"], "SHALL tap the sole button");
+        assert_eq!(
+            tap_calls[0].1,
+            vec!["160", "325"],
+            "SHALL tap the sole button"
+        );
     }
 
     // ── accept_alert fails when alert has no buttons ───────────────────
@@ -1337,7 +1427,10 @@ mod tests {
         );
 
         let result = handle_await_email(&step, &mut vars).await;
-        assert!(result.is_err(), "await_email SHALL reject invalid imap_port");
+        assert!(
+            result.is_err(),
+            "await_email SHALL reject invalid imap_port"
+        );
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
             err_msg.contains("imap_port"),

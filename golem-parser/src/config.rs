@@ -151,19 +151,27 @@ pub fn merge_config(project: &ProjectConfig, flow: &FlowFile) -> FlowFile {
             .max_runtime
             .clone()
             .or_else(|| proj_opts.max_runtime.clone()),
-        suite_concurrency: flow_opts
-            .suite_concurrency
-            .or(proj_opts.suite_concurrency),
+        suite_concurrency: flow_opts.suite_concurrency.or(proj_opts.suite_concurrency),
         keep_devices: flow_opts.keep_devices.or(proj_opts.keep_devices),
         coverage: flow_opts.coverage.or(proj_opts.coverage),
         app_lifecycle: flow_opts.app_lifecycle.or(proj_opts.app_lifecycle),
         perf: flow_opts.perf.or(proj_opts.perf),
-        perf_memory_warn_mb: flow_opts.perf_memory_warn_mb.or(proj_opts.perf_memory_warn_mb),
-        perf_memory_error_mb: flow_opts.perf_memory_error_mb.or(proj_opts.perf_memory_error_mb),
-        perf_cpu_warn_percent: flow_opts.perf_cpu_warn_percent.or(proj_opts.perf_cpu_warn_percent),
-        perf_cpu_error_percent: flow_opts.perf_cpu_error_percent.or(proj_opts.perf_cpu_error_percent),
+        perf_memory_warn_mb: flow_opts
+            .perf_memory_warn_mb
+            .or(proj_opts.perf_memory_warn_mb),
+        perf_memory_error_mb: flow_opts
+            .perf_memory_error_mb
+            .or(proj_opts.perf_memory_error_mb),
+        perf_cpu_warn_percent: flow_opts
+            .perf_cpu_warn_percent
+            .or(proj_opts.perf_cpu_warn_percent),
+        perf_cpu_error_percent: flow_opts
+            .perf_cpu_error_percent
+            .or(proj_opts.perf_cpu_error_percent),
         perf_threads_warn: flow_opts.perf_threads_warn.or(proj_opts.perf_threads_warn),
-        perf_threads_error: flow_opts.perf_threads_error.or(proj_opts.perf_threads_error),
+        perf_threads_error: flow_opts
+            .perf_threads_error
+            .or(proj_opts.perf_threads_error),
         perf_fd_warn: flow_opts.perf_fd_warn.or(proj_opts.perf_fd_warn),
         perf_fd_error: flow_opts.perf_fd_error.or(proj_opts.perf_fd_error),
     };
@@ -613,15 +621,8 @@ action = "back"
         let config =
             parse_project_config(toml_str).expect("project config with teardown should parse");
         assert_eq!(config.vars.get("token").map(|s| s.as_str()), Some("abc"));
-        let teardown = config
-            .teardown
-            .as_ref()
-            .expect("SHALL have teardown block");
-        assert_eq!(
-            teardown.steps.len(),
-            2,
-            "SHALL contain both teardown steps"
-        );
+        let teardown = config.teardown.as_ref().expect("SHALL have teardown block");
+        assert_eq!(teardown.steps.len(), 2, "SHALL contain both teardown steps");
         assert_eq!(teardown.steps[0].action, "screenshot");
         assert_eq!(teardown.steps[1].action, "back");
     }
@@ -821,8 +822,7 @@ action = "screenshot"
 [[teardown.steps]]
 action = "back"
 "#;
-        let config =
-            parse_project_config(toml_str).expect("multi-teardown config SHALL parse");
+        let config = parse_project_config(toml_str).expect("multi-teardown config SHALL parse");
         let teardown = config
             .teardown
             .as_ref()
@@ -964,10 +964,7 @@ name = "test"
         );
 
         let merged = merge_config(&project, &flow);
-        let opts = merged
-            .flow
-            .options
-            .expect("merged flow SHALL have options");
+        let opts = merged.flow.options.expect("merged flow SHALL have options");
         assert_eq!(opts.coverage, Some(crate::CoverageStrategy::Min));
         assert_eq!(opts.app_lifecycle, Some(crate::AppLifecycle::Launch));
     }
@@ -1004,10 +1001,7 @@ max_runtime = "5m"
         );
 
         let merged = merge_config(&project, &flow);
-        let opts = merged
-            .flow
-            .options
-            .expect("merged flow SHALL have options");
+        let opts = merged.flow.options.expect("merged flow SHALL have options");
         // Inherited from project.
         assert_eq!(opts.min_free_ram_mb, Some(1024));
         assert_eq!(opts.min_free_disk_mb, Some(4096));

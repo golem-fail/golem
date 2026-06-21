@@ -120,7 +120,10 @@ impl IosDriver {
     }
 
     /// Wait for companion to become healthy, polling with timeout.
-    pub async fn wait_for_health(&self, timeout: std::time::Duration) -> anyhow::Result<crate::common::CompanionHealth> {
+    pub async fn wait_for_health(
+        &self,
+        timeout: std::time::Duration,
+    ) -> anyhow::Result<crate::common::CompanionHealth> {
         self.client.wait_for_health(timeout).await
     }
 
@@ -198,9 +201,7 @@ impl IosDriver {
 /// (callers pass test-controlled values; simctl reads this as a file).
 fn build_apns_payload(title: &str, body: &str, payload: Option<&str>) -> String {
     if let Some(custom) = payload {
-        format!(
-            r#"{{"aps":{{"alert":{{"title":"{title}","body":"{body}"}}}},"custom":{custom}}}"#
-        )
+        format!(r#"{{"aps":{{"alert":{{"title":"{title}","body":"{body}"}}}},"custom":{custom}}}"#)
     } else {
         format!(r#"{{"aps":{{"alert":{{"title":"{title}","body":"{body}"}}}}}}"#)
     }
@@ -285,7 +286,9 @@ async fn setup_webkit(target_udid: &str) -> Option<WebKitState> {
     match crate::webkit::WebKitInspector::connect(Some(target_udid)).await {
         Ok(inspector) => Some(WebKitState { inspector }),
         Err(e) => {
-            if golem_common::is_debug() { eprintln!("  [webkit] setup failed: {e}"); }
+            if golem_common::is_debug() {
+                eprintln!("  [webkit] setup failed: {e}");
+            }
             None
         }
     }
@@ -316,8 +319,8 @@ impl PlatformDriver for IosDriver {
 
     async fn get_hierarchy(&self) -> Result<(Element, crate::common::HierarchyMeta)> {
         let text = self.client.get_text("/hierarchy").await?;
-        let wrapper: serde_json::Value = serde_json::from_str(&text)
-            .context("failed to parse hierarchy JSON")?;
+        let wrapper: serde_json::Value =
+            serde_json::from_str(&text).context("failed to parse hierarchy JSON")?;
 
         // Extract tree from wrapper (companion sends {"tree": [...], ...})
         let mut raw = wrapper.get("tree").cloned().unwrap_or(wrapper.clone());
@@ -414,9 +417,7 @@ impl PlatformDriver for IosDriver {
                 } else {
                     // Inspector failed — reconnect immediately
                     if let Some(new_state) = setup_webkit(&self.device_id).await {
-                        if let Some(new_state) =
-                            try_enrich(&mut raw, new_state, wv_x, wv_y).await
-                        {
+                        if let Some(new_state) = try_enrich(&mut raw, new_state, wv_x, wv_y).await {
                             let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
                             *wk = WebKitLifecycle::Ready(new_state);
                         } else {
@@ -443,7 +444,9 @@ impl PlatformDriver for IosDriver {
         // attempted against the app and a foreign dialog is blocking
         // it. Polling /hierarchy via WebKit Inspector doesn't count;
         // a real XCUI query does, without synthesising any input.
-        self.client.post_json("/poke-interruption-monitor", "{}").await?;
+        self.client
+            .post_json("/poke-interruption-monitor", "{}")
+            .await?;
         Ok(())
     }
 
@@ -478,7 +481,8 @@ impl PlatformDriver for IosDriver {
     }
 
     async fn pinch(&self, x: i32, y: i32, scale: f64, velocity: f64) -> Result<()> {
-        let body = serde_json::json!({ "x": x, "y": y, "scale": scale, "velocity": velocity }).to_string();
+        let body =
+            serde_json::json!({ "x": x, "y": y, "scale": scale, "velocity": velocity }).to_string();
         self.client.post_json("/pinch", &body).await?;
         Ok(())
     }
@@ -506,7 +510,9 @@ impl PlatformDriver for IosDriver {
         // the status bar inset (no effect) or another focusable element
         // (refocuses instead of blurring).
         if let Some(_) = self
-            .eval_in_webview("(()=>{const a=document.activeElement;if(a&&a.blur)a.blur();return ''})()")
+            .eval_in_webview(
+                "(()=>{const a=document.activeElement;if(a&&a.blur)a.blur();return ''})()",
+            )
             .await
         {
             return Ok(());
@@ -554,7 +560,8 @@ impl PlatformDriver for IosDriver {
         // alive — repeated stop+launch cycles then stack new WebViews
         // on top of the suspended ones, and taps land on a frontmost
         // dead surface that never dispatches events to the live DOM.
-        self.simctl(&["terminate", &self.device_id, bundle_id]).await?;
+        self.simctl(&["terminate", &self.device_id, bundle_id])
+            .await?;
         // simctl returns when the kill signal is sent, not when the
         // OS has actually torn down the process + its WKWebView
         // resources. A `launch` that races that teardown sometimes
@@ -591,13 +598,8 @@ impl PlatformDriver for IosDriver {
     }
 
     async fn set_location(&self, lat: f64, lon: f64) -> Result<()> {
-        self.simctl(&[
-            "location",
-            &self.device_id,
-            "set",
-            &format!("{lat},{lon}"),
-        ])
-        .await?;
+        self.simctl(&["location", &self.device_id, "set", &format!("{lat},{lon}")])
+            .await?;
         // The test app's `DeviceState.svelte` exposes a manual hook
         // (`window.__golemSetLocation`) rather than subscribing to
         // `navigator.geolocation` (which would need a permission grant
@@ -645,9 +647,7 @@ impl PlatformDriver for IosDriver {
             .await
             .context("writing push payload to temp file")?;
 
-        let tmp_str = tmp
-            .to_str()
-            .context("temp path is not valid UTF-8")?;
+        let tmp_str = tmp.to_str().context("temp path is not valid UTF-8")?;
 
         let result = self
             .simctl(&["push", &self.device_id, &self.bundle_id, tmp_str])
@@ -683,14 +683,8 @@ impl PlatformDriver for IosDriver {
 
     async fn grant_permission(&self, bundle_id: &str, permission: &str) -> Result<()> {
         let token = normalize_ios_permission(permission)?;
-        self.simctl(&[
-            "privacy",
-            &self.device_id,
-            "grant",
-            token,
-            bundle_id,
-        ])
-        .await?;
+        self.simctl(&["privacy", &self.device_id, "grant", token, bundle_id])
+            .await?;
         // simctl returns as soon as the TCC change is written; iOS still
         // needs a moment to settle it across the privacy daemons. Without
         // this sleep an immediately-following `launch` races and the app
@@ -703,14 +697,8 @@ impl PlatformDriver for IosDriver {
 
     async fn revoke_permission(&self, bundle_id: &str, permission: &str) -> Result<()> {
         let token = normalize_ios_permission(permission)?;
-        self.simctl(&[
-            "privacy",
-            &self.device_id,
-            "revoke",
-            token,
-            bundle_id,
-        ])
-        .await?;
+        self.simctl(&["privacy", &self.device_id, "revoke", token, bundle_id])
+            .await?;
         // Same TCC settle window as `grant_permission` — a `launch`
         // immediately after revoke would otherwise race the same way.
         tokio::time::sleep(std::time::Duration::from_millis(750)).await;
@@ -769,7 +757,10 @@ impl PlatformDriver for IosDriver {
         // simctl can take a moment to flush the moov atom after exit.
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         if !std::path::Path::new(&state.host_path).exists() {
-            anyhow::bail!("simctl recordVideo exited but {} is missing", state.host_path);
+            anyhow::bail!(
+                "simctl recordVideo exited but {} is missing",
+                state.host_path
+            );
         }
         Ok(state.host_path)
     }
@@ -778,7 +769,6 @@ impl PlatformDriver for IosDriver {
         Ok(()) // Not applicable to iOS
     }
 }
-
 
 // ===========================================================================
 // Tests
@@ -1038,11 +1028,16 @@ mod tests {
 
     #[test]
     fn normalize_unknown_shorthand_errors_loudly() {
-        let err = normalize_ios_permission("locaiton")
-            .expect_err("unknown shorthand SHALL error");
+        let err = normalize_ios_permission("locaiton").expect_err("unknown shorthand SHALL error");
         let msg = format!("{err}");
-        assert!(msg.contains("locaiton"), "should echo the bad shorthand, got: {msg}");
-        assert!(msg.contains("Known shorthands"), "should list known set, got: {msg}");
+        assert!(
+            msg.contains("locaiton"),
+            "should echo the bad shorthand, got: {msg}"
+        );
+        assert!(
+            msg.contains("Known shorthands"),
+            "should list known set, got: {msg}"
+        );
     }
 
     #[test]
@@ -1069,8 +1064,7 @@ mod tests {
     //    match has no empty-string arm — it falls through to `other`).
     #[test]
     fn normalize_rejects_empty_string() {
-        let err = normalize_ios_permission("")
-            .expect_err("empty shorthand SHALL error");
+        let err = normalize_ios_permission("").expect_err("empty shorthand SHALL error");
         let msg = format!("{err}");
         assert!(
             msg.contains("Known shorthands"),
@@ -1111,8 +1105,7 @@ mod tests {
     //    rendered escaped — confirms the `:?` formatting path.
     #[test]
     fn normalize_unknown_error_uses_debug_quoting() {
-        let err = normalize_ios_permission("we\"ird")
-            .expect_err("unknown shorthand SHALL error");
+        let err = normalize_ios_permission("we\"ird").expect_err("unknown shorthand SHALL error");
         let msg = format!("{err}");
         assert!(
             msg.contains("we\\\"ird"),
@@ -1217,8 +1210,7 @@ mod tests {
     // 1. A clean alphanumeric/dash/underscore name SHALL be accepted.
     #[test]
     fn validate_recording_name_accepts_clean_name() {
-        validate_recording_name("flow_tap-01")
-            .expect("clean recording name SHALL be accepted");
+        validate_recording_name("flow_tap-01").expect("clean recording name SHALL be accepted");
     }
 
     // 2. Each shell-special character SHALL be rejected, and the error SHALL
@@ -1226,8 +1218,8 @@ mod tests {
     #[test]
     fn validate_recording_name_rejects_each_special_char() {
         for bad in ["a'b", "a\"b", "a$b", "a`b", "a/b"] {
-            let err = validate_recording_name(bad)
-                .expect_err("shell-special char SHALL be rejected");
+            let err =
+                validate_recording_name(bad).expect_err("shell-special char SHALL be rejected");
             let msg = format!("{err}");
             assert!(
                 msg.contains("invalid recording name"),
@@ -1288,8 +1280,7 @@ mod tests {
             "extraneous": "ignored",
         });
         let raw = serde_json::json!({ "element_type": "View" });
-        let s = build_enriched_hierarchy(&original, &raw)
-            .expect("serialization SHALL succeed");
+        let s = build_enriched_hierarchy(&original, &raw).expect("serialization SHALL succeed");
         let parsed: serde_json::Value =
             serde_json::from_str(&s).expect("result SHALL be valid JSON");
         assert_eq!(parsed["tree"]["element_type"], "View");
@@ -1308,8 +1299,7 @@ mod tests {
     fn build_enriched_hierarchy_omits_missing_keys() {
         let original = serde_json::json!({ "tree": [] });
         let raw = serde_json::json!({ "element_type": "Window" });
-        let s = build_enriched_hierarchy(&original, &raw)
-            .expect("serialization SHALL succeed");
+        let s = build_enriched_hierarchy(&original, &raw).expect("serialization SHALL succeed");
         let parsed: serde_json::Value =
             serde_json::from_str(&s).expect("result SHALL be valid JSON");
         assert_eq!(parsed["tree"]["element_type"], "Window");
@@ -1323,8 +1313,7 @@ mod tests {
     fn build_enriched_hierarchy_non_object_original() {
         let original = serde_json::Value::Null;
         let raw = serde_json::json!([{ "element_type": "Leaf" }]);
-        let s = build_enriched_hierarchy(&original, &raw)
-            .expect("serialization SHALL succeed");
+        let s = build_enriched_hierarchy(&original, &raw).expect("serialization SHALL succeed");
         let parsed: serde_json::Value =
             serde_json::from_str(&s).expect("result SHALL be valid JSON");
         assert_eq!(parsed["tree"][0]["element_type"], "Leaf");

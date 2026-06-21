@@ -139,9 +139,8 @@ pub(crate) async fn rank_by_install_cache<'a>(
         }
         let mut score = 0usize;
         for b in &bundles {
-            if let Some(golem_runner::installer::InstallOutcome::Succeeded) = cache
-                .get(&(dev.udid.clone(), (*b).to_string()))
-                .await
+            if let Some(golem_runner::installer::InstallOutcome::Succeeded) =
+                cache.get(&(dev.udid.clone(), (*b).to_string())).await
             {
                 score += 1;
             }
@@ -175,7 +174,9 @@ mod tests {
         }
     }
 
-    fn info_present(install_time: Option<chrono::DateTime<chrono::Utc>>) -> golem_runner::installed_state::DeviceInstallInfo {
+    fn info_present(
+        install_time: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> golem_runner::installed_state::DeviceInstallInfo {
         golem_runner::installed_state::DeviceInstallInfo {
             installed: true,
             install_time,
@@ -222,8 +223,10 @@ mod tests {
         let v = gate_decision(Some(&entry), &fp_git("bbbbbbbbbbb"), &info_present(None));
         let r = miss_reason(v);
         assert!(r.contains("fingerprint changed"), "got: {r}");
-        assert!(r.contains("git:aaaaaaa") && r.contains("git:bbbbbbb"),
-            "miss reason SHALL show stored → current: {r}");
+        assert!(
+            r.contains("git:aaaaaaa") && r.contains("git:bbbbbbb"),
+            "miss reason SHALL show stored → current: {r}"
+        );
     }
 
     #[test]
@@ -260,8 +263,10 @@ mod tests {
         let v = gate_decision(Some(&entry), &fp_git("a"), &info_present(Some(drifted)));
         let r = miss_reason(v);
         assert!(r.contains("install-time differs"), "got: {r}");
-        assert!(r.contains("external reinstall"),
-            "miss reason SHALL hint at external reinstall cause: {r}");
+        assert!(
+            r.contains("external reinstall"),
+            "miss reason SHALL hint at external reinstall cause: {r}"
+        );
     }
 
     #[test]
@@ -270,7 +275,10 @@ mod tests {
         let close = t + chrono::Duration::seconds(1);
         let entry = make_entry(fp_git("a"), Some(t));
         let v = gate_decision(Some(&entry), &fp_git("a"), &info_present(Some(close)));
-        assert!(matches!(v, CacheVerdict::Hit { .. }), "1s drift SHALL be within tolerance");
+        assert!(
+            matches!(v, CacheVerdict::Hit { .. }),
+            "1s drift SHALL be within tolerance"
+        );
     }
 
     #[test]
@@ -282,8 +290,10 @@ mod tests {
         let entry = make_entry(fp_git("a"), Some(t));
         let v = gate_decision(Some(&entry), &fp_git("a"), &info_present(Some(earlier)));
         let r = miss_reason(v);
-        assert!(r.contains("install-time differs"),
-            "negative-direction drift SHALL also miss (abs comparison): {r}");
+        assert!(
+            r.contains("install-time differs"),
+            "negative-direction drift SHALL also miss (abs comparison): {r}"
+        );
     }
 
     #[test]
@@ -293,8 +303,10 @@ mod tests {
         let edge = t + chrono::Duration::seconds(2);
         let entry = make_entry(fp_git("a"), Some(t));
         let v = gate_decision(Some(&entry), &fp_git("a"), &info_present(Some(edge)));
-        assert!(matches!(v, CacheVerdict::Hit { .. }),
-            "exactly 2s drift SHALL be within the inclusive tolerance");
+        assert!(
+            matches!(v, CacheVerdict::Hit { .. }),
+            "exactly 2s drift SHALL be within the inclusive tolerance"
+        );
     }
 
     #[test]
@@ -305,8 +317,10 @@ mod tests {
         let entry = make_entry(fp_git("a"), Some(t));
         let v = gate_decision(Some(&entry), &fp_git("a"), &info_present(Some(over)));
         let r = miss_reason(v);
-        assert!(r.contains("install-time differs"),
-            "3s drift SHALL exceed the 2s tolerance and miss: {r}");
+        assert!(
+            r.contains("install-time differs"),
+            "3s drift SHALL exceed the 2s tolerance and miss: {r}"
+        );
     }
 
     #[test]
@@ -316,8 +330,10 @@ mod tests {
         let t = chrono::Utc::now();
         let entry = make_entry(fp_git("a"), None);
         let v = gate_decision(Some(&entry), &fp_git("a"), &info_present(Some(t)));
-        assert!(matches!(v, CacheVerdict::Hit { .. }),
-            "missing stored install-time SHALL skip the drift gate");
+        assert!(
+            matches!(v, CacheVerdict::Hit { .. }),
+            "missing stored install-time SHALL skip the drift gate"
+        );
     }
 
     #[test]
@@ -326,8 +342,10 @@ mod tests {
         let t = chrono::Utc::now();
         let entry = make_entry(fp_git("a"), Some(t));
         let v = gate_decision(Some(&entry), &fp_git("a"), &info_present(None));
-        assert!(matches!(v, CacheVerdict::Hit { .. }),
-            "missing device install-time SHALL skip the drift gate");
+        assert!(
+            matches!(v, CacheVerdict::Hit { .. }),
+            "missing device install-time SHALL skip the drift gate"
+        );
     }
 
     #[test]
@@ -337,8 +355,10 @@ mod tests {
         let info = golem_runner::installed_state::DeviceInstallInfo::not_installed();
         let v = gate_decision(None, &fp_git("a"), &info);
         let r = miss_reason(v);
-        assert!(r.contains("no prior cache entry"),
-            "missing-entry gate SHALL fire before the presence gate: {r}");
+        assert!(
+            r.contains("no prior cache entry"),
+            "missing-entry gate SHALL fire before the presence gate: {r}"
+        );
     }
 
     #[test]
@@ -351,8 +371,10 @@ mod tests {
             &info_present(None),
         );
         let r = miss_reason(v);
-        assert!(r.contains("fingerprint unavailable"),
-            "fingerprint gate SHALL fire before the missing-entry gate: {r}");
+        assert!(
+            r.contains("fingerprint unavailable"),
+            "fingerprint gate SHALL fire before the missing-entry gate: {r}"
+        );
     }
 
     #[test]
@@ -361,8 +383,10 @@ mod tests {
         let v = gate_decision(Some(&entry), &fp_git("abc1234567"), &info_present(None));
         match v {
             CacheVerdict::Hit { label } => {
-                assert!(label.contains("git:abc1234"),
-                    "hit label SHALL be the source-fingerprint short label: {label}");
+                assert!(
+                    label.contains("git:abc1234"),
+                    "hit label SHALL be the source-fingerprint short label: {label}"
+                );
             }
             CacheVerdict::Miss { .. } => panic!("expected Hit"),
         }
@@ -426,14 +450,23 @@ mod tests {
 
         let cache = InstallCache::new();
         cache
-            .set(("udid-2".into(), "com.app".into()), InstallOutcome::Succeeded)
+            .set(
+                ("udid-2".into(), "com.app".into()),
+                InstallOutcome::Succeeded,
+            )
             .await;
 
         let slot = test_slot(&["app"]);
         let matrix = vec![test_matrix_entry("app", "com.app")];
 
-        let pick = rank_by_install_cache(&free, Some(Platform::Ios), Some(&slot), Some(&cache), &matrix)
-            .await;
+        let pick = rank_by_install_cache(
+            &free,
+            Some(Platform::Ios),
+            Some(&slot),
+            Some(&cache),
+            &matrix,
+        )
+        .await;
         assert_eq!(
             pick.udid, "udid-2",
             "SHALL rank the sim with a Succeeded install cache entry above the cold one",
@@ -448,7 +481,8 @@ mod tests {
         let slot = test_slot(&["app"]);
         let matrix = vec![test_matrix_entry("app", "com.app")];
 
-        let pick = rank_by_install_cache(&free, Some(Platform::Ios), Some(&slot), None, &matrix).await;
+        let pick =
+            rank_by_install_cache(&free, Some(Platform::Ios), Some(&slot), None, &matrix).await;
         assert_eq!(
             pick.udid, "udid-1",
             "SHALL fall back to input order when no cache is available",
@@ -473,8 +507,14 @@ mod tests {
         let slot = test_slot(&["app"]);
         let matrix = vec![test_matrix_entry("app", "com.app")];
 
-        let pick = rank_by_install_cache(&free, Some(Platform::Ios), Some(&slot), Some(&cache), &matrix)
-            .await;
+        let pick = rank_by_install_cache(
+            &free,
+            Some(Platform::Ios),
+            Some(&slot),
+            Some(&cache),
+            &matrix,
+        )
+        .await;
         assert_eq!(
             pick.udid, "udid-1",
             "FailedScript SHALL NOT count as a cache hit — first candidate wins the tie",
@@ -490,9 +530,15 @@ mod tests {
 
         let cache = InstallCache::new();
         // sim1 has one hit (app_a), sim2 has both (app_a + app_b).
-        cache.set(("udid-1".into(), "com.a".into()), InstallOutcome::Succeeded).await;
-        cache.set(("udid-2".into(), "com.a".into()), InstallOutcome::Succeeded).await;
-        cache.set(("udid-2".into(), "com.b".into()), InstallOutcome::Succeeded).await;
+        cache
+            .set(("udid-1".into(), "com.a".into()), InstallOutcome::Succeeded)
+            .await;
+        cache
+            .set(("udid-2".into(), "com.a".into()), InstallOutcome::Succeeded)
+            .await;
+        cache
+            .set(("udid-2".into(), "com.b".into()), InstallOutcome::Succeeded)
+            .await;
 
         let slot = test_slot(&["app_a", "app_b"]);
         let matrix = vec![
@@ -500,8 +546,14 @@ mod tests {
             test_matrix_entry("app_b", "com.b"),
         ];
 
-        let pick = rank_by_install_cache(&free, Some(Platform::Ios), Some(&slot), Some(&cache), &matrix)
-            .await;
+        let pick = rank_by_install_cache(
+            &free,
+            Some(Platform::Ios),
+            Some(&slot),
+            Some(&cache),
+            &matrix,
+        )
+        .await;
         assert_eq!(
             pick.udid, "udid-2",
             "SHALL prefer the device with the higher cache-hit count across all slot apps",
@@ -519,7 +571,10 @@ mod tests {
         let cache = InstallCache::new();
         // Even though sim2 has a hit, a None slot SHALL ignore it.
         cache
-            .set(("udid-2".into(), "com.app".into()), InstallOutcome::Succeeded)
+            .set(
+                ("udid-2".into(), "com.app".into()),
+                InstallOutcome::Succeeded,
+            )
             .await;
         let matrix = vec![test_matrix_entry("app", "com.app")];
 
@@ -542,16 +597,24 @@ mod tests {
 
         let cache = InstallCache::new();
         cache
-            .set(("udid-2".into(), "com.app".into()), InstallOutcome::Succeeded)
+            .set(
+                ("udid-2".into(), "com.app".into()),
+                InstallOutcome::Succeeded,
+            )
             .await;
 
         // Slot references "app" but the matrix only knows "other".
         let slot = test_slot(&["app"]);
         let matrix = vec![test_matrix_entry("other", "com.app")];
 
-        let pick =
-            rank_by_install_cache(&free, Some(Platform::Ios), Some(&slot), Some(&cache), &matrix)
-                .await;
+        let pick = rank_by_install_cache(
+            &free,
+            Some(Platform::Ios),
+            Some(&slot),
+            Some(&cache),
+            &matrix,
+        )
+        .await;
         assert_eq!(
             pick.udid, "udid-1",
             "no matrix match SHALL leave every score at 0 and return the first candidate",
@@ -569,7 +632,10 @@ mod tests {
 
         let cache = InstallCache::new();
         cache
-            .set(("udid-2".into(), "com.app".into()), InstallOutcome::Succeeded)
+            .set(
+                ("udid-2".into(), "com.app".into()),
+                InstallOutcome::Succeeded,
+            )
             .await;
 
         let slot = test_slot(&["app"]);
@@ -584,9 +650,14 @@ mod tests {
         };
         let matrix = vec![android_entry];
 
-        let pick =
-            rank_by_install_cache(&free, Some(Platform::Ios), Some(&slot), Some(&cache), &matrix)
-                .await;
+        let pick = rank_by_install_cache(
+            &free,
+            Some(Platform::Ios),
+            Some(&slot),
+            Some(&cache),
+            &matrix,
+        )
+        .await;
         assert_eq!(
             pick.udid, "udid-1",
             "platform filter SHALL exclude a cross-platform matrix entry, leaving score 0",
@@ -606,7 +677,10 @@ mod tests {
         let cache = InstallCache::new();
         // Only the Android device has a Succeeded hit on its own bundle.
         cache
-            .set(("udid-android".into(), "com.app.android".into()), InstallOutcome::Succeeded)
+            .set(
+                ("udid-android".into(), "com.app.android".into()),
+                InstallOutcome::Succeeded,
+            )
             .await;
 
         let slot = test_slot(&["app"]);
@@ -639,15 +713,30 @@ mod tests {
         let free = vec![&sim1, &sim2];
 
         let cache = InstallCache::new();
-        cache.set(("udid-1".into(), "com.app".into()), InstallOutcome::Succeeded).await;
-        cache.set(("udid-2".into(), "com.app".into()), InstallOutcome::Succeeded).await;
+        cache
+            .set(
+                ("udid-1".into(), "com.app".into()),
+                InstallOutcome::Succeeded,
+            )
+            .await;
+        cache
+            .set(
+                ("udid-2".into(), "com.app".into()),
+                InstallOutcome::Succeeded,
+            )
+            .await;
 
         let slot = test_slot(&["app"]);
         let matrix = vec![test_matrix_entry("app", "com.app")];
 
-        let pick =
-            rank_by_install_cache(&free, Some(Platform::Ios), Some(&slot), Some(&cache), &matrix)
-                .await;
+        let pick = rank_by_install_cache(
+            &free,
+            Some(Platform::Ios),
+            Some(&slot),
+            Some(&cache),
+            &matrix,
+        )
+        .await;
         assert_eq!(
             pick.udid, "udid-1",
             "equal cache-hit scores SHALL be broken by input order (first wins)",
@@ -665,9 +754,14 @@ mod tests {
         let slot = test_slot(&["app"]);
         let matrix = vec![test_matrix_entry("app", "com.app")];
 
-        let pick =
-            rank_by_install_cache(&free, Some(Platform::Ios), Some(&slot), Some(&cache), &matrix)
-                .await;
+        let pick = rank_by_install_cache(
+            &free,
+            Some(Platform::Ios),
+            Some(&slot),
+            Some(&cache),
+            &matrix,
+        )
+        .await;
         assert_eq!(
             pick.udid, "udid-only",
             "a single-candidate pool SHALL return that candidate",

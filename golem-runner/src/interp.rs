@@ -168,8 +168,10 @@ mod tests {
             action: "http_get".into(),
             ..Default::default()
         };
-        step.params
-            .insert("url".into(), toml::Value::String("https://${host}/x".into()));
+        step.params.insert(
+            "url".into(),
+            toml::Value::String("https://${host}/x".into()),
+        );
         let out = interpolate_step(&step, &ctx).expect("ok");
         assert_eq!(
             out.params.get("url").and_then(|v| v.as_str()),

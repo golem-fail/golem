@@ -56,7 +56,10 @@ impl ResourceManager {
     }
 
     /// Create a ResourceManager with a custom RAM provider (for testing).
-    pub fn with_ram_provider(config: ConcurrencyConfig, ram_provider: Box<dyn RamProvider>) -> Self {
+    pub fn with_ram_provider(
+        config: ConcurrencyConfig,
+        ram_provider: Box<dyn RamProvider>,
+    ) -> Self {
         Self {
             config,
             ram_provider,
@@ -69,7 +72,10 @@ impl ResourceManager {
     /// Mark a device unhealthy (e.g. mid-reboot after ANR recovery).
     /// `find_available_device` callers should filter via [`is_unhealthy`].
     pub fn mark_unhealthy(&self, udid: &str) {
-        self.unhealthy.lock().expect("lock poisoned").insert(udid.to_string());
+        self.unhealthy
+            .lock()
+            .expect("lock poisoned")
+            .insert(udid.to_string());
     }
 
     /// Mark a previously-unhealthy device as healthy again.
@@ -146,7 +152,11 @@ impl ResourceManager {
 
     /// Get the port for an allocated device.
     pub fn port_for(&self, device_udid: &str) -> Option<u16> {
-        self.allocations.lock().expect("lock poisoned").get(device_udid).copied()
+        self.allocations
+            .lock()
+            .expect("lock poisoned")
+            .get(device_udid)
+            .copied()
     }
 
     /// Record that golem booted (or created) this device. Only tracked
@@ -191,7 +201,11 @@ impl ResourceManager {
     /// UDID, or `None` if that device is not tracked. Testing only.
     #[cfg(test)]
     fn golem_booted_device(&self, udid: &str) -> Option<DeviceInfo> {
-        self.golem_booted.lock().expect("lock poisoned").get(udid).cloned()
+        self.golem_booted
+            .lock()
+            .expect("lock poisoned")
+            .get(udid)
+            .cloned()
     }
 }
 
@@ -236,7 +250,8 @@ mod tests {
         );
         let device = test_device("iPhone 15", "uid-1", Platform::Ios);
 
-        rm.try_allocate(&device, 8222).expect("allocation SHALL succeed");
+        rm.try_allocate(&device, 8222)
+            .expect("allocation SHALL succeed");
         assert_eq!(rm.active_count(), 1);
         assert_eq!(rm.port_for("uid-1"), Some(8222));
 
@@ -291,7 +306,8 @@ mod tests {
         assert!(rm.try_allocate(&d2, 8223).is_err(), "second SHALL fail");
 
         rm.release("uid-1");
-        rm.try_allocate(&d2, 8223).expect("second SHALL succeed after release");
+        rm.try_allocate(&d2, 8223)
+            .expect("second SHALL succeed after release");
     }
 
     #[tokio::test]
@@ -317,8 +333,15 @@ mod tests {
         rm.mark_golem_booted(test_device("emu", "uid-2", Platform::Android));
 
         let warnings = rm.shutdown_golem_booted(true).await;
-        assert!(warnings.is_empty(), "keep_devices=true SHALL skip shutdown calls");
-        assert_eq!(rm.golem_booted_count(), 0, "map SHALL drain even with keep_devices=true");
+        assert!(
+            warnings.is_empty(),
+            "keep_devices=true SHALL skip shutdown calls"
+        );
+        assert_eq!(
+            rm.golem_booted_count(),
+            0,
+            "map SHALL drain even with keep_devices=true"
+        );
     }
 
     #[tokio::test]
@@ -398,7 +421,10 @@ mod tests {
             Box::new(FixedRamProvider(8192)),
         );
         let port = rm.find_free_port(&[]).expect("free port SHALL be found");
-        assert_eq!(port, PORT_RANGE_START, "first free port SHALL be range start");
+        assert_eq!(
+            port, PORT_RANGE_START,
+            "first free port SHALL be range start"
+        );
     }
 
     // 2. find_free_port skips ports listed in used_ports.
@@ -410,7 +436,11 @@ mod tests {
         );
         let used = vec![PORT_RANGE_START, PORT_RANGE_START + 1];
         let port = rm.find_free_port(&used).expect("free port SHALL be found");
-        assert_eq!(port, PORT_RANGE_START + 2, "SHALL skip externally-used ports");
+        assert_eq!(
+            port,
+            PORT_RANGE_START + 2,
+            "SHALL skip externally-used ports"
+        );
     }
 
     // 3. find_free_port skips ports already allocated by this manager.
@@ -421,9 +451,14 @@ mod tests {
             Box::new(FixedRamProvider(8192)),
         );
         let d = test_device("dev", "uid-1", Platform::Ios);
-        rm.try_allocate(&d, PORT_RANGE_START).expect("allocate SHALL succeed");
+        rm.try_allocate(&d, PORT_RANGE_START)
+            .expect("allocate SHALL succeed");
         let port = rm.find_free_port(&[]).expect("free port SHALL be found");
-        assert_eq!(port, PORT_RANGE_START + 1, "SHALL skip already-allocated ports");
+        assert_eq!(
+            port,
+            PORT_RANGE_START + 1,
+            "SHALL skip already-allocated ports"
+        );
     }
 
     // 4. find_free_port considers both used_ports and allocated ports together.
@@ -434,10 +469,17 @@ mod tests {
             Box::new(FixedRamProvider(8192)),
         );
         let d = test_device("dev", "uid-1", Platform::Ios);
-        rm.try_allocate(&d, PORT_RANGE_START + 1).expect("allocate SHALL succeed");
+        rm.try_allocate(&d, PORT_RANGE_START + 1)
+            .expect("allocate SHALL succeed");
         // start is externally used, start+1 is allocated → first free is start+2.
-        let port = rm.find_free_port(&[PORT_RANGE_START]).expect("free port SHALL be found");
-        assert_eq!(port, PORT_RANGE_START + 2, "SHALL combine used and allocated exclusions");
+        let port = rm
+            .find_free_port(&[PORT_RANGE_START])
+            .expect("free port SHALL be found");
+        assert_eq!(
+            port,
+            PORT_RANGE_START + 2,
+            "SHALL combine used and allocated exclusions"
+        );
     }
 
     // 5. find_free_port errors with HostPortsExhausted when whole range is used.
@@ -466,7 +508,8 @@ mod tests {
             Box::new(FixedRamProvider(8192)),
         );
         let d = test_device("dev", "uid-1", Platform::Ios);
-        rm.try_allocate(&d, 8222).expect("first allocate SHALL succeed");
+        rm.try_allocate(&d, 8222)
+            .expect("first allocate SHALL succeed");
         let err = rm
             .try_allocate(&d, 8223)
             .expect_err("re-allocating same device SHALL fail");
@@ -477,7 +520,11 @@ mod tests {
         );
         // The original allocation SHALL be untouched (still on its first port).
         assert_eq!(rm.port_for("uid-1"), Some(8222));
-        assert_eq!(rm.active_count(), 1, "failed re-allocate SHALL NOT add a slot");
+        assert_eq!(
+            rm.active_count(),
+            1,
+            "failed re-allocate SHALL NOT add a slot"
+        );
     }
 
     // 7. try_allocate failing on the concurrency limit carries DeviceBusy code.
@@ -506,7 +553,11 @@ mod tests {
             ConcurrencyConfig::default(),
             Box::new(FixedRamProvider(8192)),
         );
-        assert_eq!(rm.port_for("nope"), None, "unknown device SHALL have no port");
+        assert_eq!(
+            rm.port_for("nope"),
+            None,
+            "unknown device SHALL have no port"
+        );
     }
 
     // 9. release of a device that was never allocated is a no-op.
@@ -519,7 +570,11 @@ mod tests {
         let d = test_device("dev", "uid-1", Platform::Ios);
         rm.try_allocate(&d, 8222).expect("allocate SHALL succeed");
         rm.release("not-allocated");
-        assert_eq!(rm.active_count(), 1, "releasing unknown udid SHALL NOT drop a slot");
+        assert_eq!(
+            rm.active_count(),
+            1,
+            "releasing unknown udid SHALL NOT drop a slot"
+        );
         assert_eq!(rm.port_for("uid-1"), Some(8222));
     }
 
@@ -532,7 +587,11 @@ mod tests {
         );
         rm.mark_golem_booted(test_device("sim-a", "uid-1", Platform::Ios));
         rm.mark_golem_booted(test_device("sim-b", "uid-1", Platform::Ios));
-        assert_eq!(rm.golem_booted_count(), 1, "same UDID SHALL overwrite, not duplicate");
+        assert_eq!(
+            rm.golem_booted_count(),
+            1,
+            "same UDID SHALL overwrite, not duplicate"
+        );
     }
 
     // 11. mark_healthy removes only the named udid, leaving other unhealthy entries intact.
@@ -568,7 +627,11 @@ mod tests {
             .expect("tracked device SHALL be retrievable");
         assert_eq!(retained.udid, "uid-1", "retained udid SHALL match");
         assert_eq!(retained.name, "sim", "retained name SHALL match");
-        assert_eq!(retained.platform, Platform::Ios, "retained platform SHALL match");
+        assert_eq!(
+            retained.platform,
+            Platform::Ios,
+            "retained platform SHALL match"
+        );
     }
 
     // 14. golem_booted_device returns None for a udid that was never booted.
@@ -597,7 +660,10 @@ mod tests {
         let retained = rm
             .golem_booted_device("uid-1")
             .expect("tracked device SHALL be retrievable");
-        assert_eq!(retained.name, "sim-b", "overwrite SHALL return the latest DeviceInfo");
+        assert_eq!(
+            retained.name, "sim-b",
+            "overwrite SHALL return the latest DeviceInfo"
+        );
         assert_eq!(
             retained.platform,
             Platform::Android,
@@ -613,7 +679,10 @@ mod tests {
             Box::new(FixedRamProvider(8192)),
         );
         rm.mark_golem_booted(test_device("sim", "uid-1", Platform::Ios));
-        assert!(rm.golem_booted_device("uid-1").is_some(), "device SHALL be tracked pre-drain");
+        assert!(
+            rm.golem_booted_device("uid-1").is_some(),
+            "device SHALL be tracked pre-drain"
+        );
         let _ = rm.shutdown_golem_booted(true).await;
         assert!(
             rm.golem_booted_device("uid-1").is_none(),

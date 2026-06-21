@@ -60,7 +60,10 @@ pub fn propagate_results(
     for (child_var, parent_var) in save_to {
         let value = match child.get(child_var) {
             Some(v) => v.clone(),
-            None => crate::fail_code!(golem_events::FailureCode::ParseMissingReference, "sub-flow variable \"{child_var}\" not found for propagation"),
+            None => crate::fail_code!(
+                golem_events::FailureCode::ParseMissingReference,
+                "sub-flow variable \"{child_var}\" not found for propagation"
+            ),
         };
         parent.set_in_scope(ScopeLevel::Flow, parent_var.clone(), value);
     }
@@ -193,8 +196,7 @@ mod tests {
         let mut save_to = HashMap::new();
         save_to.insert("token".to_string(), "session_token".to_string());
 
-        propagate_results(&child_store, &mut parent, &save_to)
-            .expect("propagation should succeed");
+        propagate_results(&child_store, &mut parent, &save_to).expect("propagation should succeed");
 
         assert_eq!(
             parent.get("session_token"),
@@ -315,8 +317,7 @@ mod tests {
         save_to.insert("user_id".to_string(), "logged_in_user_id".to_string());
         save_to.insert("role".to_string(), "user_role".to_string());
 
-        propagate_results(&child_store, &mut parent, &save_to)
-            .expect("propagation should succeed");
+        propagate_results(&child_store, &mut parent, &save_to).expect("propagation should succeed");
 
         assert_eq!(
             parent.get("session_token"),
@@ -326,10 +327,7 @@ mod tests {
             parent.get("logged_in_user_id"),
             Some(&VarValue::string("42"))
         );
-        assert_eq!(
-            parent.get("user_role"),
-            Some(&VarValue::string("admin"))
-        );
+        assert_eq!(parent.get("user_role"), Some(&VarValue::string("admin")));
     }
 
     // ---------------------------------------------------------------
@@ -350,8 +348,7 @@ mod tests {
         let mut save_to = HashMap::new();
         save_to.insert("user".to_string(), "logged_in_user".to_string());
 
-        propagate_results(&child_store, &mut parent, &save_to)
-            .expect("propagation should succeed");
+        propagate_results(&child_store, &mut parent, &save_to).expect("propagation should succeed");
 
         let result = parent.get("logged_in_user").expect("should exist");
         assert_eq!(result, &user_obj);
@@ -406,8 +403,7 @@ mod tests {
         let mut save_to = HashMap::new();
         save_to.insert("token".to_string(), "base_url".to_string());
 
-        propagate_results(&child_store, &mut parent, &save_to)
-            .expect("propagation should succeed");
+        propagate_results(&child_store, &mut parent, &save_to).expect("propagation should succeed");
 
         // Existing parent variable SHALL be replaced with the propagated value.
         assert_eq!(
@@ -499,9 +495,7 @@ mod tests {
             Some(&VarValue::string("https://override.test"))
         );
         assert_eq!(
-            child
-                .resolve("base_url")
-                .expect("base_url SHALL resolve"),
+            child.resolve("base_url").expect("base_url SHALL resolve"),
             &VarValue::string("https://override.test")
         );
         // Flow-level overrides merge into the inherited Flow scope

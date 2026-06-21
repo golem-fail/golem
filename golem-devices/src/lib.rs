@@ -323,8 +323,7 @@ mod tests {
             "\"tablet\"",
             "DeviceType::Tablet SHALL serialize as \"tablet\""
         );
-        let back: DeviceType =
-            serde_json::from_str("\"tablet\"").expect("deserialize tablet");
+        let back: DeviceType = serde_json::from_str("\"tablet\"").expect("deserialize tablet");
         assert_eq!(back, DeviceType::Tablet, "\"tablet\" SHALL round-trip");
     }
 
@@ -338,10 +337,12 @@ mod tests {
             (DeviceState::NeedsCreation, "\"needscreation\""),
         ] {
             let json = serde_json::to_string(&state).expect("serialize state");
-            assert_eq!(json, wire, "DeviceState SHALL serialize to lowercase wire form");
+            assert_eq!(
+                json, wire,
+                "DeviceState SHALL serialize to lowercase wire form"
+            );
             let back: DeviceState = serde_json::from_str(&json).expect("deserialize state");
             assert_eq!(back, state, "DeviceState SHALL round-trip through JSON");
         }
     }
-
 }

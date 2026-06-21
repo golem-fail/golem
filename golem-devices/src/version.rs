@@ -26,16 +26,11 @@ pub fn parse_os_version(input: &str) -> anyhow::Result<OsVersionSpec> {
 
     // Handle "latest" variants
     if rest == "latest" {
-        return Ok(OsVersionSpec::Latest {
-            platform,
-            count: 1,
-        });
+        return Ok(OsVersionSpec::Latest { platform, count: 1 });
     }
 
     if let Some(suffix) = rest.strip_prefix("latest:") {
-        let count: u32 = suffix
-            .parse()
-            .context("invalid count after 'latest:'")?;
+        let count: u32 = suffix.parse().context("invalid count after 'latest:'")?;
         ensure!(count > 0, "latest count must be >= 1, got {count}");
         return Ok(OsVersionSpec::Latest { platform, count });
     }
@@ -406,7 +401,10 @@ mod tests {
             platform: Platform::Ios,
             major: 17,
         };
-        assert!(matches_version(&spec, 17), "Minimum SHALL include its own major");
+        assert!(
+            matches_version(&spec, 17),
+            "Minimum SHALL include its own major"
+        );
         assert!(!matches_version(&spec, 16));
     }
 
@@ -418,7 +416,10 @@ mod tests {
             count: 1,
         };
         assert!(matches_version(&spec, 0), "Latest SHALL match any major");
-        assert!(matches_version(&spec, u32::MAX), "Latest SHALL match any major");
+        assert!(
+            matches_version(&spec, u32::MAX),
+            "Latest SHALL match any major"
+        );
     }
 
     // 26. resolve_latest dedups -- duplicate majors collapse before truncation
@@ -447,7 +448,10 @@ mod tests {
     #[test]
     fn resolve_latest_empty_available() {
         let resolved = resolve_latest(Platform::Ios, 5, &[]);
-        assert!(resolved.is_empty(), "empty availability SHALL resolve to empty");
+        assert!(
+            resolved.is_empty(),
+            "empty availability SHALL resolve to empty"
+        );
     }
 
     // 29. resolve_latest count zero -- SHALL yield an empty vec even with availability

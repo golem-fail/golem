@@ -8,8 +8,7 @@ fn main() {
     let src_path = "src/dom_traversal.js";
     println!("cargo:rerun-if-changed={src_path}");
 
-    let source = std::fs::read_to_string(src_path)
-        .expect("src/dom_traversal.js missing");
+    let source = std::fs::read_to_string(src_path).expect("src/dom_traversal.js missing");
     let minified = minifier::js::minify(&source).to_string();
 
     let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR not set");

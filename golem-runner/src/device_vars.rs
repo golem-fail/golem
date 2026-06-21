@@ -25,9 +25,7 @@ impl DeviceVarManager {
     ///
     /// If the device has not been seen before, a new empty store is created.
     pub fn get_device_store(&mut self, device_id: &str) -> &mut VariableStore {
-        self.device_stores
-            .entry(device_id.to_string())
-            .or_default()
+        self.device_stores.entry(device_id.to_string()).or_default()
     }
 
     /// Get a mutable reference to the global store.

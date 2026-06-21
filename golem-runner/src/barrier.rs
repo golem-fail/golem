@@ -73,7 +73,11 @@ impl FailureBarrier {
     /// Get the step count at which the first failure occurred, if any.
     pub fn failure_point(&self) -> Option<u64> {
         let val = self.failed_at.load(Ordering::Acquire);
-        if val == NO_FAILURE { None } else { Some(val) }
+        if val == NO_FAILURE {
+            None
+        } else {
+            Some(val)
+        }
     }
 }
 
@@ -109,15 +113,15 @@ mod tests {
         b.report_failure(7);
 
         assert!(!b.should_stop(6)); // before failure — keep going
-        assert!(b.should_stop(7));  // at failure — stop
-        assert!(b.should_stop(8));  // past failure — stop
+        assert!(b.should_stop(7)); // at failure — stop
+        assert!(b.should_stop(8)); // past failure — stop
     }
 
     #[test]
     fn first_failure_wins() {
         let b = FailureBarrier::new();
         b.report_failure(10);
-        b.report_failure(5);  // earlier failure
+        b.report_failure(5); // earlier failure
         b.report_failure(15); // later failure
 
         assert_eq!(b.failure_point(), Some(5)); // earliest wins
@@ -159,7 +163,10 @@ mod tests {
     fn default_matches_new() {
         let b = FailureBarrier::default();
         assert!(!b.has_failure(), "default barrier SHALL have no failure");
-        assert!(!b.should_stop(0), "default barrier SHALL NOT stop at step 0");
+        assert!(
+            !b.should_stop(0),
+            "default barrier SHALL NOT stop at step 0"
+        );
         assert!(
             !b.should_stop(u64::MAX - 1),
             "default barrier SHALL NOT stop even at very high step counts",
@@ -175,7 +182,10 @@ mod tests {
         b.report_failure(0);
         assert!(b.has_failure(), "failure at step 0 SHALL be recorded");
         assert_eq!(b.failure_point(), Some(0));
-        assert!(b.should_stop(0), "device at step 0 SHALL stop when failure is at 0");
+        assert!(
+            b.should_stop(0),
+            "device at step 0 SHALL stop when failure is at 0"
+        );
         assert!(b.should_stop(1), "device past the failure point SHALL stop");
     }
 
@@ -211,7 +221,10 @@ mod tests {
             Some(4),
             "the earliest reported failure point SHALL be retained",
         );
-        assert!(!b.should_stop(3), "device before the point SHALL keep going");
+        assert!(
+            !b.should_stop(3),
+            "device before the point SHALL keep going"
+        );
         assert!(b.should_stop(4), "device at the retained point SHALL stop");
     }
 }

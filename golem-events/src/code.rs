@@ -161,18 +161,37 @@ impl FailureCode {
     pub fn domain(self) -> Domain {
         use FailureCode::*;
         match self {
-            FlowExplicitFail | FlowElementNotFound | FlowElementOffscreen
-            | FlowStepTimeout | FlowUnexpectedlyPresent | FlowAssertionMismatch
-            | FlowAlertInteraction | FlowExternalFailed | FlowMaxRuntime
+            FlowExplicitFail
+            | FlowElementNotFound
+            | FlowElementOffscreen
+            | FlowStepTimeout
+            | FlowUnexpectedlyPresent
+            | FlowAssertionMismatch
+            | FlowAlertInteraction
+            | FlowExternalFailed
+            | FlowMaxRuntime
             | FlowMaxSteps => Domain::Flow,
             Uncoded => Domain::Unknown,
-            ParseUnknownAction | ParseMissingReference | ParseMissingParam
-            | ParseVariable | ParseFlowFile | ParseDeviceConstraint => Domain::Parsing,
-            AppInstallPathBlocked | AppInstallScriptNotFound | AppInstallTimeout
-            | AppInstallFailed | AppStateQueryFailed | AppLifecycleFailed => Domain::App,
-            DeviceNotFound | DeviceBootTimeout | DeviceBusy | DeviceCreateFailed
-            | DeviceWebviewComms | DeviceCompanionWedged
-            | DeviceRegistrationTimeout | DeviceDriverOpFailed => Domain::Device,
+            ParseUnknownAction
+            | ParseMissingReference
+            | ParseMissingParam
+            | ParseVariable
+            | ParseFlowFile
+            | ParseDeviceConstraint => Domain::Parsing,
+            AppInstallPathBlocked
+            | AppInstallScriptNotFound
+            | AppInstallTimeout
+            | AppInstallFailed
+            | AppStateQueryFailed
+            | AppLifecycleFailed => Domain::App,
+            DeviceNotFound
+            | DeviceBootTimeout
+            | DeviceBusy
+            | DeviceCreateFailed
+            | DeviceWebviewComms
+            | DeviceCompanionWedged
+            | DeviceRegistrationTimeout
+            | DeviceDriverOpFailed => Domain::Device,
             HostToolchainMissing | HostPortsExhausted | HostOrchestratorIpc => Domain::Host,
         }
     }
@@ -266,12 +285,16 @@ impl<T, E: Into<anyhow::Error>> CodeExt<T> for Result<T, E> {
 
 /// Tag an error value directly (for non-`Result` construction sites).
 pub fn coded(c: FailureCode, e: anyhow::Error) -> anyhow::Error {
-    anyhow::Error::new(CodedError { code: c, message: format!("{e:#}") })
+    anyhow::Error::new(CodedError {
+        code: c,
+        message: format!("{e:#}"),
+    })
 }
 
 /// Walk the error chain for the outermost `CodedError` tag.
 pub fn extract_code(e: &anyhow::Error) -> Option<FailureCode> {
-    e.chain().find_map(|c| c.downcast_ref::<CodedError>().map(|m| m.code))
+    e.chain()
+        .find_map(|c| c.downcast_ref::<CodedError>().map(|m| m.code))
 }
 
 /// The human-readable message for an error, identical to `{e:#}`. `CodedError`
@@ -288,12 +311,30 @@ mod tests {
 
     #[test]
     fn render_severity_and_domain_letters() {
-        assert_eq!(FailureCode::FlowStepTimeout.render(Severity::Error), "EF408");
-        assert_eq!(FailureCode::FlowStepTimeout.render(Severity::Warning), "WF408");
-        assert_eq!(FailureCode::ParseMissingParam.render(Severity::Error), "EP422");
-        assert_eq!(FailureCode::AppInstallFailed.render(Severity::Error), "EA500");
-        assert_eq!(FailureCode::DeviceCompanionWedged.render(Severity::Error), "ED503");
-        assert_eq!(FailureCode::HostToolchainMissing.render(Severity::Error), "EH404");
+        assert_eq!(
+            FailureCode::FlowStepTimeout.render(Severity::Error),
+            "EF408"
+        );
+        assert_eq!(
+            FailureCode::FlowStepTimeout.render(Severity::Warning),
+            "WF408"
+        );
+        assert_eq!(
+            FailureCode::ParseMissingParam.render(Severity::Error),
+            "EP422"
+        );
+        assert_eq!(
+            FailureCode::AppInstallFailed.render(Severity::Error),
+            "EA500"
+        );
+        assert_eq!(
+            FailureCode::DeviceCompanionWedged.render(Severity::Error),
+            "ED503"
+        );
+        assert_eq!(
+            FailureCode::HostToolchainMissing.render(Severity::Error),
+            "EH404"
+        );
     }
 
     #[test]
@@ -306,7 +347,10 @@ mod tests {
     fn number_stable_across_severities() {
         let c = FailureCode::FlowElementNotFound;
         assert_eq!(c.number(), 404);
-        assert_eq!(&c.render(Severity::Error)[1..], &c.render(Severity::Warning)[1..]);
+        assert_eq!(
+            &c.render(Severity::Error)[1..],
+            &c.render(Severity::Warning)[1..]
+        );
     }
 
     #[test]
@@ -322,8 +366,7 @@ mod tests {
 
     #[test]
     fn extract_survives_outer_context() {
-        let r: anyhow::Result<()> =
-            Err(anyhow!("inner")).code(FailureCode::FlowStepTimeout);
+        let r: anyhow::Result<()> = Err(anyhow!("inner")).code(FailureCode::FlowStepTimeout);
         let e = match r {
             Err(e) => e.context("while running step"),
             Ok(()) => panic!("expected Err"),
@@ -365,10 +408,22 @@ mod tests {
     // 2. Host/Device/App are infrastructure; Flow/Parsing are test faults.
     #[test]
     fn is_infrastructure_partitions_domains() {
-        assert!(Domain::Host.is_infrastructure(), "Host SHALL be infrastructure");
-        assert!(Domain::Device.is_infrastructure(), "Device SHALL be infrastructure");
-        assert!(Domain::App.is_infrastructure(), "App SHALL be infrastructure");
-        assert!(!Domain::Flow.is_infrastructure(), "Flow SHALL NOT be infrastructure");
+        assert!(
+            Domain::Host.is_infrastructure(),
+            "Host SHALL be infrastructure"
+        );
+        assert!(
+            Domain::Device.is_infrastructure(),
+            "Device SHALL be infrastructure"
+        );
+        assert!(
+            Domain::App.is_infrastructure(),
+            "App SHALL be infrastructure"
+        );
+        assert!(
+            !Domain::Flow.is_infrastructure(),
+            "Flow SHALL NOT be infrastructure"
+        );
         assert!(
             !Domain::Parsing.is_infrastructure(),
             "Parsing SHALL NOT be infrastructure"

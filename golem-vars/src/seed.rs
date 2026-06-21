@@ -74,7 +74,10 @@ mod tests {
         let vals1: Vec<u64> = (0..10).map(|_| sm1.rng().gen()).collect();
         let vals2: Vec<u64> = (0..10).map(|_| sm2.rng().gen()).collect();
 
-        assert_ne!(vals1, vals2, "different seeds SHALL produce different sequences");
+        assert_ne!(
+            vals1, vals2,
+            "different seeds SHALL produce different sequences"
+        );
     }
 
     // 3. child() creates independent RNG
@@ -99,8 +102,14 @@ mod tests {
         let parent2_val: u64 = parent2.rng().gen();
         let child2_val: u64 = child2.rng().gen();
 
-        assert_eq!(parent_val, parent2_val, "parent sequences SHALL match with same seed");
-        assert_eq!(child_val, child2_val, "child sequences SHALL match with same parent seed");
+        assert_eq!(
+            parent_val, parent2_val,
+            "parent sequences SHALL match with same seed"
+        );
+        assert_eq!(
+            child_val, child2_val,
+            "child sequences SHALL match with same parent seed"
+        );
     }
 
     // 4. seed() returns the original seed

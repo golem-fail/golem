@@ -124,7 +124,13 @@ impl RegistrationState {
 
     /// Allocate a free port for a companion. Skips ports that are already
     /// in use (e.g. a companion left running from a previous golem session).
-    fn allocate_port(&self, device_id: &str, platform: &str, device_name: &str, version: &str) -> u16 {
+    fn allocate_port(
+        &self,
+        device_id: &str,
+        platform: &str,
+        device_name: &str,
+        version: &str,
+    ) -> u16 {
         let mut inner = self.inner.lock().expect("lock poisoned");
 
         // Find next free port, skipping any that are already bound
@@ -267,12 +273,18 @@ async fn handle_connection(
     // Route
     if request_line.starts_with("POST /register") {
         let body_str = String::from_utf8_lossy(&body);
-        let req: serde_json::Value = serde_json::from_str(&body_str)
-            .context("invalid JSON in /register body")?;
+        let req: serde_json::Value =
+            serde_json::from_str(&body_str).context("invalid JSON in /register body")?;
 
         let platform = req.get("platform").and_then(|v| v.as_str()).unwrap_or("");
-        let device_id = req.get("device_id").and_then(|v| v.as_str()).unwrap_or("unknown");
-        let device_name = req.get("device_name").and_then(|v| v.as_str()).unwrap_or("");
+        let device_id = req
+            .get("device_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+        let device_name = req
+            .get("device_name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let version = req.get("version").and_then(|v| v.as_str()).unwrap_or("");
 
         let port = state.allocate_port(device_id, platform, device_name, version);
@@ -318,7 +330,10 @@ mod tests {
     async fn new_state_is_empty_and_notifies_receiver() {
         let (state, mut rx) = RegistrationState::new();
 
-        assert!(state.all().is_empty(), "fresh state SHALL hold no companions");
+        assert!(
+            state.all().is_empty(),
+            "fresh state SHALL hold no companions"
+        );
         assert!(
             state.get("anything").is_none(),
             "fresh state SHALL return None for any device_id"
@@ -360,7 +375,10 @@ mod tests {
         let p2 = state.allocate_port("dev-b", "ios", "B", "1");
 
         assert_ne!(p1, p2, "distinct devices SHALL receive distinct ports");
-        assert!(p2 > p1, "next allocation SHALL advance past the previous port");
+        assert!(
+            p2 > p1,
+            "next allocation SHALL advance past the previous port"
+        );
     }
 
     // 4. Re-registering the same device_id overwrites the prior entry rather
@@ -371,10 +389,19 @@ mod tests {
 
         state.allocate_port("dev-3", "ios", "Old", "1.0");
         state.allocate_port("dev-3", "android", "New", "2.0");
-        let got = state.get("dev-3").expect("companion SHALL exist after re-register");
+        let got = state
+            .get("dev-3")
+            .expect("companion SHALL exist after re-register");
 
-        assert_eq!(state.all().len(), 1, "re-register SHALL NOT create a duplicate");
-        assert_eq!(got.device_name, "New", "later registration SHALL overwrite the entry");
+        assert_eq!(
+            state.all().len(),
+            1,
+            "re-register SHALL NOT create a duplicate"
+        );
+        assert_eq!(
+            got.device_name, "New",
+            "later registration SHALL overwrite the entry"
+        );
         assert_eq!(got.platform, "android", "later platform SHALL win");
     }
 
@@ -387,8 +414,14 @@ mod tests {
 
         state.remove("dev-4");
 
-        assert!(state.get("dev-4").is_none(), "removed device SHALL be gone from get()");
-        assert!(state.all().is_empty(), "removed device SHALL be gone from all()");
+        assert!(
+            state.get("dev-4").is_none(),
+            "removed device SHALL be gone from get()"
+        );
+        assert!(
+            state.all().is_empty(),
+            "removed device SHALL be gone from all()"
+        );
     }
 
     // 6. remove() on an unknown device_id is a no-op and SHALL NOT disturb
@@ -400,8 +433,15 @@ mod tests {
 
         state.remove("never-registered");
 
-        assert!(state.get("keep").is_some(), "unrelated companion SHALL survive");
-        assert_eq!(state.all().len(), 1, "no-op remove SHALL NOT change the count");
+        assert!(
+            state.get("keep").is_some(),
+            "unrelated companion SHALL survive"
+        );
+        assert_eq!(
+            state.all().len(),
+            1,
+            "no-op remove SHALL NOT change the count"
+        );
     }
 
     // 7. all() returns every distinct registration (order-independent).
@@ -415,7 +455,11 @@ mod tests {
         let mut ids: Vec<String> = state.all().into_iter().map(|c| c.device_id).collect();
         ids.sort();
 
-        assert_eq!(ids, vec!["d1", "d2", "d3"], "all() SHALL list every device_id");
+        assert_eq!(
+            ids,
+            vec!["d1", "d2", "d3"],
+            "all() SHALL list every device_id"
+        );
     }
 
     // 8. A receiver obtained via subscribe() (after construction) still sees
@@ -426,9 +470,15 @@ mod tests {
         let mut sub = state.subscribe();
 
         state.allocate_port("late-sub", "ios", "X", "1");
-        let got = sub.recv().await.expect("subscriber SHALL receive a notification");
+        let got = sub
+            .recv()
+            .await
+            .expect("subscriber SHALL receive a notification");
 
-        assert_eq!(got, "late-sub", "subscriber SHALL receive the registering device_id");
+        assert_eq!(
+            got, "late-sub",
+            "subscriber SHALL receive the registering device_id"
+        );
     }
 
     // 9. ensure_companion_port runs init exactly once for a UDID and shares
@@ -455,7 +505,11 @@ mod tests {
 
         assert_eq!(first, 8300, "first call SHALL return the init value");
         assert_eq!(second, 8300, "second call SHALL return the cached value");
-        assert_eq!(calls.load(Ordering::SeqCst), 1, "init SHALL run at most once per UDID");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            1,
+            "init SHALL run at most once per UDID"
+        );
     }
 
     // 10. Distinct UDIDs each drive their own init independently.
@@ -483,9 +537,7 @@ mod tests {
         let (state, _rx) = RegistrationState::new();
 
         let err = state
-            .ensure_companion_port("udid-r", || async {
-                Err(anyhow::anyhow!("boom"))
-            })
+            .ensure_companion_port("udid-r", || async { Err(anyhow::anyhow!("boom")) })
             .await;
         assert!(err.is_err(), "failing init SHALL surface the error");
 
@@ -493,7 +545,10 @@ mod tests {
             .ensure_companion_port("udid-r", || async { Ok(8330) })
             .await
             .expect("retry after error SHALL succeed");
-        assert_eq!(ok, 8330, "cell SHALL stay empty after an error so retry can init");
+        assert_eq!(
+            ok, 8330,
+            "cell SHALL stay empty after an error so retry can init"
+        );
     }
 
     // 12. invalidate_companion clears a populated cell so the next call
@@ -513,7 +568,10 @@ mod tests {
             .await
             .expect("post-invalidate init SHALL run again");
         assert_eq!(first, 8340, "pre-invalidate value SHALL be the original");
-        assert_eq!(second, 8341, "after invalidate the next init SHALL produce a fresh value");
+        assert_eq!(
+            second, 8341,
+            "after invalidate the next init SHALL produce a fresh value"
+        );
     }
 
     // 13. invalidate_companion on an unknown UDID leaves an unrelated,
@@ -569,7 +627,10 @@ mod tests {
         let second = state.launch_guard("sim-1");
         tokio::pin!(second);
         let pending = tokio::time::timeout(std::time::Duration::from_millis(50), &mut second).await;
-        assert!(pending.is_err(), "second acquire of same UDID SHALL block while guard is held");
+        assert!(
+            pending.is_err(),
+            "second acquire of same UDID SHALL block while guard is held"
+        );
 
         drop(guard);
         let _g2 = second.await;
@@ -588,7 +649,10 @@ mod tests {
         )
         .await;
 
-        assert!(g2.is_ok(), "distinct UDID SHALL acquire its guard without blocking");
+        assert!(
+            g2.is_ok(),
+            "distinct UDID SHALL acquire its guard without blocking"
+        );
     }
 
     // 16. Seeding next_port at COMPANION_PORT_END drives the allocator's
@@ -608,8 +672,7 @@ mod tests {
 
         // 2. Probe whether the range-end port is bindable right now: that
         //    decides which allocator branch we exercise.
-        let end_is_free =
-            TcpListener::bind(format!("127.0.0.1:{COMPANION_PORT_END}")).is_ok();
+        let end_is_free = TcpListener::bind(format!("127.0.0.1:{COMPANION_PORT_END}")).is_ok();
 
         // 3. Allocate from the top. The returned port always stays in range.
         let port = state.allocate_port("wrap-dev", "ios", "Top", "1");
@@ -643,15 +706,18 @@ mod tests {
     // 17. find_free_port_in_range returns the first bindable port in range.
     #[test]
     fn find_free_port_returns_port_in_range() {
-        let (listener, port) =
-            find_free_port_in_range(REG_PORT_START, REG_PORT_END).expect("a free reg port SHALL exist");
+        let (listener, port) = find_free_port_in_range(REG_PORT_START, REG_PORT_END)
+            .expect("a free reg port SHALL exist");
 
         assert!(
             (REG_PORT_START..=REG_PORT_END).contains(&port),
             "returned port SHALL fall within the requested range"
         );
         assert_eq!(
-            listener.local_addr().expect("listener SHALL have an address").port(),
+            listener
+                .local_addr()
+                .expect("listener SHALL have an address")
+                .port(),
             port,
             "returned listener SHALL be bound to the returned port"
         );
@@ -688,7 +754,10 @@ mod tests {
                 held.clear();
             }
         }
-        let (lo, hi) = (lo.expect("found lo"), hi.expect("found two adjacent free ports"));
+        let (lo, hi) = (
+            lo.expect("found lo"),
+            hi.expect("found two adjacent free ports"),
+        );
 
         let err = match find_free_port_in_range(lo, hi) {
             Ok(_) => panic!("a fully-occupied range SHALL yield an error"),
@@ -728,17 +797,29 @@ mod tests {
         let mut conn = tokio::net::TcpStream::connect(("127.0.0.1", reg_port))
             .await
             .expect("client SHALL connect to reg server");
-        conn.write_all(request.as_bytes()).await.expect("client SHALL send request");
+        conn.write_all(request.as_bytes())
+            .await
+            .expect("client SHALL send request");
         let mut response = String::new();
-        conn.read_to_string(&mut response).await.expect("client SHALL read response");
+        conn.read_to_string(&mut response)
+            .await
+            .expect("client SHALL read response");
 
-        assert!(response.starts_with("HTTP/1.1 200 OK"), "register SHALL return 200");
-        let got = state.get("e2e-dev").expect("companion SHALL be recorded in state");
+        assert!(
+            response.starts_with("HTTP/1.1 200 OK"),
+            "register SHALL return 200"
+        );
+        let got = state
+            .get("e2e-dev")
+            .expect("companion SHALL be recorded in state");
         assert!(
             response.contains(&format!("\"port\":{}", got.port)),
             "response body SHALL echo the allocated port"
         );
-        assert_eq!(got.device_name, "SimPhone", "recorded device_name SHALL match the request");
+        assert_eq!(
+            got.device_name, "SimPhone",
+            "recorded device_name SHALL match the request"
+        );
     }
 
     // 20. An unknown route returns 404 and records nothing.
@@ -755,12 +836,22 @@ mod tests {
         let mut conn = tokio::net::TcpStream::connect(("127.0.0.1", reg_port))
             .await
             .expect("client SHALL connect");
-        conn.write_all(request.as_bytes()).await.expect("client SHALL send request");
+        conn.write_all(request.as_bytes())
+            .await
+            .expect("client SHALL send request");
         let mut response = String::new();
-        conn.read_to_string(&mut response).await.expect("client SHALL read response");
+        conn.read_to_string(&mut response)
+            .await
+            .expect("client SHALL read response");
 
-        assert!(response.starts_with("HTTP/1.1 404 Not Found"), "unknown route SHALL 404");
-        assert!(state.all().is_empty(), "non-register request SHALL record nothing");
+        assert!(
+            response.starts_with("HTTP/1.1 404 Not Found"),
+            "unknown route SHALL 404"
+        );
+        assert!(
+            state.all().is_empty(),
+            "non-register request SHALL record nothing"
+        );
     }
 
     // 21. A /register POST with missing fields falls back to the defaults
@@ -783,14 +874,26 @@ mod tests {
         let mut conn = tokio::net::TcpStream::connect(("127.0.0.1", reg_port))
             .await
             .expect("client SHALL connect");
-        conn.write_all(request.as_bytes()).await.expect("client SHALL send request");
+        conn.write_all(request.as_bytes())
+            .await
+            .expect("client SHALL send request");
         let mut response = String::new();
-        conn.read_to_string(&mut response).await.expect("client SHALL read response");
+        conn.read_to_string(&mut response)
+            .await
+            .expect("client SHALL read response");
 
-        assert!(response.starts_with("HTTP/1.1 200 OK"), "register SHALL 200 even with empty body");
-        let got = state.get("unknown").expect("missing device_id SHALL default to 'unknown'");
+        assert!(
+            response.starts_with("HTTP/1.1 200 OK"),
+            "register SHALL 200 even with empty body"
+        );
+        let got = state
+            .get("unknown")
+            .expect("missing device_id SHALL default to 'unknown'");
         assert_eq!(got.platform, "", "missing platform SHALL default to empty");
-        assert_eq!(got.device_name, "", "missing device_name SHALL default to empty");
+        assert_eq!(
+            got.device_name, "",
+            "missing device_name SHALL default to empty"
+        );
         assert_eq!(got.version, "", "missing version SHALL default to empty");
     }
 }

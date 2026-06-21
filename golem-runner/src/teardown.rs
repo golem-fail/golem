@@ -41,7 +41,15 @@ pub async fn execute_teardown(
         for step in &block.steps {
             let effective_step = apply_teardown_defaults(step);
 
-            match execute_step_with_policy(&effective_step, driver, vars, default_timeout_ms, ctx, &[]).await
+            match execute_step_with_policy(
+                &effective_step,
+                driver,
+                vars,
+                default_timeout_ms,
+                ctx,
+                &[],
+            )
+            .await
             {
                 Ok(StepOutcome::Success) => {}
                 Ok(StepOutcome::Warning { message, .. }) => result.warnings.push(message),
@@ -450,10 +458,7 @@ mod tests {
         let mut ignore_step = make_failing_step();
         ignore_step.if_fail = Some("ignore".to_string());
 
-        let blocks = vec![make_teardown_block(vec![
-            ignore_step,
-            make_success_step(),
-        ])];
+        let blocks = vec![make_teardown_block(vec![ignore_step, make_success_step()])];
 
         let result = execute_teardown(&blocks, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
 
@@ -557,12 +562,7 @@ mod tests {
             Some("captured"),
             "save_to SHALL be preserved"
         );
-        assert_eq!(
-            effective.timeout,
-            Some(1234),
-            "timeout SHALL be preserved"
-        );
+        assert_eq!(effective.timeout, Some(1234), "timeout SHALL be preserved");
         assert_eq!(effective.retry, Some(5), "retry SHALL be preserved");
     }
-
 }

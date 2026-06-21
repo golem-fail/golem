@@ -135,7 +135,10 @@ mod tests {
         ];
         let result = evaluate_generators(&vars, &mut rng).expect("should succeed");
 
-        assert_eq!(result.get("greeting"), Some(&VarValue::string("hello world")));
+        assert_eq!(
+            result.get("greeting"),
+            Some(&VarValue::string("hello world"))
+        );
         assert_eq!(result.get("name"), Some(&VarValue::string("Alice")));
     }
 
@@ -148,7 +151,10 @@ mod tests {
 
         let email_val = result.get("email").expect("should have email");
         let email_str = email_val.as_str().expect("should be string");
-        assert!(email_str.contains('@'), "SHALL be an email, got: {email_str}");
+        assert!(
+            email_str.contains('@'),
+            "SHALL be an email, got: {email_str}"
+        );
     }
 
     // 3. Cross-reference: generator param references prior variable
@@ -157,7 +163,10 @@ mod tests {
         let mut rng = seeded_rng();
         let vars = vec![
             ("domain".to_string(), "acme.com".to_string()),
-            ("email".to_string(), "${fake:email(domain=${domain})}".to_string()),
+            (
+                "email".to_string(),
+                "${fake:email(domain=${domain})}".to_string(),
+            ),
         ];
         let result = evaluate_generators(&vars, &mut rng).expect("should succeed");
 
@@ -174,7 +183,10 @@ mod tests {
     fn cross_reference_object_field_dot_path() {
         let mut rng = seeded_rng();
         let vars = vec![
-            ("addr".to_string(), "${fake:address(country=JP)}".to_string()),
+            (
+                "addr".to_string(),
+                "${fake:address(country=JP)}".to_string(),
+            ),
             (
                 "phone".to_string(),
                 "${fake:phone(country=${addr.country_code})}".to_string(),
@@ -201,7 +213,10 @@ mod tests {
     fn multiple_generators_chained() {
         let mut rng = seeded_rng();
         let vars = vec![
-            ("addr".to_string(), "${fake:address(country=JP)}".to_string()),
+            (
+                "addr".to_string(),
+                "${fake:address(country=JP)}".to_string(),
+            ),
             (
                 "phone".to_string(),
                 "${fake:phone(country=${addr.country_code})}".to_string(),
@@ -265,7 +280,10 @@ mod tests {
                 "phone".to_string(),
                 "${fake:phone(country=${addr.country_code})}".to_string(),
             ),
-            ("addr".to_string(), "${fake:address(country=JP)}".to_string()),
+            (
+                "addr".to_string(),
+                "${fake:address(country=JP)}".to_string(),
+            ),
         ];
         let result = evaluate_generators(&vars, &mut rng);
 
@@ -285,7 +303,10 @@ mod tests {
             ("base_url".to_string(), "https://example.com".to_string()),
             ("user_email".to_string(), "${fake:email}".to_string()),
             ("greeting".to_string(), "Hello!".to_string()),
-            ("addr".to_string(), "${fake:address(country=GB)}".to_string()),
+            (
+                "addr".to_string(),
+                "${fake:address(country=GB)}".to_string(),
+            ),
         ];
         let result = evaluate_generators(&vars, &mut rng).expect("should succeed");
 
@@ -311,7 +332,10 @@ mod tests {
     #[test]
     fn deterministic_with_same_seed() {
         let vars = vec![
-            ("addr".to_string(), "${fake:address(country=JP)}".to_string()),
+            (
+                "addr".to_string(),
+                "${fake:address(country=JP)}".to_string(),
+            ),
             ("email".to_string(), "${fake:email}".to_string()),
             ("name".to_string(), "${fake:first_name}".to_string()),
         ];
@@ -374,7 +398,10 @@ mod tests {
     fn error_referencing_object_without_dot_path() {
         let mut rng = seeded_rng();
         let vars = vec![
-            ("addr".to_string(), "${fake:address(country=JP)}".to_string()),
+            (
+                "addr".to_string(),
+                "${fake:address(country=JP)}".to_string(),
+            ),
             ("bad".to_string(), "value=${addr}".to_string()),
         ];
         let result = evaluate_generators(&vars, &mut rng);
@@ -403,5 +430,4 @@ mod tests {
             "expected parse-failure error, got: {err}"
         );
     }
-
 }

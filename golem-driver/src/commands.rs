@@ -175,11 +175,8 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn ios_push_notification_command() {
-        let cmd = push_notification_command_ios(
-            "ABCD-1234",
-            "com.example.app",
-            "/tmp/payload.json",
-        );
+        let cmd =
+            push_notification_command_ios("ABCD-1234", "com.example.app", "/tmp/payload.json");
         assert_eq!(
             cmd,
             vec![
@@ -229,12 +226,7 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn ios_grant_permission_command() {
-        let cmd = permission_command_ios(
-            "ABCD-1234",
-            "grant",
-            "camera",
-            "com.example.app",
-        );
+        let cmd = permission_command_ios("ABCD-1234", "grant", "camera", "com.example.app");
         assert_eq!(
             cmd,
             vec![
@@ -254,12 +246,7 @@ mod tests {
     // -----------------------------------------------------------------------
     #[test]
     fn ios_revoke_permission_command() {
-        let cmd = permission_command_ios(
-            "ABCD-1234",
-            "revoke",
-            "photos",
-            "com.example.app",
-        );
+        let cmd = permission_command_ios("ABCD-1234", "revoke", "photos", "com.example.app");
         assert_eq!(
             cmd,
             vec![
@@ -404,15 +391,7 @@ mod tests {
         //    other position (prefix + device id) is left untouched.
         assert_eq!(
             cmd,
-            vec![
-                "xcrun",
-                "simctl",
-                "privacy",
-                "DEV",
-                "reset",
-                "location",
-                "com.x",
-            ],
+            vec!["xcrun", "simctl", "privacy", "DEV", "reset", "location", "com.x",],
             "arbitrary action SHALL be forwarded verbatim with no validation",
         );
     }

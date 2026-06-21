@@ -76,7 +76,10 @@ impl PerfCollector {
         let mut data = RawPerfData::default();
 
         // Memory: dumpsys meminfo (host-side, works without permissions)
-        if let Ok(output) = self.adb(&["shell", "dumpsys", "meminfo", &self.bundle_id]).await {
+        if let Ok(output) = self
+            .adb(&["shell", "dumpsys", "meminfo", &self.bundle_id])
+            .await
+        {
             data.memory_mb = parse_android_memory(&output);
         }
 
@@ -172,10 +175,7 @@ impl PerfCollector {
     }
 
     async fn android_pid(&self) -> Option<u32> {
-        let output = self
-            .adb(&["shell", "pidof", &self.bundle_id])
-            .await
-            .ok()?;
+        let output = self.adb(&["shell", "pidof", &self.bundle_id]).await.ok()?;
         output.split_whitespace().next()?.parse().ok()
     }
 
@@ -228,7 +228,12 @@ impl PerfCollectorSet {
             }
             collectors.insert(
                 bundle_id.clone(),
-                PerfCollector::new(platform, device_id.clone(), bundle_id.clone(), companion_port),
+                PerfCollector::new(
+                    platform,
+                    device_id.clone(),
+                    bundle_id.clone(),
+                    companion_port,
+                ),
             );
         }
         Self {
@@ -491,16 +496,15 @@ Uptime: 123456 Realtime: 123456
   12.5% 5678/system_server: 8% user + 4.5% kernel
   5.2% 9012/com.android.systemui: 3% user + 2.2% kernel
 "#;
-        let cpu =
-            parse_android_cpu(output, "com.example.app").expect("SHALL parse CPU percentage");
+        let cpu = parse_android_cpu(output, "com.example.app").expect("SHALL parse CPU percentage");
         assert!((cpu - 23.1).abs() < 0.01);
     }
 
     #[test]
     fn android_cpu_plus_prefix() {
         let output = " +0% 13819/fail.golem.test: 0% user + 0% kernel\n";
-        let cpu = parse_android_cpu(output, "fail.golem.test")
-            .expect("SHALL parse CPU with + prefix");
+        let cpu =
+            parse_android_cpu(output, "fail.golem.test").expect("SHALL parse CPU with + prefix");
         assert!((cpu - 0.0).abs() < 0.01);
     }
 
@@ -541,7 +545,8 @@ Threads:        42
 
     #[test]
     fn companion_perf_json_full() {
-        let json = r#"{"file_descriptors":241,"disk_kb":4924,"net_rx_bytes":159744,"net_tx_bytes":46080}"#;
+        let json =
+            r#"{"file_descriptors":241,"disk_kb":4924,"net_rx_bytes":159744,"net_tx_bytes":46080}"#;
         let r = parse_companion_perf_json(json).expect("SHALL parse companion JSON");
         assert_eq!(r.file_descriptors, Some(241));
         assert_eq!(r.disk_kb, Some(4924));
@@ -551,7 +556,8 @@ Threads:        42
 
     #[test]
     fn companion_perf_json_nulls() {
-        let json = r#"{"file_descriptors":null,"disk_kb":null,"net_rx_bytes":null,"net_tx_bytes":null}"#;
+        let json =
+            r#"{"file_descriptors":null,"disk_kb":null,"net_rx_bytes":null,"net_tx_bytes":null}"#;
         let r = parse_companion_perf_json(json).expect("SHALL parse companion JSON with nulls");
         assert!(r.file_descriptors.is_none());
         assert!(r.disk_kb.is_none());
@@ -561,7 +567,8 @@ Threads:        42
 
     #[test]
     fn companion_perf_json_partial() {
-        let json = r#"{"file_descriptors":87,"disk_kb":null,"net_rx_bytes":1024,"net_tx_bytes":null}"#;
+        let json =
+            r#"{"file_descriptors":87,"disk_kb":null,"net_rx_bytes":1024,"net_tx_bytes":null}"#;
         let r = parse_companion_perf_json(json).expect("SHALL parse partial companion JSON");
         assert_eq!(r.file_descriptors, Some(87));
         assert!(r.disk_kb.is_none());
@@ -618,10 +625,7 @@ user     12345   ??    0.0 S    31T   0:00.01   0:00.03 /path/to/app
 user     12345   ??    0.0 S    31T   0:00.00   0:00.01 /path/to/app
 user     12345   ??    0.0 S    31T   0:00.02   0:00.05 /path/to/app
 "#;
-        assert_eq!(
-            parse_ios_threads(output).expect("SHALL count threads"),
-            3
-        );
+        assert_eq!(parse_ios_threads(output).expect("SHALL count threads"), 3);
     }
 
     #[test]
@@ -639,14 +643,14 @@ user     12345   ??    0.0 S    31T   0:00.02   0:00.05 /path/to/app
 
     #[test]
     fn ios_fds_parses() {
-        let mut output = String::from("COMMAND     PID   USER   FD   TYPE DEVICE SIZE/OFF NODE NAME\n");
+        let mut output =
+            String::from("COMMAND     PID   USER   FD   TYPE DEVICE SIZE/OFF NODE NAME\n");
         for i in 0..87 {
-            output.push_str(&format!("app     12345   user  {i}u   REG  1,4  12345 67890 /some/path\n"));
+            output.push_str(&format!(
+                "app     12345   user  {i}u   REG  1,4  12345 67890 /some/path\n"
+            ));
         }
-        assert_eq!(
-            parse_ios_fds(&output).expect("SHALL count FDs"),
-            87
-        );
+        assert_eq!(parse_ios_fds(&output).expect("SHALL count FDs"), 87);
     }
 
     #[test]
@@ -743,7 +747,8 @@ user     12345   ??    0.0 S    31T   0:00.02   0:00.05 /path/to/app
     // 4. Non-numeric values for numeric keys SHALL be treated as absent (None).
     #[test]
     fn companion_perf_json_wrong_types() {
-        let json = r#"{"file_descriptors":"abc","disk_kb":true,"net_rx_bytes":[],"net_tx_bytes":1.5}"#;
+        let json =
+            r#"{"file_descriptors":"abc","disk_kb":true,"net_rx_bytes":[],"net_tx_bytes":1.5}"#;
         let r = parse_companion_perf_json(json).expect("SHALL parse JSON with wrong types");
         assert!(r.file_descriptors.is_none());
         assert!(r.disk_kb.is_none());
@@ -889,7 +894,10 @@ user     12345   ??    0.0 S    31T   0:00.02   0:00.05 /path/to/app
     async fn collector_set_capture_no_active() {
         let set = PerfCollectorSet::new(&[], Platform::Android, "device-1".to_string(), None);
         let data = set.capture().await;
-        assert!(data.memory_mb.is_none(), "no active bundle SHALL yield empty data");
+        assert!(
+            data.memory_mb.is_none(),
+            "no active bundle SHALL yield empty data"
+        );
         assert!(data.cpu_percent.is_none());
         assert!(data.threads.is_none());
     }

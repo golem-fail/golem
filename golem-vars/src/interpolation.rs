@@ -123,7 +123,10 @@ fn navigate_value(root_key: &str, rest: &[&str], value: &VarValue) -> Result<Var
 /// refs (`self:`/`global:`/`device:`/`_each.`) fall back to the string
 /// resolver wrapped as a `VarValue::String` (object copy through a prefix
 /// isn't needed for declarations).
-fn resolve_reference_value(reference: &str, ctx: &InterpolationContext) -> Result<VarValue, VarError> {
+fn resolve_reference_value(
+    reference: &str,
+    ctx: &InterpolationContext,
+) -> Result<VarValue, VarError> {
     if reference.starts_with("fake:") {
         let resolver = ctx.generator.ok_or_else(|| {
             VarError::Other("fake: generators are not available in this context".to_string())
@@ -267,9 +270,9 @@ fn resolve_reference(reference: &str, ctx: &InterpolationContext) -> Result<Stri
         let device_stores = ctx.device_stores.ok_or_else(|| {
             VarError::Other("self: prefix used but no device stores available".to_string())
         })?;
-        let device_store = device_stores.get(device_name).ok_or_else(|| {
-            VarError::Undefined(format!("self:{var_name}"))
-        })?;
+        let device_store = device_stores
+            .get(device_name)
+            .ok_or_else(|| VarError::Undefined(format!("self:{var_name}")))?;
         return resolve_from_store(var_name, device_store);
     }
 
@@ -283,9 +286,9 @@ fn resolve_reference(reference: &str, ctx: &InterpolationContext) -> Result<Stri
 
     if let Some(var_name) = reference.strip_prefix("_each.") {
         // _each. prefix -- each_vars store
-        let each_store = ctx.each_vars.ok_or_else(|| {
-            VarError::Other("_each used outside of for_each context".to_string())
-        })?;
+        let each_store = ctx
+            .each_vars
+            .ok_or_else(|| VarError::Other("_each used outside of for_each context".to_string()))?;
         return resolve_from_store(var_name, each_store);
     }
 
@@ -298,9 +301,9 @@ fn resolve_reference(reference: &str, ctx: &InterpolationContext) -> Result<Stri
                 "device prefix \"{device_name}:\" used but no device stores available"
             ))
         })?;
-        let device_store = device_stores.get(device_name).ok_or_else(|| {
-            VarError::Other(format!("device \"{device_name}\" not found"))
-        })?;
+        let device_store = device_stores
+            .get(device_name)
+            .ok_or_else(|| VarError::Other(format!("device \"{device_name}\" not found")))?;
         return resolve_from_store(var_name, device_store);
     }
 
@@ -566,7 +569,8 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-            generator: None,        };
+            generator: None,
+        };
         let result = interpolate("${self:email}", &ctx).unwrap();
         assert_eq!(result, "device@example.com");
     }
@@ -589,7 +593,8 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-            generator: None,        };
+            generator: None,
+        };
         let result = interpolate("${self:email}", &ctx);
         assert!(result.is_err());
     }
@@ -610,7 +615,8 @@ mod tests {
             global_store: Some(&global_store),
             each_vars: None,
             builtins: None,
-            generator: None,        };
+            generator: None,
+        };
         let result = interpolate("${global:email}", &ctx).unwrap();
         assert_eq!(result, "global@example.com");
     }
@@ -633,7 +639,8 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-            generator: None,        };
+            generator: None,
+        };
         let result = interpolate("${iphone_17:quote_ref}", &ctx).unwrap();
         assert_eq!(result, "QR-12345");
     }
@@ -651,7 +658,8 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-            generator: None,        };
+            generator: None,
+        };
         let result = interpolate("${nonexistent_device:var}", &ctx);
         assert!(result.is_err());
     }
@@ -672,7 +680,8 @@ mod tests {
             global_store: None,
             each_vars: Some(&each_store),
             builtins: None,
-            generator: None,        };
+            generator: None,
+        };
         let result = interpolate("${_each.item}", &ctx).unwrap();
         assert_eq!(result, "apple");
     }
@@ -689,7 +698,8 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-            generator: None,        };
+            generator: None,
+        };
         let result = interpolate("${_each.item}", &ctx);
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -716,10 +726,7 @@ mod tests {
     // 16. Empty string is valid
     #[test]
     fn empty_string_is_valid() {
-        let store = store_with(
-            ScopeLevel::Project,
-            vec![("name", VarValue::string(""))],
-        );
+        let store = store_with(ScopeLevel::Project, vec![("name", VarValue::string(""))]);
         let ctx = simple_ctx(&store);
         let result = interpolate("${name}", &ctx).unwrap();
         assert_eq!(result, "");
@@ -739,7 +746,8 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: Some(&builtins),
-            generator: None,        };
+            generator: None,
+        };
         let result = interpolate("${_device}", &ctx).unwrap();
         assert_eq!(result, "Pixel 9");
     }
@@ -758,7 +766,8 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: Some(&builtins),
-            generator: None,        };
+            generator: None,
+        };
         let result = interpolate("${_loop}", &ctx).unwrap();
         assert_eq!(result, "3");
     }
@@ -838,7 +847,8 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-            generator: None,        };
+            generator: None,
+        };
         let result = interpolate("${email}", &ctx).unwrap();
         assert_eq!(result, "device@example.com");
     }
@@ -935,7 +945,8 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-            generator: None,        };
+            generator: None,
+        };
         let result = interpolate("${self:email}", &ctx);
         let err = result.expect_err("self: without device stores SHALL error");
         assert!(
@@ -956,7 +967,8 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-            generator: None,        };
+            generator: None,
+        };
         let result = interpolate("${self:email}", &ctx);
         let err = result.expect_err("self: for absent device SHALL error");
         assert!(
@@ -1014,7 +1026,8 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-            generator: None,        };
+            generator: None,
+        };
         let result = interpolate("${only_in_main}", &ctx).expect("SHALL fall through to main");
         assert_eq!(result, "main-value");
     }
@@ -1033,7 +1046,8 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: Some(&builtins),
-            generator: None,        };
+            generator: None,
+        };
         let result = interpolate("${_device.field}", &ctx);
         let err = result.expect_err("dot access on a builtin SHALL error");
         assert!(
@@ -1142,7 +1156,8 @@ mod tests {
             global_store: None,
             each_vars: Some(&each_store),
             builtins: None,
-            generator: None,        };
+            generator: None,
+        };
         let result = interpolate("${_each.item.name}", &ctx).expect("nested _each SHALL resolve");
         assert_eq!(result, "apple");
     }
@@ -1165,7 +1180,8 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: None,
-            generator: None,        };
+            generator: None,
+        };
         let result = interpolate("${iphone_17:absent}", &ctx);
         let err = result.expect_err("missing cross-device var SHALL error");
         assert!(
@@ -1206,7 +1222,8 @@ mod tests {
             global_store: None,
             each_vars: None,
             builtins: Some(&builtins),
-            generator: None,        };
+            generator: None,
+        };
         let result = interpolate("${_device}", &ctx).expect("SHALL resolve");
         assert_eq!(
             result, "builtin-value",
@@ -1234,7 +1251,10 @@ mod tests {
         let out = interpolate("user=${fake:email}", &ctx).expect("inline generator");
         assert!(out.starts_with("user="), "literal prefix preserved: {out}");
         assert!(out.contains('@'), "generated an email: {out}");
-        assert!(!out.contains("fake:"), "generator was evaluated, not literal: {out}");
+        assert!(
+            !out.contains("fake:"),
+            "generator was evaluated, not literal: {out}"
+        );
     }
 
     // 46. Generator object field selector yields the field's scalar.
@@ -1278,7 +1298,10 @@ mod tests {
         ctx.generator = Some(&gen);
         let out = interpolate("${fake:phone(country=${addr.country_code})}", &ctx)
             .expect("nested generator args");
-        assert!(out.starts_with("+81"), "JP phone from correlated arg, got: {out}");
+        assert!(
+            out.starts_with("+81"),
+            "JP phone from correlated arg, got: {out}"
+        );
     }
 
     // 49. A `${fake:…}` reference with no generator in the context errors.
@@ -1286,8 +1309,7 @@ mod tests {
     fn generator_without_resolver_errors() {
         let store = VariableStore::new();
         let ctx = InterpolationContext::new(&store); // generator: None
-        let err = interpolate("${fake:email}", &ctx)
-            .expect_err("no generator SHALL error");
+        let err = interpolate("${fake:email}", &ctx).expect_err("no generator SHALL error");
         assert!(
             matches!(err, VarError::Other(ref m) if m.contains("not available")),
             "got: {err}"
@@ -1303,7 +1325,10 @@ mod tests {
         let mut ctx = InterpolationContext::new(&store);
         ctx.generator = Some(&gen);
         let v = evaluate_value("${fake:person(country=JP)}", &ctx).expect("whole-value object");
-        assert!(v.as_object().is_some(), "whole-value generator SHALL keep its object");
+        assert!(
+            v.as_object().is_some(),
+            "whole-value generator SHALL keep its object"
+        );
     }
 
     // 51. evaluate_value stringifies an embedded reference.

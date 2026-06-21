@@ -154,19 +154,33 @@ pub fn build_selector(step: &Step) -> Selector {
     let g = step.on.as_ref();
     Selector {
         text: g.and_then(|g| g.text.clone()).or(step.on_text.clone()),
-        accessibility_label: g.and_then(|g| g.accessibility_label.clone()).or(step.on_accessibility_label.clone()),
+        accessibility_label: g
+            .and_then(|g| g.accessibility_label.clone())
+            .or(step.on_accessibility_label.clone()),
         index: g.and_then(|g| g.index).or(step.on_index),
         enabled: g.and_then(|g| g.enabled).or(step.on_enabled),
         checked: g.and_then(|g| g.checked).or(step.on_checked),
         clickable: g.and_then(|g| g.clickable).or(step.on_clickable),
-        below: g.and_then(|g| g.below.as_ref().map(convert_anchor))
-            .or(step.on_below.as_ref().map(|s| AnchorSelector::Text(s.clone()))),
-        above: g.and_then(|g| g.above.as_ref().map(convert_anchor))
-            .or(step.on_above.as_ref().map(|s| AnchorSelector::Text(s.clone()))),
-        right_of: g.and_then(|g| g.right_of.as_ref().map(convert_anchor))
-            .or(step.on_right_of.as_ref().map(|s| AnchorSelector::Text(s.clone()))),
-        left_of: g.and_then(|g| g.left_of.as_ref().map(convert_anchor))
-            .or(step.on_left_of.as_ref().map(|s| AnchorSelector::Text(s.clone()))),
+        below: g.and_then(|g| g.below.as_ref().map(convert_anchor)).or(step
+            .on_below
+            .as_ref()
+            .map(|s| AnchorSelector::Text(s.clone()))),
+        above: g.and_then(|g| g.above.as_ref().map(convert_anchor)).or(step
+            .on_above
+            .as_ref()
+            .map(|s| AnchorSelector::Text(s.clone()))),
+        right_of: g
+            .and_then(|g| g.right_of.as_ref().map(convert_anchor))
+            .or(step
+                .on_right_of
+                .as_ref()
+                .map(|s| AnchorSelector::Text(s.clone()))),
+        left_of: g
+            .and_then(|g| g.left_of.as_ref().map(convert_anchor))
+            .or(step
+                .on_left_of
+                .as_ref()
+                .map(|s| AnchorSelector::Text(s.clone()))),
         contains: g.and_then(|g| g.contains.as_ref().map(convert_contains_anchor)),
         contains_min_matches: g.and_then(|g| g.contains.as_ref().map(|c| c.min_matches())),
         inside: g.and_then(|g| g.inside.as_ref().map(convert_anchor)),
@@ -176,8 +190,12 @@ pub fn build_selector(step: &Step) -> Selector {
 
 /// Build a human-readable label for a selector (for event output).
 fn selector_label(sel: &Selector) -> String {
-    if let Some(ref t) = sel.text { return t.clone(); }
-    if let Some(ref a) = sel.accessibility_label { return a.clone(); }
+    if let Some(ref t) = sel.text {
+        return t.clone();
+    }
+    if let Some(ref a) = sel.accessibility_label {
+        return a.clone();
+    }
     "?".to_string()
 }
 
@@ -195,14 +213,20 @@ pub fn resolve_coord_public(
     element_size: Option<i32>,
     element_origin: Option<i32>,
 ) -> i32 {
-    resolve_coord(val, viewport_size, element_pos, element_size, element_origin)
+    resolve_coord(
+        val,
+        viewport_size,
+        element_pos,
+        element_size,
+        element_origin,
+    )
 }
 
 fn resolve_coord(
     val: &golem_parser::CoordValue,
     viewport_size: i32,
-    element_pos: Option<i32>,   // element center position
-    element_size: Option<i32>,  // element width or height
+    element_pos: Option<i32>,     // element center position
+    element_size: Option<i32>,    // element width or height
     _element_origin: Option<i32>, // element x or y
 ) -> i32 {
     match val {
@@ -242,7 +266,14 @@ fn apply_coord_adjustments(
     let y_val = group.and_then(|g| g.y.as_ref());
 
     let (elem_cx, elem_cy, elem_w, elem_h, elem_x, elem_y) = if let Some(b) = element_bounds {
-        (Some(b.center_x()), Some(b.center_y()), Some(b.width), Some(b.height), Some(b.x), Some(b.y))
+        (
+            Some(b.center_x()),
+            Some(b.center_y()),
+            Some(b.width),
+            Some(b.height),
+            Some(b.x),
+            Some(b.y),
+        )
     } else {
         (None, None, None, None, None, None)
     };
@@ -289,7 +320,9 @@ fn safe_tap_coords(
 
     // Try to tap within the safe zone (preferred)
     let safe_top = vis_top.max(safe_area_top).max(TAP_MARGIN);
-    let safe_bottom = vis_bottom.min(viewport.y + viewport.height - safe_area_bottom).min(viewport.y + viewport.height - TAP_MARGIN);
+    let safe_bottom = vis_bottom
+        .min(viewport.y + viewport.height - safe_area_bottom)
+        .min(viewport.y + viewport.height - TAP_MARGIN);
     let safe_left = vis_left.max(TAP_MARGIN);
     let safe_right = vis_right.min(viewport.x + viewport.width - TAP_MARGIN);
 
@@ -355,7 +388,13 @@ fn has_empty_webview(element: &Element) -> bool {
     element.children.iter().any(has_empty_webview)
 }
 
-pub(crate) async fn wait_for_settle(driver: &dyn PlatformDriver) -> Result<(Element, golem_driver::common::HierarchyMeta, golem_events::TreeStats)> {
+pub(crate) async fn wait_for_settle(
+    driver: &dyn PlatformDriver,
+) -> Result<(
+    Element,
+    golem_driver::common::HierarchyMeta,
+    golem_events::TreeStats,
+)> {
     let deadline = Instant::now() + SETTLE_TIMEOUT;
     let mut stats = golem_events::TreeStats::default();
 
@@ -469,7 +508,9 @@ pub async fn resolve_element(
             let (root, meta) = get_hierarchy_bounded(driver).await?;
             crate::record_tree_fetch(meta.node_count);
             let mut vp = Viewport::from_root(&root);
-            if meta.keyboard_height > 0 { vp.height -= meta.keyboard_height; }
+            if meta.keyboard_height > 0 {
+                vp.height -= meta.keyboard_height;
+            }
             let (x, y) = apply_coord_adjustments(step, vp.width / 2, vp.height / 2, &vp, None);
             let dummy = golem_element::Element {
                 element_type: "point".to_string(),
@@ -492,7 +533,10 @@ pub async fn resolve_element(
 
     let (last_root, last_viewport) = loop {
         let (root, meta) = match get_hierarchy_bounded(driver).await {
-            Ok((root, meta)) => { crate::record_tree_fetch(meta.node_count); (root, meta) },
+            Ok((root, meta)) => {
+                crate::record_tree_fetch(meta.node_count);
+                (root, meta)
+            }
             Err(_) if Instant::now() < deadline => {
                 tokio::time::sleep(POLL_INTERVAL).await;
                 continue;
@@ -510,24 +554,46 @@ pub async fn resolve_element(
 
         if !results.is_empty() {
             let first = &results[0];
-            let mut base = safe_tap_coords(first.element.effective_bounds(), &viewport, meta.safe_area_top, meta.safe_area_bottom.max(meta.keyboard_height))
-                .unwrap_or((first.tap_x, first.tap_y));
+            let mut base = safe_tap_coords(
+                first.element.effective_bounds(),
+                &viewport,
+                meta.safe_area_top,
+                meta.safe_area_bottom.max(meta.keyboard_height),
+            )
+            .unwrap_or((first.tap_x, first.tap_y));
             // Occlusion-aware: when the element's centre is covered (e.g. by a
             // sticky header) but a sample point is clear, tap the clear point
             // so we hit the target, not the occluder. Only for plain taps —
             // explicit x/y offsets stay centre-relative (handled below) so they
             // remain predictable.
-            let has_offset = step.on.as_ref().is_some_and(|g| g.x.is_some() || g.y.is_some());
+            let has_offset = step
+                .on
+                .as_ref()
+                .is_some_and(|g| g.x.is_some() || g.y.is_some());
             if !has_offset && first.element.center_hittable() == Some(false) {
                 base = (first.tap_x, first.tap_y);
             }
-            let coords = apply_coord_adjustments(step, base.0, base.1, &viewport, Some(first.element.effective_bounds()));
+            let coords = apply_coord_adjustments(
+                step,
+                base.0,
+                base.1,
+                &viewport,
+                Some(first.element.effective_bounds()),
+            );
             if let Some(e) = emitter {
                 let eb = first.element.effective_bounds();
                 e.substep(golem_events::SubstepEvent::ElementResolved {
                     selector: selector_label(&selector),
-                    bounds: golem_events::Rect { x: eb.x, y: eb.y, width: eb.width, height: eb.height },
-                    tap_point: golem_events::Point { x: coords.0, y: coords.1 },
+                    bounds: golem_events::Rect {
+                        x: eb.x,
+                        y: eb.y,
+                        width: eb.width,
+                        height: eb.height,
+                    },
+                    tap_point: golem_events::Point {
+                        x: coords.0,
+                        y: coords.1,
+                    },
                 });
             }
             return Ok((first.element.clone(), coords));
@@ -588,19 +654,28 @@ pub async fn resolve_element(
                     let (r, m) = driver.get_hierarchy().await?;
                     crate::record_tree_fetch(m.node_count);
                     let mut v = Viewport::from_root(&r);
-                    if m.keyboard_height > 0 { v.height -= m.keyboard_height; }
+                    if m.keyboard_height > 0 {
+                        v.height -= m.keyboard_height;
+                    }
                     let vis = filter_viewport(&r, &v);
-                    resolve_within(find_elements(&vis, &within_sel)
-                        .first()
-                        .map(|r| r.element.bounds)
-                        .or(in_viewport))
+                    resolve_within(
+                        find_elements(&vis, &within_sel)
+                            .first()
+                            .map(|r| r.element.bounds)
+                            .or(in_viewport),
+                    )
                 } else {
                     // Container not visible — scroll the page to bring
                     // it into view. Timeout + stall govern; no attempt cap.
                     let _ = crate::scroll::scroll_to_element(
-                        &within_sel, driver, golem_driver::Direction::Down,
-                        None, None, emitter,
-                    ).await;
+                        &within_sel,
+                        driver,
+                        golem_driver::Direction::Down,
+                        None,
+                        None,
+                        emitter,
+                    )
+                    .await;
                     let (fresh_root, fresh_meta) = driver.get_hierarchy().await?;
                     crate::record_tree_fetch(fresh_meta.node_count);
                     let mut fresh_vp = Viewport::from_root(&fresh_root);
@@ -616,12 +691,16 @@ pub async fn resolve_element(
                         let (r2, m2) = driver.get_hierarchy().await?;
                         crate::record_tree_fetch(m2.node_count);
                         let mut v2 = Viewport::from_root(&r2);
-                        if m2.keyboard_height > 0 { v2.height -= m2.keyboard_height; }
+                        if m2.keyboard_height > 0 {
+                            v2.height -= m2.keyboard_height;
+                        }
                         let vis2 = filter_viewport(&r2, &v2);
-                        resolve_within(find_elements(&vis2, &within_sel)
-                            .first()
-                            .map(|r| r.element.bounds)
-                            .or(bounds))
+                        resolve_within(
+                            find_elements(&vis2, &within_sel)
+                                .first()
+                                .map(|r| r.element.bounds)
+                                .or(bounds),
+                        )
                     } else {
                         resolve_within(bounds)
                     }
@@ -642,7 +721,8 @@ pub async fn resolve_element(
             let full_results = find_elements(&root, &selector);
             let direction = if let Some(found) = full_results.first() {
                 let elem_y = found.element.bounds.center_y();
-                let ref_center = container_bounds.as_ref()
+                let ref_center = container_bounds
+                    .as_ref()
                     .map(|b| b.center_y())
                     .unwrap_or(viewport.height / 2);
                 if elem_y > ref_center {
@@ -650,7 +730,9 @@ pub async fn resolve_element(
                 } else {
                     golem_driver::Direction::Up
                 }
-            } else if let Some(anchor) = selector.below.as_ref()
+            } else if let Some(anchor) = selector
+                .below
+                .as_ref()
                 .or(selector.above.as_ref())
                 .or(selector.right_of.as_ref())
                 .or(selector.left_of.as_ref())
@@ -673,12 +755,23 @@ pub async fn resolve_element(
             };
 
             match crate::scroll::scroll_to_element(
-                &selector, driver, direction,
-                step.scroll_timeout, container_bounds, emitter,
-            ).await {
+                &selector,
+                driver,
+                direction,
+                step.scroll_timeout,
+                container_bounds,
+                emitter,
+            )
+            .await
+            {
                 Ok(found) => {
-                    let coords = safe_tap_coords(found.element.effective_bounds(), &viewport, meta.safe_area_top, meta.safe_area_bottom.max(meta.keyboard_height))
-                        .unwrap_or((found.tap_x, found.tap_y));
+                    let coords = safe_tap_coords(
+                        found.element.effective_bounds(),
+                        &viewport,
+                        meta.safe_area_top,
+                        meta.safe_area_bottom.max(meta.keyboard_height),
+                    )
+                    .unwrap_or((found.tap_x, found.tap_y));
                     return Ok((found.element.clone(), coords));
                 }
                 Err(e) => return Err(e),
@@ -761,17 +854,17 @@ pub async fn resolve_element_full_tree(
 /// Returns `Ok(())` as soon as the element disappears. If still present at
 /// timeout, returns an error. First check runs immediately — zero overhead
 /// when the element is already gone.
-pub async fn poll_for_absence(
-    step: &Step,
-    driver: &dyn PlatformDriver,
-) -> Result<()> {
+pub async fn poll_for_absence(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
     let selector = build_selector(step);
     let timeout_ms = step.timeout.unwrap_or(DEFAULT_POLL_TIMEOUT_MS);
     let deadline = Instant::now() + Duration::from_millis(timeout_ms);
 
     loop {
         let (root, _meta) = match get_hierarchy_bounded(driver).await {
-            Ok((root, meta)) => { crate::record_tree_fetch(meta.node_count); (root, meta) },
+            Ok((root, meta)) => {
+                crate::record_tree_fetch(meta.node_count);
+                (root, meta)
+            }
             Err(_) if Instant::now() < deadline => {
                 tokio::time::sleep(POLL_INTERVAL).await;
                 continue;
@@ -900,11 +993,7 @@ mod tests {
             Bounds::new(10, 10, 80, 30),
         ));
         // A Button with text "Save" and an id
-        let mut btn = make_element_with_text(
-            "Button",
-            "Save",
-            Bounds::new(10, 50, 80, 40),
-        );
+        let mut btn = make_element_with_text("Button", "Save", Bounds::new(10, 50, 80, 40));
         btn.accessibility_label = Some("btn-save".to_string());
         root.children.push(btn);
 
@@ -1170,19 +1259,12 @@ mod tests {
     async fn resolve_element_with_state_filters() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
 
-        let mut enabled = make_element_with_text(
-            "Button",
-            "Option A",
-            Bounds::new(0, 0, 100, 30),
-        );
+        let mut enabled = make_element_with_text("Button", "Option A", Bounds::new(0, 0, 100, 30));
         enabled.enabled = true;
         enabled.clickable = true;
 
-        let mut disabled = make_element_with_text(
-            "Button",
-            "Option B",
-            Bounds::new(0, 40, 100, 30),
-        );
+        let mut disabled =
+            make_element_with_text("Button", "Option B", Bounds::new(0, 40, 100, 30));
         disabled.enabled = false;
         disabled.clickable = false;
 
@@ -1218,10 +1300,16 @@ mod tests {
     fn resolve_coord_pixels_offset_from_element_center() {
         let v = golem_parser::CoordValue::Pixels(10);
         // With an element center at 200, +10px SHALL offset to 210.
-        assert_eq!(resolve_coord_public(&v, 400, Some(200), Some(80), Some(160)), 210);
+        assert_eq!(
+            resolve_coord_public(&v, 400, Some(200), Some(80), Some(160)),
+            210
+        );
         // A negative pixel offset SHALL subtract from the center.
         let neg = golem_parser::CoordValue::Pixels(-30);
-        assert_eq!(resolve_coord_public(&neg, 400, Some(200), Some(80), Some(160)), 170);
+        assert_eq!(
+            resolve_coord_public(&neg, 400, Some(200), Some(80), Some(160)),
+            170
+        );
     }
 
     // ── 13. resolve_coord: percent of viewport without element ──────
@@ -1242,13 +1330,22 @@ mod tests {
     fn resolve_coord_percent_of_element_dimensions() {
         let v = golem_parser::CoordValue::Percent("50%".to_string());
         // element center 200, size 80: 50% SHALL move +40 to the edge => 240.
-        assert_eq!(resolve_coord_public(&v, 400, Some(200), Some(80), Some(160)), 240);
+        assert_eq!(
+            resolve_coord_public(&v, 400, Some(200), Some(80), Some(160)),
+            240
+        );
         // -50% SHALL move to the opposite edge => 160.
         let neg = golem_parser::CoordValue::Percent("-50%".to_string());
-        assert_eq!(resolve_coord_public(&neg, 400, Some(200), Some(80), Some(160)), 160);
+        assert_eq!(
+            resolve_coord_public(&neg, 400, Some(200), Some(80), Some(160)),
+            160
+        );
         // 0% SHALL stay at the center.
         let zero = golem_parser::CoordValue::Percent("0%".to_string());
-        assert_eq!(resolve_coord_public(&zero, 400, Some(200), Some(80), Some(160)), 200);
+        assert_eq!(
+            resolve_coord_public(&zero, 400, Some(200), Some(80), Some(160)),
+            200
+        );
     }
 
     // ── 15. resolve_coord: percent falls back to viewport when only pos known ─
@@ -1269,7 +1366,10 @@ mod tests {
         // Unparseable percent SHALL default to 0.0 => 0 of viewport.
         assert_eq!(resolve_coord_public(&v, 400, None, None, None), 0);
         // And 0% of an element SHALL stay at the center.
-        assert_eq!(resolve_coord_public(&v, 400, Some(200), Some(80), Some(160)), 200);
+        assert_eq!(
+            resolve_coord_public(&v, 400, Some(200), Some(80), Some(160)),
+            200
+        );
     }
 
     // ── 17. build_selector_from_group maps flat fields and traits ────
@@ -1635,17 +1735,29 @@ mod tests {
 
         // web_view nested under a container.
         let mut root = make_element("View", Bounds::new(0, 0, 400, 800));
-        root.children.push(make_element("web_view", Bounds::new(0, 0, 400, 800)));
-        assert!(has_empty_webview(&root), "nested empty web_view SHALL be detected");
+        root.children
+            .push(make_element("web_view", Bounds::new(0, 0, 400, 800)));
+        assert!(
+            has_empty_webview(&root),
+            "nested empty web_view SHALL be detected"
+        );
 
         // Enriched web_view (has children) SHALL NOT be flagged.
         let mut enriched = make_element("web_view", Bounds::new(0, 0, 400, 800));
-        enriched.children.push(make_element("div", Bounds::new(0, 0, 100, 50)));
-        assert!(!has_empty_webview(&enriched), "enriched web_view SHALL NOT be empty");
+        enriched
+            .children
+            .push(make_element("div", Bounds::new(0, 0, 100, 50)));
+        assert!(
+            !has_empty_webview(&enriched),
+            "enriched web_view SHALL NOT be empty"
+        );
 
         // Tree with no web_view at all.
         let plain = make_element("View", Bounds::new(0, 0, 400, 800));
-        assert!(!has_empty_webview(&plain), "no web_view SHALL NOT be flagged");
+        assert!(
+            !has_empty_webview(&plain),
+            "no web_view SHALL NOT be flagged"
+        );
     }
 
     // ── 36. bounds_fingerprint ignores text but reflects bounds ──────
@@ -1677,7 +1789,9 @@ mod tests {
     fn bounds_fingerprint_reflects_children() {
         let leaf = make_element("View", Bounds::new(0, 0, 100, 40));
         let mut parent = make_element("View", Bounds::new(0, 0, 100, 40));
-        parent.children.push(make_element("Child", Bounds::new(5, 5, 10, 10)));
+        parent
+            .children
+            .push(make_element("Child", Bounds::new(5, 5, 10, 10)));
         // Adding a child SHALL change the fingerprint.
         assert_ne!(
             bounds_fingerprint(&leaf),
@@ -1770,13 +1884,10 @@ mod tests {
 
         // Clear the error after a short delay so an in-deadline retry succeeds.
         let driver_ref = &driver;
-        let (res, ()) = tokio::join!(
-            resolve_element(&step, driver_ref, None),
-            async {
-                tokio::time::sleep(Duration::from_millis(300)).await;
-                driver_ref.clear_error("get_hierarchy");
-            }
-        );
+        let (res, ()) = tokio::join!(resolve_element(&step, driver_ref, None), async {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            driver_ref.clear_error("get_hierarchy");
+        });
         let (elem, _coords) = res.expect("resolver SHALL recover after the transient error clears");
         assert_eq!(elem.text.as_deref(), Some("Submit"));
     }
@@ -1858,13 +1969,10 @@ mod tests {
         step.timeout = Some(2000);
 
         let driver_ref = &driver;
-        let (res, ()) = tokio::join!(
-            poll_for_absence(&step, driver_ref),
-            async {
-                tokio::time::sleep(Duration::from_millis(300)).await;
-                driver_ref.clear_error("get_hierarchy");
-            }
-        );
+        let (res, ()) = tokio::join!(poll_for_absence(&step, driver_ref), async {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            driver_ref.clear_error("get_hierarchy");
+        });
         res.expect("absence poll SHALL recover after the transient fetch error clears");
     }
 }

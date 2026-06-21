@@ -108,10 +108,7 @@ fn subflow_prepare_child_vars_passes_parent_vars() {
         Some(&VarValue::string("https://example.com")),
     );
     // Override variable is present
-    assert_eq!(
-        child.get("env"),
-        Some(&VarValue::string("staging")),
-    );
+    assert_eq!(child.get("env"), Some(&VarValue::string("staging")),);
 }
 
 // ---------------------------------------------------------------------------
@@ -131,17 +128,13 @@ fn subflow_propagate_results_maps_child_to_parent() {
         ("user_id".to_string(), "active_user_id".to_string()),
     ]);
 
-    propagate_results(&child_store, &mut parent, &save_to)
-        .expect("propagation should succeed");
+    propagate_results(&child_store, &mut parent, &save_to).expect("propagation should succeed");
 
     assert_eq!(
         parent.get("session_token"),
         Some(&VarValue::string("jwt-abc-123")),
     );
-    assert_eq!(
-        parent.get("active_user_id"),
-        Some(&VarValue::string("42")),
-    );
+    assert_eq!(parent.get("active_user_id"), Some(&VarValue::string("42")),);
     // Original parent vars are untouched
     assert_eq!(
         parent.get("user_email"),
@@ -190,9 +183,18 @@ fn data_driven_expand_rows_creates_one_run_per_row() {
     let runs = expand_data_rows(&data);
 
     assert_eq!(runs.len(), 3);
-    assert_eq!(runs[0].vars.get("payment").map(|s| s.as_str()), Some("visa"));
-    assert_eq!(runs[1].vars.get("payment").map(|s| s.as_str()), Some("paypal"));
-    assert_eq!(runs[2].vars.get("payment").map(|s| s.as_str()), Some("crypto"));
+    assert_eq!(
+        runs[0].vars.get("payment").map(|s| s.as_str()),
+        Some("visa")
+    );
+    assert_eq!(
+        runs[1].vars.get("payment").map(|s| s.as_str()),
+        Some("paypal")
+    );
+    assert_eq!(
+        runs[2].vars.get("payment").map(|s| s.as_str()),
+        Some("crypto")
+    );
     // Indices match positions
     for (i, run) in runs.iter().enumerate() {
         assert_eq!(run.index, i);
@@ -215,7 +217,9 @@ fn data_driven_apply_vars_merges_into_store() {
     let payment = store.resolve("payment").expect("payment should resolve");
     assert_eq!(payment, &VarValue::String("credit_card".to_string()));
 
-    let total = store.resolve("expected_total").expect("expected_total should resolve");
+    let total = store
+        .resolve("expected_total")
+        .expect("expected_total should resolve");
     assert_eq!(total, &VarValue::String("$29.99".to_string()));
 }
 
@@ -240,7 +244,11 @@ fn data_driven_vars_override_flow_vars() {
     let mut store = VariableStore::new();
 
     // Pre-populate a Flow-level variable
-    store.set_in_scope(ScopeLevel::Flow, "payment", VarValue::String("cash".to_string()));
+    store.set_in_scope(
+        ScopeLevel::Flow,
+        "payment",
+        VarValue::String("cash".to_string()),
+    );
 
     // Override it via data row (also at Flow level)
     let data_vars = HashMap::from([("payment".to_string(), "paypal".to_string())]);
@@ -279,10 +287,7 @@ fn fixture_loads_vars_under_namespace() {
         obj.get("email"),
         Some(&VarValue::string("alice@example.com")),
     );
-    assert_eq!(
-        obj.get("password"),
-        Some(&VarValue::string("s3cret")),
-    );
+    assert_eq!(obj.get("password"), Some(&VarValue::string("s3cret")),);
 }
 
 // ---------------------------------------------------------------------------
@@ -391,10 +396,7 @@ fn fixture_vars_available_to_child_subflow() {
     assert_eq!(email, "admin@corp.com");
 
     // Child should also have the override
-    assert_eq!(
-        child.get("env"),
-        Some(&VarValue::string("test")),
-    );
+    assert_eq!(child.get("env"), Some(&VarValue::string("test")),);
 }
 
 // ---------------------------------------------------------------------------

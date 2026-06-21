@@ -3,26 +3,26 @@ use std::io::Write;
 use std::time::SystemTime;
 
 use chrono::{DateTime, Local};
-use golem_events::{Event, EventKind, SubstepEvent, ScrollAttemptResult};
+use golem_events::{Event, EventKind, ScrollAttemptResult, SubstepEvent};
 use tokio::sync::broadcast;
 
-const SYM_FAILED: &str = "\u{2717}";   // ✗ (install failure marker)
-const SYM_BULLET: &str = "\u{2219}";   // ∙
+const SYM_FAILED: &str = "\u{2717}"; // ✗ (install failure marker)
+const SYM_BULLET: &str = "\u{2219}"; // ∙
 const SEPARATOR: &str = "────────────────────────────────────────";
 
 // ANSI color codes — muted palette, bright reserved for errors
-const DIM: &str = "\x1b[2m";           // dim/faint — indices, timing, structural
+const DIM: &str = "\x1b[2m"; // dim/faint — indices, timing, structural
 const RESET: &str = "\x1b[0m";
-const YELLOW: &str = "\x1b[33m";       // warning message body
-const CYAN: &str = "\x1b[36m";         // block headers, [plan] tag
-const MAGENTA: &str = "\x1b[35m";      // [devices] tag
-const BLUE: &str = "\x1b[34m";         // [companion] tag
-const BOLD_BLUE: &str = "\x1b[1;34m";  // flow name leaf, step local index
+const YELLOW: &str = "\x1b[33m"; // warning message body
+const CYAN: &str = "\x1b[36m"; // block headers, [plan] tag
+const MAGENTA: &str = "\x1b[35m"; // [devices] tag
+const BLUE: &str = "\x1b[34m"; // [companion] tag
+const BOLD_BLUE: &str = "\x1b[1;34m"; // flow name leaf, step local index
 const BOLD_GREEN: &str = "\x1b[1;32m"; // PASS / Starting / Summary
-const BOLD_RED: &str = "\x1b[1;31m";   // FAIL
+const BOLD_RED: &str = "\x1b[1;31m"; // FAIL
 const BOLD_YELLOW: &str = "\x1b[1;33m"; // SKIP / WARN, [install ...] tag
 const BOLD_MAGENTA: &str = "\x1b[1;35m"; // bundle ID identity
-const BOLD: &str = "\x1b[1m";          // action names, device name
+const BOLD: &str = "\x1b[1m"; // action names, device name
 
 // Threshold (ms) above which a successful step is annotated SLOW.
 const SLOW_THRESHOLD_MS: u64 = 5_000;
@@ -50,12 +50,12 @@ fn flow_index_width(total: usize) -> usize {
 
 /// Dim ANSI colors for device prefixes — subtle, won't clash with status colors.
 const DEVICE_COLORS: &[&str] = &[
-    "\x1b[36m",  // cyan
-    "\x1b[35m",  // magenta
-    "\x1b[33m",  // yellow (dim)
-    "\x1b[34m",  // blue
-    "\x1b[32m",  // green (dim)
-    "\x1b[91m",  // bright red (for device ID only)
+    "\x1b[36m", // cyan
+    "\x1b[35m", // magenta
+    "\x1b[33m", // yellow (dim)
+    "\x1b[34m", // blue
+    "\x1b[32m", // green (dim)
+    "\x1b[91m", // bright red (for device ID only)
 ];
 
 /// Render an event's wall-clock time as `HH:MM:SS.mmm ` (trailing space),
@@ -76,12 +76,7 @@ fn format_timestamp(wall_time: SystemTime, use_color: bool) -> String {
 /// an empty string in single-device mode so non-multi-device output
 /// is unchanged. Width comes from `SuitePlanned.flow_runs.len()` so
 /// the column is fixed for the run.
-fn format_flow_prefix(
-    idx: usize,
-    width: usize,
-    multi_device: bool,
-    use_color: bool,
-) -> String {
+fn format_flow_prefix(idx: usize, width: usize, multi_device: bool, use_color: bool) -> String {
     if !multi_device {
         return String::new();
     }
@@ -122,12 +117,7 @@ fn keyword(label: &str, color: &str, use_color: bool) -> String {
 /// right-padded to 5 chars dim, `::` dim, block cyan, iteration dim parens
 /// (omitted when 0), local index bold. Empty block degrades to
 /// `{global}::{local}` (rare — pre-block events).
-fn fmt_step_path(
-    global: u64,
-    block: &(String, u32),
-    local: usize,
-    use_color: bool,
-) -> String {
+fn fmt_step_path(global: u64, block: &(String, u32), local: usize, use_color: bool) -> String {
     let (block_name, iteration) = block;
     let iter_part = if *iteration > 0 {
         if use_color {
@@ -278,7 +268,11 @@ pub async fn stream_human(
                     eprintln!("{ts}{tag_str} {w}");
                 }
             }
-            EventKind::SuitePlanned { flow_runs, install_entries, device_availability } => {
+            EventKind::SuitePlanned {
+                flow_runs,
+                install_entries,
+                device_availability,
+            } => {
                 // Set the decimal width for flow-prefix lines based on
                 // the total FlowRun count for this suite. Stays fixed
                 // for the whole run so the prefix column doesn't shift.
@@ -293,10 +287,12 @@ pub async fn stream_human(
                 let n_flows = flow_runs.len();
                 let n_devs = device_availability.len();
                 let flow_word = if n_flows == 1 { "flow" } else { "flows" };
-                let dev_word = if n_devs == 1 { "device slot" } else { "device slots" };
-                eprintln!(
-                    "{ts}{kw} {n_flows} {flow_word} across {n_devs} {dev_word}"
-                );
+                let dev_word = if n_devs == 1 {
+                    "device slot"
+                } else {
+                    "device slots"
+                };
+                eprintln!("{ts}{kw} {n_flows} {flow_word} across {n_devs} {dev_word}");
 
                 // Verbose adds the diagnostic plan + install matrix dump.
                 if verbose {
@@ -309,7 +305,11 @@ pub async fn stream_human(
                         eprintln!(
                             "{ts}  {plan_tag} install matrix ({} entr{})",
                             install_entries.len(),
-                            if install_entries.len() == 1 { "y" } else { "ies" }
+                            if install_entries.len() == 1 {
+                                "y"
+                            } else {
+                                "ies"
+                            }
                         );
                         for line in install_entries {
                             eprintln!("{ts}  {plan_tag}   {line}");
@@ -323,7 +323,9 @@ pub async fn stream_human(
                     }
                 }
             }
-            EventKind::FlowStarted { flow_name, repeat, .. } => {
+            EventKind::FlowStarted {
+                flow_name, repeat, ..
+            } => {
                 // Reset any stale code from a prior flow on this device so it
                 // can't leak onto this flow's FAIL line.
                 first_fail_code.remove(&event.device_id.0);
@@ -338,10 +340,17 @@ pub async fn stream_human(
                         event.device_id
                     );
                 } else {
-                    eprintln!("{ts}{dp}\u{25B6} {name}{repeat_suffix}  device={}", event.device_id);
+                    eprintln!(
+                        "{ts}{dp}\u{25B6} {name}{repeat_suffix}  device={}",
+                        event.device_id
+                    );
                 }
             }
-            EventKind::BlockStarted { block_name, iteration, .. } => {
+            EventKind::BlockStarted {
+                block_name,
+                iteration,
+                ..
+            } => {
                 current_blocks.insert(event.device_id.0.clone(), (block_name.clone(), *iteration));
                 let iter_suffix = if *iteration > 0 {
                     format!(" (iteration {iteration})")
@@ -351,10 +360,15 @@ pub async fn stream_human(
                 if use_color {
                     eprintln!("{ts}  {dp}{CYAN}\u{2500}\u{2500} {block_name}{iter_suffix} \u{2500}\u{2500}{RESET}");
                 } else {
-                    eprintln!("{ts}  {dp}\u{2500}\u{2500} {block_name}{iter_suffix} \u{2500}\u{2500}");
+                    eprintln!(
+                        "{ts}  {dp}\u{2500}\u{2500} {block_name}{iter_suffix} \u{2500}\u{2500}"
+                    );
                 }
             }
-            EventKind::BlockFinished { recording_path: Some(path), .. } => {
+            EventKind::BlockFinished {
+                recording_path: Some(path),
+                ..
+            } => {
                 // Surface the recording path inline under the block.
                 // OSC 8 hyperlink when the terminal supports it; plain
                 // text otherwise. Falls back gracefully if path can't
@@ -373,7 +387,13 @@ pub async fn stream_human(
                 }
             }
             EventKind::BlockFinished { .. } => {}
-            EventKind::StepStarted { global_step_index, step_index_in_block, action, selector_label, .. } => {
+            EventKind::StepStarted {
+                global_step_index,
+                step_index_in_block,
+                action,
+                selector_label,
+                ..
+            } => {
                 // Capture action+selector+local-index so StepFinished can render
                 // the full row on one line. Two-line render fragments badly
                 // under parallel device interleaving; we collapse to one line
@@ -396,7 +416,10 @@ pub async fn stream_human(
                 };
                 let path = fmt_step_path(
                     *global_step_index,
-                    &current_blocks.get(&event.device_id.0).cloned().unwrap_or_default(),
+                    &current_blocks
+                        .get(&event.device_id.0)
+                        .cloned()
+                        .unwrap_or_default(),
                     *step_index_in_block,
                     use_color,
                 );
@@ -406,10 +429,16 @@ pub async fn stream_human(
                     eprintln!("{ts}  {dp}{path} {action}{target_str}");
                 }
             }
-            EventKind::StepFinished { outcome, duration_ms, tree_stats, retry_count, global_step_index, .. } => {
-                let (action, selector, local_idx) = current_steps
-                    .remove(&event.device_id.0)
-                    .unwrap_or_default();
+            EventKind::StepFinished {
+                outcome,
+                duration_ms,
+                tree_stats,
+                retry_count,
+                global_step_index,
+                ..
+            } => {
+                let (action, selector, local_idx) =
+                    current_steps.remove(&event.device_id.0).unwrap_or_default();
                 let target_str = if selector.is_empty() {
                     String::new()
                 } else {
@@ -478,8 +507,12 @@ pub async fn stream_human(
                         };
                         let kw = keyword("NG", BOLD_RED, use_color);
                         eprintln!("{ts}  {dp}{kw} {dur}  {action_target}{tag_str}{block_suffix}");
-                        let pending = pending_substeps.remove(&event.device_id.0).unwrap_or_default();
-                        first_fail_code.entry(event.device_id.0.clone()).or_insert(*code);
+                        let pending = pending_substeps
+                            .remove(&event.device_id.0)
+                            .unwrap_or_default();
+                        first_fail_code
+                            .entry(event.device_id.0.clone())
+                            .or_insert(*code);
                         let rendered = code.render(golem_events::Severity::Error);
                         print_failure_block(&rendered, message, BOLD_RED, &dp, &pending, use_color);
                         // NB: only Failed populates first_fail_code — a warning
@@ -493,7 +526,9 @@ pub async fn stream_human(
                         };
                         let kw = keyword("WARN", BOLD_YELLOW, use_color);
                         eprintln!("{ts}  {dp}{kw} {dur}  {action_target}{tag_str}{block_suffix}");
-                        let pending = pending_substeps.remove(&event.device_id.0).unwrap_or_default();
+                        let pending = pending_substeps
+                            .remove(&event.device_id.0)
+                            .unwrap_or_default();
                         let rendered = code.render(golem_events::Severity::Warning);
                         print_failure_block(&rendered, message, YELLOW, &dp, &pending, use_color);
                     }
@@ -514,7 +549,14 @@ pub async fn stream_human(
                         .push((event.wall_time, sub.clone()));
                 }
             }
-            EventKind::FlowFinished { flow_name, success, duration_ms, seed, code, .. } => {
+            EventKind::FlowFinished {
+                flow_name,
+                success,
+                duration_ms,
+                seed,
+                code,
+                ..
+            } => {
                 eprintln!();
                 let dur = fmt_dur(*duration_ms, use_color);
                 let name = fmt_flow_name(flow_name, use_color);
@@ -532,7 +574,11 @@ pub async fn stream_human(
                 let code_str = match failed_code {
                     Some(c) if !*success => {
                         let r = c.render(golem_events::Severity::Error);
-                        if use_color { format!("{BOLD_RED}{r}{RESET}  ") } else { format!("{r}  ") }
+                        if use_color {
+                            format!("{BOLD_RED}{r}{RESET}  ")
+                        } else {
+                            format!("{r}  ")
+                        }
                     }
                     _ => String::new(),
                 };
@@ -542,7 +588,12 @@ pub async fn stream_human(
                     eprintln!("{ts}  {dp}{kw} {dur}  {name}  {code_str}seed:{seed}");
                 }
             }
-            EventKind::SuiteFinished { duration_ms, passed, failed, skipped } => {
+            EventKind::SuiteFinished {
+                duration_ms,
+                passed,
+                failed,
+                skipped,
+            } => {
                 eprintln!();
                 if use_color {
                     eprintln!("{ts}{DIM}{SEPARATOR}{RESET}");
@@ -556,11 +607,14 @@ pub async fn stream_human(
                 };
                 let kw = keyword("Summary", BOLD_GREEN, use_color);
                 let dur = fmt_dur(*duration_ms, use_color);
-                eprintln!(
-                    "{ts}{kw} {dur}  {passed} passed, {failed} failed{skip_suffix}"
-                );
+                eprintln!("{ts}{kw} {dur}  {passed} passed, {failed} failed{skip_suffix}");
             }
-            EventKind::InstallStarted { app_name, bundle_id, target, .. } => {
+            EventKind::InstallStarted {
+                app_name,
+                bundle_id,
+                target,
+                ..
+            } => {
                 let t = tag(&format!("[install {app_name}]"), BOLD_YELLOW, use_color);
                 let bid = if use_color {
                     format!("{BOLD_MAGENTA}{bundle_id}{RESET}")
@@ -575,7 +629,15 @@ pub async fn stream_human(
                     eprintln!("{ts}  {dp}{t} {line}");
                 }
             }
-            EventKind::InstallFinished { app_name, bundle_id, success, duration_ms, error, target, .. } => {
+            EventKind::InstallFinished {
+                app_name,
+                bundle_id,
+                success,
+                duration_ms,
+                error,
+                target,
+                ..
+            } => {
                 let dur = fmt_dur(*duration_ms, use_color);
                 let t = tag(&format!("[install {app_name}]"), BOLD_YELLOW, use_color);
                 let bid = if use_color {
@@ -588,13 +650,20 @@ pub async fn stream_human(
                 } else {
                     let err = error.as_deref().unwrap_or("install failed");
                     if use_color {
-                        eprintln!("{ts}  {dp}{t} {BOLD_RED}{SYM_FAILED} {err}{RESET} on {target}  {dur}");
+                        eprintln!(
+                            "{ts}  {dp}{t} {BOLD_RED}{SYM_FAILED} {err}{RESET} on {target}  {dur}"
+                        );
                     } else {
                         eprintln!("{ts}  {dp}{t} {SYM_FAILED} {err} on {target}  {dur}");
                     }
                 }
             }
-            EventKind::InstallSkipped { app_name, bundle_id, target, reason } => {
+            EventKind::InstallSkipped {
+                app_name,
+                bundle_id,
+                target,
+                reason,
+            } => {
                 let t = tag(&format!("[install {app_name}]"), BOLD_YELLOW, use_color);
                 let bid = if use_color {
                     format!("{BOLD_MAGENTA}{bundle_id}{RESET}")
@@ -607,7 +676,12 @@ pub async fn stream_human(
                     eprintln!("{ts}  {dp}{t} {bid} on {target} — skipped ({reason})");
                 }
             }
-            EventKind::InstallCacheMiss { app_name, bundle_id: _, target, reason } => {
+            EventKind::InstallCacheMiss {
+                app_name,
+                bundle_id: _,
+                target,
+                reason,
+            } => {
                 let t = tag(&format!("[install {app_name}]"), BOLD_YELLOW, use_color);
                 if use_color {
                     eprintln!("{ts}  {dp}{t} {DIM}cache miss on {target} — {reason}{RESET}");
@@ -630,7 +704,11 @@ pub async fn stream_human(
                     eprintln!("{ts}  {dp}{kw} {dur_blank}  {name}  {reason}");
                 }
             }
-            EventKind::FlowCouldNotRun { flow_name, reason, code } => {
+            EventKind::FlowCouldNotRun {
+                flow_name,
+                reason,
+                code,
+            } => {
                 // The flow never ran — render FAIL with its code, matching the
                 // report files and exit code.
                 let kw = keyword("FAIL", BOLD_RED, use_color);
@@ -648,27 +726,44 @@ pub async fn stream_human(
                 }
             }
             EventKind::FlowParseFailed { path, error } => {
-                let code = golem_events::FailureCode::ParseFlowFile
-                    .render(golem_events::Severity::Error);
+                let code =
+                    golem_events::FailureCode::ParseFlowFile.render(golem_events::Severity::Error);
                 if use_color {
                     eprintln!("{ts}  {BOLD_RED}Parse error{RESET} {code} ({path}): {error}");
                 } else {
                     eprintln!("{ts}  Parse error {code} ({path}): {error}");
                 }
             }
-            EventKind::DeviceAutoBoot { device_name, slot_shape } => {
+            EventKind::DeviceAutoBoot {
+                device_name,
+                slot_shape,
+            } => {
                 let t = tag("[devices]", MAGENTA, use_color);
-                let dn = if use_color { format!("{BOLD}{device_name}{RESET}") } else { device_name.clone() };
+                let dn = if use_color {
+                    format!("{BOLD}{device_name}{RESET}")
+                } else {
+                    device_name.clone()
+                };
                 if use_color {
                     eprintln!("{ts}  {t} {DIM}no booted match — booting{RESET} {dn} {DIM}to satisfy {slot_shape}...{RESET}");
                 } else {
-                    eprintln!("{ts}  {t} no booted match — booting {dn} to satisfy {slot_shape}...");
+                    eprintln!(
+                        "{ts}  {t} no booted match — booting {dn} to satisfy {slot_shape}..."
+                    );
                 }
             }
-            EventKind::DeviceAutoBootFinished { device_name, slot_shape, duration_ms } => {
+            EventKind::DeviceAutoBootFinished {
+                device_name,
+                slot_shape,
+                duration_ms,
+            } => {
                 let dur = fmt_dur(*duration_ms, use_color);
                 let t = tag("[devices]", MAGENTA, use_color);
-                let dn = if use_color { format!("{BOLD}{device_name}{RESET}") } else { device_name.clone() };
+                let dn = if use_color {
+                    format!("{BOLD}{device_name}{RESET}")
+                } else {
+                    device_name.clone()
+                };
                 if use_color {
                     eprintln!("{ts}  {t} booted {dn} {DIM}for {slot_shape}{RESET}  {dur}");
                 } else {
@@ -677,7 +772,9 @@ pub async fn stream_human(
             }
             EventKind::SlotSetupFailed { slot_label, reason } => {
                 if use_color {
-                    eprintln!("{ts}  {BOLD_RED}[slot] setup failed for {slot_label}:{RESET} {reason}");
+                    eprintln!(
+                        "{ts}  {BOLD_RED}[slot] setup failed for {slot_label}:{RESET} {reason}"
+                    );
                 } else {
                     eprintln!("{ts}  [slot] setup failed for {slot_label}: {reason}");
                 }
@@ -690,18 +787,36 @@ pub async fn stream_human(
                     eprintln!("{ts}  {dp}{t} waiting for {platform}...");
                 }
             }
-            EventKind::CompanionStarting { platform, device_name } => {
+            EventKind::CompanionStarting {
+                platform,
+                device_name,
+            } => {
                 let t = tag("[companion]", BLUE, use_color);
-                let dn = if use_color { format!("{BOLD}{device_name}{RESET}") } else { device_name.clone() };
+                let dn = if use_color {
+                    format!("{BOLD}{device_name}{RESET}")
+                } else {
+                    device_name.clone()
+                };
                 if use_color {
-                    eprintln!("{ts}  {dp}{t} {DIM}starting on{RESET} {dn} {DIM}({platform})...{RESET}");
+                    eprintln!(
+                        "{ts}  {dp}{t} {DIM}starting on{RESET} {dn} {DIM}({platform})...{RESET}"
+                    );
                 } else {
                     eprintln!("{ts}  {dp}{t} starting on {dn} ({platform})...");
                 }
             }
-            EventKind::CompanionReady { platform, version, device_name, os_version } => {
+            EventKind::CompanionReady {
+                platform,
+                version,
+                device_name,
+                os_version,
+            } => {
                 let t = tag("[companion]", BLUE, use_color);
-                let dn = if use_color { format!("{BOLD}{device_name}{RESET}") } else { device_name.clone() };
+                let dn = if use_color {
+                    format!("{BOLD}{device_name}{RESET}")
+                } else {
+                    device_name.clone()
+                };
                 if use_color {
                     eprintln!("{ts}  {dp}{t} {DIM}ready —{RESET} {dn} {DIM}{platform} v{version} ({os_version}){RESET}");
                 } else {
@@ -745,23 +860,37 @@ fn print_failure_block_to(
     // column so the line reads as "still the FAIL above talking". When
     // there are no substeps below, close the rope with `╰`; otherwise `│`
     // continues into the substep replay.
-    let pipe_glyph = if pending.is_empty() { "\u{2570}" } else { "│" }; // ╰ or │
+    let pipe_glyph = if pending.is_empty() {
+        "\u{2570}"
+    } else {
+        "│"
+    }; // ╰ or │
     let gutter_pipe = if use_color {
         format!("{DIM}{pipe_glyph}{RESET}")
     } else {
         pipe_glyph.to_string()
     };
     if use_color {
-        let _ = writeln!(w, "{gutter_pipe}{TS_CONTINUATION_PAD}{dp}       {msg_color}{code} {msg}{RESET}");
+        let _ = writeln!(
+            w,
+            "{gutter_pipe}{TS_CONTINUATION_PAD}{dp}       {msg_color}{code} {msg}{RESET}"
+        );
     } else {
-        let _ = writeln!(w, "{gutter_pipe}{TS_CONTINUATION_PAD}{dp}       {code} {msg}");
+        let _ = writeln!(
+            w,
+            "{gutter_pipe}{TS_CONTINUATION_PAD}{dp}       {code} {msg}"
+        );
     }
     // Replayed substeps with ├/╰ rope.
     let total = pending.len();
     for (i, (st, sub)) in pending.iter().enumerate() {
         let last = i + 1 == total;
         let g = if last { "\u{2570}" } else { "\u{251C}" }; // ╰ or ├
-        let gutter = if use_color { format!("{DIM}{g}{RESET} ") } else { format!("{g} ") };
+        let gutter = if use_color {
+            format!("{DIM}{g}{RESET} ")
+        } else {
+            format!("{g} ")
+        };
         let sub_ts = format_timestamp(*st, use_color);
         let prefixed_ts = format!("{gutter}{sub_ts}");
         print_substep_to(w, &prefixed_ts, dp, sub, use_color);
@@ -778,21 +907,41 @@ fn print_substep_to(w: &mut dyn Write, ts: &str, dp: &str, sub: &SubstepEvent, u
     let (d, r) = if use_color { (DIM, RESET) } else { ("", "") };
 
     match sub {
-        SubstepEvent::ElementResolved { selector, bounds, tap_point } => {
+        SubstepEvent::ElementResolved {
+            selector,
+            bounds,
+            tap_point,
+        } => {
             let _ = writeln!(w, "{ts}  {dp}    {d}{b} element_resolved \"{selector}\" bounds=({},{},{},{}) tap=({},{}){r}",
                 bounds.x, bounds.y, bounds.width, bounds.height, tap_point.x, tap_point.y);
         }
-        SubstepEvent::ElementNotFound { selector, timeout_ms } => {
-            let _ = writeln!(w, "{ts}  {dp}    {d}{b} element_not_found \"{selector}\" after {timeout_ms}ms{r}");
+        SubstepEvent::ElementNotFound {
+            selector,
+            timeout_ms,
+        } => {
+            let _ = writeln!(
+                w,
+                "{ts}  {dp}    {d}{b} element_not_found \"{selector}\" after {timeout_ms}ms{r}"
+            );
         }
         SubstepEvent::Tap { point, .. } => {
             let _ = writeln!(w, "{ts}  {dp}    {d}{b} tap ({},{}){r}", point.x, point.y);
         }
         SubstepEvent::DoubleTap { point, .. } => {
-            let _ = writeln!(w, "{ts}  {dp}    {d}{b} double_tap ({},{}){r}", point.x, point.y);
+            let _ = writeln!(
+                w,
+                "{ts}  {dp}    {d}{b} double_tap ({},{}){r}",
+                point.x, point.y
+            );
         }
-        SubstepEvent::LongPress { point, duration_ms, .. } => {
-            let _ = writeln!(w, "{ts}  {dp}    {d}{b} long_press ({},{}) {}ms{r}", point.x, point.y, duration_ms);
+        SubstepEvent::LongPress {
+            point, duration_ms, ..
+        } => {
+            let _ = writeln!(
+                w,
+                "{ts}  {dp}    {d}{b} long_press ({},{}) {}ms{r}",
+                point.x, point.y, duration_ms
+            );
         }
         SubstepEvent::TextInput { text, .. } => {
             let _ = writeln!(w, "{ts}  {dp}    {d}{b} text_input \"{text}\"{r}");
@@ -801,18 +950,44 @@ fn print_substep_to(w: &mut dyn Write, ts: &str, dp: &str, sub: &SubstepEvent, u
             let _ = writeln!(w, "{ts}  {dp}    {d}{b} backspace ×{count}{r}");
         }
         SubstepEvent::Swipe { from, to, .. } => {
-            let _ = writeln!(w, "{ts}  {dp}    {d}{b} swipe ({},{})→({},{}){r}", from.x, from.y, to.x, to.y);
+            let _ = writeln!(
+                w,
+                "{ts}  {dp}    {d}{b} swipe ({},{})→({},{}){r}",
+                from.x, from.y, to.x, to.y
+            );
         }
-        SubstepEvent::ScrollStarted { selector, direction } => {
-            let _ = writeln!(w, "{ts}  {dp}    {d}{b} scroll_started \"{selector}\" direction={direction}{r}");
+        SubstepEvent::ScrollStarted {
+            selector,
+            direction,
+        } => {
+            let _ = writeln!(
+                w,
+                "{ts}  {dp}    {d}{b} scroll_started \"{selector}\" direction={direction}{r}"
+            );
         }
-        SubstepEvent::ScrollAttempt { attempt: _, direction, strategy_index, container, from, to, result, tree_stats } => {
+        SubstepEvent::ScrollAttempt {
+            attempt: _,
+            direction,
+            strategy_index,
+            container,
+            from,
+            to,
+            result,
+            tree_stats,
+        } => {
             let dir_arrow = match direction.as_str() {
-                "Down" => "↓", "Up" => "↑", "Left" => "←", "Right" => "→", _ => "?",
+                "Down" => "↓",
+                "Up" => "↑",
+                "Left" => "←",
+                "Right" => "→",
+                _ => "?",
             };
             let result_str = match result {
                 ScrollAttemptResult::PageScrolled => "page scrolled".to_string(),
-                ScrollAttemptResult::InnerScrollableDetected => format!("inner scrollable consumed swipe → switching to preset {}", strategy_index + 2),
+                ScrollAttemptResult::InnerScrollableDetected => format!(
+                    "inner scrollable consumed swipe → switching to preset {}",
+                    strategy_index + 2
+                ),
                 ScrollAttemptResult::ContainerAdvanced => "container advanced".to_string(),
                 ScrollAttemptResult::Stall { count, max } => format!("stall {count}/{max}"),
                 ScrollAttemptResult::BoundaryReached => "boundary reached".to_string(),
@@ -820,26 +995,61 @@ fn print_substep_to(w: &mut dyn Write, ts: &str, dp: &str, sub: &SubstepEvent, u
             let stats = format_tree_stats(tree_stats);
             // Container scrolls use fixed geometry, not presets — naming a
             // preset would be meaningless (it's always preset 1).
-            let label = if *container { "container".to_string() } else { format!("preset {}", strategy_index + 1) };
+            let label = if *container {
+                "container".to_string()
+            } else {
+                format!("preset {}", strategy_index + 1)
+            };
             let _ = writeln!(w, "{ts}  {dp}      {d}[scroll] {dir_arrow} {label} ({},{})→({},{}) → {result_str} {stats}{r}",
                 from.x, from.y, to.x, to.y);
         }
-        SubstepEvent::ScrollFound { selector, position, total_attempts } => {
+        SubstepEvent::ScrollFound {
+            selector,
+            position,
+            total_attempts,
+        } => {
             let _ = writeln!(w, "{ts}  {dp}    {d}{b} scroll_found \"{selector}\" at ({},{}) after {total_attempts} attempts{r}",
                 position.x, position.y);
         }
-        SubstepEvent::ScrollDirectionReversed { to_direction, reason } => {
-            let _ = writeln!(w, "{ts}  {dp}    {d}{b} scroll_reversed →{to_direction} {reason}{r}");
+        SubstepEvent::ScrollDirectionReversed {
+            to_direction,
+            reason,
+        } => {
+            let _ = writeln!(
+                w,
+                "{ts}  {dp}    {d}{b} scroll_reversed →{to_direction} {reason}{r}"
+            );
         }
         SubstepEvent::ScrollStrategySwitch { to_index, reason } => {
-            let _ = writeln!(w, "{ts}  {dp}    {d}{b} scroll_preset_switch →{} {reason}{r}", to_index + 1);
+            let _ = writeln!(
+                w,
+                "{ts}  {dp}    {d}{b} scroll_preset_switch →{} {reason}{r}",
+                to_index + 1
+            );
         }
-        SubstepEvent::AppLaunch { bundle, duration_ms } => {
-            let _ = writeln!(w, "{ts}  {dp}    {d}{b} app_launch bundle={bundle} {duration_ms}ms{r}");
+        SubstepEvent::AppLaunch {
+            bundle,
+            duration_ms,
+        } => {
+            let _ = writeln!(
+                w,
+                "{ts}  {dp}    {d}{b} app_launch bundle={bundle} {duration_ms}ms{r}"
+            );
         }
-        SubstepEvent::PostSettle { action, duration_ms, stable } => {
-            let note = if *stable { "stable" } else { "timeout, still animating" };
-            let _ = writeln!(w, "{ts}  {dp}    {d}{b} post_settle {action} {duration_ms}ms ({note}){r}");
+        SubstepEvent::PostSettle {
+            action,
+            duration_ms,
+            stable,
+        } => {
+            let note = if *stable {
+                "stable"
+            } else {
+                "timeout, still animating"
+            };
+            let _ = writeln!(
+                w,
+                "{ts}  {dp}    {d}{b} post_settle {action} {duration_ms}ms ({note}){r}"
+            );
         }
         SubstepEvent::AppStop { bundle } => {
             let _ = writeln!(w, "{ts}  {dp}    {d}{b} app_stop bundle={bundle}{r}");
@@ -851,16 +1061,43 @@ fn print_substep_to(w: &mut dyn Write, ts: &str, dp: &str, sub: &SubstepEvent, u
             let warn_tag = tag("[warning]", YELLOW, use_color);
             let _ = writeln!(w, "{ts}  {dp}    {warn_tag} {message}");
         }
-        SubstepEvent::RetryAttempt { attempt, max, delay_ms, error } => {
-            let _ = writeln!(w, "{ts}  {dp}    {d}{b} retry {attempt}/{max} delay={delay_ms}ms: {error}{r}");
+        SubstepEvent::RetryAttempt {
+            attempt,
+            max,
+            delay_ms,
+            error,
+        } => {
+            let _ = writeln!(
+                w,
+                "{ts}  {dp}    {d}{b} retry {attempt}/{max} delay={delay_ms}ms: {error}{r}"
+            );
         }
-        SubstepEvent::HttpRequest { method, url, status, duration_ms } => {
-            let s = status.map(|s| s.to_string()).unwrap_or_else(|| "?".to_string());
-            let _ = writeln!(w, "{ts}  {dp}    {d}{b} http {method} {url} → {s} [{duration_ms}ms]{r}");
+        SubstepEvent::HttpRequest {
+            method,
+            url,
+            status,
+            duration_ms,
+        } => {
+            let s = status
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "?".to_string());
+            let _ = writeln!(
+                w,
+                "{ts}  {dp}    {d}{b} http {method} {url} → {s} [{duration_ms}ms]{r}"
+            );
         }
-        SubstepEvent::BashCommand { command, exit_code, duration_ms } => {
-            let code = exit_code.map(|c| c.to_string()).unwrap_or_else(|| "?".to_string());
-            let _ = writeln!(w, "{ts}  {dp}    {d}{b} bash \"{command}\" exit={code} [{duration_ms}ms]{r}");
+        SubstepEvent::BashCommand {
+            command,
+            exit_code,
+            duration_ms,
+        } => {
+            let code = exit_code
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "?".to_string());
+            let _ = writeln!(
+                w,
+                "{ts}  {dp}    {d}{b} bash \"{command}\" exit={code} [{duration_ms}ms]{r}"
+            );
         }
         SubstepEvent::Screenshot { path } => {
             let _ = writeln!(w, "{ts}  {dp}    {d}{b} screenshot {path}{r}");
@@ -949,8 +1186,7 @@ mod tests {
         // DIM=\x1b[2m, DEVICE_COLORS[0] (cyan)=\x1b[36m, RESET=\x1b[0m.
         let out = format_flow_prefix(0, 1, true, true);
         assert_eq!(
-            out,
-            "\x1b[2m\x1b[36m1\x1b[0m ",
+            out, "\x1b[2m\x1b[36m1\x1b[0m ",
             "color prefix SHALL wrap padded number in DIM+device color+RESET"
         );
     }
@@ -963,8 +1199,7 @@ mod tests {
         // DIM=\x1b[2m, cyan=\x1b[36m, RESET=\x1b[0m.
         let out = format_flow_prefix(DEVICE_COLORS.len(), 1, true, true);
         assert_eq!(
-            out,
-            "\x1b[2m\x1b[36m7\x1b[0m ",
+            out, "\x1b[2m\x1b[36m7\x1b[0m ",
             "color index SHALL wrap around DEVICE_COLORS via modulo to the first color"
         );
     }
@@ -977,7 +1212,11 @@ mod tests {
             "[   1.500s]",
             "1500ms SHALL render as right-aligned 1.500s in 8 cols"
         );
-        assert_eq!(fmt_dur(0, false), "[   0.000s]", "0ms SHALL render as 0.000s");
+        assert_eq!(
+            fmt_dur(0, false),
+            "[   0.000s]",
+            "0ms SHALL render as 0.000s"
+        );
     }
 
     // 9. fmt_dur: color path wraps the bracketed duration in DIM/RESET.
@@ -993,8 +1232,16 @@ mod tests {
     // 10. keyword: no-color path left-pads label to 4 chars.
     #[test]
     fn keyword_no_color_left_pads_to_four() {
-        assert_eq!(keyword("ok", BOLD_GREEN, false), "ok  ", "short label SHALL left-pad to 4");
-        assert_eq!(keyword("PASS", BOLD_GREEN, false), "PASS", "4-char label SHALL not over-pad");
+        assert_eq!(
+            keyword("ok", BOLD_GREEN, false),
+            "ok  ",
+            "short label SHALL left-pad to 4"
+        );
+        assert_eq!(
+            keyword("PASS", BOLD_GREEN, false),
+            "PASS",
+            "4-char label SHALL not over-pad"
+        );
     }
 
     // 11. keyword: color path applies color then 4-wide label then RESET.
@@ -1058,13 +1305,20 @@ mod tests {
         let block = (String::new(), 0u32);
         let out = fmt_step_path(9, &block, 0, true);
         let expected = format!("{DIM}{:>5}::{RESET}{BOLD_BLUE}0{RESET}", 9);
-        assert_eq!(out, expected, "color empty block SHALL use degraded global::local form");
+        assert_eq!(
+            out, expected,
+            "color empty block SHALL use degraded global::local form"
+        );
     }
 
     // 17. tag: no-color returns the label verbatim; color wraps in color+RESET.
     #[test]
     fn tag_color_and_no_color() {
-        assert_eq!(tag("[plan]", CYAN, false), "[plan]", "no-color tag SHALL be verbatim");
+        assert_eq!(
+            tag("[plan]", CYAN, false),
+            "[plan]",
+            "no-color tag SHALL be verbatim"
+        );
         assert_eq!(
             tag("[plan]", CYAN, true),
             format!("{CYAN}[plan]{RESET}"),
@@ -1089,10 +1343,11 @@ mod tests {
         // Leading run at start, after space, and after '(' is bolded;
         // the "34" in "v34" is preceded by 'v' so it stays plain.
         let out = bold_numbers("2 booted (1 of v34)", true);
-        let expected = format!(
-            "{BOLD}2{RESET} booted ({BOLD}1{RESET} of v34)"
+        let expected = format!("{BOLD}2{RESET} booted ({BOLD}1{RESET} of v34)");
+        assert_eq!(
+            out, expected,
+            "only whitespace/paren/start-preceded digit runs SHALL bold"
         );
-        assert_eq!(out, expected, "only whitespace/paren/start-preceded digit runs SHALL bold");
     }
 
     // 20. bold_numbers: a multi-digit leading run is bolded as a single unit.
@@ -1142,7 +1397,11 @@ mod tests {
     // 24. format_tree_stats: zero fetches yields an empty string.
     #[test]
     fn format_tree_stats_zero_fetches_empty() {
-        let stats = golem_events::TreeStats { fetches: 0, min_nodes: 0, max_nodes: 0 };
+        let stats = golem_events::TreeStats {
+            fetches: 0,
+            min_nodes: 0,
+            max_nodes: 0,
+        };
         assert_eq!(
             format_tree_stats(&stats),
             "",
@@ -1153,7 +1412,11 @@ mod tests {
     // 25. format_tree_stats: equal min/max renders a single node count.
     #[test]
     fn format_tree_stats_equal_min_max() {
-        let stats = golem_events::TreeStats { fetches: 3, min_nodes: 181, max_nodes: 181 };
+        let stats = golem_events::TreeStats {
+            fetches: 3,
+            min_nodes: 181,
+            max_nodes: 181,
+        };
         assert_eq!(
             format_tree_stats(&stats),
             "{3 trees, 181 nodes}",
@@ -1164,7 +1427,11 @@ mod tests {
     // 26. format_tree_stats: differing min/max renders a min~max range.
     #[test]
     fn format_tree_stats_range() {
-        let stats = golem_events::TreeStats { fetches: 3, min_nodes: 181, max_nodes: 190 };
+        let stats = golem_events::TreeStats {
+            fetches: 3,
+            min_nodes: 181,
+            max_nodes: 190,
+        };
         assert_eq!(
             format_tree_stats(&stats),
             "{3 trees, 181~190 nodes}",
@@ -1194,12 +1461,18 @@ mod tests {
     #[test]
     fn print_failure_block_to_no_color_no_substeps() {
         let mut buf: Vec<u8> = Vec::new();
-        print_failure_block_to(&mut buf, "EP422", "type unsupported", BOLD_RED, "", &[], false);
+        print_failure_block_to(
+            &mut buf,
+            "EP422",
+            "type unsupported",
+            BOLD_RED,
+            "",
+            &[],
+            false,
+        );
         let out = String::from_utf8(buf).expect("failure block output SHALL be valid UTF-8");
         // ╰ gutter + 14-space pad + 7 spaces + "EP422 type unsupported".
-        let expected = format!(
-            "\u{2570}{TS_CONTINUATION_PAD}       EP422 type unsupported\n"
-        );
+        let expected = format!("\u{2570}{TS_CONTINUATION_PAD}       EP422 type unsupported\n");
         assert_eq!(
             out, expected,
             "empty-pending failure block SHALL close the rope with ╰ and render the code + message"
@@ -1216,10 +1489,22 @@ mod tests {
         };
         let pending = [(SystemTime::UNIX_EPOCH, sub)];
         let mut buf: Vec<u8> = Vec::new();
-        print_failure_block_to(&mut buf, "EE301", "not found", BOLD_RED, "", &pending, false);
+        print_failure_block_to(
+            &mut buf,
+            "EE301",
+            "not found",
+            BOLD_RED,
+            "",
+            &pending,
+            false,
+        );
         let out = String::from_utf8(buf).expect("failure block output SHALL be valid UTF-8");
         let lines: Vec<&str> = out.lines().collect();
-        assert_eq!(lines.len(), 2, "one error line plus one replayed substep SHALL render");
+        assert_eq!(
+            lines.len(),
+            2,
+            "one error line plus one replayed substep SHALL render"
+        );
         assert!(
             lines[0].starts_with('\u{2502}'),
             "with pending substeps the error gutter SHALL be │, got: {:?}",

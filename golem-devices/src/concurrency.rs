@@ -184,7 +184,10 @@ pub fn get_available_disk_mb() -> Result<u64> {
 ///
 /// Returns `true` if available disk minus `estimated_device_size_mb` is
 /// still above `config.min_free_disk_mb`.
-pub fn has_sufficient_disk(config: &ConcurrencyConfig, estimated_device_size_mb: u64) -> Result<bool> {
+pub fn has_sufficient_disk(
+    config: &ConcurrencyConfig,
+    estimated_device_size_mb: u64,
+) -> Result<bool> {
     let available = get_available_disk_mb()?;
     Ok(available >= config.min_free_disk_mb + estimated_device_size_mb)
 }
@@ -510,7 +513,9 @@ mod tests {
     #[test]
     fn system_ram_provider_returns_positive_value() {
         let provider = SystemRamProvider;
-        let mb = provider.available_ram_mb().expect("should query system RAM");
+        let mb = provider
+            .available_ram_mb()
+            .expect("should query system RAM");
         assert!(mb > 0, "available RAM SHALL be positive, got {mb}");
     }
 

@@ -44,7 +44,8 @@ pub fn build_summary(flows: &[FlowReport]) -> Vec<FlakeEntry> {
     out.sort_by(|a, b| {
         let a_flake = a.passed > 0 && a.failed > 0;
         let b_flake = b.passed > 0 && b.failed > 0;
-        b_flake.cmp(&a_flake)
+        b_flake
+            .cmp(&a_flake)
             .then(b.failed.cmp(&a.failed))
             .then(a.flow.cmp(&b.flow))
     });
@@ -118,9 +119,16 @@ mod tests {
             flow("login", None, true, None, Some(RC)),
         ];
         let out = build_summary(&flows);
-        assert_eq!(out.len(), 1, "one (flow,device) key SHALL collapse to one entry");
+        assert_eq!(
+            out.len(),
+            1,
+            "one (flow,device) key SHALL collapse to one entry"
+        );
         let e = &out[0];
-        assert_eq!(e.flow, "login", "key SHALL be the bare flow name when no device");
+        assert_eq!(
+            e.flow, "login",
+            "key SHALL be the bare flow name when no device"
+        );
         assert_eq!(e.total, 3, "total SHALL count every run");
         assert_eq!(e.passed, 2, "passed SHALL count successes");
         assert_eq!(e.failed, 1, "failed SHALL count failures");
@@ -169,7 +177,10 @@ mod tests {
         let out = build_summary(&flows);
         let e = &out[0];
         assert_eq!(e.failed, 1, "success=false + reason SHALL count as failed");
-        assert_eq!(e.skipped, 0, "an install failure SHALL NOT count as skipped");
+        assert_eq!(
+            e.skipped, 0,
+            "an install failure SHALL NOT count as skipped"
+        );
         assert_eq!(e.passed, 0, "an install failure SHALL NOT count as passed");
     }
 
@@ -190,7 +201,10 @@ mod tests {
             out[0].flow, "flaky",
             "flakes SHALL sort before pure failures regardless of fail count"
         );
-        assert_eq!(out[1].flow, "steady_fail", "pure failure SHALL follow the flake");
+        assert_eq!(
+            out[1].flow, "steady_fail",
+            "pure failure SHALL follow the flake"
+        );
     }
 
     // 8. Sort within same flake-ness: more failures first.

@@ -112,7 +112,13 @@ mod tests {
     use super::*;
     use golem_devices::{DeviceState, DeviceType, OsVersionSpec, Platform};
 
-    fn device(name: &str, udid: &str, platform: Platform, major: u32, dt: DeviceType) -> DeviceInfo {
+    fn device(
+        name: &str,
+        udid: &str,
+        platform: Platform,
+        major: u32,
+        dt: DeviceType,
+    ) -> DeviceInfo {
         DeviceInfo {
             name: name.into(),
             udid: udid.into(),
@@ -164,10 +170,7 @@ mod tests {
     // One device covers everything → 1 pick.
     #[test]
     fn set_cover_single_device_covers_all_axes() {
-        let boxes = vec![
-            os_box(Platform::Ios, 26),
-            type_box(DeviceType::Tablet),
-        ];
+        let boxes = vec![os_box(Platform::Ios, 26), type_box(DeviceType::Tablet)];
         let candidates = vec![device("iPad", "u1", Platform::Ios, 26, DeviceType::Tablet)];
         let picked = set_cover_greedy(&boxes, &candidates);
         assert_eq!(picked, vec![0], "one iPad v26 SHALL tick both boxes");
@@ -198,7 +201,11 @@ mod tests {
         let boxes = vec![os_box(Platform::Ios, 26), os_box(Platform::Ios, 18)];
         let candidates = vec![device("iPhone", "u1", Platform::Ios, 26, DeviceType::Phone)];
         let picked = set_cover_greedy(&boxes, &candidates);
-        assert_eq!(picked, vec![0], "SHALL pick the v26 device; v18 box unreachable");
+        assert_eq!(
+            picked,
+            vec![0],
+            "SHALL pick the v26 device; v18 box unreachable"
+        );
     }
 
     // Greedy picks the device that covers more first — tie-break by index.
@@ -238,14 +245,11 @@ mod tests {
     // pick_best_covering basics — used by Smart.
     #[test]
     fn pick_best_covering_picks_highest_tick_count() {
-        let boxes = vec![
-            os_box(Platform::Ios, 26),
-            type_box(DeviceType::Tablet),
-        ];
+        let boxes = vec![os_box(Platform::Ios, 26), type_box(DeviceType::Tablet)];
         let remaining: std::collections::HashSet<usize> = [0usize, 1].into_iter().collect();
         let free = vec![
-            device("iPhone-26", "u-a", Platform::Ios, 26, DeviceType::Phone),  // ticks box 0
-            device("iPad-26", "u-b", Platform::Ios, 26, DeviceType::Tablet),   // ticks boxes 0+1
+            device("iPhone-26", "u-a", Platform::Ios, 26, DeviceType::Phone), // ticks box 0
+            device("iPad-26", "u-b", Platform::Ios, 26, DeviceType::Tablet),  // ticks boxes 0+1
         ];
         let pick = pick_best_covering(&boxes, &remaining, &free).expect("SHALL pick");
         assert_eq!(pick.0.udid, "u-b");
@@ -303,7 +307,13 @@ mod tests {
     fn set_cover_skips_useless_candidate_and_terminates() {
         let boxes = vec![os_box(Platform::Ios, 26), os_box(Platform::Android, 34)];
         let candidates = vec![
-            device("android-34", "u-droid", Platform::Android, 34, DeviceType::Phone),
+            device(
+                "android-34",
+                "u-droid",
+                Platform::Android,
+                34,
+                DeviceType::Phone,
+            ),
             device("ios-18", "u-old", Platform::Ios, 18, DeviceType::Phone),
         ];
         let picked = set_cover_greedy(&boxes, &candidates);
@@ -327,15 +337,28 @@ mod tests {
         ];
         let candidates = vec![
             device("iPad-26", "u-pad", Platform::Ios, 26, DeviceType::Tablet),
-            device("Pixel-34", "u-pix", Platform::Android, 34, DeviceType::Phone),
+            device(
+                "Pixel-34",
+                "u-pix",
+                Platform::Android,
+                34,
+                DeviceType::Phone,
+            ),
         ];
         let picked = set_cover_greedy(&boxes, &candidates);
         // 2. Round 1 picks the broadest (iPad, 2 ticks); round 2 picks Pixel.
-        assert_eq!(picked, vec![0, 1], "SHALL pick iPad then Pixel across two rounds");
+        assert_eq!(
+            picked,
+            vec![0, 1],
+            "SHALL pick iPad then Pixel across two rounds"
+        );
         // 3. No device index appears more than once — the picked_set guard held.
         let mut seen = std::collections::HashSet::new();
         for idx in &picked {
-            assert!(seen.insert(*idx), "device {idx} SHALL be picked at most once");
+            assert!(
+                seen.insert(*idx),
+                "device {idx} SHALL be picked at most once"
+            );
         }
     }
 
@@ -351,7 +374,11 @@ mod tests {
         ];
         let picked = set_cover_greedy(&boxes, &candidates);
         // 1. Both tick the open box once; the fold keeps the first max → index 0.
-        assert_eq!(picked, vec![0], "equal-tick tie SHALL resolve to the lowest-index candidate");
+        assert_eq!(
+            picked,
+            vec![0],
+            "equal-tick tie SHALL resolve to the lowest-index candidate"
+        );
     }
 
     // Regression: three candidates all tick the same single box with an equal

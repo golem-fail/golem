@@ -26,16 +26,25 @@ mod tests {
         let original = is_debug();
 
         set_debug(false);
-        assert!(!is_debug(), "set_debug(false) SHALL make is_debug return false");
+        assert!(
+            !is_debug(),
+            "set_debug(false) SHALL make is_debug return false"
+        );
 
         set_debug(true);
-        assert!(is_debug(), "set_debug(true) SHALL make is_debug return true");
+        assert!(
+            is_debug(),
+            "set_debug(true) SHALL make is_debug return true"
+        );
 
         set_debug(true);
         assert!(is_debug(), "repeated set_debug(true) SHALL remain true");
 
         set_debug(false);
-        assert!(!is_debug(), "set_debug(false) SHALL clear the flag back to false");
+        assert!(
+            !is_debug(),
+            "set_debug(false) SHALL clear the flag back to false"
+        );
 
         set_debug(original);
     }

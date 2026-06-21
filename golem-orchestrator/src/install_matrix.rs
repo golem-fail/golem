@@ -79,9 +79,7 @@ pub fn build_install_matrix(
                     else {
                         continue;
                     };
-                    let timeout_ms = app
-                        .install_timeout_ms
-                        .unwrap_or(DEFAULT_INSTALL_TIMEOUT_MS);
+                    let timeout_ms = app.install_timeout_ms.unwrap_or(DEFAULT_INSTALL_TIMEOUT_MS);
                     entries.push(InstallEntry {
                         platform: *platform,
                         app_name: app_name.clone(),
@@ -117,22 +115,30 @@ mod tests {
     #[tokio::test]
     async fn matrix_dedupes_same_platform_app_across_flows() {
         let tmp = TempDir::new().unwrap();
-        let a = write_flow(tmp.path(), "a.test.toml", r#"
+        let a = write_flow(
+            tmp.path(),
+            "a.test.toml",
+            r#"
             [flow]
             name = "a"
             [[flow.apps]]
             name = "app"
             [[flow.apps.devices]]
             os = "ios"
-        "#);
-        let b = write_flow(tmp.path(), "b.test.toml", r#"
+        "#,
+        );
+        let b = write_flow(
+            tmp.path(),
+            "b.test.toml",
+            r#"
             [flow]
             name = "b"
             [[flow.apps]]
             name = "app"
             [[flow.apps.devices]]
             os = "ios"
-        "#);
+        "#,
+        );
         let apps = vec![ProjectAppConfig {
             name: "app".into(),
             bundle: Some("com.app".into()),
@@ -140,15 +146,23 @@ mod tests {
             install_script: Some(InstallScriptValue::Single("scripts/i.sh".into())),
             install_timeout_ms: None,
         }];
-        let suite = plan(&[a, b], &apps, tmp.path(), None, None, 1).await.unwrap();
-        assert_eq!(suite.install_matrix.len(), 1,
-            "two flows on the same (platform, app) SHALL produce one entry");
+        let suite = plan(&[a, b], &apps, tmp.path(), None, None, 1)
+            .await
+            .unwrap();
+        assert_eq!(
+            suite.install_matrix.len(),
+            1,
+            "two flows on the same (platform, app) SHALL produce one entry"
+        );
     }
 
     #[tokio::test]
     async fn matrix_separates_per_platform() {
         let tmp = TempDir::new().unwrap();
-        let f = write_flow(tmp.path(), "f.test.toml", r#"
+        let f = write_flow(
+            tmp.path(),
+            "f.test.toml",
+            r#"
             [flow]
             name = "f"
             [[flow.apps]]
@@ -159,7 +173,8 @@ mod tests {
             name = "supplier"
             [[flow.apps.devices]]
             os = "android"
-        "#);
+        "#,
+        );
         let apps = vec![
             ProjectAppConfig {
                 name: "client".into(),
@@ -177,14 +192,20 @@ mod tests {
             },
         ];
         let suite = plan(&[f], &apps, tmp.path(), None, None, 1).await.unwrap();
-        assert_eq!(suite.install_matrix.len(), 2,
-            "chat-test apps on different platforms SHALL produce 2 install entries");
+        assert_eq!(
+            suite.install_matrix.len(),
+            2,
+            "chat-test apps on different platforms SHALL produce 2 install entries"
+        );
     }
 
     #[tokio::test]
     async fn matrix_skips_app_without_install_script() {
         let tmp = TempDir::new().unwrap();
-        let f = write_flow(tmp.path(), "f.test.toml", r#"
+        let f = write_flow(
+            tmp.path(),
+            "f.test.toml",
+            r#"
             [flow]
             name = "f"
             [[flow.apps]]
@@ -192,16 +213,22 @@ mod tests {
             bundle = "com.app"
             [[flow.apps.devices]]
             os = "ios"
-        "#);
+        "#,
+        );
         let suite = plan(&[f], &[], tmp.path(), None, None, 1).await.unwrap();
-        assert!(suite.install_matrix.is_empty(),
-            "apps without install_script SHALL NOT appear in install_matrix");
+        assert!(
+            suite.install_matrix.is_empty(),
+            "apps without install_script SHALL NOT appear in install_matrix"
+        );
     }
 
     #[tokio::test]
     async fn matrix_carries_device_constraints() {
         let tmp = TempDir::new().unwrap();
-        let f = write_flow(tmp.path(), "f.test.toml", r#"
+        let f = write_flow(
+            tmp.path(),
+            "f.test.toml",
+            r#"
             [flow]
             name = "f"
             [[flow.apps]]
@@ -211,7 +238,8 @@ mod tests {
             [[flow.apps.devices]]
             os = "ios"
             type = "tablet"
-        "#);
+        "#,
+        );
         let suite = plan(&[f], &[], tmp.path(), None, None, 1).await.unwrap();
         assert_eq!(suite.install_matrix.len(), 1);
         let entry = &suite.install_matrix[0];
@@ -271,8 +299,10 @@ mod tests {
         let flows = vec![parsed_flow(ONE_APP)];
         let runs = vec![run_with_slot(99, slot(Some(Platform::Ios), &["app"]))];
         let entries = build_install_matrix(&flows, &runs, Path::new("/root"));
-        assert!(entries.is_empty(),
-            "out-of-range flow_idx SHALL produce no install entries");
+        assert!(
+            entries.is_empty(),
+            "out-of-range flow_idx SHALL produce no install entries"
+        );
     }
 
     // 6. A platform-None (responsive) slot SHALL fan out to every platform the
@@ -283,8 +313,11 @@ mod tests {
         let runs = vec![run_with_slot(0, slot(None, &["app"]))];
         let mut entries = build_install_matrix(&flows, &runs, Path::new("/root"));
         entries.sort_by_key(|e| e.platform.to_string());
-        assert_eq!(entries.len(), 2,
-            "platform-None slot SHALL emit one entry per installable platform");
+        assert_eq!(
+            entries.len(),
+            2,
+            "platform-None slot SHALL emit one entry per installable platform"
+        );
         assert_eq!(entries[0].platform, Platform::Android);
         assert_eq!(entries[1].platform, Platform::Ios);
     }
@@ -305,8 +338,11 @@ mod tests {
         let flows = vec![parsed_flow(toml)];
         let runs = vec![run_with_slot(0, slot(None, &["app"]))];
         let entries = build_install_matrix(&flows, &runs, Path::new("/root"));
-        assert_eq!(entries.len(), 1,
-            "per-platform script with only ios SHALL emit a single ios entry");
+        assert_eq!(
+            entries.len(),
+            1,
+            "per-platform script with only ios SHALL emit a single ios entry"
+        );
         assert_eq!(entries[0].platform, Platform::Ios);
     }
 
@@ -317,8 +353,10 @@ mod tests {
         let flows = vec![parsed_flow(ONE_APP)];
         let runs = vec![run_with_slot(0, slot(Some(Platform::Ios), &["nope"]))];
         let entries = build_install_matrix(&flows, &runs, Path::new("/root"));
-        assert!(entries.is_empty(),
-            "slot referencing a non-existent app SHALL produce no entries");
+        assert!(
+            entries.is_empty(),
+            "slot referencing a non-existent app SHALL produce no entries"
+        );
     }
 
     // 9. An app with no bundle SHALL be skipped even when it has a script.
@@ -334,8 +372,10 @@ mod tests {
         let flows = vec![parsed_flow(toml)];
         let runs = vec![run_with_slot(0, slot(Some(Platform::Ios), &["app"]))];
         let entries = build_install_matrix(&flows, &runs, Path::new("/root"));
-        assert!(entries.is_empty(),
-            "app missing a bundle SHALL produce no install entry");
+        assert!(
+            entries.is_empty(),
+            "app missing a bundle SHALL produce no install entry"
+        );
     }
 
     // 10. install_timeout_ms SHALL be carried through; absent => the default.
@@ -354,14 +394,18 @@ mod tests {
         let runs = vec![run_with_slot(0, slot(Some(Platform::Ios), &["app"]))];
         let entries = build_install_matrix(&flows, &runs, Path::new("/root"));
         assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].timeout_ms, 12345,
-            "explicit install_timeout_ms SHALL be carried into the entry");
+        assert_eq!(
+            entries[0].timeout_ms, 12345,
+            "explicit install_timeout_ms SHALL be carried into the entry"
+        );
 
         let flows = vec![parsed_flow(ONE_APP)];
         let runs = vec![run_with_slot(0, slot(Some(Platform::Ios), &["app"]))];
         let entries = build_install_matrix(&flows, &runs, Path::new("/root"));
-        assert_eq!(entries[0].timeout_ms, DEFAULT_INSTALL_TIMEOUT_MS,
-            "absent install_timeout_ms SHALL fall back to the default");
+        assert_eq!(
+            entries[0].timeout_ms, DEFAULT_INSTALL_TIMEOUT_MS,
+            "absent install_timeout_ms SHALL fall back to the default"
+        );
     }
 
     // 11. script_path SHALL be project_root joined with the configured script,
@@ -372,10 +416,15 @@ mod tests {
         let runs = vec![run_with_slot(0, slot(Some(Platform::Ios), &["app"]))];
         let entries = build_install_matrix(&flows, &runs, Path::new("/root/proj"));
         assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].script_path, PathBuf::from("/root/proj/scripts/i.sh"),
-            "script_path SHALL be project_root joined with the script path");
-        assert_eq!(entries[0].bundle_id, "com.app",
-            "bundle_id SHALL mirror the app's configured bundle");
+        assert_eq!(
+            entries[0].script_path,
+            PathBuf::from("/root/proj/scripts/i.sh"),
+            "script_path SHALL be project_root joined with the script path"
+        );
+        assert_eq!(
+            entries[0].bundle_id, "com.app",
+            "bundle_id SHALL mirror the app's configured bundle"
+        );
     }
 
     // 12. The dedup key is (platform, app_name) only — independent of which
@@ -390,19 +439,21 @@ mod tests {
         // 2. Second run (distinct repeat_index) re-references the same app on ios.
         let mut run_b = run_with_slot(0, slot(Some(Platform::Ios), &["app"]));
         run_b.repeat_index = 1;
-        let runs = vec![
-            run_with_slot(0, slot(None, &["app"])),
-            run_b,
-        ];
+        let runs = vec![run_with_slot(0, slot(None, &["app"])), run_b];
         let entries = build_install_matrix(&flows, &runs, Path::new("/root"));
         // 3. ios from run B collapses into ios from run A; android survives once.
-        assert_eq!(entries.len(), 2,
-            "(platform, app) dedup SHALL ignore which run/slot reaches the key");
-        let mut platforms: Vec<String> =
-            entries.iter().map(|e| e.platform.to_string()).collect();
+        assert_eq!(
+            entries.len(),
+            2,
+            "(platform, app) dedup SHALL ignore which run/slot reaches the key"
+        );
+        let mut platforms: Vec<String> = entries.iter().map(|e| e.platform.to_string()).collect();
         platforms.sort();
-        assert_eq!(platforms, vec!["android".to_string(), "ios".to_string()],
-            "exactly one entry per distinct platform SHALL remain after dedup");
+        assert_eq!(
+            platforms,
+            vec!["android".to_string(), "ios".to_string()],
+            "exactly one entry per distinct platform SHALL remain after dedup"
+        );
     }
 
     // 13. Empty inputs SHALL produce an empty matrix.

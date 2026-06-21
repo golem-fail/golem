@@ -359,13 +359,7 @@ mod tests {
     #[test]
     fn run_multiple_outputs() {
         let cli = parse(&[
-            "run",
-            "--output",
-            "human",
-            "--output",
-            "json",
-            "--output",
-            "junit",
+            "run", "--output", "human", "--output", "json", "--output", "junit",
         ]);
         let Commands::Run(run) = cli.command else {
             panic!("expected Run");
@@ -454,7 +448,10 @@ mod tests {
     #[test]
     fn run_repeat_zero_rejected() {
         let res = Cli::try_parse_from(["golem", "run", "--repeat", "0"]);
-        assert!(res.is_err(), "repeat=0 SHALL be rejected (range starts at 1)");
+        assert!(
+            res.is_err(),
+            "repeat=0 SHALL be rejected (range starts at 1)"
+        );
     }
 
     // 21. `--repeat 101` is above the range and SHALL be rejected
@@ -546,7 +543,10 @@ mod tests {
         assert!(run.output_dir.is_none(), "output_dir SHALL default None");
         assert!(run.platform.is_none(), "platform SHALL default None");
         assert!(run.coverage.is_none(), "coverage SHALL default None");
-        assert!(run.max_concurrency.is_none(), "max_concurrency SHALL default None");
+        assert!(
+            run.max_concurrency.is_none(),
+            "max_concurrency SHALL default None"
+        );
         assert!(run.max_wait.is_none(), "max_wait SHALL default None");
     }
 

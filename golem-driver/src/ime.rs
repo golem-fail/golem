@@ -63,7 +63,13 @@ async fn adb(serial: &str, args: &[&str]) -> Result<String> {
 fn record_path(serial: &str) -> PathBuf {
     let safe: String = serial
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     PathBuf::from(".golem").join(format!("ime-original-{safe}"))
 }
@@ -94,8 +100,16 @@ pub fn base64_encode(input: &[u8]) -> String {
         let n = (b0 << 16) | (b1 << 8) | b2;
         out.push(T[((n >> 18) & 63) as usize] as char);
         out.push(T[((n >> 12) & 63) as usize] as char);
-        out.push(if chunk.len() > 1 { T[((n >> 6) & 63) as usize] as char } else { '=' });
-        out.push(if chunk.len() > 2 { T[(n & 63) as usize] as char } else { '=' });
+        out.push(if chunk.len() > 1 {
+            T[((n >> 6) & 63) as usize] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            T[(n & 63) as usize] as char
+        } else {
+            '='
+        });
     }
     out
 }
@@ -112,7 +126,11 @@ pub async fn ensure_active(serial: &str, flag: &AtomicBool) -> Result<()> {
     }
     let golem = golem_ime_id();
     let current = parse_default_ime(
-        &adb(serial, &["shell", "settings", "get", "secure", "default_input_method"]).await?,
+        &adb(
+            serial,
+            &["shell", "settings", "get", "secure", "default_input_method"],
+        )
+        .await?,
     );
     match current.as_deref() {
         Some(c) if c == golem => {
@@ -203,7 +221,16 @@ async fn commit_line(serial: &str, line: &str) -> Result<()> {
     for attempt in 0..2 {
         let out = adb(
             serial,
-            &["shell", "am", "broadcast", "-a", ACTION_INPUT, "--es", "msg_b64", &b64],
+            &[
+                "shell",
+                "am",
+                "broadcast",
+                "-a",
+                ACTION_INPUT,
+                "--es",
+                "msg_b64",
+                &b64,
+            ],
         )
         .await?;
         match broadcast_result(&out) {
@@ -229,7 +256,9 @@ async fn commit_line(serial: &str, line: &str) -> Result<()> {
 fn broadcast_result(output: &str) -> Option<i32> {
     let idx = output.find("result=")?;
     let rest = &output[idx + "result=".len()..];
-    let end = rest.find(|c: char| !c.is_ascii_digit() && c != '-').unwrap_or(rest.len());
+    let end = rest
+        .find(|c: char| !c.is_ascii_digit() && c != '-')
+        .unwrap_or(rest.len());
     rest[..end].parse().ok()
 }
 
@@ -251,7 +280,9 @@ async fn restore_device(serial: &str, original: &str) {
 /// teardown — the primary in-session restore.
 pub async fn restore_all() {
     let entries: Vec<(String, String)> = {
-        let mut map = activations().lock().expect("ime activations mutex poisoned");
+        let mut map = activations()
+            .lock()
+            .expect("ime activations mutex poisoned");
         map.drain().collect()
     };
     for (serial, original) in entries {
@@ -264,7 +295,12 @@ pub async fn restore_all() {
 /// record is gone — e.g. after a hard kill). Best-effort; runs at device
 /// init. No-op when the active IME isn't golem's.
 pub async fn self_heal(serial: &str) {
-    let current = match adb(serial, &["shell", "settings", "get", "secure", "default_input_method"]).await {
+    let current = match adb(
+        serial,
+        &["shell", "settings", "get", "secure", "default_input_method"],
+    )
+    .await
+    {
         Ok(out) => parse_default_ime(&out),
         Err(_) => return,
     };
@@ -306,7 +342,10 @@ mod tests {
     #[test]
     fn base64_encodes_utf8_unicode() {
         // "こんにちは" — the canonical demo string.
-        assert_eq!(base64_encode("こんにちは".as_bytes()), "44GT44KT44Gr44Gh44Gv");
+        assert_eq!(
+            base64_encode("こんにちは".as_bytes()),
+            "44GT44KT44Gr44Gh44Gv"
+        );
     }
 
     #[test]
@@ -323,7 +362,9 @@ mod tests {
     #[test]
     fn broadcast_result_extracts_code() {
         assert_eq!(
-            broadcast_result("Broadcasting: Intent { ... }\nBroadcast completed: result=0, data=ok"),
+            broadcast_result(
+                "Broadcasting: Intent { ... }\nBroadcast completed: result=0, data=ok"
+            ),
             Some(0)
         );
         assert_eq!(
@@ -356,7 +397,11 @@ mod tests {
     fn type_ops_multiline_inserts_enter_between() {
         assert_eq!(
             type_ops("a\nb"),
-            vec![TypeOp::Commit("a".into()), TypeOp::Enter, TypeOp::Commit("b".into())]
+            vec![
+                TypeOp::Commit("a".into()),
+                TypeOp::Enter,
+                TypeOp::Commit("b".into())
+            ]
         );
     }
 

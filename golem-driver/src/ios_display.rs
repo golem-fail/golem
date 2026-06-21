@@ -40,7 +40,9 @@ fn parse_entries(s: &str) -> DisplayEntries {
     let table: toml::Table = s.parse().unwrap_or_default();
     let mut entries: Vec<(String, DisplayEntry)> = Vec::new();
     for (key, value) in &table {
-        let Some(tbl) = value.as_table() else { continue };
+        let Some(tbl) = value.as_table() else {
+            continue;
+        };
         let cutout_size = tbl
             .get("cutout_size")
             .and_then(|v| v.as_array())
@@ -67,13 +69,16 @@ fn parse_entries(s: &str) -> DisplayEntries {
             .get("gesture_inset_right")
             .and_then(|v| v.as_integer())
             .unwrap_or(0) as i32;
-        entries.push((key.clone(), DisplayEntry {
-            cutout_size,
-            cutout_y,
-            corner_radius,
-            gesture_inset_left,
-            gesture_inset_right,
-        }));
+        entries.push((
+            key.clone(),
+            DisplayEntry {
+                cutout_size,
+                cutout_y,
+                corner_radius,
+                gesture_inset_left,
+                gesture_inset_right,
+            },
+        ));
     }
     // Sort by key length descending so longest prefix matches first
     entries.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
@@ -101,7 +106,9 @@ pub struct DisplayLookup {
 /// Returns None if the model is unknown.
 pub fn lookup(model: &str, screen_width: i32, screen_height: i32) -> Option<DisplayLookup> {
     let entries = load();
-    let (_, entry) = entries.iter().find(|(key, _)| model.starts_with(key.as_str()))?;
+    let (_, entry) = entries
+        .iter()
+        .find(|(key, _)| model.starts_with(key.as_str()))?;
 
     let cutouts = match entry.cutout_size {
         Some([w, h]) if w > 0 && h > 0 && screen_width > 0 => {
@@ -181,7 +188,10 @@ mod tests {
     #[test]
     fn lookup_dynamic_island_has_y_offset() {
         let d = lookup("iPhone15,2", 393, 852).expect("SHALL match");
-        assert_eq!(d.cutouts[0].width, 126, "Dynamic Island SHALL be 126pt wide");
+        assert_eq!(
+            d.cutouts[0].width, 126,
+            "Dynamic Island SHALL be 126pt wide"
+        );
         assert_eq!(d.cutouts[0].y, 11, "Dynamic Island SHALL be 11pt from top");
         assert_eq!(d.rounded_corners[0].radius, 55);
     }
@@ -202,18 +212,32 @@ mod tests {
     #[test]
     fn specific_match_beats_prefix() {
         let xr = lookup("iPhone11,8", 414, 896).expect("SHALL match");
-        assert_eq!(xr.rounded_corners[0].radius, 42, "iPhone XR SHALL have radius 42");
+        assert_eq!(
+            xr.rounded_corners[0].radius, 42,
+            "iPhone XR SHALL have radius 42"
+        );
 
         let xs = lookup("iPhone11,2", 375, 812).expect("SHALL match");
-        assert_eq!(xs.rounded_corners[0].radius, 39, "iPhone XS SHALL have radius 39");
+        assert_eq!(
+            xs.rounded_corners[0].radius, 39,
+            "iPhone XS SHALL have radius 39"
+        );
     }
 
     #[test]
     fn corner_centers_use_screen_dimensions() {
         let d = lookup("iPhone17,3", 393, 852).expect("SHALL match");
-        let tl = d.rounded_corners.iter().find(|c| c.position == CornerPosition::TopLeft).unwrap();
+        let tl = d
+            .rounded_corners
+            .iter()
+            .find(|c| c.position == CornerPosition::TopLeft)
+            .unwrap();
         assert_eq!((tl.center_x, tl.center_y), (55, 55));
-        let br = d.rounded_corners.iter().find(|c| c.position == CornerPosition::BottomRight).unwrap();
+        let br = d
+            .rounded_corners
+            .iter()
+            .find(|c| c.position == CornerPosition::BottomRight)
+            .unwrap();
         assert_eq!((br.center_x, br.center_y), (393 - 55, 852 - 55));
     }
 
@@ -244,9 +268,17 @@ mod tests {
             "corners SHALL be ordered TL, TR, BR, BL"
         );
         let tr = find_corner(&d, CornerPosition::TopRight);
-        assert_eq!((tr.center_x, tr.center_y), (393 - r, r), "TR SHALL inset x from right edge");
+        assert_eq!(
+            (tr.center_x, tr.center_y),
+            (393 - r, r),
+            "TR SHALL inset x from right edge"
+        );
         let bl = find_corner(&d, CornerPosition::BottomLeft);
-        assert_eq!((bl.center_x, bl.center_y), (r, 852 - r), "BL SHALL inset y from bottom edge");
+        assert_eq!(
+            (bl.center_x, bl.center_y),
+            (r, 852 - r),
+            "BL SHALL inset y from bottom edge"
+        );
         assert!(
             d.rounded_corners.iter().all(|c| c.radius == r),
             "every corner SHALL share the same radius"
@@ -259,15 +291,24 @@ mod tests {
     fn zero_screen_width_suppresses_cutout_and_corners() {
         let d = lookup("iPhone15,2", 0, 852).expect("model SHALL still be known");
         assert!(d.cutouts.is_empty(), "zero width SHALL produce no cutout");
-        assert!(d.rounded_corners.is_empty(), "zero width SHALL produce no corners");
+        assert!(
+            d.rounded_corners.is_empty(),
+            "zero width SHALL produce no corners"
+        );
     }
 
     // 3. A negative screen width SHALL likewise suppress cutout and corners.
     #[test]
     fn negative_screen_width_suppresses_geometry() {
         let d = lookup("iPhone15,2", -10, 852).expect("model SHALL still be known");
-        assert!(d.cutouts.is_empty(), "negative width SHALL produce no cutout");
-        assert!(d.rounded_corners.is_empty(), "negative width SHALL produce no corners");
+        assert!(
+            d.cutouts.is_empty(),
+            "negative width SHALL produce no cutout"
+        );
+        assert!(
+            d.rounded_corners.is_empty(),
+            "negative width SHALL produce no corners"
+        );
     }
 
     // 4. A non-positive screen height SHALL suppress corners but the cutout
@@ -288,7 +329,10 @@ mod tests {
     #[test]
     fn missing_cutout_size_yields_no_cutouts() {
         let d = lookup("iPad13", 834, 1194).expect("SHALL match");
-        assert!(d.cutouts.is_empty(), "absent cutout_size SHALL mean no cutout");
+        assert!(
+            d.cutouts.is_empty(),
+            "absent cutout_size SHALL mean no cutout"
+        );
         assert_eq!(d.rounded_corners.len(), 4, "iPad SHALL still have corners");
     }
 
@@ -327,8 +371,14 @@ mod tests {
     #[test]
     fn twelve_family_notch_height_and_top_offset() {
         let d = lookup("iPhone13,2", 390, 844).expect("SHALL match");
-        assert_eq!(d.cutouts[0].height, 32, "iPhone 12 notch SHALL be 32pt tall");
-        assert_eq!(d.cutouts[0].width, 209, "iPhone 12 notch SHALL be 209pt wide");
+        assert_eq!(
+            d.cutouts[0].height, 32,
+            "iPhone 12 notch SHALL be 32pt tall"
+        );
+        assert_eq!(
+            d.cutouts[0].width, 209,
+            "iPhone 12 notch SHALL be 209pt wide"
+        );
         assert_eq!(d.cutouts[0].y, 0, "a notch SHALL sit at the very top");
     }
 
@@ -348,11 +398,21 @@ mod tests {
         assert_eq!(entries.len(), 1, "one table SHALL yield one entry");
         let (key, e) = &entries[0];
         assert_eq!(key, "Foo1", "key SHALL be the table name");
-        assert_eq!(e.cutout_size, Some([120i32, 30]), "cutout_size SHALL parse both ints");
+        assert_eq!(
+            e.cutout_size,
+            Some([120i32, 30]),
+            "cutout_size SHALL parse both ints"
+        );
         assert_eq!(e.cutout_y, 11, "cutout_y SHALL be read verbatim");
         assert_eq!(e.corner_radius, 55, "corner_radius SHALL be read verbatim");
-        assert_eq!(e.gesture_inset_left, 12, "left inset SHALL be read verbatim");
-        assert_eq!(e.gesture_inset_right, 8, "right inset SHALL be read verbatim");
+        assert_eq!(
+            e.gesture_inset_left, 12,
+            "left inset SHALL be read verbatim"
+        );
+        assert_eq!(
+            e.gesture_inset_right, 8,
+            "right inset SHALL be read verbatim"
+        );
     }
 
     // 11. Absent integer fields SHALL default to 0 and an absent cutout_size
@@ -368,8 +428,14 @@ mod tests {
         assert_eq!(e.cutout_size, None, "absent cutout_size SHALL be None");
         assert_eq!(e.cutout_y, 0, "absent cutout_y SHALL default to 0");
         assert_eq!(e.corner_radius, 18, "present corner_radius SHALL survive");
-        assert_eq!(e.gesture_inset_left, 0, "absent left inset SHALL default to 0");
-        assert_eq!(e.gesture_inset_right, 0, "absent right inset SHALL default to 0");
+        assert_eq!(
+            e.gesture_inset_left, 0,
+            "absent left inset SHALL default to 0"
+        );
+        assert_eq!(
+            e.gesture_inset_right, 0,
+            "absent right inset SHALL default to 0"
+        );
     }
 
     // 12. A cutout_size array whose length is not exactly 2 SHALL be rejected
@@ -407,7 +473,11 @@ mod tests {
         let keys: Vec<String> = parse_entries(src).into_iter().map(|(k, _)| k).collect();
         assert_eq!(
             keys,
-            vec!["iPhone15,2".to_string(), "iPhone15".to_string(), "iPhone".to_string()],
+            vec![
+                "iPhone15,2".to_string(),
+                "iPhone15".to_string(),
+                "iPhone".to_string()
+            ],
             "keys SHALL be ordered longest first"
         );
     }
@@ -427,6 +497,9 @@ mod tests {
         assert_eq!(entries[0].0, "Real", "only the table SHALL remain");
 
         let garbage = parse_entries("this is not = = valid toml [[[");
-        assert!(garbage.is_empty(), "unparseable TOML SHALL yield no entries");
+        assert!(
+            garbage.is_empty(),
+            "unparseable TOML SHALL yield no entries"
+        );
     }
 }

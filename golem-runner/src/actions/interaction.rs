@@ -8,7 +8,6 @@ use tokio::time::{sleep, Instant};
 use crate::context::ExecutionContext;
 use crate::resolution::{build_selector, resolve_element};
 
-
 /// Minimum delay after a tap to prevent the OS interpreting sequential taps
 /// as a double-tap. The settle check runs concurrently but we enforce at
 /// least this floor.
@@ -33,7 +32,9 @@ pub(crate) async fn nudge_into_view(
         let swipe_distance = bottom_overflow.min(viewport.height / 3);
         let cx = viewport.width / 2;
         let cy = viewport.height / 2;
-        let _ = driver.swipe_coords(cx, cy + swipe_distance / 2, cx, cy - swipe_distance / 2).await;
+        let _ = driver
+            .swipe_coords(cx, cy + swipe_distance / 2, cx, cy - swipe_distance / 2)
+            .await;
         let _ = crate::resolution::wait_for_settle(driver).await;
     }
     // If the container extends above the viewport, swipe down
@@ -41,7 +42,9 @@ pub(crate) async fn nudge_into_view(
         let swipe_distance = top_overflow.min(viewport.height / 3);
         let cx = viewport.width / 2;
         let cy = viewport.height / 2;
-        let _ = driver.swipe_coords(cx, cy - swipe_distance / 2, cx, cy + swipe_distance / 2).await;
+        let _ = driver
+            .swipe_coords(cx, cy - swipe_distance / 2, cx, cy + swipe_distance / 2)
+            .await;
         let _ = crate::resolution::wait_for_settle(driver).await;
     }
 }
@@ -60,7 +63,9 @@ async fn find_inner_toggle(
     driver: &dyn PlatformDriver,
     outer: &golem_element::Element,
 ) -> Option<golem_element::Bounds> {
-    let (root, _meta) = crate::resolution::get_hierarchy_bounded(driver).await.ok()?;
+    let (root, _meta) = crate::resolution::get_hierarchy_bounded(driver)
+        .await
+        .ok()?;
     let mut candidates = Vec::new();
     collect_toggles(&root, &mut candidates);
 
@@ -97,7 +102,11 @@ fn collect_toggles(element: &golem_element::Element, out: &mut Vec<golem_element
 ///
 /// After tapping, waits for the UI to settle so the next step sees
 /// a stable hierarchy.
-pub(crate) async fn handle_tap(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
+pub(crate) async fn handle_tap(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+    ctx: &ExecutionContext<'_>,
+) -> Result<()> {
     let (elem, coords) = resolve_element(step, driver, ctx.emitter).await?;
 
     // Workaround: iOS SwiftUI Toggles render as a full-width row with the
@@ -122,8 +131,10 @@ pub(crate) async fn handle_tap(step: &Step, driver: &dyn PlatformDriver, ctx: &E
     ctx.substep(golem_events::SubstepEvent::Tap {
         point: golem_events::Point { x, y },
         element_bounds: Some(golem_events::Rect {
-            x: elem.bounds.x, y: elem.bounds.y,
-            width: elem.bounds.width, height: elem.bounds.height,
+            x: elem.bounds.x,
+            y: elem.bounds.y,
+            width: elem.bounds.width,
+            height: elem.bounds.height,
         }),
     });
     tap_at(driver, x, y).await?;
@@ -133,7 +144,11 @@ pub(crate) async fn handle_tap(step: &Step, driver: &dyn PlatformDriver, ctx: &E
 
 /// Find the target element and double-tap at its center coordinates.
 /// Two taps are fired with 40ms between the start of each.
-pub(crate) async fn handle_double_tap(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
+pub(crate) async fn handle_double_tap(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+    ctx: &ExecutionContext<'_>,
+) -> Result<()> {
     let (_elem, (x, y)) = resolve_element(step, driver, ctx.emitter).await?;
     ctx.substep(golem_events::SubstepEvent::DoubleTap {
         point: golem_events::Point { x, y },
@@ -154,7 +169,11 @@ pub(crate) async fn handle_double_tap(step: &Step, driver: &dyn PlatformDriver, 
 ///
 /// The `input` field holds the string to type. The `text` field (and other
 /// selectors) identify which element to type into.
-pub(crate) async fn handle_type(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
+pub(crate) async fn handle_type(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+    ctx: &ExecutionContext<'_>,
+) -> Result<()> {
     let value = step
         .input
         .as_deref()
@@ -200,7 +219,11 @@ pub(crate) async fn handle_type(step: &Step, driver: &dyn PlatformDriver, ctx: &
 
 /// Find the target element, tap it to focus, then send backspace key presses.
 /// `count` defaults to 1 if not specified in `step.params`.
-pub(crate) async fn handle_backspace(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
+pub(crate) async fn handle_backspace(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+    ctx: &ExecutionContext<'_>,
+) -> Result<()> {
     let (_elem, (x, y)) = resolve_element(step, driver, ctx.emitter).await?;
     driver.tap(x, y).await?;
 
@@ -217,7 +240,11 @@ pub(crate) async fn handle_backspace(step: &Step, driver: &dyn PlatformDriver, c
 
 /// Find the target element and long press at its center coordinates.
 /// `duration` in ms, defaults to 1000 if not specified in `step.params`.
-pub(crate) async fn handle_long_press(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
+pub(crate) async fn handle_long_press(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+    ctx: &ExecutionContext<'_>,
+) -> Result<()> {
     let (_elem, (x, y)) = resolve_element(step, driver, ctx.emitter).await?;
 
     let duration = step.duration.unwrap_or(1000);
@@ -228,10 +255,16 @@ pub(crate) async fn handle_long_press(step: &Step, driver: &dyn PlatformDriver, 
 
 /// Swipe in a direction. May optionally target a specific element (ignored for
 /// the swipe call itself, but element resolution validates the element exists).
-pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
+pub(crate) async fn handle_swipe(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+    ctx: &ExecutionContext<'_>,
+) -> Result<()> {
     let (root, meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
     let mut vp = golem_element::Viewport::from_root(&root);
-    if meta.keyboard_height > 0 { vp.height -= meta.keyboard_height; }
+    if meta.keyboard_height > 0 {
+        vp.height -= meta.keyboard_height;
+    }
 
     // Build the path: start (prepend) + path + end (append)
     let mut path_groups: Vec<&golem_parser::SelectorGroup> = Vec::new();
@@ -250,8 +283,10 @@ pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver, ctx: 
         use crate::resolution::build_selector_from_group;
         use golem_element::selector::find_elements;
 
-        let has_element = group.text.is_some() || group.accessibility_label.is_some()
-            || group.below.is_some() || group.above.is_some();
+        let has_element = group.text.is_some()
+            || group.accessibility_label.is_some()
+            || group.below.is_some()
+            || group.above.is_some();
 
         if has_element {
             let sel = build_selector_from_group(group);
@@ -260,40 +295,75 @@ pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver, ctx: 
             if let Some(first) = results.first() {
                 let base_x = first.element.bounds.center_x();
                 let base_y = first.element.bounds.center_y();
-                let x = group.x.as_ref().map(|xv| crate::resolution::resolve_coord_public(
-                    xv, vp.width, Some(base_x), Some(first.element.bounds.width), Some(first.element.bounds.x)
-                )).unwrap_or(base_x);
-                let y = group.y.as_ref().map(|yv| crate::resolution::resolve_coord_public(
-                    yv, vp.height, Some(base_y), Some(first.element.bounds.height), Some(first.element.bounds.y)
-                )).unwrap_or(base_y);
+                let x = group
+                    .x
+                    .as_ref()
+                    .map(|xv| {
+                        crate::resolution::resolve_coord_public(
+                            xv,
+                            vp.width,
+                            Some(base_x),
+                            Some(first.element.bounds.width),
+                            Some(first.element.bounds.x),
+                        )
+                    })
+                    .unwrap_or(base_x);
+                let y = group
+                    .y
+                    .as_ref()
+                    .map(|yv| {
+                        crate::resolution::resolve_coord_public(
+                            yv,
+                            vp.height,
+                            Some(base_y),
+                            Some(first.element.bounds.height),
+                            Some(first.element.bounds.y),
+                        )
+                    })
+                    .unwrap_or(base_y);
                 return Some((x, y));
             }
         }
 
         if group.x.is_some() || group.y.is_some() {
-            let x = group.x.as_ref().map(|xv| crate::resolution::resolve_coord_public(
-                xv, vp.width, None, None, None
-            )).unwrap_or(vp.width / 2);
-            let y = group.y.as_ref().map(|yv| crate::resolution::resolve_coord_public(
-                yv, vp.height, None, None, None
-            )).unwrap_or(vp.height / 2);
+            let x = group
+                .x
+                .as_ref()
+                .map(|xv| crate::resolution::resolve_coord_public(xv, vp.width, None, None, None))
+                .unwrap_or(vp.width / 2);
+            let y = group
+                .y
+                .as_ref()
+                .map(|yv| crate::resolution::resolve_coord_public(yv, vp.height, None, None, None))
+                .unwrap_or(vp.height / 2);
             return Some((x, y));
         }
 
         None
     };
 
-    let mut points: Vec<(i32, i32)> = path_groups.iter().filter_map(|g| resolve_point(g)).collect();
+    let mut points: Vec<(i32, i32)> = path_groups
+        .iter()
+        .filter_map(|g| resolve_point(g))
+        .collect();
 
     // If no path points resolved, use direction to create a 2-point path
     if points.is_empty() {
-        let direction_str = step.params.get("direction").and_then(|v| v.as_str()).unwrap_or("");
+        let direction_str = step
+            .params
+            .get("direction")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let direction = match direction_str {
             "up" => Direction::Up,
             "down" => Direction::Down,
             "left" => Direction::Left,
             "right" => Direction::Right,
-            other => crate::fail_code!(golem_events::FailureCode::ParseMissingParam, "Invalid swipe direction: \"{}\"", other),
+            other => crate::fail_code!(
+                golem_events::FailureCode::ParseMissingParam,
+                "Invalid swipe direction: \"{}\"",
+                other
+            ),
         };
         let safe_vp = crate::scroll::make_safe_viewport(&vp, &meta);
         let (sx, sy) = crate::scroll::default_swipe_start(&safe_vp, direction);
@@ -303,7 +373,11 @@ pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver, ctx: 
 
     // If only one point + direction, compute the second point
     if points.len() == 1 {
-        let direction_str = step.params.get("direction").and_then(|v| v.as_str()).unwrap_or("");
+        let direction_str = step
+            .params
+            .get("direction")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let dist = vp.height * 2 / 5;
         let (sx, sy) = points[0];
         let end = match direction_str {
@@ -311,30 +385,46 @@ pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver, ctx: 
             "down" => (sx, sy + dist),
             "left" => (sx - dist, sy),
             "right" => (sx + dist, sy),
-            _ => crate::fail_code!(golem_events::FailureCode::ParseMissingParam, "swipe with one point requires direction"),
+            _ => crate::fail_code!(
+                golem_events::FailureCode::ParseMissingParam,
+                "swipe with one point requires direction"
+            ),
         };
         points.push(end);
     }
 
     if points.len() < 2 {
-        crate::fail_code!(golem_events::FailureCode::ParseMissingParam, "swipe requires at least 2 points (start + end, or direction)");
+        crate::fail_code!(
+            golem_events::FailureCode::ParseMissingParam,
+            "swipe requires at least 2 points (start + end, or direction)"
+        );
     }
 
     // Execute the swipe
     ctx.substep(golem_events::SubstepEvent::Swipe {
-        from: golem_events::Point { x: points[0].0, y: points[0].1 },
-        to: golem_events::Point { x: points.last().map_or(0, |p| p.0), y: points.last().map_or(0, |p| p.1) },
+        from: golem_events::Point {
+            x: points[0].0,
+            y: points[0].1,
+        },
+        to: golem_events::Point {
+            x: points.last().map_or(0, |p| p.0),
+            y: points.last().map_or(0, |p| p.1),
+        },
         duration_ms: None,
     });
     if points.len() == 2 {
-        driver.swipe_coords(points[0].0, points[0].1, points[1].0, points[1].1).await?;
+        driver
+            .swipe_coords(points[0].0, points[0].1, points[1].0, points[1].1)
+            .await?;
     } else {
         // 3+ points: continuous gesture (single finger, no lift between segments)
         let duration = step.duration.unwrap_or(300);
-        driver.gesture(vec![golem_driver::GestureFinger {
-            points,
-            duration_ms: duration,
-        }]).await?;
+        driver
+            .gesture(vec![golem_driver::GestureFinger {
+                points,
+                duration_ms: duration,
+            }])
+            .await?;
     }
 
     Ok(())
@@ -348,7 +438,11 @@ pub(crate) async fn handle_swipe(step: &Step, driver: &dyn PlatformDriver, ctx: 
 /// Termination: action timeout bounds wall-clock; stall detection bails
 /// when consecutive swipes have no effect on the tree. Number of swipes
 /// is unbounded by design.
-pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
+pub(crate) async fn handle_scroll(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+    ctx: &ExecutionContext<'_>,
+) -> Result<()> {
     let direction_str = step
         .params
         .get("direction")
@@ -360,7 +454,11 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
         "down" => Direction::Down,
         "left" => Direction::Left,
         "right" => Direction::Right,
-        other => crate::fail_code!(golem_events::FailureCode::ParseMissingParam, "Invalid scroll direction: \"{}\"", other),
+        other => crate::fail_code!(
+            golem_events::FailureCode::ParseMissingParam,
+            "Invalid scroll direction: \"{}\"",
+            other
+        ),
     };
 
     let selector = build_selector(step);
@@ -371,7 +469,9 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
         use golem_element::selector::find_elements;
         let (root, meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
         let mut vp = golem_element::Viewport::from_root(&root);
-        if meta.keyboard_height > 0 { vp.height -= meta.keyboard_height; }
+        if meta.keyboard_height > 0 {
+            vp.height -= meta.keyboard_height;
+        }
         let visible = golem_element::filter_viewport(&root, &vp);
         let within_sel = build_selector_from_group(within_group);
 
@@ -385,7 +485,9 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
             // Re-fetch bounds after nudge
             let (r, m) = crate::resolution::get_hierarchy_bounded(driver).await?;
             let mut v = golem_element::Viewport::from_root(&r);
-            if m.keyboard_height > 0 { v.height -= m.keyboard_height; }
+            if m.keyboard_height > 0 {
+                v.height -= m.keyboard_height;
+            }
             let vis = golem_element::filter_viewport(&r, &v);
             find_elements(&vis, &within_sel)
                 .first()
@@ -394,13 +496,20 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
         } else {
             // Container not visible — scroll to bring it into view
             let _ = crate::scroll::scroll_to_element(
-                &within_sel, driver, golem_driver::Direction::Down,
-                None, None, ctx.emitter,
-            ).await;
+                &within_sel,
+                driver,
+                golem_driver::Direction::Down,
+                None,
+                None,
+                ctx.emitter,
+            )
+            .await;
             // Nudge to get more of the container visible
             let (fresh, fresh_meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
             let mut fresh_vp = golem_element::Viewport::from_root(&fresh);
-            if fresh_meta.keyboard_height > 0 { fresh_vp.height -= fresh_meta.keyboard_height; }
+            if fresh_meta.keyboard_height > 0 {
+                fresh_vp.height -= fresh_meta.keyboard_height;
+            }
             let fresh_visible = golem_element::filter_viewport(&fresh, &fresh_vp);
             let bounds = find_elements(&fresh_visible, &within_sel)
                 .first()
@@ -410,7 +519,9 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
                 // Re-fetch after nudge
                 let (r2, m2) = crate::resolution::get_hierarchy_bounded(driver).await?;
                 let mut v2 = golem_element::Viewport::from_root(&r2);
-                if m2.keyboard_height > 0 { v2.height -= m2.keyboard_height; }
+                if m2.keyboard_height > 0 {
+                    v2.height -= m2.keyboard_height;
+                }
                 let vis2 = golem_element::filter_viewport(&r2, &v2);
                 find_elements(&vis2, &within_sel)
                     .first()
@@ -425,9 +536,14 @@ pub(crate) async fn handle_scroll(step: &Step, driver: &dyn PlatformDriver, ctx:
     };
 
     crate::scroll::scroll_to_element(
-        &selector, driver, direction,
-        step.scroll_timeout, container_bounds, ctx.emitter,
-    ).await?;
+        &selector,
+        driver,
+        direction,
+        step.scroll_timeout,
+        container_bounds,
+        ctx.emitter,
+    )
+    .await?;
     Ok(())
 }
 
@@ -459,10 +575,12 @@ fn resolve_param_coord(val: Option<&toml::Value>, viewport_size: i32) -> i32 {
 async fn resolve_gesture_center(step: &Step, driver: &dyn PlatformDriver) -> Result<(i32, i32)> {
     let (root, meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
     let mut vp = golem_element::Viewport::from_root(&root);
-    if meta.keyboard_height > 0 { vp.height -= meta.keyboard_height; }
+    if meta.keyboard_height > 0 {
+        vp.height -= meta.keyboard_height;
+    }
 
-    let has_selector = step.on_text.is_some() || step.on.is_some()
-        || step.on_accessibility_label.is_some();
+    let has_selector =
+        step.on_text.is_some() || step.on.is_some() || step.on_accessibility_label.is_some();
 
     if has_selector {
         let sel = build_selector(step);
@@ -472,7 +590,10 @@ async fn resolve_gesture_center(step: &Step, driver: &dyn PlatformDriver) -> Res
             let eb = first.element.effective_bounds();
             Ok((eb.center_x(), eb.center_y()))
         } else {
-            crate::fail_code!(golem_events::FailureCode::FlowElementNotFound, "No element found matching selector");
+            crate::fail_code!(
+                golem_events::FailureCode::FlowElementNotFound,
+                "No element found matching selector"
+            );
         }
     } else {
         let x = resolve_param_coord(step.params.get("x"), vp.width);
@@ -488,7 +609,12 @@ async fn resolve_gesture_center(step: &Step, driver: &dyn PlatformDriver) -> Res
 /// - `velocity` (optional, default 5.0): scale factor per second
 /// - Element selector or x/y coordinates for center point
 pub(crate) async fn handle_pinch(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let scale = step.scale.ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("pinch requires 'scale' parameter")))?;
+    let scale = step.scale.ok_or_else(|| {
+        golem_events::coded(
+            golem_events::FailureCode::ParseMissingParam,
+            anyhow::anyhow!("pinch requires 'scale' parameter"),
+        )
+    })?;
     let velocity = step.velocity.unwrap_or(5.0);
     let (cx, cy) = resolve_gesture_center(step, driver).await?;
 
@@ -506,7 +632,12 @@ pub(crate) async fn handle_pinch(step: &Step, driver: &dyn PlatformDriver) -> Re
 /// - `velocity` (optional, default 180.0): degrees per second
 /// - Element selector or x/y coordinates for center point
 pub(crate) async fn handle_rotate_gesture(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
-    let degrees = step.rotation.ok_or_else(|| golem_events::coded(golem_events::FailureCode::ParseMissingParam, anyhow::anyhow!("rotate requires 'rotation' parameter")))?;
+    let degrees = step.rotation.ok_or_else(|| {
+        golem_events::coded(
+            golem_events::FailureCode::ParseMissingParam,
+            anyhow::anyhow!("rotate requires 'rotation' parameter"),
+        )
+    })?;
     let velocity = step.velocity.unwrap_or(180.0);
     let (cx, cy) = resolve_gesture_center(step, driver).await?;
 
@@ -537,10 +668,18 @@ pub(crate) async fn handle_rotate_gesture(step: &Step, driver: &dyn PlatformDriv
         ));
     }
 
-    driver.gesture(vec![
-        golem_driver::GestureFinger { points: finger1, duration_ms },
-        golem_driver::GestureFinger { points: finger2, duration_ms },
-    ]).await?;
+    driver
+        .gesture(vec![
+            golem_driver::GestureFinger {
+                points: finger1,
+                duration_ms,
+            },
+            golem_driver::GestureFinger {
+                points: finger2,
+                duration_ms,
+            },
+        ])
+        .await?;
     Ok(())
 }
 
@@ -549,24 +688,34 @@ pub(crate) async fn handle_rotate_gesture(step: &Step, driver: &dyn PlatformDriv
 /// Each finger in step.fingers has `points` (Vec<SelectorGroup>) resolved to coordinates.
 pub(crate) async fn handle_gesture(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
     if step.fingers.is_empty() {
-        crate::fail_code!(golem_events::FailureCode::ParseMissingParam, "gesture requires at least one finger in 'fingers' array");
+        crate::fail_code!(
+            golem_events::FailureCode::ParseMissingParam,
+            "gesture requires at least one finger in 'fingers' array"
+        );
     }
 
     let (root, meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
     let mut vp = golem_element::Viewport::from_root(&root);
-    if meta.keyboard_height > 0 { vp.height -= meta.keyboard_height; }
+    if meta.keyboard_height > 0 {
+        vp.height -= meta.keyboard_height;
+    }
 
     let duration = step.duration.unwrap_or(300);
 
     let mut gesture_fingers = Vec::new();
     for finger in &step.fingers {
         if finger.points.len() < 2 {
-            crate::fail_code!(golem_events::FailureCode::ParseMissingParam, "each finger needs at least 2 points");
+            crate::fail_code!(
+                golem_events::FailureCode::ParseMissingParam,
+                "each finger needs at least 2 points"
+            );
         }
         let mut points = Vec::new();
         for group in &finger.points {
-            let has_element = group.text.is_some() || group.accessibility_label.is_some()
-                || group.below.is_some() || group.above.is_some();
+            let has_element = group.text.is_some()
+                || group.accessibility_label.is_some()
+                || group.below.is_some()
+                || group.above.is_some();
 
             if has_element {
                 let sel = crate::resolution::build_selector_from_group(group);
@@ -577,23 +726,47 @@ pub(crate) async fn handle_gesture(step: &Step, driver: &dyn PlatformDriver) -> 
                     let base_y = first.element.effective_bounds().center_y();
                     let w = first.element.effective_bounds().width;
                     let h = first.element.effective_bounds().height;
-                    let x = group.x.as_ref().map(|xv| crate::resolution::resolve_coord_public(
-                        xv, vp.width, Some(base_x), Some(w), Some(first.element.effective_bounds().x)
-                    )).unwrap_or(base_x);
-                    let y = group.y.as_ref().map(|yv| crate::resolution::resolve_coord_public(
-                        yv, vp.height, Some(base_y), Some(h), Some(first.element.effective_bounds().y)
-                    )).unwrap_or(base_y);
+                    let x = group
+                        .x
+                        .as_ref()
+                        .map(|xv| {
+                            crate::resolution::resolve_coord_public(
+                                xv,
+                                vp.width,
+                                Some(base_x),
+                                Some(w),
+                                Some(first.element.effective_bounds().x),
+                            )
+                        })
+                        .unwrap_or(base_x);
+                    let y = group
+                        .y
+                        .as_ref()
+                        .map(|yv| {
+                            crate::resolution::resolve_coord_public(
+                                yv,
+                                vp.height,
+                                Some(base_y),
+                                Some(h),
+                                Some(first.element.effective_bounds().y),
+                            )
+                        })
+                        .unwrap_or(base_y);
                     points.push((x, y));
                     continue;
                 }
             }
 
-            let x = group.x.as_ref().map(|xv| crate::resolution::resolve_coord_public(
-                xv, vp.width, None, None, None
-            )).unwrap_or(vp.width / 2);
-            let y = group.y.as_ref().map(|yv| crate::resolution::resolve_coord_public(
-                yv, vp.height, None, None, None
-            )).unwrap_or(vp.height / 2);
+            let x = group
+                .x
+                .as_ref()
+                .map(|xv| crate::resolution::resolve_coord_public(xv, vp.width, None, None, None))
+                .unwrap_or(vp.width / 2);
+            let y = group
+                .y
+                .as_ref()
+                .map(|yv| crate::resolution::resolve_coord_public(yv, vp.height, None, None, None))
+                .unwrap_or(vp.height / 2);
             points.push((x, y));
         }
         gesture_fingers.push(golem_driver::GestureFinger {
@@ -655,7 +828,11 @@ mod tests {
 
         let calls = driver.get_calls();
         let tap_calls: Vec<_> = calls.iter().filter(|c| c.0 == "tap").collect();
-        assert_eq!(tap_calls.len(), 2, "double_tap SHALL produce exactly two tap calls");
+        assert_eq!(
+            tap_calls.len(),
+            2,
+            "double_tap SHALL produce exactly two tap calls"
+        );
         // Both taps hit the same center: x=100+100/2=150, y=200+44/2=222
         assert_eq!(tap_calls[0].1, vec!["150", "222"]);
         assert_eq!(tap_calls[1].1, vec!["150", "222"]);
@@ -743,8 +920,10 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
 
         let mut step = make_step("swipe");
-        step.params
-            .insert("direction".to_string(), toml::Value::String("up".to_string()));
+        step.params.insert(
+            "direction".to_string(),
+            toml::Value::String("up".to_string()),
+        );
 
         let ctx = test_ctx(Path::new("."));
         handle_swipe(&step, &driver, &ctx)
@@ -836,13 +1015,17 @@ mod tests {
             );
 
             let ctx = test_ctx(Path::new("."));
-        handle_swipe(&step, &driver, &ctx)
+            handle_swipe(&step, &driver, &ctx)
                 .await
                 .unwrap_or_else(|_| panic!("swipe {dir_str} should succeed"));
 
             let calls = driver.get_calls();
             let swipe_calls: Vec<_> = calls.iter().filter(|c| c.0 == "swipe_coords").collect();
-            assert_eq!(swipe_calls.len(), 1, "swipe {dir_str} should produce one swipe_coords call");
+            assert_eq!(
+                swipe_calls.len(),
+                1,
+                "swipe {dir_str} should produce one swipe_coords call"
+            );
         }
     }
 
@@ -941,11 +1124,8 @@ mod tests {
     #[tokio::test]
     async fn multiple_actions_in_sequence() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let mut input = make_element_with_id(
-            "TextField",
-            "username",
-            Bounds::new(20, 100, 300, 44),
-        );
+        let mut input =
+            make_element_with_id("TextField", "username", Bounds::new(20, 100, 300, 44));
         input.focused = true;
         root.children.push(input);
         root.children.push(make_element_with_text(
@@ -1181,8 +1361,10 @@ mod tests {
 
         let mut step = make_step("pinch");
         step.scale = Some(2.0);
-        step.params.insert("x".to_string(), toml::Value::Integer(123));
-        step.params.insert("y".to_string(), toml::Value::Integer(456));
+        step.params
+            .insert("x".to_string(), toml::Value::Integer(123));
+        step.params
+            .insert("y".to_string(), toml::Value::Integer(456));
         // No velocity -> default 5.0
 
         handle_pinch(&step, &driver)
@@ -1274,8 +1456,10 @@ mod tests {
 
         let mut step = make_step("rotate");
         step.rotation = Some(90.0);
-        step.params.insert("x".to_string(), toml::Value::Integer(100));
-        step.params.insert("y".to_string(), toml::Value::Integer(100));
+        step.params
+            .insert("x".to_string(), toml::Value::Integer(100));
+        step.params
+            .insert("y".to_string(), toml::Value::Integer(100));
 
         handle_rotate_gesture(&step, &driver)
             .await
@@ -1468,7 +1652,11 @@ mod tests {
             swipe_calls.is_empty(),
             "3+ point swipe SHALL NOT use the 2-point swipe_coords path"
         );
-        assert_eq!(g_calls.len(), 1, "3+ point swipe SHALL emit a continuous gesture");
+        assert_eq!(
+            g_calls.len(),
+            1,
+            "3+ point swipe SHALL emit a continuous gesture"
+        );
         assert_eq!(g_calls[0].1, vec!["3pts@250ms"]);
     }
 
@@ -1616,7 +1804,10 @@ mod tests {
         // Swipe is upward: from_y > to_y
         let from_y: i32 = swipe_calls[0].1[1].parse().expect("from_y int");
         let to_y: i32 = swipe_calls[0].1[3].parse().expect("to_y int");
-        assert!(from_y > to_y, "bottom overflow SHALL swipe upward (from_y > to_y)");
+        assert!(
+            from_y > to_y,
+            "bottom overflow SHALL swipe upward (from_y > to_y)"
+        );
     }
 
     // ── 33. nudge_into_view does nothing for a fully-visible container ──
@@ -1688,7 +1879,11 @@ mod tests {
             "an unfocused post-tap snapshot SHALL trigger exactly one tap retry (two taps total)"
         );
         let type_calls: Vec<_> = calls.iter().filter(|c| c.0 == "type_text").collect();
-        assert_eq!(type_calls.len(), 1, "text SHALL be typed exactly once after focus is confirmed");
+        assert_eq!(
+            type_calls.len(),
+            1,
+            "text SHALL be typed exactly once after focus is confirmed"
+        );
         assert_eq!(type_calls[0].1, vec!["hello"]);
     }
 

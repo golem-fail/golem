@@ -82,7 +82,9 @@ async fn wait_for_android_package_service(udid: &str) -> anyhow::Result<()> {
             // bound; failure surfaces the same `Can't find service`
             // string that would otherwise poison install_script.
             let pm = tokio::process::Command::new("adb")
-                .args(["-s", udid, "shell", "pm", "list", "packages", "-f", "android"])
+                .args([
+                    "-s", udid, "shell", "pm", "list", "packages", "-f", "android",
+                ])
                 .output()
                 .await;
             if let Ok(o) = pm {
@@ -93,9 +95,7 @@ async fn wait_for_android_package_service(udid: &str) -> anyhow::Result<()> {
             }
         }
         if tokio::time::Instant::now() >= deadline {
-            anyhow::bail!(
-                "package service / sys.boot_completed not ready for {udid} within 30s"
-            );
+            anyhow::bail!("package service / sys.boot_completed not ready for {udid} within 30s");
         }
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     }
@@ -162,7 +162,13 @@ fn pool_ticks_for_device(device: &DeviceInfo, group: &CoverageGroup) -> Vec<usiz
         .boxes
         .iter()
         .enumerate()
-        .filter_map(|(i, b)| if device_matches_slot(device, b) { Some(i) } else { None })
+        .filter_map(|(i, b)| {
+            if device_matches_slot(device, b) {
+                Some(i)
+            } else {
+                None
+            }
+        })
         .collect()
 }
 
@@ -436,7 +442,10 @@ impl SuiteRunner {
             golem_runner::fingerprint::Fingerprint::None
         });
         if self.config.verbose && needs_cache {
-            eprintln!("  [install] source fingerprint: {}", fingerprint.short_label());
+            eprintln!(
+                "  [install] source fingerprint: {}",
+                fingerprint.short_label()
+            );
         }
         let device_settings = Arc::new(self.config.device_settings.clone());
 
@@ -456,8 +465,8 @@ impl SuiteRunner {
         // multi_device=true gives device prefixes — right whenever we have
         // more than one device in play (coverage fan-out, chat coordination,
         // or multi-flow).
-        let multi_device = parsed.flow_runs.len() > 1
-            || parsed.flow_runs.iter().any(|r| r.slots.len() > 1);
+        let multi_device =
+            parsed.flow_runs.len() > 1 || parsed.flow_runs.iter().any(|r| r.slots.len() > 1);
 
         let human_handle = if stream_human_enabled {
             let human_rx = suite_rx.subscribe();
@@ -570,14 +579,13 @@ impl SuiteRunner {
         // installs before the first success can update progress. Smart
         // groups (`max_runs = None`) don't need this — parallel is
         // faster since Smart wants every pool box ticked.
-        let dispatch_locks: std::collections::HashMap<usize, Arc<tokio::sync::Mutex<()>>> =
-            parsed
-                .coverage_groups
-                .iter()
-                .enumerate()
-                .filter(|(_, g)| g.max_runs.is_some())
-                .map(|(idx, _)| (idx, Arc::new(tokio::sync::Mutex::new(()))))
-                .collect();
+        let dispatch_locks: std::collections::HashMap<usize, Arc<tokio::sync::Mutex<()>>> = parsed
+            .coverage_groups
+            .iter()
+            .enumerate()
+            .filter(|(_, g)| g.max_runs.is_some())
+            .map(|(idx, _)| (idx, Arc::new(tokio::sync::Mutex::new(()))))
+            .collect();
 
         // Spawn one worker per FlowRun. The ResourceManager gates how many
         // run concurrently: `try_allocate` fails when RAM/concurrency caps
@@ -605,7 +613,9 @@ impl SuiteRunner {
             // every FlowRun shares the base dir (historical layout).
             let total_repeats = self.config.repeat.max(1);
             let output_dir = if total_repeats > 1 {
-                self.config.output_dir.join(format!("run_{}", run.repeat_index + 1))
+                self.config
+                    .output_dir
+                    .join(format!("run_{}", run.repeat_index + 1))
             } else {
                 self.config.output_dir.clone()
             };
@@ -696,25 +706,28 @@ impl SuiteRunner {
                     }
                 }
                 Err(e) => {
-                    reports_with_group.push((FlowReport {
-                        flow_name: "unknown".to_string(),
-                        success: false,
-                        step_results: Vec::new(),
-                        warnings: vec![format!("Task panicked: {e}")],
-                        duration_ms: 0,
-                        seed: self.config.seed,
-                        screenshot_path: None,
-                        device_name: None,
-                        os_major: None,
-                        perf_snapshots: vec![],
-                        skipped_reason: None,
-                        covered_axes: Vec::new(),
-                        recordings: Vec::new(),
-                        repeat: None,
-                        started_at: None,
-                        finished_at: None,
-                        first_failure_code: Some(golem_events::FailureCode::Uncoded),
-                    }, None));
+                    reports_with_group.push((
+                        FlowReport {
+                            flow_name: "unknown".to_string(),
+                            success: false,
+                            step_results: Vec::new(),
+                            warnings: vec![format!("Task panicked: {e}")],
+                            duration_ms: 0,
+                            seed: self.config.seed,
+                            screenshot_path: None,
+                            device_name: None,
+                            os_major: None,
+                            perf_snapshots: vec![],
+                            skipped_reason: None,
+                            covered_axes: Vec::new(),
+                            recordings: Vec::new(),
+                            repeat: None,
+                            started_at: None,
+                            finished_at: None,
+                            first_failure_code: Some(golem_events::FailureCode::Uncoded),
+                        },
+                        None,
+                    ));
                 }
             }
         }
@@ -732,11 +745,15 @@ impl SuiteRunner {
                     continue;
                 }
                 let Some(gi) = group_idx else { continue };
-                let Some(group) = coverage_groups.get(*gi) else { continue };
+                let Some(group) = coverage_groups.get(*gi) else {
+                    continue;
+                };
                 if group.max_runs.is_none() {
                     continue;
                 }
-                let Some(p) = final_progress.get(gi) else { continue };
+                let Some(p) = final_progress.get(gi) else {
+                    continue;
+                };
                 if p.runs >= 1 {
                     report.success = true;
                     report.skipped_reason =
@@ -761,9 +778,13 @@ impl SuiteRunner {
             },
         );
         drop(suite_tx);
-        if let Some(h) = human_handle { let _ = h.await; }
+        if let Some(h) = human_handle {
+            let _ = h.await;
+        }
         let _ = acc_handle.await;
-        if let Some(h) = fwd_handle { let _ = h.await; }
+        if let Some(h) = fwd_handle {
+            let _ = h.await;
+        }
 
         // Restore the original keyboard on any device whose IME we
         // switched to golem's Unicode IME this run (primary in-session
@@ -797,8 +818,10 @@ impl SuiteRunner {
                     report.os_major = acc_flow.os_major;
                 }
                 if report.step_results.is_empty() && !acc_flow.step_results.is_empty() {
-                    report.step_results = acc_flow.step_results.iter().map(|s| {
-                        golem_report::StepReport {
+                    report.step_results = acc_flow
+                        .step_results
+                        .iter()
+                        .map(|s| golem_report::StepReport {
                             global_step_index: s.global_step_index,
                             block_name: s.block_name.clone(),
                             block_iteration: s.block_iteration,
@@ -806,10 +829,24 @@ impl SuiteRunner {
                             action: s.action.clone(),
                             target: s.target.clone(),
                             outcome: match &s.outcome {
-                                golem_report::StepOutcome::Success => golem_report::StepOutcome::Success,
-                                golem_report::StepOutcome::Warning { message, code } => golem_report::StepOutcome::Warning { message: message.clone(), code: *code },
-                                golem_report::StepOutcome::Failed { message, code } => golem_report::StepOutcome::Failed { message: message.clone(), code: *code },
-                                golem_report::StepOutcome::Skipped => golem_report::StepOutcome::Skipped,
+                                golem_report::StepOutcome::Success => {
+                                    golem_report::StepOutcome::Success
+                                }
+                                golem_report::StepOutcome::Warning { message, code } => {
+                                    golem_report::StepOutcome::Warning {
+                                        message: message.clone(),
+                                        code: *code,
+                                    }
+                                }
+                                golem_report::StepOutcome::Failed { message, code } => {
+                                    golem_report::StepOutcome::Failed {
+                                        message: message.clone(),
+                                        code: *code,
+                                    }
+                                }
+                                golem_report::StepOutcome::Skipped => {
+                                    golem_report::StepOutcome::Skipped
+                                }
                             },
                             duration_ms: s.duration_ms,
                             retry_count: s.retry_count,
@@ -818,8 +855,8 @@ impl SuiteRunner {
                             tree_stats: s.tree_stats,
                             started_at: s.started_at.clone(),
                             finished_at: s.finished_at.clone(),
-                        }
-                    }).collect();
+                        })
+                        .collect();
                 }
             }
         }
@@ -832,7 +869,6 @@ impl SuiteRunner {
             finished_at: acc_report.finished_at,
         })
     }
-
 }
 
 /// Config bundle handed to `execute_flow_run` workers. Narrower than
@@ -998,7 +1034,9 @@ fn anr_recovery_decision(
         Some(HierarchyProbe::Fetched { anr_detected: true }) => {
             (true, "possible ANR (system dialog detected)")
         }
-        Some(HierarchyProbe::Fetched { anr_detected: false }) => (false, ""),
+        Some(HierarchyProbe::Fetched {
+            anr_detected: false,
+        }) => (false, ""),
         Some(HierarchyProbe::FetchError) => (true, "companion unresponsive at recovery time"),
         None => (false, ""),
     }
@@ -1132,10 +1170,7 @@ async fn execute_flow_run(
         }];
     }
 
-    let allocated_udids: Vec<String> = device_setups
-        .iter()
-        .map(|(d, _)| d.udid.clone())
-        .collect();
+    let allocated_udids: Vec<String> = device_setups.iter().map(|(d, _)| d.udid.clone()).collect();
 
     // Post-setup coverage gate: a concurrent group member may have
     // succeeded while we were booting / installing. Release our devices
@@ -1160,8 +1195,7 @@ async fn execute_flow_run(
     // recovery after the flow finishes (`device_setups` is moved into
     // the spawn loop below; we need (device, port) post-flow to probe
     // the device's hierarchy for ANR signals on failure).
-    let picked_devices: Vec<DeviceInfo> =
-        device_setups.iter().map(|(d, _)| d.clone()).collect();
+    let picked_devices: Vec<DeviceInfo> = device_setups.iter().map(|(d, _)| d.clone()).collect();
     let picked_with_ports: Vec<(DeviceInfo, u16)> =
         device_setups.iter().map(|(d, p)| (d.clone(), *p)).collect();
     let recovery_bundle_id = flow
@@ -1276,7 +1310,9 @@ async fn execute_flow_run(
         if !code_warrants_recovery(report.first_failure_code) {
             continue;
         }
-        let Some((device, port)) = picked_with_ports.get(idx) else { continue };
+        let Some((device, port)) = picked_with_ports.get(idx) else {
+            continue;
+        };
         let driver: Box<dyn golem_driver::PlatformDriver> = match device.platform {
             golem_devices::Platform::Ios => Box::new(golem_driver::ios::IosDriver::new(
                 device.udid.clone(),
@@ -1284,12 +1320,14 @@ async fn execute_flow_run(
                 *port,
                 device.physical,
             )),
-            golem_devices::Platform::Android => Box::new(golem_driver::android::AndroidDriver::new(
-                device.udid.clone(),
-                recovery_bundle_id.clone(),
-                *port,
-                device.physical,
-            )),
+            golem_devices::Platform::Android => {
+                Box::new(golem_driver::android::AndroidDriver::new(
+                    device.udid.clone(),
+                    recovery_bundle_id.clone(),
+                    *port,
+                    device.physical,
+                ))
+            }
         };
         // `step_results` is populated by the suite-level merger after
         // execute_flow_run returns, so it's still empty here. The
@@ -1328,7 +1366,10 @@ async fn execute_flow_run(
             .rev()
             .find(|s| matches!(s.outcome, golem_report::StepOutcome::Failed { .. }))
         {
-            if let golem_report::StepOutcome::Failed { ref mut message, .. } = last_failed.outcome {
+            if let golem_report::StepOutcome::Failed {
+                ref mut message, ..
+            } = last_failed.outcome
+            {
                 message.push_str(&format!(" — hint: {recovery_reason}; rebooting device"));
             }
         }
@@ -1354,8 +1395,9 @@ async fn execute_flow_run(
             // is a top silent cause of slow am instrument / slow reboot
             // symptoms that look like an internal recovery bug.
             // Surfacing it inline saves chasing the wrong cause.
-            let resources = golem_devices::concurrency::ResourceSnapshot::
-                capture_with_android_device(&udid).await;
+            let resources =
+                golem_devices::concurrency::ResourceSnapshot::capture_with_android_device(&udid)
+                    .await;
             let reboot_started = std::time::Instant::now();
             let reboot_ok = match platform {
                 golem_devices::Platform::Ios => reboot_ios_device(&udid).await,
@@ -1402,9 +1444,7 @@ async fn execute_flow_run(
         let any_success = reports.iter().any(|r| r.success);
         if any_success {
             let mut progress = coverage.progress.lock().await;
-            if let (Some(group), Some(p)) =
-                (coverage.groups.get(gi), progress.get_mut(&gi))
-            {
+            if let (Some(group), Some(p)) = (coverage.groups.get(gi), progress.get_mut(&gi)) {
                 p.runs += 1;
                 for i in &coverage.covers_boxes {
                     p.ticked.insert(*i);
@@ -1482,7 +1522,8 @@ async fn setup_slot(
             Some(install_cache),
             install_matrix,
             max_device_wait,
-        ).await?;
+        )
+        .await?;
         // try_allocate with placeholder port=0 — the real companion
         // port is resolved later via reg_state.ensure_companion_port,
         // but allocation only needs the udid to mark "in use" for
@@ -1534,47 +1575,64 @@ async fn setup_slot(
         let event_tx_for_init = event_tx.clone();
         let android_settings = device_settings.android.clone();
         let ios_settings = device_settings.ios.clone();
-        reg_state.ensure_companion_port(&device.udid, || async move {
-            // First flow to reach this device-session applies the
-            // [device_settings] block from golem.toml. Idempotent —
-            // safe to re-apply even if some keys are already set.
-            // OnceCell ensures we only do it once per UDID per
-            // `golem run`.
-            let setting_warnings = golem_devices::settings::apply_device_settings(
-                &device_for_init,
-                &android_settings,
-                &ios_settings,
-            ).await;
-            for w in setting_warnings {
-                eprintln!("  [device_settings] {w}");
-            }
-
-            // Next-run self-heal: if a prior run left golem's Unicode IME
-            // active on this device (e.g. crash / Ctrl-C before restore),
-            // put the original keyboard back now. No-op unless golem's IME
-            // is the current default.
-            if platform == Platform::Android {
-                golem_driver::ime::self_heal(&device_for_init.udid).await;
-            }
-
-            // In-session cache: a winning flow already registered.
-            if let Some(comp) = reg_state_for_init.get(&device_for_init.udid) {
-                if platform == Platform::Android {
-                    let fwd = golem_devices::lifecycle::port_forward_command(&device_for_init, comp.port);
-                    let _ = golem_devices::lifecycle::run_command_public(&fwd, "re-establish port forward").await;
+        reg_state
+            .ensure_companion_port(&device.udid, || async move {
+                // First flow to reach this device-session applies the
+                // [device_settings] block from golem.toml. Idempotent —
+                // safe to re-apply even if some keys are already set.
+                // OnceCell ensures we only do it once per UDID per
+                // `golem run`.
+                let setting_warnings = golem_devices::settings::apply_device_settings(
+                    &device_for_init,
+                    &android_settings,
+                    &ios_settings,
+                )
+                .await;
+                for w in setting_warnings {
+                    eprintln!("  [device_settings] {w}");
                 }
-                let client = golem_driver::common::CompanionClient::new(comp.port);
-                if let Ok(health) = client.check_health().await {
-                    if health.device_id == device_for_init.udid
-                        && health.version == env!("CARGO_PKG_VERSION")
-                    {
-                        return Ok(comp.port);
+
+                // Next-run self-heal: if a prior run left golem's Unicode IME
+                // active on this device (e.g. crash / Ctrl-C before restore),
+                // put the original keyboard back now. No-op unless golem's IME
+                // is the current default.
+                if platform == Platform::Android {
+                    golem_driver::ime::self_heal(&device_for_init.udid).await;
+                }
+
+                // In-session cache: a winning flow already registered.
+                if let Some(comp) = reg_state_for_init.get(&device_for_init.udid) {
+                    if platform == Platform::Android {
+                        let fwd = golem_devices::lifecycle::port_forward_command(
+                            &device_for_init,
+                            comp.port,
+                        );
+                        let _ = golem_devices::lifecycle::run_command_public(
+                            &fwd,
+                            "re-establish port forward",
+                        )
+                        .await;
+                    }
+                    let client = golem_driver::common::CompanionClient::new(comp.port);
+                    if let Ok(health) = client.check_health().await {
+                        if health.device_id == device_for_init.udid
+                            && health.version == env!("CARGO_PKG_VERSION")
+                        {
+                            return Ok(comp.port);
+                        }
                     }
                 }
-            }
-            // No cache hit: spawn fresh.
-            ensure_companion_with_reg(&device_for_init, platform, reg_port, &reg_state_for_init, &event_tx_for_init).await
-        }).await?
+                // No cache hit: spawn fresh.
+                ensure_companion_with_reg(
+                    &device_for_init,
+                    platform,
+                    reg_port,
+                    &reg_state_for_init,
+                    &event_tx_for_init,
+                )
+                .await
+            })
+            .await?
     };
 
     // Device already allocated atomically above (in the pick+allocate
@@ -1592,7 +1650,8 @@ async fn setup_slot(
     // prior flow ran while this one was waiting for resources.
     if platform == Platform::Android {
         let fwd = golem_devices::lifecycle::port_forward_command(&device, port);
-        let _ = golem_devices::lifecycle::run_command_public(&fwd, "re-establish port forward").await;
+        let _ =
+            golem_devices::lifecycle::run_command_public(&fwd, "re-establish port forward").await;
     }
     let client = golem_driver::common::CompanionClient::new(port);
     match client.check_health().await {
@@ -1802,9 +1861,7 @@ async fn run_install_with_build_coord(
         return match outcome {
             InstallOutcome::Succeeded => Ok(()),
             InstallOutcome::FailedScript(e) => Err(anyhow::anyhow!(e)),
-            InstallOutcome::FailedNoScript => {
-                Err(anyhow::anyhow!("no install_script configured"))
-            }
+            InstallOutcome::FailedNoScript => Err(anyhow::anyhow!("no install_script configured")),
         };
     }
 
@@ -1941,13 +1998,14 @@ async fn run_install_with_build_coord(
             // preinstall_for_device call will re-run the script.
         }
         Some(err) => {
-            install_cache.set(key, InstallOutcome::FailedScript(err)).await;
+            install_cache
+                .set(key, InstallOutcome::FailedScript(err))
+                .await;
         }
     }
 
     result
 }
-
 
 /// Reboot an Android emulator/device and wait for it to become ready.
 /// Used by the ANR recovery path. iOS recovery is not implemented yet
@@ -1994,7 +2052,11 @@ fn format_disk_summary(snap: &golem_devices::concurrency::ResourceSnapshot) -> S
     if parts.is_empty() {
         return String::new();
     }
-    let low_hint = if any_low { " — low disk may be contributing" } else { "" };
+    let low_hint = if any_low {
+        " — low disk may be contributing"
+    } else {
+        ""
+    };
     format!(" disk[{}]{low_hint}", parts.join(" "))
 }
 
@@ -2067,10 +2129,7 @@ async fn reboot_ios_device(udid: &str) -> anyhow::Result<()> {
 /// which planned runs actually executed vs. were pruned / cascade-
 /// skipped. Best-effort: errors print a warning but never fail the
 /// suite.
-fn write_plan_artifact(
-    output_dir: &std::path::Path,
-    parsed: &golem_orchestrator::ParsedSuite,
-) {
+fn write_plan_artifact(output_dir: &std::path::Path, parsed: &golem_orchestrator::ParsedSuite) {
     use serde_json::json;
 
     let runs: Vec<_> = parsed
@@ -2140,7 +2199,11 @@ fn build_suite_planned_event(parsed: &golem_orchestrator::ParsedSuite) -> golem_
                 .get(run.flow_idx)
                 .map(|f| f.flow.flow.name.as_str())
                 .unwrap_or("?");
-            let slots: Vec<String> = run.slots.iter().map(golem_orchestrator::describe_slot).collect();
+            let slots: Vec<String> = run
+                .slots
+                .iter()
+                .map(golem_orchestrator::describe_slot)
+                .collect();
             format!("#{} {}: {}", i + 1, flow_name, slots.join(" + "))
         })
         .collect();
@@ -2236,11 +2299,16 @@ pub async fn start_companions_public(
 
     for platform in platforms {
         let devices = match platform {
-            Platform::Ios => golem_devices::ios::discover_ios_devices().await.unwrap_or_default(),
-            Platform::Android => golem_devices::android::discover_android_devices().await.unwrap_or_default(),
+            Platform::Ios => golem_devices::ios::discover_ios_devices()
+                .await
+                .unwrap_or_default(),
+            Platform::Android => golem_devices::android::discover_android_devices()
+                .await
+                .unwrap_or_default(),
         };
 
-        let booted: Vec<_> = devices.into_iter()
+        let booted: Vec<_> = devices
+            .into_iter()
             .filter(|d| d.state == golem_devices::DeviceState::Booted)
             .collect();
 
@@ -2257,19 +2325,26 @@ pub async fn start_companions_public(
         if platform == Platform::Android {
             if let Ok(apk) = find_android_apk() {
                 let cmd = golem_devices::lifecycle::install_companion_command(device, &apk);
-                let _ = golem_devices::lifecycle::run_command_public(&cmd, "install test APK").await;
+                let _ =
+                    golem_devices::lifecycle::run_command_public(&cmd, "install test APK").await;
             }
             if let Some(main) = find_android_main_apk() {
                 let cmd = golem_devices::lifecycle::install_companion_command(device, &main);
-                let _ = golem_devices::lifecycle::run_command_public(&cmd, "install main APK").await;
+                let _ =
+                    golem_devices::lifecycle::run_command_public(&cmd, "install main APK").await;
             }
         } else {
             let _ = golem_devices::lifecycle::build_companion(device, &companion_path).await;
         }
 
         if let Ok(()) = golem_devices::lifecycle::spawn_companion_with_reg(
-            device, &companion_path, 0, Some(reg_port),
-        ).await {
+            device,
+            &companion_path,
+            0,
+            Some(reg_port),
+        )
+        .await
+        {
             let mut rx = reg_state.subscribe();
             let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
             loop {
@@ -2312,7 +2387,7 @@ pub async fn scan_companions_public() -> Vec<(u16, golem_driver::CompanionHealth
 /// /health endpoint. Returns a list of (port, health) for all found.
 /// Fast — unused ports return "connection refused" instantly.
 async fn scan_companions() -> Vec<(u16, golem_driver::CompanionHealth)> {
-    use golem_devices::resource_manager::{PORT_RANGE_START, PORT_RANGE_END};
+    use golem_devices::resource_manager::{PORT_RANGE_END, PORT_RANGE_START};
     use golem_driver::common::CompanionClient;
 
     let mut handles = Vec::new();
@@ -2369,19 +2444,21 @@ async fn ensure_companion_with_reg(
         let main_apk_path = find_android_main_apk();
         // Install APKs only (no port forward — that happens after registration)
         let install_main = golem_devices::lifecycle::install_companion_command(device, &apk_path);
-        let _ = golem_devices::lifecycle::run_command_public(&install_main, "install test APK").await;
+        let _ =
+            golem_devices::lifecycle::run_command_public(&install_main, "install test APK").await;
         if let Some(ref main_path) = main_apk_path {
-            let install_app = golem_devices::lifecycle::install_companion_command(device, main_path);
-            let _ = golem_devices::lifecycle::run_command_public(&install_app, "install main APK").await;
+            let install_app =
+                golem_devices::lifecycle::install_companion_command(device, main_path);
+            let _ = golem_devices::lifecycle::run_command_public(&install_app, "install main APK")
+                .await;
         }
     } else {
         golem_devices::lifecycle::build_companion(device, &companion_path).await?;
     }
 
     // Launch companion with registration port
-    golem_devices::lifecycle::spawn_companion_with_reg(
-        device, &companion_path, 0, Some(reg_port),
-    ).await?;
+    golem_devices::lifecycle::spawn_companion_with_reg(device, &companion_path, 0, Some(reg_port))
+        .await?;
 
     // Wait for the companion we just spawned to register (up to 60s).
     // We require two things to match before returning a port:
@@ -2471,7 +2548,6 @@ async fn ensure_companion_with_reg(
     }
 }
 
-
 /// Execute a flow on a single device. This is a free function (not a method)
 /// so it can be used with `tokio::spawn` which requires `'static` futures.
 /// All parameters are owned values.
@@ -2531,10 +2607,19 @@ async fn run_flow_on_device(
     // - Otherwise `--trace` forces perf on (overrides `flow.options.perf
     //   = false`) so trace-mode never silently loses forensic data.
     // - Otherwise the flow's option wins (default true).
-    let flow_perf = flow.flow.options.as_ref().and_then(|o| o.perf).unwrap_or(true);
+    let flow_perf = flow
+        .flow
+        .options
+        .as_ref()
+        .and_then(|o| o.perf)
+        .unwrap_or(true);
     let perf_enabled = !no_perf && (trace || flow_perf);
 
-    let companion_port = if platform == Platform::Android { Some(port) } else { None };
+    let companion_port = if platform == Platform::Android {
+        Some(port)
+    } else {
+        None
+    };
     let apps: Vec<(String, String)> = flow
         .flow
         .apps
@@ -2743,10 +2828,13 @@ async fn run_flow_on_device(
             Platform::Ios => "ios",
             Platform::Android => "android",
         };
-        let script_rel = app.install_script.as_ref()
+        let script_rel = app
+            .install_script
+            .as_ref()
             .and_then(|v| v.for_platform(platform_str))
             .map(|s| s.to_string());
-        let timeout_ms = app.install_timeout_ms
+        let timeout_ms = app
+            .install_timeout_ms
             .unwrap_or(golem_runner::installer::DEFAULT_INSTALL_TIMEOUT_MS);
 
         if let Some(rel) = script_rel {
@@ -2804,10 +2892,23 @@ async fn run_flow_on_device(
     });
     // CLI --start takes precedence over flow-level start field.
     let effective_start = start_block.as_deref().or(flow.flow.start.as_deref());
-    let base_timeout = flow.flow.options.as_ref()
+    let base_timeout = flow
+        .flow
+        .options
+        .as_ref()
         .and_then(|o| o.step_timeout)
         .unwrap_or(golem_runner::policy::DEFAULT_BASE_TIMEOUT_MS);
-    let mut report = match execute_flow(&flow, driver.as_ref(), &mut vars, effective_start, base_timeout, &mut ctx, Some(&barrier)).await {
+    let mut report = match execute_flow(
+        &flow,
+        driver.as_ref(),
+        &mut vars,
+        effective_start,
+        base_timeout,
+        &mut ctx,
+        Some(&barrier),
+    )
+    .await
+    {
         Ok(result) => {
             // Barrier-abort and warning eprintlns removed here: the
             // FlowFinished event carries success+barrier_aborted, the
@@ -2850,8 +2951,8 @@ async fn run_flow_on_device(
             // server-side eprintln was redundant with the stream FAIL
             // line and lost when running against an external daemon.
             let duration_ms = start.elapsed().as_millis() as u64;
-            let flow_code = golem_events::extract_code(&e)
-                .unwrap_or(golem_events::FailureCode::Uncoded);
+            let flow_code =
+                golem_events::extract_code(&e).unwrap_or(golem_events::FailureCode::Uncoded);
             ctx.emit(golem_events::EventKind::FlowFinished {
                 flow_name: flow_name.clone(),
                 success: false,
@@ -3019,9 +3120,15 @@ async fn find_available_device(
     // FlowRuns always grab a free one, picking cold over waiting).
     if !booted.is_empty() {
         // Booted count already reported via SuitePlanned/device_availability.
-        if let Some(pick) =
-            try_pick_free(&booted, platform, slot, resource_mgr, install_cache, install_matrix)
-                .await
+        if let Some(pick) = try_pick_free(
+            &booted,
+            platform,
+            slot,
+            resource_mgr,
+            install_cache,
+            install_matrix,
+        )
+        .await
         {
             return Ok(pick);
         }
@@ -3033,7 +3140,8 @@ async fn find_available_device(
     // the highest version among matches; for `Exact(N)` every match has the
     // same major so the tie-break is a no-op.
     if booted.is_empty() && !shutdown.is_empty() {
-        let best = shutdown.iter()
+        let best = shutdown
+            .iter()
             .max_by_key(|d| d.os_major)
             .expect("shutdown non-empty");
         let shape = slot
@@ -3117,7 +3225,8 @@ async fn find_available_device(
                 requested_os,
                 requested_playstore,
                 &config,
-            ).await?;
+            )
+            .await?;
             resource_mgr.mark_golem_booted(created.clone());
             return Ok(created);
         } else {
@@ -3155,9 +3264,15 @@ async fn find_available_device(
 
     loop {
         let booted_refs: Vec<&DeviceInfo> = booted_owned.iter().collect();
-        if let Some(pick) =
-            try_pick_free(&booted_refs, platform, slot, resource_mgr, install_cache, install_matrix)
-                .await
+        if let Some(pick) = try_pick_free(
+            &booted_refs,
+            platform,
+            slot,
+            resource_mgr,
+            install_cache,
+            install_matrix,
+        )
+        .await
         {
             return Ok(pick);
         }
@@ -3297,8 +3412,10 @@ mod tests {
                    (domain=NSMachErrorDomain, code=-308):\n\
                    The operation couldn’t be completed. (Mach error -308 \
                    - (ipc/mig) server died)";
-        assert!(is_transient_install_error(err),
-            "Mach -308 stderr SHALL be classified transient");
+        assert!(
+            is_transient_install_error(err),
+            "Mach -308 stderr SHALL be classified transient"
+        );
     }
 
     #[test]
@@ -3314,8 +3431,10 @@ mod tests {
         // a moment before the framework's services are up.
         let err = "install script exited 1: \
                    adb: failed to install app.apk: cmd: Can't find service: package";
-        assert!(is_transient_install_error(err),
-            "Android package-service boot race SHALL be classified transient");
+        assert!(
+            is_transient_install_error(err),
+            "Android package-service boot race SHALL be classified transient"
+        );
     }
 
     #[test]
@@ -3324,7 +3443,9 @@ mod tests {
         // NOT trigger a retry — they're real and would just waste 3s.
         assert!(!is_transient_install_error("error: scheme not found"));
         assert!(!is_transient_install_error("error: code signing required"));
-        assert!(!is_transient_install_error("xcodebuild: error: nothing to build"));
+        assert!(!is_transient_install_error(
+            "xcodebuild: error: nothing to build"
+        ));
         assert!(!is_transient_install_error(""));
     }
 
@@ -3436,10 +3557,7 @@ mod tests {
             ..SuiteConfig::default()
         };
         let mut runner = SuiteRunner::new(config);
-        let paths = vec![
-            PathBuf::from("a.test.toml"),
-            PathBuf::from("b.test.toml"),
-        ];
+        let paths = vec![PathBuf::from("a.test.toml"), PathBuf::from("b.test.toml")];
         let report = runner.run_suite(&paths).await.expect("run_suite");
         for flow in &report.flows {
             assert_eq!(flow.seed, Some(42));
@@ -3475,11 +3593,7 @@ mod tests {
     #[test]
     fn suite_stats_all_failing() {
         let report = SuiteReport {
-            flows: vec![
-                failing_flow("a"),
-                failing_flow("b"),
-                failing_flow("c"),
-            ],
+            flows: vec![failing_flow("a"), failing_flow("b"), failing_flow("c")],
             installs: Vec::new(),
             total_duration_ms: 300,
             started_at: None,
@@ -3579,14 +3693,14 @@ mod tests {
         // Simulates how `OrchestratorServer` passes one cache into every
         // `handle_submit` call — prior submit's Succeeded entries must be
         // visible to the next runner's view.
-        let rm = std::sync::Arc::new(
-            golem_devices::resource_manager::ResourceManager::new(
-                golem_devices::concurrency::ConcurrencyConfig::default(),
-            ),
-        );
+        let rm = std::sync::Arc::new(golem_devices::resource_manager::ResourceManager::new(
+            golem_devices::concurrency::ConcurrencyConfig::default(),
+        ));
         let shared = InstallCache::new();
-        let r1 = SuiteRunner::with_resource_manager(SuiteConfig::default(), rm.clone(), shared.clone());
-        let r2 = SuiteRunner::with_resource_manager(SuiteConfig::default(), rm.clone(), shared.clone());
+        let r1 =
+            SuiteRunner::with_resource_manager(SuiteConfig::default(), rm.clone(), shared.clone());
+        let r2 =
+            SuiteRunner::with_resource_manager(SuiteConfig::default(), rm.clone(), shared.clone());
 
         r1.install_cache
             .set(("udid-x".into(), "com.y".into()), InstallOutcome::Succeeded)
@@ -3745,7 +3859,12 @@ mod tests {
     // ---------------------------------------------------------------
     #[test]
     fn format_install_target_renders_name_platform_version_type() {
-        let d = device("iPhone 16e", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        let d = device(
+            "iPhone 16e",
+            Platform::Ios,
+            golem_devices::DeviceType::Phone,
+            18,
+        );
         assert_eq!(
             format_install_target(&d, "ios"),
             "iPhone 16e (ios/v18/phone)",
@@ -3759,7 +3878,12 @@ mod tests {
         // pre-formatted value; it does NOT re-derive from device.platform.
         // 1. Device's real platform is Android; pass a DISAGREEING "ios"
         //    string so the two cannot coincide.
-        let d = device("Pixel 8", Platform::Android, golem_devices::DeviceType::Tablet, 14);
+        let d = device(
+            "Pixel 8",
+            Platform::Android,
+            golem_devices::DeviceType::Tablet,
+            14,
+        );
         let target = format_install_target(&d, "ios");
         // 2. Label SHALL reflect the passed string, proving device.platform
         //    (which would yield "android") is ignored.
@@ -3792,14 +3916,23 @@ mod tests {
     fn is_group_complete_true_when_run_cap_reached() {
         // max_runs = 1, one run done → complete regardless of ticks.
         let g = group(vec![empty_slot(), empty_slot()], Some(1));
-        let progress = GroupProgress { ticked: Default::default(), runs: 1 };
-        assert!(is_group_complete(&g, &progress), "run cap SHALL end the group");
+        let progress = GroupProgress {
+            ticked: Default::default(),
+            runs: 1,
+        };
+        assert!(
+            is_group_complete(&g, &progress),
+            "run cap SHALL end the group"
+        );
     }
 
     #[test]
     fn is_group_complete_false_when_runs_below_cap_and_boxes_unticked() {
         let g = group(vec![empty_slot(), empty_slot()], Some(2));
-        let progress = GroupProgress { ticked: Default::default(), runs: 1 };
+        let progress = GroupProgress {
+            ticked: Default::default(),
+            runs: 1,
+        };
         assert!(!is_group_complete(&g, &progress));
     }
 
@@ -3811,7 +3944,10 @@ mod tests {
         ticked.insert(0usize);
         ticked.insert(1usize);
         let progress = GroupProgress { ticked, runs: 1 };
-        assert!(is_group_complete(&g, &progress), "all boxes ticked SHALL end the group");
+        assert!(
+            is_group_complete(&g, &progress),
+            "all boxes ticked SHALL end the group"
+        );
     }
 
     #[test]
@@ -3828,7 +3964,10 @@ mod tests {
         // Defensive case from the docs: max_runs None + empty pool → never
         // complete (the !boxes.is_empty() guard blocks the tick branch).
         let g = group(Vec::new(), None);
-        let progress = GroupProgress { ticked: Default::default(), runs: 99 };
+        let progress = GroupProgress {
+            ticked: Default::default(),
+            runs: 99,
+        };
         assert!(!is_group_complete(&g, &progress));
     }
 
@@ -3854,7 +3993,12 @@ mod tests {
             ..empty_slot()
         };
         let g = group(vec![ios_phone, android_phone, ios_any], None);
-        let d = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        let d = device(
+            "iPhone",
+            Platform::Ios,
+            golem_devices::DeviceType::Phone,
+            18,
+        );
         assert_eq!(
             pool_ticks_for_device(&d, &g),
             vec![0usize, 2usize],
@@ -3869,7 +4013,12 @@ mod tests {
             ..empty_slot()
         };
         let g = group(vec![android_box], None);
-        let d = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        let d = device(
+            "iPhone",
+            Platform::Ios,
+            golem_devices::DeviceType::Phone,
+            18,
+        );
         assert!(pool_ticks_for_device(&d, &g).is_empty());
     }
 
@@ -3884,7 +4033,10 @@ mod tests {
             ..empty_slot()
         };
         let r = coverage_skip_report("login".to_string(), &[slot], Some(7), Instant::now());
-        assert!(r.success, "skip report SHALL keep success=true so exit code stays 0");
+        assert!(
+            r.success,
+            "skip report SHALL keep success=true so exit code stays 0"
+        );
         assert_eq!(r.flow_name, "login");
         assert_eq!(r.seed, Some(7));
         assert_eq!(
@@ -3901,7 +4053,10 @@ mod tests {
     fn coverage_skip_report_handles_no_slots() {
         let r = coverage_skip_report("orphan".to_string(), &[], None, Instant::now());
         assert!(r.success);
-        assert!(r.device_name.is_none(), "no slot SHALL yield no device_name");
+        assert!(
+            r.device_name.is_none(),
+            "no slot SHALL yield no device_name"
+        );
         assert!(r.covered_axes.is_empty());
     }
 
@@ -3921,15 +4076,28 @@ mod tests {
 
     #[test]
     fn entry_constraints_empty_matches_any_device() {
-        let d = device("Pixel", Platform::Android, golem_devices::DeviceType::Phone, 14);
-        assert!(device_matches_entry_constraints(&d, &entry_with(Vec::new())));
+        let d = device(
+            "Pixel",
+            Platform::Android,
+            golem_devices::DeviceType::Phone,
+            14,
+        );
+        assert!(device_matches_entry_constraints(
+            &d,
+            &entry_with(Vec::new())
+        ));
     }
 
     #[test]
     fn entry_constraints_device_type_must_match() {
         let phone = entry_with(vec![constraint(r#"type = "phone""#)]);
         let tablet_dev = device("iPad", Platform::Ios, golem_devices::DeviceType::Tablet, 18);
-        let phone_dev = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        let phone_dev = device(
+            "iPhone",
+            Platform::Ios,
+            golem_devices::DeviceType::Phone,
+            18,
+        );
         assert!(!device_matches_entry_constraints(&tablet_dev, &phone));
         assert!(device_matches_entry_constraints(&phone_dev, &phone));
     }
@@ -3938,7 +4106,12 @@ mod tests {
     fn entry_constraints_default_excludes_physical_devices() {
         // No `hardware` key = virtual-only. A physical device SHALL NOT match.
         let e = entry_with(vec![constraint(r#"type = "phone""#)]);
-        let mut phys = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        let mut phys = device(
+            "iPhone",
+            Platform::Ios,
+            golem_devices::DeviceType::Phone,
+            18,
+        );
         phys.physical = true;
         assert!(!device_matches_entry_constraints(&phys, &e));
     }
@@ -3946,19 +4119,42 @@ mod tests {
     #[test]
     fn entry_constraints_hardware_real_matches_physical() {
         let e = entry_with(vec![constraint(r#"hardware = "real""#)]);
-        let mut phys = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        let mut phys = device(
+            "iPhone",
+            Platform::Ios,
+            golem_devices::DeviceType::Phone,
+            18,
+        );
         phys.physical = true;
-        let virt = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        let virt = device(
+            "iPhone",
+            Platform::Ios,
+            golem_devices::DeviceType::Phone,
+            18,
+        );
         assert!(device_matches_entry_constraints(&phys, &e));
-        assert!(!device_matches_entry_constraints(&virt, &e), "virtual SHALL NOT match hardware=real");
+        assert!(
+            !device_matches_entry_constraints(&virt, &e),
+            "virtual SHALL NOT match hardware=real"
+        );
     }
 
     #[test]
     fn entry_constraints_hardware_array_matches_either() {
         let e = entry_with(vec![constraint(r#"hardware = ["virtual", "real"]"#)]);
-        let mut phys = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        let mut phys = device(
+            "iPhone",
+            Platform::Ios,
+            golem_devices::DeviceType::Phone,
+            18,
+        );
         phys.physical = true;
-        let virt = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
+        let virt = device(
+            "iPhone",
+            Platform::Ios,
+            golem_devices::DeviceType::Phone,
+            18,
+        );
         assert!(device_matches_entry_constraints(&phys, &e));
         assert!(device_matches_entry_constraints(&virt, &e));
     }
@@ -3966,8 +4162,18 @@ mod tests {
     #[test]
     fn entry_constraints_name_must_match_exactly() {
         let e = entry_with(vec![constraint(r#"name = "Pixel 8""#)]);
-        let pixel = device("Pixel 8", Platform::Android, golem_devices::DeviceType::Phone, 14);
-        let other = device("Pixel 7a", Platform::Android, golem_devices::DeviceType::Phone, 14);
+        let pixel = device(
+            "Pixel 8",
+            Platform::Android,
+            golem_devices::DeviceType::Phone,
+            14,
+        );
+        let other = device(
+            "Pixel 7a",
+            Platform::Android,
+            golem_devices::DeviceType::Phone,
+            14,
+        );
         assert!(device_matches_entry_constraints(&pixel, &e));
         assert!(!device_matches_entry_constraints(&other, &e));
     }
@@ -3975,9 +4181,19 @@ mod tests {
     #[test]
     fn entry_constraints_playstore_flag_must_match() {
         let e = entry_with(vec![constraint("playstore = true")]);
-        let mut with_ps = device("Pixel", Platform::Android, golem_devices::DeviceType::Phone, 14);
+        let mut with_ps = device(
+            "Pixel",
+            Platform::Android,
+            golem_devices::DeviceType::Phone,
+            14,
+        );
         with_ps.playstore = true;
-        let without_ps = device("Pixel", Platform::Android, golem_devices::DeviceType::Phone, 14);
+        let without_ps = device(
+            "Pixel",
+            Platform::Android,
+            golem_devices::DeviceType::Phone,
+            14,
+        );
         assert!(device_matches_entry_constraints(&with_ps, &e));
         assert!(!device_matches_entry_constraints(&without_ps, &e));
     }
@@ -3989,9 +4205,16 @@ mod tests {
             constraint(r#"name = "Other""#),
             constraint(r#"type = "phone""#),
         ]);
-        let phone = device("iPhone", Platform::Ios, golem_devices::DeviceType::Phone, 18);
-        assert!(device_matches_entry_constraints(&phone, &e),
-            "matching any single constraint SHALL admit the device");
+        let phone = device(
+            "iPhone",
+            Platform::Ios,
+            golem_devices::DeviceType::Phone,
+            18,
+        );
+        assert!(
+            device_matches_entry_constraints(&phone, &e),
+            "matching any single constraint SHALL admit the device"
+        );
     }
 
     // ---------------------------------------------------------------
@@ -4046,8 +4269,14 @@ mod tests {
                 device_availability,
                 ..
             } => {
-                assert_eq!(install_entries, vec!["android MyApp → com.my.app".to_string()]);
-                assert_eq!(device_availability, vec!["ios/v26/phone: 1 booted".to_string()]);
+                assert_eq!(
+                    install_entries,
+                    vec!["android MyApp → com.my.app".to_string()]
+                );
+                assert_eq!(
+                    device_availability,
+                    vec!["ios/v26/phone: 1 booted".to_string()]
+                );
             }
             other => panic!("SHALL build a SuitePlanned event, got {other:?}"),
         }
@@ -4061,10 +4290,8 @@ mod tests {
     #[test]
     fn anr_recovery_wedge_already_seen_recovers_without_probe() {
         // hierarchy is None: the caller SHALL NOT probe when wedged.
-        let (recover, reason) = anr_recovery_decision(
-            Some(golem_events::FailureCode::DeviceCompanionWedged),
-            None,
-        );
+        let (recover, reason) =
+            anr_recovery_decision(Some(golem_events::FailureCode::DeviceCompanionWedged), None);
         assert!(recover, "SHALL recover when the step already saw a wedge");
         assert_eq!(reason, "companion wedged during step");
     }
@@ -4085,7 +4312,9 @@ mod tests {
     fn anr_recovery_clean_hierarchy_does_not_recover() {
         let (recover, reason) = anr_recovery_decision(
             Some(golem_events::FailureCode::Uncoded),
-            Some(HierarchyProbe::Fetched { anr_detected: false }),
+            Some(HierarchyProbe::Fetched {
+                anr_detected: false,
+            }),
         );
         assert!(
             !recover,
@@ -4114,7 +4343,9 @@ mod tests {
     fn anr_recovery_wedge_code_takes_priority_over_probe() {
         let (recover, reason) = anr_recovery_decision(
             Some(golem_events::FailureCode::DeviceCompanionWedged),
-            Some(HierarchyProbe::Fetched { anr_detected: false }),
+            Some(HierarchyProbe::Fetched {
+                anr_detected: false,
+            }),
         );
         assert!(recover, "SHALL recover on a wedge code regardless of probe");
         assert_eq!(reason, "companion wedged during step");
@@ -4144,14 +4375,14 @@ mod tests {
     fn recovery_gate_skips_flow_logic_failures() {
         use golem_events::FailureCode::*;
         for code in [
-            FlowElementNotFound,   // EF404
-            FlowElementOffscreen,  // EF405
-            FlowStepTimeout,       // EF408
+            FlowElementNotFound,     // EF404
+            FlowElementOffscreen,    // EF405
+            FlowStepTimeout,         // EF408
             FlowUnexpectedlyPresent, // EF409
-            FlowAssertionMismatch, // EF412
-            FlowExplicitFail,      // EF400
-            FlowMaxRuntime,        // EF504
-            FlowMaxSteps,          // EF508
+            FlowAssertionMismatch,   // EF412
+            FlowExplicitFail,        // EF400
+            FlowMaxRuntime,          // EF504
+            FlowMaxSteps,            // EF508
         ] {
             assert!(
                 !code_warrants_recovery(Some(code)),

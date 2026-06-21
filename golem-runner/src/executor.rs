@@ -4,9 +4,9 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use golem_driver::PlatformDriver;
 use golem_parser::{Block, FlowFile, FlowOptions};
-use rand::SeedableRng;
 use golem_report::PerfSnapshot;
 use golem_vars::{ScopeLevel, VarValue, VariableStore};
+use rand::SeedableRng;
 
 use crate::barrier::FailureBarrier;
 use crate::branch::evaluate_branch;
@@ -18,23 +18,41 @@ use crate::policy::{execute_step_with_policy, StepOutcome};
 /// E.g. `on_text="Submit"` or `app="app"`.
 fn step_target(step: &golem_parser::Step) -> String {
     let mut parts = Vec::new();
-    if let Some(ref t) = step.on_text { parts.push(format!("on_text=\"{t}\"")); }
-    if let Some(ref a) = step.on_accessibility_label { parts.push(format!("on_accessibility_label=\"{a}\"")); }
-    if let Some(ref g) = step.on {
-        if let Some(ref t) = g.text { parts.push(format!("text=\"{t}\"")); }
-        if let Some(ref a) = g.accessibility_label { parts.push(format!("accessibility_label=\"{a}\"")); }
+    if let Some(ref t) = step.on_text {
+        parts.push(format!("on_text=\"{t}\""));
     }
-    if let Some(ref b) = step.on_below { parts.push(format!("on_below=\"{b}\"")); }
-    if let Some(ref r) = step.on_right_of { parts.push(format!("on_right_of=\"{r}\"")); }
-    if let Some(ref a) = step.app { parts.push(format!("app=\"{a}\"")); }
+    if let Some(ref a) = step.on_accessibility_label {
+        parts.push(format!("on_accessibility_label=\"{a}\""));
+    }
+    if let Some(ref g) = step.on {
+        if let Some(ref t) = g.text {
+            parts.push(format!("text=\"{t}\""));
+        }
+        if let Some(ref a) = g.accessibility_label {
+            parts.push(format!("accessibility_label=\"{a}\""));
+        }
+    }
+    if let Some(ref b) = step.on_below {
+        parts.push(format!("on_below=\"{b}\""));
+    }
+    if let Some(ref r) = step.on_right_of {
+        parts.push(format!("on_right_of=\"{r}\""));
+    }
+    if let Some(ref a) = step.app {
+        parts.push(format!("app=\"{a}\""));
+    }
     if let Some(ref i) = step.input {
         // Truncate by CHARS, not bytes — `&i[..20]` panics when byte 20 lands
         // inside a multibyte char (e.g. typing Japanese / emoji).
         let shown: String = i.chars().take(20).collect();
         parts.push(format!("input=\"{shown}\""));
     }
-    if step.auto_scroll == Some(true) { parts.push("auto_scroll".to_string()); }
-    if let Some(t) = step.timeout { parts.push(format!("timeout={t}")); }
+    if step.auto_scroll == Some(true) {
+        parts.push("auto_scroll".to_string());
+    }
+    if let Some(t) = step.timeout {
+        parts.push(format!("timeout={t}"));
+    }
     parts.join(" ")
 }
 
@@ -139,10 +157,14 @@ pub async fn execute_flow<'a>(
                         app.name))?;
                 tokio::time::timeout(lifecycle_timeout, driver.launch_app(bundle))
                     .await
-                    .map_err(|_| anyhow::anyhow!(
-                        "app_lifecycle reset: launch of {} timed out after {}ms \
+                    .map_err(|_| {
+                        anyhow::anyhow!(
+                            "app_lifecycle reset: launch of {} timed out after {}ms \
                          (companion unresponsive?)",
-                        bundle, lifecycle_timeout.as_millis()))?
+                            bundle,
+                            lifecycle_timeout.as_millis()
+                        )
+                    })?
                     .with_context(|| format!("app_lifecycle reset: failed to launch {}", bundle))?;
             }
         }
@@ -154,11 +176,17 @@ pub async fn execute_flow<'a>(
                         app.name))?;
                 tokio::time::timeout(lifecycle_timeout, driver.launch_app(bundle))
                     .await
-                    .map_err(|_| anyhow::anyhow!(
-                        "app_lifecycle launch: launch of {} timed out after {}ms \
+                    .map_err(|_| {
+                        anyhow::anyhow!(
+                            "app_lifecycle launch: launch of {} timed out after {}ms \
                          (companion unresponsive?)",
-                        bundle, lifecycle_timeout.as_millis()))?
-                    .with_context(|| format!("app_lifecycle launch: failed to launch {}", bundle))?;
+                            bundle,
+                            lifecycle_timeout.as_millis()
+                        )
+                    })?
+                    .with_context(|| {
+                        format!("app_lifecycle launch: failed to launch {}", bundle)
+                    })?;
             }
         }
         golem_parser::AppLifecycle::Manual => {}
@@ -204,13 +232,18 @@ pub async fn execute_flow<'a>(
     // fine — pre-flow context is rarely consulted via sidecar.
     if ctx.capture_config.trace && ctx.global_step_index == 0 {
         if let Err(e) = crate::capture::capture_trace_boundary(
-            driver, ctx.capture_config, 0, "start",
+            driver,
+            ctx.capture_config,
+            0,
+            "start",
             crate::capture::TraceMeta {
                 after_step: None,
                 action: None,
                 wall_clock: &iso8601_now(),
             },
-        ).await {
+        )
+        .await
+        {
             warnings.push(format!("trace boundary 0 capture failed: {e}"));
         }
     }
@@ -263,9 +296,7 @@ pub async fn execute_flow<'a>(
             )?;
 
             // Build a child execution context scoped to the child flow's lifetime.
-            let child_flow_dir = child_path
-                .parent()
-                .unwrap_or(ctx.flow_dir);
+            let child_flow_dir = child_path.parent().unwrap_or(ctx.flow_dir);
             // Derive child RNG from parent for deterministic sub-flow generation.
             let child_rng = {
                 use rand::Rng;
@@ -350,7 +381,10 @@ pub async fn execute_flow<'a>(
         // Execute steps in current block
         ctx.block_name = block.name.as_deref();
         let iteration = block_iterations.entry(current_idx).or_insert(0);
-        let block_label = block.name.clone().unwrap_or_else(|| format!("block_{current_idx}"));
+        let block_label = block
+            .name
+            .clone()
+            .unwrap_or_else(|| format!("block_{current_idx}"));
         let block_iter_for_recording = *iteration;
         // Expose the 0-based per-block iteration as the reserved `_loop`
         // variable: 0 on first entry, 1 on the second, etc. This is what
@@ -388,7 +422,9 @@ pub async fn execute_flow<'a>(
                 ctx.capture_config,
                 &block_label,
                 block_iter_for_recording,
-            ).await {
+            )
+            .await
+            {
                 warnings.push(format!(
                     "start_recording failed for block '{}' iter {}: {}",
                     block_label, block_iter_for_recording, e
@@ -435,7 +471,9 @@ pub async fn execute_flow<'a>(
                             ctx.capture_config,
                             &block_label,
                             block_iter_for_recording,
-                        ).await {
+                        )
+                        .await
+                        {
                             Ok(p) => {
                                 let path_str = p.display().to_string();
                                 recordings.push(golem_report::RecordingEntry {
@@ -501,8 +539,14 @@ pub async fn execute_flow<'a>(
             let step_start = Instant::now();
             crate::reset_step_tree_stats();
             let step_action_result = execute_step_with_policy(
-                step, driver, vars, default_timeout_ms, ctx, &flow.flow.apps,
-            ).await;
+                step,
+                driver,
+                vars,
+                default_timeout_ms,
+                ctx,
+                &flow.flow.apps,
+            )
+            .await;
 
             // `--trace` post-step capture, OOB of the step timeout
             // budget. Boundary index N == "after step N". Errors are
@@ -516,13 +560,18 @@ pub async fn execute_flow<'a>(
                     step_idx + 1,
                 );
                 match crate::capture::capture_trace_boundary(
-                    driver, ctx.capture_config, step_count, &suffix,
+                    driver,
+                    ctx.capture_config,
+                    step_count,
+                    &suffix,
                     crate::capture::TraceMeta {
                         after_step: Some(step_count),
                         action: Some(&step.action),
                         wall_clock: &iso8601_now(),
                     },
-                ).await {
+                )
+                .await
+                {
                     Ok(_) => {
                         if let Some(ref mut bt) = block_trace {
                             bt.boundaries.push(crate::capture::TraceBoundary {
@@ -532,9 +581,9 @@ pub async fn execute_flow<'a>(
                             });
                         }
                     }
-                    Err(e) => warnings.push(format!(
-                        "trace boundary {step_count} capture failed: {e}"
-                    )),
+                    Err(e) => {
+                        warnings.push(format!("trace boundary {step_count} capture failed: {e}"))
+                    }
                 }
             }
 
@@ -598,7 +647,9 @@ pub async fn execute_flow<'a>(
                             ctx.capture_config,
                             &block_label,
                             block_iter_for_recording,
-                        ).await {
+                        )
+                        .await
+                        {
                             Ok(p) => {
                                 let path_str = p.display().to_string();
                                 recordings.push(golem_report::RecordingEntry {
@@ -645,7 +696,9 @@ pub async fn execute_flow<'a>(
                 ctx.capture_config,
                 &block_label,
                 block_iter_for_recording,
-            ).await {
+            )
+            .await
+            {
                 Ok(p) => {
                     let path_str = p.display().to_string();
                     recordings.push(golem_report::RecordingEntry {
@@ -683,7 +736,8 @@ pub async fn execute_flow<'a>(
                 let device_name = ctx.device.map_or("unknown", |d| d.name.as_str());
                 let active_app = collector.active_bundle_id();
 
-                let label = build_snapshot_label(block, current_idx, active_app.as_deref(), device_name, 0);
+                let label =
+                    build_snapshot_label(block, current_idx, active_app.as_deref(), device_name, 0);
                 let timestamp = chrono_now();
 
                 let snapshot = build_snapshot(&raw, label, launch_ms, timestamp);
@@ -759,17 +813,31 @@ pub fn parse_duration(s: &str) -> Option<Duration> {
         return n.trim().parse::<u64>().ok().map(Duration::from_secs);
     }
     if let Some(n) = s.strip_suffix('m') {
-        return n.trim().parse::<u64>().ok().map(|v| Duration::from_secs(v * 60));
+        return n
+            .trim()
+            .parse::<u64>()
+            .ok()
+            .map(|v| Duration::from_secs(v * 60));
     }
     if let Some(n) = s.strip_suffix('h') {
-        return n.trim().parse::<u64>().ok().map(|v| Duration::from_secs(v * 3600));
+        return n
+            .trim()
+            .parse::<u64>()
+            .ok()
+            .map(|v| Duration::from_secs(v * 3600));
     }
     None
 }
 
 // ── Perf helpers ─────────────────────────────────────────────────────
 
-fn build_snapshot_label(block: &Block, block_idx: usize, active_app: Option<&str>, device_name: &str, iteration: u32) -> String {
+fn build_snapshot_label(
+    block: &Block,
+    block_idx: usize,
+    active_app: Option<&str>,
+    device_name: &str,
+    iteration: u32,
+) -> String {
     let block_part = match &block.name {
         Some(name) => name.clone(),
         None => {
@@ -794,7 +862,12 @@ fn build_snapshot_label(block: &Block, block_idx: usize, active_app: Option<&str
     }
 }
 
-fn build_snapshot(raw: &RawPerfData, label: String, launch_ms: Option<u64>, timestamp: String) -> PerfSnapshot {
+fn build_snapshot(
+    raw: &RawPerfData,
+    label: String,
+    launch_ms: Option<u64>,
+    timestamp: String,
+) -> PerfSnapshot {
     PerfSnapshot {
         label,
         memory_mb: raw.memory_mb,
@@ -825,13 +898,19 @@ fn write_perf_var(vars: &mut VariableStore, snapshot: &PerfSnapshot) {
     map.insert("memory_mb".into(), opt_f64(snapshot.memory_mb));
     map.insert("cpu_percent".into(), opt_f64(snapshot.cpu_percent));
     map.insert("threads".into(), opt_u32(snapshot.threads));
-    map.insert("file_descriptors".into(), opt_u32(snapshot.file_descriptors));
+    map.insert(
+        "file_descriptors".into(),
+        opt_u32(snapshot.file_descriptors),
+    );
     map.insert("disk_mb".into(), opt_f64(snapshot.disk_mb));
     map.insert("net_rx_kb".into(), opt_f64(snapshot.net_rx_kb));
     map.insert("net_tx_kb".into(), opt_f64(snapshot.net_tx_kb));
     map.insert("launch_ms".into(), opt_u64(snapshot.launch_ms));
     map.insert("label".into(), VarValue::String(snapshot.label.clone()));
-    map.insert("timestamp".into(), VarValue::String(snapshot.timestamp.clone()));
+    map.insert(
+        "timestamp".into(),
+        VarValue::String(snapshot.timestamp.clone()),
+    );
 
     vars.set_in_scope(ScopeLevel::Generator, "_perf", VarValue::Object(map));
 }
@@ -881,9 +960,9 @@ fn flush_trace_sidecar(
         recording_started_at_ms: bt.recording_started_at_ms,
         boundaries: bt.boundaries,
     };
-    if let Err(e) = crate::capture::write_trace_sidecar(
-        capture_config, &bt.block_label, bt.iteration, &sidecar,
-    ) {
+    if let Err(e) =
+        crate::capture::write_trace_sidecar(capture_config, &bt.block_label, bt.iteration, &sidecar)
+    {
         warnings.push(format!(
             "trace sidecar write failed for block '{}' iter {}: {}",
             bt.block_label, bt.iteration, e
@@ -899,44 +978,60 @@ fn evaluate_thresholds(snapshot: &PerfSnapshot, options: Option<&FlowOptions>) -
     // Check error thresholds first (more severe)
     if let (Some(val), Some(limit)) = (snapshot.memory_mb, opts.perf_memory_error_mb) {
         if val > limit {
-            return ThresholdResult::Error(format!("perf: memory {val:.1} MB exceeds error threshold {limit:.1} MB"));
+            return ThresholdResult::Error(format!(
+                "perf: memory {val:.1} MB exceeds error threshold {limit:.1} MB"
+            ));
         }
     }
     if let (Some(val), Some(limit)) = (snapshot.cpu_percent, opts.perf_cpu_error_percent) {
         if val > limit {
-            return ThresholdResult::Error(format!("perf: CPU {val:.1}% exceeds error threshold {limit:.1}%"));
+            return ThresholdResult::Error(format!(
+                "perf: CPU {val:.1}% exceeds error threshold {limit:.1}%"
+            ));
         }
     }
     if let (Some(val), Some(limit)) = (snapshot.threads, opts.perf_threads_error) {
         if val > limit {
-            return ThresholdResult::Error(format!("perf: {val} threads exceeds error threshold {limit}"));
+            return ThresholdResult::Error(format!(
+                "perf: {val} threads exceeds error threshold {limit}"
+            ));
         }
     }
     if let (Some(val), Some(limit)) = (snapshot.file_descriptors, opts.perf_fd_error) {
         if val > limit {
-            return ThresholdResult::Error(format!("perf: {val} FDs exceeds error threshold {limit}"));
+            return ThresholdResult::Error(format!(
+                "perf: {val} FDs exceeds error threshold {limit}"
+            ));
         }
     }
 
     // Check warning thresholds
     if let (Some(val), Some(limit)) = (snapshot.memory_mb, opts.perf_memory_warn_mb) {
         if val > limit {
-            return ThresholdResult::Warn(format!("perf: memory {val:.1} MB exceeds warning threshold {limit:.1} MB"));
+            return ThresholdResult::Warn(format!(
+                "perf: memory {val:.1} MB exceeds warning threshold {limit:.1} MB"
+            ));
         }
     }
     if let (Some(val), Some(limit)) = (snapshot.cpu_percent, opts.perf_cpu_warn_percent) {
         if val > limit {
-            return ThresholdResult::Warn(format!("perf: CPU {val:.1}% exceeds warning threshold {limit:.1}%"));
+            return ThresholdResult::Warn(format!(
+                "perf: CPU {val:.1}% exceeds warning threshold {limit:.1}%"
+            ));
         }
     }
     if let (Some(val), Some(limit)) = (snapshot.threads, opts.perf_threads_warn) {
         if val > limit {
-            return ThresholdResult::Warn(format!("perf: {val} threads exceeds warning threshold {limit}"));
+            return ThresholdResult::Warn(format!(
+                "perf: {val} threads exceeds warning threshold {limit}"
+            ));
         }
     }
     if let (Some(val), Some(limit)) = (snapshot.file_descriptors, opts.perf_fd_warn) {
         if val > limit {
-            return ThresholdResult::Warn(format!("perf: {val} FDs exceeds warning threshold {limit}"));
+            return ThresholdResult::Warn(format!(
+                "perf: {val} FDs exceeds warning threshold {limit}"
+            ));
         }
     }
 
@@ -973,7 +1068,16 @@ pub async fn execute_flow_with_data<'a>(
         if !run.vars.is_empty() {
             crate::data_driven::apply_data_vars(vars, &run.vars);
         }
-        let result = execute_flow(flow, driver, vars, start_block, default_timeout_ms, ctx, barrier).await?;
+        let result = execute_flow(
+            flow,
+            driver,
+            vars,
+            start_block,
+            default_timeout_ms,
+            ctx,
+            barrier,
+        )
+        .await?;
         if !result.success {
             return Ok(result);
         }
@@ -1253,12 +1357,24 @@ mod tests {
         let mut ctx = test_ctx(Path::new("."));
         let flow = make_flow(vec![make_block(
             Some("only"),
-            vec![make_success_step(), make_success_step(), make_success_step()],
+            vec![
+                make_success_step(),
+                make_success_step(),
+                make_success_step(),
+            ],
         )]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow should not error");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should not error");
 
         assert!(result.success);
         assert!(result.warnings.is_empty());
@@ -1284,9 +1400,17 @@ mod tests {
             make_block(Some("second"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow should not error");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should not error");
 
         assert!(result.success);
         let calls = driver.get_calls();
@@ -1311,9 +1435,17 @@ mod tests {
             make_block(Some("target"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow should not error");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should not error");
 
         assert!(result.success);
         // first + target = 2 screenshots; "skipped" should not run
@@ -1346,9 +1478,17 @@ mod tests {
             make_block(Some("dashboard"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow should not error");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should not error");
 
         assert!(result.success);
         // check + dashboard = 2 screenshots; "login" should be skipped
@@ -1371,10 +1511,17 @@ mod tests {
             make_block(Some("third"), vec![make_success_step()]),
         ]);
 
-        let result =
-            execute_flow(&flow, &driver, &mut vars, Some("second"), DEFAULT_TIMEOUT, &mut ctx, None)
-                .await
-                .expect("execute_flow should not error");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            Some("second"),
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should not error");
 
         assert!(result.success);
         // Starting at "second" means second + third = 2 screenshots
@@ -1397,8 +1544,16 @@ mod tests {
         let mut ctx = test_ctx(Path::new("."));
         let flow = make_flow(vec![make_block(Some("only"), vec![make_success_step()])]);
 
-        let result =
-            execute_flow(&flow, &driver, &mut vars, Some("nonexistent"), DEFAULT_TIMEOUT, &mut ctx, None).await;
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            Some("nonexistent"),
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await;
 
         assert!(result.is_err());
         let err_msg = result.expect_err("should be error").to_string();
@@ -1422,7 +1577,16 @@ mod tests {
             "does_not_exist",
         )]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None).await;
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await;
 
         assert!(result.is_err());
         let err_msg = result.expect_err("should be error").to_string();
@@ -1443,14 +1607,26 @@ mod tests {
         let flow = make_flow(vec![
             make_block(
                 Some("failing_block"),
-                vec![make_success_step(), make_failing_step(), make_success_step()],
+                vec![
+                    make_success_step(),
+                    make_failing_step(),
+                    make_success_step(),
+                ],
             ),
             make_block(Some("second"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow should return Ok(FlowResult), not Err");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should return Ok(FlowResult), not Err");
 
         assert!(!result.success);
         assert_eq!(result.failed_step, Some(1), "second step (index 1) failed");
@@ -1474,9 +1650,17 @@ mod tests {
             vec![make_success_step(), make_warn_step(), make_success_step()],
         )]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow should not error");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should not error");
 
         assert!(result.success, "flow SHALL succeed despite warning");
         assert_eq!(result.warnings.len(), 1, "SHALL have collected one warning");
@@ -1499,9 +1683,17 @@ mod tests {
             vec![make_success_step(), make_ignore_step(), make_success_step()],
         )]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow should not error");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should not error");
 
         assert!(result.success, "flow SHALL succeed");
         assert!(
@@ -1520,9 +1712,17 @@ mod tests {
         let mut ctx = test_ctx(Path::new("."));
         let flow = make_flow(vec![]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow should not error");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should not error");
 
         assert!(result.success);
         assert!(result.warnings.is_empty());
@@ -1550,9 +1750,17 @@ mod tests {
             make_block(Some("login_block"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow should not error");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should not error");
 
         assert!(result.success);
         // check + fallthrough + login_block = 3 screenshots (fallthrough falls into login_block)
@@ -1590,11 +1798,22 @@ mod tests {
             make_block(Some("done"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow should not error");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should not error");
 
-        assert!(result.success, "bounded branch loop SHALL terminate cleanly");
+        assert!(
+            result.success,
+            "bounded branch loop SHALL terminate cleanly"
+        );
         let calls = driver.get_calls();
         let screenshots = calls.iter().filter(|c| c.0 == "screenshot").count();
         assert_eq!(
@@ -1624,9 +1843,17 @@ mod tests {
             make_block(Some("done"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow should not error");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should not error");
 
         assert!(result.success);
         let calls = driver.get_calls();
@@ -1661,9 +1888,17 @@ mod tests {
             make_block(Some("d"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow should not error");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should not error");
 
         assert!(result.success);
         // a -> c -> d -> end (d falls through past index 3)
@@ -1692,9 +1927,17 @@ mod tests {
             make_block(Some("block2"), vec![make_warn_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow should not error");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should not error");
 
         assert!(result.success);
         assert_eq!(
@@ -1760,9 +2003,18 @@ mod tests {
         seed_vars_with_generators(&raw, &mut store, ScopeLevel::Flow, &seeded_rng(42))
             .expect("seeding SHALL succeed");
 
-        let email = store.get("email").and_then(|v| v.as_str()).expect("email set");
-        assert!(email.contains('@'), "fake:email SHALL generate an address, got {email:?}");
-        assert_ne!(email, "${fake:email}", "fake: SHALL NOT be stored as the literal");
+        let email = store
+            .get("email")
+            .and_then(|v| v.as_str())
+            .expect("email set");
+        assert!(
+            email.contains('@'),
+            "fake:email SHALL generate an address, got {email:?}"
+        );
+        assert_ne!(
+            email, "${fake:email}",
+            "fake: SHALL NOT be stored as the literal"
+        );
         assert_eq!(
             store.get("literal").and_then(|v| v.as_str()),
             Some("hello"),
@@ -1807,8 +2059,13 @@ mod tests {
     #[test]
     fn seed_vars_empty_map_is_noop() {
         let mut store = VariableStore::new();
-        seed_vars_with_generators(&HashMap::new(), &mut store, ScopeLevel::Flow, &seeded_rng(1))
-            .expect("empty SHALL succeed");
+        seed_vars_with_generators(
+            &HashMap::new(),
+            &mut store,
+            ScopeLevel::Flow,
+            &seeded_rng(1),
+        )
+        .expect("empty SHALL succeed");
         assert!(store.get("anything").is_none());
     }
 
@@ -1817,9 +2074,11 @@ mod tests {
         let mut raw = HashMap::new();
         raw.insert("x".to_string(), "${fake:}".to_string()); // empty generator name
         let mut store = VariableStore::new();
-        let result =
-            seed_vars_with_generators(&raw, &mut store, ScopeLevel::Flow, &seeded_rng(1));
-        assert!(result.is_err(), "a malformed fake: def SHALL surface an error");
+        let result = seed_vars_with_generators(&raw, &mut store, ScopeLevel::Flow, &seeded_rng(1));
+        assert!(
+            result.is_err(),
+            "a malformed fake: def SHALL surface an error"
+        );
     }
 
     // ---------------------------------------------------------------
@@ -1841,15 +2100,27 @@ mod tests {
             make_block(Some("end"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow should not error");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should not error");
 
         assert!(result.success);
         let calls = driver.get_calls();
         let screenshot_calls: Vec<_> = calls.iter().filter(|c| c.0 == "screenshot").collect();
         // start + end = 2 (skipped is bypassed), then end falls through past index 2
-        assert_eq!(screenshot_calls.len(), 2, "default branch SHALL jump to end");
+        assert_eq!(
+            screenshot_calls.len(),
+            2,
+            "default branch SHALL jump to end"
+        );
     }
 
     // ---------------------------------------------------------------
@@ -1864,13 +2135,25 @@ mod tests {
             make_block(Some("block_a"), vec![make_success_step()]),
             make_block(
                 Some("block_b"),
-                vec![make_success_step(), make_success_step(), make_failing_step()],
+                vec![
+                    make_success_step(),
+                    make_success_step(),
+                    make_failing_step(),
+                ],
             ),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow should return FlowResult");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should return FlowResult");
 
         assert!(!result.success);
         assert_eq!(result.failed_block, Some("block_b".to_string()));
@@ -1887,12 +2170,23 @@ mod tests {
         let mut ctx = test_ctx(Path::new("."));
         let flow = make_flow(vec![make_block(None, vec![make_failing_step()])]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow should return FlowResult");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow should return FlowResult");
 
         assert!(!result.success);
-        assert_eq!(result.failed_block, None, "unnamed block has no name to report");
+        assert_eq!(
+            result.failed_block, None,
+            "unnamed block has no name to report"
+        );
         assert_eq!(result.failed_step, Some(0));
     }
 
@@ -1912,7 +2206,16 @@ mod tests {
             vec![cond_default("nonexistent_target")],
         )]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None).await;
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await;
 
         assert!(result.is_err());
         let err_msg = result.expect_err("should be error").to_string();
@@ -2018,7 +2321,16 @@ mod tests {
             options,
         );
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None).await;
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await;
         assert!(
             result.is_err(),
             "SHALL fail when step count exceeds max_steps"
@@ -2046,15 +2358,30 @@ mod tests {
         let flow = make_flow_with_options(
             vec![make_block(
                 Some("exact"),
-                vec![make_success_step(), make_success_step(), make_success_step()],
+                vec![
+                    make_success_step(),
+                    make_success_step(),
+                    make_success_step(),
+                ],
             )],
             options,
         );
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow SHALL succeed when step count equals max_steps");
-        assert!(result.success, "flow SHALL succeed at exact max_steps limit");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL succeed when step count equals max_steps");
+        assert!(
+            result.success,
+            "flow SHALL succeed at exact max_steps limit"
+        );
     }
 
     // ---------------------------------------------------------------
@@ -2071,9 +2398,17 @@ mod tests {
             vec![make_success_step(), make_success_step()],
         )]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow SHALL succeed with default limits");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL succeed with default limits");
         assert!(result.success);
     }
 
@@ -2110,10 +2445,21 @@ action = "screenshot"
 
         let flow = make_flow(vec![parent_block]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow SHALL succeed with sub-flow");
-        assert!(result.success, "flow SHALL succeed when child flow succeeds");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL succeed with sub-flow");
+        assert!(
+            result.success,
+            "flow SHALL succeed when child flow succeeds"
+        );
 
         let calls = driver.get_calls();
         let screenshot_calls: Vec<_> = calls.iter().filter(|c| c.0 == "screenshot").collect();
@@ -2156,9 +2502,17 @@ action = "screenshot"
             make_block(Some("after"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow SHALL succeed");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL succeed");
         assert!(
             result.success,
             "flow SHALL succeed when both parent and child complete"
@@ -2209,13 +2563,18 @@ timeout = 50
             make_block(Some("never_reached"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow SHALL return FlowResult, not Err");
-        assert!(
-            !result.success,
-            "flow SHALL fail when sub-flow fails"
-        );
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL return FlowResult, not Err");
+        assert!(!result.success, "flow SHALL fail when sub-flow fails");
         assert_eq!(
             result.failed_block,
             Some("run_fail_child".to_string()),
@@ -2238,7 +2597,16 @@ timeout = 50
 
         let flow = make_flow(vec![subflow_block]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None).await;
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await;
         assert!(
             result.is_err(),
             "SHALL return Err when sub-flow file does not exist"
@@ -2291,9 +2659,17 @@ action = "screenshot"
 
         let flow = make_flow(vec![subflow_block]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow SHALL succeed");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL succeed");
         assert!(result.success);
 
         assert_eq!(
@@ -2321,15 +2697,19 @@ action = "screenshot"
         let mut vars = VariableStore::new();
         let mut ctx = test_ctx(Path::new("."));
 
-        let flow = make_flow(vec![make_block(
-            Some("only"),
-            vec![make_success_step()],
-        )]);
+        let flow = make_flow(vec![make_block(Some("only"), vec![make_success_step()])]);
 
-        let result =
-            execute_flow_with_data(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-                .await
-                .expect("execute_flow_with_data SHALL succeed");
+        let result = execute_flow_with_data(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow_with_data SHALL succeed");
         assert!(result.success);
 
         let calls = driver.get_calls();
@@ -2360,10 +2740,17 @@ action = "screenshot"
             HashMap::from([("user".to_string(), "charlie".to_string())]),
         ];
 
-        let result =
-            execute_flow_with_data(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-                .await
-                .expect("execute_flow_with_data SHALL succeed");
+        let result = execute_flow_with_data(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow_with_data SHALL succeed");
         assert!(result.success);
 
         let calls = driver.get_calls();
@@ -2393,14 +2780,18 @@ action = "screenshot"
             HashMap::from([("user".to_string(), "bob".to_string())]),
         ];
 
-        let result =
-            execute_flow_with_data(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-                .await
-                .expect("execute_flow_with_data SHALL return FlowResult");
-        assert!(
-            !result.success,
-            "SHALL fail when any data row fails"
-        );
+        let result = execute_flow_with_data(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow_with_data SHALL return FlowResult");
+        assert!(!result.success, "SHALL fail when any data row fails");
     }
 
     // ---------------------------------------------------------------
@@ -2418,14 +2809,22 @@ action = "screenshot"
             Some("step_block"),
             vec![make_success_step()],
         )]);
-        flow.data = vec![HashMap::from([
-            ("payment".to_string(), "credit_card".to_string()),
-        ])];
+        flow.data = vec![HashMap::from([(
+            "payment".to_string(),
+            "credit_card".to_string(),
+        )])];
 
-        let result =
-            execute_flow_with_data(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-                .await
-                .expect("execute_flow_with_data SHALL succeed");
+        let result = execute_flow_with_data(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow_with_data SHALL succeed");
         assert!(result.success);
 
         assert_eq!(
@@ -2488,7 +2887,7 @@ action = "screenshot"
             emitter: None,
             step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
             rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::from_entropy()),
-        inherited_record_default: false,
+            inherited_record_default: false,
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -2554,7 +2953,7 @@ action = "screenshot"
             emitter: None,
             step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
             rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::from_entropy()),
-        inherited_record_default: false,
+            inherited_record_default: false,
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -2629,7 +3028,7 @@ action = "screenshot"
             emitter: None,
             step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
             rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::from_entropy()),
-        inherited_record_default: false,
+            inherited_record_default: false,
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -2725,7 +3124,14 @@ action = "screenshot"
         };
         match evaluate_thresholds(&snapshot, Some(&opts)) {
             ThresholdResult::Warn(msg) => assert!(msg.contains("250.0"), "SHALL mention value"),
-            other => panic!("expected Warn, got {}", match other { ThresholdResult::Ok => "Ok", ThresholdResult::Error(_) => "Error", _ => "?" }),
+            other => panic!(
+                "expected Warn, got {}",
+                match other {
+                    ThresholdResult::Ok => "Ok",
+                    ThresholdResult::Error(_) => "Error",
+                    _ => "?",
+                }
+            ),
         }
     }
 
@@ -2775,7 +3181,10 @@ action = "screenshot"
             perf_fd_warn: Some(200),
             ..Default::default()
         };
-        assert!(matches!(evaluate_thresholds(&snapshot, Some(&opts)), ThresholdResult::Ok));
+        assert!(matches!(
+            evaluate_thresholds(&snapshot, Some(&opts)),
+            ThresholdResult::Ok
+        ));
     }
 
     #[test]
@@ -2792,7 +3201,10 @@ action = "screenshot"
             launch_ms: None,
             timestamp: "0".into(),
         };
-        assert!(matches!(evaluate_thresholds(&snapshot, None), ThresholdResult::Ok));
+        assert!(matches!(
+            evaluate_thresholds(&snapshot, None),
+            ThresholdResult::Ok
+        ));
     }
 
     // ── perf: _perf variable writing ─────────────────────────────────
@@ -2823,10 +3235,7 @@ action = "screenshot"
             val.get_path("cpu_percent").and_then(|v| v.as_str()),
             Some("23.1")
         );
-        assert_eq!(
-            val.get_path("threads").and_then(|v| v.as_str()),
-            Some("42")
-        );
+        assert_eq!(val.get_path("threads").and_then(|v| v.as_str()), Some("42"));
         assert_eq!(
             val.get_path("launch_ms").and_then(|v| v.as_str()),
             Some("1240")
@@ -2843,7 +3252,11 @@ action = "screenshot"
     #[test]
     fn step_target_empty_for_bare_step() {
         let step = empty_step("screenshot");
-        assert_eq!(step_target(&step), "", "bare step SHALL produce empty label");
+        assert_eq!(
+            step_target(&step),
+            "",
+            "bare step SHALL produce empty label"
+        );
     }
 
     // 2. Each direct selector field is rendered with its own key=value.
@@ -2994,7 +3407,9 @@ action = "screenshot"
             ..Default::default()
         };
         match evaluate_thresholds(&snap, Some(&opts)) {
-            ThresholdResult::Error(msg) => assert!(msg.contains("threads"), "SHALL mention threads: {msg}"),
+            ThresholdResult::Error(msg) => {
+                assert!(msg.contains("threads"), "SHALL mention threads: {msg}")
+            }
             _ => panic!("expected Error for threads over error threshold"),
         }
     }
@@ -3022,7 +3437,9 @@ action = "screenshot"
             ..Default::default()
         };
         match evaluate_thresholds(&snap, Some(&opts)) {
-            ThresholdResult::Warn(msg) => assert!(msg.contains("warning"), "SHALL mention warning: {msg}"),
+            ThresholdResult::Warn(msg) => {
+                assert!(msg.contains("warning"), "SHALL mention warning: {msg}")
+            }
             _ => panic!("expected Warn for CPU over warn threshold"),
         }
     }
@@ -3036,7 +3453,9 @@ action = "screenshot"
             ..Default::default()
         };
         match evaluate_thresholds(&snap, Some(&opts)) {
-            ThresholdResult::Warn(msg) => assert!(msg.contains("threads"), "SHALL mention threads: {msg}"),
+            ThresholdResult::Warn(msg) => {
+                assert!(msg.contains("threads"), "SHALL mention threads: {msg}")
+            }
             _ => panic!("expected Warn for threads over warn threshold"),
         }
     }
@@ -3066,7 +3485,9 @@ action = "screenshot"
             ..Default::default()
         };
         match evaluate_thresholds(&snap, Some(&opts)) {
-            ThresholdResult::Error(msg) => assert!(msg.contains("error threshold"), "SHALL be error: {msg}"),
+            ThresholdResult::Error(msg) => {
+                assert!(msg.contains("error threshold"), "SHALL be error: {msg}")
+            }
             _ => panic!("error SHALL win over warn when both trip"),
         }
     }
@@ -3174,10 +3595,8 @@ action = "screenshot"
             threads: Some(11),
             ..RawPerfData::default()
         };
-        let harness = crate::context::TestHarness::new(
-            tmp.path(),
-            &[("com.example.app".to_string(), raw)],
-        );
+        let harness =
+            crate::context::TestHarness::new(tmp.path(), &[("com.example.app".to_string(), raw)]);
         let mut ctx = harness.ctx();
         let driver = MockPlatformDriver::new(empty_hierarchy());
         let mut vars = VariableStore::new();
@@ -3187,9 +3606,17 @@ action = "screenshot"
             make_block(Some("second"), vec![make_success_step()]),
         ]);
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow SHALL not error");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL not error");
 
         assert!(result.success, "flow SHALL succeed");
         assert_eq!(
@@ -3231,10 +3658,8 @@ action = "screenshot"
             memory_mb: Some(500.0),
             ..RawPerfData::default()
         };
-        let harness = crate::context::TestHarness::new(
-            tmp.path(),
-            &[("com.example.app".to_string(), raw)],
-        );
+        let harness =
+            crate::context::TestHarness::new(tmp.path(), &[("com.example.app".to_string(), raw)]);
         let mut ctx = harness.ctx();
         let driver = MockPlatformDriver::new(empty_hierarchy());
         let mut vars = VariableStore::new();
@@ -3247,11 +3672,22 @@ action = "screenshot"
             options,
         );
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow SHALL return Ok(FlowResult), not Err");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL return Ok(FlowResult), not Err");
 
-        assert!(!result.success, "breaching the error threshold SHALL fail the flow");
+        assert!(
+            !result.success,
+            "breaching the error threshold SHALL fail the flow"
+        );
         let reason = result
             .failed_reason
             .expect("a perf error SHALL set a failure reason");
@@ -3270,10 +3706,8 @@ action = "screenshot"
             memory_mb: Some(999.0),
             ..RawPerfData::default()
         };
-        let harness = crate::context::TestHarness::new(
-            tmp.path(),
-            &[("com.example.app".to_string(), raw)],
-        );
+        let harness =
+            crate::context::TestHarness::new(tmp.path(), &[("com.example.app".to_string(), raw)]);
         let mut ctx = harness.ctx();
         let driver = MockPlatformDriver::new(empty_hierarchy());
         let mut vars = VariableStore::new();
@@ -3286,9 +3720,17 @@ action = "screenshot"
             options,
         );
 
-        let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-            .await
-            .expect("execute_flow SHALL not error");
+        let result = execute_flow(
+            &flow,
+            &driver,
+            &mut vars,
+            None,
+            DEFAULT_TIMEOUT,
+            &mut ctx,
+            None,
+        )
+        .await
+        .expect("execute_flow SHALL not error");
 
         assert!(result.success, "flow SHALL succeed");
         assert!(

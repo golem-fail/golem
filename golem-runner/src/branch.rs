@@ -150,13 +150,7 @@ mod tests {
         let children = texts
             .iter()
             .enumerate()
-            .map(|(i, t)| {
-                make_element(
-                    "Label",
-                    Some(t),
-                    Bounds::new(10, (i as i32) * 50, 200, 40),
-                )
-            })
+            .map(|(i, t)| make_element("Label", Some(t), Bounds::new(10, (i as i32) * 50, 200, 40)))
             .collect();
         root_with_children(children)
     }
@@ -529,8 +523,7 @@ mod tests {
     // ---------------------------------------------------------------
     #[tokio::test]
     async fn mixed_screen_and_variable_conditions() {
-        let driver =
-            MockPlatformDriver::new(hierarchy_with_text(&["Welcome Back"]));
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["Welcome Back"]));
         let vars = make_vars(&[("variant", "premium")]);
         let conditions = vec![
             cond_if_visible("Try Premium Free", "premium_onboarding"),
@@ -551,8 +544,7 @@ mod tests {
     // ---------------------------------------------------------------
     #[tokio::test]
     async fn multiple_if_visible_conditions_tested_in_order() {
-        let driver =
-            MockPlatformDriver::new(hierarchy_with_text(&["Get Started", "Welcome"]));
+        let driver = MockPlatformDriver::new(hierarchy_with_text(&["Get Started", "Welcome"]));
         let vars = VariableStore::new();
         let conditions = vec![
             cond_if_visible("Try Premium Free", "premium"),
@@ -949,7 +941,9 @@ mod tests {
             result.is_err(),
             "hierarchy-fetch Err SHALL propagate out of evaluate_branch"
         );
-        let message = result.expect_err("expected Err from failing fetch").to_string();
+        let message = result
+            .expect_err("expected Err from failing fetch")
+            .to_string();
         assert!(
             message.contains("device disconnected"),
             "error SHALL carry the underlying fetch message, got: {message}"
@@ -969,7 +963,9 @@ mod tests {
 
         let result = evaluate_branch(&conditions, &driver, &vars).await;
 
-        let message = result.expect_err("expected Err from failing fetch").to_string();
+        let message = result
+            .expect_err("expected Err from failing fetch")
+            .to_string();
         assert!(
             message.contains("adb broken pipe"),
             "if_not_visible SHALL propagate the fetch error, got: {message}"

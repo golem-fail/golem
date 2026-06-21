@@ -79,10 +79,7 @@ pub(crate) fn generate_credit_card(
 }
 
 /// Generate a random Luhn-valid card (no provider), with optional generic status.
-fn generate_random_card(
-    params: &HashMap<String, String>,
-    rng: &mut impl Rng,
-) -> Result<VarValue> {
+fn generate_random_card(params: &HashMap<String, String>, rng: &mut impl Rng) -> Result<VarValue> {
     let status = params.get("status").map(|s| s.as_str());
     let brand_param = params.get("brand").map(|s| s.as_str());
 
@@ -131,7 +128,10 @@ fn generate_random_card(
         ("cvv", VarValue::string(&cvv)),
         ("brand", VarValue::string(brand.name)),
         ("provider", VarValue::string("")),
-        ("status", VarValue::string(if status == "approved" { "" } else { status })),
+        (
+            "status",
+            VarValue::string(if status == "approved" { "" } else { status }),
+        ),
     ];
 
     if status == "threeds" {
@@ -153,7 +153,10 @@ fn generate_provider_card(
         anyhow::anyhow!("unknown credit card provider: {provider} (valid: {valid})")
     })?;
 
-    let status = params.get("status").map(|s| s.as_str()).unwrap_or("approved");
+    let status = params
+        .get("status")
+        .map(|s| s.as_str())
+        .unwrap_or("approved");
     let brand = params.get("brand").map(|s| s.as_str());
 
     let matching = find_cards(pf, status, brand);
@@ -437,8 +440,7 @@ mod tests {
     #[test]
     fn credit_card_produces_all_fields() {
         let mut rng = seeded_rng();
-        let result =
-            generate_structured(&def("credit_card"), &mut rng).expect("should generate");
+        let result = generate_structured(&def("credit_card"), &mut rng).expect("should generate");
         let obj = result.as_object().expect("should be object");
         assert!(obj.contains_key("number"), "missing 'number'");
         assert!(obj.contains_key("expiry"), "missing 'expiry'");
@@ -472,14 +474,9 @@ mod tests {
         let mut rng1 = seeded_rng();
         let mut rng2 = seeded_rng();
 
-        let cc1 =
-            generate_structured(&def("credit_card"), &mut rng1).expect("should generate");
-        let cc2 =
-            generate_structured(&def("credit_card"), &mut rng2).expect("should generate");
-        assert_eq!(
-            cc1, cc2,
-            "same seed should produce same credit card"
-        );
+        let cc1 = generate_structured(&def("credit_card"), &mut rng1).expect("should generate");
+        let cc2 = generate_structured(&def("credit_card"), &mut rng2).expect("should generate");
+        assert_eq!(cc1, cc2, "same seed should produce same credit card");
     }
 
     #[test]
@@ -518,8 +515,7 @@ mod tests {
     #[test]
     fn credit_card_expiry_format() {
         let mut rng = seeded_rng();
-        let result =
-            generate_structured(&def("credit_card"), &mut rng).expect("should generate");
+        let result = generate_structured(&def("credit_card"), &mut rng).expect("should generate");
         let expiry = field(&result, "expiry");
         assert_eq!(expiry.len(), 5, "expiry SHALL be 5 chars (MM/YY)");
         assert_eq!(
@@ -527,21 +523,27 @@ mod tests {
             Some('/'),
             "expiry should have / at position 2"
         );
-        let month: u32 = expiry[..2]
-            .parse()
-            .expect("month part should parse as u32");
-        assert!((1..=12).contains(&month), "month SHALL be 1-12, got {month}");
+        let month: u32 = expiry[..2].parse().expect("month part should parse as u32");
+        assert!(
+            (1..=12).contains(&month),
+            "month SHALL be 1-12, got {month}"
+        );
     }
 
     #[test]
     fn credit_card_no_provider_has_empty_fields() {
         let mut rng = seeded_rng();
-        let result =
-            generate_structured(&def("credit_card"), &mut rng).expect("SHALL generate");
+        let result = generate_structured(&def("credit_card"), &mut rng).expect("SHALL generate");
         let provider = field(&result, "provider");
         let status = field(&result, "status");
-        assert!(provider.is_empty(), "SHALL have empty provider when none specified");
-        assert!(status.is_empty(), "SHALL have empty status when none specified");
+        assert!(
+            provider.is_empty(),
+            "SHALL have empty provider when none specified"
+        );
+        assert!(
+            status.is_empty(),
+            "SHALL have empty status when none specified"
+        );
     }
 
     // --- Provider tests (Stripe) ---
@@ -549,7 +551,10 @@ mod tests {
     #[test]
     fn credit_card_stripe_approved() {
         let mut rng = seeded_rng();
-        let d = def_with_params("credit_card", &[("provider", "stripe"), ("status", "approved")]);
+        let d = def_with_params(
+            "credit_card",
+            &[("provider", "stripe"), ("status", "approved")],
+        );
         let result = generate_structured(&d, &mut rng).expect("SHALL generate stripe card");
         let number = field(&result, "number");
         let approved_numbers = [
@@ -569,7 +574,10 @@ mod tests {
         let mut rng = seeded_rng();
         let d = def_with_params(
             "credit_card",
-            &[("provider", "stripe"), ("status", "declined:insufficient_funds")],
+            &[
+                ("provider", "stripe"),
+                ("status", "declined:insufficient_funds"),
+            ],
         );
         let result = generate_structured(&d, &mut rng).expect("SHALL generate stripe card");
         let number = field(&result, "number");
@@ -583,7 +591,10 @@ mod tests {
     #[test]
     fn credit_card_stripe_threeds() {
         let mut rng = seeded_rng();
-        let d = def_with_params("credit_card", &[("provider", "stripe"), ("status", "threeds")]);
+        let d = def_with_params(
+            "credit_card",
+            &[("provider", "stripe"), ("status", "threeds")],
+        );
         let result = generate_structured(&d, &mut rng).expect("SHALL generate stripe 3DS card");
         let number = field(&result, "number");
         let threeds_numbers = ["4000000000003220", "5200000000000007"];
@@ -606,7 +617,10 @@ mod tests {
     #[test]
     fn credit_card_stripe_has_provider_field() {
         let mut rng = seeded_rng();
-        let d = def_with_params("credit_card", &[("provider", "stripe"), ("status", "approved")]);
+        let d = def_with_params(
+            "credit_card",
+            &[("provider", "stripe"), ("status", "approved")],
+        );
         let result = generate_structured(&d, &mut rng).expect("SHALL generate stripe card");
         let provider = field(&result, "provider");
         let status = field(&result, "status");
@@ -625,7 +639,10 @@ mod tests {
     #[test]
     fn credit_card_unknown_status_errors() {
         let mut rng = seeded_rng();
-        let d = def_with_params("credit_card", &[("provider", "stripe"), ("status", "bogus")]);
+        let d = def_with_params(
+            "credit_card",
+            &[("provider", "stripe"), ("status", "bogus")],
+        );
         let result = generate_structured(&d, &mut rng);
         assert!(result.is_err(), "SHALL error for unknown status");
     }
@@ -633,7 +650,10 @@ mod tests {
     #[test]
     fn credit_card_stripe_declined_prefix_matches() {
         let mut rng = seeded_rng();
-        let d = def_with_params("credit_card", &[("provider", "stripe"), ("status", "declined")]);
+        let d = def_with_params(
+            "credit_card",
+            &[("provider", "stripe"), ("status", "declined")],
+        );
         let result = generate_structured(&d, &mut rng).expect("SHALL generate declined card");
         let status = field(&result, "status");
         // When using bare "declined", the status echoed back is "declined"
@@ -647,7 +667,11 @@ mod tests {
         let mut rng = seeded_rng();
         let d = def_with_params(
             "credit_card",
-            &[("provider", "stripe"), ("status", "approved"), ("brand", "amex")],
+            &[
+                ("provider", "stripe"),
+                ("status", "approved"),
+                ("brand", "amex"),
+            ],
         );
         let result = generate_structured(&d, &mut rng).expect("SHALL generate amex card");
         let number = field(&result, "number");
@@ -725,7 +749,10 @@ mod tests {
     #[test]
     fn credit_card_praxis_cvv_controlled() {
         let mut rng = seeded_rng();
-        let d = def_with_params("credit_card", &[("provider", "praxis"), ("status", "approved")]);
+        let d = def_with_params(
+            "credit_card",
+            &[("provider", "praxis"), ("status", "approved")],
+        );
         let result = generate_structured(&d, &mut rng).expect("SHALL generate praxis card");
         let cvv = field(&result, "cvv");
         assert!(
@@ -733,7 +760,10 @@ mod tests {
             "Praxis approved SHALL have CVV 568 or 5681, got: {cvv}"
         );
         let number = field(&result, "number");
-        assert!(luhn_valid(&number), "Praxis card number SHALL be Luhn-valid");
+        assert!(
+            luhn_valid(&number),
+            "Praxis card number SHALL be Luhn-valid"
+        );
     }
 
     #[test]
@@ -741,7 +771,10 @@ mod tests {
         let mut rng = seeded_rng();
         let d = def_with_params(
             "credit_card",
-            &[("provider", "mollie"), ("status", "declined:insufficient_funds")],
+            &[
+                ("provider", "mollie"),
+                ("status", "declined:insufficient_funds"),
+            ],
         );
         let result = generate_structured(&d, &mut rng).expect("SHALL generate mollie card");
         assert!(has_field(&result, "amount"), "SHALL have amount field");
@@ -771,10 +804,7 @@ mod tests {
         );
         let result = generate_structured(&d, &mut rng).expect("SHALL generate klarna card");
         assert!(has_field(&result, "email"), "SHALL have email field");
-        assert_eq!(
-            field(&result, "email"),
-            "customer+cc+denied@klarna.com"
-        );
+        assert_eq!(field(&result, "email"), "customer+cc+denied@klarna.com");
     }
 
     #[test]
@@ -782,7 +812,10 @@ mod tests {
         let mut rng = seeded_rng();
         let d = def_with_params(
             "credit_card",
-            &[("provider", "paypal"), ("status", "declined:insufficient_funds")],
+            &[
+                ("provider", "paypal"),
+                ("status", "declined:insufficient_funds"),
+            ],
         );
         let result = generate_structured(&d, &mut rng).expect("SHALL generate paypal card");
         assert!(has_field(&result, "name"), "SHALL have name field");
@@ -797,7 +830,10 @@ mod tests {
             &[("provider", "authorize_net"), ("status", "declined")],
         );
         let result = generate_structured(&d, &mut rng).expect("SHALL generate authorize_net card");
-        assert!(has_field(&result, "postal_code"), "SHALL have postal_code field");
+        assert!(
+            has_field(&result, "postal_code"),
+            "SHALL have postal_code field"
+        );
         assert_eq!(field(&result, "postal_code"), "46282");
     }
 
@@ -806,7 +842,11 @@ mod tests {
         let mut rng = seeded_rng();
         let d = def_with_params(
             "credit_card",
-            &[("provider", "adyen"), ("status", "approved"), ("brand", "visa")],
+            &[
+                ("provider", "adyen"),
+                ("status", "approved"),
+                ("brand", "visa"),
+            ],
         );
         let result = generate_structured(&d, &mut rng).expect("SHALL generate adyen card");
         let cvv = field(&result, "cvv");
@@ -818,7 +858,11 @@ mod tests {
         let mut rng = seeded_rng();
         let d = def_with_params(
             "credit_card",
-            &[("provider", "adyen"), ("status", "approved"), ("brand", "amex")],
+            &[
+                ("provider", "adyen"),
+                ("status", "approved"),
+                ("brand", "amex"),
+            ],
         );
         let result = generate_structured(&d, &mut rng).expect("SHALL generate adyen amex card");
         let cvv = field(&result, "cvv");
@@ -960,11 +1004,19 @@ mod tests {
         let mut rng = seeded_rng();
         let d = def_with_params(
             "credit_card",
-            &[("provider", "payu"), ("status", "approved"), ("brand", "amex")],
+            &[
+                ("provider", "payu"),
+                ("status", "approved"),
+                ("brand", "amex"),
+            ],
         );
         let result = generate_structured(&d, &mut rng).expect("SHALL generate payu amex card");
         assert!(has_field(&result, "otp"), "SHALL surface otp field");
-        assert_eq!(field(&result, "otp"), "725356", "SHALL carry the card's otp");
+        assert_eq!(
+            field(&result, "otp"),
+            "725356",
+            "SHALL carry the card's otp"
+        );
     }
 
     // 8. A provider card carrying a per-card pin SHALL surface the pin field.
@@ -973,16 +1025,27 @@ mod tests {
         let mut rng = seeded_rng();
         let d = def_with_params(
             "credit_card",
-            &[("provider", "paystack"), ("status", "approved"), ("brand", "verve")],
+            &[
+                ("provider", "paystack"),
+                ("status", "approved"),
+                ("brand", "verve"),
+            ],
         );
-        let result =
-            generate_structured(&d, &mut rng).expect("SHALL generate paystack verve card");
+        let result = generate_structured(&d, &mut rng).expect("SHALL generate paystack verve card");
         assert!(has_field(&result, "pin"), "SHALL surface pin field");
         // Seed 42 deterministically selects the verve card numbered 507850785078507804,
         // whose per-card pin literal is 0000; assert that concrete value flows through
         // build_output (mirroring the otp test) rather than merely that a pin key exists.
-        assert_eq!(field(&result, "number"), "507850785078507804", "seed 42 SHALL pick this verve card");
-        assert_eq!(field(&result, "pin"), "0000", "SHALL carry the card's pin literal");
+        assert_eq!(
+            field(&result, "number"),
+            "507850785078507804",
+            "seed 42 SHALL pick this verve card"
+        );
+        assert_eq!(
+            field(&result, "pin"),
+            "0000",
+            "SHALL carry the card's pin literal"
+        );
     }
 
     // 9. A provider card carrying a description SHALL surface the description field.
@@ -991,16 +1054,26 @@ mod tests {
     #[test]
     fn credit_card_provider_description_and_literal_defaults() {
         let mut rng = seeded_rng();
-        let d = def_with_params("credit_card", &[("provider", "dlocal"), ("status", "approved")]);
+        let d = def_with_params(
+            "credit_card",
+            &[("provider", "dlocal"), ("status", "approved")],
+        );
         let result = generate_structured(&d, &mut rng).expect("SHALL generate dlocal card");
-        assert!(has_field(&result, "description"), "SHALL surface description");
+        assert!(
+            has_field(&result, "description"),
+            "SHALL surface description"
+        );
         assert_eq!(field(&result, "description"), "200");
         assert_eq!(
             field(&result, "number"),
             "4111111111111111",
             "SHALL resolve literal number default"
         );
-        assert_eq!(field(&result, "cvv"), "123", "SHALL resolve literal cvv default");
+        assert_eq!(
+            field(&result, "cvv"),
+            "123",
+            "SHALL resolve literal cvv default"
+        );
         assert_eq!(
             field(&result, "expiry"),
             "10/40",
@@ -1063,14 +1136,21 @@ mod tests {
             .map(|d| char::from(b'0' + d))
             .collect();
         assert_eq!(check, 1, "check digit for 411111111111111 SHALL be 1");
-        assert!(luhn_valid(&full), "prefix + check digit SHALL be Luhn-valid");
+        assert!(
+            luhn_valid(&full),
+            "prefix + check digit SHALL be Luhn-valid"
+        );
     }
 
     // 13. luhn_check_digit of an already-zero-sum sequence SHALL be 0.
     #[test]
     fn luhn_check_digit_zero_when_sum_multiple_of_ten() {
         // Single digit 0 doubled is 0 -> sum 0 -> check (10 - 0) % 10 = 0.
-        assert_eq!(luhn_check_digit(&[0]), 0, "zero sequence SHALL yield check 0");
+        assert_eq!(
+            luhn_check_digit(&[0]),
+            0,
+            "zero sequence SHALL yield check 0"
+        );
         // "0000000" stays at sum 0.
         assert_eq!(luhn_check_digit(&[0, 0, 0, 0, 0, 0, 0]), 0);
     }
@@ -1120,7 +1200,11 @@ mod tests {
         // generate_luhn_number with an empty prefix still fills to length and validates.
         let mut rng = seeded_rng();
         let number = generate_luhn_number("", 16, &mut rng);
-        assert_eq!(number.len(), 16, "empty prefix SHALL still reach requested length");
+        assert_eq!(
+            number.len(),
+            16,
+            "empty prefix SHALL still reach requested length"
+        );
         assert!(
             number.chars().all(|c| c.is_ascii_digit()),
             "empty-prefix number SHALL be all digits"

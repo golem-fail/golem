@@ -131,7 +131,10 @@ mod tests {
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
-            outcome: StepOutcome::Failed { message: msg.to_string(), code: golem_events::FailureCode::Uncoded },
+            outcome: StepOutcome::Failed {
+                message: msg.to_string(),
+                code: golem_events::FailureCode::Uncoded,
+            },
             duration_ms: ms,
             retry_count: 0,
             screenshot_path: None,
@@ -211,7 +214,10 @@ mod tests {
     fn parse_unknown_format_is_error() {
         let result = parse_output_format("csv");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unknown output format"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Unknown output format"));
     }
 
     // 3. render produces output for each format
@@ -219,7 +225,12 @@ mod tests {
     fn render_produces_output_for_each_format() {
         let suite = sample_suite();
 
-        for fmt in &[OutputFormat::Human, OutputFormat::Json, OutputFormat::Junit, OutputFormat::Toon] {
+        for fmt in &[
+            OutputFormat::Human,
+            OutputFormat::Json,
+            OutputFormat::Junit,
+            OutputFormat::Toon,
+        ] {
             let out = render(&suite, fmt).expect("render");
             assert!(!out.is_empty());
             assert!(out.contains("login_flow"));
@@ -239,7 +250,10 @@ mod tests {
         assert!(json.contains("login_flow"));
         let toon = std::fs::read_to_string(dir.path().join("results.toon")).expect("read toon");
         assert!(toon.contains("login_flow"));
-        assert!(!dir.path().join("results.xml").exists(), "no junit without flag");
+        assert!(
+            !dir.path().join("results.xml").exists(),
+            "no junit without flag"
+        );
     }
 
     // 5. write_results_to_dir includes junit when requested
@@ -260,10 +274,23 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
 
         let written = write_results_to_dir(&suite, dir.path(), true).expect("write");
-        assert_eq!(written.len(), 3, "json+toon+junit SHALL produce three paths");
-        assert!(written[0].ends_with("results.json"), "first path SHALL be results.json");
-        assert!(written[1].ends_with("results.toon"), "second path SHALL be results.toon");
-        assert!(written[2].ends_with("results.xml"), "junit path SHALL be appended last");
+        assert_eq!(
+            written.len(),
+            3,
+            "json+toon+junit SHALL produce three paths"
+        );
+        assert!(
+            written[0].ends_with("results.json"),
+            "first path SHALL be results.json"
+        );
+        assert!(
+            written[1].ends_with("results.toon"),
+            "second path SHALL be results.toon"
+        );
+        assert!(
+            written[2].ends_with("results.xml"),
+            "junit path SHALL be appended last"
+        );
     }
 
     // 7. write_results_to_dir creates nested directories that do not yet exist
@@ -276,8 +303,14 @@ mod tests {
 
         let written = write_results_to_dir(&suite, &nested, false).expect("write");
         assert_eq!(written.len(), 2);
-        assert!(nested.join("results.json").exists(), "json SHALL be written into created nested dir");
-        assert!(nested.join("results.toon").exists(), "toon SHALL be written into created nested dir");
+        assert!(
+            nested.join("results.json").exists(),
+            "json SHALL be written into created nested dir"
+        );
+        assert!(
+            nested.join("results.toon").exists(),
+            "toon SHALL be written into created nested dir"
+        );
     }
 
     // 8. write_results_to_dir into a pre-existing directory does not error
@@ -289,7 +322,11 @@ mod tests {
         // First write creates the files; second write into the same existing dir must still succeed (overwrite).
         write_results_to_dir(&suite, dir.path(), false).expect("first write");
         let written = write_results_to_dir(&suite, dir.path(), false).expect("second write");
-        assert_eq!(written.len(), 2, "repeated write into existing dir SHALL succeed");
+        assert_eq!(
+            written.len(),
+            2,
+            "repeated write into existing dir SHALL succeed"
+        );
     }
 
     // 9. parse_output_format rejects empty string
@@ -298,7 +335,10 @@ mod tests {
         let result = parse_output_format("");
         assert!(result.is_err(), "empty format spec SHALL be an error");
         assert!(
-            result.expect_err("empty is err").to_string().contains("Unknown output format"),
+            result
+                .expect_err("empty is err")
+                .to_string()
+                .contains("Unknown output format"),
             "empty spec SHALL report Unknown output format"
         );
     }
@@ -306,8 +346,14 @@ mod tests {
     // 10. parse_output_format is case-sensitive (uppercase is not accepted)
     #[test]
     fn parse_is_case_sensitive() {
-        assert!(parse_output_format("JSON").is_err(), "uppercase JSON SHALL NOT parse");
-        assert!(parse_output_format("Human").is_err(), "capitalized Human SHALL NOT parse");
+        assert!(
+            parse_output_format("JSON").is_err(),
+            "uppercase JSON SHALL NOT parse"
+        );
+        assert!(
+            parse_output_format("Human").is_err(),
+            "capitalized Human SHALL NOT parse"
+        );
     }
 
     // 11. render of an empty suite (no flows) succeeds for every format
@@ -321,9 +367,18 @@ mod tests {
             finished_at: None,
         };
 
-        for fmt in &[OutputFormat::Human, OutputFormat::Json, OutputFormat::Junit, OutputFormat::Toon] {
-            let out = render(&empty, fmt).unwrap_or_else(|e| panic!("render of empty suite SHALL succeed: {e}"));
-            assert!(!out.is_empty(), "render of empty suite SHALL produce non-empty output");
+        for fmt in &[
+            OutputFormat::Human,
+            OutputFormat::Json,
+            OutputFormat::Junit,
+            OutputFormat::Toon,
+        ] {
+            let out = render(&empty, fmt)
+                .unwrap_or_else(|e| panic!("render of empty suite SHALL succeed: {e}"));
+            assert!(
+                !out.is_empty(),
+                "render of empty suite SHALL produce non-empty output"
+            );
         }
     }
 
@@ -332,7 +387,13 @@ mod tests {
     fn render_json_includes_failure_message() {
         let suite = sample_suite();
         let json = render(&suite, &OutputFormat::Json).expect("render json");
-        assert!(json.contains("signup_flow"), "json SHALL include the failed flow name");
-        assert!(json.contains("not found"), "json SHALL include the step failure message");
+        assert!(
+            json.contains("signup_flow"),
+            "json SHALL include the failed flow name"
+        );
+        assert!(
+            json.contains("not found"),
+            "json SHALL include the step failure message"
+        );
     }
 }

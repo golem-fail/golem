@@ -19,14 +19,10 @@ impl EmailMessage {
     /// produced by Ethereal and similar test SMTP servers. Production
     /// email parsing would need a full MIME library.
     pub fn from_raw(raw: &str) -> Result<Self> {
-        let from = Self::extract_header(raw, "From")
-            .context("missing From header")?;
-        let to = Self::extract_header(raw, "To")
-            .context("missing To header")?;
-        let subject = Self::extract_header(raw, "Subject")
-            .context("missing Subject header")?;
-        let date = Self::extract_header(raw, "Date")
-            .unwrap_or_default();
+        let from = Self::extract_header(raw, "From").context("missing From header")?;
+        let to = Self::extract_header(raw, "To").context("missing To header")?;
+        let subject = Self::extract_header(raw, "Subject").context("missing Subject header")?;
+        let date = Self::extract_header(raw, "Date").unwrap_or_default();
 
         // Body is everything after the first blank line.
         let body = raw
@@ -158,8 +154,7 @@ impl ImapPoller {
         timeout_ms: u64,
         poll_interval_ms: u64,
     ) -> Result<EmailMessage> {
-        let deadline =
-            tokio::time::Instant::now() + tokio::time::Duration::from_millis(timeout_ms);
+        let deadline = tokio::time::Instant::now() + tokio::time::Duration::from_millis(timeout_ms);
 
         loop {
             let messages = self
@@ -419,7 +414,10 @@ mod tests {
     //    empty position.
     #[test]
     fn subject_matches_question_mark_requires_one_char() {
-        assert!(!subject_matches("code-", "code-?"), "? SHALL NOT match empty");
+        assert!(
+            !subject_matches("code-", "code-?"),
+            "? SHALL NOT match empty"
+        );
         assert!(subject_matches("code-X", "code-?"));
     }
 
@@ -429,7 +427,10 @@ mod tests {
     fn subject_matches_escapes_regex_special_chars() {
         // '.' is escaped, so it matches a literal dot only.
         assert!(subject_matches("a.b", "a.b"));
-        assert!(!subject_matches("axb", "a.b"), "'.' SHALL be literal, not any-char");
+        assert!(
+            !subject_matches("axb", "a.b"),
+            "'.' SHALL be literal, not any-char"
+        );
         // '+' is escaped: literal plus, not "one-or-more".
         assert!(subject_matches("a+b", "a+b"));
         assert!(!subject_matches("aaab", "a+b"));
@@ -453,7 +454,10 @@ mod tests {
     #[test]
     fn subject_matches_empty_pattern_only_matches_empty() {
         assert!(subject_matches("", ""));
-        assert!(!subject_matches("x", ""), "empty pattern SHALL NOT match non-empty");
+        assert!(
+            !subject_matches("x", ""),
+            "empty pattern SHALL NOT match non-empty"
+        );
     }
 
     // -- Tests: ImapPoller configuration ------------------------------------
@@ -542,10 +546,7 @@ mod tests {
 
     #[tokio::test]
     async fn await_email_ignores_non_matching_subjects() {
-        let msgs = vec![
-            make_email("Welcome aboard"),
-            make_email("Your invoice"),
-        ];
+        let msgs = vec![make_email("Welcome aboard"), make_email("Your invoice")];
         let conn = MockImapConnection { messages: msgs };
         let poller = ImapPoller::with_connection(
             "host".into(),
@@ -584,7 +585,10 @@ mod tests {
             msg.contains("connection refused"),
             "SHALL preserve underlying cause: {msg}"
         );
-        assert!(!msg.contains("timed out"), "SHALL fail fast, not time out: {msg}");
+        assert!(
+            !msg.contains("timed out"),
+            "SHALL fail fast, not time out: {msg}"
+        );
     }
 
     // 12. When several messages are present the first matching one (in

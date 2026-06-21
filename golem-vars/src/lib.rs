@@ -44,10 +44,7 @@ impl VarValue {
 
     /// Create an object value from a vec of key-value entries.
     pub fn object(entries: Vec<(impl Into<String>, VarValue)>) -> Self {
-        let map = entries
-            .into_iter()
-            .map(|(k, v)| (k.into(), v))
-            .collect();
+        let map = entries.into_iter().map(|(k, v)| (k.into(), v)).collect();
         VarValue::Object(map)
     }
 
@@ -287,9 +284,7 @@ impl GeneratorDef {
         // Check if there are parameters in parentheses
         if let Some(paren_start) = rest.find('(') {
             let name = rest[..paren_start].to_string();
-            let params_str = rest
-                .get(paren_start + 1..)?
-                .strip_suffix(')')?;
+            let params_str = rest.get(paren_start + 1..)?.strip_suffix(')')?;
 
             let mut params = HashMap::new();
             if !params_str.is_empty() {
@@ -388,10 +383,7 @@ mod tests {
         store.push_scope(cli_scope);
 
         // CLI scope was pushed last, so it's at the front (highest priority)
-        assert_eq!(
-            store.get("env"),
-            Some(&VarValue::string("staging"))
-        );
+        assert_eq!(store.get("env"), Some(&VarValue::string("staging")));
     }
 
     #[test]
@@ -756,7 +748,10 @@ mod tests {
     fn store_set_on_empty_store_is_noop() {
         let mut store = VariableStore::new();
         store.set("k", VarValue::string("v"));
-        assert!(store.get("k").is_none(), "set with no scopes SHALL be a no-op");
+        assert!(
+            store.get("k").is_none(),
+            "set with no scopes SHALL be a no-op"
+        );
         assert!(store.scopes().is_empty(), "no scope SHALL be created");
     }
 
@@ -902,7 +897,10 @@ mod tests {
     #[test]
     fn variable_store_default_is_empty() {
         let store = VariableStore::default();
-        assert!(store.scopes().is_empty(), "default store SHALL have no scopes");
+        assert!(
+            store.scopes().is_empty(),
+            "default store SHALL have no scopes"
+        );
         assert!(store.get("any").is_none());
     }
 

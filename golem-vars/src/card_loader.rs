@@ -18,10 +18,19 @@ static RAW_ENTRIES: &[(&str, &str)] = &[
     ("stripe", include_str!("../../data/cards/stripe.json")),
     ("adyen", include_str!("../../data/cards/adyen.json")),
     ("braintree", include_str!("../../data/cards/braintree.json")),
-    ("checkout_com", include_str!("../../data/cards/checkout_com.json")),
+    (
+        "checkout_com",
+        include_str!("../../data/cards/checkout_com.json"),
+    ),
     ("worldpay", include_str!("../../data/cards/worldpay.json")),
-    ("authorize_net", include_str!("../../data/cards/authorize_net.json")),
-    ("cybersource", include_str!("../../data/cards/cybersource.json")),
+    (
+        "authorize_net",
+        include_str!("../../data/cards/authorize_net.json"),
+    ),
+    (
+        "cybersource",
+        include_str!("../../data/cards/cybersource.json"),
+    ),
     ("square", include_str!("../../data/cards/square.json")),
     ("nmi", include_str!("../../data/cards/nmi.json")),
     ("spreedly", include_str!("../../data/cards/spreedly.json")),
@@ -34,18 +43,33 @@ static RAW_ENTRIES: &[(&str, &str)] = &[
     ("opayo", include_str!("../../data/cards/opayo.json")),
     ("unzer", include_str!("../../data/cards/unzer.json")),
     ("nets_nexi", include_str!("../../data/cards/nets_nexi.json")),
-    ("multisafepay", include_str!("../../data/cards/multisafepay.json")),
+    (
+        "multisafepay",
+        include_str!("../../data/cards/multisafepay.json"),
+    ),
     ("buckaroo", include_str!("../../data/cards/buckaroo.json")),
     ("paysafe", include_str!("../../data/cards/paysafe.json")),
     ("payoneer", include_str!("../../data/cards/payoneer.json")),
     ("nuvei", include_str!("../../data/cards/nuvei.json")),
-    ("two_checkout", include_str!("../../data/cards/two_checkout.json")),
+    (
+        "two_checkout",
+        include_str!("../../data/cards/two_checkout.json"),
+    ),
     ("bambora", include_str!("../../data/cards/bambora.json")),
     // Africa
-    ("flutterwave", include_str!("../../data/cards/flutterwave.json")),
+    (
+        "flutterwave",
+        include_str!("../../data/cards/flutterwave.json"),
+    ),
     ("paystack", include_str!("../../data/cards/paystack.json")),
-    ("interswitch", include_str!("../../data/cards/interswitch.json")),
-    ("peach_payments", include_str!("../../data/cards/peach_payments.json")),
+    (
+        "interswitch",
+        include_str!("../../data/cards/interswitch.json"),
+    ),
+    (
+        "peach_payments",
+        include_str!("../../data/cards/peach_payments.json"),
+    ),
     // Asia-Pacific
     ("payu", include_str!("../../data/cards/payu.json")),
     ("komoju", include_str!("../../data/cards/komoju.json")),
@@ -54,22 +78,37 @@ static RAW_ENTRIES: &[(&str, &str)] = &[
     ("omise", include_str!("../../data/cards/omise.json")),
     ("xendit", include_str!("../../data/cards/xendit.json")),
     ("two_c2p", include_str!("../../data/cards/two_c2p.json")),
-    ("pin_payments", include_str!("../../data/cards/pin_payments.json")),
+    (
+        "pin_payments",
+        include_str!("../../data/cards/pin_payments.json"),
+    ),
     ("windcave", include_str!("../../data/cards/windcave.json")),
     // Latin America
-    ("mercado_pago", include_str!("../../data/cards/mercado_pago.json")),
+    (
+        "mercado_pago",
+        include_str!("../../data/cards/mercado_pago.json"),
+    ),
     ("ebanx", include_str!("../../data/cards/ebanx.json")),
     ("pagseguro", include_str!("../../data/cards/pagseguro.json")),
     ("conekta", include_str!("../../data/cards/conekta.json")),
     ("dlocal", include_str!("../../data/cards/dlocal.json")),
     // Middle East
-    ("tap_payments", include_str!("../../data/cards/tap_payments.json")),
+    (
+        "tap_payments",
+        include_str!("../../data/cards/tap_payments.json"),
+    ),
     ("amazon_ps", include_str!("../../data/cards/amazon_ps.json")),
-    ("myfatoorah", include_str!("../../data/cards/myfatoorah.json")),
+    (
+        "myfatoorah",
+        include_str!("../../data/cards/myfatoorah.json"),
+    ),
     ("telr", include_str!("../../data/cards/telr.json")),
     ("paytabs", include_str!("../../data/cards/paytabs.json")),
     // Multi-region
-    ("global_payments", include_str!("../../data/cards/global_payments.json")),
+    (
+        "global_payments",
+        include_str!("../../data/cards/global_payments.json"),
+    ),
     ("rapyd", include_str!("../../data/cards/rapyd.json")),
     ("bluesnap", include_str!("../../data/cards/bluesnap.json")),
 ];
@@ -307,7 +346,10 @@ mod tests {
         assert!(!cards.is_empty());
         // Praxis cards have CVV set, number is None (resolved from defaults)
         let card = &cards[0];
-        assert!(card.number.is_none(), "Praxis card number SHALL be None (random_luhn default)");
+        assert!(
+            card.number.is_none(),
+            "Praxis card number SHALL be None (random_luhn default)"
+        );
         assert!(card.cvv.is_some(), "Praxis card SHALL have explicit CVV");
     }
 
@@ -329,10 +371,7 @@ mod tests {
         let cards = find_cards(klarna, "declined", None);
         assert!(!cards.is_empty());
         let card = &cards[0];
-        assert_eq!(
-            card.email.as_deref(),
-            Some("customer+cc+denied@klarna.com")
-        );
+        assert_eq!(card.email.as_deref(), Some("customer+cc+denied@klarna.com"));
     }
 
     #[test]

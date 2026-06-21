@@ -6,18 +6,19 @@ use std::process::Command;
 
 use anyhow::{bail, Context, Result};
 
-
 /// Embedded iOS companion archive (tar.gz of XCTest build products).
 /// Empty if build was unavailable.
 const IOS_COMPANION: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/companion-ios.tar.gz"));
 
 /// Embedded Android companion test APK (instrumentation).
 /// Empty if build was unavailable.
-const ANDROID_TEST_APK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/companion-android-test.apk"));
+const ANDROID_TEST_APK: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/companion-android-test.apk"));
 
 /// Embedded Android companion main APK (required for instrumentation).
 /// Empty if build was unavailable.
-const ANDROID_MAIN_APK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/companion-android-main.apk"));
+const ANDROID_MAIN_APK: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/companion-android-main.apk"));
 
 /// Paths to extracted companion artifacts.
 pub struct CompanionPaths {
@@ -423,9 +424,8 @@ mod tests {
     fn extract_android_from_writes_injected_bytes() {
         let base = tempdir().expect("tempdir");
 
-        let (test_apk, main_apk) =
-            extract_android_from(b"test-bytes", b"main-bytes", base.path())
-                .expect("extract_android_from SHALL succeed");
+        let (test_apk, main_apk) = extract_android_from(b"test-bytes", b"main-bytes", base.path())
+            .expect("extract_android_from SHALL succeed");
 
         let test_apk = test_apk.expect("test APK path SHALL be Some");
         let main_apk = main_apk.expect("main APK path SHALL be Some");
@@ -446,9 +446,8 @@ mod tests {
         let base = tempdir().expect("tempdir");
 
         // Either slice empty SHALL yield (None, None) and create nothing.
-        let (test_apk, main_apk) =
-            extract_android_from(&[], b"main-bytes", base.path())
-                .expect("extract_android_from SHALL succeed");
+        let (test_apk, main_apk) = extract_android_from(&[], b"main-bytes", base.path())
+            .expect("extract_android_from SHALL succeed");
 
         assert!(
             test_apk.is_none() && main_apk.is_none(),

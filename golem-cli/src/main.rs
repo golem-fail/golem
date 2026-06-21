@@ -87,7 +87,8 @@ async fn main() -> anyhow::Result<()> {
                 .and_then(|p| p.parent().map(std::path::Path::to_path_buf))
                 .unwrap_or(cwd);
 
-            let output_dir = args.output_dir
+            let output_dir = args
+                .output_dir
                 .map(std::path::PathBuf::from)
                 .unwrap_or_else(|| std::path::PathBuf::from(".golem/results"));
 
@@ -98,7 +99,9 @@ async fn main() -> anyhow::Result<()> {
                 .map(|s| golem_report::output::parse_output_format(s))
                 .collect::<Result<Vec<_>, _>>()?;
 
-            let include_junit = stdout_formats.iter().any(|f| matches!(f, golem_report::output::OutputFormat::Junit));
+            let include_junit = stdout_formats
+                .iter()
+                .any(|f| matches!(f, golem_report::output::OutputFormat::Junit));
 
             // Conflicting flags: --no-build wins over --rebuild because
             // skipping work entirely is the more concrete intent. Warn
@@ -138,7 +141,8 @@ async fn main() -> anyhow::Result<()> {
                 project_record: project_config.options.record,
                 trace: args.trace,
                 repeat: args.repeat,
-                max_device_wait: args.max_wait
+                max_device_wait: args
+                    .max_wait
                     .as_deref()
                     .and_then(golem_runner::executor::parse_duration),
             };
@@ -178,23 +182,32 @@ async fn main() -> anyhow::Result<()> {
                 Ok(s) => (s, None),
                 Err(_) => {
                     let server = orchestrator::start_server().await?;
-                    let s = orchestrator::try_connect().await
+                    let s = orchestrator::try_connect()
+                        .await
                         .context("failed to connect to in-process orchestrator")?;
                     (s, Some(server))
                 }
             };
 
             let outcome = orchestrator::submit_and_wait(
-                stream, &flow_paths, &config_json,
-                config.verbose, config.debug, has_human_output,
-            ).await?;
+                stream,
+                &flow_paths,
+                &config_json,
+                config.verbose,
+                config.debug,
+                has_human_output,
+            )
+            .await?;
             let report = outcome.report;
 
             // Drain in-process server: wait for any other clients, then
             // shut down sims/emulators we booted (respects --keep-devices).
             if let Some(server) = local_server {
                 server.wait_for_clients().await;
-                let warnings = server.resource_mgr.shutdown_golem_booted(args.keep_devices).await;
+                let warnings = server
+                    .resource_mgr
+                    .shutdown_golem_booted(args.keep_devices)
+                    .await;
                 for w in &warnings {
                     eprintln!("  [devices] {w}");
                 }
@@ -265,11 +278,9 @@ async fn main() -> anyhow::Result<()> {
             install_script_cmd::run()?;
         }
 
-        Commands::Cache(args) => {
-            match args.command {
-                cli::CacheCommands::Info => cache::info()?,
-            }
-        }
+        Commands::Cache(args) => match args.command {
+            cli::CacheCommands::Info => cache::info()?,
+        },
     }
 
     Ok(())
@@ -285,7 +296,9 @@ fn parse_platform_override(
         None => Ok(None),
         Some("android") => Ok(Some(golem_devices::Platform::Android)),
         Some("ios") => Ok(Some(golem_devices::Platform::Ios)),
-        Some(other) => Err(format!("Unknown platform: {other}. Use 'ios' or 'android'.")),
+        Some(other) => Err(format!(
+            "Unknown platform: {other}. Use 'ios' or 'android'."
+        )),
     }
 }
 
@@ -401,9 +414,16 @@ fn render_flake_summary_with_color(entries: &[FlakeEntry], use_color: bool) -> S
     const BOLD_GREEN: &str = "\x1b[1;32m";
 
     let total_runs = entries.first().map(|e| e.total).unwrap_or(0);
-    let flakes = entries.iter().filter(|e| e.passed > 0 && e.failed > 0).count();
-    let stable_fails = entries.iter().filter(|e| e.passed == 0 && e.failed > 0).count();
-    let stable_passes = entries.iter()
+    let flakes = entries
+        .iter()
+        .filter(|e| e.passed > 0 && e.failed > 0)
+        .count();
+    let stable_fails = entries
+        .iter()
+        .filter(|e| e.passed == 0 && e.failed > 0)
+        .count();
+    let stable_passes = entries
+        .iter()
         .filter(|e| e.failed == 0 && e.passed > 0)
         .count();
 
@@ -443,8 +463,16 @@ fn render_flake_summary_with_color(entries: &[FlakeEntry], use_color: bool) -> S
             // Dim stable PASS rows — they're informational once flakes
             // and stable fails are listed above; eye should land on the
             // problematic rows first.
-            let body_color = if e.failed == 0 && e.passed > 0 { DIM } else { "" };
-            let body_reset = if e.failed == 0 && e.passed > 0 { RESET } else { "" };
+            let body_color = if e.failed == 0 && e.passed > 0 {
+                DIM
+            } else {
+                ""
+            };
+            let body_reset = if e.failed == 0 && e.passed > 0 {
+                RESET
+            } else {
+                ""
+            };
             let _ = writeln!(
                 out,
                 "{INDENT}{label_color}{label}{RESET}  {body_color}{body}{body_reset}",
@@ -470,7 +498,11 @@ mod tests {
         FlowReport {
             flow_name: name.to_string(),
             success: if skipped { true } else { success },
-            skipped_reason: if skipped { Some("coverage group satisfied".into()) } else { None },
+            skipped_reason: if skipped {
+                Some("coverage group satisfied".into())
+            } else {
+                None
+            },
             device_name: Some("iPhone 17".into()),
             repeat,
             ..FlowReport::default()
@@ -480,7 +512,10 @@ mod tests {
     #[test]
     fn flake_summary_empty_when_no_repeat() {
         // Single-run suites — every flow has repeat=None — get no flake summary.
-        let flows = vec![flow("a.test", true, None, false), flow("b.test", false, None, false)];
+        let flows = vec![
+            flow("a.test", true, None, false),
+            flow("b.test", false, None, false),
+        ];
         assert!(build_flake_summary(&flows).is_empty());
     }
 
@@ -535,13 +570,23 @@ mod tests {
         let names: Vec<&str> = summary.iter().map(|e| e.flow.as_str()).collect();
         assert_eq!(
             names,
-            vec!["a_flake.test (iPhone 17)", "m_fail.test (iPhone 17)", "z_pass.test (iPhone 17)"],
+            vec![
+                "a_flake.test (iPhone 17)",
+                "m_fail.test (iPhone 17)",
+                "z_pass.test (iPhone 17)"
+            ],
             "SHALL sort flakes first, then stable failures, then stable passes",
         );
     }
 
     fn entry(flow: &str, passed: u32, failed: u32, skipped: u32, total: u32) -> FlakeEntry {
-        FlakeEntry { flow: flow.to_string(), passed, failed, skipped, total }
+        FlakeEntry {
+            flow: flow.to_string(),
+            passed,
+            failed,
+            skipped,
+            total,
+        }
     }
 
     // render_flake_summary runs under nextest with a non-terminal stderr,
@@ -588,7 +633,10 @@ mod tests {
     //    "flake" and "fail" with no trailing 's'.
     #[test]
     fn render_header_singular_pluralization() {
-        let entries = vec![entry("flaky (dev)", 1, 2, 0, 3), entry("broken (dev)", 0, 3, 0, 3)];
+        let entries = vec![
+            entry("flaky (dev)", 1, 2, 0, 3),
+            entry("broken (dev)", 0, 3, 0, 3),
+        ];
         let out = render_flake_summary(&entries);
         assert!(
             out.contains("1 flake, 1 fail, 0 stable across 3 runs"),
@@ -623,11 +671,23 @@ mod tests {
             entry("good (dev)", 3, 0, 0, 3),
         ];
         let out = render_flake_summary(&entries);
-        assert!(out.contains("FLAKE    1/3    flaky (dev)"), "flake row SHALL be labelled FLAKE with passed/total body, got: {out}");
-        assert!(out.contains("FAIL     0/3    broken (dev)"), "stable-fail row SHALL be labelled FAIL, got: {out}");
-        assert!(out.contains("PASS     3/3    good (dev)"), "stable-pass row SHALL be labelled PASS, got: {out}");
+        assert!(
+            out.contains("FLAKE    1/3    flaky (dev)"),
+            "flake row SHALL be labelled FLAKE with passed/total body, got: {out}"
+        );
+        assert!(
+            out.contains("FAIL     0/3    broken (dev)"),
+            "stable-fail row SHALL be labelled FAIL, got: {out}"
+        );
+        assert!(
+            out.contains("PASS     3/3    good (dev)"),
+            "stable-pass row SHALL be labelled PASS, got: {out}"
+        );
         // Header counts the categories correctly: 1 flake, 1 fail, 1 stable.
-        assert!(out.contains("1 flake, 1 fail, 1 stable across 3 runs"), "header SHALL tally one of each category, got: {out}");
+        assert!(
+            out.contains("1 flake, 1 fail, 1 stable across 3 runs"),
+            "header SHALL tally one of each category, got: {out}"
+        );
     }
 
     // 6. A skipped-only entry (passed=0, failed=0) is neither flake nor
@@ -636,13 +696,25 @@ mod tests {
     //    return) — the skipped row is labelled PASS (the else branch).
     #[test]
     fn render_skipped_only_entry_takes_pass_label_branch() {
-        let entries = vec![entry("skip (dev)", 0, 0, 3, 3), entry("flaky (dev)", 1, 2, 0, 3)];
+        let entries = vec![
+            entry("skip (dev)", 0, 0, 3, 3),
+            entry("flaky (dev)", 1, 2, 0, 3),
+        ];
         let out = render_flake_summary(&entries);
         // total_runs comes from the FIRST entry.
-        assert!(out.contains("1 flake, 0 fails,"), "one flake, no stable fails SHALL be tallied, got: {out}");
+        assert!(
+            out.contains("1 flake, 0 fails,"),
+            "one flake, no stable fails SHALL be tallied, got: {out}"
+        );
         // skip row: passed==0 && failed==0 → else branch → PASS label.
-        assert!(out.contains("PASS     0/3    skip (dev)"), "a fully-skipped entry SHALL fall to the PASS label branch, got: {out}");
-        assert!(out.contains("FLAKE    1/3    flaky (dev)"), "flake row SHALL render, got: {out}");
+        assert!(
+            out.contains("PASS     0/3    skip (dev)"),
+            "a fully-skipped entry SHALL fall to the PASS label branch, got: {out}"
+        );
+        assert!(
+            out.contains("FLAKE    1/3    flaky (dev)"),
+            "flake row SHALL render, got: {out}"
+        );
     }
 
     // 8. Color injection: the same sample flake summary SHALL render with
@@ -679,9 +751,18 @@ mod tests {
             "colored render SHALL contain ANSI escapes, got: {colored:?}",
         );
         // 3. The colored render SHALL carry the category label colors.
-        assert!(colored.contains("\x1b[1;33mFLAKE"), "FLAKE row SHALL be bold-yellow, got: {colored:?}");
-        assert!(colored.contains("\x1b[1;31mFAIL "), "FAIL row SHALL be bold-red, got: {colored:?}");
-        assert!(colored.contains("\x1b[1;32mPASS "), "PASS row SHALL be bold-green, got: {colored:?}");
+        assert!(
+            colored.contains("\x1b[1;33mFLAKE"),
+            "FLAKE row SHALL be bold-yellow, got: {colored:?}"
+        );
+        assert!(
+            colored.contains("\x1b[1;31mFAIL "),
+            "FAIL row SHALL be bold-red, got: {colored:?}"
+        );
+        assert!(
+            colored.contains("\x1b[1;32mPASS "),
+            "PASS row SHALL be bold-green, got: {colored:?}"
+        );
 
         // 4. Stripping ANSI from the colored output SHALL reproduce the
         //    plain output exactly — color is purely decorative.
@@ -702,13 +783,20 @@ mod tests {
         let colored = render_flake_summary_with_color(&entries, true);
 
         assert!(plain.contains("all flows passed in every run"));
-        assert!(!plain.contains('\x1b'), "plain all-passed SHALL have no ANSI, got: {plain:?}");
+        assert!(
+            !plain.contains('\x1b'),
+            "plain all-passed SHALL have no ANSI, got: {plain:?}"
+        );
         // \x1b[2m is the DIM code wrapping the all-passed line.
         assert!(
             colored.contains("\x1b[2mall flows passed in every run\x1b[0m"),
             "colored all-passed line SHALL be dimmed, got: {colored:?}",
         );
-        assert_eq!(strip_ansi(&colored), plain, "stripping color SHALL match plain");
+        assert_eq!(
+            strip_ansi(&colored),
+            plain,
+            "stripping color SHALL match plain"
+        );
     }
 
     // Minimal ANSI stripper for the color-injection assertions above —
@@ -736,7 +824,10 @@ mod tests {
     #[test]
     fn parse_platform_override_maps_known_and_rejects_unknown() {
         // 1. Absent flag SHALL be None (no override).
-        assert_eq!(parse_platform_override(None).expect("none SHALL be Ok"), None);
+        assert_eq!(
+            parse_platform_override(None).expect("none SHALL be Ok"),
+            None
+        );
         // 2. Known values SHALL map to the matching Platform.
         assert_eq!(
             parse_platform_override(Some("android")).expect("android SHALL be Ok"),
@@ -760,7 +851,10 @@ mod tests {
     fn parse_coverage_override_maps_known_and_rejects_unknown() {
         use golem_parser::CoverageStrategy;
         // 1. Absent flag SHALL be None.
-        assert_eq!(parse_coverage_override(None).expect("none SHALL be Ok"), None);
+        assert_eq!(
+            parse_coverage_override(None).expect("none SHALL be Ok"),
+            None
+        );
         // 2. Each known strategy SHALL map to its variant.
         for (s, want) in [
             ("one", CoverageStrategy::One),
@@ -775,7 +869,8 @@ mod tests {
             );
         }
         // 3. Unknown value SHALL be a descriptive error.
-        let err = parse_coverage_override(Some("none")).expect_err("bad coverage SHALL be rejected");
+        let err =
+            parse_coverage_override(Some("none")).expect_err("bad coverage SHALL be rejected");
         assert!(
             err.contains("Unknown coverage: none")
                 && err.contains("'one', 'min', 'smart', or 'full'"),
@@ -790,7 +885,10 @@ mod tests {
         // 1. Empty (no --output) SHALL default to human streaming.
         assert!(detect_human_output(&[]), "empty outputs SHALL stream human");
         // 2. Explicit human (bare or with suboptions) SHALL stream.
-        assert!(detect_human_output(&["human".to_string()]), "bare human SHALL stream");
+        assert!(
+            detect_human_output(&["human".to_string()]),
+            "bare human SHALL stream"
+        );
         assert!(
             detect_human_output(&["human:color".to_string()]),
             "human: prefixed SHALL stream",
@@ -821,8 +919,7 @@ mod tests {
     #[test]
     fn conflict_warnings_only_when_both_flags_set() {
         // 1. rebuild + no_build SHALL warn that --no-build wins.
-        let w = rebuild_no_build_conflict_warning(true, true)
-            .expect("both build flags SHALL warn");
+        let w = rebuild_no_build_conflict_warning(true, true).expect("both build flags SHALL warn");
         assert!(
             w.contains("--no-build wins") && w.contains("[install]"),
             "rebuild/no-build warning SHALL state --no-build wins, got: {w}",
@@ -832,8 +929,8 @@ mod tests {
         assert!(rebuild_no_build_conflict_warning(false, true).is_none());
         assert!(rebuild_no_build_conflict_warning(false, false).is_none());
         // 3. record + no_record SHALL warn that --no-record wins.
-        let r = record_no_record_conflict_warning(true, true)
-            .expect("both record flags SHALL warn");
+        let r =
+            record_no_record_conflict_warning(true, true).expect("both record flags SHALL warn");
         assert!(
             r.contains("--no-record wins") && r.contains("[record]"),
             "record/no-record warning SHALL state --no-record wins, got: {r}",
@@ -872,7 +969,10 @@ mod tests {
 
         // 1. Raw flag strings SHALL pass through verbatim.
         assert_eq!(json["platform"], "ios", "platform SHALL be the raw string");
-        assert_eq!(json["coverage"], "smart", "coverage SHALL be the raw string");
+        assert_eq!(
+            json["coverage"], "smart",
+            "coverage SHALL be the raw string"
+        );
         // 2. Scalar config fields SHALL be mirrored onto the wire.
         assert_eq!(json["seed"], 42);
         assert_eq!(json["verbose"], true);
@@ -897,8 +997,14 @@ mod tests {
     fn build_config_json_absent_options_are_null() {
         let config = SuiteConfig::default();
         let json = build_config_json(&config, None, None, None, false);
-        assert!(json["platform"].is_null(), "absent --platform SHALL be null");
-        assert!(json["coverage"].is_null(), "absent --coverage SHALL be null");
+        assert!(
+            json["platform"].is_null(),
+            "absent --platform SHALL be null"
+        );
+        assert!(
+            json["coverage"].is_null(),
+            "absent --coverage SHALL be null"
+        );
         assert!(
             json["max_device_wait_ms"].is_null(),
             "absent --max-wait SHALL be null",
@@ -906,4 +1012,3 @@ mod tests {
         assert_eq!(json["include_junit"], false);
     }
 }
-

@@ -60,10 +60,13 @@ pub async fn try_connect() -> Result<UnixStream> {
 
     let mut reader = BufReader::new(&mut stream);
     let mut line = String::new();
-    tokio::time::timeout(std::time::Duration::from_secs(2), reader.read_line(&mut line))
-        .await
-        .context("ping timeout")?
-        .context("failed to read pong")?;
+    tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        reader.read_line(&mut line),
+    )
+    .await
+    .context("ping timeout")?
+    .context("failed to read pong")?;
 
     if !line.contains("pong") {
         return Err(golem_events::coded(
@@ -178,11 +181,9 @@ pub async fn start_server() -> Result<OrchestratorServer> {
 
     eprintln!("  [orchestrator] server — listening on {}", path.display());
 
-    let resource_mgr = std::sync::Arc::new(
-        golem_devices::resource_manager::ResourceManager::new(
-            golem_devices::concurrency::ConcurrencyConfig::default(),
-        ),
-    );
+    let resource_mgr = std::sync::Arc::new(golem_devices::resource_manager::ResourceManager::new(
+        golem_devices::concurrency::ConcurrencyConfig::default(),
+    ));
     let install_cache = golem_runner::installer::InstallCache::new();
 
     let active_clients = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
@@ -211,7 +212,12 @@ pub async fn start_server() -> Result<OrchestratorServer> {
         }
     });
 
-    Ok(OrchestratorServer { _handle: handle, resource_mgr, install_cache, active_clients })
+    Ok(OrchestratorServer {
+        _handle: handle,
+        resource_mgr,
+        install_cache,
+        active_clients,
+    })
 }
 
 /// Handle a single client connection.
@@ -263,7 +269,8 @@ async fn handle_client(
                         let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
                     }
                     None => {
-                        let resp = serde_json::json!({"type": "error", "message": "missing 'type' field"});
+                        let resp =
+                            serde_json::json!({"type": "error", "message": "missing 'type' field"});
                         let mut w = writer.lock().await;
                         let _ = w.write_all(format!("{}\n", resp).as_bytes()).await;
                     }
@@ -362,7 +369,10 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
     let record = cfg["record"].as_bool().unwrap_or(false);
     let no_record = cfg["no_record"].as_bool().unwrap_or(false);
     let trace = cfg["trace"].as_bool().unwrap_or(false);
-    let repeat = cfg["repeat"].as_u64().map(|n| n.clamp(1, 100) as u32).unwrap_or(1);
+    let repeat = cfg["repeat"]
+        .as_u64()
+        .map(|n| n.clamp(1, 100) as u32)
+        .unwrap_or(1);
     let max_device_wait = cfg["max_device_wait_ms"]
         .as_u64()
         .map(std::time::Duration::from_millis);
@@ -536,7 +546,9 @@ async fn handle_submit(
         Ok(report) => {
             if !no_results_for_write {
                 if let Err(e) = golem_report::output::write_results_to_dir(
-                    &report, &server_output_dir, include_junit,
+                    &report,
+                    &server_output_dir,
+                    include_junit,
                 ) {
                     eprintln!("  [orchestrator] result-file write failed: {e:#}");
                 }
@@ -658,15 +670,15 @@ pub async fn submit_and_wait(
             ));
         }
 
-        let response: serde_json::Value = serde_json::from_str(line.trim())
-            .context("invalid JSON from orchestrator")?;
+        let response: serde_json::Value =
+            serde_json::from_str(line.trim()).context("invalid JSON from orchestrator")?;
 
         match response["type"].as_str() {
             Some("event") => {
                 // Deserialize and re-emit locally.
-                if let Ok(wire) = serde_json::from_value::<golem_events::WireEvent>(
-                    response["event"].clone(),
-                ) {
+                if let Ok(wire) =
+                    serde_json::from_value::<golem_events::WireEvent>(response["event"].clone())
+                {
                     let event = wire.into_event();
                     local_tx.emit(event.device_id, event.kind);
                 }
@@ -686,7 +698,11 @@ pub async fn submit_and_wait(
                 let server_output_dir = report["output_dir"].as_str().unwrap_or("");
                 if !server_output_dir.is_empty() {
                     let include_junit = report["include_junit"].as_bool().unwrap_or(false);
-                    let formats = if include_junit { "json, toon, xml" } else { "json, toon" };
+                    let formats = if include_junit {
+                        "json, toon, xml"
+                    } else {
+                        "json, toon"
+                    };
                     let use_color = std::io::IsTerminal::is_terminal(&std::io::stderr());
                     if use_color {
                         let abs = std::fs::canonicalize(server_output_dir)
@@ -742,8 +758,7 @@ pub async fn submit_and_wait(
 fn file_uri_str(path: &str) -> String {
     let mut out = String::from("file://");
     for &c in path.as_bytes() {
-        let unreserved = c.is_ascii_alphanumeric()
-            || matches!(c, b'-' | b'.' | b'_' | b'~' | b'/');
+        let unreserved = c.is_ascii_alphanumeric() || matches!(c, b'-' | b'.' | b'_' | b'~' | b'/');
         if unreserved {
             out.push(c as char);
         } else {
@@ -820,9 +835,15 @@ mod tests {
     fn parse_submit_config_empty_object_uses_defaults() {
         let cfg = serde_json::json!({});
         let f = parse_submit_config(&cfg);
-        assert!(f.platform_override.is_none(), "absent platform SHALL be None");
+        assert!(
+            f.platform_override.is_none(),
+            "absent platform SHALL be None"
+        );
         assert!(f.seed.is_none(), "absent seed SHALL be None");
-        assert!(!f.verbose && !f.debug && !f.no_perf, "absent bools SHALL default false");
+        assert!(
+            !f.verbose && !f.debug && !f.no_perf,
+            "absent bools SHALL default false"
+        );
         assert!(
             !f.no_clean && !f.no_teardown && !f.keep_devices && !f.no_results,
             "absent bools SHALL default false"
@@ -834,10 +855,16 @@ mod tests {
             "absent output_dir SHALL default to .golem/results"
         );
         assert!(f.vars.is_empty(), "absent vars SHALL be empty");
-        assert!(f.coverage_override.is_none(), "absent coverage SHALL be None");
+        assert!(
+            f.coverage_override.is_none(),
+            "absent coverage SHALL be None"
+        );
         assert!(!f.rebuild && !f.no_build && !f.record && !f.no_record && !f.trace);
         assert_eq!(f.repeat, 1, "absent repeat SHALL default to 1");
-        assert!(f.max_device_wait.is_none(), "absent max_device_wait SHALL be None");
+        assert!(
+            f.max_device_wait.is_none(),
+            "absent max_device_wait SHALL be None"
+        );
     }
 
     // 8. Platform strings map to the matching enum; unknown strings map to None.

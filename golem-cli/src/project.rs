@@ -72,7 +72,10 @@ impl ProjectConfig {
 
 /// Walk up from `start` looking for a directory containing `golem.toml`.
 pub fn find_project_root(start: &Path) -> Option<PathBuf> {
-    let mut current = start.canonicalize().ok().or_else(|| Some(start.to_path_buf()))?;
+    let mut current = start
+        .canonicalize()
+        .ok()
+        .or_else(|| Some(start.to_path_buf()))?;
     loop {
         if current.join("golem.toml").is_file() {
             return Some(current);
@@ -107,7 +110,8 @@ bundle = "com.example.b"
 install_script = { ios = "scripts/install-b-ios.sh", android = "scripts/install-b-android.sh" }
 install_timeout_ms = 900000
 "#,
-        ).unwrap();
+        )
+        .unwrap();
         let (cfg, path) = ProjectConfig::load_from(tmp.path()).expect("load");
         assert!(path.is_some());
         assert_eq!(cfg.apps.len(), 1);
@@ -115,7 +119,10 @@ install_timeout_ms = 900000
         assert_eq!(cfg.apps[0].bundle.as_deref(), Some("com.example.b"));
         assert_eq!(cfg.apps[0].install_timeout_ms, Some(900000));
         assert_eq!(
-            cfg.apps[0].install_script.as_ref().and_then(|v| v.for_platform("ios")),
+            cfg.apps[0]
+                .install_script
+                .as_ref()
+                .and_then(|v| v.for_platform("ios")),
             Some("scripts/install-b-ios.sh")
         );
     }
@@ -132,7 +139,8 @@ install_timeout_ms = 900000
 name = "x"
 bundle = "com.x"
 "#,
-        ).unwrap();
+        )
+        .unwrap();
         let (cfg, path) = ProjectConfig::load_from(&nested).expect("load");
         assert!(path.is_some(), "SHALL find golem.toml in ancestor");
         assert_eq!(cfg.apps.len(), 1);
@@ -182,11 +190,7 @@ bundle = "com.x"
     #[test]
     fn load_parses_options_record() {
         let tmp = tempfile::tempdir().expect("tempdir");
-        std::fs::write(
-            tmp.path().join("golem.toml"),
-            "[options]\nrecord = true\n",
-        )
-        .expect("write");
+        std::fs::write(tmp.path().join("golem.toml"), "[options]\nrecord = true\n").expect("write");
         let (cfg, _) = ProjectConfig::load_from(tmp.path()).expect("load");
         assert_eq!(
             cfg.options.record,
@@ -219,12 +223,16 @@ bundle = "com.x"
             "android key SHALL parse"
         );
         assert_eq!(
-            cfg.device_settings.android.get("global.window_animation_scale"),
+            cfg.device_settings
+                .android
+                .get("global.window_animation_scale"),
             Some(&"0".to_string()),
             "second android key SHALL parse"
         );
         assert_eq!(
-            cfg.device_settings.ios.get("com_apple_keyboard.KeyboardAutocorrection"),
+            cfg.device_settings
+                .ios
+                .get("com_apple_keyboard.KeyboardAutocorrection"),
             Some(&"0".to_string()),
             "ios key SHALL parse"
         );

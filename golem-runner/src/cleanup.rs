@@ -122,22 +122,27 @@ mod tests {
 
     #[async_trait]
     impl PlatformDriver for FailableMockDriver {
-        async fn get_hierarchy(&self) -> anyhow::Result<(Element, golem_driver::common::HierarchyMeta)> {
-            Ok((Element {
-                element_type: "View".into(),
-                text: None,
-                accessibility_label: None,
-                placeholder: None,
-                enabled: true,
-                checked: false,
-                clickable: false,
-                focused: false,
-                bounds: Bounds::new(0, 0, 375, 812),
-                visible_bounds: None,
-                hit_points: vec![],
-                drawing_order: None,
-                children: vec![],
-            }, golem_driver::common::HierarchyMeta::default()))
+        async fn get_hierarchy(
+            &self,
+        ) -> anyhow::Result<(Element, golem_driver::common::HierarchyMeta)> {
+            Ok((
+                Element {
+                    element_type: "View".into(),
+                    text: None,
+                    accessibility_label: None,
+                    placeholder: None,
+                    enabled: true,
+                    checked: false,
+                    clickable: false,
+                    focused: false,
+                    bounds: Bounds::new(0, 0, 375, 812),
+                    visible_bounds: None,
+                    hit_points: vec![],
+                    drawing_order: None,
+                    children: vec![],
+                },
+                golem_driver::common::HierarchyMeta::default(),
+            ))
         }
 
         async fn tap(&self, _x: i32, _y: i32) -> anyhow::Result<()> {
@@ -155,7 +160,6 @@ mod tests {
         async fn backspace(&self, _count: u32) -> anyhow::Result<()> {
             Ok(())
         }
-
 
         async fn swipe_coords(
             &self,
@@ -255,8 +259,6 @@ mod tests {
             Ok("recording.mp4".into())
         }
 
-
-
         async fn pinch(&self, _x: i32, _y: i32, _scale: f64, _velocity: f64) -> anyhow::Result<()> {
             Ok(())
         }
@@ -296,9 +298,7 @@ mod tests {
     async fn auto_cleanup_resets_dark_mode_to_disabled() {
         let driver = FailableMockDriver::new();
         let device = test_device();
-        let options = CleanupOptions {
-            keep_devices: true,
-        };
+        let options = CleanupOptions { keep_devices: true };
 
         let result = auto_cleanup(&driver, &device, &options).await;
 
@@ -315,9 +315,7 @@ mod tests {
     async fn auto_cleanup_stops_recording() {
         let driver = FailableMockDriver::new();
         let device = test_device();
-        let options = CleanupOptions {
-            keep_devices: true,
-        };
+        let options = CleanupOptions { keep_devices: true };
 
         let result = auto_cleanup(&driver, &device, &options).await;
 
@@ -361,17 +359,12 @@ mod tests {
     async fn auto_cleanup_skips_shutdown_when_keep_devices_true() {
         let driver = FailableMockDriver::new();
         let device = test_device();
-        let options = CleanupOptions {
-            keep_devices: true,
-        };
+        let options = CleanupOptions { keep_devices: true };
 
         let result = auto_cleanup(&driver, &device, &options).await;
 
         // No shutdown warning because we skipped it
-        let has_shutdown_warning = result
-            .warnings
-            .iter()
-            .any(|w| w.contains("shutdown"));
+        let has_shutdown_warning = result.warnings.iter().any(|w| w.contains("shutdown"));
         assert!(
             !has_shutdown_warning,
             "Should not have shutdown warnings when keep_devices=true, got: {:?}",
@@ -387,9 +380,7 @@ mod tests {
             ..FailableMockDriver::new()
         };
         let device = test_device();
-        let options = CleanupOptions {
-            keep_devices: true,
-        };
+        let options = CleanupOptions { keep_devices: true };
 
         // auto_cleanup returns normally (not Err) even when reset fails
         let result = auto_cleanup(&driver, &device, &options).await;
@@ -411,9 +402,7 @@ mod tests {
             ..FailableMockDriver::new()
         };
         let device = test_device();
-        let options = CleanupOptions {
-            keep_devices: true,
-        };
+        let options = CleanupOptions { keep_devices: true };
 
         let result = auto_cleanup(&driver, &device, &options).await;
 
@@ -459,9 +448,7 @@ mod tests {
     async fn auto_cleanup_resets_location() {
         let driver = FailableMockDriver::new();
         let device = test_device();
-        let options = CleanupOptions {
-            keep_devices: true,
-        };
+        let options = CleanupOptions { keep_devices: true };
 
         let result = auto_cleanup(&driver, &device, &options).await;
 
@@ -481,9 +468,7 @@ mod tests {
             ..FailableMockDriver::new()
         };
         let device = test_device();
-        let options = CleanupOptions {
-            keep_devices: true,
-        };
+        let options = CleanupOptions { keep_devices: true };
 
         let result = auto_cleanup(&driver, &device, &options).await;
 

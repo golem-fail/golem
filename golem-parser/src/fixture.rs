@@ -184,8 +184,11 @@ mod tests {
         // The closest one is in flows/__fixtures__/user.toml
         let path = result.expect("fixture path SHALL resolve");
         assert!(
-            path.to_string_lossy().contains("flows/__fixtures__/user.toml")
-                || path.to_string_lossy().contains("flows\\__fixtures__\\user.toml"),
+            path.to_string_lossy()
+                .contains("flows/__fixtures__/user.toml")
+                || path
+                    .to_string_lossy()
+                    .contains("flows\\__fixtures__\\user.toml"),
             "Should resolve to the closest fixture, got: {}",
             path.display()
         );
@@ -283,7 +286,10 @@ mod tests {
 
         // Resolve without .toml extension
         let result = resolve_fixture_path("user", flow_dir, project_root);
-        assert!(result.is_ok(), "Should find fixture without .toml extension");
+        assert!(
+            result.is_ok(),
+            "Should find fixture without .toml extension"
+        );
     }
 
     // ---------------------------------------------------------------

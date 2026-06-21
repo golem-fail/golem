@@ -5,7 +5,9 @@ pub mod channel;
 pub mod code;
 pub mod emitter;
 
-pub use code::{clean_msg, coded, extract_code, CodeExt, CodedError, Domain, FailureCode, Severity};
+pub use code::{
+    clean_msg, coded, extract_code, CodeExt, CodedError, Domain, FailureCode, Severity,
+};
 
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
@@ -121,7 +123,9 @@ impl WireEvent {
 fn system_time_to_unix_nanos(t: SystemTime) -> u128 {
     // Pre-epoch timestamps shouldn't occur in practice; saturate to 0 so
     // we don't propagate a panic out of a serializer.
-    t.duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0)
+    t.duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0)
 }
 
 fn unix_nanos_to_system_time(nanos: u128) -> SystemTime {
@@ -164,8 +168,15 @@ pub struct PerfSnapshotData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EventKind {
     // Suite level
-    SuiteStarted { flow_count: usize },
-    SuiteFinished { duration_ms: u64, passed: usize, failed: usize, skipped: usize },
+    SuiteStarted {
+        flow_count: usize,
+    },
+    SuiteFinished {
+        duration_ms: u64,
+        passed: usize,
+        failed: usize,
+        skipped: usize,
+    },
 
     /// Diagnostic snapshot of the Plan phase output. Emitted once per suite
     /// when `--verbose` is on. All fields are pre-formatted `String`s:
@@ -230,7 +241,11 @@ pub enum EventKind {
     },
 
     // Block level
-    BlockStarted { block_name: String, block_index: usize, iteration: u32 },
+    BlockStarted {
+        block_name: String,
+        block_index: usize,
+        iteration: u32,
+    },
     BlockFinished {
         block_name: String,
         block_index: usize,
@@ -571,7 +586,9 @@ impl TreeStats {
     }
 
     pub fn merge(&mut self, other: &TreeStats) {
-        if other.fetches == 0 { return; }
+        if other.fetches == 0 {
+            return;
+        }
         self.fetches += other.fetches;
         if self.min_nodes == 0 || other.min_nodes < self.min_nodes {
             self.min_nodes = other.min_nodes;
@@ -587,7 +604,10 @@ pub enum ScrollAttemptResult {
     /// Container content advanced — real progress for a `within` scroll
     /// (the inner list/carousel moved). Not a wasted swipe.
     ContainerAdvanced,
-    Stall { count: u32, max: u32 },
+    Stall {
+        count: u32,
+        max: u32,
+    },
     BoundaryReached,
 }
 
@@ -598,7 +618,10 @@ mod tests {
     // 1. DeviceId Display writes the inner string verbatim.
     #[test]
     fn device_id_display_is_verbatim() {
-        assert_eq!(DeviceId("ios/iPhone 15 Pro".into()).to_string(), "ios/iPhone 15 Pro");
+        assert_eq!(
+            DeviceId("ios/iPhone 15 Pro".into()).to_string(),
+            "ios/iPhone 15 Pro"
+        );
         assert_eq!(DeviceId("suite".into()).to_string(), "suite");
         assert_eq!(DeviceId(String::new()).to_string(), "");
     }
@@ -700,7 +723,10 @@ mod tests {
             back.wall_time, original_wall,
             "rehydrated wall_time SHALL match the original"
         );
-        assert!(matches!(back.kind, EventKind::SuiteStarted { flow_count: 3 }));
+        assert!(matches!(
+            back.kind,
+            EventKind::SuiteStarted { flow_count: 3 }
+        ));
     }
 
     // 9. WireEvent serializes to the exact wire schema: a flat object keyed
@@ -762,7 +788,11 @@ mod tests {
     // 13. TreeStats::merge with a zero-fetch other is a no-op.
     #[test]
     fn tree_stats_merge_zero_fetch_is_noop() {
-        let mut s = TreeStats { fetches: 2, min_nodes: 10, max_nodes: 40 };
+        let mut s = TreeStats {
+            fetches: 2,
+            min_nodes: 10,
+            max_nodes: 40,
+        };
         s.merge(&TreeStats::default());
         assert_eq!(s.fetches, 2);
         assert_eq!(s.min_nodes, 10);
@@ -774,10 +804,17 @@ mod tests {
     #[test]
     fn tree_stats_merge_into_fresh_adopts_min() {
         let mut s = TreeStats::default();
-        let other = TreeStats { fetches: 3, min_nodes: 12, max_nodes: 90 };
+        let other = TreeStats {
+            fetches: 3,
+            min_nodes: 12,
+            max_nodes: 90,
+        };
         s.merge(&other);
         assert_eq!(s.fetches, 3);
-        assert_eq!(s.min_nodes, 12, "fresh target SHALL take other's min, not 0");
+        assert_eq!(
+            s.min_nodes, 12,
+            "fresh target SHALL take other's min, not 0"
+        );
         assert_eq!(s.max_nodes, 90);
     }
 
@@ -785,8 +822,16 @@ mod tests {
     //     higher max across both.
     #[test]
     fn tree_stats_merge_combines_min_max() {
-        let mut s = TreeStats { fetches: 2, min_nodes: 20, max_nodes: 50 };
-        let other = TreeStats { fetches: 4, min_nodes: 15, max_nodes: 45 };
+        let mut s = TreeStats {
+            fetches: 2,
+            min_nodes: 20,
+            max_nodes: 50,
+        };
+        let other = TreeStats {
+            fetches: 4,
+            min_nodes: 15,
+            max_nodes: 45,
+        };
         s.merge(&other);
         assert_eq!(s.fetches, 6, "fetch counts SHALL add");
         assert_eq!(s.min_nodes, 15, "merge SHALL keep the lower min");
@@ -797,8 +842,16 @@ mod tests {
     //     larger.
     #[test]
     fn tree_stats_merge_keeps_smaller_existing_min() {
-        let mut s = TreeStats { fetches: 1, min_nodes: 5, max_nodes: 5 };
-        let other = TreeStats { fetches: 1, min_nodes: 100, max_nodes: 200 };
+        let mut s = TreeStats {
+            fetches: 1,
+            min_nodes: 5,
+            max_nodes: 5,
+        };
+        let other = TreeStats {
+            fetches: 1,
+            min_nodes: 100,
+            max_nodes: 200,
+        };
         s.merge(&other);
         assert_eq!(s.min_nodes, 5, "existing smaller min SHALL be preserved");
         assert_eq!(s.max_nodes, 200);
@@ -822,7 +875,11 @@ mod tests {
             duration_ms: 1234,
             retry_count: 2,
             screenshot_path: Some("/tmp/shot.png".into()),
-            tree_stats: TreeStats { fetches: 3, min_nodes: 10, max_nodes: 20 },
+            tree_stats: TreeStats {
+                fetches: 3,
+                min_nodes: 10,
+                max_nodes: 20,
+            },
         };
         let json = serde_json::to_string(&kind).expect("serialize SHALL succeed");
         assert_eq!(
@@ -832,12 +889,20 @@ mod tests {
         );
         let back: EventKind = serde_json::from_str(&json).expect("deserialize SHALL succeed");
         match back {
-            EventKind::StepFinished { global_step_index, retry_count, outcome, .. } => {
+            EventKind::StepFinished {
+                global_step_index,
+                retry_count,
+                outcome,
+                ..
+            } => {
                 assert_eq!(global_step_index, 7);
                 assert_eq!(retry_count, 2);
                 assert!(matches!(
                     outcome,
-                    StepOutcome::Failed { code: FailureCode::FlowElementNotFound, .. }
+                    StepOutcome::Failed {
+                        code: FailureCode::FlowElementNotFound,
+                        ..
+                    }
                 ));
             }
             other => panic!("expected StepFinished, got {other:?}"),
@@ -870,10 +935,15 @@ mod tests {
         );
         let back: SubstepEvent = serde_json::from_str(&json).expect("deserialize SHALL succeed");
         match back {
-            SubstepEvent::ScrollAttempt { from, to, result, .. } => {
+            SubstepEvent::ScrollAttempt {
+                from, to, result, ..
+            } => {
                 assert_eq!(from.x, 10);
                 assert_eq!(to.y, 50);
-                assert!(matches!(result, ScrollAttemptResult::Stall { count: 2, max: 3 }));
+                assert!(matches!(
+                    result,
+                    ScrollAttemptResult::Stall { count: 2, max: 3 }
+                ));
             }
             other => panic!("expected ScrollAttempt, got {other:?}"),
         }

@@ -2,13 +2,13 @@
 #![deny(clippy::unwrap_used)]
 
 pub mod accumulator;
+pub mod flake;
 pub mod human;
 pub mod json;
 pub mod junit;
 pub mod output;
 pub mod stream;
 pub mod toon;
-pub mod flake;
 
 use serde::Serialize;
 
@@ -135,65 +135,190 @@ pub enum SubstepDetail {
 impl From<&golem_events::SubstepEvent> for SubstepDetail {
     fn from(event: &golem_events::SubstepEvent) -> Self {
         match event {
-            golem_events::SubstepEvent::ElementResolved { selector, bounds, tap_point } =>
-                SubstepDetail::ElementResolved { selector: selector.clone(), bounds: *bounds, tap_point: *tap_point },
-            golem_events::SubstepEvent::ElementNotFound { selector, timeout_ms } =>
-                SubstepDetail::ElementNotFound { selector: selector.clone(), timeout_ms: *timeout_ms },
-            golem_events::SubstepEvent::Tap { point, element_bounds } =>
-                SubstepDetail::Tap { point: *point, element_bounds: *element_bounds },
-            golem_events::SubstepEvent::DoubleTap { point, element_bounds } =>
-                SubstepDetail::DoubleTap { point: *point, element_bounds: *element_bounds },
-            golem_events::SubstepEvent::LongPress { point, duration_ms, element_bounds: _ } =>
-                SubstepDetail::LongPress { point: *point, duration_ms: *duration_ms },
-            golem_events::SubstepEvent::TextInput { text, field_bounds } =>
-                SubstepDetail::TextInput { text: text.clone(), field_bounds: *field_bounds },
-            golem_events::SubstepEvent::Backspace { count } =>
-                SubstepDetail::Backspace { count: *count },
-            golem_events::SubstepEvent::Swipe { from, to, duration_ms: _ } =>
-                SubstepDetail::Swipe { from: *from, to: *to },
-            golem_events::SubstepEvent::ScrollStarted { selector, direction } =>
-                SubstepDetail::ScrollStarted { selector: selector.clone(), direction: direction.clone() },
-            golem_events::SubstepEvent::ScrollAttempt { attempt, direction, strategy_index, container, from, to, result, tree_stats } =>
-                SubstepDetail::ScrollAttempt {
-                    attempt: *attempt, direction: direction.clone(), strategy_index: *strategy_index,
-                    container: *container,
-                    from: *from, to: *to, result: format!("{result:?}"),
-                    tree_stats: *tree_stats,
-                },
-            golem_events::SubstepEvent::ScrollFound { selector, position, total_attempts } =>
-                SubstepDetail::ScrollFound { selector: selector.clone(), position: *position, total_attempts: *total_attempts },
-            golem_events::SubstepEvent::ScrollDirectionReversed { to_direction, reason } =>
-                SubstepDetail::ScrollDirectionReversed { to_direction: to_direction.clone(), reason: reason.clone() },
-            golem_events::SubstepEvent::ScrollStrategySwitch { to_index, reason } =>
-                SubstepDetail::ScrollStrategySwitch { to_index: *to_index, reason: reason.clone() },
-            golem_events::SubstepEvent::AssertionMatch { expected, actual, element_bounds } =>
-                SubstepDetail::AssertionMatch { expected: expected.clone(), actual: actual.clone(), element_bounds: *element_bounds },
-            golem_events::SubstepEvent::AssertionMismatch { expected, actual } =>
-                SubstepDetail::AssertionMismatch { expected: expected.clone(), actual: actual.clone() },
-            golem_events::SubstepEvent::RetryAttempt { attempt, max, delay_ms, error } =>
-                SubstepDetail::RetryAttempt { attempt: *attempt, max: *max, delay_ms: *delay_ms, error: error.clone() },
-            golem_events::SubstepEvent::HttpRequest { method, url, status, duration_ms } =>
-                SubstepDetail::HttpRequest { method: method.clone(), url: url.clone(), status: *status, duration_ms: *duration_ms },
-            golem_events::SubstepEvent::BashCommand { command, exit_code, duration_ms } =>
-                SubstepDetail::BashCommand { command: command.clone(), exit_code: *exit_code, duration_ms: *duration_ms },
-            golem_events::SubstepEvent::AppLaunch { bundle, duration_ms } =>
-                SubstepDetail::AppLaunch { bundle: bundle.clone(), duration_ms: *duration_ms },
-            golem_events::SubstepEvent::AppStop { bundle } =>
-                SubstepDetail::AppStop { bundle: bundle.clone() },
-            golem_events::SubstepEvent::PostSettle { action, duration_ms, stable } =>
-                SubstepDetail::PostSettle { action: action.clone(), duration_ms: *duration_ms, stable: *stable },
-            golem_events::SubstepEvent::DriverWarning { message } =>
-                SubstepDetail::DriverWarning { message: message.clone() },
-            golem_events::SubstepEvent::Screenshot { path } =>
-                SubstepDetail::Screenshot { path: path.clone() },
-            golem_events::SubstepEvent::BarrierAborted { step_count } =>
-                SubstepDetail::BarrierAborted { step_count: *step_count },
-            golem_events::SubstepEvent::AlertFound { text } =>
-                SubstepDetail::AssertionMatch {
-                    expected: "alert".to_string(),
-                    actual: text.clone().unwrap_or_else(|| "alert present".to_string()),
-                    element_bounds: None,
-                },
+            golem_events::SubstepEvent::ElementResolved {
+                selector,
+                bounds,
+                tap_point,
+            } => SubstepDetail::ElementResolved {
+                selector: selector.clone(),
+                bounds: *bounds,
+                tap_point: *tap_point,
+            },
+            golem_events::SubstepEvent::ElementNotFound {
+                selector,
+                timeout_ms,
+            } => SubstepDetail::ElementNotFound {
+                selector: selector.clone(),
+                timeout_ms: *timeout_ms,
+            },
+            golem_events::SubstepEvent::Tap {
+                point,
+                element_bounds,
+            } => SubstepDetail::Tap {
+                point: *point,
+                element_bounds: *element_bounds,
+            },
+            golem_events::SubstepEvent::DoubleTap {
+                point,
+                element_bounds,
+            } => SubstepDetail::DoubleTap {
+                point: *point,
+                element_bounds: *element_bounds,
+            },
+            golem_events::SubstepEvent::LongPress {
+                point,
+                duration_ms,
+                element_bounds: _,
+            } => SubstepDetail::LongPress {
+                point: *point,
+                duration_ms: *duration_ms,
+            },
+            golem_events::SubstepEvent::TextInput { text, field_bounds } => {
+                SubstepDetail::TextInput {
+                    text: text.clone(),
+                    field_bounds: *field_bounds,
+                }
+            }
+            golem_events::SubstepEvent::Backspace { count } => {
+                SubstepDetail::Backspace { count: *count }
+            }
+            golem_events::SubstepEvent::Swipe {
+                from,
+                to,
+                duration_ms: _,
+            } => SubstepDetail::Swipe {
+                from: *from,
+                to: *to,
+            },
+            golem_events::SubstepEvent::ScrollStarted {
+                selector,
+                direction,
+            } => SubstepDetail::ScrollStarted {
+                selector: selector.clone(),
+                direction: direction.clone(),
+            },
+            golem_events::SubstepEvent::ScrollAttempt {
+                attempt,
+                direction,
+                strategy_index,
+                container,
+                from,
+                to,
+                result,
+                tree_stats,
+            } => SubstepDetail::ScrollAttempt {
+                attempt: *attempt,
+                direction: direction.clone(),
+                strategy_index: *strategy_index,
+                container: *container,
+                from: *from,
+                to: *to,
+                result: format!("{result:?}"),
+                tree_stats: *tree_stats,
+            },
+            golem_events::SubstepEvent::ScrollFound {
+                selector,
+                position,
+                total_attempts,
+            } => SubstepDetail::ScrollFound {
+                selector: selector.clone(),
+                position: *position,
+                total_attempts: *total_attempts,
+            },
+            golem_events::SubstepEvent::ScrollDirectionReversed {
+                to_direction,
+                reason,
+            } => SubstepDetail::ScrollDirectionReversed {
+                to_direction: to_direction.clone(),
+                reason: reason.clone(),
+            },
+            golem_events::SubstepEvent::ScrollStrategySwitch { to_index, reason } => {
+                SubstepDetail::ScrollStrategySwitch {
+                    to_index: *to_index,
+                    reason: reason.clone(),
+                }
+            }
+            golem_events::SubstepEvent::AssertionMatch {
+                expected,
+                actual,
+                element_bounds,
+            } => SubstepDetail::AssertionMatch {
+                expected: expected.clone(),
+                actual: actual.clone(),
+                element_bounds: *element_bounds,
+            },
+            golem_events::SubstepEvent::AssertionMismatch { expected, actual } => {
+                SubstepDetail::AssertionMismatch {
+                    expected: expected.clone(),
+                    actual: actual.clone(),
+                }
+            }
+            golem_events::SubstepEvent::RetryAttempt {
+                attempt,
+                max,
+                delay_ms,
+                error,
+            } => SubstepDetail::RetryAttempt {
+                attempt: *attempt,
+                max: *max,
+                delay_ms: *delay_ms,
+                error: error.clone(),
+            },
+            golem_events::SubstepEvent::HttpRequest {
+                method,
+                url,
+                status,
+                duration_ms,
+            } => SubstepDetail::HttpRequest {
+                method: method.clone(),
+                url: url.clone(),
+                status: *status,
+                duration_ms: *duration_ms,
+            },
+            golem_events::SubstepEvent::BashCommand {
+                command,
+                exit_code,
+                duration_ms,
+            } => SubstepDetail::BashCommand {
+                command: command.clone(),
+                exit_code: *exit_code,
+                duration_ms: *duration_ms,
+            },
+            golem_events::SubstepEvent::AppLaunch {
+                bundle,
+                duration_ms,
+            } => SubstepDetail::AppLaunch {
+                bundle: bundle.clone(),
+                duration_ms: *duration_ms,
+            },
+            golem_events::SubstepEvent::AppStop { bundle } => SubstepDetail::AppStop {
+                bundle: bundle.clone(),
+            },
+            golem_events::SubstepEvent::PostSettle {
+                action,
+                duration_ms,
+                stable,
+            } => SubstepDetail::PostSettle {
+                action: action.clone(),
+                duration_ms: *duration_ms,
+                stable: *stable,
+            },
+            golem_events::SubstepEvent::DriverWarning { message } => SubstepDetail::DriverWarning {
+                message: message.clone(),
+            },
+            golem_events::SubstepEvent::Screenshot { path } => {
+                SubstepDetail::Screenshot { path: path.clone() }
+            }
+            golem_events::SubstepEvent::BarrierAborted { step_count } => {
+                SubstepDetail::BarrierAborted {
+                    step_count: *step_count,
+                }
+            }
+            golem_events::SubstepEvent::AlertFound { text } => SubstepDetail::AssertionMatch {
+                expected: "alert".to_string(),
+                actual: text.clone().unwrap_or_else(|| "alert present".to_string()),
+                element_bounds: None,
+            },
         }
     }
 }
@@ -238,9 +363,15 @@ pub enum StepOutcome {
     /// Step completed successfully.
     Success,
     /// Step completed with a warning.
-    Warning { message: String, code: golem_events::FailureCode },
+    Warning {
+        message: String,
+        code: golem_events::FailureCode,
+    },
     /// Step failed with an error message.
-    Failed { message: String, code: golem_events::FailureCode },
+    Failed {
+        message: String,
+        code: golem_events::FailureCode,
+    },
     /// Step was skipped.
     Skipped,
 }
@@ -462,11 +593,19 @@ mod tests {
     fn tap_with_element_bounds_converts_correctly() {
         let event = SubstepEvent::Tap {
             point: Point { x: 150, y: 300 },
-            element_bounds: Some(Rect { x: 100, y: 280, width: 100, height: 44 }),
+            element_bounds: Some(Rect {
+                x: 100,
+                y: 280,
+                width: 100,
+                height: 44,
+            }),
         };
         let detail = SubstepDetail::from(&event);
         match detail {
-            SubstepDetail::Tap { point, element_bounds } => {
+            SubstepDetail::Tap {
+                point,
+                element_bounds,
+            } => {
                 assert_eq!(point.x, 150, "SHALL preserve tap point x");
                 assert_eq!(point.y, 300, "SHALL preserve tap point y");
                 let bounds = element_bounds.expect("SHALL preserve element_bounds");
@@ -483,12 +622,21 @@ mod tests {
     fn element_resolved_preserves_bounds_and_tap_point() {
         let event = SubstepEvent::ElementResolved {
             selector: "text=Submit".into(),
-            bounds: Rect { x: 20, y: 400, width: 200, height: 50 },
+            bounds: Rect {
+                x: 20,
+                y: 400,
+                width: 200,
+                height: 50,
+            },
             tap_point: Point { x: 120, y: 425 },
         };
         let detail = SubstepDetail::from(&event);
         match detail {
-            SubstepDetail::ElementResolved { selector, bounds, tap_point } => {
+            SubstepDetail::ElementResolved {
+                selector,
+                bounds,
+                tap_point,
+            } => {
                 assert_eq!(selector, "text=Submit", "SHALL preserve selector");
                 assert_eq!(bounds.x, 20, "SHALL preserve bounds.x");
                 assert_eq!(bounds.width, 200, "SHALL preserve bounds.width");
@@ -508,7 +656,11 @@ mod tests {
         };
         let detail = SubstepDetail::from(&event);
         match detail {
-            SubstepDetail::ScrollFound { selector, position, total_attempts } => {
+            SubstepDetail::ScrollFound {
+                selector,
+                position,
+                total_attempts,
+            } => {
                 assert_eq!(selector, "text=Price", "SHALL preserve selector");
                 assert_eq!(position.x, 200, "SHALL preserve position.x");
                 assert_eq!(position.y, 800, "SHALL preserve position.y");
@@ -522,7 +674,12 @@ mod tests {
     fn text_input_preserves_text() {
         let event = SubstepEvent::TextInput {
             text: "hello@example.com".into(),
-            field_bounds: Some(Rect { x: 10, y: 100, width: 300, height: 40 }),
+            field_bounds: Some(Rect {
+                x: 10,
+                y: 100,
+                width: 300,
+                height: 40,
+            }),
         };
         let detail = SubstepDetail::from(&event);
         match detail {
@@ -542,7 +699,10 @@ mod tests {
         };
         let detail = SubstepDetail::from(&event);
         match detail {
-            SubstepDetail::AppLaunch { bundle, duration_ms } => {
+            SubstepDetail::AppLaunch {
+                bundle,
+                duration_ms,
+            } => {
                 assert_eq!(bundle, "com.example.app", "SHALL preserve bundle");
                 assert_eq!(duration_ms, 1234, "SHALL preserve duration_ms");
             }
@@ -558,7 +718,10 @@ mod tests {
         };
         let detail = SubstepDetail::from(&event);
         match detail {
-            SubstepDetail::ElementNotFound { selector, timeout_ms } => {
+            SubstepDetail::ElementNotFound {
+                selector,
+                timeout_ms,
+            } => {
                 assert_eq!(selector, "text=Ghost", "SHALL preserve selector");
                 assert_eq!(timeout_ms, 10000, "SHALL preserve timeout_ms");
             }
@@ -573,9 +736,16 @@ mod tests {
         };
         let detail = SubstepDetail::from(&event);
         match detail {
-            SubstepDetail::AssertionMatch { expected, actual, element_bounds } => {
+            SubstepDetail::AssertionMatch {
+                expected,
+                actual,
+                element_bounds,
+            } => {
                 assert_eq!(expected, "alert", "SHALL set expected to 'alert'");
-                assert_eq!(actual, "Delete this item?", "SHALL pass alert text as actual");
+                assert_eq!(
+                    actual, "Delete this item?",
+                    "SHALL pass alert text as actual"
+                );
                 assert!(element_bounds.is_none(), "SHALL set element_bounds to None");
             }
             other => panic!("SHALL produce AssertionMatch variant, got {other:?}"),
@@ -588,8 +758,10 @@ mod tests {
         let detail = SubstepDetail::from(&event);
         match detail {
             SubstepDetail::AssertionMatch { actual, .. } => {
-                assert_eq!(actual, "alert present",
-                    "SHALL use 'alert present' as default when text is None");
+                assert_eq!(
+                    actual, "alert present",
+                    "SHALL use 'alert present' as default when text is None"
+                );
             }
             other => panic!("SHALL produce AssertionMatch variant, got {other:?}"),
         }
@@ -603,7 +775,10 @@ mod tests {
         };
         let detail = SubstepDetail::from(&event);
         match detail {
-            SubstepDetail::Tap { point, element_bounds } => {
+            SubstepDetail::Tap {
+                point,
+                element_bounds,
+            } => {
                 assert_eq!(point.x, 50);
                 assert_eq!(point.y, 60);
                 assert!(element_bounds.is_none(), "SHALL preserve None bounds");
@@ -620,7 +795,12 @@ mod tests {
         let event = SubstepEvent::LongPress {
             point: Point { x: 70, y: 90 },
             duration_ms: 800,
-            element_bounds: Some(Rect { x: 1, y: 2, width: 3, height: 4 }),
+            element_bounds: Some(Rect {
+                x: 1,
+                y: 2,
+                width: 3,
+                height: 4,
+            }),
         };
         match SubstepDetail::from(&event) {
             SubstepDetail::LongPress { point, duration_ms } => {
@@ -661,7 +841,10 @@ mod tests {
             element_bounds: None,
         };
         match SubstepDetail::from(&event) {
-            SubstepDetail::DoubleTap { point, element_bounds } => {
+            SubstepDetail::DoubleTap {
+                point,
+                element_bounds,
+            } => {
                 assert_eq!(point.x, 5, "SHALL preserve point.x");
                 assert_eq!(point.y, 6, "SHALL preserve point.y");
                 assert!(element_bounds.is_none(), "SHALL preserve None bounds");
@@ -683,11 +866,22 @@ mod tests {
             from: Point { x: 100, y: 700 },
             to: Point { x: 100, y: 300 },
             result: golem_events::ScrollAttemptResult::Stall { count: 2, max: 3 },
-            tree_stats: golem_events::TreeStats { fetches: 4, min_nodes: 10, max_nodes: 90 },
+            tree_stats: golem_events::TreeStats {
+                fetches: 4,
+                min_nodes: 10,
+                max_nodes: 90,
+            },
         };
         match SubstepDetail::from(&event) {
             SubstepDetail::ScrollAttempt {
-                attempt, direction, strategy_index, container, from, to, result, tree_stats,
+                attempt,
+                direction,
+                strategy_index,
+                container,
+                from,
+                to,
+                result,
+                tree_stats,
             } => {
                 assert_eq!(attempt, 3, "SHALL preserve attempt");
                 assert_eq!(direction, "down", "SHALL preserve direction");
@@ -695,11 +889,19 @@ mod tests {
                 assert!(!container, "SHALL preserve container flag");
                 assert_eq!(from.y, 700, "SHALL preserve from.y");
                 assert_eq!(to.y, 300, "SHALL preserve to.y");
-                assert_eq!(result, "Stall { count: 2, max: 3 }",
-                    "SHALL Debug-format the ScrollAttemptResult into result");
+                assert_eq!(
+                    result, "Stall { count: 2, max: 3 }",
+                    "SHALL Debug-format the ScrollAttemptResult into result"
+                );
                 assert_eq!(tree_stats.fetches, 4, "SHALL preserve tree_stats.fetches");
-                assert_eq!(tree_stats.min_nodes, 10, "SHALL preserve tree_stats.min_nodes");
-                assert_eq!(tree_stats.max_nodes, 90, "SHALL preserve tree_stats.max_nodes");
+                assert_eq!(
+                    tree_stats.min_nodes, 10,
+                    "SHALL preserve tree_stats.min_nodes"
+                );
+                assert_eq!(
+                    tree_stats.max_nodes, 90,
+                    "SHALL preserve tree_stats.max_nodes"
+                );
             }
             other => panic!("SHALL produce ScrollAttempt variant, got {other:?}"),
         }
@@ -721,8 +923,10 @@ mod tests {
         };
         match SubstepDetail::from(&event) {
             SubstepDetail::ScrollAttempt { result, .. } => {
-                assert_eq!(result, "BoundaryReached",
-                    "SHALL Debug-format a fieldless result to its variant name");
+                assert_eq!(
+                    result, "BoundaryReached",
+                    "SHALL Debug-format a fieldless result to its variant name"
+                );
             }
             other => panic!("SHALL produce ScrollAttempt variant, got {other:?}"),
         }
@@ -740,11 +944,18 @@ mod tests {
         match SubstepDetail::from(&some) {
             SubstepDetail::AssertionMismatch { expected, actual } => {
                 assert_eq!(expected, "Welcome", "SHALL preserve expected");
-                assert_eq!(actual.as_deref(), Some("Goodbye"), "SHALL preserve Some actual");
+                assert_eq!(
+                    actual.as_deref(),
+                    Some("Goodbye"),
+                    "SHALL preserve Some actual"
+                );
             }
             other => panic!("SHALL produce AssertionMismatch variant, got {other:?}"),
         }
-        let none = SubstepEvent::AssertionMismatch { expected: "X".into(), actual: None };
+        let none = SubstepEvent::AssertionMismatch {
+            expected: "X".into(),
+            actual: None,
+        };
         match SubstepDetail::from(&none) {
             SubstepDetail::AssertionMismatch { actual, .. } => {
                 assert!(actual.is_none(), "SHALL preserve None actual");
@@ -763,7 +974,12 @@ mod tests {
             error: "timeout".into(),
         };
         match SubstepDetail::from(&event) {
-            SubstepDetail::RetryAttempt { attempt, max, delay_ms, error } => {
+            SubstepDetail::RetryAttempt {
+                attempt,
+                max,
+                delay_ms,
+                error,
+            } => {
                 assert_eq!(attempt, 2, "SHALL preserve attempt");
                 assert_eq!(max, 5, "SHALL preserve max");
                 assert_eq!(delay_ms, 1500, "SHALL preserve delay_ms");
@@ -784,7 +1000,12 @@ mod tests {
             duration_ms: 42,
         };
         match SubstepDetail::from(&event) {
-            SubstepDetail::HttpRequest { method, url, status, duration_ms } => {
+            SubstepDetail::HttpRequest {
+                method,
+                url,
+                status,
+                duration_ms,
+            } => {
                 assert_eq!(method, "POST", "SHALL preserve method");
                 assert_eq!(url, "https://api.example.com/charge", "SHALL preserve url");
                 assert!(status.is_none(), "SHALL preserve None status");
@@ -803,7 +1024,11 @@ mod tests {
             duration_ms: 7,
         };
         match SubstepDetail::from(&event) {
-            SubstepDetail::BashCommand { command, exit_code, duration_ms } => {
+            SubstepDetail::BashCommand {
+                command,
+                exit_code,
+                duration_ms,
+            } => {
                 assert_eq!(command, "echo hi", "SHALL preserve command");
                 assert_eq!(exit_code, Some(0), "SHALL preserve exit_code");
                 assert_eq!(duration_ms, 7, "SHALL preserve duration_ms");
@@ -831,25 +1056,34 @@ mod tests {
     #[test]
     fn string_and_scalar_variants_map_one_to_one() {
         match SubstepDetail::from(&SubstepEvent::ScrollStarted {
-            selector: "text=Foo".into(), direction: "down".into(),
+            selector: "text=Foo".into(),
+            direction: "down".into(),
         }) {
-            SubstepDetail::ScrollStarted { selector, direction } => {
+            SubstepDetail::ScrollStarted {
+                selector,
+                direction,
+            } => {
                 assert_eq!(selector, "text=Foo");
                 assert_eq!(direction, "down");
             }
             other => panic!("SHALL produce ScrollStarted, got {other:?}"),
         }
         match SubstepDetail::from(&SubstepEvent::ScrollDirectionReversed {
-            to_direction: "up".into(), reason: "boundary".into(),
+            to_direction: "up".into(),
+            reason: "boundary".into(),
         }) {
-            SubstepDetail::ScrollDirectionReversed { to_direction, reason } => {
+            SubstepDetail::ScrollDirectionReversed {
+                to_direction,
+                reason,
+            } => {
                 assert_eq!(to_direction, "up");
                 assert_eq!(reason, "boundary");
             }
             other => panic!("SHALL produce ScrollDirectionReversed, got {other:?}"),
         }
         match SubstepDetail::from(&SubstepEvent::ScrollStrategySwitch {
-            to_index: 3, reason: "stall".into(),
+            to_index: 3,
+            reason: "stall".into(),
         }) {
             SubstepDetail::ScrollStrategySwitch { to_index, reason } => {
                 assert_eq!(to_index, 3);
@@ -858,10 +1092,20 @@ mod tests {
             other => panic!("SHALL produce ScrollStrategySwitch, got {other:?}"),
         }
         match SubstepDetail::from(&SubstepEvent::AssertionMatch {
-            expected: "A".into(), actual: "A".into(),
-            element_bounds: Some(Rect { x: 1, y: 1, width: 1, height: 1 }),
+            expected: "A".into(),
+            actual: "A".into(),
+            element_bounds: Some(Rect {
+                x: 1,
+                y: 1,
+                width: 1,
+                height: 1,
+            }),
         }) {
-            SubstepDetail::AssertionMatch { expected, actual, element_bounds } => {
+            SubstepDetail::AssertionMatch {
+                expected,
+                actual,
+                element_bounds,
+            } => {
                 assert_eq!(expected, "A");
                 assert_eq!(actual, "A");
                 assert!(element_bounds.is_some());
@@ -869,24 +1113,36 @@ mod tests {
             other => panic!("SHALL produce AssertionMatch, got {other:?}"),
         }
         match SubstepDetail::from(&SubstepEvent::PostSettle {
-            action: "tap".into(), duration_ms: 12, stable: true,
+            action: "tap".into(),
+            duration_ms: 12,
+            stable: true,
         }) {
-            SubstepDetail::PostSettle { action, duration_ms, stable } => {
+            SubstepDetail::PostSettle {
+                action,
+                duration_ms,
+                stable,
+            } => {
                 assert_eq!(action, "tap");
                 assert_eq!(duration_ms, 12);
                 assert!(stable);
             }
             other => panic!("SHALL produce PostSettle, got {other:?}"),
         }
-        match SubstepDetail::from(&SubstepEvent::AppStop { bundle: "com.x".into() }) {
+        match SubstepDetail::from(&SubstepEvent::AppStop {
+            bundle: "com.x".into(),
+        }) {
             SubstepDetail::AppStop { bundle } => assert_eq!(bundle, "com.x"),
             other => panic!("SHALL produce AppStop, got {other:?}"),
         }
-        match SubstepDetail::from(&SubstepEvent::DriverWarning { message: "slow".into() }) {
+        match SubstepDetail::from(&SubstepEvent::DriverWarning {
+            message: "slow".into(),
+        }) {
             SubstepDetail::DriverWarning { message } => assert_eq!(message, "slow"),
             other => panic!("SHALL produce DriverWarning, got {other:?}"),
         }
-        match SubstepDetail::from(&SubstepEvent::Screenshot { path: "/tmp/a.png".into() }) {
+        match SubstepDetail::from(&SubstepEvent::Screenshot {
+            path: "/tmp/a.png".into(),
+        }) {
             SubstepDetail::Screenshot { path } => assert_eq!(path, "/tmp/a.png"),
             other => panic!("SHALL produce Screenshot, got {other:?}"),
         }
@@ -907,16 +1163,25 @@ mod tests {
         };
         let v = serde_json::to_value(&none).expect("SHALL serialize Tap");
         assert_eq!(v["type"], "tap", "SHALL tag with snake_case variant name");
-        assert!(v.get("element_bounds").is_none(),
-            "SHALL omit a None element_bounds entirely");
+        assert!(
+            v.get("element_bounds").is_none(),
+            "SHALL omit a None element_bounds entirely"
+        );
 
         let some = SubstepDetail::Tap {
             point: Point { x: 1, y: 2 },
-            element_bounds: Some(Rect { x: 0, y: 0, width: 10, height: 10 }),
+            element_bounds: Some(Rect {
+                x: 0,
+                y: 0,
+                width: 10,
+                height: 10,
+            }),
         };
         let v = serde_json::to_value(&some).expect("SHALL serialize Tap");
-        assert!(v.get("element_bounds").is_some(),
-            "SHALL keep a Some element_bounds");
+        assert!(
+            v.get("element_bounds").is_some(),
+            "SHALL keep a Some element_bounds"
+        );
     }
 
     // 26. The multi-word variant ElementNotFound serializes its tag in
@@ -928,8 +1193,10 @@ mod tests {
             timeout_ms: 5000,
         };
         let v = serde_json::to_value(&d).expect("SHALL serialize ElementNotFound");
-        assert_eq!(v["type"], "element_not_found",
-            "SHALL render multi-word variant tag in snake_case");
+        assert_eq!(
+            v["type"], "element_not_found",
+            "SHALL render multi-word variant tag in snake_case"
+        );
         assert_eq!(v["timeout_ms"], 5000, "SHALL include scalar fields");
     }
 }

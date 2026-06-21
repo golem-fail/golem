@@ -259,17 +259,14 @@ fn resolve_full(
         }
 
         // Find matching available devices that aren't already selected, sorted by preference.
-        let selected_udids: HashSet<&str> =
-            result.iter().map(|r| r.device.udid.as_str()).collect();
+        let selected_udids: HashSet<&str> = result.iter().map(|r| r.device.udid.as_str()).collect();
 
         let mut candidates: Vec<&DeviceInfo> = available
             .iter()
             .filter(|d| !selected_udids.contains(d.udid.as_str()))
             .filter(|d| {
                 let os_ok = match os_opt {
-                    Some(os_str) => {
-                        device_satisfies(d, &Requirement::OsVersion((*os_str).clone()))
-                    }
+                    Some(os_str) => device_satisfies(d, &Requirement::OsVersion((*os_str).clone())),
                     None => true,
                 };
                 let dt_ok = match dt_opt {
@@ -292,9 +289,10 @@ fn resolve_full(
         } else if requires_physical(os_opt, dt_opt, available) && options.ignore_missing_physical {
             // Physical device required but not connected -- skip silently.
             continue;
-        } else if let (true, Some(synthetic)) =
-            (options.create_if_missing, make_synthetic_device(os_opt, dt_opt))
-        {
+        } else if let (true, Some(synthetic)) = (
+            options.create_if_missing,
+            make_synthetic_device(os_opt, dt_opt),
+        ) {
             result.push(ResolvedDevice {
                 device: synthetic,
                 apps: Vec::new(),
@@ -345,8 +343,7 @@ fn resolve_min_coverage(
     }
 
     // Greedy set cover loop.
-    let selected_udids: HashSet<String> =
-        result.iter().map(|r| r.device.udid.clone()).collect();
+    let selected_udids: HashSet<String> = result.iter().map(|r| r.device.udid.clone()).collect();
 
     // Build a pool of candidates (available devices not already selected),
     // sorted by state preference so ties favor better states.
@@ -458,7 +455,9 @@ fn uncovered_reqs_are_physical_only(reqs: &[&Requirement], available: &[DeviceIn
     // For simplicity: if no available device (including virtual) satisfies any of the
     // uncovered reqs, and the constraint could reference a physical device, treat as physical.
     for req in reqs {
-        let any_virtual_match = available.iter().any(|d| !d.physical && device_satisfies(d, req));
+        let any_virtual_match = available
+            .iter()
+            .any(|d| !d.physical && device_satisfies(d, req));
         if any_virtual_match {
             return false;
         }
@@ -611,7 +610,13 @@ mod tests {
     #[test]
     fn single_explicit_device_by_name() {
         let available = vec![
-            make_device("iPhone 15 Pro", "uid-1", Platform::Ios, DeviceType::Phone, 18),
+            make_device(
+                "iPhone 15 Pro",
+                "uid-1",
+                Platform::Ios,
+                DeviceType::Phone,
+                18,
+            ),
             make_device("iPad Air", "uid-2", Platform::Ios, DeviceType::Tablet, 18),
         ];
         let constraints = vec![DeviceConstraint {
@@ -642,7 +647,8 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].device.os_major, 18);
     }
@@ -661,7 +667,8 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].device.device_type, DeviceType::Tablet);
     }
@@ -681,7 +688,8 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
         assert_eq!(result.len(), 2);
         let majors: HashSet<u32> = result.iter().map(|r| r.device.os_major).collect();
         assert!(majors.contains(&17));
@@ -702,7 +710,8 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
         assert_eq!(result.len(), 2);
         let types: HashSet<DeviceType> = result.iter().map(|r| r.device.device_type).collect();
         assert!(types.contains(&DeviceType::Phone));
@@ -729,7 +738,8 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
         assert_eq!(result.len(), 2);
 
         // Verify all requirements are satisfied.
@@ -763,7 +773,8 @@ mod tests {
             expand: ExpandMode::Full,
         }];
 
-        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
         // 2 OS versions x 2 types = 4 devices
         assert_eq!(result.len(), 4);
     }
@@ -775,7 +786,13 @@ mod tests {
         // Second constraint needs ios:17, ios:18, phone.
         // iPhone 15 Pro already covers ios:18 and phone, so only need one more for ios:17.
         let available = vec![
-            make_device("iPhone 15 Pro", "uid-1", Platform::Ios, DeviceType::Phone, 18),
+            make_device(
+                "iPhone 15 Pro",
+                "uid-1",
+                Platform::Ios,
+                DeviceType::Phone,
+                18,
+            ),
             make_device("iPhone 14", "uid-2", Platform::Ios, DeviceType::Phone, 17),
             make_device("iPhone 16", "uid-3", Platform::Ios, DeviceType::Phone, 18),
         ];
@@ -794,7 +811,8 @@ mod tests {
             },
         ];
 
-        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
         // iPhone 15 Pro covers ios:18 + phone. Only need one more for ios:17.
         assert_eq!(result.len(), 2);
         assert!(result.iter().any(|r| r.device.name == "iPhone 15 Pro"));
@@ -834,7 +852,8 @@ mod tests {
         )];
         let constraints: Vec<DeviceConstraint> = vec![];
 
-        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
         assert!(result.is_empty());
     }
 
@@ -864,7 +883,8 @@ mod tests {
             },
         ];
 
-        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
         assert_eq!(result.len(), 1);
     }
 
@@ -892,7 +912,8 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
         // Greedy should find a 2-device solution (not 3).
         assert_eq!(result.len(), 2);
         // Both OS versions covered.
@@ -915,7 +936,8 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
         // Only one requirement (ios:17+), so one device suffices.
         assert_eq!(result.len(), 1);
         // The picked device should have os_major >= 17.
@@ -944,7 +966,8 @@ mod tests {
             },
         ];
 
-        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
         assert_eq!(result.len(), 2);
         let platforms: HashSet<Platform> = result.iter().map(|r| r.device.platform).collect();
         assert!(platforms.contains(&Platform::Ios));
@@ -991,7 +1014,8 @@ mod tests {
             expand: ExpandMode::Full,
         }];
 
-        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
         assert_eq!(result.len(), 2);
     }
 
@@ -1009,7 +1033,8 @@ mod tests {
             expand: ExpandMode::Full,
         }];
 
-        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
         assert_eq!(result.len(), 2);
     }
 
@@ -1030,7 +1055,8 @@ mod tests {
             expand: ExpandMode::MinCoverage,
         }];
 
-        let result = resolve_devices(&constraints, &available, &ResolveOptions::default()).expect("should resolve");
+        let result = resolve_devices(&constraints, &available, &ResolveOptions::default())
+            .expect("should resolve");
         assert!(result.is_empty());
     }
 

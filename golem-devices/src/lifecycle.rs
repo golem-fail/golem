@@ -15,11 +15,7 @@ fn find_xctestrun(dir: &Path) -> Option<String> {
     std::fs::read_dir(dir)
         .ok()?
         .filter_map(|e| e.ok())
-        .find(|e| {
-            e.path()
-                .extension()
-                .is_some_and(|ext| ext == "xctestrun")
-        })
+        .find(|e| e.path().extension().is_some_and(|ext| ext == "xctestrun"))
         .map(|e| e.path().to_string_lossy().into_owned())
 }
 
@@ -111,7 +107,7 @@ pub fn build_companion_command(device: &DeviceInfo, companion_path: &str) -> Vec
                 vec![]
             }
         }
-        Platform::Android => vec![],  // Android uses pre-built APK
+        Platform::Android => vec![], // Android uses pre-built APK
     }
 }
 
@@ -124,7 +120,11 @@ pub fn build_companion_command(device: &DeviceInfo, companion_path: &str) -> Vec
 /// If `reg_port` is provided, the companion will register with golem's
 /// registration server to get its port allocation. Otherwise falls back
 /// to the legacy `port` parameter.
-pub fn start_companion_command(device: &DeviceInfo, companion_path: &str, port: u16) -> Vec<String> {
+pub fn start_companion_command(
+    device: &DeviceInfo,
+    companion_path: &str,
+    port: u16,
+) -> Vec<String> {
     start_companion_command_with_reg(device, companion_path, port, None)
 }
 
@@ -148,7 +148,8 @@ pub fn start_companion_command_with_reg(
                     format!("id={}", device.udid),
                     "-parallel-testing-enabled".into(),
                     "NO".into(),
-                    "-only-testing:GolemRunnerUITests/GolemRunnerUITests/testCompanionServer".into(),
+                    "-only-testing:GolemRunnerUITests/GolemRunnerUITests/testCompanionServer"
+                        .into(),
                 ]
             } else {
                 let dir = std::path::Path::new(companion_path);
@@ -162,7 +163,8 @@ pub fn start_companion_command_with_reg(
                     format!("id={}", device.udid),
                     "-parallel-testing-enabled".into(),
                     "NO".into(),
-                    "-only-testing:GolemRunnerUITests/GolemRunnerUITests/testCompanionServer".into(),
+                    "-only-testing:GolemRunnerUITests/GolemRunnerUITests/testCompanionServer"
+                        .into(),
                 ]
             }
         }
@@ -337,8 +339,7 @@ pub async fn run_command_public(args: &[String], context: &str) -> Result<String
 /// `An error was encountered processing the command (domain=com.apple.CoreSimulator.SimError, code=405): Unable to boot device in current state: Booted`
 fn is_already_booted_error(e: &anyhow::Error) -> bool {
     let s = format!("{e:#}");
-    s.contains("Unable to boot device in current state: Booted")
-        || s.contains("code=405")
+    s.contains("Unable to boot device in current state: Booted") || s.contains("code=405")
 }
 
 async fn run_command(args: &[String], context: &str) -> Result<String> {
@@ -352,10 +353,7 @@ async fn run_command(args: &[String], context: &str) -> Result<String> {
         .await?;
 
     if !output.status.success() {
-        bail!(
-            "{context}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        bail!("{context}: {}", String::from_utf8_lossy(&output.stderr));
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
@@ -546,7 +544,6 @@ fn parse_emulator_serials(stdout: &str) -> Vec<String> {
         })
         .collect()
 }
-
 
 /// Shut down a device (simulator or emulator).
 pub async fn shutdown_device(device: &DeviceInfo) -> Result<()> {
@@ -743,9 +740,7 @@ pub async fn auto_create_device(
 
     match platform {
         Platform::Ios => auto_create_ios(want_phone, os_version.as_ref()).await,
-        Platform::Android => {
-            auto_create_android(want_phone, os_version.as_ref(), playstore).await
-        }
+        Platform::Android => auto_create_android(want_phone, os_version.as_ref(), playstore).await,
     }
 }
 
@@ -764,42 +759,53 @@ async fn auto_create_ios(
             anyhow::anyhow!("No iOS runtimes installed. Install one via Xcode."),
         ));
     }
-    let runtime = pick_runtime_for_spec(&runtimes, os_version)
-        .ok_or_else(|| {
-            let requested = match os_version {
-                Some(crate::OsVersionSpec::Exact { major, .. }) => format!("iOS {major}"),
-                _ => "any iOS".to_string(),
-            };
-            let installed: Vec<String> = runtimes.iter().map(|r| format!("iOS {}", r.major)).collect();
-            golem_events::coded(
-                golem_events::FailureCode::HostToolchainMissing,
-                anyhow::anyhow!(
-                    "Requested {requested} runtime is not installed. Installed: {}. \
+    let runtime = pick_runtime_for_spec(&runtimes, os_version).ok_or_else(|| {
+        let requested = match os_version {
+            Some(crate::OsVersionSpec::Exact { major, .. }) => format!("iOS {major}"),
+            _ => "any iOS".to_string(),
+        };
+        let installed: Vec<String> = runtimes
+            .iter()
+            .map(|r| format!("iOS {}", r.major))
+            .collect();
+        golem_events::coded(
+            golem_events::FailureCode::HostToolchainMissing,
+            anyhow::anyhow!(
+                "Requested {requested} runtime is not installed. Installed: {}. \
                      Add via Xcode > Settings > Platforms.",
-                    installed.join(", ")
-                ),
-            )
-        })?;
+                installed.join(", ")
+            ),
+        )
+    })?;
 
     let device_types = discover_ios_device_types().await?;
-    let device_type = pick_device_type(&device_types, want_phone)
-        .ok_or_else(|| golem_events::coded(
+    let device_type = pick_device_type(&device_types, want_phone).ok_or_else(|| {
+        golem_events::coded(
             golem_events::FailureCode::HostToolchainMissing,
             anyhow::anyhow!(
                 "No {} device type found. Install Xcode device support.",
                 if want_phone { "iPhone" } else { "iPad" }
             ),
-        ))?;
+        )
+    })?;
 
-    let name = format!("golem-{}-ios{}", device_type.name.replace(' ', "-"), runtime.major);
-    eprintln!("  Creating iOS simulator: {name} ({}, {})", device_type.name, runtime.name);
+    let name = format!(
+        "golem-{}-ios{}",
+        device_type.name.replace(' ', "-"),
+        runtime.major
+    );
+    eprintln!(
+        "  Creating iOS simulator: {name} ({}, {})",
+        device_type.name, runtime.name
+    );
 
     let output = create_simulator(
         Platform::Ios,
         &name,
         &device_type.identifier,
         &runtime.identifier,
-    ).await?;
+    )
+    .await?;
 
     // xcrun simctl create returns the UDID on stdout
     let udid = output.trim().to_string();
@@ -814,7 +820,11 @@ async fn auto_create_ios(
         name: name.clone(),
         udid: udid.clone(),
         platform: Platform::Ios,
-        device_type: if want_phone { crate::DeviceType::Phone } else { crate::DeviceType::Tablet },
+        device_type: if want_phone {
+            crate::DeviceType::Phone
+        } else {
+            crate::DeviceType::Tablet
+        },
         os_major: runtime.major,
         os_version: runtime.version.clone(),
         state: crate::DeviceState::Shutdown,
@@ -837,8 +847,10 @@ async fn auto_create_android(
     os_version: Option<&crate::OsVersionSpec>,
     playstore: Option<bool>,
 ) -> Result<crate::DeviceInfo> {
-    use crate::android::{discover_android_device_profiles, discover_android_system_images,
-                          pick_device_profile, pick_system_image};
+    use crate::android::{
+        discover_android_device_profiles, discover_android_system_images, pick_device_profile,
+        pick_system_image,
+    };
 
     let images = discover_android_system_images().await?;
     // Exact(N) → that API level; anything else → latest (preferred_api=0).
@@ -846,58 +858,60 @@ async fn auto_create_android(
         Some(crate::OsVersionSpec::Exact { major, .. }) => *major,
         _ => 0,
     };
-    let image = pick_system_image(&images, preferred_api, playstore)
-        .ok_or_else(|| {
-            let requested = if preferred_api > 0 {
-                format!("API {preferred_api}")
-            } else {
-                "any arm64 Android".to_string()
-            };
-            let store_hint = match playstore {
-                Some(true) => " (playstore target required)",
-                Some(false) => " (non-playstore target required)",
-                None => "",
-            };
-            let installed: Vec<String> = images
-                .iter()
-                .map(|i| format!("API {} ({})", i.api_level, i.target))
-                .collect();
-            golem_events::coded(
-                golem_events::FailureCode::HostToolchainMissing,
-                anyhow::anyhow!(
-                    "Requested {requested}{store_hint} system image is not installed. \
+    let image = pick_system_image(&images, preferred_api, playstore).ok_or_else(|| {
+        let requested = if preferred_api > 0 {
+            format!("API {preferred_api}")
+        } else {
+            "any arm64 Android".to_string()
+        };
+        let store_hint = match playstore {
+            Some(true) => " (playstore target required)",
+            Some(false) => " (non-playstore target required)",
+            None => "",
+        };
+        let installed: Vec<String> = images
+            .iter()
+            .map(|i| format!("API {} ({})", i.api_level, i.target))
+            .collect();
+        golem_events::coded(
+            golem_events::FailureCode::HostToolchainMissing,
+            anyhow::anyhow!(
+                "Requested {requested}{store_hint} system image is not installed. \
                      Installed: {}. \
                      Add via: sdkmanager 'system-images;android-<N>;<target>;arm64-v8a'",
-                    installed.join(", ")
-                ),
-            )
-        })?;
+                installed.join(", ")
+            ),
+        )
+    })?;
 
     let profiles = discover_android_device_profiles().await?;
-    let profile = pick_device_profile(&profiles, want_phone)
-        .ok_or_else(|| golem_events::coded(
+    let profile = pick_device_profile(&profiles, want_phone).ok_or_else(|| {
+        golem_events::coded(
             golem_events::FailureCode::HostToolchainMissing,
             anyhow::anyhow!(
                 "No {} device profile found.",
                 if want_phone { "phone" } else { "tablet" }
             ),
-        ))?;
+        )
+    })?;
 
     let name = format!("golem-{}-api{}", profile.id, image.api_level);
-    eprintln!("  Creating Android emulator: {name} ({}, API {})", profile.name, image.api_level);
+    eprintln!(
+        "  Creating Android emulator: {name} ({}, API {})",
+        profile.name, image.api_level
+    );
 
-    create_simulator(
-        Platform::Android,
-        &name,
-        &image.path,
-        &profile.id,
-    ).await?;
+    create_simulator(Platform::Android, &name, &image.path, &profile.id).await?;
 
     let device = crate::DeviceInfo {
         name: name.clone(),
         udid: name.clone(), // Android uses AVD name as identifier
         platform: Platform::Android,
-        device_type: if want_phone { crate::DeviceType::Phone } else { crate::DeviceType::Tablet },
+        device_type: if want_phone {
+            crate::DeviceType::Phone
+        } else {
+            crate::DeviceType::Tablet
+        },
         os_major: image.api_level,
         os_version: image.api_level.to_string(),
         state: crate::DeviceState::Shutdown,
@@ -940,9 +954,7 @@ mod tests {
             screen_scale: None,
             last_booted: None,
             runtime_id: Some("com.apple.CoreSimulator.SimRuntime.iOS-17-2".into()),
-            device_type_id: Some(
-                "com.apple.CoreSimulator.SimDeviceType.iPhone-15".into(),
-            ),
+            device_type_id: Some("com.apple.CoreSimulator.SimDeviceType.iPhone-15".into()),
         }
     }
 
@@ -982,15 +994,21 @@ mod tests {
     #[test]
     fn android_boot_command_is_correct() {
         let d = DeviceInfo {
-            name: "Pixel 8 API 34".into(),       // display name with spaces
-            udid: "Pixel_8_API_34".into(),       // on-disk AVD identifier
+            name: "Pixel 8 API 34".into(), // display name with spaces
+            udid: "Pixel_8_API_34".into(), // on-disk AVD identifier
             state: DeviceState::Shutdown,
             ..android_device()
         };
         let cmd = boot_command(&d);
         assert_eq!(
             cmd,
-            vec!["emulator", "-avd", "Pixel_8_API_34", "-no-window", "-no-audio"]
+            vec![
+                "emulator",
+                "-avd",
+                "Pixel_8_API_34",
+                "-no-window",
+                "-no-audio"
+            ]
         );
     }
 
@@ -1007,10 +1025,7 @@ mod tests {
     fn android_shutdown_command_is_correct() {
         let d = android_device();
         let cmd = shutdown_command(&d);
-        assert_eq!(
-            cmd,
-            vec!["adb", "-s", "emulator-5554", "emu", "kill"]
-        );
+        assert_eq!(cmd, vec!["adb", "-s", "emulator-5554", "emu", "kill"]);
     }
 
     // 5. iOS install app
@@ -1099,16 +1114,28 @@ mod tests {
     #[test]
     fn ios_clear_app_data_commands_are_correct() {
         let d = ios_device();
-        let cmds =
-            clear_app_data_commands(&d, "com.example.MyApp", Some("/path/to/MyApp.app"));
+        let cmds = clear_app_data_commands(&d, "com.example.MyApp", Some("/path/to/MyApp.app"));
         assert_eq!(cmds.len(), 3);
         assert_eq!(
             cmds[0],
-            vec!["xcrun", "simctl", "privacy", "AAAA-BBBB-CCCC", "reset", "all"]
+            vec![
+                "xcrun",
+                "simctl",
+                "privacy",
+                "AAAA-BBBB-CCCC",
+                "reset",
+                "all"
+            ]
         );
         assert_eq!(
             cmds[1],
-            vec!["xcrun", "simctl", "uninstall", "AAAA-BBBB-CCCC", "com.example.MyApp"]
+            vec![
+                "xcrun",
+                "simctl",
+                "uninstall",
+                "AAAA-BBBB-CCCC",
+                "com.example.MyApp"
+            ]
         );
         assert_eq!(
             cmds[2],
@@ -1236,7 +1263,14 @@ mod tests {
         let cmd = port_forward_command(&d, 8223);
         assert_eq!(
             cmd,
-            vec!["adb", "-s", "emulator-5554", "forward", "tcp:8223", "tcp:8223"]
+            vec![
+                "adb",
+                "-s",
+                "emulator-5554",
+                "forward",
+                "tcp:8223",
+                "tcp:8223"
+            ]
         );
     }
 
@@ -1273,8 +1307,7 @@ mod tests {
     #[test]
     fn android_start_companion_with_reg_uses_reg_port() {
         let d = android_device();
-        let cmd =
-            start_companion_command_with_reg(&d, "/path/to/companion.apk", 8225, Some(9999));
+        let cmd = start_companion_command_with_reg(&d, "/path/to/companion.apk", 8225, Some(9999));
         assert_eq!(
             cmd,
             vec![
@@ -1302,12 +1335,8 @@ mod tests {
     #[test]
     fn ios_source_start_companion_with_reg_matches_legacy() {
         let d = ios_device();
-        let with_reg = start_companion_command_with_reg(
-            &d,
-            "/path/to/Companion.xcodeproj",
-            8222,
-            Some(9999),
-        );
+        let with_reg =
+            start_companion_command_with_reg(&d, "/path/to/Companion.xcodeproj", 8222, Some(9999));
         let legacy = start_companion_command(&d, "/path/to/Companion.xcodeproj", 8222);
         assert_eq!(
             with_reg, legacy,
@@ -1381,9 +1410,7 @@ mod tests {
     //     message and the code=405 form, but not unrelated errors.
     #[test]
     fn is_already_booted_error_detection() {
-        let booted = anyhow::anyhow!(
-            "Unable to boot device in current state: Booted"
-        );
+        let booted = anyhow::anyhow!("Unable to boot device in current state: Booted");
         assert!(
             is_already_booted_error(&booted),
             "the Booted-state message SHALL be recognised"
@@ -1403,10 +1430,8 @@ mod tests {
     //     wrapped/contextualised cause still matches.
     #[test]
     fn is_already_booted_error_matches_wrapped_cause() {
-        let wrapped = anyhow::anyhow!(
-            "Unable to boot device in current state: Booted"
-        )
-        .context("boot iPhone 15");
+        let wrapped = anyhow::anyhow!("Unable to boot device in current state: Booted")
+            .context("boot iPhone 15");
         assert!(
             is_already_booted_error(&wrapped),
             "wrapped Booted cause SHALL be recognised via {{:#}}"
@@ -1472,7 +1497,10 @@ mod tests {
     fn parse_emulator_serials_skips_header() {
         // The header is always line 1; with no devices the result is empty.
         let serials = parse_emulator_serials("List of devices attached\n");
-        assert!(serials.is_empty(), "header-only output SHALL yield no serials");
+        assert!(
+            serials.is_empty(),
+            "header-only output SHALL yield no serials"
+        );
     }
 
     // 31. parse_emulator_serials excludes physical devices (serials that

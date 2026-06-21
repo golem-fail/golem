@@ -308,20 +308,14 @@ mod tests {
     #[test]
     fn geo_database_jp_has_states() {
         let jp = geo_database().get("JP").expect("JP should be loaded");
-        assert!(
-            !jp.states.is_empty(),
-            "JP should have at least one state"
-        );
+        assert!(!jp.states.is_empty(), "JP should have at least one state");
     }
 
     // 7. GB has non-empty states
     #[test]
     fn geo_database_gb_has_states() {
         let gb = geo_database().get("GB").expect("GB should be loaded");
-        assert!(
-            !gb.states.is_empty(),
-            "GB should have at least one state"
-        );
+        assert!(!gb.states.is_empty(), "GB should have at least one state");
     }
 
     // 8. JP phone formats start with +81
@@ -360,10 +354,7 @@ mod tests {
     #[test]
     fn geo_database_all_iterates() {
         let count = geo_database().all().count();
-        assert!(
-            count >= 2,
-            "all() should yield at least 2, got {count}"
-        );
+        assert!(count >= 2, "all() should yield at least 2, got {count}");
     }
 
     // 11. Case-insensitive lookup works
@@ -395,10 +386,7 @@ mod tests {
     fn geo_database_loads_all_27_countries() {
         let db = geo_database();
         let count = db.countries().len();
-        assert!(
-            count >= 27,
-            "SHALL load at least 27 countries, got {count}"
-        );
+        assert!(count >= 27, "SHALL load at least 27 countries, got {count}");
     }
 
     // 14. Every expected ISO code SHALL be present
@@ -406,15 +394,11 @@ mod tests {
     fn geo_database_all_expected_codes_present() {
         let db = geo_database();
         let expected = [
-            "AE", "AU", "BE", "BR", "CA", "CN", "DE", "EG", "ES", "FR",
-            "GB", "IE", "IL", "IN", "JP", "KR", "LT", "MX", "NL", "NZ",
-            "PL", "RU", "SE", "SG", "TH", "US", "ZA",
+            "AE", "AU", "BE", "BR", "CA", "CN", "DE", "EG", "ES", "FR", "GB", "IE", "IL", "IN",
+            "JP", "KR", "LT", "MX", "NL", "NZ", "PL", "RU", "SE", "SG", "TH", "US", "ZA",
         ];
         for code in &expected {
-            assert!(
-                db.get(code).is_some(),
-                "SHALL load country {code}"
-            );
+            assert!(db.get(code).is_some(), "SHALL load country {code}");
         }
     }
 

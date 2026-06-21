@@ -29,9 +29,7 @@ impl TagFilter {
 
     /// Check if a flow's tags satisfy this filter (any alternative matches).
     pub fn matches(&self, flow_tags: &[String]) -> bool {
-        self.alternatives
-            .iter()
-            .any(|alt| flow_tags.contains(alt))
+        self.alternatives.iter().any(|alt| flow_tags.contains(alt))
     }
 }
 
@@ -111,10 +109,7 @@ mod tests {
     /// Helper: create a flow TOML with given name and tags.
     fn flow_toml(name: &str, tags: &[&str]) -> String {
         if tags.is_empty() {
-            format!(
-                "[flow]\nname = \"{name}\"\n",
-                name = name
-            )
+            format!("[flow]\nname = \"{name}\"\n", name = name)
         } else {
             let tags_str: Vec<String> = tags.iter().map(|t| format!("\"{t}\"")).collect();
             format!(
@@ -156,11 +151,7 @@ mod tests {
     fn discover_flows_recursively() {
         let tmp = TempDir::new().expect("tempdir");
         write_flow(tmp.path(), "top.test.toml", &flow_toml("top", &[]));
-        write_flow(
-            tmp.path(),
-            "auth/login.test.toml",
-            &flow_toml("login", &[]),
-        );
+        write_flow(tmp.path(), "auth/login.test.toml", &flow_toml("login", &[]));
         write_flow(
             tmp.path(),
             "auth/deep/nested.test.toml",
@@ -452,7 +443,11 @@ mod tests {
         );
 
         let flows = discover_flows(tmp.path(), &[]).expect("discover");
-        assert_eq!(flows.len(), 1, "target dir SHALL be excluded from discovery");
+        assert_eq!(
+            flows.len(),
+            1,
+            "target dir SHALL be excluded from discovery"
+        );
         assert_eq!(flows[0].name, "real");
     }
 

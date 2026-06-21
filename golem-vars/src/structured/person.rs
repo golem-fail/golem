@@ -322,8 +322,7 @@ mod tests {
     // 23. first_name pool diversity: >20 unique names from 100 draws (Issue 13)
     #[test]
     fn person_name_pool_diversity() {
-        let mut unique_first: std::collections::HashSet<String> =
-            std::collections::HashSet::new();
+        let mut unique_first: std::collections::HashSet<String> = std::collections::HashSet::new();
         for seed in 0u64..100 {
             let mut rng = ChaCha8Rng::seed_from_u64(seed);
             let result =
@@ -439,7 +438,10 @@ mod tests {
     fn expand_phone_format_no_hash_is_identity() {
         let mut rng = seeded_rng();
         let out = expand_phone_format("+44-FIXED", &mut rng);
-        assert_eq!(out, "+44-FIXED", "no-'#' format SHALL pass through unchanged");
+        assert_eq!(
+            out, "+44-FIXED",
+            "no-'#' format SHALL pass through unchanged"
+        );
     }
 
     // 32. expand_phone_format on an empty format SHALL return an empty string

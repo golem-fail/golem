@@ -63,7 +63,8 @@ pub(crate) fn find_android_apk() -> Result<String> {
         }
     }
 
-    let relative = "companions/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk";
+    let relative =
+        "companions/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk";
     if std::path::Path::new(relative).exists() {
         return Ok(relative.to_string());
     }

@@ -48,7 +48,7 @@ fn test_ctx() -> ExecutionContext<'static> {
         emitter: None,
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
         rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
-    inherited_record_default: false,
+        inherited_record_default: false,
     }
 }
 
@@ -118,10 +118,7 @@ fn empty_hierarchy() -> Element {
 fn assert_success(result: &FlowResult) {
     assert!(result.success, "flow SHALL succeed");
     assert!(result.failed_step.is_none(), "no step SHALL have failed");
-    assert!(
-        result.failed_block.is_none(),
-        "no block should have failed"
-    );
+    assert!(result.failed_block.is_none(), "no block should have failed");
 }
 
 // ---------------------------------------------------------------------------
@@ -160,9 +157,17 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
 
@@ -205,9 +210,17 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
 
@@ -257,9 +270,17 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
 
@@ -310,9 +331,17 @@ steps = [
     }
     vars.push_scope(flow_scope);
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
 
@@ -369,9 +398,17 @@ steps = [
     }
     vars.push_scope(flow_scope);
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
 
@@ -419,9 +456,17 @@ steps = [
     let mut ctx = test_ctx();
 
     // Execute the main flow
-    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let flow_result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&flow_result);
 
@@ -441,10 +486,7 @@ steps = [
     // 1 from main flow + 2 from teardown = 3 screenshots total
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
-    assert_eq!(
-        screenshot_count, 3,
-        "1 main + 2 teardown = 3 screenshots"
-    );
+    assert_eq!(screenshot_count, 3, "1 main + 2 teardown = 3 screenshots");
 }
 
 // ---------------------------------------------------------------------------
@@ -473,25 +515,27 @@ steps = [
     let mut ctx = test_ctx();
 
     // Main flow fails (element not found)
-    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should return Ok(FlowResult), not Err");
+    let flow_result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should return Ok(FlowResult), not Err");
 
     assert!(!flow_result.success, "flow SHALL have failed");
     assert_eq!(flow_result.failed_step, Some(0));
-    assert_eq!(
-        flow_result.failed_block,
-        Some("failing".to_string())
-    );
+    assert_eq!(flow_result.failed_block, Some("failing".to_string()));
 
     // Teardown still runs after failure
     let teardown_result =
         execute_teardown(&flow.teardown, &driver, &mut vars, DEFAULT_TIMEOUT, &ctx).await;
 
-    assert!(
-        teardown_result.errors.is_empty(),
-        "teardown should succeed"
-    );
+    assert!(teardown_result.errors.is_empty(), "teardown should succeed");
 
     // Teardown screenshot should have executed.
     // screenshot_on_failure is disabled in test config, so no failure capture.
@@ -525,9 +569,17 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert!(result.success, "flow SHALL succeed despite warning");
     assert_eq!(
@@ -572,9 +624,17 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert!(result.success, "flow SHALL succeed");
     assert!(
@@ -628,9 +688,17 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
 
@@ -660,14 +728,21 @@ steps = [
 ]
 "#;
     let flow = parse_flow(toml).expect("should parse");
-    let driver =
-        MockPlatformDriver::new(hierarchy_with_texts(&["Login", "Submit", "Cancel"]));
+    let driver = MockPlatformDriver::new(hierarchy_with_texts(&["Login", "Submit", "Cancel"]));
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
 
@@ -704,9 +779,17 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should return Ok(FlowResult)");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should return Ok(FlowResult)");
 
     assert!(!result.success, "flow SHALL have failed");
     assert_eq!(
@@ -749,9 +832,17 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert!(result.success, "flow SHALL succeed despite warnings");
     assert_eq!(
@@ -806,9 +897,17 @@ steps = [
     scope.set("env", VarValue::string("staging"));
     vars.push_scope(scope);
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
 
@@ -839,9 +938,17 @@ name = "empty flow"
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
     assert!(result.warnings.is_empty());
@@ -874,9 +981,17 @@ steps = [
     let mut vars = VariableStore::new();
     let mut ctx = test_ctx();
 
-    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let flow_result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
     assert_success(&flow_result);
 
     let teardown_result =
@@ -941,9 +1056,17 @@ steps = [
     let mut ctx = test_ctx();
 
     let start = flow.flow.start.as_deref();
-    let result = execute_flow(&flow, &driver, &mut vars, start, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        start,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
 
@@ -1004,9 +1127,17 @@ steps = [
     vars.push_scope(flow_scope);
 
     // Execute flow
-    let flow_result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let flow_result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
     assert_success(&flow_result);
 
     // Execute teardown

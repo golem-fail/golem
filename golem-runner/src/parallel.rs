@@ -138,11 +138,7 @@ mod tests {
         let started_clone = started.clone();
 
         let result = execute_block_parallel(
-            &[
-                "d1".to_string(),
-                "d2".to_string(),
-                "d3".to_string(),
-            ],
+            &["d1".to_string(), "d2".to_string(), "d3".to_string()],
             4,
             move |_id| {
                 let started = started_clone.clone();
@@ -206,12 +202,10 @@ mod tests {
             .iter()
             .find(|r| r.device_id == "fail1")
             .expect("should find fail1");
-        assert!(
-            fail_result
-                .error
-                .as_ref()
-                .is_some_and(|e| e.contains("device failed"))
-        );
+        assert!(fail_result
+            .error
+            .as_ref()
+            .is_some_and(|e| e.contains("device failed")));
     }
 
     // ---------------------------------------------------------------
@@ -292,12 +286,9 @@ mod tests {
     // ---------------------------------------------------------------
     #[tokio::test]
     async fn empty_device_list_returns_empty_results() {
-        let result = execute_block_parallel(
-            &[],
-            DEFAULT_MAX_CONCURRENCY,
-            |_id| async { Ok(Vec::new()) },
-        )
-        .await;
+        let result =
+            execute_block_parallel(&[], DEFAULT_MAX_CONCURRENCY, |_id| async { Ok(Vec::new()) })
+                .await;
 
         assert!(result.device_results.is_empty());
         assert!(result.all_succeeded()); // vacuously true
@@ -312,9 +303,7 @@ mod tests {
         let result = execute_block_parallel(
             &["d1".to_string(), "d2".to_string()],
             DEFAULT_MAX_CONCURRENCY,
-            |id| async move {
-                Ok(vec![format!("warning from {id}")])
-            },
+            |id| async move { Ok(vec![format!("warning from {id}")]) },
         )
         .await;
 
@@ -365,16 +354,10 @@ mod tests {
     // ---------------------------------------------------------------
     #[tokio::test]
     async fn device_ids_correctly_assigned() {
-        let devices = vec![
-            "alpha".to_string(),
-            "beta".to_string(),
-            "gamma".to_string(),
-        ];
-        let result = execute_block_parallel(
-            &devices,
-            DEFAULT_MAX_CONCURRENCY,
-            |_id| async { Ok(Vec::new()) },
-        )
+        let devices = vec!["alpha".to_string(), "beta".to_string(), "gamma".to_string()];
+        let result = execute_block_parallel(&devices, DEFAULT_MAX_CONCURRENCY, |_id| async {
+            Ok(Vec::new())
+        })
         .await;
 
         let mut result_ids: Vec<&str> = result
@@ -463,7 +446,10 @@ mod tests {
             .expect("should find good");
         assert!(good.success, "good device SHALL succeed");
         assert_eq!(good.warnings, vec!["a warning".to_string()]);
-        assert!(good.error.is_none(), "successful device SHALL have no error");
+        assert!(
+            good.error.is_none(),
+            "successful device SHALL have no error"
+        );
 
         let bad = result
             .device_results

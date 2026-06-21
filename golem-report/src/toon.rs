@@ -56,22 +56,34 @@ pub fn format_step_toon(step: &StepReport) -> String {
 
     let substep_suffix = format_substeps_toon(&step.substeps);
     let tree_suffix = if step.tree_stats.fetches > 0 {
-        format!(" t:{}/{}", step.tree_stats.fetches, step.tree_stats.max_nodes)
+        format!(
+            " t:{}/{}",
+            step.tree_stats.fetches, step.tree_stats.max_nodes
+        )
     } else {
         String::new()
     };
 
     match &step.outcome {
         StepOutcome::Success => {
-            format!(" +{label} d:{}{substep_suffix}{tree_suffix}", step.duration_ms)
+            format!(
+                " +{label} d:{}{substep_suffix}{tree_suffix}",
+                step.duration_ms
+            )
         }
         StepOutcome::Warning { message, code } => {
             let c = code.render(golem_events::Severity::Warning);
-            format!(" ~{label} d:{} {c} {message}{substep_suffix}", step.duration_ms)
+            format!(
+                " ~{label} d:{} {c} {message}{substep_suffix}",
+                step.duration_ms
+            )
         }
         StepOutcome::Failed { message, code } => {
             let c = code.render(golem_events::Severity::Error);
-            format!(" !{label} d:{} {c} {message}{substep_suffix}", step.duration_ms)
+            format!(
+                " !{label} d:{} {c} {message}{substep_suffix}",
+                step.duration_ms
+            )
         }
         StepOutcome::Skipped => {
             format!(" -{label}{substep_suffix}")
@@ -88,43 +100,85 @@ fn format_substeps_toon(substeps: &[crate::SubstepDetail]) -> String {
     let mut parts = Vec::new();
     for sub in substeps {
         match sub {
-            SubstepDetail::Tap { point, element_bounds: Some(b), .. } =>
-                parts.push(format!("@{},{} b{},{},{},{}", point.x, point.y, b.x, b.y, b.width, b.height)),
-            SubstepDetail::Tap { point, .. } =>
-                parts.push(format!("@{},{}", point.x, point.y)),
-            SubstepDetail::ElementResolved { bounds, tap_point, .. } =>
-                parts.push(format!("@{},{} b{},{},{},{}", tap_point.x, tap_point.y, bounds.x, bounds.y, bounds.width, bounds.height)),
-            SubstepDetail::ScrollFound { position, total_attempts, .. } =>
-                parts.push(format!("s:{total_attempts} @{},{}", position.x, position.y)),
-            SubstepDetail::AppLaunch { bundle, duration_ms } =>
-                parts.push(format!("launch:{bundle} {duration_ms}ms")),
-            SubstepDetail::AppStop { bundle } =>
-                parts.push(format!("stop:{bundle}")),
-            SubstepDetail::DriverWarning { message } =>
-                parts.push(format!("warn:\"{message}\"")),
-            SubstepDetail::TextInput { text, .. } =>
-                parts.push(format!("t:\"{text}\"")),
-            SubstepDetail::Swipe { from, to } =>
-                parts.push(format!("({},{})→({},{})", from.x, from.y, to.x, to.y)),
-            SubstepDetail::ElementNotFound { timeout_ms, .. } =>
-                parts.push(format!("!found {timeout_ms}ms")),
-            SubstepDetail::ScrollStarted { direction, .. } =>
-                parts.push(format!("dir:{direction}")),
-            SubstepDetail::ScrollAttempt { attempt, direction, from, to, result, .. } =>
-                parts.push(format!("#{attempt} {direction} ({},{})→({},{}) {result}",
-                    from.x, from.y, to.x, to.y)),
-            SubstepDetail::ScrollDirectionReversed { to_direction, reason } =>
-                parts.push(format!("rev→{to_direction} {reason}")),
-            SubstepDetail::ScrollStrategySwitch { to_index, reason } =>
-                parts.push(format!("strat→{} {reason}", to_index + 1)),
-            SubstepDetail::RetryAttempt { attempt, max, error, .. } =>
-                parts.push(format!("retry {attempt}/{max}: {error}")),
-            SubstepDetail::HttpRequest { method, status, duration_ms, .. } => {
-                let s = status.map(|s| s.to_string()).unwrap_or_else(|| "?".to_string());
+            SubstepDetail::Tap {
+                point,
+                element_bounds: Some(b),
+                ..
+            } => parts.push(format!(
+                "@{},{} b{},{},{},{}",
+                point.x, point.y, b.x, b.y, b.width, b.height
+            )),
+            SubstepDetail::Tap { point, .. } => parts.push(format!("@{},{}", point.x, point.y)),
+            SubstepDetail::ElementResolved {
+                bounds, tap_point, ..
+            } => parts.push(format!(
+                "@{},{} b{},{},{},{}",
+                tap_point.x, tap_point.y, bounds.x, bounds.y, bounds.width, bounds.height
+            )),
+            SubstepDetail::ScrollFound {
+                position,
+                total_attempts,
+                ..
+            } => parts.push(format!("s:{total_attempts} @{},{}", position.x, position.y)),
+            SubstepDetail::AppLaunch {
+                bundle,
+                duration_ms,
+            } => parts.push(format!("launch:{bundle} {duration_ms}ms")),
+            SubstepDetail::AppStop { bundle } => parts.push(format!("stop:{bundle}")),
+            SubstepDetail::DriverWarning { message } => parts.push(format!("warn:\"{message}\"")),
+            SubstepDetail::TextInput { text, .. } => parts.push(format!("t:\"{text}\"")),
+            SubstepDetail::Swipe { from, to } => {
+                parts.push(format!("({},{})→({},{})", from.x, from.y, to.x, to.y))
+            }
+            SubstepDetail::ElementNotFound { timeout_ms, .. } => {
+                parts.push(format!("!found {timeout_ms}ms"))
+            }
+            SubstepDetail::ScrollStarted { direction, .. } => {
+                parts.push(format!("dir:{direction}"))
+            }
+            SubstepDetail::ScrollAttempt {
+                attempt,
+                direction,
+                from,
+                to,
+                result,
+                ..
+            } => parts.push(format!(
+                "#{attempt} {direction} ({},{})→({},{}) {result}",
+                from.x, from.y, to.x, to.y
+            )),
+            SubstepDetail::ScrollDirectionReversed {
+                to_direction,
+                reason,
+            } => parts.push(format!("rev→{to_direction} {reason}")),
+            SubstepDetail::ScrollStrategySwitch { to_index, reason } => {
+                parts.push(format!("strat→{} {reason}", to_index + 1))
+            }
+            SubstepDetail::RetryAttempt {
+                attempt,
+                max,
+                error,
+                ..
+            } => parts.push(format!("retry {attempt}/{max}: {error}")),
+            SubstepDetail::HttpRequest {
+                method,
+                status,
+                duration_ms,
+                ..
+            } => {
+                let s = status
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "?".to_string());
                 parts.push(format!("{method}→{s} {duration_ms}ms"));
             }
-            SubstepDetail::BashCommand { command, exit_code, duration_ms } => {
-                let c = exit_code.map(|c| c.to_string()).unwrap_or_else(|| "?".to_string());
+            SubstepDetail::BashCommand {
+                command,
+                exit_code,
+                duration_ms,
+            } => {
+                let c = exit_code
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| "?".to_string());
                 parts.push(format!("bash:\"{command}\" exit={c} {duration_ms}ms"));
             }
             _ => {}
@@ -146,10 +200,7 @@ pub fn format_flow_toon(report: &FlowReport) -> String {
 
 /// Internal variant that appends a ` t0+:<delta-ms>` offset to the flow
 /// header when called from a suite context that carries an anchor.
-pub(crate) fn format_flow_toon_anchored(
-    report: &FlowReport,
-    suite_t0_ms: Option<i64>,
-) -> String {
+pub(crate) fn format_flow_toon_anchored(report: &FlowReport, suite_t0_ms: Option<i64>) -> String {
     let mut out = String::new();
 
     // Header: F:flow_name [dev:...] [os:...] d:duration [seed:N] [t0+:offset]
@@ -277,8 +328,12 @@ pub fn format_suite_toon(report: &SuiteReport) -> String {
     out.push_str("# step: +=pass !=fail ~=warn -=skip @x,y=position b=bounds(x,y,w,h) s:N=scroll_attempts t:N/M=trees/nodes\n");
     out.push_str("# perf: P block:app:device:iteration mem=MB cpu=% thr=threads fd=file_descriptors disk=MB net_rx/tx=KB launch=ms\n");
     out.push_str("# rec: rec block:iteration path-to-recording.mp4\n");
-    out.push_str("# install: I app:bundle:device R=ok/fail d:ms os:N (device = `{platform}/{name}`)\n");
-    out.push_str("# time: T0:<unix-ms> suite-anchor (once); t0+:<delta-ms> per-line start offset from T0\n");
+    out.push_str(
+        "# install: I app:bundle:device R=ok/fail d:ms os:N (device = `{platform}/{name}`)\n",
+    );
+    out.push_str(
+        "# time: T0:<unix-ms> suite-anchor (once); t0+:<delta-ms> per-line start offset from T0\n",
+    );
 
     // Suite-anchor timestamp. Only emitted when parseable. Offsets below
     // are computed relative to this; if the anchor is absent, offsets are
@@ -384,7 +439,10 @@ mod tests {
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
-            outcome: StepOutcome::Failed { message: msg.to_string(), code: golem_events::FailureCode::Uncoded },
+            outcome: StepOutcome::Failed {
+                message: msg.to_string(),
+                code: golem_events::FailureCode::Uncoded,
+            },
             duration_ms: ms,
             retry_count: 0,
             screenshot_path: None,
@@ -403,7 +461,10 @@ mod tests {
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
-            outcome: StepOutcome::Warning { message: msg.to_string(), code: golem_events::FailureCode::Uncoded },
+            outcome: StepOutcome::Warning {
+                message: msg.to_string(),
+                code: golem_events::FailureCode::Uncoded,
+            },
             duration_ms: ms,
             retry_count: 0,
             screenshot_path: None,
@@ -701,9 +762,7 @@ mod tests {
                     first_failure_code: None,
                     flow_name: "flow_c".to_string(),
                     success: false,
-                    step_results: vec![
-                        failed_step("tap", "Nope", 300, "gone"),
-                    ],
+                    step_results: vec![failed_step("tap", "Nope", 300, "gone")],
                     warnings: vec![],
                     duration_ms: 300,
                     seed: None,
@@ -777,11 +836,18 @@ mod tests {
     fn substeps_toon_tap_with_bounds_produces_at_xy_bxywh() {
         let substeps = vec![crate::SubstepDetail::Tap {
             point: golem_events::Point { x: 150, y: 300 },
-            element_bounds: Some(golem_events::Rect { x: 100, y: 280, width: 100, height: 44 }),
+            element_bounds: Some(golem_events::Rect {
+                x: 100,
+                y: 280,
+                width: 100,
+                height: 44,
+            }),
         }];
         let out = format_substeps_toon(&substeps);
-        assert_eq!(out, " @150,300 b100,280,100,44",
-            "SHALL produce @x,y bx,y,w,h notation for Tap with bounds");
+        assert_eq!(
+            out, " @150,300 b100,280,100,44",
+            "SHALL produce @x,y bx,y,w,h notation for Tap with bounds"
+        );
     }
 
     #[test]
@@ -792,8 +858,10 @@ mod tests {
             total_attempts: 3,
         }];
         let out = format_substeps_toon(&substeps);
-        assert_eq!(out, " s:3 @200,800",
-            "SHALL produce s:N @x,y notation for ScrollFound");
+        assert_eq!(
+            out, " s:3 @200,800",
+            "SHALL produce s:N @x,y notation for ScrollFound"
+        );
     }
 
     #[test]
@@ -809,8 +877,10 @@ mod tests {
             duration_ms: 1500,
         }];
         let out = format_substeps_toon(&substeps);
-        assert_eq!(out, " launch:com.example.app 1500ms",
-            "SHALL produce launch:bundle Nms notation for AppLaunch");
+        assert_eq!(
+            out, " launch:com.example.app 1500ms",
+            "SHALL produce launch:bundle Nms notation for AppLaunch"
+        );
     }
 
     #[test]
@@ -820,20 +890,29 @@ mod tests {
             element_bounds: None,
         }];
         let out = format_substeps_toon(&substeps);
-        assert_eq!(out, " @50,60",
-            "SHALL produce @x,y without bounds for Tap without element_bounds");
+        assert_eq!(
+            out, " @50,60",
+            "SHALL produce @x,y without bounds for Tap without element_bounds"
+        );
     }
 
     #[test]
     fn substeps_toon_element_resolved_produces_at_and_bounds() {
         let substeps = vec![crate::SubstepDetail::ElementResolved {
             selector: "text=OK".into(),
-            bounds: golem_events::Rect { x: 10, y: 20, width: 80, height: 40 },
+            bounds: golem_events::Rect {
+                x: 10,
+                y: 20,
+                width: 80,
+                height: 40,
+            },
             tap_point: golem_events::Point { x: 50, y: 40 },
         }];
         let out = format_substeps_toon(&substeps);
-        assert_eq!(out, " @50,40 b10,20,80,40",
-            "SHALL produce @tap_x,tap_y bx,y,w,h for ElementResolved");
+        assert_eq!(
+            out, " @50,40 b10,20,80,40",
+            "SHALL produce @tap_x,tap_y bx,y,w,h for ElementResolved"
+        );
     }
 
     #[test]
@@ -841,17 +920,29 @@ mod tests {
         let substeps = vec![
             crate::SubstepDetail::ElementResolved {
                 selector: "text=OK".into(),
-                bounds: golem_events::Rect { x: 10, y: 20, width: 80, height: 40 },
+                bounds: golem_events::Rect {
+                    x: 10,
+                    y: 20,
+                    width: 80,
+                    height: 40,
+                },
                 tap_point: golem_events::Point { x: 50, y: 40 },
             },
             crate::SubstepDetail::Tap {
                 point: golem_events::Point { x: 50, y: 40 },
-                element_bounds: Some(golem_events::Rect { x: 10, y: 20, width: 80, height: 40 }),
+                element_bounds: Some(golem_events::Rect {
+                    x: 10,
+                    y: 20,
+                    width: 80,
+                    height: 40,
+                }),
             },
         ];
         let out = format_substeps_toon(&substeps);
-        assert_eq!(out, " @50,40 b10,20,80,40 @50,40 b10,20,80,40",
-            "SHALL join multiple substep notations with spaces");
+        assert_eq!(
+            out, " @50,40 b10,20,80,40 @50,40 b10,20,80,40",
+            "SHALL join multiple substep notations with spaces"
+        );
     }
 
     // ── Perf rendering tests ────────────────────────────────────────
@@ -894,11 +985,23 @@ mod tests {
         };
 
         let out = format_flow_toon(&report);
-        let perf_line = out.lines().find(|l| l.starts_with("P ")).expect("SHALL contain a P line");
-        assert!(perf_line.contains("login:iPhone_16:0"), "SHALL contain snapshot label");
-        assert!(perf_line.contains("mem:142.5"), "SHALL contain memory value");
+        let perf_line = out
+            .lines()
+            .find(|l| l.starts_with("P "))
+            .expect("SHALL contain a P line");
+        assert!(
+            perf_line.contains("login:iPhone_16:0"),
+            "SHALL contain snapshot label"
+        );
+        assert!(
+            perf_line.contains("mem:142.5"),
+            "SHALL contain memory value"
+        );
         assert!(perf_line.contains("cpu:23.1"), "SHALL contain cpu value");
-        assert!(perf_line.contains("launch:1240"), "SHALL contain launch value");
+        assert!(
+            perf_line.contains("launch:1240"),
+            "SHALL contain launch value"
+        );
     }
 
     #[test]
@@ -958,7 +1061,10 @@ mod tests {
     fn format_t0_offset_emits_delta_when_both_present() {
         // line at 5000ms, anchor at 1000ms → delta 4000.
         let out = format_t0_offset(Some("1970-01-01T00:00:05Z"), Some(1000));
-        assert_eq!(out, " t0+:4000", "SHALL emit delta when line and anchor present");
+        assert_eq!(
+            out, " t0+:4000",
+            "SHALL emit delta when line and anchor present"
+        );
     }
 
     // 4. Anchor missing → empty string (offset dropped, not bogus).
@@ -981,18 +1087,32 @@ mod tests {
     #[test]
     fn step_success_with_tree_stats_appends_t_suffix() {
         let mut step = success_step("tap", "OK", 45);
-        step.tree_stats = golem_events::TreeStats { fetches: 3, max_nodes: 128, ..Default::default() };
+        step.tree_stats = golem_events::TreeStats {
+            fetches: 3,
+            max_nodes: 128,
+            ..Default::default()
+        };
         let out = format_step_toon(&step);
-        assert_eq!(out, " +tap:OK d:45 t:3/128", "SHALL append t:fetches/max_nodes when fetches > 0");
+        assert_eq!(
+            out, " +tap:OK d:45 t:3/128",
+            "SHALL append t:fetches/max_nodes when fetches > 0"
+        );
     }
 
     // 7. Zero tree fetches omits the t: suffix entirely.
     #[test]
     fn step_success_zero_tree_fetches_omits_t_suffix() {
         let mut step = success_step("tap", "OK", 45);
-        step.tree_stats = golem_events::TreeStats { fetches: 0, max_nodes: 200, ..Default::default() };
+        step.tree_stats = golem_events::TreeStats {
+            fetches: 0,
+            max_nodes: 200,
+            ..Default::default()
+        };
         let out = format_step_toon(&step);
-        assert_eq!(out, " +tap:OK d:45", "SHALL omit t: suffix when fetches == 0");
+        assert_eq!(
+            out, " +tap:OK d:45",
+            "SHALL omit t: suffix when fetches == 0"
+        );
     }
 
     // 8. Success step with substeps appends substep notation before tree suffix.
@@ -1003,9 +1123,16 @@ mod tests {
             point: golem_events::Point { x: 10, y: 20 },
             element_bounds: None,
         }];
-        step.tree_stats = golem_events::TreeStats { fetches: 1, max_nodes: 50, ..Default::default() };
+        step.tree_stats = golem_events::TreeStats {
+            fetches: 1,
+            max_nodes: 50,
+            ..Default::default()
+        };
         let out = format_step_toon(&step);
-        assert_eq!(out, " +tap:OK d:45 @10,20 t:1/50", "substeps SHALL precede tree suffix");
+        assert_eq!(
+            out, " +tap:OK d:45 @10,20 t:1/50",
+            "substeps SHALL precede tree suffix"
+        );
     }
 
     // 9. Warning step carries its substep suffix (but no tree suffix).
@@ -1017,8 +1144,7 @@ mod tests {
         }];
         let out = format_step_toon(&step);
         assert_eq!(
-            out,
-            " ~scroll:Promo d:15 WX000 element not found warn:\"slow\"",
+            out, " ~scroll:Promo d:15 WX000 element not found warn:\"slow\"",
             "warning step SHALL append substep notation"
         );
     }
@@ -1044,7 +1170,10 @@ mod tests {
         s.block_name = "checkout".into();
         report.step_results = vec![s];
         let out = format_flow_toon(&report);
-        assert!(out.contains(" B:checkout\n"), "SHALL emit B:checkout header; got: {out}");
+        assert!(
+            out.contains(" B:checkout\n"),
+            "SHALL emit B:checkout header; got: {out}"
+        );
     }
 
     // 12. Block iteration > 0 emits ` B:<block> i:<n>` header.
@@ -1056,7 +1185,10 @@ mod tests {
         s.block_iteration = 2;
         report.step_results = vec![s];
         let out = format_flow_toon(&report);
-        assert!(out.contains(" B:loop i:2\n"), "SHALL emit B:loop i:2 header; got: {out}");
+        assert!(
+            out.contains(" B:loop i:2\n"),
+            "SHALL emit B:loop i:2 header; got: {out}"
+        );
     }
 
     // 13. A new header is emitted each time the (block, iteration) pair changes.
@@ -1072,7 +1204,11 @@ mod tests {
         report.step_results = vec![s0, s1];
         let out = format_flow_toon(&report);
         let headers: Vec<&str> = out.lines().filter(|l| l.starts_with(" B:")).collect();
-        assert_eq!(headers, vec![" B:loop i:1", " B:loop i:2"], "SHALL re-emit header per iteration");
+        assert_eq!(
+            headers,
+            vec![" B:loop i:1", " B:loop i:2"],
+            "SHALL re-emit header per iteration"
+        );
     }
 
     // 14. Empty block_name suppresses the B: header line.
@@ -1095,7 +1231,10 @@ mod tests {
         report.first_failure_code = Some(golem_events::FailureCode::FlowStepTimeout);
         let out = format_flow_toon(&report);
         let last = out.lines().last().expect("result line");
-        assert_eq!(last, "R:FAIL 4/1/1 EF408", "FAIL line SHALL carry the failure code token");
+        assert_eq!(
+            last, "R:FAIL 4/1/1 EF408",
+            "FAIL line SHALL carry the failure code token"
+        );
     }
 
     // 16. PASS flow never appends a failure code even if one is somehow set.
@@ -1105,7 +1244,10 @@ mod tests {
         report.first_failure_code = Some(golem_events::FailureCode::FlowStepTimeout);
         let out = format_flow_toon(&report);
         let last = out.lines().last().expect("result line");
-        assert!(!last.contains("EF408"), "PASS line SHALL NOT carry a failure code; got: {last}");
+        assert!(
+            !last.contains("EF408"),
+            "PASS line SHALL NOT carry a failure code; got: {last}"
+        );
     }
 
     // 17. Skipped flow (success + reason) renders SKIP and appends the reason.
@@ -1116,7 +1258,10 @@ mod tests {
         report.step_results = vec![];
         let out = format_flow_toon(&report);
         let last = out.lines().last().expect("result line");
-        assert_eq!(last, "R:SKIP 0/0/0 covered by peer run", "SKIP line SHALL append the reason");
+        assert_eq!(
+            last, "R:SKIP 0/0/0 covered by peer run",
+            "SKIP line SHALL append the reason"
+        );
     }
 
     // ── recording-line tests ────────────────────────────────────────
@@ -1127,12 +1272,26 @@ mod tests {
         let mut report = sample_flow(true, None);
         report.step_results = vec![success_step("launch", "", 100)];
         report.recordings = vec![
-            crate::RecordingEntry { block: "checkout".into(), iteration: 0, path: "/tmp/a.mp4".into() },
-            crate::RecordingEntry { block: "checkout".into(), iteration: 1, path: "/tmp/b.mp4".into() },
+            crate::RecordingEntry {
+                block: "checkout".into(),
+                iteration: 0,
+                path: "/tmp/a.mp4".into(),
+            },
+            crate::RecordingEntry {
+                block: "checkout".into(),
+                iteration: 1,
+                path: "/tmp/b.mp4".into(),
+            },
         ];
         let out = format_flow_toon(&report);
-        assert!(out.contains(" rec checkout:0 /tmp/a.mp4\n"), "SHALL emit first recording line; got: {out}");
-        assert!(out.contains(" rec checkout:1 /tmp/b.mp4\n"), "SHALL emit second recording line; got: {out}");
+        assert!(
+            out.contains(" rec checkout:0 /tmp/a.mp4\n"),
+            "SHALL emit first recording line; got: {out}"
+        );
+        assert!(
+            out.contains(" rec checkout:1 /tmp/b.mp4\n"),
+            "SHALL emit second recording line; got: {out}"
+        );
     }
 
     // ── suite T0 / install / flake tests ────────────────────────────
@@ -1153,7 +1312,10 @@ mod tests {
         let mut suite = empty_suite();
         suite.started_at = Some("1970-01-01T00:00:01Z".into());
         let out = format_suite_toon(&suite);
-        assert!(out.contains("\nT0:1000\n"), "SHALL emit T0:<ms> when anchor parseable; got: {out}");
+        assert!(
+            out.contains("\nT0:1000\n"),
+            "SHALL emit T0:<ms> when anchor parseable; got: {out}"
+        );
     }
 
     // 20. Unparseable suite anchor omits the T0: line entirely.
@@ -1190,8 +1352,14 @@ mod tests {
             out.contains("I myapp:com.example:android/emu R:fail d:4200 os:34\n"),
             "install line SHALL carry name/bundle/device/result/duration/os; got: {out}"
         );
-        assert!(out.contains("  line one\n"), "SHALL indent error line one; got: {out}");
-        assert!(out.contains("  line two\n"), "SHALL indent error line two; got: {out}");
+        assert!(
+            out.contains("  line one\n"),
+            "SHALL indent error line one; got: {out}"
+        );
+        assert!(
+            out.contains("  line two\n"),
+            "SHALL indent error line two; got: {out}"
+        );
     }
 
     // 22. Successful install renders R:ok and omits os: when os_major absent.
@@ -1212,19 +1380,40 @@ mod tests {
             finished_at: None,
         }];
         let out = format_suite_toon(&suite);
-        let line = out.lines().find(|l| l.starts_with("I ")).expect("install line");
-        assert_eq!(line, "I app:b:ios/sim R:ok d:900", "ok install SHALL omit os: when absent");
+        let line = out
+            .lines()
+            .find(|l| l.starts_with("I "))
+            .expect("install line");
+        assert_eq!(
+            line, "I app:b:ios/sim R:ok d:900",
+            "ok install SHALL omit os: when absent"
+        );
     }
 
     // 23. Suite schema header comment lines are always present.
     #[test]
     fn suite_emits_schema_header_comments() {
         let out = format_suite_toon(&empty_suite());
-        assert!(out.starts_with("# F=flow-run"), "SHALL begin with the F= schema header; got: {out}");
-        assert!(out.contains("# step:"), "SHALL include the step schema header");
-        assert!(out.contains("# perf:"), "SHALL include the perf schema header");
-        assert!(out.contains("# install:"), "SHALL include the install schema header");
-        assert!(out.contains("# time:"), "SHALL include the time schema header");
+        assert!(
+            out.starts_with("# F=flow-run"),
+            "SHALL begin with the F= schema header; got: {out}"
+        );
+        assert!(
+            out.contains("# step:"),
+            "SHALL include the step schema header"
+        );
+        assert!(
+            out.contains("# perf:"),
+            "SHALL include the perf schema header"
+        );
+        assert!(
+            out.contains("# install:"),
+            "SHALL include the install schema header"
+        );
+        assert!(
+            out.contains("# time:"),
+            "SHALL include the time schema header"
+        );
     }
 
     // 24. A flow whose every step is Skipped counts toward the suite skip total.
@@ -1239,7 +1428,10 @@ mod tests {
         let out = format_suite_toon(&suite);
         let last = out.lines().last().expect("total line");
         // is_failed (success=false) AND all-skipped → counted in both fail and skip tallies.
-        assert_eq!(last, "total:0×pass,1×fail,1×skip d:10", "all-skipped-steps flow SHALL count as skip");
+        assert_eq!(
+            last, "total:0×pass,1×fail,1×skip d:10",
+            "all-skipped-steps flow SHALL count as skip"
+        );
     }
 
     // 25. Flake summary emitted when any flow carries repeat context.
@@ -1257,8 +1449,14 @@ mod tests {
         suite.flows = vec![pass, fail];
         suite.total_duration_ms = 2;
         let out = format_suite_toon(&suite);
-        assert!(out.contains("# flake:"), "SHALL emit flake schema header; got: {out}");
-        assert!(out.contains("flake:1/2 f"), "SHALL tally 1/2 for flow f; got: {out}");
+        assert!(
+            out.contains("# flake:"),
+            "SHALL emit flake schema header; got: {out}"
+        );
+        assert!(
+            out.contains("flake:1/2 f"),
+            "SHALL tally 1/2 for flow f; got: {out}"
+        );
     }
 
     // 26. No flake lines for a single-run suite (no repeat set).
@@ -1270,7 +1468,8 @@ mod tests {
         suite.flows = vec![flow];
         let out = format_suite_toon(&suite);
         assert!(
-            !out.lines().any(|l| l.starts_with("flake:") || l == "# flake: flake:passed/total flow (sorted flakiest-first)"),
+            !out.lines().any(|l| l.starts_with("flake:")
+                || l == "# flake: flake:passed/total flow (sorted flakiest-first)"),
             "single-run suite SHALL NOT emit flake lines; got: {out}"
         );
     }
@@ -1280,7 +1479,9 @@ mod tests {
     // 27. AppStop renders stop:bundle.
     #[test]
     fn substeps_toon_app_stop() {
-        let out = format_substeps_toon(&[crate::SubstepDetail::AppStop { bundle: "com.x".into() }]);
+        let out = format_substeps_toon(&[crate::SubstepDetail::AppStop {
+            bundle: "com.x".into(),
+        }]);
         assert_eq!(out, " stop:com.x", "AppStop SHALL render stop:bundle");
     }
 
@@ -1311,7 +1512,10 @@ mod tests {
             selector: "text=X".into(),
             timeout_ms: 5000,
         }]);
-        assert_eq!(out, " !found 5000ms", "ElementNotFound SHALL render !found Nms");
+        assert_eq!(
+            out, " !found 5000ms",
+            "ElementNotFound SHALL render !found Nms"
+        );
     }
 
     // 31. ScrollStarted renders dir:<direction>.
@@ -1321,7 +1525,10 @@ mod tests {
             selector: "text=X".into(),
             direction: "down".into(),
         }]);
-        assert_eq!(out, " dir:down", "ScrollStarted SHALL render dir:<direction>");
+        assert_eq!(
+            out, " dir:down",
+            "ScrollStarted SHALL render dir:<direction>"
+        );
     }
 
     // 32. ScrollAttempt renders #attempt dir (from)→(to) result.
@@ -1337,7 +1544,10 @@ mod tests {
             result: "moved".into(),
             tree_stats: golem_events::TreeStats::default(),
         }]);
-        assert_eq!(out, " #2 down (1,2)→(3,4) moved", "ScrollAttempt SHALL render #n dir (from)→(to) result");
+        assert_eq!(
+            out, " #2 down (1,2)→(3,4) moved",
+            "ScrollAttempt SHALL render #n dir (from)→(to) result"
+        );
     }
 
     // 33. ScrollDirectionReversed renders rev→<dir> <reason>.
@@ -1347,7 +1557,10 @@ mod tests {
             to_direction: "up".into(),
             reason: "edge".into(),
         }]);
-        assert_eq!(out, " rev→up edge", "ScrollDirectionReversed SHALL render rev→<dir> <reason>");
+        assert_eq!(
+            out, " rev→up edge",
+            "ScrollDirectionReversed SHALL render rev→<dir> <reason>"
+        );
     }
 
     // 34. ScrollStrategySwitch renders strat→<index+1> <reason> (1-based).
@@ -1357,7 +1570,10 @@ mod tests {
             to_index: 0,
             reason: "fallback".into(),
         }]);
-        assert_eq!(out, " strat→1 fallback", "ScrollStrategySwitch SHALL render 1-based index");
+        assert_eq!(
+            out, " strat→1 fallback",
+            "ScrollStrategySwitch SHALL render 1-based index"
+        );
     }
 
     // 35. RetryAttempt renders retry attempt/max: error.
@@ -1369,7 +1585,10 @@ mod tests {
             delay_ms: 100,
             error: "stale".into(),
         }]);
-        assert_eq!(out, " retry 1/3: stale", "RetryAttempt SHALL render retry n/m: error");
+        assert_eq!(
+            out, " retry 1/3: stale",
+            "RetryAttempt SHALL render retry n/m: error"
+        );
     }
 
     // 36. HttpRequest with a status renders method→status Nms.
@@ -1381,7 +1600,10 @@ mod tests {
             status: Some(200),
             duration_ms: 42,
         }]);
-        assert_eq!(out, " GET→200 42ms", "HttpRequest with status SHALL render method→status Nms");
+        assert_eq!(
+            out, " GET→200 42ms",
+            "HttpRequest with status SHALL render method→status Nms"
+        );
     }
 
     // 37. HttpRequest without a status renders ? in place of the code.
@@ -1393,7 +1615,10 @@ mod tests {
             status: None,
             duration_ms: 7,
         }]);
-        assert_eq!(out, " POST→? 7ms", "HttpRequest without status SHALL render ?");
+        assert_eq!(
+            out, " POST→? 7ms",
+            "HttpRequest without status SHALL render ?"
+        );
     }
 
     // 38. BashCommand with an exit code renders bash:"cmd" exit=N Nms.
@@ -1404,7 +1629,10 @@ mod tests {
             exit_code: Some(0),
             duration_ms: 12,
         }]);
-        assert_eq!(out, " bash:\"ls\" exit=0 12ms", "BashCommand SHALL render bash:\"cmd\" exit=N Nms");
+        assert_eq!(
+            out, " bash:\"ls\" exit=0 12ms",
+            "BashCommand SHALL render bash:\"cmd\" exit=N Nms"
+        );
     }
 
     // 39. BashCommand without an exit code renders exit=?.
@@ -1415,13 +1643,19 @@ mod tests {
             exit_code: None,
             duration_ms: 99,
         }]);
-        assert_eq!(out, " bash:\"sleep\" exit=? 99ms", "BashCommand without exit SHALL render exit=?");
+        assert_eq!(
+            out, " bash:\"sleep\" exit=? 99ms",
+            "BashCommand without exit SHALL render exit=?"
+        );
     }
 
     // 40. An unhandled substep variant contributes nothing (empty result).
     #[test]
     fn substeps_toon_unhandled_variant_produces_empty() {
         let out = format_substeps_toon(&[crate::SubstepDetail::Backspace { count: 3 }]);
-        assert_eq!(out, "", "unhandled substep variant SHALL contribute no notation");
+        assert_eq!(
+            out, "",
+            "unhandled substep variant SHALL contribute no notation"
+        );
     }
 }

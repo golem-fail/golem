@@ -54,22 +54,14 @@ fn write_section(out: &mut String, header: &str, devices: &[&DeviceInfo]) {
     }
 
     // Compute column widths for alignment
-    let name_width = devices
-        .iter()
-        .map(|d| d.name.len())
-        .max()
-        .unwrap_or(0);
+    let name_width = devices.iter().map(|d| d.name.len()).max().unwrap_or(0);
 
     let version_strings: Vec<String> = devices
         .iter()
         .map(|d| format!("{}:{}", d.platform, d.os_version))
         .collect();
 
-    let version_width = version_strings
-        .iter()
-        .map(|s| s.len())
-        .max()
-        .unwrap_or(0);
+    let version_width = version_strings.iter().map(|s| s.len()).max().unwrap_or(0);
 
     let type_width = devices
         .iter()
@@ -197,7 +189,10 @@ mod tests {
         assert!(output.contains("Physical Devices:"));
         // Each category should show "(none)"
         let none_count = output.matches("(none)").count();
-        assert_eq!(none_count, 3, "Expected 3 '(none)' markers, got {none_count}");
+        assert_eq!(
+            none_count, 3,
+            "Expected 3 '(none)' markers, got {none_count}"
+        );
     }
 
     #[test]
@@ -232,7 +227,10 @@ mod tests {
         let android_pos = output
             .find("Android Emulators:")
             .expect("Android header should exist");
-        assert!(ios_pos < android_pos, "iOS section SHALL precede Android section");
+        assert!(
+            ios_pos < android_pos,
+            "iOS section SHALL precede Android section"
+        );
 
         // iPhone should appear under iOS, not under Android
         let iphone_pos = output.find("iPhone 15").expect("iPhone should appear");
@@ -359,10 +357,8 @@ mod tests {
         // All lines should have the same length after trimming trailing whitespace is
         // not applicable because state strings differ in length.
         // Instead, verify that the platform:version column starts at the same position.
-        let version_positions: Vec<Option<usize>> = ios_lines
-            .iter()
-            .map(|line| line.find("ios:18.0"))
-            .collect();
+        let version_positions: Vec<Option<usize>> =
+            ios_lines.iter().map(|line| line.find("ios:18.0")).collect();
 
         // All positions should be Some and equal
         let first = version_positions[0].expect("version column should exist in first line");

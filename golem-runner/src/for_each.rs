@@ -31,10 +31,7 @@ pub fn build_each_contexts(
     target_app_devices
         .iter()
         .map(|device| {
-            let vars = device_vars
-                .get(&device.udid)
-                .cloned()
-                .unwrap_or_default();
+            let vars = device_vars.get(&device.udid).cloned().unwrap_or_default();
             EachContext {
                 device_id: device.udid.clone(),
                 device_name: device.name.clone(),
@@ -165,10 +162,7 @@ impl WhereFilter {
 /// Filter a slice of devices, returning only those that match the given filter.
 ///
 /// The returned references preserve the input ordering.
-pub fn filter_devices<'a>(
-    devices: &'a [DeviceInfo],
-    filter: &WhereFilter,
-) -> Vec<&'a DeviceInfo> {
+pub fn filter_devices<'a>(devices: &'a [DeviceInfo], filter: &WhereFilter) -> Vec<&'a DeviceInfo> {
     devices.iter().filter(|d| filter.matches(d)).collect()
 }
 

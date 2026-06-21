@@ -92,8 +92,8 @@ mod tests {
     #[test]
     fn empty_name_is_unknown() {
         let mut rng = seeded_rng();
-        let err = generate_structured(&def(""), &mut rng)
-            .expect_err("empty generator name SHALL error");
+        let err =
+            generate_structured(&def(""), &mut rng).expect_err("empty generator name SHALL error");
         let msg = golem_events::clean_msg(&err);
         assert!(
             msg.contains("Unknown structured generator"),
@@ -105,8 +105,8 @@ mod tests {
     #[test]
     fn person_dispatches_to_object() {
         let mut rng = seeded_rng();
-        let value = generate_structured(&def("person"), &mut rng)
-            .expect("person generator SHALL succeed");
+        let value =
+            generate_structured(&def("person"), &mut rng).expect("person generator SHALL succeed");
         assert!(
             value.as_object().is_some(),
             "person SHALL produce an Object value"

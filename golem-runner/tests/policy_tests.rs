@@ -13,8 +13,8 @@ use golem_element::{Bounds, Element};
 use golem_parser::parse_flow;
 use golem_runner::capture::{build_screenshot_path, CaptureConfig};
 use golem_runner::context::ExecutionContext;
-use rand::SeedableRng;
 use golem_runner::executor::{execute_flow, FlowResult};
+use rand::SeedableRng;
 
 // Tests use a short per-step timeout — these flows test outcome
 // (error / warn / ignore policies, retry semantics, screenshot
@@ -46,7 +46,7 @@ fn test_ctx() -> ExecutionContext<'static> {
         emitter: None,
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
         rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
-    inherited_record_default: false,
+        inherited_record_default: false,
     }
 }
 
@@ -129,10 +129,7 @@ fn hierarchy_with_texts(texts: &[&str]) -> Element {
 fn assert_success(result: &FlowResult) {
     assert!(result.success, "flow SHALL succeed");
     assert!(result.failed_step.is_none(), "no step SHALL have failed");
-    assert!(
-        result.failed_block.is_none(),
-        "no block should have failed"
-    );
+    assert!(result.failed_block.is_none(), "no block should have failed");
 }
 
 // ===========================================================================
@@ -161,16 +158,25 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should return Ok(FlowResult)");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should return Ok(FlowResult)");
 
     assert!(!result.success, "flow SHALL fail with if_fail=error");
-    assert_eq!(result.failed_step, Some(1), "second step SHALL be the failure");
     assert_eq!(
-        result.failed_block,
-        Some("failing_block".to_string()),
+        result.failed_step,
+        Some(1),
+        "second step SHALL be the failure"
     );
+    assert_eq!(result.failed_block, Some("failing_block".to_string()),);
 
     // The third step (second screenshot) should NOT have executed.
     // Count includes: 1 explicit screenshot step + 1 failure capture = 2
@@ -204,9 +210,17 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
     assert_eq!(result.warnings.len(), 1, "SHALL collect one warning");
@@ -219,7 +233,10 @@ steps = [
     // Count includes: 2 explicit screenshot steps + 1 failure capture = 3
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
-    assert_eq!(screenshot_count, 3, "both screenshot steps + failure capture screenshot");
+    assert_eq!(
+        screenshot_count, 3,
+        "both screenshot steps + failure capture screenshot"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -244,9 +261,17 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
     assert!(
@@ -256,7 +281,10 @@ steps = [
 
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
-    assert_eq!(screenshot_count, 2, "both screenshots SHALL execute around ignored step");
+    assert_eq!(
+        screenshot_count, 2,
+        "both screenshots SHALL execute around ignored step"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -282,9 +310,17 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should return Ok(FlowResult)");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should return Ok(FlowResult)");
 
     assert!(!result.success, "flow SHALL fail on the error step");
     assert_eq!(result.failed_step, Some(2), "third step (error) SHALL fail");
@@ -298,7 +334,10 @@ steps = [
     // Count includes: 1 warn capture + 1 explicit screenshot step + 1 error capture = 3
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
-    assert_eq!(screenshot_count, 3, "warn capture + screenshot step + error capture");
+    assert_eq!(
+        screenshot_count, 3,
+        "warn capture + screenshot step + error capture"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -322,9 +361,17 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should return Ok(FlowResult)");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should return Ok(FlowResult)");
 
     assert!(
         !result.success,
@@ -364,9 +411,17 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
     assert_eq!(
@@ -378,7 +433,10 @@ steps = [
     // Count includes: 1 explicit screenshot step + 1 failure capture = 2
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
-    assert_eq!(screenshot_count, 2, "screenshot step + failure capture screenshot");
+    assert_eq!(
+        screenshot_count, 2,
+        "screenshot step + failure capture screenshot"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -402,9 +460,17 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should return Ok(FlowResult)");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should return Ok(FlowResult)");
 
     assert!(!result.success, "SHALL fail after retries exhausted");
     assert_eq!(result.failed_step, Some(0));
@@ -435,9 +501,17 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
     assert_eq!(
@@ -475,9 +549,17 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     // The step should fail (element not found) and produce a warning
     assert_success(&result);
@@ -511,9 +593,17 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
     assert_eq!(result.warnings.len(), 1);
@@ -526,10 +616,10 @@ steps = [
     };
     let screenshot_path = build_screenshot_path(
         &config,
-        "login_screen",           // block name
-        2,                        // global step index
-        0,                        // block iteration
-        1,                        // step index of the warning
+        "login_screen", // block name
+        2,              // global step index
+        0,              // block iteration
+        1,              // step index of the warning
         "warn",
     );
 
@@ -564,13 +654,24 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should return Ok(FlowResult)");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should return Ok(FlowResult)");
 
     assert!(!result.success);
     let failed_step = result.failed_step.expect("should have failed_step");
-    let failed_block = result.failed_block.as_deref().expect("should have failed_block");
+    let failed_block = result
+        .failed_block
+        .as_deref()
+        .expect("should have failed_block");
 
     // Build the screenshot path from the failure info
     let config = CaptureConfig {
@@ -594,7 +695,10 @@ steps = [
         .expect("should be valid utf-8");
 
     assert!(filename.contains("error"), "error type in path");
-    assert!(filename.contains("auth_block"), "block name from failure info");
+    assert!(
+        filename.contains("auth_block"),
+        "block name from failure info"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -623,9 +727,17 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
     assert_eq!(result.warnings.len(), 2, "two warnings from two blocks");
@@ -692,9 +804,17 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
     assert!(
@@ -732,9 +852,17 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
     assert!(
@@ -744,7 +872,10 @@ steps = [
 
     let calls = driver.get_calls();
     let screenshot_count = calls.iter().filter(|c| c.0 == "screenshot").count();
-    assert_eq!(screenshot_count, 1, "screenshot SHALL still run after ignored retry failure");
+    assert_eq!(
+        screenshot_count, 1,
+        "screenshot SHALL still run after ignored retry failure"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -768,9 +899,17 @@ steps = [
     let mut vars = golem_vars::VariableStore::new();
     let mut ctx = test_ctx();
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert_success(&result);
     assert!(
@@ -812,12 +951,22 @@ async fn capture_failure_screenshot_writes_to_disk() {
         .expect("should have filename")
         .to_str()
         .expect("utf-8");
-    assert!(filename.contains("my_block"), "block name in captured filename");
-    assert!(filename.contains("error"), "failure type in captured filename");
+    assert!(
+        filename.contains("my_block"),
+        "block name in captured filename"
+    );
+    assert!(
+        filename.contains("error"),
+        "failure type in captured filename"
+    );
 
     // Verify PNG magic bytes were written
     let data = std::fs::read(&path).expect("should read file");
-    assert_eq!(&data[..4], &[0x89, 0x50, 0x4E, 0x47], "SHALL contain PNG magic bytes");
+    assert_eq!(
+        &data[..4],
+        &[0x89, 0x50, 0x4E, 0x47],
+        "SHALL contain PNG magic bytes"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -833,8 +982,7 @@ async fn capture_failure_screenshot_disabled_returns_error() {
         ..CaptureConfig::default()
     };
 
-    let result =
-        capture_failure_screenshot(&driver, &config, "block", 1, 0, 0, "error").await;
+    let result = capture_failure_screenshot(&driver, &config, "block", 1, 0, 0, "error").await;
 
     assert!(result.is_err(), "SHALL error when screenshot disabled");
     let err_msg = result.expect_err("should be error").to_string();
@@ -896,12 +1044,20 @@ steps = [
         emitter: None,
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
         rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
-    inherited_record_default: false,
+        inherited_record_default: false,
     };
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should return Ok(FlowResult)");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should return Ok(FlowResult)");
 
     assert!(!result.success, "flow SHALL fail with if_fail=error");
 
@@ -957,12 +1113,20 @@ steps = [
         emitter: None,
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
         rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
-    inherited_record_default: false,
+        inherited_record_default: false,
     };
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert!(result.success, "flow SHALL succeed with if_fail=warn");
     assert_eq!(result.warnings.len(), 1, "SHALL collect one warning");
@@ -1018,12 +1182,20 @@ steps = [
         emitter: None,
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
         rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
-    inherited_record_default: false,
+        inherited_record_default: false,
     };
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should not error");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should not error");
 
     assert!(result.success, "flow SHALL succeed with if_fail=ignore");
 
@@ -1077,18 +1249,30 @@ steps = [
         emitter: None,
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
         rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
-    inherited_record_default: false,
+        inherited_record_default: false,
     };
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should return Ok(FlowResult)");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should return Ok(FlowResult)");
 
     assert!(
         !result.success,
         "flow SHALL still fail even when screenshot capture fails"
     );
-    assert_eq!(result.failed_step, Some(0), "SHALL report the correct failed step");
+    assert_eq!(
+        result.failed_step,
+        Some(0),
+        "SHALL report the correct failed step"
+    );
     assert_eq!(
         result.failed_block,
         Some("fail_block".to_string()),
@@ -1138,12 +1322,20 @@ steps = [
         emitter: None,
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
         rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
-    inherited_record_default: false,
+        inherited_record_default: false,
     };
 
-    let _result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should return Ok(FlowResult)");
+    let _result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should return Ok(FlowResult)");
 
     // Check that a screenshot file was written in the structured output dir.
     // Path: tmp/{flow}/{device}/screenshots/*.png
@@ -1161,7 +1353,11 @@ steps = [
 
     // Verify PNG magic bytes
     let data = std::fs::read(&png_path).expect("should read screenshot");
-    assert_eq!(&data[..4], &[0x89, 0x50, 0x4E, 0x47], "SHALL contain PNG magic bytes");
+    assert_eq!(
+        &data[..4],
+        &[0x89, 0x50, 0x4E, 0x47],
+        "SHALL contain PNG magic bytes"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1202,12 +1398,20 @@ steps = [
         emitter: None,
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
         rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
-    inherited_record_default: false,
+        inherited_record_default: false,
     };
 
-    let result = execute_flow(&flow, &driver, &mut vars, None, DEFAULT_TIMEOUT, &mut ctx, None)
-        .await
-        .expect("execute_flow should return Ok(FlowResult)");
+    let result = execute_flow(
+        &flow,
+        &driver,
+        &mut vars,
+        None,
+        DEFAULT_TIMEOUT,
+        &mut ctx,
+        None,
+    )
+    .await
+    .expect("execute_flow should return Ok(FlowResult)");
 
     assert!(!result.success, "flow SHALL fail with if_fail=error");
 

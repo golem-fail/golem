@@ -101,7 +101,11 @@ pub fn resolve_anchor(root: &Element, anchor: &AnchorSelector) -> Option<FindRes
 /// element.
 fn resolve_visible_anchor(root: &Element, anchor: &AnchorSelector) -> Option<FindResult> {
     let found = resolve_anchor(root, anchor)?;
-    if anchor_on_screen(&found.element) { Some(found) } else { None }
+    if anchor_on_screen(&found.element) {
+        Some(found)
+    } else {
+        None
+    }
 }
 
 /// True when the element has a non-zero visible footprint (on screen).
@@ -197,7 +201,9 @@ fn apply_relational_filters(
     let mut left_anchor: Option<Bounds> = None;
 
     if let Some(ref anchor) = selector.below {
-        let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
+        let Some(found) = resolve_visible_anchor(root, anchor) else {
+            return Vec::new();
+        };
         let a = *found.element.effective_bounds();
         results.retain(|r| {
             let b = r.element.effective_bounds();
@@ -207,7 +213,9 @@ fn apply_relational_filters(
     }
 
     if let Some(ref anchor) = selector.above {
-        let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
+        let Some(found) = resolve_visible_anchor(root, anchor) else {
+            return Vec::new();
+        };
         let a = *found.element.effective_bounds();
         results.retain(|r| {
             let b = r.element.effective_bounds();
@@ -217,7 +225,9 @@ fn apply_relational_filters(
     }
 
     if let Some(ref anchor) = selector.right_of {
-        let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
+        let Some(found) = resolve_visible_anchor(root, anchor) else {
+            return Vec::new();
+        };
         let a = *found.element.effective_bounds();
         results.retain(|r| {
             let b = r.element.effective_bounds();
@@ -227,7 +237,9 @@ fn apply_relational_filters(
     }
 
     if let Some(ref anchor) = selector.left_of {
-        let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
+        let Some(found) = resolve_visible_anchor(root, anchor) else {
+            return Vec::new();
+        };
         let a = *found.element.effective_bounds();
         results.retain(|r| {
             let b = r.element.effective_bounds();
@@ -240,7 +252,9 @@ fn apply_relational_filters(
         let min = selector.contains_min_matches.unwrap_or(1);
         if min <= 1 {
             // Default: the smallest box around the single first visible match.
-            let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
+            let Some(found) = resolve_visible_anchor(root, anchor) else {
+                return Vec::new();
+            };
             let t = *found.element.effective_bounds();
             // Strictly enclose: an element trivially contains itself, and a
             // zero-margin wrapper coincident with the anchor isn't a meaningful
@@ -277,7 +291,9 @@ fn apply_relational_filters(
     }
 
     if let Some(ref anchor) = selector.inside {
-        let Some(found) = resolve_visible_anchor(root, anchor) else { return Vec::new() };
+        let Some(found) = resolve_visible_anchor(root, anchor) else {
+            return Vec::new();
+        };
         let t = *found.element.effective_bounds();
         results.retain(|r| {
             let b = r.element.effective_bounds();
@@ -295,10 +311,18 @@ fn apply_relational_filters(
         // Sum of primary-axis gaps over active directional predicates.
         let proximity_gap = |b: &Bounds| -> i64 {
             let mut gap: i64 = 0;
-            if let Some(a) = below_anchor { gap += (b.y - a.bottom()) as i64; }
-            if let Some(a) = above_anchor { gap += (a.y - b.bottom()) as i64; }
-            if let Some(a) = right_anchor { gap += (b.x - a.right()) as i64; }
-            if let Some(a) = left_anchor { gap += (a.x - b.right()) as i64; }
+            if let Some(a) = below_anchor {
+                gap += (b.y - a.bottom()) as i64;
+            }
+            if let Some(a) = above_anchor {
+                gap += (a.y - b.bottom()) as i64;
+            }
+            if let Some(a) = right_anchor {
+                gap += (b.x - a.right()) as i64;
+            }
+            if let Some(a) = left_anchor {
+                gap += (a.x - b.right()) as i64;
+            }
             gap
         };
         // Stable sort → equal keys preserve the original tree pre-order, which
@@ -306,13 +330,21 @@ fn apply_relational_filters(
         results.sort_by(|x, y| {
             use std::cmp::Ordering::Equal;
             if containment_active {
-                let c = x.element.effective_bounds().area().cmp(&y.element.effective_bounds().area());
-                if c != Equal { return c; }
+                let c = x
+                    .element
+                    .effective_bounds()
+                    .area()
+                    .cmp(&y.element.effective_bounds().area());
+                if c != Equal {
+                    return c;
+                }
             }
             if proximity_active {
                 let c = proximity_gap(x.element.effective_bounds())
                     .cmp(&proximity_gap(y.element.effective_bounds()));
-                if c != Equal { return c; }
+                if c != Equal {
+                    return c;
+                }
             }
             Equal
         });
@@ -406,7 +438,9 @@ pub fn element_has_trait(element: &Element, trait_name: &str) -> bool {
 
         // Shape/size traits
         "square" => {
-            if w == 0 || h == 0 { return false; }
+            if w == 0 || h == 0 {
+                return false;
+            }
             let ratio = w as f64 / h as f64;
             ratio > 0.8 && ratio < 1.2
         }
@@ -544,7 +578,10 @@ mod tests {
         };
         let results = find_elements(&root, &s);
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].element.accessibility_label.as_deref(), Some("btn-submit"));
+        assert_eq!(
+            results[0].element.accessibility_label.as_deref(),
+            Some("btn-submit")
+        );
     }
 
     // ── 6. ID glob ──────────────────────────────────────────────────
@@ -791,10 +828,14 @@ mod tests {
     #[test]
     fn unicode_text_matching() {
         let mut root = elem("View");
-        root.children
-            .push(elem_with_text("Button", "\u{9001}\u{4FE1}\u{30DC}\u{30BF}\u{30F3}"));
-        root.children
-            .push(elem_with_text("Button", "\u{30AD}\u{30E3}\u{30F3}\u{30BB}\u{30EB}"));
+        root.children.push(elem_with_text(
+            "Button",
+            "\u{9001}\u{4FE1}\u{30DC}\u{30BF}\u{30F3}",
+        ));
+        root.children.push(elem_with_text(
+            "Button",
+            "\u{30AD}\u{30E3}\u{30F3}\u{30BB}\u{30EB}",
+        ));
 
         let s = Selector {
             text: Some("\u{9001}\u{4FE1}*".to_string()),
@@ -843,11 +884,14 @@ mod tests {
         let mut root = elem("View");
         root.bounds = bounds(0, 0, 400, 600);
         // Header at top: y=0, height=50 => bottom=50
-        root.children.push(elem_at("Label", "Header", 0, 0, 400, 50));
+        root.children
+            .push(elem_at("Label", "Header", 0, 0, 400, 50));
         // Content below header: y=60 > 50
-        root.children.push(elem_at("Button", "Content", 0, 60, 400, 40));
+        root.children
+            .push(elem_at("Button", "Content", 0, 60, 400, 40));
         // Sidebar at same level as header: y=10 (not below)
-        root.children.push(elem_at("Label", "Sidebar", 0, 10, 100, 40));
+        root.children
+            .push(elem_at("Label", "Sidebar", 0, 10, 100, 40));
 
         let s = Selector {
             below: Some(AnchorSelector::Text("Header".to_string())),
@@ -867,9 +911,11 @@ mod tests {
         // Title at top: y=0, height=30 => bottom=30
         root.children.push(elem_at("Label", "Title", 0, 0, 400, 30));
         // Footer at bottom: y=500
-        root.children.push(elem_at("Label", "Footer", 0, 500, 400, 50));
+        root.children
+            .push(elem_at("Label", "Footer", 0, 500, 400, 50));
         // Body in middle: y=100, height=200 => bottom=300 < 500
-        root.children.push(elem_at("Label", "Body", 0, 100, 400, 200));
+        root.children
+            .push(elem_at("Label", "Body", 0, 100, 400, 200));
 
         let s = Selector {
             above: Some(AnchorSelector::Text("Footer".to_string())),
@@ -878,7 +924,10 @@ mod tests {
         let results = find_elements(&root, &s);
         // Title (bottom=30 < 500) and Body (bottom=300 < 500) qualify
         assert_eq!(results.len(), 2);
-        let texts: Vec<_> = results.iter().filter_map(|r| r.element.text.as_deref()).collect();
+        let texts: Vec<_> = results
+            .iter()
+            .filter_map(|r| r.element.text.as_deref())
+            .collect();
         assert!(texts.contains(&"Title"));
         assert!(texts.contains(&"Body"));
     }
@@ -892,7 +941,8 @@ mod tests {
         // Label on the left: x=0, width=100 => right=100
         root.children.push(elem_at("Label", "Label", 0, 0, 100, 40));
         // Input to the right: x=120 > 100
-        root.children.push(elem_at("TextField", "Input", 120, 0, 200, 40));
+        root.children
+            .push(elem_at("TextField", "Input", 120, 0, 200, 40));
         // Another label overlapping: x=50 (not to the right)
         root.children.push(elem_at("Label", "Other", 50, 0, 80, 40));
 
@@ -914,7 +964,8 @@ mod tests {
         // Icon on the left: x=0, width=30 => right=30
         root.children.push(elem_at("Image", "Icon", 0, 0, 30, 30));
         // Button on the right: x=200
-        root.children.push(elem_at("Button", "Button", 200, 0, 100, 40));
+        root.children
+            .push(elem_at("Button", "Button", 200, 0, 100, 40));
         // Another element overlapping: x=180, width=50 => right=230 (not to the left)
         root.children.push(elem_at("Label", "Near", 180, 0, 50, 40));
 
@@ -932,7 +983,8 @@ mod tests {
     #[test]
     fn relational_anchor_not_found() {
         let mut root = elem("View");
-        root.children.push(elem_at("Button", "Submit", 0, 100, 100, 40));
+        root.children
+            .push(elem_at("Button", "Submit", 0, 100, 100, 40));
 
         let s = Selector {
             below: Some(AnchorSelector::Text("Nonexistent".to_string())),
@@ -949,18 +1001,32 @@ mod tests {
         let mut root = elem("View");
         root.bounds = bounds(0, 0, 800, 600);
         // Narrow heading in the LEFT column: x=0..300.
-        root.children.push(elem_at("Label", "Heading", 0, 0, 300, 50));
+        root.children
+            .push(elem_at("Label", "Heading", 0, 0, 300, 50));
         // Element below AND in the heading's column (overlaps x).
-        root.children.push(elem_at("Button", "InColumn", 0, 100, 300, 40));
+        root.children
+            .push(elem_at("Button", "InColumn", 0, 100, 300, 40));
         // Element below but in the RIGHT column (x=400..700, no x-overlap).
-        root.children.push(elem_at("Button", "OtherColumn", 400, 100, 300, 40));
+        root.children
+            .push(elem_at("Button", "OtherColumn", 400, 100, 300, 40));
 
-        let s = Selector { below: Some(AnchorSelector::Text("Heading".to_string())), ..sel() };
+        let s = Selector {
+            below: Some(AnchorSelector::Text("Heading".to_string())),
+            ..sel()
+        };
         let results = find_elements(&root, &s);
-        let texts: Vec<_> = results.iter().filter_map(|r| r.element.text.as_deref()).collect();
-        assert!(texts.contains(&"InColumn"), "SHALL keep the in-column element below");
-        assert!(!texts.contains(&"OtherColumn"),
-            "SHALL exclude an element below but in a different column (no horizontal overlap)");
+        let texts: Vec<_> = results
+            .iter()
+            .filter_map(|r| r.element.text.as_deref())
+            .collect();
+        assert!(
+            texts.contains(&"InColumn"),
+            "SHALL keep the in-column element below"
+        );
+        assert!(
+            !texts.contains(&"OtherColumn"),
+            "SHALL exclude an element below but in a different column (no horizontal overlap)"
+        );
     }
 
     // ── below sorts nearest-first (primary-axis gap) ────────────────
@@ -969,15 +1035,23 @@ mod tests {
     fn below_sorts_nearest_first() {
         let mut root = elem("View");
         root.bounds = bounds(0, 0, 400, 800);
-        root.children.push(elem_at("Label", "Anchor", 0, 0, 400, 50));
+        root.children
+            .push(elem_at("Label", "Anchor", 0, 0, 400, 50));
         // Far one first in tree order, near one second — sort must reorder.
         root.children.push(elem_at("Label", "Far", 0, 400, 400, 40));
-        root.children.push(elem_at("Label", "Near", 0, 100, 400, 40));
+        root.children
+            .push(elem_at("Label", "Near", 0, 100, 400, 40));
 
-        let s = Selector { below: Some(AnchorSelector::Text("Anchor".to_string())), ..sel() };
+        let s = Selector {
+            below: Some(AnchorSelector::Text("Anchor".to_string())),
+            ..sel()
+        };
         let results = find_elements(&root, &s);
-        assert_eq!(results[0].element.text.as_deref(), Some("Near"),
-            "nearest-by-vertical-gap SHALL sort first, regardless of tree order");
+        assert_eq!(
+            results[0].element.text.as_deref(),
+            Some("Near"),
+            "nearest-by-vertical-gap SHALL sort first, regardless of tree order"
+        );
     }
 
     // ── contains: smallest enclosing element, excluding the anchor ──
@@ -987,21 +1061,39 @@ mod tests {
         let mut root = elem("View");
         root.bounds = bounds(0, 0, 400, 600);
         // The target item.
-        root.children.push(elem_at("Label", "Item", 100, 200, 50, 20));
+        root.children
+            .push(elem_at("Label", "Item", 100, 200, 50, 20));
         // Tight list container around the item.
-        root.children.push(elem_at("List", "list", 90, 180, 100, 200));
+        root.children
+            .push(elem_at("List", "list", 90, 180, 100, 200));
         // Bigger section wrapper also enclosing the item.
-        root.children.push(elem_at("Section", "section", 0, 100, 400, 400));
+        root.children
+            .push(elem_at("Section", "section", 0, 100, 400, 400));
         // A box that does NOT enclose the item (left column only).
         root.children.push(elem_at("Aside", "aside", 0, 0, 80, 600));
 
-        let s = Selector { contains: Some(AnchorSelector::Text("Item".to_string())), ..sel() };
+        let s = Selector {
+            contains: Some(AnchorSelector::Text("Item".to_string())),
+            ..sel()
+        };
         let results = find_elements(&root, &s);
-        let texts: Vec<_> = results.iter().filter_map(|r| r.element.text.as_deref()).collect();
-        assert!(!texts.contains(&"Item"), "SHALL exclude the anchor element itself");
-        assert!(!texts.contains(&"aside"), "SHALL exclude non-enclosing elements");
-        assert_eq!(results[0].element.text.as_deref(), Some("list"),
-            "smallest enclosing element SHALL sort first");
+        let texts: Vec<_> = results
+            .iter()
+            .filter_map(|r| r.element.text.as_deref())
+            .collect();
+        assert!(
+            !texts.contains(&"Item"),
+            "SHALL exclude the anchor element itself"
+        );
+        assert!(
+            !texts.contains(&"aside"),
+            "SHALL exclude non-enclosing elements"
+        );
+        assert_eq!(
+            results[0].element.text.as_deref(),
+            Some("list"),
+            "smallest enclosing element SHALL sort first"
+        );
     }
 
     // ── contains + min_matches: the repeated-item container ─────────
@@ -1039,7 +1131,8 @@ mod tests {
             ..sel()
         };
         assert_eq!(
-            find_elements(&root, &s1)[0].element.element_type, "Row",
+            find_elements(&root, &s1)[0].element.element_type,
+            "Row",
             "min_matches=1 SHALL pick the smallest enclosing box (the wrapper)"
         );
 
@@ -1050,7 +1143,8 @@ mod tests {
             ..sel()
         };
         assert_eq!(
-            find_elements(&root, &s2)[0].element.element_type, "List",
+            find_elements(&root, &s2)[0].element.element_type,
+            "List",
             "min_matches=2 SHALL climb to the smallest container of ≥2 items"
         );
     }
@@ -1076,20 +1170,38 @@ mod tests {
         let mut root = elem("View");
         root.bounds = bounds(0, 0, 400, 600);
         // The container region.
-        root.children.push(elem_at("List", "Region", 50, 50, 200, 200));
+        root.children
+            .push(elem_at("List", "Region", 50, 50, 200, 200));
         // Inside the region.
-        root.children.push(elem_at("Label", "InsideA", 60, 60, 50, 20));
-        root.children.push(elem_at("Label", "InsideB", 60, 100, 80, 20));
+        root.children
+            .push(elem_at("Label", "InsideA", 60, 60, 50, 20));
+        root.children
+            .push(elem_at("Label", "InsideB", 60, 100, 80, 20));
         // Outside the region.
-        root.children.push(elem_at("Label", "Outside", 300, 60, 50, 20));
+        root.children
+            .push(elem_at("Label", "Outside", 300, 60, 50, 20));
 
-        let s = Selector { inside: Some(AnchorSelector::Text("Region".to_string())), ..sel() };
+        let s = Selector {
+            inside: Some(AnchorSelector::Text("Region".to_string())),
+            ..sel()
+        };
         let results = find_elements(&root, &s);
-        let texts: Vec<_> = results.iter().filter_map(|r| r.element.text.as_deref()).collect();
-        assert!(texts.contains(&"InsideA") && texts.contains(&"InsideB"),
-            "SHALL keep elements enclosed by the anchor");
-        assert!(!texts.contains(&"Outside"), "SHALL exclude elements outside the anchor");
-        assert!(!texts.contains(&"Region"), "SHALL exclude the anchor element itself");
+        let texts: Vec<_> = results
+            .iter()
+            .filter_map(|r| r.element.text.as_deref())
+            .collect();
+        assert!(
+            texts.contains(&"InsideA") && texts.contains(&"InsideB"),
+            "SHALL keep elements enclosed by the anchor"
+        );
+        assert!(
+            !texts.contains(&"Outside"),
+            "SHALL exclude elements outside the anchor"
+        );
+        assert!(
+            !texts.contains(&"Region"),
+            "SHALL exclude the anchor element itself"
+        );
     }
 
     // ── containment sort dominates proximity (priority order) ───────
@@ -1099,11 +1211,14 @@ mod tests {
         let mut root = elem("View");
         root.bounds = bounds(0, 0, 400, 800);
         root.children.push(elem_at("Label", "Head", 0, 0, 400, 40));
-        root.children.push(elem_at("Label", "Target", 100, 500, 50, 20));
+        root.children
+            .push(elem_at("Label", "Target", 100, 500, 50, 20));
         // Near the head but a large enclosing box.
-        root.children.push(elem_at("Box", "BigNear", 0, 60, 400, 480));
+        root.children
+            .push(elem_at("Box", "BigNear", 0, 60, 400, 480));
         // Farther from head but a tighter enclosing box.
-        root.children.push(elem_at("Box", "SmallFar", 90, 480, 100, 60));
+        root.children
+            .push(elem_at("Box", "SmallFar", 90, 480, 100, 60));
 
         let s = Selector {
             below: Some(AnchorSelector::Text("Head".to_string())),
@@ -1111,8 +1226,11 @@ mod tests {
             ..sel()
         };
         let results = find_elements(&root, &s);
-        assert_eq!(results[0].element.text.as_deref(), Some("SmallFar"),
-            "containment (smallest) SHALL outrank proximity (nearest) in the sort");
+        assert_eq!(
+            results[0].element.text.as_deref(),
+            Some("SmallFar"),
+            "containment (smallest) SHALL outrank proximity (nearest) in the sort"
+        );
     }
 
     // ── 31. Combined type + below + enabled ─────────────────────────
@@ -1122,7 +1240,8 @@ mod tests {
         let mut root = elem("View");
         root.bounds = bounds(0, 0, 400, 600);
         // Header at top
-        root.children.push(elem_at("Label", "Header", 0, 0, 400, 50));
+        root.children
+            .push(elem_at("Label", "Header", 0, 0, 400, 50));
 
         // Enabled button below header
         let mut btn1 = elem_at("Button", "Enabled Btn", 0, 60, 200, 40);
@@ -1135,7 +1254,8 @@ mod tests {
         root.children.push(btn2);
 
         // Enabled label below header (wrong type)
-        root.children.push(elem_at("Label", "Info", 0, 160, 200, 40));
+        root.children
+            .push(elem_at("Label", "Info", 0, 160, 200, 40));
 
         let s = Selector {
             text: Some("*Btn".to_string()),
@@ -1155,11 +1275,15 @@ mod tests {
         let mut root = elem("View");
         root.bounds = bounds(0, 0, 400, 600);
         // Header: bottom = 50
-        root.children.push(elem_at("Label", "Header", 0, 0, 400, 50));
+        root.children
+            .push(elem_at("Label", "Header", 0, 0, 400, 50));
         // Three buttons below header
-        root.children.push(elem_at("Button", "Btn A", 0, 60, 200, 40));
-        root.children.push(elem_at("Button", "Btn B", 0, 110, 200, 40));
-        root.children.push(elem_at("Button", "Btn C", 0, 160, 200, 40));
+        root.children
+            .push(elem_at("Button", "Btn A", 0, 60, 200, 40));
+        root.children
+            .push(elem_at("Button", "Btn B", 0, 110, 200, 40));
+        root.children
+            .push(elem_at("Button", "Btn C", 0, 160, 200, 40));
 
         let s = Selector {
             text: Some("Btn *".to_string()),
@@ -1188,7 +1312,11 @@ mod tests {
         };
         let results = find_elements(&root, &s);
         // root is unchecked, off is unchecked; only `on` qualifies.
-        assert_eq!(results.len(), 1, "checked=true SHALL keep only checked elements");
+        assert_eq!(
+            results.len(),
+            1,
+            "checked=true SHALL keep only checked elements"
+        );
         assert!(results[0].element.checked);
     }
 
@@ -1205,7 +1333,11 @@ mod tests {
             ..sel()
         };
         let results = find_elements(&root, &s);
-        assert_eq!(results.len(), 1, "elements without text SHALL not match a text selector");
+        assert_eq!(
+            results.len(),
+            1,
+            "elements without text SHALL not match a text selector"
+        );
         assert_eq!(results[0].element.text.as_deref(), Some("Go"));
     }
 
@@ -1224,7 +1356,11 @@ mod tests {
             ..sel()
         };
         let results = find_elements(&root, &s);
-        assert_eq!(results.len(), 1, "elements without a label SHALL not match a label selector");
+        assert_eq!(
+            results.len(),
+            1,
+            "elements without a label SHALL not match a label selector"
+        );
     }
 
     // ── 36. resolve_anchor with a full selector ──────────────────────
@@ -1276,7 +1412,10 @@ mod tests {
     fn resolve_anchor_none_when_absent() {
         let root = elem("View");
         let anchor = AnchorSelector::Text("Missing".to_string());
-        assert!(resolve_anchor(&root, &anchor).is_none(), "absent anchor SHALL resolve to None");
+        assert!(
+            resolve_anchor(&root, &anchor).is_none(),
+            "absent anchor SHALL resolve to None"
+        );
     }
 
     // ── 39. relational filter empty when anchor off-screen ───────────
@@ -1291,14 +1430,18 @@ mod tests {
         header.visible_bounds = Some(bounds(0, 0, 0, 0));
         root.children.push(header);
         // A real candidate that WOULD be below if the anchor were visible.
-        root.children.push(elem_at("Button", "Content", 0, 60, 400, 40));
+        root.children
+            .push(elem_at("Button", "Content", 0, 60, 400, 40));
 
         let s = Selector {
             below: Some(AnchorSelector::Text("Header".to_string())),
             ..sel()
         };
         let results = find_elements(&root, &s);
-        assert!(results.is_empty(), "off-screen anchor SHALL yield an empty relational result");
+        assert!(
+            results.is_empty(),
+            "off-screen anchor SHALL yield an empty relational result"
+        );
     }
 
     // ── 40. visible_bounds None trusts on-screen bounds for anchor ───
@@ -1308,15 +1451,21 @@ mod tests {
         let mut root = elem("View");
         root.bounds = bounds(0, 0, 400, 600);
         // visible_bounds None (native a11y); bounds are non-zero => on screen.
-        root.children.push(elem_at("Label", "Header", 0, 0, 400, 50));
-        root.children.push(elem_at("Button", "Content", 0, 60, 400, 40));
+        root.children
+            .push(elem_at("Label", "Header", 0, 0, 400, 50));
+        root.children
+            .push(elem_at("Button", "Content", 0, 60, 400, 40));
 
         let s = Selector {
             below: Some(AnchorSelector::Text("Header".to_string())),
             ..sel()
         };
         let results = find_elements(&root, &s);
-        assert_eq!(results.len(), 1, "None visible_bounds SHALL trust the anchor's bounds");
+        assert_eq!(
+            results.len(),
+            1,
+            "None visible_bounds SHALL trust the anchor's bounds"
+        );
         assert_eq!(results[0].element.text.as_deref(), Some("Content"));
     }
 
@@ -1327,7 +1476,8 @@ mod tests {
         let mut root = elem("View");
         root.bounds = bounds(0, 0, 400, 600);
         // Anchor: bottom = 50.
-        root.children.push(elem_at("Label", "Header", 0, 0, 400, 50));
+        root.children
+            .push(elem_at("Label", "Header", 0, 0, 400, 50));
         // Candidate whose raw bounds.y=10 (above anchor bottom) but whose
         // visible_bounds.y=60 (below). effective_bounds SHALL win.
         let mut cand = elem_at("Button", "Content", 0, 10, 400, 40);
@@ -1339,7 +1489,11 @@ mod tests {
             ..sel()
         };
         let results = find_elements(&root, &s);
-        assert_eq!(results.len(), 1, "relational filter SHALL compare effective_bounds");
+        assert_eq!(
+            results.len(),
+            1,
+            "relational filter SHALL compare effective_bounds"
+        );
         assert_eq!(results[0].element.text.as_deref(), Some("Content"));
     }
 
@@ -1350,7 +1504,10 @@ mod tests {
         assert!(element_has_trait(&elem("Button"), "button"));
         assert!(element_has_trait(&elem("link"), "button"));
         // Case-insensitive: iOS lowercase vs Android PascalCase.
-        assert!(element_has_trait(&elem("LINK"), "button"), "trait check SHALL be case-insensitive");
+        assert!(
+            element_has_trait(&elem("LINK"), "button"),
+            "trait check SHALL be case-insensitive"
+        );
         assert!(!element_has_trait(&elem("Label"), "button"));
     }
 
@@ -1375,9 +1532,15 @@ mod tests {
         // Empty is not short (requires len > 0).
         assert!(!element_has_trait(&elem("Label"), "short_text"));
         // len 10 => short.
-        assert!(element_has_trait(&elem_with_text("Label", "0123456789"), "short_text"));
+        assert!(element_has_trait(
+            &elem_with_text("Label", "0123456789"),
+            "short_text"
+        ));
         // len 11 => not short.
-        assert!(!element_has_trait(&elem_with_text("Label", "0123456789X"), "short_text"));
+        assert!(!element_has_trait(
+            &elem_with_text("Label", "0123456789X"),
+            "short_text"
+        ));
     }
 
     // ── 47. trait: long_text boundary at len 50 ─────────────────────
@@ -1387,9 +1550,15 @@ mod tests {
         let fifty = "a".repeat(50);
         let fifty_one = "a".repeat(51);
         // len 50 => NOT long (requires > 50).
-        assert!(!element_has_trait(&elem_with_text("Label", &fifty), "long_text"));
+        assert!(!element_has_trait(
+            &elem_with_text("Label", &fifty),
+            "long_text"
+        ));
         // len 51 => long.
-        assert!(element_has_trait(&elem_with_text("Label", &fifty_one), "long_text"));
+        assert!(element_has_trait(
+            &elem_with_text("Label", &fifty_one),
+            "long_text"
+        ));
     }
 
     // ── 48. trait: square ratio window and zero-dim guard ───────────
@@ -1410,7 +1579,10 @@ mod tests {
 
         let mut zero = elem("View");
         zero.bounds = bounds(0, 0, 0, 100); // zero width => guarded false
-        assert!(!element_has_trait(&zero, "square"), "zero dimension SHALL not be square");
+        assert!(
+            !element_has_trait(&zero, "square"),
+            "zero dimension SHALL not be square"
+        );
     }
 
     // ── 49. trait: wide / tall ──────────────────────────────────────
@@ -1430,14 +1602,20 @@ mod tests {
         // Boundary: exactly 2x is NOT wide (strict >).
         let mut exact = elem("View");
         exact.bounds = bounds(0, 0, 200, 100);
-        assert!(!element_has_trait(&exact, "wide"), "exactly 2x SHALL not be wide");
+        assert!(
+            !element_has_trait(&exact, "wide"),
+            "exactly 2x SHALL not be wide"
+        );
     }
 
     // ── 51. trait: unknown trait never matches ──────────────────────
 
     #[test]
     fn trait_unknown_never_matches() {
-        assert!(!element_has_trait(&elem_with_text("Button", "x"), "bogus_trait"));
+        assert!(!element_has_trait(
+            &elem_with_text("Button", "x"),
+            "bogus_trait"
+        ));
     }
 
     // ── 52. traits in selector AND-combine and filter ───────────────
@@ -1459,7 +1637,11 @@ mod tests {
         root.children.push(wide_btn);
 
         let s = Selector {
-            traits: vec!["button".to_string(), "square".to_string(), "has_text".to_string()],
+            traits: vec![
+                "button".to_string(),
+                "square".to_string(),
+                "has_text".to_string(),
+            ],
             ..sel()
         };
         let results = find_elements(&root, &s);
@@ -1479,6 +1661,9 @@ mod tests {
             ..sel()
         };
         let results = find_elements(&root, &s);
-        assert!(results.is_empty(), "an unknown trait SHALL match no element");
+        assert!(
+            results.is_empty(),
+            "an unknown trait SHALL match no element"
+        );
     }
 }

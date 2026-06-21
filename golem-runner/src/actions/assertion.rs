@@ -7,7 +7,11 @@ use crate::context::ExecutionContext;
 use crate::resolution::{poll_for_absence, resolve_element};
 
 /// Assert that an element matching the step's selectors exists in the hierarchy.
-pub(crate) async fn handle_assert_visible(step: &Step, driver: &dyn PlatformDriver, ctx: &ExecutionContext<'_>) -> Result<()> {
+pub(crate) async fn handle_assert_visible(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+    ctx: &ExecutionContext<'_>,
+) -> Result<()> {
     resolve_element(step, driver, ctx.emitter).await?;
     Ok(())
 }
@@ -16,10 +20,12 @@ pub(crate) async fn handle_assert_visible(step: &Step, driver: &dyn PlatformDriv
 ///
 /// Polls the hierarchy until the element disappears or timeout (default 10s).
 /// Passes immediately if the element is already absent.
-pub(crate) async fn handle_assert_not_visible(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+pub(crate) async fn handle_assert_not_visible(
+    step: &Step,
+    driver: &dyn PlatformDriver,
+) -> Result<()> {
     poll_for_absence(step, driver).await
 }
-
 
 /// Assert that an alert/dialog is currently displayed.
 ///
@@ -178,7 +184,10 @@ mod tests {
 
         let ctx = test_ctx(Path::new("."));
         let result = handle_assert_visible(&step, &driver, &ctx).await;
-        assert!(result.is_err(), "assert_visible SHALL fail when text does not match");
+        assert!(
+            result.is_err(),
+            "assert_visible SHALL fail when text does not match"
+        );
     }
 
     // ── assert_visible with enabled selector ─────────────────────────
@@ -220,7 +229,10 @@ mod tests {
 
         let ctx = test_ctx(Path::new("."));
         let result = handle_assert_visible(&step, &driver, &ctx).await;
-        assert!(result.is_err(), "assert_visible SHALL fail when element is disabled");
+        assert!(
+            result.is_err(),
+            "assert_visible SHALL fail when element is disabled"
+        );
     }
 
     // ── assert_alert tests ────────────────────────────────────────────
@@ -228,7 +240,8 @@ mod tests {
     #[tokio::test]
     async fn assert_alert_succeeds_when_alert_present() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let alert = make_element_with_text("Alert", "Delete this item?", Bounds::new(50, 200, 275, 150));
+        let alert =
+            make_element_with_text("Alert", "Delete this item?", Bounds::new(50, 200, 275, 150));
         root.children.push(alert);
         let driver = MockPlatformDriver::new(root);
 
@@ -242,7 +255,8 @@ mod tests {
     #[tokio::test]
     async fn assert_alert_with_matching_text_pattern() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let alert = make_element_with_text("Alert", "Delete this item?", Bounds::new(50, 200, 275, 150));
+        let alert =
+            make_element_with_text("Alert", "Delete this item?", Bounds::new(50, 200, 275, 150));
         root.children.push(alert);
         let driver = MockPlatformDriver::new(root);
 
@@ -257,7 +271,8 @@ mod tests {
     #[tokio::test]
     async fn assert_alert_fails_with_mismatched_text_pattern() {
         let mut root = make_element("View", Bounds::new(0, 0, 375, 812));
-        let alert = make_element_with_text("Alert", "Delete this item?", Bounds::new(50, 200, 275, 150));
+        let alert =
+            make_element_with_text("Alert", "Delete this item?", Bounds::new(50, 200, 275, 150));
         root.children.push(alert);
         let driver = MockPlatformDriver::new(root);
 
@@ -265,7 +280,10 @@ mod tests {
         step.on_text = Some("Save*".to_string());
 
         let result = handle_assert_alert(&step, &driver).await;
-        assert!(result.is_err(), "assert_alert SHALL fail when text does not match");
+        assert!(
+            result.is_err(),
+            "assert_alert SHALL fail when text does not match"
+        );
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
             err_msg.contains("does not match"),
@@ -308,7 +326,10 @@ mod tests {
         step.on_text = Some("Delete*".to_string());
 
         let result = handle_assert_alert(&step, &driver).await;
-        assert!(result.is_err(), "assert_alert SHALL fail when empty text does not match literal");
+        assert!(
+            result.is_err(),
+            "assert_alert SHALL fail when empty text does not match literal"
+        );
         let err_msg = format!("{}", result.expect_err("should be error"));
         assert!(
             err_msg.contains("does not match"),

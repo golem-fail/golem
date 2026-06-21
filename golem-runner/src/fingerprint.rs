@@ -152,9 +152,19 @@ fn content_fingerprint(project_root: &Path) -> Option<Fingerprint> {
         .add_custom_ignore_filename(".golemignore");
     // Build-output dirs that we never want in the fingerprint.
     let extra_ignores = [
-        "target", "node_modules", ".golem", "build", "DerivedData",
-        ".gradle", "dist", ".next", ".cache", "Pods", ".git",
-        ".idea", ".vscode",
+        "target",
+        "node_modules",
+        ".golem",
+        "build",
+        "DerivedData",
+        ".gradle",
+        "dist",
+        ".next",
+        ".cache",
+        "Pods",
+        ".git",
+        ".idea",
+        ".vscode",
     ];
     let walker = wb.build();
 
@@ -302,7 +312,8 @@ mod tests {
         let s = serde_json::to_string(&g).unwrap();
         let back: Fingerprint = serde_json::from_str(&s).unwrap();
         assert_eq!(g, back);
-        let n: Fingerprint = serde_json::from_str(&serde_json::to_string(&Fingerprint::None).unwrap()).unwrap();
+        let n: Fingerprint =
+            serde_json::from_str(&serde_json::to_string(&Fingerprint::None).unwrap()).unwrap();
         assert_eq!(n, Fingerprint::None);
     }
 
@@ -312,8 +323,11 @@ mod tests {
             rev: "abc1234567890".into(),
             porcelain: "da39a3ee5e6b4b0d3255bfef95601890afd80709".into(), // sha1("")
         };
-        assert_eq!(g.short_label(), "git:abc1234",
-            "clean working tree SHALL omit the porcelain suffix");
+        assert_eq!(
+            g.short_label(),
+            "git:abc1234",
+            "clean working tree SHALL omit the porcelain suffix"
+        );
     }
 
     #[test]
@@ -322,8 +336,11 @@ mod tests {
             rev: "abc1234567890".into(),
             porcelain: "0a1b2c3d4e5f6789".into(),
         };
-        assert_eq!(g.short_label(), "git:abc1234+0a1b",
-            "dirty working tree SHALL include 4-char porcelain suffix");
+        assert_eq!(
+            g.short_label(),
+            "git:abc1234+0a1b",
+            "dirty working tree SHALL include 4-char porcelain suffix"
+        );
     }
 
     #[test]
@@ -341,7 +358,9 @@ mod tests {
             rev: "abc".into(),
             porcelain: "def".into(),
         };
-        let c = Fingerprint::Content { hash: "0123".into() };
+        let c = Fingerprint::Content {
+            hash: "0123".into(),
+        };
         assert!(g.is_some(), "Git fingerprint SHALL be is_some");
         assert!(c.is_some(), "Content fingerprint SHALL be is_some");
         assert!(!Fingerprint::None.is_some(), "None SHALL NOT be is_some");
@@ -354,8 +373,11 @@ mod tests {
             rev: "abc".into(),
             porcelain: "da39a3ee5e6b4b0d3255bfef95601890afd80709".into(),
         };
-        assert_eq!(g.short_label(), "git:abc",
-            "rev shorter than 7 chars SHALL be emitted whole");
+        assert_eq!(
+            g.short_label(),
+            "git:abc",
+            "rev shorter than 7 chars SHALL be emitted whole"
+        );
     }
 
     // 3. A dirty porcelain shorter than 4 chars SHALL be emitted whole.
@@ -365,16 +387,22 @@ mod tests {
             rev: "abcdef0".into(),
             porcelain: "12".into(),
         };
-        assert_eq!(g.short_label(), "git:abcdef0+12",
-            "porcelain shorter than 4 chars SHALL be emitted whole");
+        assert_eq!(
+            g.short_label(),
+            "git:abcdef0+12",
+            "porcelain shorter than 4 chars SHALL be emitted whole"
+        );
     }
 
     // 4. A content hash shorter than 8 chars SHALL be emitted whole.
     #[test]
     fn short_label_short_content_hash_not_truncated() {
         let c = Fingerprint::Content { hash: "abc".into() };
-        assert_eq!(c.short_label(), "content:abc",
-            "content hash shorter than 8 chars SHALL be emitted whole");
+        assert_eq!(
+            c.short_label(),
+            "content:abc",
+            "content hash shorter than 8 chars SHALL be emitted whole"
+        );
     }
 
     // 5. An empty tree yields no entries, so compute SHALL fall through to None.
@@ -382,8 +410,11 @@ mod tests {
     fn compute_empty_dir_is_none() {
         let dir = tempdir().expect("tempdir");
         let f = Fingerprint::compute(dir.path());
-        assert_eq!(f, Fingerprint::None,
-            "empty non-git tree SHALL produce None");
+        assert_eq!(
+            f,
+            Fingerprint::None,
+            "empty non-git tree SHALL produce None"
+        );
         assert!(!f.is_some());
     }
 
@@ -394,8 +425,11 @@ mod tests {
         std::fs::create_dir(dir.path().join("node_modules")).expect("mkdir");
         std::fs::write(dir.path().join("node_modules/dep.js"), "x").expect("write");
         let f = Fingerprint::compute(dir.path());
-        assert_eq!(f, Fingerprint::None,
-            "tree with only ignored content SHALL produce None");
+        assert_eq!(
+            f,
+            Fingerprint::None,
+            "tree with only ignored content SHALL produce None"
+        );
     }
 
     // 7. The .golemignore custom ignore file SHALL exclude matching files.
@@ -407,7 +441,10 @@ mod tests {
         let a = Fingerprint::compute(dir.path());
         std::fs::write(dir.path().join("secret.bin"), vec![0u8; 64]).expect("write secret");
         let b = Fingerprint::compute(dir.path());
-        assert_eq!(a, b, ".golemignore'd file SHALL NOT contribute to fingerprint");
+        assert_eq!(
+            a, b,
+            ".golemignore'd file SHALL NOT contribute to fingerprint"
+        );
     }
 
     // 8. Renaming a file (same content) changes the (path,hash) pair set, so
@@ -420,7 +457,10 @@ mod tests {
         std::fs::remove_file(dir.path().join("a.txt")).expect("rm a");
         std::fs::write(dir.path().join("b.txt"), "payload").expect("write b");
         let b = Fingerprint::compute(dir.path());
-        assert_ne!(a, b, "rename SHALL change fingerprint (path is part of the hash)");
+        assert_ne!(
+            a, b,
+            "rename SHALL change fingerprint (path is part of the hash)"
+        );
     }
 
     // 9. Path is folded into the hash alongside content: two trees that carry
@@ -445,14 +485,20 @@ mod tests {
         let f2 = Fingerprint::compute(dir2.path());
 
         // 9c. Both are Content fingerprints (non-git tempdirs).
-        assert!(matches!(f1, Fingerprint::Content { .. }),
-            "tree 1 SHALL be a Content fingerprint");
-        assert!(matches!(f2, Fingerprint::Content { .. }),
-            "tree 2 SHALL be a Content fingerprint");
+        assert!(
+            matches!(f1, Fingerprint::Content { .. }),
+            "tree 1 SHALL be a Content fingerprint"
+        );
+        assert!(
+            matches!(f2, Fingerprint::Content { .. }),
+            "tree 2 SHALL be a Content fingerprint"
+        );
         // 9d. Equal content, different paths => different fingerprint, proving
         //     the path string is hashed in, not just the content.
-        assert_ne!(f1, f2,
-            "trees with equal content but distinct path splits SHALL differ");
+        assert_ne!(
+            f1, f2,
+            "trees with equal content but distinct path splits SHALL differ"
+        );
     }
 
     // 10. The persisted-cache on-disk form for Content SHALL be the
@@ -463,10 +509,14 @@ mod tests {
     //     fingerprint_serde_roundtrip; this asserts the wire format instead.)
     #[test]
     fn content_fingerprint_serialized_wire_format() {
-        let c = Fingerprint::Content { hash: "8f2a1bcd".into() };
+        let c = Fingerprint::Content {
+            hash: "8f2a1bcd".into(),
+        };
         let s = serde_json::to_string(&c).expect("serialize");
-        assert_eq!(s, r#"{"kind":"content","hash":"8f2a1bcd"}"#,
-            "Content SHALL serialize to the snake_case kind-tagged wire form");
+        assert_eq!(
+            s, r#"{"kind":"content","hash":"8f2a1bcd"}"#,
+            "Content SHALL serialize to the snake_case kind-tagged wire form"
+        );
     }
 
     // 11. Git tier: a fresh repo with one commit and a clean tree SHALL
@@ -486,8 +536,12 @@ mod tests {
                 .env("GIT_COMMITTER_EMAIL", "t@t")
                 .output()
                 .expect("git runs");
-            assert!(out.status.success(),
-                "git {:?} SHALL succeed: {}", args, String::from_utf8_lossy(&out.stderr));
+            assert!(
+                out.status.success(),
+                "git {:?} SHALL succeed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
         };
         run(&["init", "-q"]);
         std::fs::write(root.join("a.txt"), "hello").expect("write");
@@ -498,12 +552,18 @@ mod tests {
         match &f {
             Fingerprint::Git { rev, porcelain } => {
                 assert!(!rev.is_empty(), "git rev SHALL be non-empty");
-                assert_eq!(porcelain, "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                    "clean tree SHALL hash empty porcelain output");
-                assert!(f.short_label().starts_with("git:"),
-                    "git fingerprint SHALL render a git: label");
-                assert!(!f.short_label().contains('+'),
-                    "clean tree label SHALL omit the porcelain suffix");
+                assert_eq!(
+                    porcelain, "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+                    "clean tree SHALL hash empty porcelain output"
+                );
+                assert!(
+                    f.short_label().starts_with("git:"),
+                    "git fingerprint SHALL render a git: label"
+                );
+                assert!(
+                    !f.short_label().contains('+'),
+                    "clean tree label SHALL omit the porcelain suffix"
+                );
             }
             other => panic!("git repo SHALL produce Git variant, got {other:?}"),
         }
@@ -525,8 +585,12 @@ mod tests {
                 .env("GIT_COMMITTER_EMAIL", "t@t")
                 .output()
                 .expect("git runs");
-            assert!(out.status.success(),
-                "git {:?} SHALL succeed: {}", args, String::from_utf8_lossy(&out.stderr));
+            assert!(
+                out.status.success(),
+                "git {:?} SHALL succeed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
         };
         run(&["init", "-q"]);
         std::fs::write(root.join("a.txt"), "hello").expect("write");
@@ -539,12 +603,22 @@ mod tests {
         let dirty = Fingerprint::compute(root);
 
         match (&clean, &dirty) {
-            (Fingerprint::Git { rev: r1, porcelain: p1 },
-             Fingerprint::Git { rev: r2, porcelain: p2 }) => {
+            (
+                Fingerprint::Git {
+                    rev: r1,
+                    porcelain: p1,
+                },
+                Fingerprint::Git {
+                    rev: r2,
+                    porcelain: p2,
+                },
+            ) => {
                 assert_eq!(r1, r2, "rev SHALL be unchanged by a working-tree edit");
                 assert_ne!(p1, p2, "uncommitted change SHALL change the porcelain hash");
-                assert!(dirty.short_label().contains('+'),
-                    "dirty tree label SHALL include the porcelain suffix");
+                assert!(
+                    dirty.short_label().contains('+'),
+                    "dirty tree label SHALL include the porcelain suffix"
+                );
             }
             _ => panic!("both computations SHALL be Git variants"),
         }

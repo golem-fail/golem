@@ -248,8 +248,14 @@ mod tests {
         let d = def_with_params("email", &[("prefix", "test"), ("domain", "acme.com")]);
         let result = generate_simple(&d, &mut rng).expect("should generate");
         let email = result.as_str().expect("should be string");
-        assert!(email.starts_with("test"), "SHALL start with prefix, got: {email}");
-        assert!(email.ends_with("@acme.com"), "SHALL end with @acme.com, got: {email}");
+        assert!(
+            email.starts_with("test"),
+            "SHALL start with prefix, got: {email}"
+        );
+        assert!(
+            email.ends_with("@acme.com"),
+            "SHALL end with @acme.com, got: {email}"
+        );
     }
 
     // 3. email with plus addressing
@@ -259,7 +265,10 @@ mod tests {
         let d = def_with_params("email", &[("prefix", "user+tag")]);
         let result = generate_simple(&d, &mut rng).expect("should generate");
         let email = result.as_str().expect("should be string");
-        assert!(email.starts_with("user+tag"), "SHALL start with user+tag, got: {email}");
+        assert!(
+            email.starts_with("user+tag"),
+            "SHALL start with user+tag, got: {email}"
+        );
         assert!(email.contains('+'), "SHALL contain +, got: {email}");
     }
 
@@ -288,8 +297,14 @@ mod tests {
         let result = generate_simple(&def("password"), &mut rng).expect("should generate");
         let pw = result.as_str().expect("should be string");
         assert!(pw.len() >= 12, "expected >= 12 chars, got {}", pw.len());
-        assert!(pw.chars().any(|c| c.is_ascii_alphabetic()), "SHALL contain letters");
-        assert!(pw.chars().any(|c| c.is_ascii_digit()), "SHALL contain digits");
+        assert!(
+            pw.chars().any(|c| c.is_ascii_alphabetic()),
+            "SHALL contain letters"
+        );
+        assert!(
+            pw.chars().any(|c| c.is_ascii_digit()),
+            "SHALL contain digits"
+        );
     }
 
     // 7. password custom length
@@ -442,7 +457,9 @@ mod tests {
             .expect("SHALL end with @example.com");
         assert!(!local.is_empty(), "SHALL have a non-empty local part");
         assert!(
-            local.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()),
+            local
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()),
             "random part SHALL be lowercase letters and digits only, got: {local}"
         );
     }
@@ -498,7 +515,10 @@ mod tests {
         let d = def_with_params("password", &[("length", "0")]);
         let result = generate_simple(&d, &mut rng).expect("should generate");
         let pw = result.as_str().expect("should be string");
-        assert!(pw.is_empty(), "length=0 SHALL produce empty password, got: {pw}");
+        assert!(
+            pw.is_empty(),
+            "length=0 SHALL produce empty password, got: {pw}"
+        );
     }
 
     // 22. password invalid (non-numeric) length is an error mentioning length
@@ -614,7 +634,10 @@ mod tests {
             .expect("SHALL parse as RFC3339")
             .with_timezone(&Utc);
         let now = Utc::now();
-        assert!(parsed <= now, "timestamp SHALL not be in the future, got: {ts}");
+        assert!(
+            parsed <= now,
+            "timestamp SHALL not be in the future, got: {ts}"
+        );
         let one_year_ago = now - Duration::seconds(365 * 24 * 3600);
         // allow a small slack for the second boundary
         assert!(
@@ -679,6 +702,9 @@ mod tests {
             s.chars().any(|c| c.is_ascii_alphabetic()),
             "city SHALL contain letters, got: {s}"
         );
-        assert!(!s.is_empty(), "city SHALL produce a non-empty value, got: {s}");
+        assert!(
+            !s.is_empty(),
+            "city SHALL produce a non-empty value, got: {s}"
+        );
     }
 }

@@ -105,7 +105,11 @@ impl ReportAccumulator {
         }
 
         match &event.kind {
-            EventKind::FlowStarted { flow_name, os_major, repeat } => {
+            EventKind::FlowStarted {
+                flow_name,
+                os_major,
+                repeat,
+            } => {
                 let idx = self.flows.len();
                 self.flows.push(AccumulatedFlow {
                     flow_name: flow_name.clone(),
@@ -124,7 +128,12 @@ impl ReportAccumulator {
                 });
                 self.current_flow_by_device.insert(dev_key, idx);
             }
-            EventKind::FlowFinished { success, duration_ms, os_major, .. } => {
+            EventKind::FlowFinished {
+                success,
+                duration_ms,
+                os_major,
+                ..
+            } => {
                 if let Some(&idx) = self.current_flow_by_device.get(&dev_key) {
                     if let Some(flow) = self.flows.get_mut(idx) {
                         flow.success = *success;
@@ -158,7 +167,11 @@ impl ReportAccumulator {
                     first_failure_code: None,
                 });
             }
-            EventKind::FlowCouldNotRun { flow_name, reason, code } => {
+            EventKind::FlowCouldNotRun {
+                flow_name,
+                reason,
+                code,
+            } => {
                 // A precondition stopped the flow from running at all — it
                 // executed no steps, so it counts as a failure (exit 1) and
                 // carries the responsible code for the summary line.
@@ -181,7 +194,12 @@ impl ReportAccumulator {
             EventKind::BlockStarted { iteration, .. } => {
                 self.current_block_iter.insert(dev_key, *iteration);
             }
-            EventKind::BlockFinished { block_name, iteration, recording_path, .. } => {
+            EventKind::BlockFinished {
+                block_name,
+                iteration,
+                recording_path,
+                ..
+            } => {
                 if let Some(path) = recording_path {
                     if let Some(&idx) = self.current_flow_by_device.get(&dev_key) {
                         if let Some(flow) = self.flows.get_mut(idx) {
@@ -194,27 +212,43 @@ impl ReportAccumulator {
                     }
                 }
             }
-            EventKind::StepStarted { global_step_index, block_name, step_index_in_block, action, selector_label } => {
+            EventKind::StepStarted {
+                global_step_index,
+                block_name,
+                step_index_in_block,
+                action,
+                selector_label,
+            } => {
                 self.finish_current_step(&dev_key);
                 let block_iteration = self.current_block_iter.get(&dev_key).copied().unwrap_or(0);
-                self.current_step.insert(dev_key, AccumulatedStep {
-                    global_index: *global_step_index,
-                    block_name: block_name.clone(),
-                    block_iteration,
-                    step_index_in_block: *step_index_in_block,
-                    action: action.clone(),
-                    selector_label: selector_label.clone(),
-                    outcome: None,
-                    duration_ms: 0,
-                    retry_count: 0,
-                    screenshot_path: None,
-                    substeps: Vec::new(),
-                    tree_stats: golem_events::TreeStats::default(),
-                    started_at: Some(event.wall_time),
-                    finished_at: None,
-                });
+                self.current_step.insert(
+                    dev_key,
+                    AccumulatedStep {
+                        global_index: *global_step_index,
+                        block_name: block_name.clone(),
+                        block_iteration,
+                        step_index_in_block: *step_index_in_block,
+                        action: action.clone(),
+                        selector_label: selector_label.clone(),
+                        outcome: None,
+                        duration_ms: 0,
+                        retry_count: 0,
+                        screenshot_path: None,
+                        substeps: Vec::new(),
+                        tree_stats: golem_events::TreeStats::default(),
+                        started_at: Some(event.wall_time),
+                        finished_at: None,
+                    },
+                );
             }
-            EventKind::StepFinished { outcome, duration_ms, retry_count, screenshot_path, tree_stats, .. } => {
+            EventKind::StepFinished {
+                outcome,
+                duration_ms,
+                retry_count,
+                screenshot_path,
+                tree_stats,
+                ..
+            } => {
                 if let Some(step) = self.current_step.get_mut(&dev_key) {
                     step.outcome = Some(outcome.clone());
                     step.duration_ms = *duration_ms;
@@ -242,7 +276,17 @@ impl ReportAccumulator {
                 self.install_starts
                     .insert((dev_key.clone(), bundle_id.clone()), event.wall_time);
             }
-            EventKind::InstallFinished { app_name, bundle_id, success, duration_ms, exit_code, error, code, target: _, os_major } => {
+            EventKind::InstallFinished {
+                app_name,
+                bundle_id,
+                success,
+                duration_ms,
+                exit_code,
+                error,
+                code,
+                target: _,
+                os_major,
+            } => {
                 let started_at = self
                     .install_starts
                     .remove(&(dev_key.clone(), bundle_id.clone()))
@@ -281,65 +325,76 @@ impl ReportAccumulator {
 
     /// Convert accumulated data into a SuiteReport.
     pub fn into_suite_report(self) -> SuiteReport {
-        let flows = self.flows.into_iter().map(|flow| {
-            // First *failed* step's code surfaces on the flow FAIL line. A
-            // warning doesn't fail the flow, so its code must not pre-empt the
-            // fatal step's code on the summary line. A flow that never ran
-            // (FlowCouldNotRun) carries its code explicitly — that wins.
-            let explicit_code = flow.first_failure_code;
-            let mut first_failure_code: Option<golem_events::FailureCode> = None;
-            let step_results = flow.steps.into_iter().map(|s| {
-                let outcome = match s.outcome {
-                    Some(golem_events::StepOutcome::Success) => StepOutcome::Success,
-                    Some(golem_events::StepOutcome::Warning { message, code }) => {
-                        StepOutcome::Warning { message, code }
-                    }
-                    Some(golem_events::StepOutcome::Failed { message, code }) => {
-                        first_failure_code.get_or_insert(code);
-                        StepOutcome::Failed { message, code }
-                    }
-                    Some(golem_events::StepOutcome::Skipped) => StepOutcome::Skipped,
-                    Some(golem_events::StepOutcome::Ignored) => StepOutcome::Skipped,
-                    None => StepOutcome::Skipped,
-                };
-                StepReport {
-                    global_step_index: s.global_index,
-                    block_name: s.block_name,
-                    block_iteration: s.block_iteration,
-                    step_index_in_block: s.step_index_in_block,
-                    action: s.action,
-                    target: s.selector_label,
-                    outcome,
-                    duration_ms: s.duration_ms,
-                    retry_count: s.retry_count,
-                    screenshot_path: s.screenshot_path,
-                    substeps: s.substeps,
-                    tree_stats: s.tree_stats,
-                    started_at: s.started_at.map(iso8601_utc),
-                    finished_at: s.finished_at.map(iso8601_utc),
-                }
-            }).collect();
+        let flows = self
+            .flows
+            .into_iter()
+            .map(|flow| {
+                // First *failed* step's code surfaces on the flow FAIL line. A
+                // warning doesn't fail the flow, so its code must not pre-empt the
+                // fatal step's code on the summary line. A flow that never ran
+                // (FlowCouldNotRun) carries its code explicitly — that wins.
+                let explicit_code = flow.first_failure_code;
+                let mut first_failure_code: Option<golem_events::FailureCode> = None;
+                let step_results = flow
+                    .steps
+                    .into_iter()
+                    .map(|s| {
+                        let outcome = match s.outcome {
+                            Some(golem_events::StepOutcome::Success) => StepOutcome::Success,
+                            Some(golem_events::StepOutcome::Warning { message, code }) => {
+                                StepOutcome::Warning { message, code }
+                            }
+                            Some(golem_events::StepOutcome::Failed { message, code }) => {
+                                first_failure_code.get_or_insert(code);
+                                StepOutcome::Failed { message, code }
+                            }
+                            Some(golem_events::StepOutcome::Skipped) => StepOutcome::Skipped,
+                            Some(golem_events::StepOutcome::Ignored) => StepOutcome::Skipped,
+                            None => StepOutcome::Skipped,
+                        };
+                        StepReport {
+                            global_step_index: s.global_index,
+                            block_name: s.block_name,
+                            block_iteration: s.block_iteration,
+                            step_index_in_block: s.step_index_in_block,
+                            action: s.action,
+                            target: s.selector_label,
+                            outcome,
+                            duration_ms: s.duration_ms,
+                            retry_count: s.retry_count,
+                            screenshot_path: s.screenshot_path,
+                            substeps: s.substeps,
+                            tree_stats: s.tree_stats,
+                            started_at: s.started_at.map(iso8601_utc),
+                            finished_at: s.finished_at.map(iso8601_utc),
+                        }
+                    })
+                    .collect();
 
-            FlowReport {
-                flow_name: flow.flow_name,
-                success: flow.success,
-                skipped_reason: flow.skipped_reason,
-                step_results,
-                warnings: flow.warnings,
-                duration_ms: flow.duration_ms,
-                seed: None,
-                screenshot_path: None,
-                device_name: Some(flow.device_id.0),
-                os_major: flow.os_major,
-                perf_snapshots: Vec::new(),
-                covered_axes: Vec::new(),
-                recordings: flow.recordings,
-                started_at: flow.started_at.map(iso8601_utc),
-                finished_at: flow.finished_at.map(iso8601_utc),
-                repeat: flow.repeat,
-                first_failure_code: resolve_flow_failure_code(explicit_code, first_failure_code),
-            }
-        }).collect();
+                FlowReport {
+                    flow_name: flow.flow_name,
+                    success: flow.success,
+                    skipped_reason: flow.skipped_reason,
+                    step_results,
+                    warnings: flow.warnings,
+                    duration_ms: flow.duration_ms,
+                    seed: None,
+                    screenshot_path: None,
+                    device_name: Some(flow.device_id.0),
+                    os_major: flow.os_major,
+                    perf_snapshots: Vec::new(),
+                    covered_axes: Vec::new(),
+                    recordings: flow.recordings,
+                    started_at: flow.started_at.map(iso8601_utc),
+                    finished_at: flow.finished_at.map(iso8601_utc),
+                    repeat: flow.repeat,
+                    first_failure_code: resolve_flow_failure_code(
+                        explicit_code,
+                        first_failure_code,
+                    ),
+                }
+            })
+            .collect();
 
         SuiteReport {
             flows,
@@ -366,9 +421,9 @@ pub async fn accumulate_events(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{Instant, SystemTime};
-    use golem_events::{DeviceId, Event, EventKind, Point, Rect, SubstepEvent};
     use crate::StepOutcome as ReportStepOutcome;
+    use golem_events::{DeviceId, Event, EventKind, Point, Rect, SubstepEvent};
+    use std::time::{Instant, SystemTime};
 
     fn make_event(seq: u64, device: &str, kind: EventKind) -> Event {
         Event {
@@ -385,7 +440,15 @@ mod tests {
     #[test]
     fn flow_started_creates_new_flow_entry() {
         let mut acc = ReportAccumulator::new();
-        acc.process(&make_event(0, "dev1", EventKind::FlowStarted { flow_name: "login".into(), os_major: 0 , repeat: None}));
+        acc.process(&make_event(
+            0,
+            "dev1",
+            EventKind::FlowStarted {
+                flow_name: "login".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
 
         let report = acc.into_suite_report();
         assert_eq!(report.flows.len(), 1, "SHALL create one flow entry");
@@ -402,25 +465,36 @@ mod tests {
     #[test]
     fn flow_skipped_is_success_not_a_failure() {
         let mut acc = ReportAccumulator::new();
-        acc.process(&make_event(0, "dev1", EventKind::FlowSkipped {
-            flow_name: "spared".into(),
-            reason: "coverage group satisfied by peer run".into(),
-        }));
+        acc.process(&make_event(
+            0,
+            "dev1",
+            EventKind::FlowSkipped {
+                flow_name: "spared".into(),
+                reason: "coverage group satisfied by peer run".into(),
+            },
+        ));
         let report = acc.into_suite_report();
         let flow = &report.flows[0];
         assert!(flow.is_skipped(), "FlowSkipped SHALL be a skip (success)");
-        assert!(!flow.is_failed(), "FlowSkipped SHALL NOT count as a failure");
+        assert!(
+            !flow.is_failed(),
+            "FlowSkipped SHALL NOT count as a failure"
+        );
         assert_eq!(flow.first_failure_code, None);
     }
 
     #[test]
     fn flow_could_not_run_is_a_failure_with_code() {
         let mut acc = ReportAccumulator::new();
-        acc.process(&make_event(0, "dev1", EventKind::FlowCouldNotRun {
-            flow_name: "needs_app".into(),
-            reason: "install_script failed".into(),
-            code: golem_events::FailureCode::AppInstallFailed,
-        }));
+        acc.process(&make_event(
+            0,
+            "dev1",
+            EventKind::FlowCouldNotRun {
+                flow_name: "needs_app".into(),
+                reason: "install_script failed".into(),
+                code: golem_events::FailureCode::AppInstallFailed,
+            },
+        ));
         let report = acc.into_suite_report();
         let flow = &report.flows[0];
         assert!(flow.is_failed(), "FlowCouldNotRun SHALL count as a failure");
@@ -439,29 +513,51 @@ mod tests {
         let mut acc = ReportAccumulator::new();
         let dev = "pixel";
 
-        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f1".into(), os_major: 0 , repeat: None}));
-        acc.process(&make_event(1, dev, EventKind::StepStarted {
-            global_step_index: 0,
-            block_name: "main".into(),
-            step_index_in_block: 0,
-            action: "tap".into(),
-            selector_label: "Sign Up".into(),
-        }));
-        acc.process(&make_event(2, dev, EventKind::StepFinished {
-            global_step_index: 0,
-            outcome: golem_events::StepOutcome::Success,
-            duration_ms: 45,
-            retry_count: 0,
-            screenshot_path: None,
-            tree_stats: golem_events::TreeStats::default(),
-        }));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "f1".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::StepStarted {
+                global_step_index: 0,
+                block_name: "main".into(),
+                step_index_in_block: 0,
+                action: "tap".into(),
+                selector_label: "Sign Up".into(),
+            },
+        ));
+        acc.process(&make_event(
+            2,
+            dev,
+            EventKind::StepFinished {
+                global_step_index: 0,
+                outcome: golem_events::StepOutcome::Success,
+                duration_ms: 45,
+                retry_count: 0,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
 
         let report = acc.into_suite_report();
         let step = &report.flows[0].step_results[0];
 
-        assert_eq!(step.global_step_index, 0, "SHALL preserve global_step_index");
+        assert_eq!(
+            step.global_step_index, 0,
+            "SHALL preserve global_step_index"
+        );
         assert_eq!(step.block_name, "main", "SHALL preserve block_name");
-        assert_eq!(step.step_index_in_block, 0, "SHALL preserve step_index_in_block");
+        assert_eq!(
+            step.step_index_in_block, 0,
+            "SHALL preserve step_index_in_block"
+        );
         assert_eq!(step.action, "tap", "SHALL preserve action");
         assert_eq!(step.target, "Sign Up", "SHALL map selector_label to target");
         assert_eq!(step.duration_ms, 45, "SHALL preserve duration_ms");
@@ -479,31 +575,65 @@ mod tests {
         let mut acc = ReportAccumulator::new();
         let dev = "iphone";
 
-        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0 , repeat: None}));
-        acc.process(&make_event(1, dev, EventKind::StepStarted {
-            global_step_index: 0,
-            block_name: "b".into(),
-            step_index_in_block: 0,
-            action: "tap".into(),
-            selector_label: "OK".into(),
-        }));
-        acc.process(&make_event(2, dev, EventKind::Substep(SubstepEvent::ElementResolved {
-            selector: "text=OK".into(),
-            bounds: Rect { x: 10, y: 20, width: 100, height: 40 },
-            tap_point: Point { x: 60, y: 40 },
-        })));
-        acc.process(&make_event(3, dev, EventKind::Substep(SubstepEvent::Tap {
-            point: Point { x: 60, y: 40 },
-            element_bounds: Some(Rect { x: 10, y: 20, width: 100, height: 40 }),
-        })));
-        acc.process(&make_event(4, dev, EventKind::StepFinished {
-            global_step_index: 0,
-            outcome: golem_events::StepOutcome::Success,
-            duration_ms: 30,
-            retry_count: 0,
-            screenshot_path: None,
-            tree_stats: golem_events::TreeStats::default(),
-        }));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "f".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::StepStarted {
+                global_step_index: 0,
+                block_name: "b".into(),
+                step_index_in_block: 0,
+                action: "tap".into(),
+                selector_label: "OK".into(),
+            },
+        ));
+        acc.process(&make_event(
+            2,
+            dev,
+            EventKind::Substep(SubstepEvent::ElementResolved {
+                selector: "text=OK".into(),
+                bounds: Rect {
+                    x: 10,
+                    y: 20,
+                    width: 100,
+                    height: 40,
+                },
+                tap_point: Point { x: 60, y: 40 },
+            }),
+        ));
+        acc.process(&make_event(
+            3,
+            dev,
+            EventKind::Substep(SubstepEvent::Tap {
+                point: Point { x: 60, y: 40 },
+                element_bounds: Some(Rect {
+                    x: 10,
+                    y: 20,
+                    width: 100,
+                    height: 40,
+                }),
+            }),
+        ));
+        acc.process(&make_event(
+            4,
+            dev,
+            EventKind::StepFinished {
+                global_step_index: 0,
+                outcome: golem_events::StepOutcome::Success,
+                duration_ms: 30,
+                retry_count: 0,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
 
         let report = acc.into_suite_report();
         let step = &report.flows[0].step_results[0];
@@ -526,12 +656,38 @@ mod tests {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
 
-        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0 , repeat: None}));
-        acc.process(&make_event(1, dev, EventKind::FlowFinished { flow_name: "f".into(), success: false, duration_ms: 5000, seed: 0, os_major: 0 , code: None, repeat: None}));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "f".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::FlowFinished {
+                flow_name: "f".into(),
+                success: false,
+                duration_ms: 5000,
+                seed: 0,
+                os_major: 0,
+                code: None,
+                repeat: None,
+            },
+        ));
 
         let report = acc.into_suite_report();
-        assert!(!report.flows[0].success, "SHALL set success=false from FlowFinished");
-        assert_eq!(report.flows[0].duration_ms, 5000, "SHALL set duration_ms from FlowFinished");
+        assert!(
+            !report.flows[0].success,
+            "SHALL set success=false from FlowFinished"
+        );
+        assert_eq!(
+            report.flows[0].duration_ms, 5000,
+            "SHALL set duration_ms from FlowFinished"
+        );
     }
 
     // -- into_suite_report produces correct structure --
@@ -541,47 +697,93 @@ mod tests {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
 
-        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "checkout".into(), os_major: 0 , repeat: None}));
-        acc.process(&make_event(1, dev, EventKind::StepStarted {
-            global_step_index: 0,
-            block_name: "main".into(),
-            step_index_in_block: 0,
-            action: "tap".into(),
-            selector_label: "Buy".into(),
-        }));
-        acc.process(&make_event(2, dev, EventKind::StepFinished {
-            global_step_index: 0,
-            outcome: golem_events::StepOutcome::Success,
-            duration_ms: 20,
-            retry_count: 0,
-            screenshot_path: None,
-            tree_stats: golem_events::TreeStats::default(),
-        }));
-        acc.process(&make_event(3, dev, EventKind::StepStarted {
-            global_step_index: 1,
-            block_name: "main".into(),
-            step_index_in_block: 1,
-            action: "assert_visible".into(),
-            selector_label: "Thank You".into(),
-        }));
-        acc.process(&make_event(4, dev, EventKind::StepFinished {
-            global_step_index: 1,
-            outcome: golem_events::StepOutcome::Failed { message: "not found".into(), code: golem_events::FailureCode::FlowElementNotFound },
-            duration_ms: 10000,
-            retry_count: 3,
-            screenshot_path: Some("/tmp/fail.png".into()),
-            tree_stats: golem_events::TreeStats::default(),
-        }));
-        acc.process(&make_event(5, dev, EventKind::FlowFinished { flow_name: "checkout".into(), success: false, duration_ms: 10020, seed: 0, os_major: 0 , code: None, repeat: None}));
-        acc.process(&make_event(6, dev, EventKind::SuiteFinished {
-            duration_ms: 10020,
-            passed: 0,
-            failed: 1,
-            skipped: 0,
-        }));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "checkout".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::StepStarted {
+                global_step_index: 0,
+                block_name: "main".into(),
+                step_index_in_block: 0,
+                action: "tap".into(),
+                selector_label: "Buy".into(),
+            },
+        ));
+        acc.process(&make_event(
+            2,
+            dev,
+            EventKind::StepFinished {
+                global_step_index: 0,
+                outcome: golem_events::StepOutcome::Success,
+                duration_ms: 20,
+                retry_count: 0,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
+        acc.process(&make_event(
+            3,
+            dev,
+            EventKind::StepStarted {
+                global_step_index: 1,
+                block_name: "main".into(),
+                step_index_in_block: 1,
+                action: "assert_visible".into(),
+                selector_label: "Thank You".into(),
+            },
+        ));
+        acc.process(&make_event(
+            4,
+            dev,
+            EventKind::StepFinished {
+                global_step_index: 1,
+                outcome: golem_events::StepOutcome::Failed {
+                    message: "not found".into(),
+                    code: golem_events::FailureCode::FlowElementNotFound,
+                },
+                duration_ms: 10000,
+                retry_count: 3,
+                screenshot_path: Some("/tmp/fail.png".into()),
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
+        acc.process(&make_event(
+            5,
+            dev,
+            EventKind::FlowFinished {
+                flow_name: "checkout".into(),
+                success: false,
+                duration_ms: 10020,
+                seed: 0,
+                os_major: 0,
+                code: None,
+                repeat: None,
+            },
+        ));
+        acc.process(&make_event(
+            6,
+            dev,
+            EventKind::SuiteFinished {
+                duration_ms: 10020,
+                passed: 0,
+                failed: 1,
+                skipped: 0,
+            },
+        ));
 
         let suite = acc.into_suite_report();
-        assert_eq!(suite.total_duration_ms, 10020, "SHALL set total_duration_ms from SuiteFinished");
+        assert_eq!(
+            suite.total_duration_ms, 10020,
+            "SHALL set total_duration_ms from SuiteFinished"
+        );
         assert_eq!(suite.flows.len(), 1, "SHALL have one flow");
 
         let flow = &suite.flows[0];
@@ -592,7 +794,10 @@ mod tests {
             matches!(flow.step_results[1].outcome, ReportStepOutcome::Failed { ref message, .. } if message == "not found"),
             "SHALL preserve failure message"
         );
-        assert_eq!(flow.step_results[1].retry_count, 3, "SHALL preserve retry_count");
+        assert_eq!(
+            flow.step_results[1].retry_count, 3,
+            "SHALL preserve retry_count"
+        );
         assert_eq!(
             flow.step_results[1].screenshot_path.as_deref(),
             Some("/tmp/fail.png"),
@@ -606,58 +811,127 @@ mod tests {
     fn multiple_devices_accumulate_independently() {
         let mut acc = ReportAccumulator::new();
 
-        acc.process(&make_event(0, "ios", EventKind::FlowStarted { flow_name: "login_ios".into(), os_major: 0 , repeat: None}));
-        acc.process(&make_event(1, "android", EventKind::FlowStarted { flow_name: "login_android".into(), os_major: 0 , repeat: None}));
+        acc.process(&make_event(
+            0,
+            "ios",
+            EventKind::FlowStarted {
+                flow_name: "login_ios".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
+        acc.process(&make_event(
+            1,
+            "android",
+            EventKind::FlowStarted {
+                flow_name: "login_android".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
 
         // iOS step
-        acc.process(&make_event(2, "ios", EventKind::StepStarted {
-            global_step_index: 0,
-            block_name: "b".into(),
-            step_index_in_block: 0,
-            action: "tap".into(),
-            selector_label: "OK".into(),
-        }));
-        acc.process(&make_event(3, "ios", EventKind::StepFinished {
-            global_step_index: 0,
-            outcome: golem_events::StepOutcome::Success,
-            duration_ms: 30,
-            retry_count: 0,
-            screenshot_path: None,
-            tree_stats: golem_events::TreeStats::default(),
-        }));
+        acc.process(&make_event(
+            2,
+            "ios",
+            EventKind::StepStarted {
+                global_step_index: 0,
+                block_name: "b".into(),
+                step_index_in_block: 0,
+                action: "tap".into(),
+                selector_label: "OK".into(),
+            },
+        ));
+        acc.process(&make_event(
+            3,
+            "ios",
+            EventKind::StepFinished {
+                global_step_index: 0,
+                outcome: golem_events::StepOutcome::Success,
+                duration_ms: 30,
+                retry_count: 0,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
 
         // Android step
-        acc.process(&make_event(4, "android", EventKind::StepStarted {
-            global_step_index: 0,
-            block_name: "b".into(),
-            step_index_in_block: 0,
-            action: "type".into(),
-            selector_label: "email".into(),
-        }));
-        acc.process(&make_event(5, "android", EventKind::StepFinished {
-            global_step_index: 0,
-            outcome: golem_events::StepOutcome::Warning { message: "slow".into(), code: golem_events::FailureCode::Uncoded },
-            duration_ms: 200,
-            retry_count: 1,
-            screenshot_path: None,
-            tree_stats: golem_events::TreeStats::default(),
-        }));
+        acc.process(&make_event(
+            4,
+            "android",
+            EventKind::StepStarted {
+                global_step_index: 0,
+                block_name: "b".into(),
+                step_index_in_block: 0,
+                action: "type".into(),
+                selector_label: "email".into(),
+            },
+        ));
+        acc.process(&make_event(
+            5,
+            "android",
+            EventKind::StepFinished {
+                global_step_index: 0,
+                outcome: golem_events::StepOutcome::Warning {
+                    message: "slow".into(),
+                    code: golem_events::FailureCode::Uncoded,
+                },
+                duration_ms: 200,
+                retry_count: 1,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
 
-        acc.process(&make_event(6, "ios", EventKind::FlowFinished { flow_name: "login_ios".into(), success: true, duration_ms: 30, seed: 0, os_major: 0 , code: None, repeat: None}));
-        acc.process(&make_event(7, "android", EventKind::FlowFinished { flow_name: "login_android".into(), success: true, duration_ms: 200, seed: 0, os_major: 0 , code: None, repeat: None}));
+        acc.process(&make_event(
+            6,
+            "ios",
+            EventKind::FlowFinished {
+                flow_name: "login_ios".into(),
+                success: true,
+                duration_ms: 30,
+                seed: 0,
+                os_major: 0,
+                code: None,
+                repeat: None,
+            },
+        ));
+        acc.process(&make_event(
+            7,
+            "android",
+            EventKind::FlowFinished {
+                flow_name: "login_android".into(),
+                success: true,
+                duration_ms: 200,
+                seed: 0,
+                os_major: 0,
+                code: None,
+                repeat: None,
+            },
+        ));
 
         let suite = acc.into_suite_report();
         assert_eq!(suite.flows.len(), 2, "SHALL have two separate flows");
 
         // Find each flow by device name
-        let ios_flow = suite.flows.iter().find(|f| f.device_name.as_deref() == Some("ios"))
+        let ios_flow = suite
+            .flows
+            .iter()
+            .find(|f| f.device_name.as_deref() == Some("ios"))
             .expect("SHALL have iOS flow");
-        let android_flow = suite.flows.iter().find(|f| f.device_name.as_deref() == Some("android"))
+        let android_flow = suite
+            .flows
+            .iter()
+            .find(|f| f.device_name.as_deref() == Some("android"))
             .expect("SHALL have Android flow");
 
         assert_eq!(ios_flow.step_results.len(), 1, "iOS SHALL have 1 step");
         assert_eq!(ios_flow.step_results[0].action, "tap");
-        assert_eq!(android_flow.step_results.len(), 1, "Android SHALL have 1 step");
+        assert_eq!(
+            android_flow.step_results.len(),
+            1,
+            "Android SHALL have 1 step"
+        );
         assert_eq!(android_flow.step_results[0].action, "type");
     }
 
@@ -668,26 +942,48 @@ mod tests {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
 
-        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0 , repeat: None}));
-        acc.process(&make_event(1, dev, EventKind::StepStarted {
-            global_step_index: 0,
-            block_name: "b".into(),
-            step_index_in_block: 0,
-            action: "assert".into(),
-            selector_label: "x".into(),
-        }));
-        acc.process(&make_event(2, dev, EventKind::StepFinished {
-            global_step_index: 0,
-            outcome: golem_events::StepOutcome::Warning { message: "flaky element".into(), code: golem_events::FailureCode::Uncoded },
-            duration_ms: 50,
-            retry_count: 0,
-            screenshot_path: None,
-            tree_stats: golem_events::TreeStats::default(),
-        }));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "f".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::StepStarted {
+                global_step_index: 0,
+                block_name: "b".into(),
+                step_index_in_block: 0,
+                action: "assert".into(),
+                selector_label: "x".into(),
+            },
+        ));
+        acc.process(&make_event(
+            2,
+            dev,
+            EventKind::StepFinished {
+                global_step_index: 0,
+                outcome: golem_events::StepOutcome::Warning {
+                    message: "flaky element".into(),
+                    code: golem_events::FailureCode::Uncoded,
+                },
+                duration_ms: 50,
+                retry_count: 0,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
 
         let suite = acc.into_suite_report();
         assert_eq!(suite.flows[0].warnings.len(), 1, "SHALL collect warning");
-        assert_eq!(suite.flows[0].warnings[0], "flaky element", "SHALL preserve warning message");
+        assert_eq!(
+            suite.flows[0].warnings[0], "flaky element",
+            "SHALL preserve warning message"
+        );
     }
 
     // -- Ignored and Skipped outcomes both map to Skipped --
@@ -697,39 +993,79 @@ mod tests {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
 
-        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0 , repeat: None}));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "f".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
 
         // Skipped step
-        acc.process(&make_event(1, dev, EventKind::StepStarted {
-            global_step_index: 0, block_name: "b".into(),
- step_index_in_block: 0,
-            action: "a".into(), selector_label: "s".into(),
-        }));
-        acc.process(&make_event(2, dev, EventKind::StepFinished {
-            global_step_index: 0, outcome: golem_events::StepOutcome::Skipped,
-            duration_ms: 0, retry_count: 0, screenshot_path: None,
-            tree_stats: golem_events::TreeStats::default(),
-        }));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::StepStarted {
+                global_step_index: 0,
+                block_name: "b".into(),
+                step_index_in_block: 0,
+                action: "a".into(),
+                selector_label: "s".into(),
+            },
+        ));
+        acc.process(&make_event(
+            2,
+            dev,
+            EventKind::StepFinished {
+                global_step_index: 0,
+                outcome: golem_events::StepOutcome::Skipped,
+                duration_ms: 0,
+                retry_count: 0,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
 
         // Ignored step
-        acc.process(&make_event(3, dev, EventKind::StepStarted {
-            global_step_index: 1, block_name: "b".into(),
- step_index_in_block: 1,
-            action: "b".into(), selector_label: "t".into(),
-        }));
-        acc.process(&make_event(4, dev, EventKind::StepFinished {
-            global_step_index: 1, outcome: golem_events::StepOutcome::Ignored,
-            duration_ms: 0, retry_count: 0, screenshot_path: None,
-            tree_stats: golem_events::TreeStats::default(),
-        }));
+        acc.process(&make_event(
+            3,
+            dev,
+            EventKind::StepStarted {
+                global_step_index: 1,
+                block_name: "b".into(),
+                step_index_in_block: 1,
+                action: "b".into(),
+                selector_label: "t".into(),
+            },
+        ));
+        acc.process(&make_event(
+            4,
+            dev,
+            EventKind::StepFinished {
+                global_step_index: 1,
+                outcome: golem_events::StepOutcome::Ignored,
+                duration_ms: 0,
+                retry_count: 0,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
 
         let suite = acc.into_suite_report();
         assert!(
-            matches!(suite.flows[0].step_results[0].outcome, ReportStepOutcome::Skipped),
+            matches!(
+                suite.flows[0].step_results[0].outcome,
+                ReportStepOutcome::Skipped
+            ),
             "Skipped SHALL map to Skipped"
         );
         assert!(
-            matches!(suite.flows[0].step_results[1].outcome, ReportStepOutcome::Skipped),
+            matches!(
+                suite.flows[0].step_results[1].outcome,
+                ReportStepOutcome::Skipped
+            ),
             "Ignored SHALL map to Skipped"
         );
     }
@@ -752,21 +1088,50 @@ mod tests {
     fn unfinished_step_maps_to_skipped() {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
-        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
-        acc.process(&make_event(1, dev, EventKind::StepStarted {
-            global_step_index: 0, block_name: "b".into(), step_index_in_block: 0,
-            action: "tap".into(), selector_label: "X".into(),
-        }));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "f".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::StepStarted {
+                global_step_index: 0,
+                block_name: "b".into(),
+                step_index_in_block: 0,
+                action: "tap".into(),
+                selector_label: "X".into(),
+            },
+        ));
         // A new StepStarted finishes the previous (still-pending) step.
-        acc.process(&make_event(2, dev, EventKind::StepStarted {
-            global_step_index: 1, block_name: "b".into(), step_index_in_block: 1,
-            action: "tap".into(), selector_label: "Y".into(),
-        }));
-        acc.process(&make_event(3, dev, EventKind::StepFinished {
-            global_step_index: 1, outcome: golem_events::StepOutcome::Success,
-            duration_ms: 5, retry_count: 0, screenshot_path: None,
-            tree_stats: golem_events::TreeStats::default(),
-        }));
+        acc.process(&make_event(
+            2,
+            dev,
+            EventKind::StepStarted {
+                global_step_index: 1,
+                block_name: "b".into(),
+                step_index_in_block: 1,
+                action: "tap".into(),
+                selector_label: "Y".into(),
+            },
+        ));
+        acc.process(&make_event(
+            3,
+            dev,
+            EventKind::StepFinished {
+                global_step_index: 1,
+                outcome: golem_events::StepOutcome::Success,
+                duration_ms: 5,
+                retry_count: 0,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
 
         let suite = acc.into_suite_report();
         let steps = &suite.flows[0].step_results;
@@ -786,19 +1151,47 @@ mod tests {
     fn block_iteration_propagates_to_steps() {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
-        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
-        acc.process(&make_event(1, dev, EventKind::BlockStarted {
-            block_name: "loop".into(), block_index: 0, iteration: 3,
-        }));
-        acc.process(&make_event(2, dev, EventKind::StepStarted {
-            global_step_index: 0, block_name: "loop".into(), step_index_in_block: 0,
-            action: "tap".into(), selector_label: "X".into(),
-        }));
-        acc.process(&make_event(3, dev, EventKind::StepFinished {
-            global_step_index: 0, outcome: golem_events::StepOutcome::Success,
-            duration_ms: 1, retry_count: 0, screenshot_path: None,
-            tree_stats: golem_events::TreeStats::default(),
-        }));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "f".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::BlockStarted {
+                block_name: "loop".into(),
+                block_index: 0,
+                iteration: 3,
+            },
+        ));
+        acc.process(&make_event(
+            2,
+            dev,
+            EventKind::StepStarted {
+                global_step_index: 0,
+                block_name: "loop".into(),
+                step_index_in_block: 0,
+                action: "tap".into(),
+                selector_label: "X".into(),
+            },
+        ));
+        acc.process(&make_event(
+            3,
+            dev,
+            EventKind::StepFinished {
+                global_step_index: 0,
+                outcome: golem_events::StepOutcome::Success,
+                duration_ms: 1,
+                retry_count: 0,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
 
         let suite = acc.into_suite_report();
         assert_eq!(
@@ -812,16 +1205,38 @@ mod tests {
     fn block_iteration_defaults_to_zero_without_block_started() {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
-        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
-        acc.process(&make_event(1, dev, EventKind::StepStarted {
-            global_step_index: 0, block_name: "b".into(), step_index_in_block: 0,
-            action: "tap".into(), selector_label: "X".into(),
-        }));
-        acc.process(&make_event(2, dev, EventKind::StepFinished {
-            global_step_index: 0, outcome: golem_events::StepOutcome::Success,
-            duration_ms: 1, retry_count: 0, screenshot_path: None,
-            tree_stats: golem_events::TreeStats::default(),
-        }));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "f".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::StepStarted {
+                global_step_index: 0,
+                block_name: "b".into(),
+                step_index_in_block: 0,
+                action: "tap".into(),
+                selector_label: "X".into(),
+            },
+        ));
+        acc.process(&make_event(
+            2,
+            dev,
+            EventKind::StepFinished {
+                global_step_index: 0,
+                outcome: golem_events::StepOutcome::Success,
+                duration_ms: 1,
+                retry_count: 0,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
 
         let suite = acc.into_suite_report();
         assert_eq!(
@@ -835,11 +1250,25 @@ mod tests {
     fn block_finished_with_recording_path_appends_recording() {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
-        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
-        acc.process(&make_event(1, dev, EventKind::BlockFinished {
-            block_name: "rec".into(), block_index: 0, iteration: 2,
-            recording_path: Some("/tmp/rec.mp4".into()),
-        }));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "f".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::BlockFinished {
+                block_name: "rec".into(),
+                block_index: 0,
+                iteration: 2,
+                recording_path: Some("/tmp/rec.mp4".into()),
+            },
+        ));
 
         let suite = acc.into_suite_report();
         let recs = &suite.flows[0].recordings;
@@ -854,11 +1283,25 @@ mod tests {
     fn block_finished_without_recording_path_adds_nothing() {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
-        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
-        acc.process(&make_event(1, dev, EventKind::BlockFinished {
-            block_name: "rec".into(), block_index: 0, iteration: 0,
-            recording_path: None,
-        }));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "f".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::BlockFinished {
+                block_name: "rec".into(),
+                block_index: 0,
+                iteration: 0,
+                recording_path: None,
+            },
+        ));
 
         let suite = acc.into_suite_report();
         assert!(
@@ -873,27 +1316,53 @@ mod tests {
     fn install_started_then_finished_populates_install_report() {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
-        acc.process(&make_event(0, dev, EventKind::InstallStarted {
-            app_name: "App".into(), bundle_id: "com.app".into(),
-            script_path: "/s.sh".into(), target: "iPhone".into(), os_major: 18,
-        }));
-        acc.process(&make_event(1, dev, EventKind::InstallFinished {
-            app_name: "App".into(), bundle_id: "com.app".into(), success: true,
-            duration_ms: 1234, exit_code: None, error: None, code: None,
-            target: "iPhone".into(), os_major: 18,
-        }));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::InstallStarted {
+                app_name: "App".into(),
+                bundle_id: "com.app".into(),
+                script_path: "/s.sh".into(),
+                target: "iPhone".into(),
+                os_major: 18,
+            },
+        ));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::InstallFinished {
+                app_name: "App".into(),
+                bundle_id: "com.app".into(),
+                success: true,
+                duration_ms: 1234,
+                exit_code: None,
+                error: None,
+                code: None,
+                target: "iPhone".into(),
+                os_major: 18,
+            },
+        ));
 
         let suite = acc.into_suite_report();
         assert_eq!(suite.installs.len(), 1, "SHALL produce one install report");
         let install = &suite.installs[0];
         assert_eq!(install.app_name, "App");
         assert_eq!(install.bundle_id, "com.app");
-        assert_eq!(install.device_name, "dev", "SHALL set device_name from DeviceId");
+        assert_eq!(
+            install.device_name, "dev",
+            "SHALL set device_name from DeviceId"
+        );
         assert_eq!(install.os_major, Some(18));
         assert!(install.success);
         assert_eq!(install.duration_ms, 1234);
-        assert!(install.started_at.is_some(), "started_at SHALL be drained from InstallStarted");
-        assert!(install.finished_at.is_some(), "finished_at SHALL be stamped from InstallFinished");
+        assert!(
+            install.started_at.is_some(),
+            "started_at SHALL be drained from InstallStarted"
+        );
+        assert!(
+            install.finished_at.is_some(),
+            "finished_at SHALL be stamped from InstallFinished"
+        );
     }
 
     // 8. InstallFinished without a matching InstallStarted leaves started_at None.
@@ -901,20 +1370,43 @@ mod tests {
     fn install_finished_without_start_has_no_started_at() {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
-        acc.process(&make_event(0, dev, EventKind::InstallFinished {
-            app_name: "App".into(), bundle_id: "com.app".into(), success: false,
-            duration_ms: 0, exit_code: Some(2), error: Some("boom".into()),
-            code: Some(golem_events::FailureCode::AppInstallFailed),
-            target: "iPhone".into(), os_major: 18,
-        }));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::InstallFinished {
+                app_name: "App".into(),
+                bundle_id: "com.app".into(),
+                success: false,
+                duration_ms: 0,
+                exit_code: Some(2),
+                error: Some("boom".into()),
+                code: Some(golem_events::FailureCode::AppInstallFailed),
+                target: "iPhone".into(),
+                os_major: 18,
+            },
+        ));
 
         let suite = acc.into_suite_report();
         let install = &suite.installs[0];
-        assert_eq!(install.started_at, None, "absent InstallStarted SHALL leave started_at None");
-        assert!(install.finished_at.is_some(), "finished_at SHALL still be stamped");
+        assert_eq!(
+            install.started_at, None,
+            "absent InstallStarted SHALL leave started_at None"
+        );
+        assert!(
+            install.finished_at.is_some(),
+            "finished_at SHALL still be stamped"
+        );
         assert_eq!(install.exit_code, Some(2), "SHALL preserve exit_code");
-        assert_eq!(install.error.as_deref(), Some("boom"), "SHALL preserve error");
-        assert_eq!(install.code, Some(golem_events::FailureCode::AppInstallFailed), "SHALL preserve code");
+        assert_eq!(
+            install.error.as_deref(),
+            Some("boom"),
+            "SHALL preserve error"
+        );
+        assert_eq!(
+            install.code,
+            Some(golem_events::FailureCode::AppInstallFailed),
+            "SHALL preserve code"
+        );
     }
 
     // 9. The first *failed* step's code surfaces on the flow; a later failure
@@ -923,29 +1415,69 @@ mod tests {
     fn first_failed_step_code_wins_on_flow() {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
-        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "f".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
         // First failure
-        acc.process(&make_event(1, dev, EventKind::StepStarted {
-            global_step_index: 0, block_name: "b".into(), step_index_in_block: 0,
-            action: "tap".into(), selector_label: "X".into(),
-        }));
-        acc.process(&make_event(2, dev, EventKind::StepFinished {
-            global_step_index: 0,
-            outcome: golem_events::StepOutcome::Failed { message: "first".into(), code: golem_events::FailureCode::FlowElementNotFound },
-            duration_ms: 1, retry_count: 0, screenshot_path: None,
-            tree_stats: golem_events::TreeStats::default(),
-        }));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::StepStarted {
+                global_step_index: 0,
+                block_name: "b".into(),
+                step_index_in_block: 0,
+                action: "tap".into(),
+                selector_label: "X".into(),
+            },
+        ));
+        acc.process(&make_event(
+            2,
+            dev,
+            EventKind::StepFinished {
+                global_step_index: 0,
+                outcome: golem_events::StepOutcome::Failed {
+                    message: "first".into(),
+                    code: golem_events::FailureCode::FlowElementNotFound,
+                },
+                duration_ms: 1,
+                retry_count: 0,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
         // Second failure with a different code
-        acc.process(&make_event(3, dev, EventKind::StepStarted {
-            global_step_index: 1, block_name: "b".into(), step_index_in_block: 1,
-            action: "tap".into(), selector_label: "Y".into(),
-        }));
-        acc.process(&make_event(4, dev, EventKind::StepFinished {
-            global_step_index: 1,
-            outcome: golem_events::StepOutcome::Failed { message: "second".into(), code: golem_events::FailureCode::Uncoded },
-            duration_ms: 1, retry_count: 0, screenshot_path: None,
-            tree_stats: golem_events::TreeStats::default(),
-        }));
+        acc.process(&make_event(
+            3,
+            dev,
+            EventKind::StepStarted {
+                global_step_index: 1,
+                block_name: "b".into(),
+                step_index_in_block: 1,
+                action: "tap".into(),
+                selector_label: "Y".into(),
+            },
+        ));
+        acc.process(&make_event(
+            4,
+            dev,
+            EventKind::StepFinished {
+                global_step_index: 1,
+                outcome: golem_events::StepOutcome::Failed {
+                    message: "second".into(),
+                    code: golem_events::FailureCode::Uncoded,
+                },
+                duration_ms: 1,
+                retry_count: 0,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
 
         let suite = acc.into_suite_report();
         assert_eq!(
@@ -961,29 +1493,69 @@ mod tests {
     fn warning_code_does_not_preempt_failure_code() {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
-        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "f".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
         // Warning first
-        acc.process(&make_event(1, dev, EventKind::StepStarted {
-            global_step_index: 0, block_name: "b".into(), step_index_in_block: 0,
-            action: "tap".into(), selector_label: "X".into(),
-        }));
-        acc.process(&make_event(2, dev, EventKind::StepFinished {
-            global_step_index: 0,
-            outcome: golem_events::StepOutcome::Warning { message: "warn".into(), code: golem_events::FailureCode::Uncoded },
-            duration_ms: 1, retry_count: 0, screenshot_path: None,
-            tree_stats: golem_events::TreeStats::default(),
-        }));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::StepStarted {
+                global_step_index: 0,
+                block_name: "b".into(),
+                step_index_in_block: 0,
+                action: "tap".into(),
+                selector_label: "X".into(),
+            },
+        ));
+        acc.process(&make_event(
+            2,
+            dev,
+            EventKind::StepFinished {
+                global_step_index: 0,
+                outcome: golem_events::StepOutcome::Warning {
+                    message: "warn".into(),
+                    code: golem_events::FailureCode::Uncoded,
+                },
+                duration_ms: 1,
+                retry_count: 0,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
         // Real failure after
-        acc.process(&make_event(3, dev, EventKind::StepStarted {
-            global_step_index: 1, block_name: "b".into(), step_index_in_block: 1,
-            action: "tap".into(), selector_label: "Y".into(),
-        }));
-        acc.process(&make_event(4, dev, EventKind::StepFinished {
-            global_step_index: 1,
-            outcome: golem_events::StepOutcome::Failed { message: "fail".into(), code: golem_events::FailureCode::FlowElementNotFound },
-            duration_ms: 1, retry_count: 0, screenshot_path: None,
-            tree_stats: golem_events::TreeStats::default(),
-        }));
+        acc.process(&make_event(
+            3,
+            dev,
+            EventKind::StepStarted {
+                global_step_index: 1,
+                block_name: "b".into(),
+                step_index_in_block: 1,
+                action: "tap".into(),
+                selector_label: "Y".into(),
+            },
+        ));
+        acc.process(&make_event(
+            4,
+            dev,
+            EventKind::StepFinished {
+                global_step_index: 1,
+                outcome: golem_events::StepOutcome::Failed {
+                    message: "fail".into(),
+                    code: golem_events::FailureCode::FlowElementNotFound,
+                },
+                duration_ms: 1,
+                retry_count: 0,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
 
         let suite = acc.into_suite_report();
         assert_eq!(
@@ -1003,16 +1575,38 @@ mod tests {
     fn flow_with_only_success_steps_has_no_failure_code() {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
-        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
-        acc.process(&make_event(1, dev, EventKind::StepStarted {
-            global_step_index: 0, block_name: "b".into(), step_index_in_block: 0,
-            action: "tap".into(), selector_label: "X".into(),
-        }));
-        acc.process(&make_event(2, dev, EventKind::StepFinished {
-            global_step_index: 0, outcome: golem_events::StepOutcome::Success,
-            duration_ms: 1, retry_count: 0, screenshot_path: None,
-            tree_stats: golem_events::TreeStats::default(),
-        }));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "f".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::StepStarted {
+                global_step_index: 0,
+                block_name: "b".into(),
+                step_index_in_block: 0,
+                action: "tap".into(),
+                selector_label: "X".into(),
+            },
+        ));
+        acc.process(&make_event(
+            2,
+            dev,
+            EventKind::StepFinished {
+                global_step_index: 0,
+                outcome: golem_events::StepOutcome::Success,
+                duration_ms: 1,
+                retry_count: 0,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
 
         let suite = acc.into_suite_report();
         assert_eq!(
@@ -1026,10 +1620,15 @@ mod tests {
     fn repeat_context_propagates_to_flow_report() {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
-        acc.process(&make_event(0, dev, EventKind::FlowStarted {
-            flow_name: "f".into(), os_major: 0,
-            repeat: Some(golem_events::RepeatContext { index: 2, total: 5 }),
-        }));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "f".into(),
+                os_major: 0,
+                repeat: Some(golem_events::RepeatContext { index: 2, total: 5 }),
+            },
+        ));
 
         let suite = acc.into_suite_report();
         let repeat = suite.flows[0].repeat.expect("repeat SHALL be preserved");
@@ -1042,12 +1641,27 @@ mod tests {
     #[test]
     fn suite_timestamps_from_first_event_and_suite_finished() {
         let mut acc = ReportAccumulator::new();
-        let first = make_event(0, "dev", EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None });
+        let first = make_event(
+            0,
+            "dev",
+            EventKind::FlowStarted {
+                flow_name: "f".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        );
         let started_iso = iso8601_utc(first.wall_time);
         acc.process(&first);
-        acc.process(&make_event(1, "dev", EventKind::SuiteFinished {
-            duration_ms: 99, passed: 0, failed: 0, skipped: 0,
-        }));
+        acc.process(&make_event(
+            1,
+            "dev",
+            EventKind::SuiteFinished {
+                duration_ms: 99,
+                passed: 0,
+                failed: 0,
+                skipped: 0,
+            },
+        ));
 
         let suite = acc.into_suite_report();
         assert_eq!(suite.total_duration_ms, 99, "SHALL set total_duration_ms");
@@ -1056,7 +1670,10 @@ mod tests {
             Some(started_iso.as_str()),
             "started_at SHALL come from the first observed event's wall_time"
         );
-        assert!(suite.finished_at.is_some(), "finished_at SHALL be set from SuiteFinished");
+        assert!(
+            suite.finished_at.is_some(),
+            "finished_at SHALL be set from SuiteFinished"
+        );
     }
 
     // 14. Substep events arriving with no current step are dropped silently
@@ -1065,11 +1682,24 @@ mod tests {
     fn substep_without_current_step_is_dropped() {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
-        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "f".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
         // No StepStarted; this substep has nowhere to land.
-        acc.process(&make_event(1, dev, EventKind::Substep(SubstepEvent::Tap {
-            point: Point { x: 1, y: 2 }, element_bounds: None,
-        })));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::Substep(SubstepEvent::Tap {
+                point: Point { x: 1, y: 2 },
+                element_bounds: None,
+            }),
+        ));
 
         let suite = acc.into_suite_report();
         assert!(
@@ -1083,12 +1713,27 @@ mod tests {
     fn step_finished_without_current_step_is_noop() {
         let mut acc = ReportAccumulator::new();
         let dev = "dev";
-        acc.process(&make_event(0, dev, EventKind::FlowStarted { flow_name: "f".into(), os_major: 0, repeat: None }));
-        acc.process(&make_event(1, dev, EventKind::StepFinished {
-            global_step_index: 0, outcome: golem_events::StepOutcome::Success,
-            duration_ms: 1, retry_count: 0, screenshot_path: None,
-            tree_stats: golem_events::TreeStats::default(),
-        }));
+        acc.process(&make_event(
+            0,
+            dev,
+            EventKind::FlowStarted {
+                flow_name: "f".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ));
+        acc.process(&make_event(
+            1,
+            dev,
+            EventKind::StepFinished {
+                global_step_index: 0,
+                outcome: golem_events::StepOutcome::Success,
+                duration_ms: 1,
+                retry_count: 0,
+                screenshot_path: None,
+                tree_stats: golem_events::TreeStats::default(),
+            },
+        ));
 
         let suite = acc.into_suite_report();
         assert!(
@@ -1141,14 +1786,25 @@ mod tests {
         let (tx, rx) = broadcast::channel(16);
         let acc = tokio::sync::Mutex::new(ReportAccumulator::new());
 
-        tx.send(make_event(0, "dev", EventKind::FlowStarted { flow_name: "drained".into(), os_major: 0, repeat: None }))
-            .expect("send SHALL succeed");
+        tx.send(make_event(
+            0,
+            "dev",
+            EventKind::FlowStarted {
+                flow_name: "drained".into(),
+                os_major: 0,
+                repeat: None,
+            },
+        ))
+        .expect("send SHALL succeed");
         drop(tx); // closing the channel ends the loop
 
         accumulate_events(rx, &acc).await;
 
         let report = acc.into_inner().into_suite_report();
         assert_eq!(report.flows.len(), 1, "SHALL accumulate the sent event");
-        assert_eq!(report.flows[0].flow_name, "drained", "SHALL process the event payload");
+        assert_eq!(
+            report.flows[0].flow_name, "drained",
+            "SHALL process the event payload"
+        );
     }
 }

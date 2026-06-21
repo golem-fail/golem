@@ -144,8 +144,12 @@ impl InstallFramework {
 
     fn template(self) -> &'static str {
         match self {
-            InstallFramework::NativeIos => include_str!("../templates/install-scripts/native-ios.sh"),
-            InstallFramework::NativeAndroid => include_str!("../templates/install-scripts/native-android.sh"),
+            InstallFramework::NativeIos => {
+                include_str!("../templates/install-scripts/native-ios.sh")
+            }
+            InstallFramework::NativeAndroid => {
+                include_str!("../templates/install-scripts/native-android.sh")
+            }
             InstallFramework::Tauri => include_str!("../templates/install-scripts/tauri.sh"),
         }
     }
@@ -217,9 +221,12 @@ pub fn update_golem_toml_install_script(
     if !doc.contains_key("apps") {
         doc["apps"] = toml_edit::Item::ArrayOfTables(toml_edit::ArrayOfTables::new());
     }
-    let apps = doc["apps"]
-        .as_array_of_tables_mut()
-        .ok_or_else(|| anyhow::anyhow!("`apps` in {} is not an array of tables", golem_toml_path.display()))?;
+    let apps = doc["apps"].as_array_of_tables_mut().ok_or_else(|| {
+        anyhow::anyhow!(
+            "`apps` in {} is not an array of tables",
+            golem_toml_path.display()
+        )
+    })?;
 
     // Find existing entry by name, or append a new one.
     let idx = (0..apps.len()).find(|i| {
@@ -304,10 +311,7 @@ mod tests {
 
         for dir_name in &["flows", "__fixtures__", "__mixins__", ".golem"] {
             let dir_path = tmp.path().join(dir_name);
-            assert!(
-                dir_path.is_dir(),
-                "{dir_name} directory should exist"
-            );
+            assert!(dir_path.is_dir(), "{dir_name} directory should exist");
         }
     }
 
@@ -325,7 +329,10 @@ mod tests {
         init_project(tmp.path()).expect("init");
 
         let content = fs::read_to_string(&config_path).expect("read golem.toml");
-        assert_eq!(content, custom_content, "golem.toml SHALL NOT be overwritten");
+        assert_eq!(
+            content, custom_content,
+            "golem.toml SHALL NOT be overwritten"
+        );
     }
 
     // ---------------------------------------------------------------
@@ -336,12 +343,12 @@ mod tests {
         let tmp = TempDir::new().expect("tempdir");
 
         init_project(tmp.path()).expect("first init");
-        let content_after_first = fs::read_to_string(tmp.path().join("golem.toml"))
-            .expect("read golem.toml");
+        let content_after_first =
+            fs::read_to_string(tmp.path().join("golem.toml")).expect("read golem.toml");
 
         init_project(tmp.path()).expect("second init");
-        let content_after_second = fs::read_to_string(tmp.path().join("golem.toml"))
-            .expect("read golem.toml");
+        let content_after_second =
+            fs::read_to_string(tmp.path().join("golem.toml")).expect("read golem.toml");
 
         assert_eq!(content_after_first, content_after_second);
 
@@ -462,9 +469,15 @@ mod tests {
 
         let content = fs::read_to_string(&path).expect("read flow file");
         assert!(content.contains("[flow]"), "SHALL contain [flow] section");
-        assert!(content.contains("[[flow.apps]]"), "SHALL contain [[flow.apps]]");
+        assert!(
+            content.contains("[[flow.apps]]"),
+            "SHALL contain [[flow.apps]]"
+        );
         assert!(content.contains("[[block]]"), "SHALL contain [[block]]");
-        assert!(content.contains("action = \"launch\""), "SHALL contain launch action");
+        assert!(
+            content.contains("action = \"launch\""),
+            "SHALL contain launch action"
+        );
     }
 
     // ---------------------------------------------------------------
@@ -488,10 +501,7 @@ mod tests {
     #[test]
     fn render_template_replaces_placeholders() {
         let tmpl = "#!/bin/sh\necho {{BUNDLE_ID}} {{APP_NAME}}";
-        let rendered = render_template(tmpl, &[
-            ("BUNDLE_ID", "com.x"),
-            ("APP_NAME", "myapp"),
-        ]);
+        let rendered = render_template(tmpl, &[("BUNDLE_ID", "com.x"), ("APP_NAME", "myapp")]);
         assert_eq!(rendered, "#!/bin/sh\necho com.x myapp");
     }
 
@@ -507,7 +517,8 @@ mod tests {
                 ("MODULE_NAME", "app"),
                 ("GRADLE_TASK", "installDebug"),
             ],
-        ).expect("write");
+        )
+        .expect("write");
         assert!(out.exists());
         let content = fs::read_to_string(&out).expect("read");
         assert!(content.contains("MODULE_NAME=\"app\""));
@@ -529,8 +540,13 @@ mod tests {
         let path = tmp.path().join("golem.toml");
         fs::write(&path, "[options]\n").unwrap();
         update_golem_toml_install_script(
-            &path, "app-b", Some("com.example.b"), "scripts/install-b.sh", None,
-        ).expect("update");
+            &path,
+            "app-b",
+            Some("com.example.b"),
+            "scripts/install-b.sh",
+            None,
+        )
+        .expect("update");
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains("[[apps]]"));
         assert!(content.contains(r#"name = "app-b""#));
@@ -542,15 +558,18 @@ mod tests {
     fn update_golem_toml_updates_existing_app_entry() {
         let tmp = TempDir::new().expect("tempdir");
         let path = tmp.path().join("golem.toml");
-        fs::write(&path, r#"
+        fs::write(
+            &path,
+            r#"
 [[apps]]
 name = "app-b"
 bundle = "com.example.b"
 install_script = "scripts/old.sh"
-"#).unwrap();
-        update_golem_toml_install_script(
-            &path, "app-b", None, "scripts/new.sh", None,
-        ).expect("update");
+"#,
+        )
+        .unwrap();
+        update_golem_toml_install_script(&path, "app-b", None, "scripts/new.sh", None)
+            .expect("update");
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains(r#"install_script = "scripts/new.sh""#));
         assert!(!content.contains("scripts/old.sh"));
@@ -564,17 +583,28 @@ install_script = "scripts/old.sh"
         let path = tmp.path().join("golem.toml");
         // Existing entry has no bundle — a second scaffold pass supplying one
         // SHALL fill it in rather than silently discard.
-        fs::write(&path, r#"
+        fs::write(
+            &path,
+            r#"
 [[apps]]
 name = "app-b"
 install_script = { ios = "scripts/ios.sh" }
-"#).unwrap();
+"#,
+        )
+        .unwrap();
         update_golem_toml_install_script(
-            &path, "app-b", Some("com.x"), "scripts/android.sh", Some("android"),
-        ).expect("update");
+            &path,
+            "app-b",
+            Some("com.x"),
+            "scripts/android.sh",
+            Some("android"),
+        )
+        .expect("update");
         let content = fs::read_to_string(&path).unwrap();
-        assert!(content.contains(r#"bundle = "com.x""#),
-            "SHALL backfill missing bundle, got:\n{content}");
+        assert!(
+            content.contains(r#"bundle = "com.x""#),
+            "SHALL backfill missing bundle, got:\n{content}"
+        );
     }
 
     #[test]
@@ -582,20 +612,33 @@ install_script = { ios = "scripts/ios.sh" }
         let tmp = TempDir::new().expect("tempdir");
         let path = tmp.path().join("golem.toml");
         // A subsequent scaffold with a different bundle SHALL NOT overwrite.
-        fs::write(&path, r#"
+        fs::write(
+            &path,
+            r#"
 [[apps]]
 name = "app-b"
 bundle = "com.kept"
 install_script = { ios = "scripts/ios.sh" }
-"#).unwrap();
+"#,
+        )
+        .unwrap();
         update_golem_toml_install_script(
-            &path, "app-b", Some("com.other"), "scripts/android.sh", Some("android"),
-        ).expect("update");
+            &path,
+            "app-b",
+            Some("com.other"),
+            "scripts/android.sh",
+            Some("android"),
+        )
+        .expect("update");
         let content = fs::read_to_string(&path).unwrap();
-        assert!(content.contains(r#"bundle = "com.kept""#),
-            "SHALL preserve existing bundle, got:\n{content}");
-        assert!(!content.contains("com.other"),
-            "SHALL NOT write the supplied bundle when one already exists");
+        assert!(
+            content.contains(r#"bundle = "com.kept""#),
+            "SHALL preserve existing bundle, got:\n{content}"
+        );
+        assert!(
+            !content.contains("com.other"),
+            "SHALL NOT write the supplied bundle when one already exists"
+        );
     }
 
     #[test]
@@ -604,11 +647,21 @@ install_script = { ios = "scripts/ios.sh" }
         let path = tmp.path().join("golem.toml");
         fs::write(&path, "[options]\n").unwrap();
         update_golem_toml_install_script(
-            &path, "app-b", Some("com.example.b"), "scripts/ios.sh", Some("ios"),
-        ).expect("update ios");
+            &path,
+            "app-b",
+            Some("com.example.b"),
+            "scripts/ios.sh",
+            Some("ios"),
+        )
+        .expect("update ios");
         update_golem_toml_install_script(
-            &path, "app-b", Some("com.example.b"), "scripts/android.sh", Some("android"),
-        ).expect("update android");
+            &path,
+            "app-b",
+            Some("com.example.b"),
+            "scripts/android.sh",
+            Some("android"),
+        )
+        .expect("update android");
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains("scripts/ios.sh"));
         assert!(content.contains("scripts/android.sh"));
@@ -698,9 +751,8 @@ install_script = { ios = "scripts/ios.sh" }
     fn update_golem_toml_missing_file_errors() {
         let tmp = TempDir::new().expect("tempdir");
         let path = tmp.path().join("does-not-exist.toml");
-        let result = update_golem_toml_install_script(
-            &path, "app", Some("com.x"), "scripts/x.sh", None,
-        );
+        let result =
+            update_golem_toml_install_script(&path, "app", Some("com.x"), "scripts/x.sh", None);
         assert!(result.is_err(), "missing golem.toml SHALL error");
         let msg = format!("{}", result.expect_err("expected error"));
         assert!(
@@ -715,9 +767,8 @@ install_script = { ios = "scripts/ios.sh" }
         let tmp = TempDir::new().expect("tempdir");
         let path = tmp.path().join("golem.toml");
         fs::write(&path, "this is = = not valid toml [[[").expect("write");
-        let result = update_golem_toml_install_script(
-            &path, "app", Some("com.x"), "scripts/x.sh", None,
-        );
+        let result =
+            update_golem_toml_install_script(&path, "app", Some("com.x"), "scripts/x.sh", None);
         assert!(result.is_err(), "invalid TOML SHALL error");
         let msg = format!("{}", result.expect_err("expected error"));
         assert!(
@@ -732,9 +783,8 @@ install_script = { ios = "scripts/ios.sh" }
         let tmp = TempDir::new().expect("tempdir");
         let path = tmp.path().join("golem.toml");
         fs::write(&path, "apps = \"not-a-table-array\"\n").expect("write");
-        let result = update_golem_toml_install_script(
-            &path, "app", Some("com.x"), "scripts/x.sh", None,
-        );
+        let result =
+            update_golem_toml_install_script(&path, "app", Some("com.x"), "scripts/x.sh", None);
         assert!(result.is_err(), "wrong `apps` type SHALL error");
         let msg = format!("{}", result.expect_err("expected error"));
         assert!(
@@ -748,18 +798,30 @@ install_script = { ios = "scripts/ios.sh" }
     fn update_golem_toml_same_platform_overwrites_keeps_other() {
         let tmp = TempDir::new().expect("tempdir");
         let path = tmp.path().join("golem.toml");
-        fs::write(&path, r#"
+        fs::write(
+            &path,
+            r#"
 [[apps]]
 name = "app-b"
 install_script = { ios = "scripts/ios-old.sh", android = "scripts/android.sh" }
-"#).expect("write");
-        update_golem_toml_install_script(
-            &path, "app-b", None, "scripts/ios-new.sh", Some("ios"),
-        ).expect("update ios");
+"#,
+        )
+        .expect("write");
+        update_golem_toml_install_script(&path, "app-b", None, "scripts/ios-new.sh", Some("ios"))
+            .expect("update ios");
         let content = fs::read_to_string(&path).expect("read");
-        assert!(content.contains("scripts/ios-new.sh"), "ios key SHALL be updated");
-        assert!(!content.contains("scripts/ios-old.sh"), "old ios value SHALL be replaced");
-        assert!(content.contains("scripts/android.sh"), "android key SHALL be preserved");
+        assert!(
+            content.contains("scripts/ios-new.sh"),
+            "ios key SHALL be updated"
+        );
+        assert!(
+            !content.contains("scripts/ios-old.sh"),
+            "old ios value SHALL be replaced"
+        );
+        assert!(
+            content.contains("scripts/android.sh"),
+            "android key SHALL be preserved"
+        );
     }
 
     // 22. cross-platform (None) path backfills a missing bundle on an existing entry.
@@ -767,17 +829,28 @@ install_script = { ios = "scripts/ios-old.sh", android = "scripts/android.sh" }
     fn update_golem_toml_cross_platform_backfills_bundle() {
         let tmp = TempDir::new().expect("tempdir");
         let path = tmp.path().join("golem.toml");
-        fs::write(&path, r#"
+        fs::write(
+            &path,
+            r#"
 [[apps]]
 name = "app-b"
 install_script = "scripts/old.sh"
-"#).expect("write");
+"#,
+        )
+        .expect("write");
         update_golem_toml_install_script(
-            &path, "app-b", Some("com.backfill"), "scripts/new.sh", None,
-        ).expect("update");
+            &path,
+            "app-b",
+            Some("com.backfill"),
+            "scripts/new.sh",
+            None,
+        )
+        .expect("update");
         let content = fs::read_to_string(&path).expect("read");
-        assert!(content.contains(r#"bundle = "com.backfill""#),
-            "cross-platform update SHALL backfill missing bundle, got:\n{content}");
+        assert!(
+            content.contains(r#"bundle = "com.backfill""#),
+            "cross-platform update SHALL backfill missing bundle, got:\n{content}"
+        );
         assert!(content.contains(r#"install_script = "scripts/new.sh""#));
     }
 
@@ -805,11 +878,19 @@ install_script = "scripts/old.sh"
             ("IOS_SCHEME", "X_iOS"),
             ("TAURI_CMD", "npx tauri"),
         ];
-        for fw in [InstallFramework::NativeIos, InstallFramework::NativeAndroid, InstallFramework::Tauri] {
+        for fw in [
+            InstallFramework::NativeIos,
+            InstallFramework::NativeAndroid,
+            InstallFramework::Tauri,
+        ] {
             let out = tmp.path().join(format!("{}.sh", fw.label()));
             write_install_script(&out, fw, &placeholders).expect("write");
             let content = fs::read_to_string(&out).expect("read");
-            assert!(!content.contains("{{"), "{}: has leftover placeholder", fw.label());
+            assert!(
+                !content.contains("{{"),
+                "{}: has leftover placeholder",
+                fw.label()
+            );
         }
     }
 }

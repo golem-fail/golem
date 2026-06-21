@@ -54,15 +54,13 @@ impl Default for CaptureConfig {
 ///
 /// Replaces any character that is not alphanumeric, `_`, or `-` with `_`.
 pub fn sanitize_filename(name: &str) -> String {
-    name.replace(
-        |c: char| !c.is_alphanumeric() && c != '_' && c != '-',
-        "_",
-    )
+    name.replace(|c: char| !c.is_alphanumeric() && c != '_' && c != '-', "_")
 }
 
 /// Build the screenshot directory for this flow/device.
 fn screenshot_dir(config: &CaptureConfig) -> PathBuf {
-    config.output_dir
+    config
+        .output_dir
         .join(sanitize_filename(&config.flow_name))
         .join(sanitize_filename(&config.device_name))
         .join("screenshots")
@@ -91,7 +89,6 @@ pub fn build_screenshot_path(
     screenshot_dir(config).join(filename)
 }
 
-
 /// Capture a screenshot on failure/warning and write it to disk.
 ///
 /// Returns the path the screenshot was saved to, or an error if
@@ -111,7 +108,14 @@ pub async fn capture_failure_screenshot(
 
     let screenshot = crate::resolution::screenshot_bounded(driver).await?;
 
-    let path = build_screenshot_path(config, block_name, global_step_index, block_iteration, step_index, failure_type);
+    let path = build_screenshot_path(
+        config,
+        block_name,
+        global_step_index,
+        block_iteration,
+        step_index,
+        failure_type,
+    );
 
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -167,7 +171,14 @@ pub async fn capture_failure_tree(
     let (root, _meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
     let json = serde_json::to_string_pretty(&root)?;
 
-    let path = build_tree_path(config, block_name, global_step_index, block_iteration, step_index, failure_type);
+    let path = build_tree_path(
+        config,
+        block_name,
+        global_step_index,
+        block_iteration,
+        step_index,
+        failure_type,
+    );
 
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -179,7 +190,8 @@ pub async fn capture_failure_tree(
 
 /// Trace directory for `--trace` boundary snapshots.
 fn trace_dir(config: &CaptureConfig) -> PathBuf {
-    config.output_dir
+    config
+        .output_dir
         .join(sanitize_filename(&config.flow_name))
         .join(sanitize_filename(&config.device_name))
         .join("trace")
@@ -244,7 +256,11 @@ fn write_png_chunk(out: &mut Vec<u8>, chunk_type: &[u8; 4], data: &[u8]) {
     for &b in chunk_type.iter().chain(data.iter()) {
         crc ^= b as u32;
         for _ in 0..8 {
-            crc = if crc & 1 != 0 { 0xEDB8_8320 ^ (crc >> 1) } else { crc >> 1 };
+            crc = if crc & 1 != 0 {
+                0xEDB8_8320 ^ (crc >> 1)
+            } else {
+                crc >> 1
+            };
         }
     }
     out.extend_from_slice(&(!crc).to_be_bytes());
@@ -346,7 +362,8 @@ pub fn write_trace_sidecar(
     if !config.write_to_disk {
         anyhow::bail!("sidecar write disabled");
     }
-    let dir = config.output_dir
+    let dir = config
+        .output_dir
         .join(sanitize_filename(&config.flow_name))
         .join(sanitize_filename(&config.device_name))
         .join("recordings");
@@ -360,7 +377,8 @@ pub fn write_trace_sidecar(
 
 /// Build the recording directory for this flow/device.
 fn recording_dir(config: &CaptureConfig) -> PathBuf {
-    config.output_dir
+    config
+        .output_dir
         .join(sanitize_filename(&config.flow_name))
         .join(sanitize_filename(&config.device_name))
         .join("recordings")
@@ -374,11 +392,7 @@ fn recording_dir(config: &CaptureConfig) -> PathBuf {
 // TODO: Android `screenrecord` truncates at ~3 min. Auto-rotate into
 // `{block}_{iter}_part1.mp4`, `_part2.mp4` once duration crosses 2:55.
 // Tracked in roadmap "Recording: per-block default with cascading config".
-pub fn build_recording_path(
-    config: &CaptureConfig,
-    block_name: &str,
-    iteration: u32,
-) -> PathBuf {
+pub fn build_recording_path(config: &CaptureConfig, block_name: &str, iteration: u32) -> PathBuf {
     let filename = format!("{}_{}.mp4", sanitize_filename(block_name), iteration);
     recording_dir(config).join(filename)
 }
@@ -471,7 +485,9 @@ mod tests {
 
         assert_eq!(
             path,
-            PathBuf::from(".golem/results/login_flow/iPhone_16e/screenshots/3_verify_block_0_1_error.png")
+            PathBuf::from(
+                ".golem/results/login_flow/iPhone_16e/screenshots/3_verify_block_0_1_error.png"
+            )
         );
     }
 
@@ -489,7 +505,9 @@ mod tests {
 
         assert_eq!(
             path,
-            PathBuf::from(".golem/results/my_flow_/iPhone_16_Pro/screenshots/5_block__1_2_0_warn.png")
+            PathBuf::from(
+                ".golem/results/my_flow_/iPhone_16_Pro/screenshots/5_block__1_2_0_warn.png"
+            )
         );
     }
 
@@ -517,8 +535,7 @@ mod tests {
             ..test_config()
         };
 
-        let result =
-            capture_failure_screenshot(&driver, &config, "block", 1, 0, 0, "error").await;
+        let result = capture_failure_screenshot(&driver, &config, "block", 1, 0, 0, "error").await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be an error"));
         assert!(
@@ -536,7 +553,10 @@ mod tests {
     fn sanitize_filename_handles_special_chars() {
         assert_eq!(sanitize_filename("hello world"), "hello_world");
         assert_eq!(sanitize_filename("test/flow.v2"), "test_flow_v2");
-        assert_eq!(sanitize_filename("keep-dashes_and_underscores"), "keep-dashes_and_underscores");
+        assert_eq!(
+            sanitize_filename("keep-dashes_and_underscores"),
+            "keep-dashes_and_underscores"
+        );
         assert_eq!(sanitize_filename("emoji\u{1F600}name"), "emoji_name");
         assert_eq!(sanitize_filename(""), "");
     }
@@ -580,7 +600,10 @@ mod tests {
         };
         let path = build_recording_path(&config, "login", 0);
 
-        assert_eq!(path, PathBuf::from("/tmp/out/signup/Pixel-6/recordings/login_0.mp4"));
+        assert_eq!(
+            path,
+            PathBuf::from("/tmp/out/signup/Pixel-6/recordings/login_0.mp4")
+        );
     }
 
     // ---------------------------------------------------------------
@@ -638,10 +661,9 @@ mod tests {
             ..CaptureConfig::default()
         };
 
-        let path =
-            capture_failure_screenshot(&driver, &config, "auth", 2, 0, 1, "error")
-                .await
-                .expect("capture should succeed");
+        let path = capture_failure_screenshot(&driver, &config, "auth", 2, 0, 1, "error")
+            .await
+            .expect("capture should succeed");
 
         assert!(path.exists(), "screenshot file SHALL exist on disk");
         let data = std::fs::read(&path).expect("should read file");
@@ -664,8 +686,7 @@ mod tests {
             ..test_config()
         };
 
-        let result =
-            capture_failure_screenshot(&driver, &config, "block", 1, 0, 0, "error").await;
+        let result = capture_failure_screenshot(&driver, &config, "block", 1, 0, 0, "error").await;
         assert!(result.is_err());
         assert!(driver.get_calls().is_empty());
     }
@@ -759,7 +780,10 @@ mod tests {
         // return the input unchanged.
         let mut truncated = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
         truncated.extend_from_slice(&[0u8; 12]);
-        assert!(truncated.len() < 33, "fixture SHALL be shorter than IHDR end");
+        assert!(
+            truncated.len() < 33,
+            "fixture SHALL be shorter than IHDR end"
+        );
         let out = embed_png_metadata(&truncated, &[("k", "v")]);
         assert_eq!(out, truncated, "truncated IHDR SHALL be returned unchanged");
     }
@@ -811,7 +835,10 @@ mod tests {
             err_msg.contains("disabled"),
             "expected 'disabled' in error message, got: {err_msg}"
         );
-        assert!(driver.get_calls().is_empty(), "driver SHALL NOT be called when disabled");
+        assert!(
+            driver.get_calls().is_empty(),
+            "driver SHALL NOT be called when disabled"
+        );
     }
 
     // ---------------------------------------------------------------
@@ -1005,10 +1032,9 @@ mod tests {
             wall_clock: "2026-06-15T00:00:00Z",
         };
 
-        let (png_path, json_path) =
-            capture_trace_boundary(&driver, &config, 0, "preflow", meta)
-                .await
-                .expect("preflow boundary capture should succeed");
+        let (png_path, json_path) = capture_trace_boundary(&driver, &config, 0, "preflow", meta)
+            .await
+            .expect("preflow boundary capture should succeed");
 
         assert!(png_path.exists());
         assert!(json_path.exists());
@@ -1071,7 +1097,8 @@ mod tests {
 
         assert_eq!(
             path,
-            tmp.path().join("login/Pixel_6/recordings/auth_block_2_steps.json")
+            tmp.path()
+                .join("login/Pixel_6/recordings/auth_block_2_steps.json")
         );
         let json = std::fs::read_to_string(&path).expect("read sidecar");
         let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid json");

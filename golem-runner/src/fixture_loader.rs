@@ -87,18 +87,13 @@ mod tests {
         load_fixture_into_store("new_user", "user", dir, dir, &mut store, &mut rng)
             .expect("should load fixture");
 
-        let user = store
-            .resolve("user")
-            .expect("user should exist in store");
+        let user = store.resolve("user").expect("user should exist in store");
         let obj = user.as_object().expect("user should be an object");
         assert_eq!(
             obj.get("email"),
             Some(&VarValue::string("alice@example.com"))
         );
-        assert_eq!(
-            obj.get("password"),
-            Some(&VarValue::string("s3cret"))
-        );
+        assert_eq!(obj.get("password"), Some(&VarValue::string("s3cret")));
     }
 
     // ---------------------------------------------------------------
@@ -182,8 +177,7 @@ mod tests {
         let mut store = VariableStore::new();
         let mut rng = seeded_rng();
 
-        let result =
-            load_fixture_into_store("nonexistent", "user", dir, dir, &mut store, &mut rng);
+        let result = load_fixture_into_store("nonexistent", "user", dir, dir, &mut store, &mut rng);
         assert!(result.is_err(), "SHALL error when fixture not found");
         let err_msg = format!("{}", result.expect_err("should be an error"));
         assert!(
@@ -256,14 +250,8 @@ mod tests {
             .expect("should load fixture");
 
         let srv = store.resolve("srv").expect("srv should exist");
-        assert_eq!(
-            srv.get_path("host"),
-            Some(&VarValue::string("localhost"))
-        );
-        assert_eq!(
-            srv.get_path("port"),
-            Some(&VarValue::string("8080"))
-        );
+        assert_eq!(srv.get_path("host"), Some(&VarValue::string("localhost")));
+        assert_eq!(srv.get_path("port"), Some(&VarValue::string("8080")));
     }
 
     // ---------------------------------------------------------------
@@ -298,8 +286,7 @@ mod tests {
         let mut store = VariableStore::new();
         let mut rng = seeded_rng();
 
-        let result =
-            load_fixture_into_store("broken", "data", dir, dir, &mut store, &mut rng);
+        let result = load_fixture_into_store("broken", "data", dir, dir, &mut store, &mut rng);
         assert!(result.is_err(), "SHALL error on invalid TOML");
     }
 
@@ -327,7 +314,10 @@ mod tests {
 
         let first = load_email();
         let second = load_email();
-        assert_eq!(first, second, "same seed SHALL produce same generated value");
+        assert_eq!(
+            first, second,
+            "same seed SHALL produce same generated value"
+        );
     }
 
     // ---------------------------------------------------------------
@@ -338,7 +328,11 @@ mod tests {
     fn same_namespace_second_load_replaces_first() {
         let tmp = TempDir::new().expect("temp dir");
         let dir = tmp.path();
-        write_fixture(dir, "first", "[vars]\nname = \"Alice\"\nonly_first = \"x\"\n");
+        write_fixture(
+            dir,
+            "first",
+            "[vars]\nname = \"Alice\"\nonly_first = \"x\"\n",
+        );
         write_fixture(dir, "second", "[vars]\nname = \"Bob\"\n");
 
         let mut store = VariableStore::new();
@@ -379,8 +373,15 @@ mod tests {
         let mut store = VariableStore::new();
         let mut rng = seeded_rng();
 
-        load_fixture_into_store("shared", "cfg", &flow_dir, project_root, &mut store, &mut rng)
-            .expect("should resolve fixture from ancestor");
+        load_fixture_into_store(
+            "shared",
+            "cfg",
+            &flow_dir,
+            project_root,
+            &mut store,
+            &mut rng,
+        )
+        .expect("should resolve fixture from ancestor");
 
         let cfg = store.resolve("cfg").expect("cfg should exist");
         assert_eq!(cfg.get_path("key"), Some(&VarValue::string("value")));
@@ -472,7 +473,11 @@ mod tests {
     fn distinct_generated_keys_advance_rng() {
         let tmp = TempDir::new().expect("temp dir");
         let dir = tmp.path();
-        write_fixture(dir, "multi", "[vars]\na = \"${fake:email}\"\nb = \"${fake:email}\"\n");
+        write_fixture(
+            dir,
+            "multi",
+            "[vars]\na = \"${fake:email}\"\nb = \"${fake:email}\"\n",
+        );
 
         let mut store = VariableStore::new();
         let mut rng = seeded_rng();

@@ -226,9 +226,7 @@ fn pick_random_postcode_entry<'a>(
     }
 
     // Should not reach here, but satisfy the compiler.
-    Err(VarError::Other(
-        "failed to pick postcode entry".to_string(),
-    ))
+    Err(VarError::Other("failed to pick postcode entry".to_string()))
 }
 
 /// Expand a `GeoPostcode` entry into a street address string.
@@ -267,17 +265,25 @@ pub(crate) fn expand_street_pattern(pattern: &str, street_en: &str, rng: &mut im
 
     // Replace all n{min,max} tokens left-to-right.
     while let Some(start) = result.find("n{") {
-        let Some(close) = result[start..].find('}') else { break };
+        let Some(close) = result[start..].find('}') else {
+            break;
+        };
         let range_str = &result[start + 2..start + close];
-        let Some((min_s, max_s)) = range_str.split_once(',') else { break };
+        let Some((min_s, max_s)) = range_str.split_once(',') else {
+            break;
+        };
         let min_s = min_s.trim();
         let max_s = max_s.trim();
 
         // Detect numeral system from min value.
         let style = detect_numeral_style(min_s);
 
-        let Some(min) = parse_numerals(min_s) else { break };
-        let Some(max) = parse_numerals(max_s) else { break };
+        let Some(min) = parse_numerals(min_s) else {
+            break;
+        };
+        let Some(max) = parse_numerals(max_s) else {
+            break;
+        };
 
         let num = rng.gen_range(min..=max);
         let num_str = format_numerals(num, style);
@@ -326,15 +332,18 @@ fn detect_numeral_style(s: &str) -> NumeralStyle {
 
 /// Parse a numeral string (any supported style) to u32.
 fn parse_numerals(s: &str) -> Option<u32> {
-    let ascii: String = s.chars().map(|ch| {
-        if ('０'..='９').contains(&ch) {
-            (b'0' + (ch as u32 - '０' as u32) as u8) as char
-        } else if ('٠'..='٩').contains(&ch) {
-            (b'0' + (ch as u32 - '٠' as u32) as u8) as char
-        } else {
-            ch
-        }
-    }).collect();
+    let ascii: String = s
+        .chars()
+        .map(|ch| {
+            if ('０'..='９').contains(&ch) {
+                (b'0' + (ch as u32 - '０' as u32) as u8) as char
+            } else if ('٠'..='٩').contains(&ch) {
+                (b'0' + (ch as u32 - '٠' as u32) as u8) as char
+            } else {
+                ch
+            }
+        })
+        .collect();
     ascii.parse().ok()
 }
 
@@ -343,20 +352,26 @@ fn format_numerals(n: u32, style: NumeralStyle) -> String {
     let ascii = n.to_string();
     match style {
         NumeralStyle::Ascii => ascii,
-        NumeralStyle::FullWidth => ascii.chars().map(|ch| {
-            if ch.is_ascii_digit() {
-                char::from_u32('０' as u32 + (ch as u32 - '0' as u32)).unwrap_or(ch)
-            } else {
-                ch
-            }
-        }).collect(),
-        NumeralStyle::ArabicIndic => ascii.chars().map(|ch| {
-            if ch.is_ascii_digit() {
-                char::from_u32('٠' as u32 + (ch as u32 - '0' as u32)).unwrap_or(ch)
-            } else {
-                ch
-            }
-        }).collect(),
+        NumeralStyle::FullWidth => ascii
+            .chars()
+            .map(|ch| {
+                if ch.is_ascii_digit() {
+                    char::from_u32('０' as u32 + (ch as u32 - '0' as u32)).unwrap_or(ch)
+                } else {
+                    ch
+                }
+            })
+            .collect(),
+        NumeralStyle::ArabicIndic => ascii
+            .chars()
+            .map(|ch| {
+                if ch.is_ascii_digit() {
+                    char::from_u32('٠' as u32 + (ch as u32 - '0' as u32)).unwrap_or(ch)
+                } else {
+                    ch
+                }
+            })
+            .collect(),
     }
 }
 
@@ -480,10 +495,7 @@ mod tests {
             "length should match format, got: {phone}"
         );
         // No '#' should remain.
-        assert!(
-            !phone.contains('#'),
-            "no # should remain, got: {phone}"
-        );
+        assert!(!phone.contains('#'), "no # should remain, got: {phone}");
     }
 
     // -----------------------------------------------------------------------
@@ -529,10 +541,7 @@ mod tests {
         let all_jp = collect_city_names(Some(geo_jp()), None);
         let kansai_only = collect_city_names(Some(geo_jp()), Some("Kansai"));
 
-        assert!(
-            !kansai_only.is_empty(),
-            "should have Kansai cities"
-        );
+        assert!(!kansai_only.is_empty(), "should have Kansai cities");
         assert!(
             kansai_only.len() < all_jp.len(),
             "Kansai subset ({}) should be smaller than all JP ({})",
@@ -779,10 +788,7 @@ mod tests {
     #[test]
     fn city_gb_scotland_region_filter() {
         let scotland = collect_city_names(Some(geo_gb()), Some("Scotland"));
-        assert!(
-            !scotland.is_empty(),
-            "should have Scottish cities"
-        );
+        assert!(!scotland.is_empty(), "should have Scottish cities");
 
         let mut rng = seeded_rng();
         let p = params(&[("country", "GB"), ("region", "Scotland")]);
@@ -806,7 +812,10 @@ mod tests {
             "SHALL contain street name, got: {result}"
         );
         let num: u32 = result.split_whitespace().next().unwrap().parse().unwrap();
-        assert!((1..=100).contains(&num), "number SHALL be in range, got: {num}");
+        assert!(
+            (1..=100).contains(&num),
+            "number SHALL be in range, got: {num}"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -827,11 +836,18 @@ mod tests {
         // Should match pattern like "清田一条2-7"
         let suffix = &result["清田一条".len()..];
         let parts: Vec<&str> = suffix.split('-').collect();
-        assert_eq!(parts.len(), 2, "SHALL have two numeric parts, got: {result}");
+        assert_eq!(
+            parts.len(),
+            2,
+            "SHALL have two numeric parts, got: {result}"
+        );
         let n1: u32 = parts[0].parse().expect("first part SHALL be numeric");
         let n2: u32 = parts[1].parse().expect("second part SHALL be numeric");
         assert!((1..=4).contains(&n1), "first num SHALL be 1-4, got: {n1}");
-        assert!((1..=15).contains(&n2), "second num SHALL be 1-15, got: {n2}");
+        assert!(
+            (1..=15).contains(&n2),
+            "second num SHALL be 1-15, got: {n2}"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -853,7 +869,10 @@ mod tests {
     fn expand_street_pattern_no_tokens_returns_as_is() {
         let mut rng = seeded_rng();
         let result = expand_street_pattern("Fixed Street Name", "Fixed Street Name", &mut rng);
-        assert_eq!(result, "Fixed Street Name", "no tokens SHALL return pattern unchanged");
+        assert_eq!(
+            result, "Fixed Street Name",
+            "no tokens SHALL return pattern unchanged"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -877,8 +896,14 @@ mod tests {
             "SHALL use full-width digits not ASCII, got: {result}"
         );
         // Should contain 丁目 and 番
-        assert!(result.contains("丁目"), "SHALL keep 丁目 delimiter, got: {result}");
-        assert!(result.contains("番"), "SHALL keep 番 delimiter, got: {result}");
+        assert!(
+            result.contains("丁目"),
+            "SHALL keep 丁目 delimiter, got: {result}"
+        );
+        assert!(
+            result.contains("番"),
+            "SHALL keep 番 delimiter, got: {result}"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1154,7 +1179,11 @@ mod tests {
         );
         // The two replaced positions SHALL be ASCII digits.
         let digits: Vec<char> = result.chars().filter(|c| c.is_ascii_digit()).collect();
-        assert_eq!(digits.len(), 2, "two '#' SHALL become two digits, got: {result}");
+        assert_eq!(
+            digits.len(),
+            2,
+            "two '#' SHALL become two digits, got: {result}"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1163,7 +1192,11 @@ mod tests {
     #[test]
     fn expand_format_empty_is_empty() {
         let mut rng = seeded_rng();
-        assert_eq!(expand_format("", &mut rng), "", "empty format SHALL stay empty");
+        assert_eq!(
+            expand_format("", &mut rng),
+            "",
+            "empty format SHALL stay empty"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1190,10 +1223,7 @@ mod tests {
                 GeoCity::for_test(name, postcodes)
             })
             .collect();
-        let state = GeoState::for_test(
-            region_tags.iter().map(|s| s.to_string()).collect(),
-            cities,
-        );
+        let state = GeoState::for_test(region_tags.iter().map(|s| s.to_string()).collect(), cities);
         let country = GeoCountry::for_test("ZZ", vec!["+99 ### ####".to_string()]);
         GeoData::for_test(country, vec![state])
     }

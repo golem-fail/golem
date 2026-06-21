@@ -99,9 +99,9 @@ pub fn lint_push_notification_phys(flow: &FlowFile) -> Vec<PushNotificationPhysI
         .iter()
         .filter(|app| {
             app.devices.iter().any(|dc| {
-                dc.hardware.as_ref().is_some_and(|h| {
-                    h.to_vec().iter().any(|v| v == "real")
-                })
+                dc.hardware
+                    .as_ref()
+                    .is_some_and(|h| h.to_vec().iter().any(|v| v == "real"))
             })
         })
         .map(|app| app.name.as_str())
@@ -121,7 +121,9 @@ pub fn lint_push_notification_phys(flow: &FlowFile) -> Vec<PushNotificationPhysI
                 .app
                 .as_deref()
                 .or_else(|| flow.flow.apps.first().map(|a| a.name.as_str()));
-            let Some(target) = target else { continue; };
+            let Some(target) = target else {
+                continue;
+            };
             if phys_capable_apps.contains(&target) {
                 issues.push(PushNotificationPhysIssue {
                     block_name: block.name.clone(),

@@ -20,8 +20,14 @@ pub fn run() -> Result<()> {
     let theme = ColorfulTheme::default();
 
     let frameworks = [
-        ("native-ios    (Xcode / xcodebuild)", InstallFramework::NativeIos),
-        ("native-android (Gradle / adb)", InstallFramework::NativeAndroid),
+        (
+            "native-ios    (Xcode / xcodebuild)",
+            InstallFramework::NativeIos,
+        ),
+        (
+            "native-android (Gradle / adb)",
+            InstallFramework::NativeAndroid,
+        ),
         ("tauri          (Tauri 2.x mobile)", InstallFramework::Tauri),
     ];
     let idx = Select::with_theme(&theme)
@@ -50,12 +56,22 @@ pub fn run() -> Result<()> {
                 Input::with_theme(&theme)
                     .with_prompt("Xcode project or workspace path (e.g. MyApp.xcodeproj)")
                     .validate_with(|s: &String| -> std::result::Result<(), &str> {
-                        if s.trim().is_empty() { Err("required") } else { Ok(()) }
+                        if s.trim().is_empty() {
+                            Err("required")
+                        } else {
+                            Ok(())
+                        }
                     })
                     .interact_text()?
             } else {
-                let mut items: Vec<String> = found.iter()
-                    .map(|p| p.strip_prefix(&cwd).unwrap_or(p).to_string_lossy().to_string())
+                let mut items: Vec<String> = found
+                    .iter()
+                    .map(|p| {
+                        p.strip_prefix(&cwd)
+                            .unwrap_or(p)
+                            .to_string_lossy()
+                            .to_string()
+                    })
                     .collect();
                 items.push(OTHER_LABEL.into());
                 let idx = Select::with_theme(&theme)
@@ -170,10 +186,10 @@ pub fn run() -> Result<()> {
 
             // Detect package manager from lockfile in the tauri dir.
             let pm_items = [
-                ("npx tauri",   "npm (npx)"),
-                ("yarn tauri",  "yarn"),
-                ("pnpm tauri",  "pnpm"),
-                ("bun tauri",   "bun"),
+                ("npx tauri", "npm (npx)"),
+                ("yarn tauri", "yarn"),
+                ("pnpm tauri", "pnpm"),
+                ("bun tauri", "bun"),
                 ("cargo tauri", "cargo (direct)"),
             ];
             let default_idx = detect_tauri_command(&cwd.join(&tauri_dir), &pm_items);
@@ -204,8 +220,12 @@ pub fn run() -> Result<()> {
     let output_path = PathBuf::from(&output_path_str);
 
     let ph_refs: Vec<(&str, &str)> = placeholders.iter().map(|(k, v)| (*k, v.as_str())).collect();
-    write_install_script(&output_path, framework, &ph_refs)
-        .with_context(|| format!("failed to write install script to {}", output_path.display()))?;
+    write_install_script(&output_path, framework, &ph_refs).with_context(|| {
+        format!(
+            "failed to write install script to {}",
+            output_path.display()
+        )
+    })?;
     println!("\n✓ wrote {}", output_path.display());
 
     let golem_toml = find_golem_toml();
@@ -225,7 +245,11 @@ pub fn run() -> Result<()> {
                     .with_prompt("Bundle id (optional — leave blank if already set in [[apps]])")
                     .allow_empty(true)
                     .interact_text()?;
-                let bundle_id = if bundle_input.trim().is_empty() { None } else { Some(bundle_input) };
+                let bundle_id = if bundle_input.trim().is_empty() {
+                    None
+                } else {
+                    Some(bundle_input)
+                };
 
                 let project_root = path.parent().unwrap_or(Path::new("."));
                 let rel = pathdiff_relative(&output_path, project_root)
@@ -241,10 +265,19 @@ pub fn run() -> Result<()> {
                     platform_key,
                 )?;
                 match platform_key {
-                    Some(p) => println!("✓ updated {} with [[apps]] name=\"{}\" install_script.{} = \"{}\"",
-                        display_path.display(), app_name, p, rel_str),
-                    None => println!("✓ updated {} with [[apps]] name=\"{}\" install_script = \"{}\"",
-                        display_path.display(), app_name, rel_str),
+                    Some(p) => println!(
+                        "✓ updated {} with [[apps]] name=\"{}\" install_script.{} = \"{}\"",
+                        display_path.display(),
+                        app_name,
+                        p,
+                        rel_str
+                    ),
+                    None => println!(
+                        "✓ updated {} with [[apps]] name=\"{}\" install_script = \"{}\"",
+                        display_path.display(),
+                        app_name,
+                        rel_str
+                    ),
                 }
             } else {
                 let snippet = install_script_snippet(framework, &output_path.display().to_string());
@@ -270,15 +303,19 @@ fn find_golem_toml() -> Option<PathBuf> {
 }
 
 fn pathdiff_relative(path: &Path, base: &Path) -> Option<PathBuf> {
-    let abs_path = path.canonicalize().ok().or_else(|| Some(path.to_path_buf()))?;
-    let abs_base = base.canonicalize().ok().or_else(|| Some(base.to_path_buf()))?;
+    let abs_path = path
+        .canonicalize()
+        .ok()
+        .or_else(|| Some(path.to_path_buf()))?;
+    let abs_base = base
+        .canonicalize()
+        .ok()
+        .or_else(|| Some(base.to_path_buf()))?;
 
     let mut path_components = abs_path.components().peekable();
     let mut base_components = abs_base.components().peekable();
 
-    while path_components.peek() == base_components.peek()
-        && path_components.peek().is_some()
-    {
+    while path_components.peek() == base_components.peek() && path_components.peek().is_some() {
         path_components.next();
         base_components.next();
     }
@@ -301,10 +338,15 @@ fn pathdiff_relative(path: &Path, base: &Path) -> Option<PathBuf> {
 /// `.xcodeproj` bundles. Skips common noise (node_modules, build, .git, target).
 fn discover_xcode_projects(root: &Path, max_depth: usize) -> Vec<PathBuf> {
     let mut out = Vec::new();
-    walk_for(root, max_depth, &mut |p| {
-        let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        name.ends_with(".xcworkspace") || name.ends_with(".xcodeproj")
-    }, &mut out);
+    walk_for(
+        root,
+        max_depth,
+        &mut |p| {
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            name.ends_with(".xcworkspace") || name.ends_with(".xcodeproj")
+        },
+        &mut out,
+    );
     // Prefer .xcworkspace over .xcodeproj in same dir.
     out.sort_by(|a, b| {
         let a_ws = a.extension().map(|e| e == "xcworkspace").unwrap_or(false);
@@ -319,13 +361,24 @@ fn discover_xcode_projects(root: &Path, max_depth: usize) -> Vec<PathBuf> {
 /// are named by the user separately.
 fn discover_android_roots(root: &Path, max_depth: usize) -> Vec<String> {
     let mut dirs = Vec::<PathBuf>::new();
-    walk_for(root, max_depth, &mut |p| {
-        let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        name == "settings.gradle" || name == "settings.gradle.kts"
-    }, &mut dirs);
-    let mut out: Vec<String> = dirs.iter()
+    walk_for(
+        root,
+        max_depth,
+        &mut |p| {
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            name == "settings.gradle" || name == "settings.gradle.kts"
+        },
+        &mut dirs,
+    );
+    let mut out: Vec<String> = dirs
+        .iter()
         .filter_map(|p| p.parent())
-        .map(|p| p.strip_prefix(root).unwrap_or(p).to_string_lossy().to_string())
+        .map(|p| {
+            p.strip_prefix(root)
+                .unwrap_or(p)
+                .to_string_lossy()
+                .to_string()
+        })
         .map(|s| if s.is_empty() { ".".to_string() } else { s })
         .collect();
     out.sort();
@@ -336,12 +389,21 @@ fn discover_android_roots(root: &Path, max_depth: usize) -> Vec<String> {
 /// Walk for directories containing `src-tauri/`.
 fn discover_tauri_dirs(root: &Path, max_depth: usize) -> Vec<String> {
     let mut tauri_children = Vec::<PathBuf>::new();
-    walk_for(root, max_depth, &mut |p| {
-        p.is_dir() && p.file_name().and_then(|n| n.to_str()) == Some("src-tauri")
-    }, &mut tauri_children);
-    let mut out: Vec<String> = tauri_children.iter()
+    walk_for(
+        root,
+        max_depth,
+        &mut |p| p.is_dir() && p.file_name().and_then(|n| n.to_str()) == Some("src-tauri"),
+        &mut tauri_children,
+    );
+    let mut out: Vec<String> = tauri_children
+        .iter()
         .filter_map(|p| p.parent())
-        .map(|p| p.strip_prefix(root).unwrap_or(p).to_string_lossy().to_string())
+        .map(|p| {
+            p.strip_prefix(root)
+                .unwrap_or(p)
+                .to_string_lossy()
+                .to_string()
+        })
         .map(|s| if s.is_empty() { ".".to_string() } else { s })
         .collect();
     out.sort();
@@ -352,12 +414,18 @@ fn discover_tauri_dirs(root: &Path, max_depth: usize) -> Vec<String> {
 /// Invoke `xcodebuild -list` on a project/workspace and parse scheme names.
 /// Returns empty Vec if xcodebuild fails or produces no schemes.
 fn discover_xcode_schemes(project_path: &str) -> Vec<String> {
-    let flag = if project_path.ends_with(".xcworkspace") { "-workspace" } else { "-project" };
+    let flag = if project_path.ends_with(".xcworkspace") {
+        "-workspace"
+    } else {
+        "-project"
+    };
     let output = Command::new("xcodebuild")
         .args(["-list", flag, project_path])
         .output();
     let Ok(out) = output else { return Vec::new() };
-    if !out.status.success() { return Vec::new(); }
+    if !out.status.success() {
+        return Vec::new();
+    }
     let text = String::from_utf8_lossy(&out.stdout);
     parse_xcode_schemes(&text)
 }
@@ -374,7 +442,9 @@ fn parse_xcode_schemes(text: &str) -> Vec<String> {
             continue;
         }
         if in_schemes {
-            if t.is_empty() { break; }
+            if t.is_empty() {
+                break;
+            }
             schemes.push(t.to_string());
         }
     }
@@ -401,9 +471,18 @@ fn walk_for(
         let path = entry.path();
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
         // Skip common noise.
-        if matches!(name,
-            "node_modules" | "target" | ".git" | ".golem" | "build" | "DerivedData"
-            | ".gradle" | "dist" | ".next" | ".cache"
+        if matches!(
+            name,
+            "node_modules"
+                | "target"
+                | ".git"
+                | ".golem"
+                | "build"
+                | "DerivedData"
+                | ".gradle"
+                | "dist"
+                | ".next"
+                | ".cache"
         ) {
             continue;
         }
@@ -429,23 +508,43 @@ fn detect_tauri_command(tauri_dir: &Path, pm_items: &[(&str, &str)]) -> usize {
     let candidates = [tauri_dir.to_path_buf(), tauri_dir.join("..")];
     for dir in &candidates {
         if dir.join("bun.lockb").exists() || dir.join("bun.lock").exists() {
-            return pm_items.iter().position(|(cmd, _)| cmd.starts_with("bun")).unwrap_or(0);
+            return pm_items
+                .iter()
+                .position(|(cmd, _)| cmd.starts_with("bun"))
+                .unwrap_or(0);
         }
         if dir.join("pnpm-lock.yaml").exists() {
-            return pm_items.iter().position(|(cmd, _)| cmd.starts_with("pnpm")).unwrap_or(0);
+            return pm_items
+                .iter()
+                .position(|(cmd, _)| cmd.starts_with("pnpm"))
+                .unwrap_or(0);
         }
         if dir.join("yarn.lock").exists() {
-            return pm_items.iter().position(|(cmd, _)| cmd.starts_with("yarn")).unwrap_or(0);
+            return pm_items
+                .iter()
+                .position(|(cmd, _)| cmd.starts_with("yarn"))
+                .unwrap_or(0);
         }
         if dir.join("package-lock.json").exists() || dir.join("package.json").exists() {
-            return pm_items.iter().position(|(cmd, _)| cmd.starts_with("npx")).unwrap_or(0);
+            return pm_items
+                .iter()
+                .position(|(cmd, _)| cmd.starts_with("npx"))
+                .unwrap_or(0);
         }
     }
     0
 }
 
 fn sanitize_app_name_for_path(name: &str) -> String {
-    name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).collect()
+    name.chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect()
 }
 
 /// Default suggested output path for the install script. Native frameworks
@@ -516,7 +615,12 @@ mod tests {
         let root = tmp.path();
         std::fs::create_dir_all(root.join("ios/MyApp.xcodeproj/project.xcworkspace")).unwrap();
         let found = discover_xcode_projects(root, 5);
-        assert_eq!(found.len(), 1, "SHALL not recurse into .xcodeproj: {:?}", found);
+        assert_eq!(
+            found.len(),
+            1,
+            "SHALL not recurse into .xcodeproj: {:?}",
+            found
+        );
         assert!(found[0].to_string_lossy().ends_with("MyApp.xcodeproj"));
     }
 
@@ -533,7 +637,10 @@ mod tests {
         std::fs::create_dir_all(root.join("project-b")).unwrap();
         std::fs::write(root.join("project-b/settings.gradle.kts"), "").unwrap();
         let found = discover_android_roots(root, 5);
-        assert_eq!(found, vec!["project-a".to_string(), "project-b".to_string()]);
+        assert_eq!(
+            found,
+            vec!["project-a".to_string(), "project-b".to_string()]
+        );
     }
 
     #[test]
@@ -659,7 +766,10 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         std::fs::create_dir_all(tmp.path().join("src")).expect("mkdir");
         let found = discover_xcode_projects(tmp.path(), 5);
-        assert!(found.is_empty(), "no xcode artifacts SHALL yield empty: {found:?}");
+        assert!(
+            found.is_empty(),
+            "no xcode artifacts SHALL yield empty: {found:?}"
+        );
     }
 
     // 6. When two .xcodeproj exist they are ordered alphabetically by path
@@ -710,7 +820,10 @@ mod tests {
         let root = tmp.path();
         std::fs::write(root.join("src-tauri"), "").expect("write file");
         let found = discover_tauri_dirs(root, 5);
-        assert!(found.is_empty(), "file named src-tauri SHALL be ignored: {found:?}");
+        assert!(
+            found.is_empty(),
+            "file named src-tauri SHALL be ignored: {found:?}"
+        );
     }
 
     // 10. A src-tauri directly under the search root surfaces its parent as ".".
@@ -720,7 +833,11 @@ mod tests {
         let root = tmp.path();
         std::fs::create_dir_all(root.join("src-tauri")).expect("mkdir");
         let found = discover_tauri_dirs(root, 5);
-        assert_eq!(found, vec![".".to_string()], "root src-tauri parent SHALL be \".\"");
+        assert_eq!(
+            found,
+            vec![".".to_string()],
+            "root src-tauri parent SHALL be \".\""
+        );
     }
 
     // 11. bun is detected ahead of all others when bun.lock(b) co-exists with
@@ -740,7 +857,11 @@ mod tests {
         std::fs::write(d.join("pnpm-lock.yaml"), "").expect("write");
         std::fs::write(d.join("yarn.lock"), "").expect("write");
         std::fs::write(d.join("package-lock.json"), "").expect("write");
-        assert_eq!(detect_tauri_command(d, &items), 3, "bun SHALL take priority");
+        assert_eq!(
+            detect_tauri_command(d, &items),
+            3,
+            "bun SHALL take priority"
+        );
     }
 
     // 12. package-lock.json (npm) and bare package.json both fall back to npx.
@@ -755,11 +876,19 @@ mod tests {
         ];
         let tmp = tempfile::tempdir().expect("tempdir");
         std::fs::write(tmp.path().join("package-lock.json"), "").expect("write");
-        assert_eq!(detect_tauri_command(tmp.path(), &items), 0, "package-lock SHALL pick npx");
+        assert_eq!(
+            detect_tauri_command(tmp.path(), &items),
+            0,
+            "package-lock SHALL pick npx"
+        );
 
         let tmp2 = tempfile::tempdir().expect("tempdir");
         std::fs::write(tmp2.path().join("package.json"), "{}").expect("write");
-        assert_eq!(detect_tauri_command(tmp2.path(), &items), 0, "package.json SHALL pick npx");
+        assert_eq!(
+            detect_tauri_command(tmp2.path(), &items),
+            0,
+            "package.json SHALL pick npx"
+        );
     }
 
     // 13. The dir's own lockfile takes precedence over a parent dir lockfile
@@ -778,7 +907,11 @@ mod tests {
         std::fs::create_dir(&sub).expect("mkdir");
         std::fs::write(sub.join("yarn.lock"), "").expect("write child");
         std::fs::write(tmp.path().join("pnpm-lock.yaml"), "").expect("write parent");
-        assert_eq!(detect_tauri_command(&sub, &items), 1, "own-dir lockfile SHALL win");
+        assert_eq!(
+            detect_tauri_command(&sub, &items),
+            1,
+            "own-dir lockfile SHALL win"
+        );
     }
 
     // 14. walk_for honours its depth budget: at depth 1 only direct children
@@ -796,7 +929,10 @@ mod tests {
             &mut |p| p.file_name().and_then(|n| n.to_str()) == Some("target.txt"),
             &mut found,
         );
-        assert!(found.is_empty(), "depth 1 SHALL not reach a grandchild: {found:?}");
+        assert!(
+            found.is_empty(),
+            "depth 1 SHALL not reach a grandchild: {found:?}"
+        );
 
         let mut found2 = Vec::new();
         walk_for(
@@ -866,7 +1002,10 @@ mod tests {
     // 19. Empty input yields no schemes.
     #[test]
     fn parse_xcode_schemes_empty_input() {
-        assert!(parse_xcode_schemes("").is_empty(), "empty text SHALL yield no schemes");
+        assert!(
+            parse_xcode_schemes("").is_empty(),
+            "empty text SHALL yield no schemes"
+        );
     }
 
     // 20. A Schemes header with no following blank line (EOF instead) still
@@ -907,7 +1046,10 @@ mod tests {
     #[test]
     fn platform_key_for_maps_frameworks() {
         assert_eq!(platform_key_for(InstallFramework::NativeIos), Some("ios"));
-        assert_eq!(platform_key_for(InstallFramework::NativeAndroid), Some("android"));
+        assert_eq!(
+            platform_key_for(InstallFramework::NativeAndroid),
+            Some("android")
+        );
         assert_eq!(
             platform_key_for(InstallFramework::Tauri),
             None,

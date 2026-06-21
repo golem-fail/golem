@@ -71,11 +71,17 @@ pub fn format_step(step: &StepReport) -> String {
         StepOutcome::Success => (SYM_SUCCESS, String::new()),
         StepOutcome::Warning { message, code } => (
             SYM_WARNING,
-            format!("  {} ({message})", code.render(golem_events::Severity::Warning)),
+            format!(
+                "  {} ({message})",
+                code.render(golem_events::Severity::Warning)
+            ),
         ),
         StepOutcome::Failed { message, code } => (
             SYM_FAILED,
-            format!("  {} ({message})", code.render(golem_events::Severity::Error)),
+            format!(
+                "  {} ({message})",
+                code.render(golem_events::Severity::Error)
+            ),
         ),
         StepOutcome::Skipped => (SYM_SKIPPED, "  (skipped)".to_string()),
     };
@@ -207,7 +213,11 @@ pub fn format_flow(report: &FlowReport) -> String {
         let _ = writeln!(out, "  Covered: {}", report.covered_axes.join(", "));
     }
     for rec in &report.recordings {
-        let _ = writeln!(out, "  Recording: {} (block {}, iter {})", rec.path, rec.block, rec.iteration);
+        let _ = writeln!(
+            out,
+            "  Recording: {} (block {}, iter {})",
+            rec.path, rec.block, rec.iteration
+        );
     }
 
     out
@@ -240,7 +250,9 @@ pub fn format_suite(report: &SuiteReport) -> String {
             f.is_skipped()
                 || (!f.is_passed()
                     && !f.step_results.is_empty()
-                    && f.step_results.iter().all(|s| matches!(s.outcome, StepOutcome::Skipped)))
+                    && f.step_results
+                        .iter()
+                        .all(|s| matches!(s.outcome, StepOutcome::Skipped)))
         })
         .count();
     let timing = format_duration(report.total_duration_ms);
@@ -288,7 +300,10 @@ mod tests {
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
-            outcome: StepOutcome::Failed { message: msg.to_string(), code: golem_events::FailureCode::Uncoded },
+            outcome: StepOutcome::Failed {
+                message: msg.to_string(),
+                code: golem_events::FailureCode::Uncoded,
+            },
             duration_ms: ms,
             retry_count: 0,
             screenshot_path: None,
@@ -307,7 +322,10 @@ mod tests {
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
-            outcome: StepOutcome::Warning { message: msg.to_string(), code: golem_events::FailureCode::Uncoded },
+            outcome: StepOutcome::Warning {
+                message: msg.to_string(),
+                code: golem_events::FailureCode::Uncoded,
+            },
             duration_ms: ms,
             retry_count: 0,
             screenshot_path: None,
@@ -368,7 +386,10 @@ mod tests {
             code: golem_events::FailureCode::FlowStepTimeout,
         };
         let out = format_step(&step);
-        assert!(out.contains("EF408"), "SHALL surface the failure code token");
+        assert!(
+            out.contains("EF408"),
+            "SHALL surface the failure code token"
+        );
         assert!(out.contains("(timed out)"), "SHALL keep the message");
     }
 
@@ -418,7 +439,10 @@ mod tests {
         let lines: Vec<&str> = out.lines().collect();
 
         // Header line
-        assert!(lines[0].contains("login_flow"), "first line SHALL name the flow");
+        assert!(
+            lines[0].contains("login_flow"),
+            "first line SHALL name the flow"
+        );
         assert!(lines[0].contains(SYM_FLOW), "first line SHALL have ▶");
 
         // Steps appear in order: launch before tap before type
@@ -444,9 +468,7 @@ mod tests {
             warnings: vec![],
             duration_ms: 10132,
             seed: Some(847_291_036),
-            screenshot_path: Some(
-                ".golem/screenshots/login_flow_main_step5_error.png".to_string(),
-            ),
+            screenshot_path: Some(".golem/screenshots/login_flow_main_step5_error.png".to_string()),
             device_name: None,
             os_major: None,
             perf_snapshots: vec![],
@@ -494,13 +516,12 @@ mod tests {
         }
     }
 
-    fn failed_step_coded(
-        action: &str,
-        msg: &str,
-        code: golem_events::FailureCode,
-    ) -> StepReport {
+    fn failed_step_coded(action: &str, msg: &str, code: golem_events::FailureCode) -> StepReport {
         let mut s = failed_step(action, "", 100, msg);
-        s.outcome = StepOutcome::Failed { message: msg.to_string(), code };
+        s.outcome = StepOutcome::Failed {
+            message: msg.to_string(),
+            code,
+        };
         s
     }
 
@@ -516,7 +537,10 @@ mod tests {
             "SHALL prefer the report's first_failure_code"
         );
         let out = format_flow(&report);
-        let summary = out.lines().find(|l| l.contains("FAILED")).expect("FAILED line");
+        let summary = out
+            .lines()
+            .find(|l| l.contains("FAILED"))
+            .expect("FAILED line");
         assert!(
             summary.contains("EF408"),
             "FAILED summary line SHALL carry the code, got: {summary}"
@@ -530,7 +554,11 @@ mod tests {
             None,
             vec![
                 success_step("launch", "", 50),
-                failed_step_coded("tap", "not found", golem_events::FailureCode::FlowElementNotFound),
+                failed_step_coded(
+                    "tap",
+                    "not found",
+                    golem_events::FailureCode::FlowElementNotFound,
+                ),
             ],
         );
         assert_eq!(
@@ -547,13 +575,21 @@ mod tests {
     fn fail_line_has_no_code_on_success() {
         let report = FlowReport {
             success: true,
-            ..make_failed_flow(Some(golem_events::FailureCode::FlowStepTimeout), vec![
-                success_step("tap", "OK", 30),
-            ])
+            ..make_failed_flow(
+                Some(golem_events::FailureCode::FlowStepTimeout),
+                vec![success_step("tap", "OK", 30)],
+            )
         };
-        assert_eq!(flow_fail_code(&report), None, "passing flow SHALL have no code");
+        assert_eq!(
+            flow_fail_code(&report),
+            None,
+            "passing flow SHALL have no code"
+        );
         let out = format_flow(&report);
-        let summary = out.lines().find(|l| l.contains("PASSED")).expect("PASSED line");
+        let summary = out
+            .lines()
+            .find(|l| l.contains("PASSED"))
+            .expect("PASSED line");
         assert!(
             !summary.contains("EF408") && !summary.contains("EX000"),
             "PASSED summary line SHALL NOT carry a failure code, got: {summary}"
@@ -780,8 +816,14 @@ mod tests {
         };
 
         let out = format_flow(&report);
-        assert!(out.contains("Performance:"), "SHALL contain Performance: header");
-        assert!(out.contains("login:iPhone_16:0"), "SHALL contain snapshot label");
+        assert!(
+            out.contains("Performance:"),
+            "SHALL contain Performance: header"
+        );
+        assert!(
+            out.contains("login:iPhone_16:0"),
+            "SHALL contain snapshot label"
+        );
         assert!(out.contains("mem: 142.5 MB"), "SHALL contain memory value");
         assert!(out.contains("cpu: 23.1%"), "SHALL contain cpu value");
         assert!(out.contains("launch: 1240ms"), "SHALL contain launch value");
@@ -810,7 +852,10 @@ mod tests {
         assert!(out.contains("0.045s]"), "SHALL still render the timing");
         // The bracket should sit immediately after the label (no spaces between).
         let label = format!("tap \"{long_target}\"");
-        assert!(out.contains(&format!("{label}[")), "long label SHALL have no padding before timing");
+        assert!(
+            out.contains(&format!("{label}[")),
+            "long label SHALL have no padding before timing"
+        );
     }
 
     // 13. format_flow skipped flow shows SKIPPED status word and reason line
@@ -844,7 +889,10 @@ mod tests {
             out.contains("Skipped: peer run met coverage goal"),
             "SHALL show the skipped reason"
         );
-        assert!(!out.contains("PASSED"), "SHALL NOT say PASSED for a skipped flow");
+        assert!(
+            !out.contains("PASSED"),
+            "SHALL NOT say PASSED for a skipped flow"
+        );
         // No step counts → no trailing parenthesised counts on the summary line.
         assert!(!out.contains("passed"), "no step counts SHALL be rendered");
     }
@@ -878,7 +926,10 @@ mod tests {
         };
 
         let out = format_flow(&report);
-        assert!(out.contains("Covered: os:android, locale:en"), "SHALL join covered axes");
+        assert!(
+            out.contains("Covered: os:android, locale:en"),
+            "SHALL join covered axes"
+        );
         assert!(
             out.contains("Recording: .golem/rec/main_2.mp4 (block main, iter 2)"),
             "SHALL render the recording entry with block and iteration"
@@ -935,7 +986,10 @@ mod tests {
             timestamp: "0".into(),
         };
         let out = format_perf_snapshot(&snap);
-        assert!(out.contains("mem: 10.0 MB"), "SHALL render present memory field");
+        assert!(
+            out.contains("mem: 10.0 MB"),
+            "SHALL render present memory field"
+        );
         assert!(!out.contains("cpu:"), "SHALL omit absent cpu field");
         assert!(!out.contains("thr:"), "SHALL omit absent threads field");
         assert!(!out.contains("net:"), "SHALL omit absent net field");
@@ -982,7 +1036,10 @@ mod tests {
         assert!(out.contains("thr: 7"), "SHALL render threads");
         assert!(out.contains("fd: 13"), "SHALL render file descriptors");
         assert!(out.contains("disk: 5.5 MB"), "SHALL render disk");
-        assert!(out.contains("net: 200/50 KB"), "SHALL render net with both directions");
+        assert!(
+            out.contains("net: 200/50 KB"),
+            "SHALL render net with both directions"
+        );
     }
 
     // 19. format_suite separator line is present between flows and summary
@@ -1035,7 +1092,10 @@ mod tests {
         };
         let out = format_suite(&suite);
         // is_skipped() flow is skipped, not passed and not failed.
-        assert!(out.contains("0 passed, 0 failed, 1 skipped"), "SHALL classify as skipped");
+        assert!(
+            out.contains("0 passed, 0 failed, 1 skipped"),
+            "SHALL classify as skipped"
+        );
     }
 
     // 21. format_suite counts a passing all-skipped-steps flow as passed only, never as skipped
@@ -1116,7 +1176,9 @@ mod tests {
                 f.is_skipped()
                     || (!f.is_passed()
                         && !f.step_results.is_empty()
-                        && f.step_results.iter().all(|s| matches!(s.outcome, StepOutcome::Skipped)))
+                        && f.step_results
+                            .iter()
+                            .all(|s| matches!(s.outcome, StepOutcome::Skipped)))
             })
             .count();
 
@@ -1133,9 +1195,21 @@ mod tests {
 
     #[test]
     fn duration_is_fixed_width_three_decimals() {
-        assert_eq!(format_duration(45), "   0.045s", "SHALL right-pad to width 8 with 3 decimals");
-        assert_eq!(format_duration(0), "   0.000s", "zero SHALL render as 0.000s");
-        assert_eq!(format_duration(10012), "  10.012s", "SHALL render seconds with padding");
+        assert_eq!(
+            format_duration(45),
+            "   0.045s",
+            "SHALL right-pad to width 8 with 3 decimals"
+        );
+        assert_eq!(
+            format_duration(0),
+            "   0.000s",
+            "zero SHALL render as 0.000s"
+        );
+        assert_eq!(
+            format_duration(10012),
+            "  10.012s",
+            "SHALL render seconds with padding"
+        );
     }
 
     #[test]
@@ -1161,6 +1235,9 @@ mod tests {
         };
 
         let out = format_flow(&report);
-        assert!(!out.contains("Performance:"), "SHALL NOT contain Performance: when no snapshots");
+        assert!(
+            !out.contains("Performance:"),
+            "SHALL NOT contain Performance: when no snapshots"
+        );
     }
 }

@@ -77,9 +77,10 @@ mod tests {
     // ---------------------------------------------------------------
     #[test]
     fn single_row_produces_one_run() {
-        let data = vec![HashMap::from([
-            ("payment".to_string(), "credit_card".to_string()),
-        ])];
+        let data = vec![HashMap::from([(
+            "payment".to_string(),
+            "credit_card".to_string(),
+        )])];
 
         let runs = expand_data_rows(&data);
         assert_eq!(runs.len(), 1);
@@ -140,7 +141,11 @@ mod tests {
         let mut store = VariableStore::new();
 
         // Pre-populate a Flow-level variable
-        store.set_in_scope(ScopeLevel::Flow, "payment", VarValue::String("cash".to_string()));
+        store.set_in_scope(
+            ScopeLevel::Flow,
+            "payment",
+            VarValue::String("cash".to_string()),
+        );
 
         // Override it via data row
         let data_vars = HashMap::from([("payment".to_string(), "paypal".to_string())]);
@@ -262,7 +267,10 @@ mod tests {
     #[test]
     fn expand_empty_slice_returns_empty() {
         let runs = expand_data_rows(&[]);
-        assert!(runs.is_empty(), "expanding an empty slice SHALL yield no runs");
+        assert!(
+            runs.is_empty(),
+            "expanding an empty slice SHALL yield no runs"
+        );
     }
 
     // ---------------------------------------------------------------
@@ -286,11 +294,17 @@ mod tests {
     #[test]
     fn apply_empty_data_vars_is_noop() {
         let mut store = VariableStore::new();
-        store.set_in_scope(ScopeLevel::Flow, "kept", VarValue::String("yes".to_string()));
+        store.set_in_scope(
+            ScopeLevel::Flow,
+            "kept",
+            VarValue::String("yes".to_string()),
+        );
 
         apply_data_vars(&mut store, &HashMap::new());
 
-        let val = store.resolve("kept").expect("pre-existing var SHALL remain");
+        let val = store
+            .resolve("kept")
+            .expect("pre-existing var SHALL remain");
         assert_eq!(val, &VarValue::String("yes".to_string()));
     }
 

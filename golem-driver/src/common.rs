@@ -40,7 +40,6 @@ pub(crate) struct SwipeRequest {
     pub duration_ms: u64,
 }
 
-
 // ---------------------------------------------------------------------------
 // Parsing helpers (testable without HTTP)
 // ---------------------------------------------------------------------------
@@ -134,7 +133,10 @@ pub fn parse_hierarchy(json: &str) -> Result<(Element, HierarchyMeta)> {
                 .unwrap_or(0) as i32;
             meta.cutouts = parse_cutouts_json(obj.get("cutouts"));
             meta.rounded_corners = parse_corners_json(obj.get("rounded_corners"));
-            device_model = obj.get("device_model").and_then(|v| v.as_str()).map(String::from);
+            device_model = obj
+                .get("device_model")
+                .and_then(|v| v.as_str())
+                .map(String::from);
             val = obj.get("tree").cloned().unwrap_or(val);
         }
     }
@@ -178,7 +180,8 @@ pub fn parse_hierarchy(json: &str) -> Result<(Element, HierarchyMeta)> {
         normalize_json(&mut val);
     }
 
-    let mut element: Element = serde_json::from_value(val).context("failed to deserialize hierarchy into Element")?;
+    let mut element: Element =
+        serde_json::from_value(val).context("failed to deserialize hierarchy into Element")?;
     // Native occlusion: hit-test tap targets against the tree's paint order so
     // `tap_point()` routes around occluders the same way it does for webview
     // (where hit_points arrive pre-computed from the DOM). No-op for nodes that
@@ -189,11 +192,9 @@ pub fn parse_hierarchy(json: &str) -> Result<(Element, HierarchyMeta)> {
 
     // iOS: look up display data from device model using screen dimensions from the parsed tree
     if let Some(model) = device_model {
-        if let Some(display) = ios_display::lookup(
-            &model,
-            element.bounds.width,
-            element.bounds.height,
-        ) {
+        if let Some(display) =
+            ios_display::lookup(&model, element.bounds.width, element.bounds.height)
+        {
             if meta.cutouts.is_empty() {
                 meta.cutouts = display.cutouts;
             }
@@ -243,7 +244,10 @@ fn normalize_json(val: &mut serde_json::Value) {
                     .and_then(|s| s.rsplit('.').next())
                     .unwrap_or("")
                     .to_string();
-                map.insert("element_type".to_string(), serde_json::Value::String(simplified));
+                map.insert(
+                    "element_type".to_string(),
+                    serde_json::Value::String(simplified),
+                );
             }
         }
 
@@ -255,21 +259,26 @@ fn normalize_json(val: &mut serde_json::Value) {
                     .and_then(|v| v.as_str())
                     .is_none_or(|s| s.is_empty());
                 if id_empty {
-                    map.insert("accessibility_label".to_string(), serde_json::Value::String(cd.to_string()));
+                    map.insert(
+                        "accessibility_label".to_string(),
+                        serde_json::Value::String(cd.to_string()),
+                    );
                 }
             }
         }
 
         // Fix checked state for switches/toggles: iOS reports state via value "0"/"1"
         // rather than isSelected. Normalize to checked = true/false.
-        let is_switch = map.get("element_type")
+        let is_switch = map
+            .get("element_type")
             .and_then(|v| v.as_str())
             .is_some_and(|et| {
                 let lower = et.to_lowercase();
                 lower == "switch" || lower == "toggle" || lower == "checkbox"
             });
         if is_switch {
-            let value_is_on = map.get("value")
+            let value_is_on = map
+                .get("value")
                 .and_then(|v| v.as_str())
                 .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
             if value_is_on {
@@ -318,8 +327,14 @@ fn normalize_json(val: &mut serde_json::Value) {
 
         let is_input = matches!(
             map.get("element_type").and_then(|v| v.as_str()),
-            Some("text_field" | "secure_text_field" | "search_field" | "text_view"
-                | "EditText" | "AutoCompleteTextView")
+            Some(
+                "text_field"
+                    | "secure_text_field"
+                    | "search_field"
+                    | "text_view"
+                    | "EditText"
+                    | "AutoCompleteTextView"
+            )
         );
 
         let resolved_text = if is_input && !value.is_empty() {
@@ -356,8 +371,14 @@ fn normalize_android_rect(rect: &mut serde_json::Map<String, serde_json::Value>)
         let bottom = rect.get("bottom").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
         rect.insert("x".to_string(), serde_json::json!(left));
         rect.insert("y".to_string(), serde_json::json!(top));
-        rect.insert("width".to_string(), serde_json::json!((right - left).max(0)));
-        rect.insert("height".to_string(), serde_json::json!((bottom - top).max(0)));
+        rect.insert(
+            "width".to_string(),
+            serde_json::json!((right - left).max(0)),
+        );
+        rect.insert(
+            "height".to_string(),
+            serde_json::json!((bottom - top).max(0)),
+        );
     }
 }
 
@@ -375,7 +396,10 @@ fn promote_label_to_id(map: &mut serde_json::Map<String, serde_json::Value>) {
         _ => false,
     };
     if id_empty && !label_str.is_empty() {
-        map.insert("accessibility_label".to_string(), serde_json::Value::String(label_str));
+        map.insert(
+            "accessibility_label".to_string(),
+            serde_json::Value::String(label_str),
+        );
     }
 }
 
@@ -397,12 +421,8 @@ pub(crate) fn build_backspace_body(count: u32) -> Result<String> {
 
 /// Build the JSON body for a long-press request.
 pub(crate) fn build_long_press_body(x: i32, y: i32, duration_ms: u64) -> Result<String> {
-    serde_json::to_string(&LongPressRequest {
-        x,
-        y,
-        duration_ms,
-    })
-    .context("failed to serialize long press request")
+    serde_json::to_string(&LongPressRequest { x, y, duration_ms })
+        .context("failed to serialize long press request")
 }
 
 /// Build the JSON body for a swipe request.
@@ -439,7 +459,6 @@ pub(crate) fn build_gesture_body(fingers: &[crate::GestureFinger]) -> Result<Str
         .context("failed to serialize gesture request")
 }
 
-
 // ---------------------------------------------------------------------------
 // Cutout / corner JSON parsing helpers
 // ---------------------------------------------------------------------------
@@ -457,7 +476,12 @@ fn parse_cutouts_json(val: Option<&serde_json::Value>) -> Vec<CutoutRect> {
             let w = item.get("width")?.as_i64()? as i32;
             let h = item.get("height")?.as_i64()? as i32;
             if w > 0 && h > 0 {
-                Some(CutoutRect { x, y, width: w, height: h })
+                Some(CutoutRect {
+                    x,
+                    y,
+                    width: w,
+                    height: h,
+                })
             } else {
                 None
             }
@@ -485,7 +509,12 @@ fn parse_corners_json(val: Option<&serde_json::Value>) -> Vec<RoundedCorner> {
             let radius = item.get("radius")?.as_i64()? as i32;
             let center_x = item.get("center_x")?.as_i64()? as i32;
             let center_y = item.get("center_y")?.as_i64()? as i32;
-            Some(RoundedCorner { position, radius, center_x, center_y })
+            Some(RoundedCorner {
+                position,
+                radius,
+                center_x,
+                center_y,
+            })
         })
         .collect()
 }
@@ -570,7 +599,6 @@ fn collect_non_button_text(el: &Element, texts: &mut Vec<String>) {
         collect_non_button_text(child, texts);
     }
 }
-
 
 /// Find all buttons in an alert element.
 pub fn find_alert_buttons(alert: &Element) -> Vec<Element> {
@@ -762,10 +790,12 @@ impl CompanionClient {
             .timeout(std::time::Duration::from_secs(5))
             .send()
             .await
-            .with_context(|| format!(
-                "Companion server not reachable at {}. Is it running?",
-                self.base_url
-            ))?;
+            .with_context(|| {
+                format!(
+                    "Companion server not reachable at {}. Is it running?",
+                    self.base_url
+                )
+            })?;
 
         // 503 = companion is up but its UiAutomation accessibility-
         // service binding hasn't warmed up yet (Android first-flow
@@ -782,7 +812,10 @@ impl CompanionClient {
         Ok(CompanionHealth {
             platform: json["platform"].as_str().unwrap_or("unknown").to_string(),
             version: json["version"].as_str().unwrap_or("unknown").to_string(),
-            device_name: json["device_name"].as_str().unwrap_or("unknown").to_string(),
+            device_name: json["device_name"]
+                .as_str()
+                .unwrap_or("unknown")
+                .to_string(),
             os_version: json["os_version"].as_str().unwrap_or("unknown").to_string(),
             device_id: json["device_id"].as_str().unwrap_or("unknown").to_string(),
         })
@@ -808,7 +841,11 @@ impl CompanionClient {
 
     /// Build the full URL for a request, appending the default query string.
     fn url(&self, path: &str) -> String {
-        let dq = self.default_query.read().map(|q| q.clone()).unwrap_or_default();
+        let dq = self
+            .default_query
+            .read()
+            .map(|q| q.clone())
+            .unwrap_or_default();
         let sep = if path.contains('?') { "&" } else { "?" };
         if dq.is_empty() {
             format!("{}{}", self.base_url, path)
@@ -916,7 +953,10 @@ mod tests {
         let (el, meta) = parse_hierarchy(json).expect("single root SHALL parse");
         assert_eq!(el.element_type, "other", "element_type SHALL round-trip");
         assert_eq!(meta.node_count, 1, "single node SHALL count as 1");
-        assert_eq!(meta.keyboard_height, 0, "absent keyboard_height SHALL default 0");
+        assert_eq!(
+            meta.keyboard_height, 0,
+            "absent keyboard_height SHALL default 0"
+        );
     }
 
     // 2. A single-element array unwraps to that element (no synthetic container).
@@ -929,8 +969,14 @@ mod tests {
             "children": []
         }]"#;
         let (el, meta) = parse_hierarchy(json).expect("array of one SHALL parse");
-        assert_eq!(el.element_type, "Button", "lone array element SHALL be unwrapped");
-        assert_eq!(meta.node_count, 1, "unwrapped lone element SHALL count as 1");
+        assert_eq!(
+            el.element_type, "Button",
+            "lone array element SHALL be unwrapped"
+        );
+        assert_eq!(
+            meta.node_count, 1,
+            "unwrapped lone element SHALL count as 1"
+        );
     }
 
     // 3. A multi-root array is wrapped in a synthetic `other` container whose
@@ -946,11 +992,23 @@ mod tests {
               "bounds": { "x": 100, "y": 200, "width": 30, "height": 40 }, "children": [] }
         ]"#;
         let (el, meta) = parse_hierarchy(json).expect("multi-root SHALL parse");
-        assert_eq!(el.element_type, "other", "wrapper SHALL be synthetic `other`");
+        assert_eq!(
+            el.element_type, "other",
+            "wrapper SHALL be synthetic `other`"
+        );
         assert_eq!(el.children.len(), 2, "wrapper SHALL hold both roots");
-        assert_eq!(el.bounds.width, 130, "wrapper width SHALL be max child right edge");
-        assert_eq!(el.bounds.height, 240, "wrapper height SHALL be max child bottom edge");
-        assert_eq!(meta.node_count, 3, "two roots plus wrapper SHALL count as 3");
+        assert_eq!(
+            el.bounds.width, 130,
+            "wrapper width SHALL be max child right edge"
+        );
+        assert_eq!(
+            el.bounds.height, 240,
+            "wrapper height SHALL be max child bottom edge"
+        );
+        assert_eq!(
+            meta.node_count, 3,
+            "two roots plus wrapper SHALL count as 3"
+        );
     }
 
     // 4. The `{ "tree": ..., ...meta }` wrapper extracts metadata and uses `tree`.
@@ -968,7 +1026,10 @@ mod tests {
             "safe_area_right": 6
         }"#;
         let (_el, meta) = parse_hierarchy(json).expect("tree wrapper SHALL parse");
-        assert_eq!(meta.keyboard_height, 300, "keyboard_height SHALL be read from wrapper");
+        assert_eq!(
+            meta.keyboard_height, 300,
+            "keyboard_height SHALL be read from wrapper"
+        );
         assert_eq!(meta.safe_area_top, 47, "safe_area_top SHALL be read");
         assert_eq!(meta.safe_area_bottom, 34, "safe_area_bottom SHALL be read");
         assert_eq!(meta.safe_area_left, 5, "safe_area_left SHALL be read");
@@ -991,7 +1052,8 @@ mod tests {
         let err = parse_hierarchy(r#"{"element_type": "x"}"#)
             .expect_err("missing bounds SHALL fail deserialize");
         assert!(
-            err.to_string().contains("failed to deserialize hierarchy into Element"),
+            err.to_string()
+                .contains("failed to deserialize hierarchy into Element"),
             "error SHALL carry deserialize context, got: {err}"
         );
     }
@@ -1006,7 +1068,10 @@ mod tests {
             "children": []
         }"#;
         let (el, _meta) = parse_hierarchy(json).expect("android node SHALL parse");
-        assert_eq!(el.element_type, "Button", "class SHALL simplify to last segment");
+        assert_eq!(
+            el.element_type, "Button",
+            "class SHALL simplify to last segment"
+        );
         assert_eq!(el.bounds.x, 10, "left SHALL map to x");
         assert_eq!(el.bounds.width, 50, "right-left SHALL be width");
         assert_eq!(el.bounds.height, 100, "bottom-top SHALL be height");
@@ -1019,7 +1084,10 @@ mod tests {
     fn normalize_renames_id_to_accessibility_label() {
         let mut v = json!({ "id": "save_btn" });
         normalize_json(&mut v);
-        assert_eq!(v["accessibility_label"], "save_btn", "id SHALL become accessibility_label");
+        assert_eq!(
+            v["accessibility_label"], "save_btn",
+            "id SHALL become accessibility_label"
+        );
         assert!(v.get("id").is_none(), "raw id SHALL be removed");
     }
 
@@ -1028,7 +1096,10 @@ mod tests {
     fn normalize_keeps_existing_accessibility_label_over_id() {
         let mut v = json!({ "id": "a", "accessibility_label": "b" });
         normalize_json(&mut v);
-        assert_eq!(v["accessibility_label"], "b", "existing label SHALL win over id");
+        assert_eq!(
+            v["accessibility_label"], "b",
+            "existing label SHALL win over id"
+        );
     }
 
     // 10. Android `class` simplifies to the final dotted segment.
@@ -1036,7 +1107,10 @@ mod tests {
     fn normalize_simplifies_android_class() {
         let mut v = json!({ "class": "android.widget.EditText" });
         normalize_json(&mut v);
-        assert_eq!(v["element_type"], "EditText", "class SHALL simplify to last segment");
+        assert_eq!(
+            v["element_type"], "EditText",
+            "class SHALL simplify to last segment"
+        );
     }
 
     // 11. Non-empty contentDescription fills an absent accessibility_label.
@@ -1044,7 +1118,10 @@ mod tests {
     fn normalize_uses_content_description_for_label() {
         let mut v = json!({ "contentDescription": "Close" });
         normalize_json(&mut v);
-        assert_eq!(v["accessibility_label"], "Close", "contentDescription SHALL fill label");
+        assert_eq!(
+            v["accessibility_label"], "Close",
+            "contentDescription SHALL fill label"
+        );
     }
 
     // 12. Empty contentDescription does not set a label.
@@ -1063,7 +1140,10 @@ mod tests {
     fn normalize_switch_value_one_sets_checked() {
         let mut v = json!({ "element_type": "Switch", "value": "1" });
         normalize_json(&mut v);
-        assert_eq!(v["checked"], true, "switch value \"1\" SHALL set checked true");
+        assert_eq!(
+            v["checked"], true,
+            "switch value \"1\" SHALL set checked true"
+        );
     }
 
     // 14. Switch with value "true" (case-insensitive) sets checked.
@@ -1079,7 +1159,10 @@ mod tests {
     fn normalize_switch_value_zero_does_not_set_checked() {
         let mut v = json!({ "element_type": "toggle", "value": "0" });
         normalize_json(&mut v);
-        assert!(v.get("checked").is_none(), "value \"0\" SHALL NOT insert checked");
+        assert!(
+            v.get("checked").is_none(),
+            "value \"0\" SHALL NOT insert checked"
+        );
     }
 
     // 16. Input element prefers `value` over placeholder/label for text.
@@ -1090,7 +1173,10 @@ mod tests {
             "placeholder": "hint", "label": "field"
         });
         normalize_json(&mut v);
-        assert_eq!(v["text"], "typed", "input SHALL surface typed value as text");
+        assert_eq!(
+            v["text"], "typed",
+            "input SHALL surface typed value as text"
+        );
     }
 
     // 17. Empty-value input falls back to placeholder.
@@ -1101,7 +1187,10 @@ mod tests {
             "placeholder": "Enter name", "label": "field"
         });
         normalize_json(&mut v);
-        assert_eq!(v["text"], "Enter name", "empty input SHALL fall back to placeholder");
+        assert_eq!(
+            v["text"], "Enter name",
+            "empty input SHALL fall back to placeholder"
+        );
     }
 
     // 18. Non-input prefers placeholder → label over the value field.
@@ -1109,7 +1198,10 @@ mod tests {
     fn normalize_non_input_ignores_value_for_text() {
         let mut v = json!({ "element_type": "other", "value": "internal", "label": "Visible" });
         normalize_json(&mut v);
-        assert_eq!(v["text"], "Visible", "non-input SHALL prefer label over value");
+        assert_eq!(
+            v["text"], "Visible",
+            "non-input SHALL prefer label over value"
+        );
     }
 
     // 19. With nothing else, existing `text` is preserved.
@@ -1128,8 +1220,14 @@ mod tests {
             "children": [ { "class": "android.widget.TextView", "id": "child" } ]
         });
         normalize_json(&mut v);
-        assert_eq!(v["children"][0]["element_type"], "TextView", "child class SHALL normalize");
-        assert_eq!(v["children"][0]["accessibility_label"], "child", "child id SHALL normalize");
+        assert_eq!(
+            v["children"][0]["element_type"], "TextView",
+            "child class SHALL normalize"
+        );
+        assert_eq!(
+            v["children"][0]["accessibility_label"], "child",
+            "child id SHALL normalize"
+        );
     }
 
     // ---- normalize_android_rect ----
@@ -1170,7 +1268,10 @@ mod tests {
         rect.insert("left".into(), json!(99));
         normalize_android_rect(&mut rect);
         assert_eq!(rect["x"], 7, "existing x SHALL be untouched");
-        assert!(rect.get("width").is_none(), "no conversion SHALL run when x present");
+        assert!(
+            rect.get("width").is_none(),
+            "no conversion SHALL run when x present"
+        );
     }
 
     // ---- promote_label_to_id ----
@@ -1182,7 +1283,10 @@ mod tests {
         map.insert("label".into(), json!("Submit"));
         map.insert("accessibility_label".into(), serde_json::Value::Null);
         promote_label_to_id(&mut map);
-        assert_eq!(map["accessibility_label"], "Submit", "null label SHALL be filled from label");
+        assert_eq!(
+            map["accessibility_label"], "Submit",
+            "null label SHALL be filled from label"
+        );
     }
 
     // 25. label does not overwrite a non-empty accessibility_label.
@@ -1192,7 +1296,10 @@ mod tests {
         map.insert("label".into(), json!("ignored"));
         map.insert("accessibility_label".into(), json!("kept"));
         promote_label_to_id(&mut map);
-        assert_eq!(map["accessibility_label"], "kept", "non-empty label SHALL NOT be overwritten");
+        assert_eq!(
+            map["accessibility_label"], "kept",
+            "non-empty label SHALL NOT be overwritten"
+        );
     }
 
     // ---- build_* request bodies ----
@@ -1250,14 +1357,31 @@ mod tests {
     #[test]
     fn build_gesture_body_serializes_fingers() {
         let fingers = vec![
-            crate::GestureFinger { points: vec![(0, 0), (5, 5)], duration_ms: 300 },
-            crate::GestureFinger { points: vec![(9, 9)], duration_ms: 100 },
+            crate::GestureFinger {
+                points: vec![(0, 0), (5, 5)],
+                duration_ms: 300,
+            },
+            crate::GestureFinger {
+                points: vec![(9, 9)],
+                duration_ms: 100,
+            },
         ];
         let body = build_gesture_body(&fingers).expect("gesture body SHALL serialize");
         let v: serde_json::Value = serde_json::from_str(&body).expect("valid json");
-        assert_eq!(v["fingers"][0]["points"][1], json!([5, 5]), "point SHALL be [x,y]");
-        assert_eq!(v["fingers"][0]["duration_ms"], 300, "duration SHALL serialize");
-        assert_eq!(v["fingers"][1]["points"][0], json!([9, 9]), "second finger SHALL serialize");
+        assert_eq!(
+            v["fingers"][0]["points"][1],
+            json!([5, 5]),
+            "point SHALL be [x,y]"
+        );
+        assert_eq!(
+            v["fingers"][0]["duration_ms"], 300,
+            "duration SHALL serialize"
+        );
+        assert_eq!(
+            v["fingers"][1]["points"][0],
+            json!([9, 9]),
+            "second finger SHALL serialize"
+        );
     }
 
     // 32. Empty gesture serializes an empty fingers array.
@@ -1265,7 +1389,11 @@ mod tests {
     fn build_gesture_body_empty_fingers() {
         let body = build_gesture_body(&[]).expect("empty gesture SHALL serialize");
         let v: serde_json::Value = serde_json::from_str(&body).expect("valid json");
-        assert_eq!(v["fingers"], json!([]), "empty input SHALL yield empty array");
+        assert_eq!(
+            v["fingers"],
+            json!([]),
+            "empty input SHALL yield empty array"
+        );
     }
 
     // ---- parse_cutouts_json ----
@@ -1273,7 +1401,10 @@ mod tests {
     // 33. None input yields an empty cutout vec.
     #[test]
     fn parse_cutouts_none_is_empty() {
-        assert!(parse_cutouts_json(None).is_empty(), "None SHALL yield empty cutouts");
+        assert!(
+            parse_cutouts_json(None).is_empty(),
+            "None SHALL yield empty cutouts"
+        );
     }
 
     // 34. Valid cutouts parse; zero/negative-area entries are filtered out.
@@ -1292,7 +1423,10 @@ mod tests {
     #[test]
     fn parse_cutouts_skips_missing_fields() {
         let v = json!([ { "x": 1, "y": 2, "width": 3 } ]);
-        assert!(parse_cutouts_json(Some(&v)).is_empty(), "missing height SHALL skip entry");
+        assert!(
+            parse_cutouts_json(Some(&v)).is_empty(),
+            "missing height SHALL skip entry"
+        );
     }
 
     // ---- parse_corners_json ----
@@ -1308,21 +1442,35 @@ mod tests {
         ]);
         let corners = parse_corners_json(Some(&v));
         assert_eq!(corners.len(), 4, "all four corners SHALL parse");
-        assert_eq!(corners[0].position, CornerPosition::TopLeft, "first SHALL be TopLeft");
-        assert_eq!(corners[3].position, CornerPosition::BottomLeft, "last SHALL be BottomLeft");
+        assert_eq!(
+            corners[0].position,
+            CornerPosition::TopLeft,
+            "first SHALL be TopLeft"
+        );
+        assert_eq!(
+            corners[3].position,
+            CornerPosition::BottomLeft,
+            "last SHALL be BottomLeft"
+        );
     }
 
     // 37. Unknown position string skips the entry.
     #[test]
     fn parse_corners_skips_unknown_position() {
         let v = json!([ { "position": "middle", "radius": 5, "center_x": 1, "center_y": 1 } ]);
-        assert!(parse_corners_json(Some(&v)).is_empty(), "unknown position SHALL be skipped");
+        assert!(
+            parse_corners_json(Some(&v)).is_empty(),
+            "unknown position SHALL be skipped"
+        );
     }
 
     // 38. None input yields empty corners.
     #[test]
     fn parse_corners_none_is_empty() {
-        assert!(parse_corners_json(None).is_empty(), "None SHALL yield empty corners");
+        assert!(
+            parse_corners_json(None).is_empty(),
+            "None SHALL yield empty corners"
+        );
     }
 
     // ---- element-tree helpers (detect_anr / find_alert / buttons) ----
@@ -1352,7 +1500,10 @@ mod tests {
             "bounds": { "x": 0, "y": 0, "width": 1, "height": 1 },
             "children": [ leaf("TextView", Some("App isn't responding")) ]
         }));
-        assert!(detect_anr(&tree), "straight-apostrophe ANR title SHALL match");
+        assert!(
+            detect_anr(&tree),
+            "straight-apostrophe ANR title SHALL match"
+        );
     }
 
     // 40. detect_anr matches the curly-apostrophe (Unicode) title.
@@ -1383,9 +1534,13 @@ mod tests {
             ]
         }));
         let alert = find_alert(&tree).expect("alert SHALL be found");
-        assert_eq!(alert.element_type, "alert", "found element SHALL be the alert");
         assert_eq!(
-            alert.text.as_deref(), Some("This is the body"),
+            alert.element_type, "alert",
+            "found element SHALL be the alert"
+        );
+        assert_eq!(
+            alert.text.as_deref(),
+            Some("This is the body"),
             "alert text SHALL be the message (second non-button text)"
         );
     }
@@ -1403,7 +1558,10 @@ mod tests {
             ]
         }));
         let alert = find_alert(&tree).expect("android dialog SHALL be found");
-        assert_eq!(alert.element_type, "FrameLayout", "android alert SHALL be the frame");
+        assert_eq!(
+            alert.element_type, "FrameLayout",
+            "android alert SHALL be the frame"
+        );
     }
 
     // 44. Android FrameLayout at y == 0 is NOT treated as an alert.
@@ -1415,14 +1573,20 @@ mod tests {
             "bounds": { "x": 0, "y": 0, "width": 200, "height": 200 },
             "children": [ leaf("Button", Some("X")) ]
         }));
-        assert!(find_alert(&tree).is_none(), "y==0 frame SHALL NOT be an alert");
+        assert!(
+            find_alert(&tree).is_none(),
+            "y==0 frame SHALL NOT be an alert"
+        );
     }
 
     // 45. find_alert returns None when no alert is present.
     #[test]
     fn find_alert_none_when_absent() {
         let tree = el(leaf("other", Some("content")));
-        assert!(find_alert(&tree).is_none(), "tree without alert SHALL yield None");
+        assert!(
+            find_alert(&tree).is_none(),
+            "tree without alert SHALL yield None"
+        );
     }
 
     // 46. find_alert_buttons collects all buttons recursively, case-insensitively.
@@ -1443,7 +1607,11 @@ mod tests {
             ]
         }));
         let buttons = find_alert_buttons(&alert);
-        assert_eq!(buttons.len(), 2, "both buttons SHALL be collected across depths");
+        assert_eq!(
+            buttons.len(),
+            2,
+            "both buttons SHALL be collected across depths"
+        );
     }
 
     // 47. extract_alert_message returns the single text when only one non-button text exists.
@@ -1457,7 +1625,8 @@ mod tests {
         }));
         let alert = find_alert(&tree).expect("alert SHALL be found");
         assert_eq!(
-            alert.text.as_deref(), Some("Only line"),
+            alert.text.as_deref(),
+            Some("Only line"),
             "single non-button text SHALL be used as message"
         );
     }
@@ -1471,7 +1640,11 @@ mod tests {
             "class": "android.webkit.WebView",
             "bounds": { "left": 5, "top": 15, "right": 100, "bottom": 200 }
         });
-        assert_eq!(find_webview_bounds(&v), Some((5, 15)), "android webview SHALL read left/top");
+        assert_eq!(
+            find_webview_bounds(&v),
+            Some((5, 15)),
+            "android webview SHALL read left/top"
+        );
     }
 
     // 49. iOS web_view bounds read from {x,y}; array root is traversed.
@@ -1481,7 +1654,11 @@ mod tests {
             { "element_type": "window", "children": [] },
             { "element_type": "web_view", "bounds": { "x": 7, "y": 8 } }
         ]);
-        assert_eq!(find_webview_bounds(&v), Some((7, 8)), "ios webview SHALL read x/y from array");
+        assert_eq!(
+            find_webview_bounds(&v),
+            Some((7, 8)),
+            "ios webview SHALL read x/y from array"
+        );
     }
 
     // 50. find_webview_bounds recurses into children.
@@ -1493,7 +1670,11 @@ mod tests {
                 { "element_type": "web_view", "bounds": { "x": 1, "y": 2 } }
             ]
         });
-        assert_eq!(find_webview_bounds(&v), Some((1, 2)), "nested webview SHALL be found");
+        assert_eq!(
+            find_webview_bounds(&v),
+            Some((1, 2)),
+            "nested webview SHALL be found"
+        );
     }
 
     // 51. No webview yields None.
@@ -1515,8 +1696,15 @@ mod tests {
         let dom = json!({ "element_type": "dom_root" });
         let replaced = replace_webview_children(&mut v, dom);
         assert!(replaced, "replacement SHALL report success");
-        assert_eq!(v["children"].as_array().map(|a| a.len()), Some(1), "children SHALL be exactly the DOM");
-        assert_eq!(v["children"][0]["element_type"], "dom_root", "children SHALL be the DOM node");
+        assert_eq!(
+            v["children"].as_array().map(|a| a.len()),
+            Some(1),
+            "children SHALL be exactly the DOM"
+        );
+        assert_eq!(
+            v["children"][0]["element_type"], "dom_root",
+            "children SHALL be the DOM node"
+        );
     }
 
     // 53. No webview present returns false and leaves the tree unchanged.
@@ -1536,7 +1724,10 @@ mod tests {
         ]);
         let replaced = replace_webview_children(&mut v, json!({ "element_type": "dom" }));
         assert!(replaced, "array-root webview SHALL be replaced");
-        assert_eq!(v[1]["children"][0]["element_type"], "dom", "DOM SHALL replace android webview kids");
+        assert_eq!(
+            v[1]["children"][0]["element_type"], "dom",
+            "DOM SHALL replace android webview kids"
+        );
     }
 
     // ---- CompanionClient URL / timeout (non-network) ----
@@ -1545,7 +1736,11 @@ mod tests {
     #[test]
     fn companion_url_without_query() {
         let c = CompanionClient::new(1234);
-        assert_eq!(c.url("/tap"), "http://localhost:1234/tap", "bare path SHALL append to base");
+        assert_eq!(
+            c.url("/tap"),
+            "http://localhost:1234/tap",
+            "bare path SHALL append to base"
+        );
     }
 
     // 56. url() appends default query with `?` when path has none.
@@ -1576,7 +1771,10 @@ mod tests {
     #[test]
     fn companion_request_timeout_roundtrip() {
         let c = CompanionClient::new(1);
-        assert!(c.current_request_timeout().is_none(), "default SHALL be no timeout");
+        assert!(
+            c.current_request_timeout().is_none(),
+            "default SHALL be no timeout"
+        );
         c.set_request_timeout(std::time::Duration::from_millis(250));
         assert_eq!(
             c.current_request_timeout(),
@@ -1584,7 +1782,10 @@ mod tests {
             "set timeout SHALL round-trip"
         );
         c.set_request_timeout(std::time::Duration::ZERO);
-        assert!(c.current_request_timeout().is_none(), "ZERO SHALL clear the timeout");
+        assert!(
+            c.current_request_timeout().is_none(),
+            "ZERO SHALL clear the timeout"
+        );
     }
 
     // 59. Sub-millisecond Durations truncate to 0ms (whole-ms precision),

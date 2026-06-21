@@ -162,7 +162,9 @@ impl Element {
         if self.is_webview() {
             return Some(self.node_count());
         }
-        self.children.iter().find_map(Element::webview_subtree_count)
+        self.children
+            .iter()
+            .find_map(Element::webview_subtree_count)
     }
 
     /// Canonical occlusion sample points within `b` — centre → arms → corners,
@@ -243,7 +245,11 @@ impl Element {
                             && !encloses(&mj.bounds, &b)
                             && mj.bounds.contains_point(x, y)
                     });
-                    HitPoint { x, y, hit: !occluded }
+                    HitPoint {
+                        x,
+                        y,
+                        hit: !occluded,
+                    }
                 })
                 .collect();
             computed[i] = Some(hp);
@@ -342,7 +348,12 @@ pub struct Viewport {
 
 impl Viewport {
     pub fn new(width: i32, height: i32) -> Self {
-        Self { x: 0, y: 0, width, height }
+        Self {
+            x: 0,
+            y: 0,
+            width,
+            height,
+        }
     }
 
     /// Detect viewport from the root element's bounds.
@@ -466,7 +477,10 @@ mod tests {
     }
 
     fn find_button(root: &Element) -> &Element {
-        root.children.iter().find(|c| c.element_type == "Button").expect("button")
+        root.children
+            .iter()
+            .find(|c| c.element_type == "Button")
+            .expect("button")
     }
 
     #[test]
@@ -475,14 +489,21 @@ mod tests {
         let mut tree = occlusion_tree(false, None, None);
         tree.compute_native_hit_points();
         let b = find_button(&tree);
-        assert_eq!(b.center_hittable(), Some(false), "centre is under the overlay");
+        assert_eq!(
+            b.center_hittable(),
+            Some(false),
+            "centre is under the overlay"
+        );
         assert!(
             b.hittable_fraction().is_some_and(|f| f > 0.0 && f < 1.0),
             "partially occluded: some points clear, some not"
         );
         // Routes to a clear point on the uncovered right edge (x >= 150).
         let (tx, _ty) = b.tap_point();
-        assert!(tx >= 150, "tap SHALL route to the clear right edge, got x={tx}");
+        assert!(
+            tx >= 150,
+            "tap SHALL route to the clear right edge, got x={tx}"
+        );
     }
 
     #[test]
@@ -494,7 +515,8 @@ mod tests {
         tree.compute_native_hit_points();
         let b = find_button(&tree);
         assert_eq!(
-            b.center_hittable(), Some(true),
+            b.center_hittable(),
+            Some(true),
             "higher drawing_order SHALL paint B above the overlay (no occlusion)"
         );
     }
@@ -506,7 +528,11 @@ mod tests {
         root.children = vec![make_element("Button", make_bounds(10, 10, 120, 120))];
         root.compute_native_hit_points();
         let b = find_button(&root);
-        assert_eq!(b.hittable_fraction(), Some(1.0), "lone target SHALL be fully clear");
+        assert_eq!(
+            b.hittable_fraction(),
+            Some(1.0),
+            "lone target SHALL be fully clear"
+        );
     }
 
     #[test]
@@ -514,12 +540,20 @@ mod tests {
         let mut root = make_element("Root", make_bounds(0, 0, 400, 400));
         root.clickable = false;
         let mut wv = make_element("div", make_bounds(0, 0, 50, 50));
-        wv.hit_points = vec![HitPoint { x: 1, y: 2, hit: true }];
+        wv.hit_points = vec![HitPoint {
+            x: 1,
+            y: 2,
+            hit: true,
+        }];
         root.children = vec![wv];
         root.compute_native_hit_points();
         assert_eq!(
             root.children[0].hit_points,
-            vec![HitPoint { x: 1, y: 2, hit: true }],
+            vec![HitPoint {
+                x: 1,
+                y: 2,
+                hit: true
+            }],
             "nodes that already carry hit_points (webview) SHALL not be recomputed"
         );
     }
@@ -527,7 +561,11 @@ mod tests {
     #[test]
     fn tap_point_falls_back_to_center_without_hit_points() {
         let e = make_element("Button", make_bounds(0, 0, 100, 40));
-        assert_eq!(e.tap_point(), (50, 20), "no hit_points → visible-bounds centre");
+        assert_eq!(
+            e.tap_point(),
+            (50, 20),
+            "no hit_points → visible-bounds centre"
+        );
         assert_eq!(e.hittable_fraction(), None);
         assert_eq!(e.center_hittable(), None);
     }
@@ -537,11 +575,27 @@ mod tests {
         let mut e = make_element("Button", make_bounds(0, 0, 100, 40));
         // Centre occluded, an arm clear → tap the clear arm, not the centre.
         e.hit_points = vec![
-            HitPoint { x: 50, y: 20, hit: false }, // centre (canonical first)
-            HitPoint { x: 50, y: 10, hit: false }, // top
-            HitPoint { x: 50, y: 30, hit: true },  // bottom — first clear
+            HitPoint {
+                x: 50,
+                y: 20,
+                hit: false,
+            }, // centre (canonical first)
+            HitPoint {
+                x: 50,
+                y: 10,
+                hit: false,
+            }, // top
+            HitPoint {
+                x: 50,
+                y: 30,
+                hit: true,
+            }, // bottom — first clear
         ];
-        assert_eq!(e.tap_point(), (50, 30), "SHALL route to the first clear sample");
+        assert_eq!(
+            e.tap_point(),
+            (50, 30),
+            "SHALL route to the first clear sample"
+        );
         assert_eq!(e.center_hittable(), Some(false));
         assert!((e.hittable_fraction().unwrap() - 1.0 / 3.0).abs() < 1e-6);
     }
@@ -550,10 +604,22 @@ mod tests {
     fn tap_point_clear_center_wins() {
         let mut e = make_element("Button", make_bounds(0, 0, 100, 40));
         e.hit_points = vec![
-            HitPoint { x: 50, y: 20, hit: true },
-            HitPoint { x: 50, y: 30, hit: true },
+            HitPoint {
+                x: 50,
+                y: 20,
+                hit: true,
+            },
+            HitPoint {
+                x: 50,
+                y: 30,
+                hit: true,
+            },
         ];
-        assert_eq!(e.tap_point(), (50, 20), "clear centre is preferred (canonical first)");
+        assert_eq!(
+            e.tap_point(),
+            (50, 20),
+            "clear centre is preferred (canonical first)"
+        );
         assert_eq!(e.center_hittable(), Some(true));
         assert_eq!(e.hittable_fraction(), Some(1.0));
     }
@@ -561,7 +627,11 @@ mod tests {
     #[test]
     fn tap_point_fully_occluded_falls_back_to_center() {
         let mut e = make_element("Button", make_bounds(0, 0, 100, 40));
-        e.hit_points = vec![HitPoint { x: 50, y: 20, hit: false }];
+        e.hit_points = vec![HitPoint {
+            x: 50,
+            y: 20,
+            hit: false,
+        }];
         // No clear point → still attempt at centre (heuristic, never blocks).
         assert_eq!(e.tap_point(), (50, 20));
         assert_eq!(e.hittable_fraction(), Some(0.0));
@@ -633,10 +703,7 @@ mod tests {
 
         assert_eq!(deserialized.children.len(), 1);
         assert_eq!(deserialized.children[0].element_type, "Label");
-        assert_eq!(
-            deserialized.children[0].bounds,
-            make_bounds(10, 10, 80, 20)
-        );
+        assert_eq!(deserialized.children[0].bounds, make_bounds(10, 10, 80, 20));
     }
 
     #[test]
@@ -679,9 +746,12 @@ mod tests {
     fn filter_viewport_keeps_visible_removes_offscreen() {
         let vp = Viewport::new(375, 812);
         let mut root = make_element("View", make_bounds(0, 0, 375, 2000));
-        root.children.push(make_element("Button", make_bounds(10, 100, 100, 44))); // visible
-        root.children.push(make_element("Button", make_bounds(10, 900, 100, 44))); // offscreen
-        root.children.push(make_element("Button", make_bounds(10, 400, 100, 44))); // visible
+        root.children
+            .push(make_element("Button", make_bounds(10, 100, 100, 44))); // visible
+        root.children
+            .push(make_element("Button", make_bounds(10, 900, 100, 44))); // offscreen
+        root.children
+            .push(make_element("Button", make_bounds(10, 400, 100, 44))); // visible
 
         let filtered = filter_viewport(&root, &vp);
         assert_eq!(
@@ -948,8 +1018,14 @@ mod tests {
         let mut elem = make_element("Button", make_bounds(0, 0, 200, 80));
         elem.visible_bounds = Some(make_bounds(0, 0, 50, 40));
         let result = FindResult::new(elem);
-        assert_eq!(result.tap_x, 25, "tap_x SHALL come from visible_bounds center");
-        assert_eq!(result.tap_y, 20, "tap_y SHALL come from visible_bounds center");
+        assert_eq!(
+            result.tap_x, 25,
+            "tap_x SHALL come from visible_bounds center"
+        );
+        assert_eq!(
+            result.tap_y, 20,
+            "tap_y SHALL come from visible_bounds center"
+        );
     }
 
     // ── filter_viewport structural behavior ──────────────────────────
@@ -1034,7 +1110,10 @@ mod tests {
         }"#;
         let elem: Element = serde_json::from_str(json).expect("minimal payload SHALL parse");
         // 14a. Required fields carry their wire values.
-        assert_eq!(elem.element_type, "View", "element_type SHALL parse from wire");
+        assert_eq!(
+            elem.element_type, "View",
+            "element_type SHALL parse from wire"
+        );
         assert_eq!(
             elem.bounds,
             Bounds::new(0, 0, 10, 10),
@@ -1060,6 +1139,9 @@ mod tests {
         assert!(!elem.clickable, "omitted clickable SHALL default to false");
         assert!(!elem.focused, "omitted focused SHALL default to false");
         // 14d. Omitted children default to an empty Vec.
-        assert!(elem.children.is_empty(), "omitted children SHALL default to empty");
+        assert!(
+            elem.children.is_empty(),
+            "omitted children SHALL default to empty"
+        );
     }
 }

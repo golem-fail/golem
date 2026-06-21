@@ -87,7 +87,11 @@ pub async fn execute_action(
         "http_put" => handle_http(step, vars, "PUT").await,
         "http_patch" => handle_http(step, vars, "PATCH").await,
         "http_delete" => handle_http(step, vars, "DELETE").await,
-        _ => crate::fail_code!(golem_events::FailureCode::ParseUnknownAction, "Unknown action: {}", action),
+        _ => crate::fail_code!(
+            golem_events::FailureCode::ParseUnknownAction,
+            "Unknown action: {}",
+            action
+        ),
     }
 }
 

@@ -65,7 +65,11 @@ fn flow_failure_counts(flow: &FlowReport) -> (usize, usize) {
             .first_failure_code
             .map(|c| c.domain().is_infrastructure())
             .unwrap_or(false);
-        if infra { errors += 1; } else { failures += 1; }
+        if infra {
+            errors += 1;
+        } else {
+            failures += 1;
+        }
     }
     (failures, errors)
 }
@@ -86,52 +90,129 @@ fn format_substeps_text(substeps: &[SubstepDetail]) -> String {
     let mut lines = Vec::new();
     for sub in substeps {
         match sub {
-            SubstepDetail::ElementResolved { selector, bounds, tap_point } =>
-                lines.push(format!("element_resolved \"{}\" bounds=({},{},{},{}) tap=({},{})",
-                    selector, bounds.x, bounds.y, bounds.width, bounds.height, tap_point.x, tap_point.y)),
-            SubstepDetail::ElementNotFound { selector, timeout_ms } =>
-                lines.push(format!("element_not_found \"{}\" after {}ms", selector, timeout_ms)),
-            SubstepDetail::Tap { point, .. } =>
-                lines.push(format!("tap ({},{})", point.x, point.y)),
-            SubstepDetail::DoubleTap { point, .. } =>
-                lines.push(format!("double_tap ({},{})", point.x, point.y)),
-            SubstepDetail::TextInput { text, .. } =>
-                lines.push(format!("text_input \"{}\"", text)),
-            SubstepDetail::Swipe { from, to } =>
-                lines.push(format!("swipe ({},{})→({},{})", from.x, from.y, to.x, to.y)),
-            SubstepDetail::ScrollStarted { selector, direction } =>
-                lines.push(format!("scroll_started \"{}\" direction={}", selector, direction)),
-            SubstepDetail::ScrollAttempt { attempt, direction, strategy_index, container, from, to, result, tree_stats } => {
-                let scope = if *container { "container".to_string() } else { format!("preset={}", strategy_index + 1) };
-                lines.push(format!("scroll_attempt #{} {} {} ({},{})→({},{}) {} {{{} trees, {} nodes}}",
-                    attempt, scope, direction, from.x, from.y, to.x, to.y, result,
-                    tree_stats.fetches, tree_stats.max_nodes))
+            SubstepDetail::ElementResolved {
+                selector,
+                bounds,
+                tap_point,
+            } => lines.push(format!(
+                "element_resolved \"{}\" bounds=({},{},{},{}) tap=({},{})",
+                selector, bounds.x, bounds.y, bounds.width, bounds.height, tap_point.x, tap_point.y
+            )),
+            SubstepDetail::ElementNotFound {
+                selector,
+                timeout_ms,
+            } => lines.push(format!(
+                "element_not_found \"{}\" after {}ms",
+                selector, timeout_ms
+            )),
+            SubstepDetail::Tap { point, .. } => {
+                lines.push(format!("tap ({},{})", point.x, point.y))
             }
-            SubstepDetail::ScrollFound { selector, position, total_attempts } =>
-                lines.push(format!("scroll_found \"{}\" at ({},{}) after {} attempts",
-                    selector, position.x, position.y, total_attempts)),
-            SubstepDetail::ScrollDirectionReversed { to_direction, reason } =>
-                lines.push(format!("scroll_reversed →{} {}", to_direction, reason)),
-            SubstepDetail::ScrollStrategySwitch { to_index, reason } =>
-                lines.push(format!("scroll_strategy_switch →{} {}", to_index + 1, reason)),
-            SubstepDetail::AppLaunch { bundle, duration_ms } =>
-                lines.push(format!("app_launch bundle={} {}ms", bundle, duration_ms)),
-            SubstepDetail::AppStop { bundle } =>
-                lines.push(format!("app_stop bundle={}", bundle)),
-            SubstepDetail::DriverWarning { message } =>
-                lines.push(format!("[warning] {}", message)),
-            SubstepDetail::RetryAttempt { attempt, max, delay_ms, error } =>
-                lines.push(format!("retry {}/{} delay={}ms: {}", attempt, max, delay_ms, error)),
-            SubstepDetail::HttpRequest { method, url, status, duration_ms } => {
-                let s = status.map(|s| s.to_string()).unwrap_or_else(|| "?".to_string());
-                lines.push(format!("http {} {} → {} [{}ms]", method, url, s, duration_ms));
+            SubstepDetail::DoubleTap { point, .. } => {
+                lines.push(format!("double_tap ({},{})", point.x, point.y))
             }
-            SubstepDetail::BashCommand { command, exit_code, duration_ms } => {
-                let c = exit_code.map(|c| c.to_string()).unwrap_or_else(|| "?".to_string());
-                lines.push(format!("bash \"{}\" exit={} [{}ms]", command, c, duration_ms));
+            SubstepDetail::TextInput { text, .. } => lines.push(format!("text_input \"{}\"", text)),
+            SubstepDetail::Swipe { from, to } => {
+                lines.push(format!("swipe ({},{})→({},{})", from.x, from.y, to.x, to.y))
             }
-            SubstepDetail::Screenshot { path } =>
-                lines.push(format!("screenshot {}", path)),
+            SubstepDetail::ScrollStarted {
+                selector,
+                direction,
+            } => lines.push(format!(
+                "scroll_started \"{}\" direction={}",
+                selector, direction
+            )),
+            SubstepDetail::ScrollAttempt {
+                attempt,
+                direction,
+                strategy_index,
+                container,
+                from,
+                to,
+                result,
+                tree_stats,
+            } => {
+                let scope = if *container {
+                    "container".to_string()
+                } else {
+                    format!("preset={}", strategy_index + 1)
+                };
+                lines.push(format!(
+                    "scroll_attempt #{} {} {} ({},{})→({},{}) {} {{{} trees, {} nodes}}",
+                    attempt,
+                    scope,
+                    direction,
+                    from.x,
+                    from.y,
+                    to.x,
+                    to.y,
+                    result,
+                    tree_stats.fetches,
+                    tree_stats.max_nodes
+                ))
+            }
+            SubstepDetail::ScrollFound {
+                selector,
+                position,
+                total_attempts,
+            } => lines.push(format!(
+                "scroll_found \"{}\" at ({},{}) after {} attempts",
+                selector, position.x, position.y, total_attempts
+            )),
+            SubstepDetail::ScrollDirectionReversed {
+                to_direction,
+                reason,
+            } => lines.push(format!("scroll_reversed →{} {}", to_direction, reason)),
+            SubstepDetail::ScrollStrategySwitch { to_index, reason } => lines.push(format!(
+                "scroll_strategy_switch →{} {}",
+                to_index + 1,
+                reason
+            )),
+            SubstepDetail::AppLaunch {
+                bundle,
+                duration_ms,
+            } => lines.push(format!("app_launch bundle={} {}ms", bundle, duration_ms)),
+            SubstepDetail::AppStop { bundle } => lines.push(format!("app_stop bundle={}", bundle)),
+            SubstepDetail::DriverWarning { message } => {
+                lines.push(format!("[warning] {}", message))
+            }
+            SubstepDetail::RetryAttempt {
+                attempt,
+                max,
+                delay_ms,
+                error,
+            } => lines.push(format!(
+                "retry {}/{} delay={}ms: {}",
+                attempt, max, delay_ms, error
+            )),
+            SubstepDetail::HttpRequest {
+                method,
+                url,
+                status,
+                duration_ms,
+            } => {
+                let s = status
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "?".to_string());
+                lines.push(format!(
+                    "http {} {} → {} [{}ms]",
+                    method, url, s, duration_ms
+                ));
+            }
+            SubstepDetail::BashCommand {
+                command,
+                exit_code,
+                duration_ms,
+            } => {
+                let c = exit_code
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| "?".to_string());
+                lines.push(format!(
+                    "bash \"{}\" exit={} [{}ms]",
+                    command, c, duration_ms
+                ));
+            }
+            SubstepDetail::Screenshot { path } => lines.push(format!("screenshot {}", path)),
             _ => {}
         }
     }
@@ -191,7 +272,11 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
                         out,
                         "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\"{step_ts}>"
                     );
-                    let _ = writeln!(out, "      <system-out>{}</system-out>", xml_escape(&substep_text));
+                    let _ = writeln!(
+                        out,
+                        "      <system-out>{}</system-out>",
+                        xml_escape(&substep_text)
+                    );
                     let _ = writeln!(out, "    </testcase>");
                 }
             }
@@ -215,7 +300,11 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
                 let escaped_msg = xml_escape(message);
                 // Infrastructure-domain faults (Host/Device/App) are JUnit
                 // <error>s; test/spec faults (Flow/Parsing) are <failure>s.
-                let elem = if code.domain().is_infrastructure() { "error" } else { "failure" };
+                let elem = if code.domain().is_infrastructure() {
+                    "error"
+                } else {
+                    "failure"
+                };
                 let _ = writeln!(
                     out,
                     "    <testcase name=\"{name}\" classname=\"{flow_name}\" time=\"{step_time}\"{step_ts}>"
@@ -223,7 +312,10 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
                 let failure_detail = if substep_text.is_empty() {
                     format!("Step failed: {name} - {escaped_msg}")
                 } else {
-                    format!("{}\nStep failed: {name} - {escaped_msg}", xml_escape(&substep_text))
+                    format!(
+                        "{}\nStep failed: {name} - {escaped_msg}",
+                        xml_escape(&substep_text)
+                    )
                 };
                 let _ = writeln!(
                     out,
@@ -490,7 +582,10 @@ mod tests {
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
-            outcome: StepOutcome::Failed { message: msg.to_string(), code: golem_events::FailureCode::Uncoded },
+            outcome: StepOutcome::Failed {
+                message: msg.to_string(),
+                code: golem_events::FailureCode::Uncoded,
+            },
             duration_ms: ms,
             retry_count: 0,
             screenshot_path: None,
@@ -509,7 +604,10 @@ mod tests {
             step_index_in_block: 0,
             action: action.to_string(),
             target: target.to_string(),
-            outcome: StepOutcome::Warning { message: msg.to_string(), code: golem_events::FailureCode::Uncoded },
+            outcome: StepOutcome::Warning {
+                message: msg.to_string(),
+                code: golem_events::FailureCode::Uncoded,
+            },
             duration_ms: ms,
             retry_count: 0,
             screenshot_path: None,
@@ -550,7 +648,12 @@ mod tests {
                 success_step("type", "email", 32),
                 warning_step("assert_visible", "Promo", 15, "element not found"),
                 success_step("tap", "Submit", 38),
-                failed_step("assert_visible", "Welcome", 10012, "timed out after 10000ms"),
+                failed_step(
+                    "assert_visible",
+                    "Welcome",
+                    10012,
+                    "timed out after 10000ms",
+                ),
             ],
             warnings: vec![],
             duration_ms: 10262,
@@ -634,7 +737,10 @@ mod tests {
             "should start with XML declaration"
         );
         assert!(xml.contains("<testsuites"), "SHALL contain <testsuites>");
-        assert!(xml.contains("</testsuites>"), "SHALL contain closing </testsuites>");
+        assert!(
+            xml.contains("</testsuites>"),
+            "SHALL contain closing </testsuites>"
+        );
     }
 
     // 2. Flow maps to testsuite with correct attributes ---------------
@@ -656,10 +762,7 @@ mod tests {
             xml.contains("failures=\"1\""),
             "should have correct failures count"
         );
-        assert!(
-            xml.contains("errors=\"0\""),
-            "should have errors=0"
-        );
+        assert!(xml.contains("errors=\"0\""), "should have errors=0");
     }
 
     // 3. Step maps to testcase with name and time ---------------------
@@ -689,10 +792,7 @@ mod tests {
     fn failed_step_has_failure_element() {
         let flow = sample_flow();
         let xml = format_flow_junit(&flow);
-        assert!(
-            xml.contains("<failure"),
-            "should contain <failure> element"
-        );
+        assert!(xml.contains("<failure"), "should contain <failure> element");
         assert!(
             xml.contains("message=\"timed out after 10000ms\""),
             "failure should have message attribute"
@@ -766,12 +866,18 @@ mod tests {
             ..sample_flow()
         };
         let xml = format_flow_junit(&flow);
-        assert!(xml.contains("<failure message=\"timed out\" type=\"EF408\""),
-            "flow-domain fault SHALL be a <failure>");
-        assert!(xml.contains("<error message=\"companion wedged\" type=\"ED503\""),
-            "infrastructure-domain fault SHALL be an <error>");
-        assert!(xml.contains("failures=\"1\" errors=\"1\""),
-            "testsuite SHALL count one failure and one error, got: {xml}");
+        assert!(
+            xml.contains("<failure message=\"timed out\" type=\"EF408\""),
+            "flow-domain fault SHALL be a <failure>"
+        );
+        assert!(
+            xml.contains("<error message=\"companion wedged\" type=\"ED503\""),
+            "infrastructure-domain fault SHALL be an <error>"
+        );
+        assert!(
+            xml.contains("failures=\"1\" errors=\"1\""),
+            "testsuite SHALL count one failure and one error, got: {xml}"
+        );
     }
 
     // 4c. A flow that failed without running any step gets a synthetic
@@ -788,10 +894,14 @@ mod tests {
         };
         let xml = format_flow_junit(&flow);
         // AppInstallFailed is App-domain (infrastructure) → <error>, EA500.
-        assert!(xml.contains("tests=\"1\" failures=\"0\" errors=\"1\""),
-            "no-step failure SHALL surface as one error, got: {xml}");
-        assert!(xml.contains("<error message=\"install_script failed\" type=\"EA500\"/>"),
-            "synthetic testcase SHALL carry the reason and code, got: {xml}");
+        assert!(
+            xml.contains("tests=\"1\" failures=\"0\" errors=\"1\""),
+            "no-step failure SHALL surface as one error, got: {xml}"
+        );
+        assert!(
+            xml.contains("<error message=\"install_script failed\" type=\"EA500\"/>"),
+            "synthetic testcase SHALL carry the reason and code, got: {xml}"
+        );
     }
 
     // 5. Warning step has system-out with message ---------------------
@@ -959,10 +1069,7 @@ mod tests {
         let suite = sample_suite();
         let xml = format_suite_junit(&suite);
         let testsuite_count = xml.matches("<testsuite ").count();
-        assert_eq!(
-            testsuite_count, 2,
-            "should have one <testsuite> per flow"
-        );
+        assert_eq!(testsuite_count, 2, "should have one <testsuite> per flow");
         assert!(
             xml.contains("name=\"login_flow\""),
             "should contain login_flow testsuite"
@@ -1029,7 +1136,10 @@ mod tests {
         };
 
         let xml = format_flow_junit(&flow);
-        assert!(xml.contains("<properties>"), "SHALL contain <properties> element");
+        assert!(
+            xml.contains("<properties>"),
+            "SHALL contain <properties> element"
+        );
         assert!(
             xml.contains("perf.login:iPhone_16:0.memory_mb"),
             "SHALL contain perf property name with label"
@@ -1060,7 +1170,10 @@ mod tests {
         };
 
         let xml = format_flow_junit(&flow);
-        assert!(xml.contains("<properties>"), "SHALL emit <properties> when covered_axes set");
+        assert!(
+            xml.contains("<properties>"),
+            "SHALL emit <properties> when covered_axes set"
+        );
         assert!(
             xml.contains(r#"<property name="covered_axes" value="ios,v26,tablet"/>"#),
             "SHALL contain covered_axes property with comma-joined value; got:\n{xml}"
@@ -1108,13 +1221,17 @@ mod tests {
     fn substeps_text_element_resolved_formats_bounds_and_tap_point() {
         let substeps = vec![SubstepDetail::ElementResolved {
             selector: "text=Submit".into(),
-            bounds: golem_events::Rect { x: 20, y: 400, width: 200, height: 50 },
+            bounds: golem_events::Rect {
+                x: 20,
+                y: 400,
+                width: 200,
+                height: 50,
+            },
             tap_point: golem_events::Point { x: 120, y: 425 },
         }];
         let out = format_substeps_text(&substeps);
         assert_eq!(
-            out,
-            "element_resolved \"text=Submit\" bounds=(20,400,200,50) tap=(120,425)",
+            out, "element_resolved \"text=Submit\" bounds=(20,400,200,50) tap=(120,425)",
             "SHALL format ElementResolved with bounds and tap_point"
         );
     }
@@ -1173,8 +1290,7 @@ mod tests {
         ];
         let out = format_substeps_text(&substeps);
         assert_eq!(
-            out,
-            "tap (100,200)\ntext_input \"hello\"",
+            out, "tap (100,200)\ntext_input \"hello\"",
             "SHALL join multiple substep lines with newlines"
         );
     }
@@ -1186,8 +1302,10 @@ mod tests {
             duration_ms: 2000,
         }];
         let out = format_substeps_text(&substeps);
-        assert_eq!(out, "app_launch bundle=com.example.app 2000ms",
-            "SHALL format AppLaunch with bundle and duration");
+        assert_eq!(
+            out, "app_launch bundle=com.example.app 2000ms",
+            "SHALL format AppLaunch with bundle and duration"
+        );
     }
 
     #[test]
@@ -1197,8 +1315,10 @@ mod tests {
             timeout_ms: 10000,
         }];
         let out = format_substeps_text(&substeps);
-        assert_eq!(out, "element_not_found \"text=Ghost\" after 10000ms",
-            "SHALL format ElementNotFound with selector and timeout");
+        assert_eq!(
+            out, "element_not_found \"text=Ghost\" after 10000ms",
+            "SHALL format ElementNotFound with selector and timeout"
+        );
     }
 
     // 12. Empty suite produces valid XML ------------------------------
@@ -1236,10 +1356,16 @@ mod tests {
 
     #[test]
     fn step_name_joins_or_uses_action_only() {
-        assert_eq!(step_name("tap", "Submit"), "tap: Submit",
-            "non-empty target SHALL be appended after a colon");
-        assert_eq!(step_name("launch", ""), "launch",
-            "empty target SHALL yield action alone");
+        assert_eq!(
+            step_name("tap", "Submit"),
+            "tap: Submit",
+            "non-empty target SHALL be appended after a colon"
+        );
+        assert_eq!(
+            step_name("launch", ""),
+            "launch",
+            "empty target SHALL yield action alone"
+        );
     }
 
     // 15. Successful step with substeps emits a system-out block -------
@@ -1260,10 +1386,14 @@ mod tests {
         };
         let xml = format_flow_junit(&flow);
         // Success with substeps SHALL open the testcase and emit system-out.
-        assert!(xml.contains("<system-out>tap (10,20)</system-out>"),
-            "success step with substeps SHALL emit <system-out>, got: {xml}");
-        assert!(xml.contains("</testcase>"),
-            "success step with substeps SHALL close the testcase explicitly");
+        assert!(
+            xml.contains("<system-out>tap (10,20)</system-out>"),
+            "success step with substeps SHALL emit <system-out>, got: {xml}"
+        );
+        assert!(
+            xml.contains("</testcase>"),
+            "success step with substeps SHALL close the testcase explicitly"
+        );
     }
 
     // 16. Successful step without substeps is a self-closing testcase --
@@ -1278,10 +1408,14 @@ mod tests {
             ..sample_flow()
         };
         let xml = format_flow_junit(&flow);
-        assert!(xml.contains("time=\"0.100\"/>"),
-            "success step without substeps SHALL be a self-closing testcase, got: {xml}");
-        assert!(!xml.contains("<system-out>"),
-            "success step without substeps SHALL NOT emit <system-out>");
+        assert!(
+            xml.contains("time=\"0.100\"/>"),
+            "success step without substeps SHALL be a self-closing testcase, got: {xml}"
+        );
+        assert!(
+            !xml.contains("<system-out>"),
+            "success step without substeps SHALL NOT emit <system-out>"
+        );
     }
 
     // 17. Warning step with substeps prepends substep text -------------
@@ -1302,8 +1436,10 @@ mod tests {
         };
         let xml = format_flow_junit(&flow);
         // Substep text is prepended, then the rendered warning line.
-        assert!(xml.contains("<system-out>tap (5,6)\n[WX000] not found</system-out>"),
-            "warning step with substeps SHALL combine substep text then message, got: {xml}");
+        assert!(
+            xml.contains("<system-out>tap (5,6)\n[WX000] not found</system-out>"),
+            "warning step with substeps SHALL combine substep text then message, got: {xml}"
+        );
     }
 
     // 18. Failed step with substeps prepends substep text to detail ----
@@ -1343,12 +1479,18 @@ mod tests {
         };
         let xml = format_flow_junit(&flow);
         // No first_failure_code → not infrastructure → <failure>, no type attr.
-        assert!(xml.contains("tests=\"1\" failures=\"1\" errors=\"0\""),
-            "no-code synthetic failure SHALL count as one <failure>, got: {xml}");
-        assert!(xml.contains("name=\"flow could not run\""),
-            "synthetic testcase SHALL be named 'flow could not run'");
-        assert!(xml.contains("<failure message=\"flow could not run\"/>"),
-            "synthetic failure SHALL use the default reason and omit type, got: {xml}");
+        assert!(
+            xml.contains("tests=\"1\" failures=\"1\" errors=\"0\""),
+            "no-code synthetic failure SHALL count as one <failure>, got: {xml}"
+        );
+        assert!(
+            xml.contains("name=\"flow could not run\""),
+            "synthetic testcase SHALL be named 'flow could not run'"
+        );
+        assert!(
+            xml.contains("<failure message=\"flow could not run\"/>"),
+            "synthetic failure SHALL use the default reason and omit type, got: {xml}"
+        );
     }
 
     // 20. timestamp attributes appear when started_at is set -----------
@@ -1366,10 +1508,14 @@ mod tests {
             ..sample_flow()
         };
         let xml = format_flow_junit(&flow);
-        assert!(xml.contains("timestamp=\"2026-06-15T10:00:00Z\""),
-            "testsuite SHALL carry the flow timestamp, got: {xml}");
-        assert!(xml.contains("timestamp=\"2026-06-15T10:00:01Z\""),
-            "testcase SHALL carry the step timestamp, got: {xml}");
+        assert!(
+            xml.contains("timestamp=\"2026-06-15T10:00:00Z\""),
+            "testsuite SHALL carry the flow timestamp, got: {xml}"
+        );
+        assert!(
+            xml.contains("timestamp=\"2026-06-15T10:00:01Z\""),
+            "testcase SHALL carry the step timestamp, got: {xml}"
+        );
     }
 
     // 21. recordings render as recording.<block>.<iter> properties -----
@@ -1389,10 +1535,14 @@ mod tests {
             ..sample_flow()
         };
         let xml = format_flow_junit(&flow);
-        assert!(xml.contains("<properties>"),
-            "recordings SHALL trigger a <properties> block");
-        assert!(xml.contains(r#"<property name="recording.checkout.2" value="/tmp/rec.mp4"/>"#),
-            "recording SHALL render block.iteration name and path value, got: {xml}");
+        assert!(
+            xml.contains("<properties>"),
+            "recordings SHALL trigger a <properties> block"
+        );
+        assert!(
+            xml.contains(r#"<property name="recording.checkout.2" value="/tmp/rec.mp4"/>"#),
+            "recording SHALL render block.iteration name and path value, got: {xml}"
+        );
     }
 
     // 22. perf snapshot threads / fds / launch_ms properties -----------
@@ -1408,14 +1558,24 @@ mod tests {
             ..sample_flow()
         };
         let xml = format_flow_junit(&flow);
-        assert!(xml.contains(r#"<property name="perf.login:iPhone_16:0.cpu_percent" value="23.1"/>"#),
-            "cpu_percent SHALL render with one decimal, got: {xml}");
-        assert!(xml.contains(r#"<property name="perf.login:iPhone_16:0.threads" value="42"/>"#),
-            "threads SHALL render as integer");
-        assert!(xml.contains(r#"<property name="perf.login:iPhone_16:0.file_descriptors" value="87"/>"#),
-            "file_descriptors SHALL render as integer");
-        assert!(xml.contains(r#"<property name="perf.login:iPhone_16:0.launch_ms" value="1240"/>"#),
-            "launch_ms SHALL render as integer");
+        assert!(
+            xml.contains(r#"<property name="perf.login:iPhone_16:0.cpu_percent" value="23.1"/>"#),
+            "cpu_percent SHALL render with one decimal, got: {xml}"
+        );
+        assert!(
+            xml.contains(r#"<property name="perf.login:iPhone_16:0.threads" value="42"/>"#),
+            "threads SHALL render as integer"
+        );
+        assert!(
+            xml.contains(
+                r#"<property name="perf.login:iPhone_16:0.file_descriptors" value="87"/>"#
+            ),
+            "file_descriptors SHALL render as integer"
+        );
+        assert!(
+            xml.contains(r#"<property name="perf.login:iPhone_16:0.launch_ms" value="1240"/>"#),
+            "launch_ms SHALL render as integer"
+        );
     }
 
     // 23. perf snapshot with all-None metrics emits no perf properties -
@@ -1445,10 +1605,14 @@ mod tests {
         let xml = format_flow_junit(&flow);
         // has_props is true (perf_snapshots non-empty) so <properties> opens,
         // but no perf.* lines are emitted since every metric is None.
-        assert!(xml.contains("<properties>"),
-            "non-empty perf_snapshots SHALL open <properties>");
-        assert!(!xml.contains("perf.empty"),
-            "all-None snapshot SHALL emit no perf.* properties, got: {xml}");
+        assert!(
+            xml.contains("<properties>"),
+            "non-empty perf_snapshots SHALL open <properties>"
+        );
+        assert!(
+            !xml.contains("perf.empty"),
+            "all-None snapshot SHALL emit no perf.* properties, got: {xml}"
+        );
     }
 
     // 24. os_major renders as a property -------------------------------
@@ -1464,8 +1628,10 @@ mod tests {
             ..sample_flow()
         };
         let xml = format_flow_junit(&flow);
-        assert!(xml.contains(r#"<property name="os_major" value="26"/>"#),
-            "os_major SHALL render as a property, got: {xml}");
+        assert!(
+            xml.contains(r#"<property name="os_major" value="26"/>"#),
+            "os_major SHALL render as a property, got: {xml}"
+        );
     }
 
     // ── Install suite tests ─────────────────────────────────────────
@@ -1479,7 +1645,11 @@ mod tests {
             success,
             duration_ms: 3000,
             exit_code: if success { Some(0) } else { Some(1) },
-            error: if success { None } else { Some("gradle exploded".to_string()) },
+            error: if success {
+                None
+            } else {
+                Some("gradle exploded".to_string())
+            },
             code: if success {
                 None
             } else {
@@ -1499,19 +1669,31 @@ mod tests {
             ..sample_suite()
         };
         let xml = format_suite_junit(&suite);
-        assert!(xml.contains("<testsuite name=\"install\""),
-            "installs SHALL form a dedicated 'install' testsuite, got: {xml}");
-        assert!(xml.contains("name=\"MyApp (com.example.app)\""),
-            "install testcase name SHALL combine app and bundle");
-        assert!(xml.contains("classname=\"Pixel_7a\""),
-            "install classname SHALL be the device name");
-        assert!(xml.contains("os_major=\"34\""),
-            "install testcase SHALL carry os_major attribute");
-        assert!(xml.contains("timestamp=\"2026-06-15T09:00:00Z\""),
-            "install suite SHALL use earliest install started_at as timestamp");
+        assert!(
+            xml.contains("<testsuite name=\"install\""),
+            "installs SHALL form a dedicated 'install' testsuite, got: {xml}"
+        );
+        assert!(
+            xml.contains("name=\"MyApp (com.example.app)\""),
+            "install testcase name SHALL combine app and bundle"
+        );
+        assert!(
+            xml.contains("classname=\"Pixel_7a\""),
+            "install classname SHALL be the device name"
+        );
+        assert!(
+            xml.contains("os_major=\"34\""),
+            "install testcase SHALL carry os_major attribute"
+        );
+        assert!(
+            xml.contains("timestamp=\"2026-06-15T09:00:00Z\""),
+            "install suite SHALL use earliest install started_at as timestamp"
+        );
         // Successful install SHALL have no <error>.
-        assert!(!xml.contains("<error message=\"install script failed\""),
-            "successful install SHALL NOT emit an error");
+        assert!(
+            !xml.contains("<error message=\"install script failed\""),
+            "successful install SHALL NOT emit an error"
+        );
     }
 
     // 26. Failed install becomes a JUnit error counted suite-wide ------
@@ -1523,12 +1705,18 @@ mod tests {
             ..sample_suite()
         };
         let xml = format_suite_junit(&suite);
-        assert!(xml.contains("<error message=\"install script failed\" type=\"EA500\">gradle exploded</error>"),
-            "failed install SHALL emit an <error> carrying the code and message, got: {xml}");
+        assert!(
+            xml.contains(
+                "<error message=\"install script failed\" type=\"EA500\">gradle exploded</error>"
+            ),
+            "failed install SHALL emit an <error> carrying the code and message, got: {xml}"
+        );
         // Suite errors = flow_errors (0 here) + install_failures (1).
         // sample_suite has 4 flow tests + 1 install test = 5, 1 flow failure.
-        assert!(xml.contains("tests=\"5\" failures=\"1\" errors=\"1\""),
-            "install failure SHALL add to total tests and errors, got: {xml}");
+        assert!(
+            xml.contains("tests=\"5\" failures=\"1\" errors=\"1\""),
+            "install failure SHALL add to total tests and errors, got: {xml}"
+        );
     }
 
     // 27. Failed install without error message uses default text -------
@@ -1545,8 +1733,10 @@ mod tests {
         };
         let xml = format_suite_junit(&suite);
         // No code → no type attribute; missing error → default body text.
-        assert!(xml.contains("<error message=\"install script failed\">install failed</error>"),
-            "missing install error SHALL default to 'install failed' with no type, got: {xml}");
+        assert!(
+            xml.contains("<error message=\"install script failed\">install failed</error>"),
+            "missing install error SHALL default to 'install failed' with no type, got: {xml}"
+        );
     }
 
     // ── Flake summary tests ─────────────────────────────────────────
@@ -1567,20 +1757,23 @@ mod tests {
     #[test]
     fn flake_summary_renders_flake_failure() {
         let suite = SuiteReport {
-            flows: vec![
-                repeated_flow("login", true),
-                repeated_flow("login", false),
-            ],
+            flows: vec![repeated_flow("login", true), repeated_flow("login", false)],
             installs: vec![],
             ..sample_suite()
         };
         let xml = format_suite_junit(&suite);
-        assert!(xml.contains("<testsuite name=\"flake-summary\""),
-            "repeat suites SHALL emit a flake-summary testsuite, got: {xml}");
-        assert!(xml.contains(r#"passed="1" failed="1" skipped="0" total="2""#),
-            "flake testcase SHALL carry the run tallies");
-        assert!(xml.contains(r#"<failure message="flake: 1/2 runs failed"/>"#),
-            "a flow with both passes and fails SHALL be marked a flake, got: {xml}");
+        assert!(
+            xml.contains("<testsuite name=\"flake-summary\""),
+            "repeat suites SHALL emit a flake-summary testsuite, got: {xml}"
+        );
+        assert!(
+            xml.contains(r#"passed="1" failed="1" skipped="0" total="2""#),
+            "flake testcase SHALL carry the run tallies"
+        );
+        assert!(
+            xml.contains(r#"<failure message="flake: 1/2 runs failed"/>"#),
+            "a flow with both passes and fails SHALL be marked a flake, got: {xml}"
+        );
     }
 
     // 29. A flow that fails every run is a stable-fail, not a flake -----
@@ -1596,8 +1789,10 @@ mod tests {
             ..sample_suite()
         };
         let xml = format_suite_junit(&suite);
-        assert!(xml.contains(r#"<failure message="stable-fail: 2/2 runs failed"/>"#),
-            "an all-fail repeated flow SHALL be a stable-fail, got: {xml}");
+        assert!(
+            xml.contains(r#"<failure message="stable-fail: 2/2 runs failed"/>"#),
+            "an all-fail repeated flow SHALL be a stable-fail, got: {xml}"
+        );
     }
 
     // ── Remaining substep formatters ────────────────────────────────
@@ -1609,7 +1804,10 @@ mod tests {
         let q = golem_events::Point { x: 3, y: 4 };
         let cases = vec![
             (
-                SubstepDetail::DoubleTap { point: p, element_bounds: None },
+                SubstepDetail::DoubleTap {
+                    point: p,
+                    element_bounds: None,
+                },
                 "double_tap (1,2)",
             ),
             (
@@ -1617,35 +1815,59 @@ mod tests {
                 "swipe (1,2)\u{2192}(3,4)",
             ),
             (
-                SubstepDetail::ScrollStarted { selector: "text=X".into(), direction: "down".into() },
+                SubstepDetail::ScrollStarted {
+                    selector: "text=X".into(),
+                    direction: "down".into(),
+                },
                 "scroll_started \"text=X\" direction=down",
             ),
             (
-                SubstepDetail::ScrollFound { selector: "text=X".into(), position: p, total_attempts: 3 },
+                SubstepDetail::ScrollFound {
+                    selector: "text=X".into(),
+                    position: p,
+                    total_attempts: 3,
+                },
                 "scroll_found \"text=X\" at (1,2) after 3 attempts",
             ),
             (
-                SubstepDetail::ScrollDirectionReversed { to_direction: "up".into(), reason: "edge".into() },
+                SubstepDetail::ScrollDirectionReversed {
+                    to_direction: "up".into(),
+                    reason: "edge".into(),
+                },
                 "scroll_reversed \u{2192}up edge",
             ),
             (
-                SubstepDetail::ScrollStrategySwitch { to_index: 1, reason: "stuck".into() },
+                SubstepDetail::ScrollStrategySwitch {
+                    to_index: 1,
+                    reason: "stuck".into(),
+                },
                 "scroll_strategy_switch \u{2192}2 stuck",
             ),
             (
-                SubstepDetail::AppStop { bundle: "com.x".into() },
+                SubstepDetail::AppStop {
+                    bundle: "com.x".into(),
+                },
                 "app_stop bundle=com.x",
             ),
             (
-                SubstepDetail::DriverWarning { message: "slow".into() },
+                SubstepDetail::DriverWarning {
+                    message: "slow".into(),
+                },
                 "[warning] slow",
             ),
             (
-                SubstepDetail::RetryAttempt { attempt: 1, max: 3, delay_ms: 500, error: "boom".into() },
+                SubstepDetail::RetryAttempt {
+                    attempt: 1,
+                    max: 3,
+                    delay_ms: 500,
+                    error: "boom".into(),
+                },
                 "retry 1/3 delay=500ms: boom",
             ),
             (
-                SubstepDetail::Screenshot { path: "/tmp/s.png".into() },
+                SubstepDetail::Screenshot {
+                    path: "/tmp/s.png".into(),
+                },
                 "screenshot /tmp/s.png",
             ),
         ];
@@ -1664,22 +1886,28 @@ mod tests {
             status: Some(200),
             duration_ms: 12,
         }]);
-        assert_eq!(http_some, "http GET http://x \u{2192} 200 [12ms]",
-            "HttpRequest with status SHALL render the code");
+        assert_eq!(
+            http_some, "http GET http://x \u{2192} 200 [12ms]",
+            "HttpRequest with status SHALL render the code"
+        );
         let http_none = format_substeps_text(&[SubstepDetail::HttpRequest {
             method: "GET".into(),
             url: "http://x".into(),
             status: None,
             duration_ms: 12,
         }]);
-        assert_eq!(http_none, "http GET http://x \u{2192} ? [12ms]",
-            "HttpRequest without status SHALL render '?'");
+        assert_eq!(
+            http_none, "http GET http://x \u{2192} ? [12ms]",
+            "HttpRequest without status SHALL render '?'"
+        );
         let bash_none = format_substeps_text(&[SubstepDetail::BashCommand {
             command: "ls".into(),
             exit_code: None,
             duration_ms: 5,
         }]);
-        assert_eq!(bash_none, "bash \"ls\" exit=? [5ms]",
-            "BashCommand without exit code SHALL render '?'");
+        assert_eq!(
+            bash_none, "bash \"ls\" exit=? [5ms]",
+            "BashCommand without exit code SHALL render '?'"
+        );
     }
 }

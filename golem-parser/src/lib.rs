@@ -260,9 +260,7 @@ where
     let value = Option::<usize>::deserialize(deserializer)?;
     if let Some(n) = value {
         if n == 0 {
-            return Err(serde::de::Error::custom(
-                "min_matches must be at least 1",
-            ));
+            return Err(serde::de::Error::custom("min_matches must be at least 1"));
         }
         if n > MAX_CONTAINS_MIN_MATCHES {
             return Err(serde::de::Error::custom(format!(
@@ -551,7 +549,11 @@ action = "launch"
 action = "clear_text"
 "#;
         let flow = parse_flow(toml_str).expect("all actions should parse");
-        let actions: Vec<&str> = flow.block[0].steps.iter().map(|s| s.action.as_str()).collect();
+        let actions: Vec<&str> = flow.block[0]
+            .steps
+            .iter()
+            .map(|s| s.action.as_str())
+            .collect();
         assert_eq!(
             actions,
             vec![
@@ -741,8 +743,14 @@ action = "tap"
         assert_eq!(w.os.as_deref(), Some("android"));
         assert_eq!(w.physical, Some(true));
 
-        assert_eq!(block.vars.get("username").map(|s| s.as_str()), Some("admin"));
-        assert_eq!(block.vars.get("password").map(|s| s.as_str()), Some("secret"));
+        assert_eq!(
+            block.vars.get("username").map(|s| s.as_str()),
+            Some("admin")
+        );
+        assert_eq!(
+            block.vars.get("password").map(|s| s.as_str()),
+            Some("secret")
+        );
     }
 
     // ---------------------------------------------------------------
@@ -870,8 +878,16 @@ steps = [
         let c1 = steps[1].on.as_ref().unwrap().contains.as_ref().unwrap();
         match c1 {
             ContainsAnchor::Spec(s) => {
-                assert_eq!(s.group.text.as_deref(), Some("Row *"), "flatten SHALL keep group fields");
-                assert_eq!(c1.min_matches(), 1, "group without min_matches SHALL default to 1");
+                assert_eq!(
+                    s.group.text.as_deref(),
+                    Some("Row *"),
+                    "flatten SHALL keep group fields"
+                );
+                assert_eq!(
+                    c1.min_matches(),
+                    1,
+                    "group without min_matches SHALL default to 1"
+                );
             }
             other => panic!("expected Spec, got {other:?}"),
         }
@@ -902,8 +918,8 @@ steps = [
 ]
 "#
             );
-            let err = parse_flow(&toml_str)
-                .expect_err(&format!("min_matches = {bad} SHALL be rejected"));
+            let err =
+                parse_flow(&toml_str).expect_err(&format!("min_matches = {bad} SHALL be rejected"));
             assert!(
                 err.to_string().contains("min_matches"),
                 "error SHALL name min_matches: {err}"
@@ -1035,10 +1051,22 @@ password = "pass3"
 "#;
         let flow = parse_flow(toml_str).expect("data rows should parse");
         assert_eq!(flow.data.len(), 3);
-        assert_eq!(flow.data[0].get("username").map(|s| s.as_str()), Some("alice"));
-        assert_eq!(flow.data[1].get("username").map(|s| s.as_str()), Some("bob"));
-        assert_eq!(flow.data[2].get("username").map(|s| s.as_str()), Some("charlie"));
-        assert_eq!(flow.data[2].get("password").map(|s| s.as_str()), Some("pass3"));
+        assert_eq!(
+            flow.data[0].get("username").map(|s| s.as_str()),
+            Some("alice")
+        );
+        assert_eq!(
+            flow.data[1].get("username").map(|s| s.as_str()),
+            Some("bob")
+        );
+        assert_eq!(
+            flow.data[2].get("username").map(|s| s.as_str()),
+            Some("charlie")
+        );
+        assert_eq!(
+            flow.data[2].get("password").map(|s| s.as_str()),
+            Some("pass3")
+        );
     }
 
     // ---------------------------------------------------------------
@@ -1155,10 +1183,7 @@ name = "helper"
 run_flow = "helper.test.toml"
 "#;
         let flow = parse_flow(toml_str).expect("run_flow should parse");
-        assert_eq!(
-            flow.block[0].run_flow.as_deref(),
-            Some("helper.test.toml")
-        );
+        assert_eq!(flow.block[0].run_flow.as_deref(), Some("helper.test.toml"));
     }
 
     // ---------------------------------------------------------------
@@ -1359,7 +1384,11 @@ max_steps = 100
             ios: Some("ios.sh".to_string()),
             android: Some("android.sh".to_string()),
         });
-        assert_eq!(v.for_platform("ios"), Some("ios.sh"), "ios key SHALL resolve");
+        assert_eq!(
+            v.for_platform("ios"),
+            Some("ios.sh"),
+            "ios key SHALL resolve"
+        );
         assert_eq!(
             v.for_platform("android"),
             Some("android.sh"),
@@ -1381,7 +1410,11 @@ max_steps = 100
             ios: Some("ios.sh".to_string()),
             android: None,
         });
-        assert_eq!(v.for_platform("ios"), Some("ios.sh"), "present ios key SHALL resolve");
+        assert_eq!(
+            v.for_platform("ios"),
+            Some("ios.sh"),
+            "present ios key SHALL resolve"
+        );
         assert_eq!(
             v.for_platform("android"),
             None,
@@ -1448,7 +1481,11 @@ install_script = { ios = "ios.sh", android = "android.sh" }
     #[test]
     fn string_or_vec_to_vec_single() {
         let s = StringOrVec::Single("phone".to_string());
-        assert_eq!(s.to_vec(), vec!["phone".to_string()], "Single SHALL yield one element");
+        assert_eq!(
+            s.to_vec(),
+            vec!["phone".to_string()],
+            "Single SHALL yield one element"
+        );
     }
 
     // ---------------------------------------------------------------
@@ -1673,7 +1710,10 @@ points = [{ x = 200, y = 200 }, { x = 50, y = 50 }]
         assert_eq!(step.rotation, Some(90.0));
         assert_eq!(step.fingers.len(), 2, "two finger paths SHALL parse");
         assert_eq!(step.fingers[0].points.len(), 2);
-        assert!(matches!(step.fingers[1].points[0].x, Some(CoordValue::Pixels(200))));
+        assert!(matches!(
+            step.fingers[1].points[0].x,
+            Some(CoordValue::Pixels(200))
+        ));
     }
 
     // ---------------------------------------------------------------
@@ -1730,7 +1770,11 @@ text = "ScrollContainer"
             Some("BottomAnchor")
         );
         assert_eq!(
-            step.within.as_ref().expect("within present").text.as_deref(),
+            step.within
+                .as_ref()
+                .expect("within present")
+                .text
+                .as_deref(),
             Some("ScrollContainer")
         );
         assert_eq!(step.duration, Some(300));
@@ -1785,7 +1829,11 @@ action = "tap"
 "#;
         let flow = parse_flow(toml_str).expect("record/save_to SHALL parse");
         let block = &flow.block[0];
-        assert_eq!(block.record, Some(false), "explicit record opt-out SHALL parse");
+        assert_eq!(
+            block.record,
+            Some(false),
+            "explicit record opt-out SHALL parse"
+        );
         assert_eq!(
             block.save_to.get("total").map(|s| s.as_str()),
             Some("counter_value")
@@ -1863,7 +1911,10 @@ expand = "matrix"
     #[test]
     fn malformed_toml_is_err() {
         let toml_str = "this is = = not valid toml [[[";
-        assert!(parse_flow(toml_str).is_err(), "invalid TOML SHALL produce an error");
+        assert!(
+            parse_flow(toml_str).is_err(),
+            "invalid TOML SHALL produce an error"
+        );
     }
 
     // ---------------------------------------------------------------
@@ -1884,6 +1935,9 @@ token = "abc123"
             flow.flow.vars.get("base_url").map(|s| s.as_str()),
             Some("https://example.com")
         );
-        assert_eq!(flow.flow.vars.get("token").map(|s| s.as_str()), Some("abc123"));
+        assert_eq!(
+            flow.flow.vars.get("token").map(|s| s.as_str()),
+            Some("abc123")
+        );
     }
 }

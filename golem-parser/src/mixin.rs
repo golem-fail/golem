@@ -121,8 +121,9 @@ pub fn expand_mixins(
             let vars = extract_vars_from_step(step);
 
             let mixin_path = resolve_mixin_path(mixin_name, flow_dir, project_root)?;
-            let mixin_content = std::fs::read_to_string(&mixin_path)
-                .map_err(|e| anyhow::anyhow!("Failed to read mixin file {}: {e}", mixin_path.display()))?;
+            let mixin_content = std::fs::read_to_string(&mixin_path).map_err(|e| {
+                anyhow::anyhow!("Failed to read mixin file {}: {e}", mixin_path.display())
+            })?;
             let mixin = parse_mixin(&mixin_content)?;
 
             // Check for nested load_mixin
@@ -172,7 +173,10 @@ fn remap_step_vars(step: &Step, vars: &HashMap<String, String>) -> Step {
     Step {
         action: remap_string(&step.action, vars),
         on_text: step.on_text.as_ref().map(|s| remap_string(s, vars)),
-        on_accessibility_label: step.on_accessibility_label.as_ref().map(|s| remap_string(s, vars)),
+        on_accessibility_label: step
+            .on_accessibility_label
+            .as_ref()
+            .map(|s| remap_string(s, vars)),
         on_index: step.on_index,
         on_enabled: step.on_enabled,
         on_checked: step.on_checked,
@@ -209,26 +213,39 @@ fn remap_step_vars(step: &Step, vars: &HashMap<String, String>) -> Step {
 fn remap_anchor(a: &crate::Anchor, vars: &HashMap<String, String>) -> crate::Anchor {
     match a {
         crate::Anchor::Text(s) => crate::Anchor::Text(remap_string(s, vars)),
-        crate::Anchor::Selector(g) => crate::Anchor::Selector(Box::new(remap_selector_group(g, vars))),
+        crate::Anchor::Selector(g) => {
+            crate::Anchor::Selector(Box::new(remap_selector_group(g, vars)))
+        }
     }
 }
 
 /// Remap variables in a ContainsAnchor (preserves `min_matches`).
-fn remap_contains_anchor(a: &crate::ContainsAnchor, vars: &HashMap<String, String>) -> crate::ContainsAnchor {
+fn remap_contains_anchor(
+    a: &crate::ContainsAnchor,
+    vars: &HashMap<String, String>,
+) -> crate::ContainsAnchor {
     match a {
         crate::ContainsAnchor::Text(s) => crate::ContainsAnchor::Text(remap_string(s, vars)),
-        crate::ContainsAnchor::Spec(s) => crate::ContainsAnchor::Spec(Box::new(crate::ContainsSpec {
-            group: remap_selector_group(&s.group, vars),
-            min_matches: s.min_matches,
-        })),
+        crate::ContainsAnchor::Spec(s) => {
+            crate::ContainsAnchor::Spec(Box::new(crate::ContainsSpec {
+                group: remap_selector_group(&s.group, vars),
+                min_matches: s.min_matches,
+            }))
+        }
     }
 }
 
 /// Remap variables in a grouped SelectorGroup.
-fn remap_selector_group(g: &crate::SelectorGroup, vars: &HashMap<String, String>) -> crate::SelectorGroup {
+fn remap_selector_group(
+    g: &crate::SelectorGroup,
+    vars: &HashMap<String, String>,
+) -> crate::SelectorGroup {
     crate::SelectorGroup {
         text: g.text.as_ref().map(|s| remap_string(s, vars)),
-        accessibility_label: g.accessibility_label.as_ref().map(|s| remap_string(s, vars)),
+        accessibility_label: g
+            .accessibility_label
+            .as_ref()
+            .map(|s| remap_string(s, vars)),
         index: g.index,
         enabled: g.enabled,
         checked: g.checked,
@@ -359,7 +376,10 @@ on_text = "hello"
 
         assert_eq!(expanded.len(), 2);
         assert_eq!(expanded[0].action, "tap");
-        assert_eq!(expanded[0].on_accessibility_label.as_deref(), Some("email-input"));
+        assert_eq!(
+            expanded[0].on_accessibility_label.as_deref(),
+            Some("email-input")
+        );
         assert_eq!(expanded[1].action, "type");
         assert_eq!(expanded[1].on_text.as_deref(), Some("hello"));
     }
@@ -430,9 +450,15 @@ on_text = "${password}"
             expand_mixins(&steps, flow_dir, project_root).expect("expansion should succeed");
 
         assert_eq!(expanded.len(), 2);
-        assert_eq!(expanded[0].on_accessibility_label.as_deref(), Some("login-email"));
+        assert_eq!(
+            expanded[0].on_accessibility_label.as_deref(),
+            Some("login-email")
+        );
         assert_eq!(expanded[0].on_text.as_deref(), Some("alice@example.com"));
-        assert_eq!(expanded[1].on_accessibility_label.as_deref(), Some("login-password"));
+        assert_eq!(
+            expanded[1].on_accessibility_label.as_deref(),
+            Some("login-password")
+        );
         assert_eq!(expanded[1].on_text.as_deref(), Some("secret123"));
     }
 
@@ -619,7 +645,10 @@ mixin = "inner"
         let steps = vec![load_mixin_step("outer", None)];
         let result = expand_mixins(&steps, flow_dir, project_root);
 
-        assert!(result.is_err(), "SHALL reject nested load_mixin in mixin files");
+        assert!(
+            result.is_err(),
+            "SHALL reject nested load_mixin in mixin files"
+        );
         let err_msg = format!("{}", result.expect_err("SHALL be an error"));
         assert!(
             err_msg.contains("Nested load_mixin"),
@@ -879,7 +908,10 @@ on_text = "mixin-step-3"
         let resolved = resolve_mixin_path("only_root", &nested, project_root)
             .expect("SHALL walk up to ancestor");
         let content = fs::read_to_string(&resolved).expect("SHALL read resolved file");
-        assert!(content.contains("root"), "SHALL find ancestor mixin, got: {content}");
+        assert!(
+            content.contains("root"),
+            "SHALL find ancestor mixin, got: {content}"
+        );
     }
 
     // ---------------------------------------------------------------
@@ -989,7 +1021,10 @@ on_text = "mixin-step-3"
         vars.insert("b".to_string(), "Y".to_string());
 
         let out = remap_string("${a}-${b}-${a}", &vars);
-        assert_eq!(out, "X-Y-X", "every occurrence of each key SHALL be replaced");
+        assert_eq!(
+            out, "X-Y-X",
+            "every occurrence of each key SHALL be replaced"
+        );
     }
 
     // ---------------------------------------------------------------
@@ -1100,8 +1135,16 @@ inner = "${b}"
             .get("list")
             .and_then(|v| v.as_array())
             .expect("list param SHALL be an array");
-        assert_eq!(list[0].as_str(), Some("AA"), "array string SHALL be remapped");
-        assert_eq!(list[1].as_str(), Some("literal"), "non-var literal SHALL stay");
+        assert_eq!(
+            list[0].as_str(),
+            Some("AA"),
+            "array string SHALL be remapped"
+        );
+        assert_eq!(
+            list[1].as_str(),
+            Some("literal"),
+            "non-var literal SHALL stay"
+        );
 
         let inner = expanded[0]
             .params

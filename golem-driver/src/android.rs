@@ -57,7 +57,6 @@ struct CdpState {
     page_id: String,
 }
 
-
 /// Decide the swipe gesture duration (ms) for the given coordinates.
 ///
 /// Horizontal swipes get a longer duration so the gesture velocity stays
@@ -76,7 +75,6 @@ fn swipe_duration_ms(from_x: i32, from_y: i32, to_x: i32, to_y: i32) -> u64 {
         300
     }
 }
-
 
 /// Map a cross-platform permission shorthand (e.g. `camera`, `location`)
 /// to the Android `pm grant` permission constant. Pass-through anything
@@ -210,7 +208,10 @@ impl AndroidDriver {
     }
 
     /// Wait for companion to become healthy, polling with timeout.
-    pub async fn wait_for_health(&self, timeout: std::time::Duration) -> anyhow::Result<crate::common::CompanionHealth> {
+    pub async fn wait_for_health(
+        &self,
+        timeout: std::time::Duration,
+    ) -> anyhow::Result<crate::common::CompanionHealth> {
         self.client.wait_for_health(timeout).await
     }
 
@@ -266,10 +267,7 @@ impl AndroidDriver {
         let (port, page_id) = match initial {
             Initial::Ready(p, pid) => (p, pid),
             Initial::Setup(mut rx) => {
-                let res = tokio::time::timeout(
-                    std::time::Duration::from_secs(3),
-                    &mut rx,
-                ).await;
+                let res = tokio::time::timeout(std::time::Duration::from_secs(3), &mut rx).await;
                 let mut cdp = self.cdp.lock().expect("cdp mutex poisoned");
                 match res {
                     Ok(Ok(Some(state))) => {
@@ -354,11 +352,15 @@ async fn setup_cdp(device_serial: &str, package_name: &str) -> Option<CdpState> 
     crate::cdp::cleanup_stale_forwards(device_serial).await;
 
     let socket_name = crate::cdp::find_webview_socket(device_serial, package_name).await?;
-    let port = crate::cdp::setup_forward(device_serial, &socket_name).await.ok()?;
+    let port = crate::cdp::setup_forward(device_serial, &socket_name)
+        .await
+        .ok()?;
     let page_id = match crate::cdp::get_page_id(port).await {
         Ok(id) => id,
         Err(e) => {
-            if golem_common::is_debug() { eprintln!("  [cdp] setup failed at get_page_id: {e}"); }
+            if golem_common::is_debug() {
+                eprintln!("  [cdp] setup failed at get_page_id: {e}");
+            }
             let _ = crate::cdp::remove_forward(device_serial, port).await;
             return None;
         }
@@ -368,7 +370,13 @@ async fn setup_cdp(device_serial: &str, package_name: &str) -> Option<CdpState> 
 
 /// Try to enrich a WebView node with CDP DOM data.
 /// Returns false if CDP failed (caller should reset state for recovery).
-async fn try_enrich(raw: &mut serde_json::Value, port: u16, page_id: &str, wv_left: i32, wv_top: i32) -> bool {
+async fn try_enrich(
+    raw: &mut serde_json::Value,
+    port: u16,
+    page_id: &str,
+    wv_left: i32,
+    wv_top: i32,
+) -> bool {
     let dom_json = match crate::cdp::evaluate_dom_js_cached(port, page_id).await {
         Ok(json) => json,
         Err(_) => return false, // Dead socket — signal recovery
@@ -416,8 +424,8 @@ impl PlatformDriver for AndroidDriver {
 
     async fn get_hierarchy(&self) -> Result<(Element, crate::common::HierarchyMeta)> {
         let text = self.client.get_text("/hierarchy").await?;
-        let wrapper: serde_json::Value = serde_json::from_str(&text)
-            .context("failed to parse hierarchy JSON")?;
+        let wrapper: serde_json::Value =
+            serde_json::from_str(&text).context("failed to parse hierarchy JSON")?;
 
         // Extract tree from wrapper (companion sends {"tree": {...}, "keyboard_height": N})
         let mut raw = wrapper.get("tree").cloned().unwrap_or(wrapper);
@@ -485,8 +493,17 @@ impl PlatformDriver for AndroidDriver {
                     // CDP failed (dead socket, app restart). Reconnect immediately
                     // rather than deferring to background — the caller is already
                     // waiting for hierarchy data.
-                    if let Some(new_state) = setup_cdp(&self.device_serial, &self.package_name).await {
-                        try_enrich(&mut raw, new_state.port, &new_state.page_id, wv_left, wv_top).await;
+                    if let Some(new_state) =
+                        setup_cdp(&self.device_serial, &self.package_name).await
+                    {
+                        try_enrich(
+                            &mut raw,
+                            new_state.port,
+                            &new_state.page_id,
+                            wv_left,
+                            wv_top,
+                        )
+                        .await;
                         let mut cdp = self.cdp.lock().expect("cdp mutex poisoned");
                         *cdp = CdpLifecycle::Ready(new_state);
                     } else {
@@ -501,14 +518,20 @@ impl PlatformDriver for AndroidDriver {
         let original: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
         let mut response = serde_json::json!({ "tree": raw });
         if let Some(obj) = original.as_object() {
-            for key in ["keyboard_height", "safe_area_top", "safe_area_bottom", "cutouts", "rounded_corners"] {
+            for key in [
+                "keyboard_height",
+                "safe_area_top",
+                "safe_area_bottom",
+                "cutouts",
+                "rounded_corners",
+            ] {
                 if let Some(val) = obj.get(key) {
                     response[key] = val.clone();
                 }
             }
         }
-        let enriched_str = serde_json::to_string(&response)
-            .context("failed to serialize hierarchy")?;
+        let enriched_str =
+            serde_json::to_string(&response).context("failed to serialize hierarchy")?;
         parse_hierarchy(&enriched_str)
     }
 
@@ -567,7 +590,8 @@ impl PlatformDriver for AndroidDriver {
     }
 
     async fn pinch(&self, x: i32, y: i32, scale: f64, velocity: f64) -> Result<()> {
-        let body = serde_json::json!({ "x": x, "y": y, "scale": scale, "velocity": velocity }).to_string();
+        let body =
+            serde_json::json!({ "x": x, "y": y, "scale": scale, "velocity": velocity }).to_string();
         self.client.post_json("/pinch", &body).await?;
         Ok(())
     }
@@ -608,11 +632,18 @@ impl PlatformDriver for AndroidDriver {
         // of leaking it into the next step's element resolver.
         let am_start = || async {
             self.adb(&[
-                "shell", "am", "start", "-W",
-                "-a", "android.intent.action.MAIN",
-                "-c", "android.intent.category.LAUNCHER",
-                "-n", &format!("{bundle_id}/.MainActivity"),
-            ]).await
+                "shell",
+                "am",
+                "start",
+                "-W",
+                "-a",
+                "android.intent.action.MAIN",
+                "-c",
+                "android.intent.category.LAUNCHER",
+                "-n",
+                &format!("{bundle_id}/.MainActivity"),
+            ])
+            .await
         };
         let mut out = am_start().await?;
         // `am start -W` always prints a `Status:` line; success is
@@ -787,7 +818,8 @@ impl PlatformDriver for AndroidDriver {
     async fn grant_permission(&self, bundle_id: &str, permission: &str) -> Result<()> {
         let sdk = self.sdk_int().await?;
         for perm in normalize_android_permission(permission, sdk)? {
-            self.adb(&["shell", "pm", "grant", bundle_id, &perm]).await?;
+            self.adb(&["shell", "pm", "grant", bundle_id, &perm])
+                .await?;
         }
         Ok(())
     }
@@ -795,7 +827,8 @@ impl PlatformDriver for AndroidDriver {
     async fn revoke_permission(&self, bundle_id: &str, permission: &str) -> Result<()> {
         let sdk = self.sdk_int().await?;
         for perm in normalize_android_permission(permission, sdk)? {
-            self.adb(&["shell", "pm", "revoke", bundle_id, &perm]).await?;
+            self.adb(&["shell", "pm", "revoke", bundle_id, &perm])
+                .await?;
         }
         Ok(())
     }
@@ -812,7 +845,10 @@ impl PlatformDriver for AndroidDriver {
         let device_path = format!("/sdcard/{name}.mp4");
         // Sanitize name to a safe shell token. Driver-side: name comes
         // from sanitize_filename in capture.rs, so this is belt-and-braces.
-        if device_path.chars().any(|c| c == '\'' || c == '"' || c == '$' || c == '`') {
+        if device_path
+            .chars()
+            .any(|c| c == '\'' || c == '"' || c == '$' || c == '`')
+        {
             bail!("invalid recording name {name:?}");
         }
         // `--time-limit 0` removes the historical 180s cap (Android 11+
@@ -822,8 +858,13 @@ impl PlatformDriver for AndroidDriver {
         // file rotation + ffmpeg stitching.
         let child = tokio::process::Command::new("adb")
             .args([
-                "-s", &self.device_serial,
-                "shell", "screenrecord", "--time-limit", "0", &device_path,
+                "-s",
+                &self.device_serial,
+                "shell",
+                "screenrecord",
+                "--time-limit",
+                "0",
+                &device_path,
             ])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::piped())
@@ -858,7 +899,13 @@ impl PlatformDriver for AndroidDriver {
         ));
         let tmp_str = tmp.to_string_lossy().to_string();
         let output = tokio::process::Command::new("adb")
-            .args(["-s", &self.device_serial, "pull", &state.device_path, &tmp_str])
+            .args([
+                "-s",
+                &self.device_serial,
+                "pull",
+                &state.device_path,
+                &tmp_str,
+            ])
             .output()
             .await
             .with_context(|| format!("adb pull {}", state.device_path))?;
@@ -873,8 +920,6 @@ impl PlatformDriver for AndroidDriver {
         let _ = self.adb(&["shell", "rm", "-f", &state.device_path]).await;
         Ok(tmp_str)
     }
-
-
 
     async fn remove_port_forwards(&self) -> Result<()> {
         let output = tokio::process::Command::new("adb")
@@ -1271,8 +1316,7 @@ mod tests {
 
     #[test]
     fn normalize_location_always_grants_foreground_and_background() {
-        let perms = normalize_android_permission("location-always", 34)
-            .expect("known shorthand");
+        let perms = normalize_android_permission("location-always", 34).expect("known shorthand");
         // Background updates require BOTH foreground (FINE_LOCATION) and
         // background permissions on Android 10+. The legacy table mapped
         // it to FINE_LOCATION only and apps silently failed at runtime.
@@ -1283,15 +1327,13 @@ mod tests {
     #[test]
     fn normalize_photos_on_android_12_uses_legacy_storage() {
         // SDK ≤ 32 (Android 12 and below) predates READ_MEDIA_*.
-        let perms = normalize_android_permission("photos", 32)
-            .expect("known shorthand");
+        let perms = normalize_android_permission("photos", 32).expect("known shorthand");
         assert_eq!(perms, vec!["android.permission.READ_EXTERNAL_STORAGE"]);
     }
 
     #[test]
     fn normalize_photos_on_android_13_uses_read_media_images_only() {
-        let perms = normalize_android_permission("photos", 33)
-            .expect("known shorthand");
+        let perms = normalize_android_permission("photos", 33).expect("known shorthand");
         assert_eq!(perms, vec!["android.permission.READ_MEDIA_IMAGES"]);
     }
 
@@ -1299,12 +1341,9 @@ mod tests {
     fn normalize_photos_on_android_14_adds_user_selected() {
         // SDK ≥ 34 (Android 14+) introduced READ_MEDIA_VISUAL_USER_SELECTED
         // for the user-curated subset access flow.
-        let perms = normalize_android_permission("photos", 34)
-            .expect("known shorthand");
+        let perms = normalize_android_permission("photos", 34).expect("known shorthand");
         assert!(perms.contains(&"android.permission.READ_MEDIA_IMAGES".to_string()));
-        assert!(
-            perms.contains(&"android.permission.READ_MEDIA_VISUAL_USER_SELECTED".to_string())
-        );
+        assert!(perms.contains(&"android.permission.READ_MEDIA_VISUAL_USER_SELECTED".to_string()));
     }
 
     #[test]

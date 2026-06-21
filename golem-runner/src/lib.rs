@@ -46,25 +46,25 @@ pub fn take_step_tree_stats() -> golem_events::TreeStats {
 
 pub mod actions;
 pub mod barrier;
+pub mod branch;
 pub mod capture;
 pub mod cleanup;
 pub mod context;
-pub mod branch;
-pub mod fixture_loader;
-pub mod interp;
 pub mod data_driven;
 pub mod device_vars;
 pub mod executor;
 pub mod fingerprint;
+pub mod fixture_loader;
+pub mod for_each;
 pub mod installed_state;
 pub mod installer;
+pub mod interp;
+pub mod parallel;
+pub mod perf;
 pub mod policy;
 pub mod resolution;
 pub mod scroll;
 pub mod subflow;
-pub mod parallel;
-pub mod for_each;
-pub mod perf;
 pub mod teardown;
 
 #[cfg(test)]
@@ -83,8 +83,14 @@ mod tests {
         reset_step_tree_stats();
         let stats = take_step_tree_stats();
         assert_eq!(stats.fetches, 0, "no fetches SHALL report zero fetches");
-        assert_eq!(stats.min_nodes, 0, "zero fetches SHALL clamp min_nodes to 0");
-        assert_eq!(stats.max_nodes, 0, "zero fetches SHALL report zero max_nodes");
+        assert_eq!(
+            stats.min_nodes, 0,
+            "zero fetches SHALL clamp min_nodes to 0"
+        );
+        assert_eq!(
+            stats.max_nodes, 0,
+            "zero fetches SHALL report zero max_nodes"
+        );
     }
 
     // 2. A single recorded fetch reports min==max==that node count and one fetch.
@@ -108,8 +114,14 @@ mod tests {
         record_tree_fetch(8);
         let stats = take_step_tree_stats();
         assert_eq!(stats.fetches, 4, "four records SHALL count four fetches");
-        assert_eq!(stats.min_nodes, 3, "min SHALL be the smallest node count seen");
-        assert_eq!(stats.max_nodes, 25, "max SHALL be the largest node count seen");
+        assert_eq!(
+            stats.min_nodes, 3,
+            "min SHALL be the smallest node count seen"
+        );
+        assert_eq!(
+            stats.max_nodes, 25,
+            "max SHALL be the largest node count seen"
+        );
     }
 
     // 4. A fetch count of zero nodes is a legitimate observation: min becomes 0
@@ -122,7 +134,10 @@ mod tests {
         let stats = take_step_tree_stats();
         assert_eq!(stats.fetches, 2, "two records SHALL count two fetches");
         assert_eq!(stats.min_nodes, 0, "a zero-node fetch SHALL set min to 0");
-        assert_eq!(stats.max_nodes, 5, "max SHALL ignore the smaller zero fetch");
+        assert_eq!(
+            stats.max_nodes, 5,
+            "max SHALL ignore the smaller zero fetch"
+        );
     }
 
     // 5. take_step_tree_stats resets state: a second take with no intervening
@@ -134,9 +149,18 @@ mod tests {
         let first = take_step_tree_stats();
         assert_eq!(first.fetches, 1, "first take SHALL see the recorded fetch");
         let second = take_step_tree_stats();
-        assert_eq!(second.fetches, 0, "take SHALL drain fetches for the next take");
-        assert_eq!(second.min_nodes, 0, "drained min SHALL clamp to 0 when no fetches");
-        assert_eq!(second.max_nodes, 0, "drained max SHALL be 0 when no fetches");
+        assert_eq!(
+            second.fetches, 0,
+            "take SHALL drain fetches for the next take"
+        );
+        assert_eq!(
+            second.min_nodes, 0,
+            "drained min SHALL clamp to 0 when no fetches"
+        );
+        assert_eq!(
+            second.max_nodes, 0,
+            "drained max SHALL be 0 when no fetches"
+        );
     }
 
     // 6. Recording after a take starts a fresh window (the take's swap reset
@@ -149,9 +173,18 @@ mod tests {
         let _ = take_step_tree_stats();
         record_tree_fetch(99);
         let stats = take_step_tree_stats();
-        assert_eq!(stats.fetches, 1, "post-take window SHALL count only the new fetch");
-        assert_eq!(stats.min_nodes, 99, "post-take min SHALL be the new fetch count");
-        assert_eq!(stats.max_nodes, 99, "post-take max SHALL be the new fetch count");
+        assert_eq!(
+            stats.fetches, 1,
+            "post-take window SHALL count only the new fetch"
+        );
+        assert_eq!(
+            stats.min_nodes, 99,
+            "post-take min SHALL be the new fetch count"
+        );
+        assert_eq!(
+            stats.max_nodes, 99,
+            "post-take max SHALL be the new fetch count"
+        );
     }
 
     // 7. reset_step_tree_stats clears a partially-accumulated window so a later

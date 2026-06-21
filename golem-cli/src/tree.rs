@@ -10,9 +10,15 @@ use golem_element::{filter_viewport, Element, Viewport};
 /// avoid duplicate rendering.
 const RENDERED_TRAITS: &[&str] = &[
     "button",
-    "has_text", "no_text", "short_text", "long_text",
-    "square", "wide", "tall",
-    "small", "large",
+    "has_text",
+    "no_text",
+    "short_text",
+    "long_text",
+    "square",
+    "wide",
+    "tall",
+    "small",
+    "large",
 ];
 
 use crate::cli::TreeArgs;
@@ -40,8 +46,7 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
     if let Some(ref filter) = args.device {
         let f = filter.to_lowercase();
         companions.retain(|(_, h)| {
-            h.device_name.to_lowercase().contains(&f)
-                || h.device_id.to_lowercase().contains(&f)
+            h.device_name.to_lowercase().contains(&f) || h.device_id.to_lowercase().contains(&f)
         });
     }
 
@@ -57,8 +62,7 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
         if let Some(ref filter) = args.device {
             let f = filter.to_lowercase();
             companions.retain(|(_, h)| {
-                h.device_name.to_lowercase().contains(&f)
-                    || h.device_id.to_lowercase().contains(&f)
+                h.device_name.to_lowercase().contains(&f) || h.device_id.to_lowercase().contains(&f)
             });
         }
     }
@@ -126,16 +130,23 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
                 println!("  keyboard: closed");
             }
             if meta.safe_area_top > 0 || meta.safe_area_bottom > 0 {
-                println!("  safe_area: top={} bottom={}", meta.safe_area_top, meta.safe_area_bottom);
+                println!(
+                    "  safe_area: top={} bottom={}",
+                    meta.safe_area_top, meta.safe_area_bottom
+                );
             }
             if !meta.cutouts.is_empty() {
-                let rects: Vec<String> = meta.cutouts.iter()
+                let rects: Vec<String> = meta
+                    .cutouts
+                    .iter()
                     .map(|c| format!("Rect({},{} {}x{})", c.x, c.y, c.width, c.height))
                     .collect();
                 println!("  cutouts: {}", rects.join(", "));
             }
             if !meta.rounded_corners.is_empty() {
-                let corners: Vec<String> = meta.rounded_corners.iter()
+                let corners: Vec<String> = meta
+                    .rounded_corners
+                    .iter()
                     .map(|c| {
                         let pos = match c.position {
                             golem_driver::common::CornerPosition::TopLeft => "TL",
@@ -208,11 +219,16 @@ async fn find_device_id(platform: &str, device_name: &str) -> String {
         "ios" => {
             // Get UDID by matching device name
             if let Ok(devices) = golem_devices::ios::discover_ios_devices().await {
-                if let Some(d) = devices.iter().find(|d| d.name == device_name && d.state == golem_devices::DeviceState::Booted) {
+                if let Some(d) = devices.iter().find(|d| {
+                    d.name == device_name && d.state == golem_devices::DeviceState::Booted
+                }) {
                     return d.udid.clone();
                 }
                 // Fallback: first booted device
-                if let Some(d) = devices.iter().find(|d| d.state == golem_devices::DeviceState::Booted) {
+                if let Some(d) = devices
+                    .iter()
+                    .find(|d| d.state == golem_devices::DeviceState::Booted)
+                {
                     return d.udid.clone();
                 }
             }
@@ -305,7 +321,11 @@ fn format_tree_line(element: &Element, depth: usize, debug: bool) -> String {
     };
 
     let traits = format_traits(element);
-    let traits_part = if traits.is_empty() { String::new() } else { format!("  {traits}") };
+    let traits_part = if traits.is_empty() {
+        String::new()
+    } else {
+        format!("  {traits}")
+    };
 
     if !text.is_empty() || !label.is_empty() {
         format!(
@@ -325,11 +345,12 @@ fn format_tree_line(element: &Element, depth: usize, debug: bool) -> String {
 /// affordance.
 fn is_selectable(e: &Element) -> bool {
     let has_text = e.text.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
-    let has_label = e.accessibility_label.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
-    has_text
-        || has_label
-        || e.clickable
-        || element_has_trait(e, "button")
+    let has_label = e
+        .accessibility_label
+        .as_deref()
+        .map(|s| !s.is_empty())
+        .unwrap_or(false);
+    has_text || has_label || e.clickable || element_has_trait(e, "button")
 }
 
 fn collect_selectable<'a>(e: &'a Element, out: &mut Vec<&'a Element>) {
@@ -375,12 +396,22 @@ fn format_selectable_line(idx: usize, e: &Element) -> String {
         .unwrap_or_default();
 
     let traits = format_traits(e);
-    let traits_part = if traits.is_empty() { String::new() } else { format!("  {traits}") };
+    let traits_part = if traits.is_empty() {
+        String::new()
+    } else {
+        format!("  {traits}")
+    };
 
     let mut state_parts = Vec::new();
-    if !e.enabled { state_parts.push("disabled"); }
-    if e.checked { state_parts.push("checked"); }
-    if e.focused { state_parts.push("focused"); }
+    if !e.enabled {
+        state_parts.push("disabled");
+    }
+    if e.checked {
+        state_parts.push("checked");
+    }
+    if e.focused {
+        state_parts.push("focused");
+    }
     let state = if state_parts.is_empty() {
         String::new()
     } else {
@@ -548,10 +579,7 @@ mod tests {
     fn clickable_element_is_selectable() {
         let mut e = elem("View");
         e.clickable = true;
-        assert!(
-            is_selectable(&e),
-            "clickable element SHALL be selectable"
-        );
+        assert!(is_selectable(&e), "clickable element SHALL be selectable");
     }
 
     // 11. A button-type element (via the "button" trait) is selectable even
@@ -580,7 +608,11 @@ mod tests {
         let mut out: Vec<&Element> = Vec::new();
         collect_selectable(&root, &mut out);
 
-        assert_eq!(out.len(), 2, "two selectable descendants SHALL be collected");
+        assert_eq!(
+            out.len(),
+            2,
+            "two selectable descendants SHALL be collected"
+        );
         assert_eq!(
             out[0].text.as_deref(),
             Some("Top"),
@@ -602,7 +634,11 @@ mod tests {
         let mut out: Vec<&Element> = Vec::new();
         collect_selectable(&root, &mut out);
 
-        assert_eq!(out.len(), 2, "selectable root and child SHALL both be collected");
+        assert_eq!(
+            out.len(),
+            2,
+            "selectable root and child SHALL both be collected"
+        );
         assert_eq!(
             out[0].text.as_deref(),
             Some("Root"),
@@ -760,8 +796,7 @@ mod tests {
         e.checked = true;
         let line = format_tree_line(&e, 0, false);
         assert_eq!(
-            line,
-            "View (0,0 0x0)  ·no_text· [disabled, checked]",
+            line, "View (0,0 0x0)  ·no_text· [disabled, checked]",
             "text-less element SHALL omit quoted text and render state suffix"
         );
     }
@@ -794,8 +829,7 @@ mod tests {
         e.bounds = Bounds::new(3, 4, 100, 40);
         let line = format_selectable_line(1, &e);
         assert_eq!(
-            line,
-            "[1] (3,4 100x40) \"Tap\"  ·button·has_text·short_text·wide·",
+            line, "[1] (3,4 100x40) \"Tap\"  ·button·has_text·short_text·wide·",
             "selectable line SHALL render index, bounds, text and traits"
         );
     }
