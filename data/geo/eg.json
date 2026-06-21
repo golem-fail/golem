@@ -4,7 +4,10 @@
     "name_en": "Egypt",
     "iso_code": "EG",
     "phone_prefix": "+20",
-    "phone_formats": ["+20-1#-####-####", "+20-#-####-####"],
+    "phone_formats": [
+      "+20-1#-####-####",
+      "+20-#-####-####"
+    ],
     "postcode_format": "#####",
     "name_order": "given_first"
   },
@@ -12,7 +15,9 @@
     {
       "name": "القاهرة",
       "name_en": "Cairo",
-      "region_tags": ["Greater Cairo"],
+      "region_tags": [
+        "Greater Cairo"
+      ],
       "cities": [
         {
           "name": "القاهرة",
@@ -24,97 +29,63 @@
               "code": "11511",
               "street": "شارع التحرير",
               "street_en": "Tahrir St.",
-              "pattern": "شارع التحرير n{1,100}"
-            },
-            {
-              "code": "11512",
-              "street": "شارع طلعت حرب",
-              "street_en": "Talaat Harb St.",
-              "pattern": "شارع طلعت حرب n{1,80}"
-            },
-            {
-              "code": "11513",
-              "street": "شارع رمسيس",
-              "street_en": "Ramses St.",
-              "pattern": "شارع رمسيس n{1,120}"
-            },
-            {
-              "code": "11514",
-              "street": "شارع القصر العيني",
-              "street_en": "Qasr El Aini St.",
-              "pattern": "شارع القصر العيني n{1,90}"
-            },
-            {
-              "code": "11515",
-              "street": "شارع الأزهر",
-              "street_en": "Al-Azhar St.",
-              "pattern": "شارع الأزهر n{1,75}"
-            },
-            {
-              "code": "11516",
-              "street": "شارع المعز",
-              "street_en": "Al-Muizz St.",
-              "pattern": "شارع المعز n{1,60}"
-            },
-            {
-              "code": "11517",
-              "street": "شارع الجمهورية",
-              "street_en": "El Gomhoreya St.",
-              "pattern": "شارع الجمهورية n{1,110}"
-            },
-            {
-              "code": "11518",
-              "street": "شارع بورسعيد",
-              "street_en": "Port Said St.",
-              "pattern": "شارع بورسعيد n{1,85}"
+              "pattern": "شارع التحرير n{1,72}"
             },
             {
               "code": "11519",
-              "street": "شارع صلاح سالم",
-              "street_en": "Salah Salem St.",
-              "pattern": "شارع صلاح سالم n{1,95}"
+              "street": "كورنيش النيل",
+              "street_en": "Nile Corniche (Garden City)",
+              "pattern": "كورنيش النيل n{1,83}"
             },
             {
-              "code": "11611",
-              "street": "شارع الهرم",
-              "street_en": "Al-Haram St.",
-              "pattern": "شارع الهرم n{1,150}"
+              "code": "11522",
+              "street": "شارع رمسيس",
+              "street_en": "Ramses St.",
+              "pattern": "شارع رمسيس n{1,134}"
             },
             {
-              "code": "11612",
-              "street": "شارع فيصل",
-              "street_en": "Faisal St.",
-              "pattern": "شارع فيصل n{1,130}"
+              "code": "11613",
+              "street": "شارع عابدين",
+              "street_en": "Abdeen St.",
+              "pattern": "شارع عابدين n{1,66}"
             },
             {
-              "code": "11711",
-              "street": "شارع مصر والسودان",
-              "street_en": "Misr Wal Sudan St.",
-              "pattern": "شارع مصر والسودان n{1,70}"
+              "code": "11617",
+              "street": "شارع بورسعيد",
+              "street_en": "Port Said St.",
+              "pattern": "شارع بورسعيد n{1,146}"
             },
             {
-              "code": "11712",
+              "code": "11631",
               "street": "شارع شبرا",
               "street_en": "Shubra St.",
-              "pattern": "شارع شبرا n{1,200}"
+              "pattern": "شارع شبرا n{1,180}"
+            }
+          ]
+        },
+        {
+          "name": "الزمالك",
+          "name_en": "Zamalek",
+          "lat": 30.0614,
+          "lon": 31.2206,
+          "postcodes": [
+            {
+              "code": "11561",
+              "street": "شارع 26 يوليو",
+              "street_en": "26th of July St.",
+              "pattern": "شارع 26 يوليو n{1,197}"
             },
             {
-              "code": "11713",
-              "street": "شارع الخليفة المأمون",
-              "street_en": "Al-Khalifa Al-Mamoun St.",
-              "pattern": "شارع الخليفة المأمون n{1,65}"
+              "code": "11561",
+              "street": "شارع حسن صبري",
+              "street_en": "Hassan Sabry St.",
+              "pattern": "شارع حسن صبري n{1,87}"
             },
             {
-              "code": "11714",
-              "street": "شارع عباس العقاد",
-              "street_en": "Abbas El Akkad St.",
-              "pattern": "شارع عباس العقاد n{1,100}"
-            },
-            {
-              "code": "11715",
-              "street": "شارع مكرم عبيد",
-              "street_en": "Makram Ebeid St.",
-              "pattern": "شارع مكرم عبيد n{1,80}"
+              "code": "11561",
+              "street": "شارع البرازيل",
+              "street_en": "Brazil St.",
+              "pattern": "شارع البرازيل n{1,187}"
             }
           ]
         },
@@ -125,16 +96,22 @@
           "lon": 31.3656,
           "postcodes": [
             {
-              "code": "11762",
-              "street": "شارع الطيران",
-              "street_en": "Al-Tayaran St.",
-              "pattern": "شارع الطيران n{1,90}"
-            },
-            {
               "code": "11765",
               "street": "شارع مصطفى النحاس",
               "street_en": "Mostafa El Nahas St.",
-              "pattern": "شارع مصطفى النحاس n{1,100}"
+              "pattern": "شارع مصطفى النحاس n{1,91}"
+            },
+            {
+              "code": "11762",
+              "street": "شارع الطيران",
+              "street_en": "Al-Tayaran St.",
+              "pattern": "شارع الطيران n{1,140}"
+            },
+            {
+              "code": "11768",
+              "street": "شارع عباس العقاد",
+              "street_en": "Abbas El Akkad St.",
+              "pattern": "شارع عباس العقاد n{1,168}"
             }
           ]
         },
@@ -145,16 +122,22 @@
           "lon": 31.3233,
           "postcodes": [
             {
-              "code": "11341",
+              "code": "11757",
               "street": "شارع الميرغني",
               "street_en": "Al-Merghany St.",
-              "pattern": "شارع الميرغني n{1,75}"
+              "pattern": "شارع الميرغني n{1,159}"
             },
             {
-              "code": "11342",
+              "code": "11757",
               "street": "شارع الحجاز",
               "street_en": "Al-Hegaz St.",
-              "pattern": "شارع الحجاز n{1,60}"
+              "pattern": "شارع الحجاز n{1,164}"
+            },
+            {
+              "code": "11757",
+              "street": "شارع الأهرام",
+              "street_en": "Al-Ahram St. (Heliopolis)",
+              "pattern": "شارع الأهرام n{1,63}"
             }
           ]
         },
@@ -165,16 +148,48 @@
           "lon": 31.2569,
           "postcodes": [
             {
-              "code": "11431",
+              "code": "11728",
               "street": "شارع 9 المعادي",
               "street_en": "Street 9 Maadi",
-              "pattern": "شارع 9 المعادي n{1,50}"
+              "pattern": "شارع 9 المعادي n{1,168}"
             },
             {
-              "code": "11435",
+              "code": "11728",
               "street": "كورنيش النيل المعادي",
               "street_en": "Maadi Corniche",
-              "pattern": "كورنيش النيل المعادي n{1,40}"
+              "pattern": "كورنيش النيل المعادي n{1,135}"
+            },
+            {
+              "code": "11728",
+              "street": "شارع 200 المعادي",
+              "street_en": "Street 200 Maadi",
+              "pattern": "شارع 200 المعادي n{1,133}"
+            }
+          ]
+        },
+        {
+          "name": "التجمع الخامس",
+          "name_en": "5th Settlement (New Cairo)",
+          "lat": 30.0074,
+          "lon": 31.4913,
+          "postcodes": [
+            {
+              "code": "11835",
+              "street": "شارع التسعين الشمالي",
+              "street_en": "North 90th St.",
+              "pattern": "شارع التسعين الشمالي n{1,85}"
+            },
+            {
+              "code": "11835",
+              "street": "شارع التسعين الجنوبي",
+              "street_en": "South 90th St.",
+              "pattern": "شارع التسعين الجنوبي n{1,84}"
+            },
+            {
+              "code": "11865",
+              "street": "محور محمد نجيب",
+              "street_en": "Mohamed Naguib Axis",
+              "pattern": "محور محمد نجيب n{1,117}"
             }
           ]
         }
@@ -183,7 +198,9 @@
     {
       "name": "الجيزة",
       "name_en": "Giza",
-      "region_tags": ["Greater Cairo"],
+      "region_tags": [
+        "Greater Cairo"
+      ],
       "cities": [
         {
           "name": "الجيزة",
@@ -193,27 +210,79 @@
           "postcodes": [
             {
               "code": "12511",
-              "street": "شارع الهرم",
-              "street_en": "Al-Haram St.",
-              "pattern": "شارع الهرم n{1,200}"
+              "street": "شارع الجيزة",
+              "street_en": "Giza St.",
+              "pattern": "شارع الجيزة n{1,99}"
             },
             {
               "code": "12512",
-              "street": "شارع فيصل",
-              "street_en": "Faisal St.",
-              "pattern": "شارع فيصل n{1,180}"
+              "street": "شارع الهرم",
+              "street_en": "Al-Haram St. (Pyramids Rd.)",
+              "pattern": "شارع الهرم n{1,122}"
             },
             {
-              "code": "12513",
-              "street": "شارع الملك فيصل",
-              "street_en": "King Faisal St.",
-              "pattern": "شارع الملك فيصل n{1,100}"
+              "code": "12553",
+              "street": "شارع الطالبية",
+              "street_en": "Al-Talbia St.",
+              "pattern": "شارع الطالبية n{1,107}"
             },
             {
-              "code": "12514",
-              "street": "شارع المريوطية",
-              "street_en": "Al-Maryouteya St.",
-              "pattern": "شارع المريوطية n{1,90}"
+              "code": "12551",
+              "street": "شارع العمرانية",
+              "street_en": "Al-Omraneya St.",
+              "pattern": "شارع العمرانية n{1,179}"
+            }
+          ]
+        },
+        {
+          "name": "الدقي",
+          "name_en": "Dokki",
+          "lat": 30.0385,
+          "lon": 31.2118,
+          "postcodes": [
+            {
+              "code": "12611",
+              "street": "شارع التحرير",
+              "street_en": "Tahrir St.",
+              "pattern": "شارع التحرير n{1,72}"
+            },
+            {
+              "code": "12611",
+              "street": "شارع الدقي",
+              "street_en": "Dokki St.",
+              "pattern": "شارع الدقي n{1,144}"
+            },
+            {
+              "code": "12611",
+              "street": "ميدان المساحة",
+              "street_en": "Mesaha Sq.",
+              "pattern": "ميدان المساحة n{1,87}"
+            }
+          ]
+        },
+        {
+          "name": "المهندسين",
+          "name_en": "Mohandessin",
+          "lat": 30.0561,
+          "lon": 31.2003,
+          "postcodes": [
+            {
+              "code": "12411",
+              "street": "شارع جامعة الدول العربية",
+              "street_en": "Gameat El Dewal El Arabia St.",
+              "pattern": "شارع جامعة الدول العربية n{1,191}"
+            },
+            {
+              "code": "12655",
+              "street": "شارع لبنان",
+              "street_en": "Lebanon St.",
+              "pattern": "شارع لبنان n{1,92}"
+            },
+            {
+              "code": "12411",
+              "street": "شارع شهاب",
+              "street_en": "Shehab St.",
+              "pattern": "شارع شهاب n{1,129}"
             }
           ]
         },
@@ -224,16 +293,22 @@
           "lon": 30.9188,
           "postcodes": [
             {
-              "code": "12564",
+              "code": "12566",
               "street": "المحور المركزي",
               "street_en": "Central Axis",
-              "pattern": "المحور المركزي n{1,50}"
+              "pattern": "المحور المركزي n{1,184}"
             },
             {
-              "code": "12566",
-              "street": "شارع التسعين",
-              "street_en": "Ninety St.",
-              "pattern": "شارع التسعين n{1,60}"
+              "code": "12573",
+              "street": "محور 26 يوليو",
+              "street_en": "26th of July Axis",
+              "pattern": "محور 26 يوليو n{1,196}"
+            },
+            {
+              "code": "12582",
+              "street": "الحي المتميز",
+              "street_en": "El Hay El Motamayez",
+              "pattern": "الحي المتميز n{1,82}"
             }
           ]
         },
@@ -245,15 +320,21 @@
           "postcodes": [
             {
               "code": "12588",
-              "street": "محور 26 يوليو",
-              "street_en": "26th of July Axis",
-              "pattern": "محور 26 يوليو n{1,40}"
-            },
-            {
-              "code": "12589",
               "street": "شارع الحصري",
               "street_en": "Al-Hosary St.",
-              "pattern": "شارع الحصري n{1,30}"
+              "pattern": "شارع الحصري n{1,168}"
+            },
+            {
+              "code": "12588",
+              "street": "محور 26 يوليو",
+              "street_en": "26th of July Axis",
+              "pattern": "محور 26 يوليو n{1,196}"
+            },
+            {
+              "code": "12588",
+              "street": "شارع البنفسج",
+              "street_en": "Al-Banafseg St.",
+              "pattern": "شارع البنفسج n{1,163}"
             }
           ]
         }
@@ -262,7 +343,9 @@
     {
       "name": "الإسكندرية",
       "name_en": "Alexandria",
-      "region_tags": ["Nile Delta"],
+      "region_tags": [
+        "Mediterranean Coast"
+      ],
       "cities": [
         {
           "name": "الإسكندرية",
@@ -271,64 +354,86 @@
           "lon": 29.9187,
           "postcodes": [
             {
-              "code": "21500",
-              "street": "كورنيش الإسكندرية",
-              "street_en": "Alexandria Corniche",
-              "pattern": "كورنيش الإسكندرية n{1,100}"
-            },
-            {
-              "code": "21511",
-              "street": "شارع فؤاد",
-              "street_en": "Fouad St.",
-              "pattern": "شارع فؤاد n{1,80}"
-            },
-            {
-              "code": "21512",
-              "street": "شارع أبو قير",
-              "street_en": "Abu Qir St.",
-              "pattern": "شارع أبو قير n{1,120}"
-            },
-            {
-              "code": "21513",
-              "street": "شارع الحرية",
-              "street_en": "Al-Horreya St.",
-              "pattern": "شارع الحرية n{1,90}"
-            },
-            {
-              "code": "21514",
-              "street": "شارع سعد زغلول",
-              "street_en": "Saad Zaghloul St.",
-              "pattern": "شارع سعد زغلول n{1,60}"
-            },
-            {
-              "code": "21515",
-              "street": "شارع السلطان حسين",
-              "street_en": "Sultan Hussein St.",
-              "pattern": "شارع السلطان حسين n{1,50}"
-            },
-            {
-              "code": "21516",
-              "street": "شارع النبي دانيال",
-              "street_en": "Al-Nabi Daniel St.",
-              "pattern": "شارع النبي دانيال n{1,45}"
+              "code": "21519",
+              "street": "شارع فرنسا",
+              "street_en": "France St. (Manshiya)",
+              "pattern": "شارع فرنسا n{1,88}"
             },
             {
               "code": "21517",
-              "street": "طريق الجيش",
-              "street_en": "Al-Geish Rd.",
-              "pattern": "طريق الجيش n{1,150}"
+              "street": "شارع فؤاد",
+              "street_en": "Fouad St. (Attarin)",
+              "pattern": "شارع فؤاد n{1,94}"
+            },
+            {
+              "code": "21515",
+              "street": "شارع محرم بك",
+              "street_en": "Muharram Bey St.",
+              "pattern": "شارع محرم بك n{1,111}"
+            },
+            {
+              "code": "21563",
+              "street": "شارع صفية زغلول",
+              "street_en": "Safeya Zaghloul St. (Raml Station)",
+              "pattern": "شارع صفية زغلول n{1,139}"
             },
             {
               "code": "21526",
-              "street": "شارع مصطفى كامل",
-              "street_en": "Mostafa Kamel St.",
-              "pattern": "شارع مصطفى كامل n{1,70}"
+              "street": "شارع بورسعيد",
+              "street_en": "Port Said St. (Shatby)",
+              "pattern": "شارع بورسعيد n{1,146}"
+            }
+          ]
+        },
+        {
+          "name": "سموحة",
+          "name_en": "Smouha",
+          "lat": 31.2156,
+          "lon": 29.9437,
+          "postcodes": [
+            {
+              "code": "21648",
+              "street": "شارع فوزي معاذ",
+              "street_en": "Fawzy Moaz St.",
+              "pattern": "شارع فوزي معاذ n{1,89}"
             },
             {
-              "code": "21599",
-              "street": "شارع 45 سموحة",
-              "street_en": "Street 45 Smouha",
-              "pattern": "شارع 45 سموحة n{1,55}"
+              "code": "21648",
+              "street": "شارع 14 مايو",
+              "street_en": "14th of May St.",
+              "pattern": "شارع 14 مايو n{1,114}"
+            },
+            {
+              "code": "21617",
+              "street": "شارع أبو قير",
+              "street_en": "Abu Qir St. (Sporting)",
+              "pattern": "شارع أبو قير n{1,149}"
+            }
+          ]
+        },
+        {
+          "name": "المنتزه",
+          "name_en": "Montazah",
+          "lat": 31.2876,
+          "lon": 30.0156,
+          "postcodes": [
+            {
+              "code": "21919",
+              "street": "طريق الكورنيش",
+              "street_en": "Corniche Rd. (Montazah)",
+              "pattern": "طريق الكورنيش n{1,168}"
+            },
+            {
+              "code": "21912",
+              "street": "شارع المعمورة",
+              "street_en": "Al-Mamoura St.",
+              "pattern": "شارع المعمورة n{1,73}"
+            },
+            {
+              "code": "21532",
+              "street": "كورنيش سان ستيفانو",
+              "street_en": "San Stefano Corniche",
+              "pattern": "كورنيش سان ستيفانو n{1,144}"
             }
           ]
         }
@@ -337,7 +442,10 @@
     {
       "name": "القليوبية",
       "name_en": "Qalyubia",
-      "region_tags": ["Greater Cairo", "Nile Delta"],
+      "region_tags": [
+        "Greater Cairo",
+        "Nile Delta"
+      ],
       "cities": [
         {
           "name": "بنها",
@@ -347,21 +455,21 @@
           "postcodes": [
             {
               "code": "13511",
-              "street": "شارع سعد زغلول",
-              "street_en": "Saad Zaghloul St.",
-              "pattern": "شارع سعد زغلول n{1,60}"
+              "street": "شارع فريد ندا",
+              "street_en": "Farid Nada St.",
+              "pattern": "شارع فريد ندا n{1,147}"
             },
             {
               "code": "13512",
               "street": "شارع الجمهورية",
               "street_en": "El Gomhoreya St.",
-              "pattern": "شارع الجمهورية n{1,50}"
+              "pattern": "شارع الجمهورية n{1,192}"
             },
             {
-              "code": "13513",
-              "street": "شارع فريد ندا",
-              "street_en": "Farid Nada St.",
-              "pattern": "شارع فريد ندا n{1,40}"
+              "code": "13518",
+              "street": "شارع سعد زغلول",
+              "street_en": "Saad Zaghloul St.",
+              "pattern": "شارع سعد زغلول n{1,64}"
             }
           ]
         },
@@ -375,13 +483,19 @@
               "code": "13411",
               "street": "شارع أحمد عرابي",
               "street_en": "Ahmed Orabi St.",
-              "pattern": "شارع أحمد عرابي n{1,80}"
+              "pattern": "شارع أحمد عرابي n{1,119}"
             },
             {
-              "code": "13412",
+              "code": "13415",
               "street": "شارع شبرا الخيمة",
               "street_en": "Shubra El Kheima St.",
-              "pattern": "شارع شبرا الخيمة n{1,70}"
+              "pattern": "شارع شبرا الخيمة n{1,157}"
+            },
+            {
+              "code": "13769",
+              "street": "شارع مسطرد",
+              "street_en": "Mostorod St.",
+              "pattern": "شارع مسطرد n{1,120}"
             }
           ]
         }
@@ -390,31 +504,33 @@
     {
       "name": "الشرقية",
       "name_en": "Sharqia",
-      "region_tags": ["Nile Delta"],
+      "region_tags": [
+        "Nile Delta"
+      ],
       "cities": [
         {
           "name": "الزقازيق",
           "name_en": "Zagazig",
           "lat": 30.5877,
-          "lon": 31.5020,
+          "lon": 31.502,
           "postcodes": [
             {
               "code": "44511",
-              "street": "شارع الجيش",
-              "street_en": "Al-Geish St.",
-              "pattern": "شارع الجيش n{1,90}"
+              "street": "شارع الجلاء",
+              "street_en": "Al-Galaa St.",
+              "pattern": "شارع الجلاء n{1,146}"
             },
             {
-              "code": "44512",
+              "code": "44516",
               "street": "شارع سعد زغلول",
               "street_en": "Saad Zaghloul St.",
-              "pattern": "شارع سعد زغلول n{1,55}"
+              "pattern": "شارع سعد زغلول n{1,64}"
             },
             {
-              "code": "44513",
-              "street": "شارع الغشام",
-              "street_en": "Al-Ghasham St.",
-              "pattern": "شارع الغشام n{1,40}"
+              "code": "44519",
+              "street": "شارع المديرية",
+              "street_en": "Al-Modireya St.",
+              "pattern": "شارع المديرية n{1,109}"
             }
           ]
         },
@@ -425,16 +541,22 @@
           "lon": 31.7631,
           "postcodes": [
             {
-              "code": "44635",
-              "street": "المنطقة الصناعية",
-              "street_en": "Industrial Zone",
-              "pattern": "المنطقة الصناعية n{1,30}"
-            },
-            {
-              "code": "44636",
+              "code": "44629",
               "street": "الحي الأول",
               "street_en": "First District",
-              "pattern": "الحي الأول n{1,25}"
+              "pattern": "الحي الأول n{1,88}"
+            },
+            {
+              "code": "44634",
+              "street": "المنطقة الصناعية الأولى",
+              "street_en": "First Industrial Zone",
+              "pattern": "المنطقة الصناعية الأولى n{1,138}"
+            },
+            {
+              "code": "44637",
+              "street": "الحي الثالث",
+              "street_en": "Third District",
+              "pattern": "الحي الثالث n{1,105}"
             }
           ]
         }
@@ -443,7 +565,9 @@
     {
       "name": "الدقهلية",
       "name_en": "Dakahlia",
-      "region_tags": ["Nile Delta"],
+      "region_tags": [
+        "Nile Delta"
+      ],
       "cities": [
         {
           "name": "المنصورة",
@@ -455,39 +579,45 @@
               "code": "35511",
               "street": "شارع الجمهورية",
               "street_en": "El Gomhoreya St.",
-              "pattern": "شارع الجمهورية n{1,100}"
+              "pattern": "شارع الجمهورية n{1,192}"
             },
             {
               "code": "35516",
               "street": "كورنيش النيل",
               "street_en": "Nile Corniche",
-              "pattern": "كورنيش النيل n{1,60}"
+              "pattern": "كورنيش النيل n{1,83}"
             },
             {
               "code": "35517",
               "street": "شارع بنك مصر",
               "street_en": "Bank Misr St.",
-              "pattern": "شارع بنك مصر n{1,45}"
-            },
-            {
-              "code": "35518",
-              "street": "شارع الجيش",
-              "street_en": "Al-Geish St.",
-              "pattern": "شارع الجيش n{1,55}"
+              "pattern": "شارع بنك مصر n{1,118}"
             }
           ]
         },
         {
-          "name": "دكرنس",
-          "name_en": "Dekernes",
-          "lat": 31.0890,
-          "lon": 31.6195,
+          "name": "ميت غمر",
+          "name_en": "Mit Ghamr",
+          "lat": 30.718,
+          "lon": 31.2587,
           "postcodes": [
             {
-              "code": "35711",
+              "code": "35611",
               "street": "شارع الجمهورية",
               "street_en": "El Gomhoreya St.",
-              "pattern": "شارع الجمهورية n{1,40}"
+              "pattern": "شارع الجمهورية n{1,192}"
+            },
+            {
+              "code": "35612",
+              "street": "شارع البحر",
+              "street_en": "Al-Bahr St.",
+              "pattern": "شارع البحر n{1,156}"
+            },
+            {
+              "code": "35615",
+              "street": "شارع المحطة",
+              "street_en": "Al-Mahatta St.",
+              "pattern": "شارع المحطة n{1,139}"
             }
           ]
         }
@@ -496,7 +626,9 @@
     {
       "name": "الغربية",
       "name_en": "Gharbia",
-      "region_tags": ["Nile Delta"],
+      "region_tags": [
+        "Nile Delta"
+      ],
       "cities": [
         {
           "name": "طنطا",
@@ -508,19 +640,19 @@
               "code": "31511",
               "street": "شارع البحر",
               "street_en": "Al-Bahr St.",
-              "pattern": "شارع البحر n{1,70}"
+              "pattern": "شارع البحر n{1,156}"
             },
             {
               "code": "31512",
-              "street": "شارع سعيد",
-              "street_en": "Saeed St.",
-              "pattern": "شارع سعيد n{1,55}"
-            },
-            {
-              "code": "31513",
               "street": "شارع الجلاء",
               "street_en": "Al-Galaa St.",
-              "pattern": "شارع الجلاء n{1,60}"
+              "pattern": "شارع الجلاء n{1,146}"
+            },
+            {
+              "code": "31516",
+              "street": "شارع سعيد",
+              "street_en": "Saeed St.",
+              "pattern": "شارع سعيد n{1,81}"
             }
           ]
         },
@@ -534,7 +666,19 @@
               "code": "31951",
               "street": "شارع النحاس",
               "street_en": "Al-Nahas St.",
-              "pattern": "شارع النحاس n{1,50}"
+              "pattern": "شارع النحاس n{1,70}"
+            },
+            {
+              "code": "31952",
+              "street": "شارع البورصة",
+              "street_en": "Al-Borsa St.",
+              "pattern": "شارع البورصة n{1,84}"
+            },
+            {
+              "code": "31957",
+              "street": "شارع 23 يوليو",
+              "street_en": "23rd of July St.",
+              "pattern": "شارع 23 يوليو n{1,86}"
             }
           ]
         }
@@ -543,25 +687,53 @@
     {
       "name": "المنوفية",
       "name_en": "Monufia",
-      "region_tags": ["Nile Delta"],
+      "region_tags": [
+        "Nile Delta"
+      ],
       "cities": [
         {
           "name": "شبين الكوم",
           "name_en": "Shibin El Kom",
-          "lat": 30.5570,
+          "lat": 30.557,
           "lon": 31.0103,
           "postcodes": [
             {
               "code": "32511",
               "street": "شارع جمال عبد الناصر",
               "street_en": "Gamal Abdel Nasser St.",
-              "pattern": "شارع جمال عبد الناصر n{1,65}"
+              "pattern": "شارع جمال عبد الناصر n{1,175}"
             },
             {
               "code": "32512",
               "street": "شارع البحر",
               "street_en": "Al-Bahr St.",
-              "pattern": "شارع البحر n{1,50}"
+              "pattern": "شارع البحر n{1,156}"
+            },
+            {
+              "code": "32514",
+              "street": "شارع سعد زغلول",
+              "street_en": "Saad Zaghloul St.",
+              "pattern": "شارع سعد زغلول n{1,64}"
+            }
+          ]
+        },
+        {
+          "name": "مدينة السادات",
+          "name_en": "Sadat City",
+          "lat": 30.3637,
+          "lon": 30.9233,
+          "postcodes": [
+            {
+              "code": "32897",
+              "street": "الحي الأول",
+              "street_en": "First District",
+              "pattern": "الحي الأول n{1,120}"
+            },
+            {
+              "code": "32958",
+              "street": "المنطقة الصناعية",
+              "street_en": "Industrial Zone",
+              "pattern": "المنطقة الصناعية n{1,120}"
             }
           ]
         }
@@ -570,7 +742,9 @@
     {
       "name": "البحيرة",
       "name_en": "Beheira",
-      "region_tags": ["Nile Delta"],
+      "region_tags": [
+        "Nile Delta"
+      ],
       "cities": [
         {
           "name": "دمنهور",
@@ -582,13 +756,39 @@
               "code": "22511",
               "street": "شارع عمر بن الخطاب",
               "street_en": "Omar Ibn El Khattab St.",
-              "pattern": "شارع عمر بن الخطاب n{1,55}"
+              "pattern": "شارع عمر بن الخطاب n{1,70}"
             },
             {
               "code": "22512",
               "street": "شارع سعد زغلول",
               "street_en": "Saad Zaghloul St.",
-              "pattern": "شارع سعد زغلول n{1,45}"
+              "pattern": "شارع سعد زغلول n{1,64}"
+            },
+            {
+              "code": "22516",
+              "street": "شارع الجمهورية",
+              "street_en": "El Gomhoreya St.",
+              "pattern": "شارع الجمهورية n{1,192}"
+            }
+          ]
+        },
+        {
+          "name": "كفر الدوار",
+          "name_en": "Kafr El Dawwar",
+          "lat": 31.1342,
+          "lon": 30.1294,
+          "postcodes": [
+            {
+              "code": "22611",
+              "street": "شارع الجمهورية",
+              "street_en": "El Gomhoreya St.",
+              "pattern": "شارع الجمهورية n{1,192}"
+            },
+            {
+              "code": "22612",
+              "street": "شارع المحطة",
+              "street_en": "Al-Mahatta St.",
+              "pattern": "شارع المحطة n{1,139}"
             }
           ]
         }
@@ -597,7 +797,9 @@
     {
       "name": "كفر الشيخ",
       "name_en": "Kafr el-Sheikh",
-      "region_tags": ["Nile Delta"],
+      "region_tags": [
+        "Nile Delta"
+      ],
       "cities": [
         {
           "name": "كفر الشيخ",
@@ -609,13 +811,39 @@
               "code": "33511",
               "street": "شارع الجيش",
               "street_en": "Al-Geish St.",
-              "pattern": "شارع الجيش n{1,60}"
+              "pattern": "شارع الجيش n{1,193}"
             },
             {
               "code": "33512",
               "street": "شارع صلاح الدين",
               "street_en": "Salah El Din St.",
-              "pattern": "شارع صلاح الدين n{1,45}"
+              "pattern": "شارع صلاح الدين n{1,190}"
+            },
+            {
+              "code": "33516",
+              "street": "شارع الجمهورية",
+              "street_en": "El Gomhoreya St.",
+              "pattern": "شارع الجمهورية n{1,192}"
+            }
+          ]
+        },
+        {
+          "name": "دسوق",
+          "name_en": "Desouk",
+          "lat": 31.1314,
+          "lon": 30.6469,
+          "postcodes": [
+            {
+              "code": "33611",
+              "street": "شارع الجيش",
+              "street_en": "Al-Geish St.",
+              "pattern": "شارع الجيش n{1,193}"
+            },
+            {
+              "code": "33617",
+              "street": "كورنيش النيل",
+              "street_en": "Nile Corniche",
+              "pattern": "كورنيش النيل n{1,83}"
             }
           ]
         }
@@ -624,7 +852,9 @@
     {
       "name": "دمياط",
       "name_en": "Damietta",
-      "region_tags": ["Nile Delta"],
+      "region_tags": [
+        "Nile Delta"
+      ],
       "cities": [
         {
           "name": "دمياط",
@@ -634,21 +864,41 @@
           "postcodes": [
             {
               "code": "34511",
-              "street": "شارع كورنيش النيل",
-              "street_en": "Nile Corniche St.",
-              "pattern": "شارع كورنيش النيل n{1,70}"
+              "street": "كورنيش النيل",
+              "street_en": "Nile Corniche",
+              "pattern": "كورنيش النيل n{1,83}"
             },
             {
               "code": "34512",
-              "street": "شارع السكة الجديدة",
-              "street_en": "New Road St.",
-              "pattern": "شارع السكة الجديدة n{1,50}"
-            },
-            {
-              "code": "34513",
               "street": "شارع الجلاء",
               "street_en": "Al-Galaa St.",
-              "pattern": "شارع الجلاء n{1,40}"
+              "pattern": "شارع الجلاء n{1,146}"
+            },
+            {
+              "code": "34517",
+              "street": "شارع سعد زغلول",
+              "street_en": "Saad Zaghloul St.",
+              "pattern": "شارع سعد زغلول n{1,64}"
+            }
+          ]
+        },
+        {
+          "name": "رأس البر",
+          "name_en": "Ras El Bar",
+          "lat": 31.4915,
+          "lon": 31.833,
+          "postcodes": [
+            {
+              "code": "34711",
+              "street": "اللسان",
+              "street_en": "El Lessan",
+              "pattern": "اللسان n{1,175}"
+            },
+            {
+              "code": "34712",
+              "street": "شارع النيل",
+              "street_en": "Nile St.",
+              "pattern": "شارع النيل n{1,172}"
             }
           ]
         }
@@ -657,7 +907,9 @@
     {
       "name": "بورسعيد",
       "name_en": "Port Said",
-      "region_tags": ["Canal Zone"],
+      "region_tags": [
+        "Canal Zone"
+      ],
       "cities": [
         {
           "name": "بورسعيد",
@@ -667,21 +919,41 @@
           "postcodes": [
             {
               "code": "42511",
-              "street": "شارع محمد علي",
-              "street_en": "Mohamed Ali St.",
-              "pattern": "شارع محمد علي n{1,80}"
-            },
-            {
-              "code": "42512",
               "street": "شارع الجمهورية",
               "street_en": "El Gomhoreya St.",
-              "pattern": "شارع الجمهورية n{1,65}"
+              "pattern": "شارع الجمهورية n{1,192}"
             },
             {
               "code": "42513",
+              "street": "شارع محمد علي",
+              "street_en": "Mohamed Ali St.",
+              "pattern": "شارع محمد علي n{1,142}"
+            },
+            {
+              "code": "42516",
               "street": "شارع 23 يوليو",
               "street_en": "23rd of July St.",
-              "pattern": "شارع 23 يوليو n{1,55}"
+              "pattern": "شارع 23 يوليو n{1,86}"
+            }
+          ]
+        },
+        {
+          "name": "بورفؤاد",
+          "name_en": "Port Fouad",
+          "lat": 31.2497,
+          "lon": 32.3186,
+          "postcodes": [
+            {
+              "code": "42711",
+              "street": "شارع البحر",
+              "street_en": "Al-Bahr St.",
+              "pattern": "شارع البحر n{1,156}"
+            },
+            {
+              "code": "42712",
+              "street": "شارع الكورنيش",
+              "street_en": "Corniche St.",
+              "pattern": "شارع الكورنيش n{1,149}"
             }
           ]
         }
@@ -690,7 +962,9 @@
     {
       "name": "السويس",
       "name_en": "Suez",
-      "region_tags": ["Canal Zone"],
+      "region_tags": [
+        "Canal Zone"
+      ],
       "cities": [
         {
           "name": "السويس",
@@ -702,19 +976,25 @@
               "code": "43511",
               "street": "شارع الجيش",
               "street_en": "Al-Geish St.",
-              "pattern": "شارع الجيش n{1,70}"
+              "pattern": "شارع الجيش n{1,193}"
             },
             {
-              "code": "43512",
-              "street": "شارع صلاح الدين",
-              "street_en": "Salah El Din St.",
-              "pattern": "شارع صلاح الدين n{1,50}"
+              "code": "43518",
+              "street": "شارع الملك فيصل",
+              "street_en": "King Faisal St.",
+              "pattern": "شارع الملك فيصل n{1,109}"
             },
             {
-              "code": "43513",
-              "street": "شارع الشهداء",
-              "street_en": "Al-Shohada St.",
-              "pattern": "شارع الشهداء n{1,40}"
+              "code": "43522",
+              "street": "كورنيش بورتوفيق",
+              "street_en": "Port Tawfik Corniche",
+              "pattern": "كورنيش بورتوفيق n{1,129}"
+            },
+            {
+              "code": "43523",
+              "street": "شارع السادات",
+              "street_en": "Sadat St. (Ataka)",
+              "pattern": "شارع السادات n{1,71}"
             }
           ]
         }
@@ -723,7 +1003,9 @@
     {
       "name": "الإسماعيلية",
       "name_en": "Ismailia",
-      "region_tags": ["Canal Zone"],
+      "region_tags": [
+        "Canal Zone"
+      ],
       "cities": [
         {
           "name": "الإسماعيلية",
@@ -735,19 +1017,19 @@
               "code": "41511",
               "street": "شارع محمد علي",
               "street_en": "Mohamed Ali St.",
-              "pattern": "شارع محمد علي n{1,60}"
+              "pattern": "شارع محمد علي n{1,142}"
             },
             {
               "code": "41512",
               "street": "شارع الثورة",
               "street_en": "Al-Thawra St.",
-              "pattern": "شارع الثورة n{1,50}"
+              "pattern": "شارع الثورة n{1,86}"
             },
             {
-              "code": "41513",
-              "street": "شارع السلطان حسين",
+              "code": "41516",
+              "street": "شارع سلطان حسين",
               "street_en": "Sultan Hussein St.",
-              "pattern": "شارع السلطان حسين n{1,45}"
+              "pattern": "شارع سلطان حسين n{1,63}"
             }
           ]
         }
@@ -756,7 +1038,9 @@
     {
       "name": "شمال سيناء",
       "name_en": "North Sinai",
-      "region_tags": ["Sinai"],
+      "region_tags": [
+        "Sinai"
+      ],
       "cities": [
         {
           "name": "العريش",
@@ -768,13 +1052,19 @@
               "code": "45511",
               "street": "شارع 23 يوليو",
               "street_en": "23rd of July St.",
-              "pattern": "شارع 23 يوليو n{1,50}"
+              "pattern": "شارع 23 يوليو n{1,86}"
             },
             {
               "code": "45512",
               "street": "شارع الكورنيش",
               "street_en": "Corniche St.",
-              "pattern": "شارع الكورنيش n{1,40}"
+              "pattern": "شارع الكورنيش n{1,149}"
+            },
+            {
+              "code": "45516",
+              "street": "شارع فلسطين",
+              "street_en": "Palestine St.",
+              "pattern": "شارع فلسطين n{1,114}"
             }
           ]
         }
@@ -783,39 +1073,33 @@
     {
       "name": "جنوب سيناء",
       "name_en": "South Sinai",
-      "region_tags": ["Sinai"],
+      "region_tags": [
+        "Sinai"
+      ],
       "cities": [
         {
           "name": "شرم الشيخ",
           "name_en": "Sharm El Sheikh",
           "lat": 27.9158,
-          "lon": 34.3300,
+          "lon": 34.33,
           "postcodes": [
             {
               "code": "46619",
               "street": "شارع السلام",
               "street_en": "Peace Rd.",
-              "pattern": "شارع السلام n{1,80}"
+              "pattern": "شارع السلام n{1,138}"
             },
             {
               "code": "46621",
               "street": "خليج نعمة",
               "street_en": "Naama Bay Rd.",
-              "pattern": "خليج نعمة n{1,40}"
-            }
-          ]
-        },
-        {
-          "name": "الطور",
-          "name_en": "El Tor",
-          "lat": 28.2392,
-          "lon": 33.6225,
-          "postcodes": [
+              "pattern": "خليج نعمة n{1,123}"
+            },
             {
-              "code": "46511",
-              "street": "شارع الكورنيش",
-              "street_en": "Corniche St.",
-              "pattern": "شارع الكورنيش n{1,30}"
+              "code": "46628",
+              "street": "شارع هضبة أم السيد",
+              "street_en": "Hadaba Umm El Sid St.",
+              "pattern": "شارع هضبة أم السيد n{1,90}"
             }
           ]
         },
@@ -829,7 +1113,13 @@
               "code": "46617",
               "street": "شارع الممشى",
               "street_en": "Promenade St.",
-              "pattern": "شارع الممشى n{1,25}"
+              "pattern": "شارع الممشى n{1,138}"
+            },
+            {
+              "code": "46618",
+              "street": "شارع المساعيد",
+              "street_en": "Masbat St.",
+              "pattern": "شارع المساعيد n{1,188}"
             }
           ]
         }
@@ -838,7 +1128,9 @@
     {
       "name": "البحر الأحمر",
       "name_en": "Red Sea",
-      "region_tags": ["Upper Egypt"],
+      "region_tags": [
+        "Red Sea Coast"
+      ],
       "cities": [
         {
           "name": "الغردقة",
@@ -850,33 +1142,39 @@
               "code": "84511",
               "street": "شارع الشيراتون",
               "street_en": "Sheraton Rd.",
-              "pattern": "شارع الشيراتون n{1,60}"
+              "pattern": "شارع الشيراتون n{1,65}"
             },
             {
               "code": "84512",
               "street": "طريق الكورنيش",
               "street_en": "Corniche Rd.",
-              "pattern": "طريق الكورنيش n{1,50}"
+              "pattern": "طريق الكورنيش n{1,168}"
             },
             {
-              "code": "84513",
+              "code": "84516",
               "street": "شارع النصر",
               "street_en": "Al-Nasr St.",
-              "pattern": "شارع النصر n{1,40}"
+              "pattern": "شارع النصر n{1,75}"
             }
           ]
         },
         {
-          "name": "مرسى علم",
-          "name_en": "Marsa Alam",
-          "lat": 25.0693,
-          "lon": 34.8990,
+          "name": "سفاجا",
+          "name_en": "Safaga",
+          "lat": 26.7333,
+          "lon": 33.9388,
           "postcodes": [
             {
-              "code": "84721",
-              "street": "طريق مرسى علم",
-              "street_en": "Marsa Alam Rd.",
-              "pattern": "طريق مرسى علم n{1,20}"
+              "code": "84711",
+              "street": "طريق الكورنيش",
+              "street_en": "Corniche Rd.",
+              "pattern": "طريق الكورنيش n{1,168}"
+            },
+            {
+              "code": "84712",
+              "street": "شارع الميناء",
+              "street_en": "Port St.",
+              "pattern": "شارع الميناء n{1,91}"
             }
           ]
         }
@@ -885,7 +1183,9 @@
     {
       "name": "الأقصر",
       "name_en": "Luxor",
-      "region_tags": ["Upper Egypt"],
+      "region_tags": [
+        "Upper Egypt"
+      ],
       "cities": [
         {
           "name": "الأقصر",
@@ -894,28 +1194,28 @@
           "lon": 32.6396,
           "postcodes": [
             {
-              "code": "85511",
+              "code": "85951",
               "street": "كورنيش النيل",
               "street_en": "Nile Corniche",
-              "pattern": "كورنيش النيل n{1,60}"
+              "pattern": "كورنيش النيل n{1,83}"
             },
             {
-              "code": "85512",
-              "street": "شارع محطة الأقصر",
-              "street_en": "Luxor Station St.",
-              "pattern": "شارع محطة الأقصر n{1,40}"
+              "code": "85956",
+              "street": "شارع أبو الجود",
+              "street_en": "Abou El Goud St.",
+              "pattern": "شارع أبو الجود n{1,152}"
             },
             {
-              "code": "85513",
-              "street": "شارع المعبد",
-              "street_en": "Temple St.",
-              "pattern": "شارع المعبد n{1,35}"
+              "code": "85965",
+              "street": "شارع الكرنك",
+              "street_en": "Al-Karnak St.",
+              "pattern": "شارع الكرنك n{1,79}"
             },
             {
-              "code": "85514",
-              "street": "شارع التلفزيون",
-              "street_en": "Television St.",
-              "pattern": "شارع التلفزيون n{1,50}"
+              "code": "85957",
+              "street": "شارع العوامية",
+              "street_en": "Awwamiyya St.",
+              "pattern": "شارع العوامية n{1,195}"
             }
           ]
         }
@@ -924,7 +1224,9 @@
     {
       "name": "أسوان",
       "name_en": "Aswan",
-      "region_tags": ["Upper Egypt"],
+      "region_tags": [
+        "Upper Egypt"
+      ],
       "cities": [
         {
           "name": "أسوان",
@@ -936,19 +1238,39 @@
               "code": "81511",
               "street": "كورنيش النيل",
               "street_en": "Nile Corniche",
-              "pattern": "كورنيش النيل n{1,50}"
+              "pattern": "كورنيش النيل n{1,83}"
             },
             {
-              "code": "81512",
+              "code": "81515",
               "street": "شارع السوق",
-              "street_en": "Souk St.",
-              "pattern": "شارع السوق n{1,40}"
+              "street_en": "Souk St. (El Shallal)",
+              "pattern": "شارع السوق n{1,198}"
             },
             {
-              "code": "81513",
-              "street": "شارع عباس فريد",
-              "street_en": "Abbas Farid St.",
-              "pattern": "شارع عباس فريد n{1,35}"
+              "code": "81711",
+              "street": "شارع أبو الريش",
+              "street_en": "Abou El Rish St.",
+              "pattern": "شارع أبو الريش n{1,122}"
+            }
+          ]
+        },
+        {
+          "name": "إدفو",
+          "name_en": "Edfu",
+          "lat": 24.9781,
+          "lon": 32.8731,
+          "postcodes": [
+            {
+              "code": "81644",
+              "street": "شارع المعبد",
+              "street_en": "Temple St.",
+              "pattern": "شارع المعبد n{1,105}"
+            },
+            {
+              "code": "81641",
+              "street": "شارع المحطة",
+              "street_en": "Al-Mahatta St.",
+              "pattern": "شارع المحطة n{1,139}"
             }
           ]
         }
@@ -957,7 +1279,9 @@
     {
       "name": "أسيوط",
       "name_en": "Asyut",
-      "region_tags": ["Upper Egypt"],
+      "region_tags": [
+        "Upper Egypt"
+      ],
       "cities": [
         {
           "name": "أسيوط",
@@ -967,27 +1291,21 @@
           "postcodes": [
             {
               "code": "71511",
-              "street": "شارع الجمهورية",
-              "street_en": "El Gomhoreya St.",
-              "pattern": "شارع الجمهورية n{1,80}"
+              "street": "شارع محمود فهمي النقراشي",
+              "street_en": "Mahmoud Fahmy El-Nokrashi St.",
+              "pattern": "شارع محمود فهمي النقراشي n{1,189}"
             },
             {
               "code": "71512",
-              "street": "شارع الثورة",
-              "street_en": "Al-Thawra St.",
-              "pattern": "شارع الثورة n{1,60}"
+              "street": "شارع الجمهورية",
+              "street_en": "El Gomhoreya St.",
+              "pattern": "شارع الجمهورية n{1,192}"
             },
             {
-              "code": "71513",
-              "street": "شارع الجلاء",
-              "street_en": "Al-Galaa St.",
-              "pattern": "شارع الجلاء n{1,50}"
-            },
-            {
-              "code": "71514",
+              "code": "71515",
               "street": "كورنيش النيل",
               "street_en": "Nile Corniche",
-              "pattern": "كورنيش النيل n{1,45}"
+              "pattern": "كورنيش النيل n{1,83}"
             }
           ]
         }
@@ -996,31 +1314,53 @@
     {
       "name": "سوهاج",
       "name_en": "Sohag",
-      "region_tags": ["Upper Egypt"],
+      "region_tags": [
+        "Upper Egypt"
+      ],
       "cities": [
         {
           "name": "سوهاج",
           "name_en": "Sohag",
-          "lat": 26.5590,
+          "lat": 26.559,
           "lon": 31.6948,
           "postcodes": [
             {
               "code": "82511",
               "street": "شارع الجمهورية",
               "street_en": "El Gomhoreya St.",
-              "pattern": "شارع الجمهورية n{1,70}"
+              "pattern": "شارع الجمهورية n{1,192}"
             },
             {
               "code": "82512",
               "street": "كورنيش النيل",
               "street_en": "Nile Corniche",
-              "pattern": "كورنيش النيل n{1,45}"
+              "pattern": "كورنيش النيل n{1,83}"
             },
             {
-              "code": "82513",
+              "code": "82516",
               "street": "شارع التحرير",
               "street_en": "Tahrir St.",
-              "pattern": "شارع التحرير n{1,50}"
+              "pattern": "شارع التحرير n{1,72}"
+            }
+          ]
+        },
+        {
+          "name": "جرجا",
+          "name_en": "Girga",
+          "lat": 26.3389,
+          "lon": 31.8911,
+          "postcodes": [
+            {
+              "code": "82611",
+              "street": "شارع الجمهورية",
+              "street_en": "El Gomhoreya St.",
+              "pattern": "شارع الجمهورية n{1,192}"
+            },
+            {
+              "code": "82617",
+              "street": "شارع المحطة",
+              "street_en": "Al-Mahatta St.",
+              "pattern": "شارع المحطة n{1,139}"
             }
           ]
         }
@@ -1029,45 +1369,53 @@
     {
       "name": "قنا",
       "name_en": "Qena",
-      "region_tags": ["Upper Egypt"],
+      "region_tags": [
+        "Upper Egypt"
+      ],
       "cities": [
         {
           "name": "قنا",
           "name_en": "Qena",
           "lat": 26.1551,
-          "lon": 32.7160,
+          "lon": 32.716,
           "postcodes": [
             {
               "code": "83511",
               "street": "شارع الجمهورية",
               "street_en": "El Gomhoreya St.",
-              "pattern": "شارع الجمهورية n{1,60}"
+              "pattern": "شارع الجمهورية n{1,192}"
             },
             {
               "code": "83512",
               "street": "شارع بورسعيد",
               "street_en": "Port Said St.",
-              "pattern": "شارع بورسعيد n{1,45}"
+              "pattern": "شارع بورسعيد n{1,146}"
             },
             {
-              "code": "83513",
+              "code": "83516",
               "street": "شارع النيل",
               "street_en": "Nile St.",
-              "pattern": "شارع النيل n{1,40}"
+              "pattern": "شارع النيل n{1,172}"
             }
           ]
         },
         {
           "name": "نجع حمادي",
           "name_en": "Nag Hammadi",
-          "lat": 26.0500,
-          "lon": 32.2500,
+          "lat": 26.05,
+          "lon": 32.25,
           "postcodes": [
             {
               "code": "83711",
               "street": "شارع المصنع",
               "street_en": "Factory St.",
-              "pattern": "شارع المصنع n{1,30}"
+              "pattern": "شارع المصنع n{1,107}"
+            },
+            {
+              "code": "83712",
+              "street": "شارع المحطة",
+              "street_en": "Al-Mahatta St.",
+              "pattern": "شارع المحطة n{1,139}"
             }
           ]
         }
@@ -1076,7 +1424,9 @@
     {
       "name": "المنيا",
       "name_en": "Minya",
-      "region_tags": ["Upper Egypt"],
+      "region_tags": [
+        "Upper Egypt"
+      ],
       "cities": [
         {
           "name": "المنيا",
@@ -1088,25 +1438,19 @@
               "code": "61511",
               "street": "كورنيش النيل",
               "street_en": "Nile Corniche",
-              "pattern": "كورنيش النيل n{1,60}"
+              "pattern": "كورنيش النيل n{1,83}"
             },
             {
               "code": "61512",
               "street": "شارع الحرية",
               "street_en": "Al-Horreya St.",
-              "pattern": "شارع الحرية n{1,50}"
+              "pattern": "شارع الحرية n{1,150}"
             },
             {
-              "code": "61513",
-              "street": "شارع سعد زغلول",
-              "street_en": "Saad Zaghloul St.",
-              "pattern": "شارع سعد زغلول n{1,40}"
-            },
-            {
-              "code": "61514",
+              "code": "61519",
               "street": "شارع طه حسين",
               "street_en": "Taha Hussein St.",
-              "pattern": "شارع طه حسين n{1,50}"
+              "pattern": "شارع طه حسين n{1,150}"
             }
           ]
         },
@@ -1120,7 +1464,13 @@
               "code": "61711",
               "street": "شارع الجمهورية",
               "street_en": "El Gomhoreya St.",
-              "pattern": "شارع الجمهورية n{1,35}"
+              "pattern": "شارع الجمهورية n{1,192}"
+            },
+            {
+              "code": "61712",
+              "street": "شارع المحطة",
+              "street_en": "Al-Mahatta St.",
+              "pattern": "شارع المحطة n{1,139}"
             }
           ]
         }
@@ -1129,7 +1479,9 @@
     {
       "name": "بني سويف",
       "name_en": "Beni Suef",
-      "region_tags": ["Upper Egypt"],
+      "region_tags": [
+        "Upper Egypt"
+      ],
       "cities": [
         {
           "name": "بني سويف",
@@ -1141,19 +1493,19 @@
               "code": "62511",
               "street": "شارع الجمهورية",
               "street_en": "El Gomhoreya St.",
-              "pattern": "شارع الجمهورية n{1,55}"
+              "pattern": "شارع الجمهورية n{1,192}"
             },
             {
               "code": "62512",
               "street": "شارع صفية زغلول",
               "street_en": "Safeya Zaghloul St.",
-              "pattern": "شارع صفية زغلول n{1,40}"
+              "pattern": "شارع صفية زغلول n{1,139}"
             },
             {
-              "code": "62513",
+              "code": "62516",
               "street": "كورنيش النيل",
               "street_en": "Nile Corniche",
-              "pattern": "كورنيش النيل n{1,35}"
+              "pattern": "كورنيش النيل n{1,83}"
             }
           ]
         }
@@ -1162,7 +1514,9 @@
     {
       "name": "الفيوم",
       "name_en": "Faiyum",
-      "region_tags": ["Upper Egypt"],
+      "region_tags": [
+        "Upper Egypt"
+      ],
       "cities": [
         {
           "name": "الفيوم",
@@ -1174,13 +1528,19 @@
               "code": "63511",
               "street": "شارع الجمهورية",
               "street_en": "El Gomhoreya St.",
-              "pattern": "شارع الجمهورية n{1,60}"
+              "pattern": "شارع الجمهورية n{1,192}"
             },
             {
               "code": "63512",
               "street": "شارع بورسعيد",
               "street_en": "Port Said St.",
-              "pattern": "شارع بورسعيد n{1,45}"
+              "pattern": "شارع بورسعيد n{1,146}"
+            },
+            {
+              "code": "63516",
+              "street": "شارع الحرية",
+              "street_en": "Al-Horreya St.",
+              "pattern": "شارع الحرية n{1,150}"
             }
           ]
         }
@@ -1189,7 +1549,10 @@
     {
       "name": "مطروح",
       "name_en": "Matrouh",
-      "region_tags": ["Western Desert"],
+      "region_tags": [
+        "Western Desert",
+        "Mediterranean Coast"
+      ],
       "cities": [
         {
           "name": "مرسى مطروح",
@@ -1201,19 +1564,19 @@
               "code": "51511",
               "street": "شارع الإسكندرية",
               "street_en": "Alexandria St.",
-              "pattern": "شارع الإسكندرية n{1,50}"
+              "pattern": "شارع الإسكندرية n{1,126}"
             },
             {
               "code": "51512",
               "street": "شارع الكورنيش",
               "street_en": "Corniche St.",
-              "pattern": "شارع الكورنيش n{1,40}"
+              "pattern": "شارع الكورنيش n{1,149}"
             },
             {
-              "code": "51513",
-              "street": "شارع الشاطئ",
-              "street_en": "Beach St.",
-              "pattern": "شارع الشاطئ n{1,30}"
+              "code": "51516",
+              "street": "شارع الجلاء",
+              "street_en": "Al-Galaa St.",
+              "pattern": "شارع الجلاء n{1,146}"
             }
           ]
         },
@@ -1227,7 +1590,13 @@
               "code": "51711",
               "street": "شارع السوق",
               "street_en": "Market St.",
-              "pattern": "شارع السوق n{1,20}"
+              "pattern": "شارع السوق n{1,198}"
+            },
+            {
+              "code": "51712",
+              "street": "شارع شالي",
+              "street_en": "Shali St.",
+              "pattern": "شارع شالي n{1,90}"
             }
           ]
         }
@@ -1236,25 +1605,27 @@
     {
       "name": "الوادي الجديد",
       "name_en": "New Valley",
-      "region_tags": ["Western Desert"],
+      "region_tags": [
+        "Western Desert"
+      ],
       "cities": [
         {
           "name": "الخارجة",
           "name_en": "Kharga",
-          "lat": 25.4390,
+          "lat": 25.439,
           "lon": 30.5564,
           "postcodes": [
             {
               "code": "72511",
               "street": "شارع جمال عبد الناصر",
               "street_en": "Gamal Abdel Nasser St.",
-              "pattern": "شارع جمال عبد الناصر n{1,35}"
+              "pattern": "شارع جمال عبد الناصر n{1,175}"
             },
             {
               "code": "72512",
               "street": "شارع التحرير",
               "street_en": "Tahrir St.",
-              "pattern": "شارع التحرير n{1,30}"
+              "pattern": "شارع التحرير n{1,72}"
             }
           ]
         },
@@ -1268,7 +1639,13 @@
               "code": "72611",
               "street": "شارع الواحة",
               "street_en": "Oasis St.",
-              "pattern": "شارع الواحة n{1,25}"
+              "pattern": "شارع الواحة n{1,170}"
+            },
+            {
+              "code": "72612",
+              "street": "شارع موط",
+              "street_en": "Mut St.",
+              "pattern": "شارع موط n{1,120}"
             }
           ]
         }
