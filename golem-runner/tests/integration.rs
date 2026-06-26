@@ -46,8 +46,8 @@ fn test_ctx() -> ExecutionContext<'static> {
         perf_collector: None,
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
-        rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
+        a11y_level: golem_runner::accessibility::A11yLevel::Off,
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
         inherited_record_default: false,
     }
 }

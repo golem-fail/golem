@@ -212,6 +212,9 @@ pub struct SuiteConfig {
     /// strategy is forced to this value regardless of `[flow.options]`.
     /// Useful for quick smoke runs: `--coverage one`.
     pub coverage_override: Option<golem_parser::CoverageStrategy>,
+    /// CLI `--a11y` override. When Some, every flow's accessibility audit
+    /// level is forced to this regardless of `[flow.options].a11y`.
+    pub a11y_override: Option<golem_parser::A11yLevel>,
     /// `--rebuild`: bypass the persistent install cache for this run
     /// (rebuild + reinstall every (device, bundle)). The cache is still
     /// written after a successful install.
@@ -266,6 +269,7 @@ impl Default for SuiteConfig {
             project_root: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             project_apps: Vec::new(),
             coverage_override: None,
+            a11y_override: None,
             rebuild: false,
             no_build: false,
             device_settings: crate::project::DeviceSettings::default(),
@@ -555,6 +559,7 @@ impl SuiteRunner {
                 started_at: None,
                 finished_at: None,
                 first_failure_code: Some(golem_events::FailureCode::ParseFlowFile),
+                a11y_audits: vec![],
             });
         }
 
@@ -621,6 +626,7 @@ impl SuiteRunner {
             };
             let no_results = self.config.no_results;
             let no_perf = self.config.no_perf;
+            let a11y_override = self.config.a11y_override;
             let debug = self.config.debug;
             let project_root = self.config.project_root.clone();
             let fingerprint = fingerprint.clone();
@@ -668,6 +674,7 @@ impl SuiteRunner {
                         output_dir,
                         no_results,
                         no_perf,
+                        a11y_override,
                         debug,
                         project_root,
                         fingerprint,
@@ -725,6 +732,7 @@ impl SuiteRunner {
                             started_at: None,
                             finished_at: None,
                             first_failure_code: Some(golem_events::FailureCode::Uncoded),
+                            a11y_audits: vec![],
                         },
                         None,
                     ));
@@ -880,6 +888,8 @@ struct FlowRunConfig {
     output_dir: PathBuf,
     no_results: bool,
     no_perf: bool,
+    /// CLI `--a11y` override forwarded to every flow.
+    a11y_override: Option<golem_parser::A11yLevel>,
     debug: bool,
     project_root: PathBuf,
     /// Source-tree fingerprint computed once at suite start. Used by the
@@ -942,6 +952,7 @@ fn coverage_skip_report(
         started_at: None,
         finished_at: None,
         first_failure_code: None,
+        a11y_audits: vec![],
         recordings: Vec::new(),
         repeat: None,
     }
@@ -1165,6 +1176,7 @@ async fn execute_flow_run(
             recordings: Vec::new(),
             repeat: None,
             first_failure_code: Some(golem_events::FailureCode::DeviceNotFound),
+            a11y_audits: vec![],
             started_at: None,
             finished_at: None,
         }];
@@ -1231,6 +1243,7 @@ async fn execute_flow_run(
         let project_record = cfg.project_record;
         let trace = cfg.trace;
         let repeat_ctx = cfg.repeat_ctx;
+        let a11y_override = cfg.a11y_override;
         handles.push(tokio::spawn(async move {
             run_flow_on_device(
                 flow_c,
@@ -1254,6 +1267,7 @@ async fn execute_flow_run(
                 project_record,
                 trace,
                 repeat_ctx,
+                a11y_override,
             )
             .await
         }));
@@ -1282,6 +1296,7 @@ async fn execute_flow_run(
                     started_at: None,
                     finished_at: None,
                     first_failure_code: Some(golem_events::FailureCode::Uncoded),
+                    a11y_audits: vec![],
                 });
             }
         }
@@ -2552,6 +2567,18 @@ async fn ensure_companion_with_reg(
 /// so it can be used with `tokio::spawn` which requires `'static` futures.
 /// All parameters are owned values.
 #[allow(clippy::too_many_arguments)]
+/// Map the parser's TOML-level `A11yLevel` onto the runner's audit
+/// `A11yLevel` (which carries the threshold behaviour).
+fn map_a11y_level(level: golem_parser::A11yLevel) -> golem_runner::accessibility::A11yLevel {
+    use golem_runner::accessibility::A11yLevel as R;
+    match level {
+        golem_parser::A11yLevel::Off => R::Off,
+        golem_parser::A11yLevel::Critical => R::Critical,
+        golem_parser::A11yLevel::Relaxed => R::Relaxed,
+        golem_parser::A11yLevel::Strict => R::Strict,
+    }
+}
+
 async fn run_flow_on_device(
     flow: FlowFile,
     flow_name: String,
@@ -2574,6 +2601,7 @@ async fn run_flow_on_device(
     project_record: Option<bool>,
     trace: bool,
     repeat_ctx: Option<golem_events::RepeatContext>,
+    a11y_override: Option<golem_parser::A11yLevel>,
 ) -> FlowReport {
     let start = Instant::now();
     let device_name = device.name.clone();
@@ -2614,6 +2642,15 @@ async fn run_flow_on_device(
         .and_then(|o| o.perf)
         .unwrap_or(true);
     let perf_enabled = !no_perf && (trace || flow_perf);
+
+    // Resolve the accessibility audit level: CLI `--a11y` override wins,
+    // else the flow's `[flow.options].a11y`, else the default (relaxed).
+    let a11y_level = {
+        let setting = a11y_override
+            .or_else(|| flow.flow.options.as_ref().and_then(|o| o.a11y))
+            .unwrap_or(golem_parser::A11yLevel::Relaxed);
+        map_a11y_level(setting)
+    };
 
     let companion_port = if platform == Platform::Android {
         Some(port)
@@ -2712,6 +2749,8 @@ async fn run_flow_on_device(
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: device_emitter.as_ref(),
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+        last_settled_tree: std::sync::Mutex::new(None),
+        a11y_level,
         rng: std::sync::Mutex::new(rng),
         // Seed from project-level default; `execute_flow` refines from
         // the top-level flow's own `[flow.options].record`. Subflows
@@ -2753,6 +2792,7 @@ async fn run_flow_on_device(
                     started_at: None,
                     finished_at: None,
                     first_failure_code: Some(golem_events::FailureCode::ParseMissingParam),
+                    a11y_audits: vec![],
                 };
             }
         };
@@ -2787,6 +2827,7 @@ async fn run_flow_on_device(
                     started_at: None,
                     finished_at: None,
                     first_failure_code: Some(golem_events::FailureCode::AppInstallFailed),
+                    a11y_audits: vec![],
                 };
             }
             Some(golem_runner::installer::InstallOutcome::FailedNoScript) => {
@@ -2818,6 +2859,7 @@ async fn run_flow_on_device(
                     started_at: None,
                     finished_at: None,
                     first_failure_code: Some(golem_events::FailureCode::AppInstallScriptNotFound),
+                    a11y_audits: vec![],
                 };
             }
             None => {}
@@ -2880,6 +2922,7 @@ async fn run_flow_on_device(
                     started_at: None,
                     finished_at: None,
                     first_failure_code: Some(golem_events::FailureCode::AppInstallFailed),
+                    a11y_audits: vec![],
                 };
             }
         }
@@ -2943,6 +2986,7 @@ async fn run_flow_on_device(
                 started_at: None,
                 finished_at: None,
                 first_failure_code: result.failed_code,
+                a11y_audits: result.a11y_audits,
             }
         }
         Err(e) => {
@@ -2980,6 +3024,7 @@ async fn run_flow_on_device(
                 started_at: None,
                 finished_at: None,
                 first_failure_code: Some(flow_code),
+                a11y_audits: vec![],
             }
         }
     };
@@ -3358,6 +3403,7 @@ mod tests {
             started_at: None,
             finished_at: None,
             first_failure_code: None,
+            a11y_audits: vec![],
         }
     }
 
@@ -3381,6 +3427,7 @@ mod tests {
             started_at: None,
             finished_at: None,
             first_failure_code: Some(golem_events::FailureCode::Uncoded),
+            a11y_audits: vec![],
         }
     }
 

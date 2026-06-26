@@ -504,6 +504,7 @@ async fn handle_submit(
         project_root,
         project_apps: project_config.apps,
         coverage_override,
+        a11y_override: None,
         rebuild,
         no_build,
         device_settings: project_config.device_settings,

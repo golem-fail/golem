@@ -141,6 +141,41 @@ pub fn format_flow(report: &FlowReport) -> String {
         }
     }
 
+    // Accessibility audits
+    if !report.a11y_audits.is_empty() {
+        let _ = writeln!(out, "  Accessibility:");
+        for audit in &report.a11y_audits {
+            let errors = audit.error_count();
+            let warnings = audit.warning_count();
+            if audit.issues.is_empty() {
+                let _ = writeln!(out, "    {:<32} clean", audit.label);
+                continue;
+            }
+            let summary = format!("{errors} error(s), {warnings} warning(s)");
+            match &audit.screenshot_path {
+                Some(p) => {
+                    let _ = writeln!(out, "    {:<32} {summary}  → {p}", audit.label);
+                }
+                None => {
+                    let _ = writeln!(out, "    {:<32} {summary}", audit.label);
+                }
+            }
+            for (i, issue) in audit.issues.iter().enumerate() {
+                let tag = match issue.severity {
+                    golem_events::Severity::Error => "ERR",
+                    golem_events::Severity::Warning => "WRN",
+                };
+                let _ = writeln!(
+                    out,
+                    "      [{}] [{tag}] {:<24} {}",
+                    i + 1,
+                    issue.check_id,
+                    issue.message
+                );
+            }
+        }
+    }
+
     // Blank line before summary
     let _ = writeln!(out);
 
@@ -413,6 +448,7 @@ mod tests {
     fn flow_shows_steps_in_order() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "login_flow".to_string(),
             success: true,
             step_results: vec![
@@ -459,6 +495,7 @@ mod tests {
     fn flow_failed_shows_seed_and_screenshot() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "login_flow".to_string(),
             success: false,
             step_results: vec![
@@ -497,6 +534,7 @@ mod tests {
     ) -> FlowReport {
         FlowReport {
             first_failure_code,
+            a11y_audits: vec![],
             flow_name: "checkout".to_string(),
             success: false,
             step_results,
@@ -602,6 +640,7 @@ mod tests {
     fn flow_summary_counts() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "login_flow".to_string(),
             success: false,
             step_results: vec![
@@ -642,6 +681,7 @@ mod tests {
             flows: vec![
                 FlowReport {
                     first_failure_code: None,
+                    a11y_audits: vec![],
                     flow_name: "login_flow".to_string(),
                     success: true,
                     step_results: vec![
@@ -664,6 +704,7 @@ mod tests {
                 },
                 FlowReport {
                     first_failure_code: None,
+                    a11y_audits: vec![],
                     flow_name: "signup_flow".to_string(),
                     success: false,
                     step_results: vec![
@@ -704,6 +745,7 @@ mod tests {
         let suite = SuiteReport {
             flows: vec![FlowReport {
                 first_failure_code: None,
+                a11y_audits: vec![],
                 flow_name: "quick_flow".to_string(),
                 success: true,
                 step_results: vec![success_step("launch", "", 100)],
@@ -748,6 +790,7 @@ mod tests {
     fn empty_flow_formats_correctly() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "empty_flow".to_string(),
             success: true,
             step_results: vec![],
@@ -797,6 +840,7 @@ mod tests {
     fn perf_section_renders_when_snapshots_present() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "perf_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],
@@ -864,6 +908,7 @@ mod tests {
     fn flow_skipped_shows_status_and_reason() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "covered_flow".to_string(),
             success: true,
             step_results: vec![],
@@ -903,6 +948,7 @@ mod tests {
     fn flow_shows_covered_axes_and_recordings() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "matrix_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],
@@ -942,6 +988,7 @@ mod tests {
     fn flow_counts_skipped_steps() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "partial_flow".to_string(),
             success: true,
             step_results: vec![
@@ -1068,6 +1115,7 @@ mod tests {
         let suite = SuiteReport {
             flows: vec![FlowReport {
                 first_failure_code: None,
+                a11y_audits: vec![],
                 flow_name: "skipped_flow".to_string(),
                 success: true,
                 step_results: vec![],
@@ -1105,6 +1153,7 @@ mod tests {
         let suite = SuiteReport {
             flows: vec![FlowReport {
                 first_failure_code: None,
+                a11y_audits: vec![],
                 flow_name: "all_skip_steps".to_string(),
                 success: true,
                 step_results: vec![skipped_step("tap", "A"), skipped_step("tap", "B")],
@@ -1143,6 +1192,7 @@ mod tests {
         let suite = SuiteReport {
             flows: vec![FlowReport {
                 first_failure_code: None,
+                a11y_audits: vec![],
                 flow_name: "all_skip_steps".to_string(),
                 success: true,
                 step_results: vec![skipped_step("tap", "A"), skipped_step("tap", "B")],
@@ -1216,6 +1266,7 @@ mod tests {
     fn perf_section_omitted_when_empty() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "no_perf_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],

@@ -158,6 +158,11 @@ pub struct RunArgs {
     #[arg(long)]
     pub no_perf: bool,
 
+    /// Override every flow's accessibility audit level
+    /// (off | critical | relaxed | strict). Default: relaxed.
+    #[arg(long)]
+    pub a11y: Option<String>,
+
     /// Verbose output: show swipe coordinates, scroll strategy, fingerprints
     #[arg(long)]
     pub verbose: bool,

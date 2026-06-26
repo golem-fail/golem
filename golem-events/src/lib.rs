@@ -31,6 +31,56 @@ pub struct Rect {
     pub height: i32,
 }
 
+// ── Accessibility ──
+
+/// A single accessibility finding from a block-boundary audit. Defined here
+/// (the shared vocabulary crate) so it can travel both on the event stream
+/// (`EventKind::A11yAudit`, for the live renderer) and on `FlowReport`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct A11yIssue {
+    /// Stable check identifier, e.g. `touch_target_too_small`.
+    pub check_id: String,
+    /// Error or Warning — reuses the shipped step-severity enum.
+    pub severity: Severity,
+    /// Human-readable description.
+    pub message: String,
+    /// The offending element's type (e.g. `button`, `image`).
+    pub element_type: String,
+    /// The element's text or accessibility label, whichever is available.
+    pub element_label: Option<String>,
+    /// Element bounds for annotated-screenshot drawing (device coords).
+    pub element_bounds: Option<Rect>,
+}
+
+/// All accessibility findings from one block-boundary audit.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct A11yAudit {
+    /// `{block_name}:{device_name}:{iteration}` (mirrors perf snapshot labels).
+    pub label: String,
+    /// Findings in this audit; empty means the screen was clean.
+    pub issues: Vec<A11yIssue>,
+    /// Path to the annotated screenshot, when one was captured.
+    pub screenshot_path: Option<String>,
+}
+
+impl A11yAudit {
+    /// Number of error-severity findings.
+    pub fn error_count(&self) -> usize {
+        self.issues
+            .iter()
+            .filter(|i| i.severity == Severity::Error)
+            .count()
+    }
+
+    /// Number of warning-severity findings.
+    pub fn warning_count(&self) -> usize {
+        self.issues
+            .iter()
+            .filter(|i| i.severity == Severity::Warning)
+            .count()
+    }
+}
+
 // ── Identity ──
 
 /// Unique identifier for a device execution.
@@ -257,6 +307,9 @@ pub enum EventKind {
         /// renderer decides how to display.
         recording_path: Option<String>,
     },
+    /// Accessibility audit results for a completed block — emitted after
+    /// `BlockFinished` so the live renderer can surface findings inline.
+    A11yAudit { audit: A11yAudit },
 
     // Step level
     StepStarted {

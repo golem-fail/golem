@@ -287,6 +287,25 @@ pub(crate) fn format_flow_toon_anchored(report: &FlowReport, suite_t0_ms: Option
         out.push('\n');
     }
 
+    // A11y lines: `A label e:N w:M` then one issue line per finding
+    // (`!check Type` for errors, `~check Type` for warnings).
+    for audit in &report.a11y_audits {
+        let _ = writeln!(
+            out,
+            "A {} e:{} w:{}",
+            audit.label,
+            audit.error_count(),
+            audit.warning_count()
+        );
+        for issue in &audit.issues {
+            let marker = match issue.severity {
+                golem_events::Severity::Error => '!',
+                golem_events::Severity::Warning => '~',
+            };
+            let _ = writeln!(out, " {marker}{} {}", issue.check_id, issue.element_type);
+        }
+    }
+
     // Recordings: one ` rec block:iter path` line per recorded block iteration.
     for rec in &report.recordings {
         let _ = writeln!(out, " rec {}:{} {}", rec.block, rec.iteration, rec.path);
@@ -497,6 +516,7 @@ mod tests {
     fn sample_flow(success: bool, seed: Option<u64>) -> FlowReport {
         FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "login_flow".to_string(),
             success,
             step_results: vec![
@@ -618,6 +638,7 @@ mod tests {
     fn flow_result_line_pass_with_counts() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "simple".to_string(),
             success: true,
             step_results: vec![
@@ -660,6 +681,7 @@ mod tests {
             flows: vec![
                 FlowReport {
                     first_failure_code: None,
+                    a11y_audits: vec![],
                     flow_name: "login_flow".to_string(),
                     success: true,
                     step_results: vec![
@@ -682,6 +704,7 @@ mod tests {
                 },
                 FlowReport {
                     first_failure_code: None,
+                    a11y_audits: vec![],
                     flow_name: "signup_flow".to_string(),
                     success: false,
                     step_results: vec![
@@ -722,6 +745,7 @@ mod tests {
             flows: vec![
                 FlowReport {
                     first_failure_code: None,
+                    a11y_audits: vec![],
                     flow_name: "flow_a".to_string(),
                     success: true,
                     step_results: vec![success_step("launch", "", 100)],
@@ -741,6 +765,7 @@ mod tests {
                 },
                 FlowReport {
                     first_failure_code: None,
+                    a11y_audits: vec![],
                     flow_name: "flow_b".to_string(),
                     success: true,
                     step_results: vec![success_step("launch", "", 200)],
@@ -760,6 +785,7 @@ mod tests {
                 },
                 FlowReport {
                     first_failure_code: None,
+                    a11y_audits: vec![],
                     flow_name: "flow_c".to_string(),
                     success: false,
                     step_results: vec![failed_step("tap", "Nope", 300, "gone")],
@@ -966,6 +992,7 @@ mod tests {
     fn toon_includes_perf_lines() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "perf_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],
@@ -1008,6 +1035,7 @@ mod tests {
     fn toon_omits_perf_when_empty() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "no_perf_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],

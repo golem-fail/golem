@@ -79,6 +79,8 @@ pub struct FlowResult {
     pub perf_snapshots: Vec<golem_report::PerfSnapshot>,
     /// Screen recordings produced during this flow execution.
     pub recordings: Vec<golem_report::RecordingEntry>,
+    /// Accessibility audits captured at block boundaries.
+    pub a11y_audits: Vec<golem_report::A11yAudit>,
 }
 
 /// Execute a parsed FlowFile by traversing blocks in order.
@@ -217,6 +219,7 @@ pub async fn execute_flow<'a>(
     let mut warnings = Vec::new();
     let mut perf_snapshots: Vec<PerfSnapshot> = Vec::new();
     let mut recordings: Vec<golem_report::RecordingEntry> = Vec::new();
+    let mut a11y_audits: Vec<golem_report::A11yAudit> = Vec::new();
     let mut block_iterations: HashMap<usize, u32> = HashMap::new();
 
     // `--trace` boundary state, lazily populated when a recording block
@@ -317,7 +320,8 @@ pub async fn execute_flow<'a>(
                 perf_collector: ctx.perf_collector,
                 last_launch_ms: std::sync::atomic::AtomicU64::new(0),
                 emitter: ctx.emitter,
-                step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+                a11y_level: crate::accessibility::A11yLevel::Off,
+                step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),            last_settled_tree: std::sync::Mutex::new(None),
                 rng: std::sync::Mutex::new(child_rng),
                 // Carry parent's effective default in as the child's
                 // starting point — `execute_flow` will refine it from
@@ -356,6 +360,7 @@ pub async fn execute_flow<'a>(
                     barrier_aborted: child_result.barrier_aborted,
                     perf_snapshots: vec![],
                     recordings: recordings.clone(),
+                    a11y_audits: vec![],
                 });
             }
 
@@ -506,6 +511,7 @@ pub async fn execute_flow<'a>(
                         barrier_aborted: true,
                         perf_snapshots: vec![],
                         recordings: recordings.clone(),
+                        a11y_audits: vec![],
                     });
                 }
             }
@@ -685,6 +691,7 @@ pub async fn execute_flow<'a>(
                         barrier_aborted: false,
                         perf_snapshots: vec![],
                         recordings: recordings.clone(),
+                        a11y_audits: vec![],
                     });
                 }
             }
@@ -762,8 +769,77 @@ pub async fn execute_flow<'a>(
                             barrier_aborted: false,
                             perf_snapshots,
                             recordings,
+                            a11y_audits,
                         });
                     }
+                }
+            }
+        }
+
+        // Accessibility audit after block completes. Reuses the tree the
+        // post-step settle cached for THIS block's last step (no extra
+        // hierarchy fetch); falls back to a fresh fetch when the last step
+        // didn't settle (e.g. a read/http step). Judges only the visible
+        // tree (`audit_hierarchy` gates on the viewport predicate).
+        if ctx.a11y_level.is_enabled() {
+            let tree = match ctx.take_settled_tree_at(ctx.global_step_index) {
+                Some(t) => Some(t),
+                None => driver.get_hierarchy().await.ok().map(|(t, _meta)| t),
+            };
+            if let Some(tree) = tree {
+                let viewport = golem_element::Viewport::from_root(&tree);
+                let density = ctx
+                    .device
+                    .and_then(a11y_density)
+                    .unwrap_or(1.0);
+                let config = crate::accessibility::A11yConfig::new(ctx.a11y_level, density);
+                let issues = crate::accessibility::audit_hierarchy(&tree, &viewport, &config);
+                let device_name = ctx.device.map_or("unknown", |d| d.name.as_str());
+                let label = build_snapshot_label(
+                    block,
+                    current_idx,
+                    None,
+                    device_name,
+                    block_iter_for_recording,
+                );
+                let audit = golem_report::A11yAudit {
+                    label,
+                    issues,
+                    screenshot_path: None,
+                };
+                if !audit.issues.is_empty() {
+                    warnings.push(format!(
+                        "a11y[{}]: {} error(s), {} warning(s)",
+                        audit.label,
+                        audit.error_count(),
+                        audit.warning_count()
+                    ));
+                }
+                // Surface findings on the live event stream (the renderer
+                // decides verbose detail vs a one-line summary).
+                ctx.emit(golem_events::EventKind::A11yAudit {
+                    audit: audit.clone(),
+                });
+                a11y_audits.push(audit);
+
+                // Threshold gate: fail the flow when cumulative errors/warnings
+                // exceed the configured maxima.
+                if let Some(reason) = a11y_threshold_breach(&a11y_audits, flow.flow.options.as_ref())
+                {
+                    warnings.push(reason.clone());
+                    return Ok(FlowResult {
+                        success: false,
+                        warnings,
+                        failed_step: None,
+                        failed_block: block.name.clone(),
+                        failed_action: None,
+                        failed_reason: Some(reason),
+                        failed_code: None,
+                        barrier_aborted: false,
+                        perf_snapshots,
+                        recordings,
+                        a11y_audits,
+                    });
                 }
             }
         }
@@ -797,6 +873,7 @@ pub async fn execute_flow<'a>(
         barrier_aborted: false,
         perf_snapshots,
         recordings,
+        a11y_audits,
     })
 }
 
@@ -825,6 +902,44 @@ pub fn parse_duration(s: &str) -> Option<Duration> {
             .parse::<u64>()
             .ok()
             .map(|v| Duration::from_secs(v * 3600));
+    }
+    None
+}
+
+// ── A11y helpers ─────────────────────────────────────────────────────
+
+/// Px-per-dp factor for normalising `Element.bounds` to dp. Android bounds
+/// are device px (factor = `screen_scale`); iOS bounds are already points
+/// (factor 1.0).
+fn a11y_density(device: &golem_devices::DeviceInfo) -> Option<f64> {
+    match device.platform {
+        golem_devices::Platform::Android => device.screen_scale,
+        _ => Some(1.0),
+    }
+}
+
+/// A failure reason when cumulative a11y errors/warnings across all audits
+/// so far exceed the flow's configured maxima; `None` when within limits or
+/// no maxima are set.
+fn a11y_threshold_breach(
+    audits: &[golem_report::A11yAudit],
+    options: Option<&golem_parser::FlowOptions>,
+) -> Option<String> {
+    let opts = options?;
+    let errors: usize = audits.iter().map(golem_report::A11yAudit::error_count).sum();
+    let warnings: usize = audits
+        .iter()
+        .map(golem_report::A11yAudit::warning_count)
+        .sum();
+    if let Some(max) = opts.a11y_max_errors {
+        if errors > max {
+            return Some(format!("a11y errors {errors} exceed max {max}"));
+        }
+    }
+    if let Some(max) = opts.a11y_max_warnings {
+        if warnings > max {
+            return Some(format!("a11y warnings {warnings} exceed max {max}"));
+        }
     }
     None
 }
@@ -1094,6 +1209,7 @@ pub async fn execute_flow_with_data<'a>(
         barrier_aborted: false,
         perf_snapshots: vec![],
         recordings: Vec::new(),
+    a11y_audits: Vec::new(),
     }))
 }
 
@@ -1150,6 +1266,98 @@ mod tests {
     use golem_parser::{BranchCondition, FlowMeta, FlowOptions, Step};
     use std::collections::HashMap;
     use std::path::Path;
+
+    // ── a11y executor helpers ────────────────────────────────────────
+
+    fn audit_with(errors: usize, warnings: usize) -> golem_report::A11yAudit {
+        let mut issues = Vec::new();
+        for _ in 0..errors {
+            issues.push(golem_report::A11yIssue {
+                check_id: "missing_label".into(),
+                severity: golem_events::Severity::Error,
+                message: "m".into(),
+                element_type: "Button".into(),
+                element_label: None,
+                element_bounds: None,
+            });
+        }
+        for _ in 0..warnings {
+            issues.push(golem_report::A11yIssue {
+                check_id: "nested_clickable".into(),
+                severity: golem_events::Severity::Warning,
+                message: "m".into(),
+                element_type: "Button".into(),
+                element_label: None,
+                element_bounds: None,
+            });
+        }
+        golem_report::A11yAudit {
+            label: "b:d:0".into(),
+            issues,
+            screenshot_path: None,
+        }
+    }
+
+    #[test]
+    fn a11y_threshold_none_when_no_maxima() {
+        let audits = vec![audit_with(3, 3)];
+        assert!(a11y_threshold_breach(&audits, None).is_none());
+        let opts = FlowOptions::default();
+        assert!(
+            a11y_threshold_breach(&audits, Some(&opts)).is_none(),
+            "no maxima set → never breaches"
+        );
+    }
+
+    #[test]
+    fn a11y_threshold_errors_breach_is_cumulative() {
+        let audits = vec![audit_with(1, 0), audit_with(1, 0)];
+        let opts = FlowOptions {
+            a11y_max_errors: Some(1),
+            ..FlowOptions::default()
+        };
+        // 2 cumulative errors > max 1 → breach.
+        assert!(a11y_threshold_breach(&audits, Some(&opts)).is_some());
+    }
+
+    #[test]
+    fn a11y_threshold_within_limit_ok() {
+        let audits = vec![audit_with(0, 5)];
+        let opts = FlowOptions {
+            a11y_max_warnings: Some(10),
+            ..FlowOptions::default()
+        };
+        assert!(a11y_threshold_breach(&audits, Some(&opts)).is_none());
+    }
+
+    fn device_info(platform: golem_devices::Platform, scale: Option<f64>) -> golem_devices::DeviceInfo {
+        golem_devices::DeviceInfo {
+            name: "dev".into(),
+            udid: "x".into(),
+            platform,
+            device_type: golem_devices::DeviceType::Phone,
+            os_major: 17,
+            os_version: "17".into(),
+            state: golem_devices::DeviceState::Booted,
+            physical: false,
+            playstore: false,
+            screen_width: Some(1080),
+            screen_height: Some(1920),
+            screen_scale: scale,
+            last_booted: None,
+            runtime_id: None,
+            device_type_id: None,
+        }
+    }
+
+    #[test]
+    fn a11y_density_android_uses_screen_scale_ios_is_one() {
+        let android = device_info(golem_devices::Platform::Android, Some(3.0));
+        assert_eq!(a11y_density(&android), Some(3.0));
+        // iOS bounds are already points → factor 1.0 regardless of backing scale.
+        let ios = device_info(golem_devices::Platform::Ios, Some(3.0));
+        assert_eq!(a11y_density(&ios), Some(1.0));
+    }
 
     // ---------------------------------------------------------------
     // Helpers
@@ -2885,7 +3093,8 @@ action = "screenshot"
             perf_collector: None,
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),
             emitter: None,
-            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+            a11y_level: crate::accessibility::A11yLevel::Off,
+            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),            last_settled_tree: std::sync::Mutex::new(None),
             rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::from_entropy()),
             inherited_record_default: false,
         };
@@ -2951,7 +3160,8 @@ action = "screenshot"
             perf_collector: None,
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),
             emitter: None,
-            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+            a11y_level: crate::accessibility::A11yLevel::Off,
+            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),            last_settled_tree: std::sync::Mutex::new(None),
             rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::from_entropy()),
             inherited_record_default: false,
         };
@@ -3026,7 +3236,8 @@ action = "screenshot"
             perf_collector: None,
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),
             emitter: None,
-            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+            a11y_level: crate::accessibility::A11yLevel::Off,
+            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),            last_settled_tree: std::sync::Mutex::new(None),
             rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::from_entropy()),
             inherited_record_default: false,
         };

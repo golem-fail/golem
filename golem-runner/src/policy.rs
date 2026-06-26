@@ -280,7 +280,15 @@ pub async fn execute_step_with_policy(
                 // user-budgeted timeouts on later steps unreachable.
                 if needs_post_settle(step) {
                     let started = std::time::Instant::now();
-                    let _ = crate::resolution::wait_for_settle(driver).await;
+                    // Cache the settled tree for the block-end a11y audit to
+                    // reuse — a move, not a clone (it's otherwise dropped).
+                    // Tagged with this step's global index so the audit only
+                    // reuses it when this was the block's last step.
+                    if let Ok((root, _meta, _stats)) =
+                        crate::resolution::wait_for_settle(driver).await
+                    {
+                        ctx.cache_settled_tree(root, ctx.global_step_index);
+                    }
                     let elapsed = started.elapsed();
                     // `wait_for_settle`'s internal SETTLE_TIMEOUT is
                     // 1500ms — anything close to that means it gave up

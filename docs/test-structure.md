@@ -72,7 +72,31 @@ perf_memory_warn_mb = 200.0
 perf_memory_error_mb = 500.0
 perf_cpu_warn_percent = 80.0
 perf_cpu_error_percent = 95.0
+a11y = "relaxed"                    # Accessibility audit: "off", "critical", "relaxed" (default), "strict". --a11y overrides.
+a11y_max_errors = 0                 # Optional: fail the flow if cumulative a11y errors exceed this
+a11y_max_warnings = 20              # Optional: fail the flow if cumulative a11y warnings exceed this
 ```
+
+### Accessibility Audit
+
+After each block, Golem audits the **visible** UI tree for accessibility issues
+(zero config, on by default at `relaxed`). Findings appear inline in the live
+run (a per-block `a11y: N error(s), M warning(s)` line; `--verbose` lists each)
+and in every report format (`json`/`junit`/`toon`/`human`). They are warnings by
+default; set `a11y_max_errors`/`a11y_max_warnings` to fail a flow. Levels: `off`, `critical` (tree checks only), `relaxed` (default —
+adds contrast/text-size **only when a screenshot was already captured this
+block**), `strict` (forces a per-block screenshot + WCAG-AAA bands).
+
+Checks judge only the innermost actionable control (the real tap target) on the
+visible tree, and size thresholds are dp-normalised (so verdicts match across
+Android px and iOS points):
+
+| Check | Severity | Rule |
+|-------|----------|------|
+| `missing_label` | Error | Actionable control with no text/accessibility label anywhere in its subtree |
+| `touch_target_too_small` | Error/Warning | Min dimension below the dp threshold (error `<24dp`, warn `<44dp`; `strict` errors `<44dp`) |
+| `duplicate_labels` | Warning | Sibling controls sharing identical visible text |
+| `overlapping_interactive` | Warning | Sibling controls with overlapping bounds (coincident/enclosed wrappers excluded) |
 
 ### Coverage strategies
 

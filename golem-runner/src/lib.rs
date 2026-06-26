@@ -44,6 +44,7 @@ pub fn take_step_tree_stats() -> golem_events::TreeStats {
     }
 }
 
+pub mod accessibility;
 pub mod actions;
 pub mod barrier;
 pub mod branch;

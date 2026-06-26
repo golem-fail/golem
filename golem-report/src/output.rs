@@ -150,6 +150,7 @@ mod tests {
             flows: vec![
                 FlowReport {
                     first_failure_code: None,
+                    a11y_audits: vec![],
                     flow_name: "login_flow".to_string(),
                     success: true,
                     step_results: vec![
@@ -172,6 +173,7 @@ mod tests {
                 },
                 FlowReport {
                     first_failure_code: None,
+                    a11y_audits: vec![],
                     flow_name: "signup_flow".to_string(),
                     success: false,
                     step_results: vec![

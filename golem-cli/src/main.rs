@@ -73,6 +73,14 @@ async fn main() -> anyhow::Result<()> {
                 }
             };
 
+            let a11y_override = match parse_a11y_override(args.a11y.as_deref()) {
+                Ok(a) => a,
+                Err(msg) => {
+                    eprintln!("{msg}");
+                    std::process::exit(1);
+                }
+            };
+
             // Stream human output unless user explicitly chose non-human format.
             // Default (no --output) = human, so stream is on.
             let has_human_output = detect_human_output(&args.outputs);
@@ -133,6 +141,7 @@ async fn main() -> anyhow::Result<()> {
                 project_root,
                 project_apps: project_config.apps,
                 coverage_override,
+                a11y_override,
                 rebuild,
                 no_build,
                 device_settings: project_config.device_settings,
@@ -316,6 +325,19 @@ fn parse_coverage_override(
         Some("full") => Ok(Some(golem_parser::CoverageStrategy::Full)),
         Some(other) => Err(format!(
             "Unknown coverage: {other}. Use 'one', 'min', 'smart', or 'full'."
+        )),
+    }
+}
+
+fn parse_a11y_override(a11y: Option<&str>) -> Result<Option<golem_parser::A11yLevel>, String> {
+    match a11y {
+        None => Ok(None),
+        Some("off") => Ok(Some(golem_parser::A11yLevel::Off)),
+        Some("critical") => Ok(Some(golem_parser::A11yLevel::Critical)),
+        Some("relaxed") => Ok(Some(golem_parser::A11yLevel::Relaxed)),
+        Some("strict") => Ok(Some(golem_parser::A11yLevel::Strict)),
+        Some(other) => Err(format!(
+            "Unknown a11y level: {other}. Use 'off', 'critical', 'relaxed', or 'strict'."
         )),
     }
 }

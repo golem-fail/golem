@@ -429,6 +429,26 @@ pub struct FlowOptions {
     pub perf_fd_warn: Option<u32>,
     /// File descriptor error threshold.
     pub perf_fd_error: Option<u32>,
+    /// Accessibility audit strictness. `off` disables; `critical` runs
+    /// tree checks only; `relaxed` (default) adds opportunistic contrast;
+    /// `strict` forces a per-block screenshot + AAA bands. The `--a11y`
+    /// CLI flag overrides this.
+    pub a11y: Option<A11yLevel>,
+    /// Fail the flow when the cumulative a11y error count exceeds this.
+    pub a11y_max_errors: Option<usize>,
+    /// Fail the flow when the cumulative a11y warning count exceeds this.
+    pub a11y_max_warnings: Option<usize>,
+}
+
+/// Accessibility audit strictness (the TOML `a11y` value). The runner maps
+/// this onto its own `A11yLevel` (which carries the threshold behaviour).
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum A11yLevel {
+    Off,
+    Critical,
+    Relaxed,
+    Strict,
 }
 
 /// How to expand multi-valued device constraints into FlowRuns.
@@ -1026,6 +1046,57 @@ ignore_missing_physical = false
         assert_eq!(opts.keep_devices, Some(false));
         assert_eq!(opts.create_if_missing, Some(true));
         assert_eq!(opts.ignore_missing_physical, Some(false));
+    }
+
+    // ---------------------------------------------------------------
+    // 10b. Accessibility options
+    // ---------------------------------------------------------------
+    fn parse_a11y_opts(body: &str) -> FlowOptions {
+        let toml_str = format!("[flow]\nname = \"a\"\n\n[flow.options]\n{body}\n");
+        parse_flow(&toml_str)
+            .expect("a11y options should parse")
+            .flow
+            .options
+            .expect("options present")
+    }
+
+    #[test]
+    fn a11y_levels_parse() {
+        assert_eq!(parse_a11y_opts("a11y = \"off\"").a11y, Some(A11yLevel::Off));
+        assert_eq!(
+            parse_a11y_opts("a11y = \"critical\"").a11y,
+            Some(A11yLevel::Critical)
+        );
+        assert_eq!(
+            parse_a11y_opts("a11y = \"relaxed\"").a11y,
+            Some(A11yLevel::Relaxed)
+        );
+        assert_eq!(
+            parse_a11y_opts("a11y = \"strict\"").a11y,
+            Some(A11yLevel::Strict)
+        );
+    }
+
+    #[test]
+    fn a11y_default_absent_is_none() {
+        // No a11y key → None at parse; the suite supplies the relaxed default.
+        assert_eq!(parse_a11y_opts("max_steps = 1").a11y, None);
+    }
+
+    #[test]
+    fn a11y_invalid_value_rejected() {
+        let toml_str = "[flow]\nname = \"a\"\n\n[flow.options]\na11y = \"banana\"\n";
+        assert!(
+            parse_flow(toml_str).is_err(),
+            "unknown a11y level SHALL be a parse error"
+        );
+    }
+
+    #[test]
+    fn a11y_thresholds_parse() {
+        let opts = parse_a11y_opts("a11y_max_errors = 0\na11y_max_warnings = 10");
+        assert_eq!(opts.a11y_max_errors, Some(0));
+        assert_eq!(opts.a11y_max_warnings, Some(10));
     }
 
     // ---------------------------------------------------------------

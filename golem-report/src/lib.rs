@@ -401,6 +401,11 @@ pub struct PerfSnapshot {
     pub timestamp: String,
 }
 
+/// Accessibility audit types live in `golem-events` (the shared vocabulary
+/// crate) so they can travel on the event stream too; re-exported here for
+/// `FlowReport` and the formatters.
+pub use golem_events::{A11yAudit, A11yIssue};
+
 /// Result of a complete test flow.
 #[derive(Default, Clone)]
 pub struct FlowReport {
@@ -449,6 +454,9 @@ pub struct FlowReport {
     /// Failure code of the first failed/warned step, surfaced on the
     /// flow-level FAIL line. `None` for passing flows.
     pub first_failure_code: Option<golem_events::FailureCode>,
+    /// Accessibility audits captured at block boundaries (one per block
+    /// iteration when a11y is enabled). Empty when a11y is `off`.
+    pub a11y_audits: Vec<A11yAudit>,
 }
 
 /// One screen recording produced by a recorded block iteration.
@@ -528,9 +536,90 @@ mod tests {
     use super::*;
     use golem_events::{Point, Rect, SubstepEvent};
 
+    fn a11y_issue(check_id: &str, severity: golem_events::Severity) -> A11yIssue {
+        A11yIssue {
+            check_id: check_id.into(),
+            severity,
+            message: "m".into(),
+            element_type: "Button".into(),
+            element_label: None,
+            element_bounds: None,
+        }
+    }
+
+    #[test]
+    fn a11y_audit_error_and_warning_counts() {
+        let audit = A11yAudit {
+            label: "login:dev:0".into(),
+            issues: vec![
+                a11y_issue("missing_label", golem_events::Severity::Error),
+                a11y_issue("touch_target_too_small", golem_events::Severity::Error),
+                a11y_issue("nested_clickable", golem_events::Severity::Warning),
+            ],
+            screenshot_path: None,
+        };
+        assert_eq!(audit.error_count(), 2, "two errors");
+        assert_eq!(audit.warning_count(), 1, "one warning");
+    }
+
+    #[test]
+    fn a11y_audit_empty_is_clean() {
+        let audit = A11yAudit {
+            label: "dash:dev:0".into(),
+            issues: vec![],
+            screenshot_path: None,
+        };
+        assert_eq!(audit.error_count(), 0);
+        assert_eq!(audit.warning_count(), 0);
+    }
+
+    #[test]
+    fn a11y_audits_render_across_formats() {
+        let mut report = flow_with(true, None);
+        report.a11y_audits = vec![
+            A11yAudit {
+                label: "login:dev:0".into(),
+                issues: vec![
+                    a11y_issue("missing_label", golem_events::Severity::Error),
+                    a11y_issue("nested_clickable", golem_events::Severity::Warning),
+                ],
+                screenshot_path: None,
+            },
+            A11yAudit {
+                label: "dash:dev:0".into(),
+                issues: vec![],
+                screenshot_path: None,
+            },
+        ];
+
+        let human = crate::human::format_flow(&report);
+        assert!(human.contains("Accessibility:"), "human header");
+        assert!(human.contains("[ERR]") && human.contains("[WRN]"), "human tags");
+        assert!(human.contains("clean"), "human clean line");
+
+        let json = crate::json::format_flow_json(&report).expect("json");
+        let json_compact: String = json.chars().filter(|c| !c.is_whitespace()).collect();
+        assert!(json.contains("a11y_audits"), "json key");
+        assert!(json_compact.contains("\"errors\":1"), "json error count");
+        assert!(
+            json_compact.contains("\"check\":\"missing_label\""),
+            "json issue check"
+        );
+
+        let junit = crate::junit::format_flow_junit(&report);
+        assert!(junit.contains("Accessibility:"), "junit system-out");
+        assert!(junit.contains("[ERR] missing_label"), "junit issue");
+
+        let toon = crate::toon::format_flow_toon(&report);
+        assert!(toon.contains("A login:dev:0 e:1 w:1"), "toon audit line");
+        assert!(toon.contains("!missing_label"), "toon error marker");
+        assert!(toon.contains("~nested_clickable"), "toon warn marker");
+    }
+
     fn flow_with(success: bool, skipped_reason: Option<String>) -> FlowReport {
         FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "f".into(),
             success,
             step_results: Vec::new(),

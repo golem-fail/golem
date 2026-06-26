@@ -425,6 +425,31 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
         let _ = writeln!(out, "    </properties>");
     }
 
+    // Accessibility audit summary on the testsuite system-out.
+    if !report.a11y_audits.is_empty() {
+        let mut text = String::from("Accessibility:\n");
+        for audit in &report.a11y_audits {
+            if audit.issues.is_empty() {
+                text.push_str(&format!("  {} clean\n", audit.label));
+                continue;
+            }
+            text.push_str(&format!(
+                "  {} {} error(s), {} warning(s)\n",
+                audit.label,
+                audit.error_count(),
+                audit.warning_count()
+            ));
+            for issue in &audit.issues {
+                let tag = match issue.severity {
+                    golem_events::Severity::Error => "ERR",
+                    golem_events::Severity::Warning => "WRN",
+                };
+                text.push_str(&format!("    [{tag}] {}: {}\n", issue.check_id, issue.message));
+            }
+        }
+        let _ = writeln!(out, "    <system-out>{}</system-out>", xml_escape(&text));
+    }
+
     let _ = writeln!(out, "  </testsuite>");
     out
 }
@@ -640,6 +665,7 @@ mod tests {
     fn sample_flow() -> FlowReport {
         FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "login_flow".to_string(),
             success: false,
             step_results: vec![
@@ -676,6 +702,7 @@ mod tests {
             flows: vec![
                 FlowReport {
                     first_failure_code: None,
+                    a11y_audits: vec![],
                     flow_name: "login_flow".to_string(),
                     success: true,
                     step_results: vec![
@@ -698,6 +725,7 @@ mod tests {
                 },
                 FlowReport {
                     first_failure_code: None,
+                    a11y_audits: vec![],
                     flow_name: "signup_flow".to_string(),
                     success: false,
                     step_results: vec![
@@ -820,6 +848,7 @@ mod tests {
         };
         let flow = FlowReport {
             first_failure_code: Some(golem_events::FailureCode::FlowStepTimeout),
+            a11y_audits: vec![],
             flow_name: "timeout_flow".to_string(),
             success: false,
             step_results: vec![step],
@@ -863,6 +892,7 @@ mod tests {
             success: false,
             step_results: vec![flow_fault, infra_fault],
             first_failure_code: Some(golem_events::FailureCode::FlowStepTimeout),
+            a11y_audits: vec![],
             ..sample_flow()
         };
         let xml = format_flow_junit(&flow);
@@ -890,6 +920,7 @@ mod tests {
             step_results: vec![],
             skipped_reason: Some("install_script failed".to_string()),
             first_failure_code: Some(golem_events::FailureCode::AppInstallFailed),
+            a11y_audits: vec![],
             ..sample_flow()
         };
         let xml = format_flow_junit(&flow);
@@ -922,6 +953,7 @@ mod tests {
     fn skipped_step_has_skipped_element() {
         let flow = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "skip_flow".to_string(),
             success: true,
             step_results: vec![skipped_step("tap", "Cancel")],
@@ -952,6 +984,7 @@ mod tests {
     fn time_is_in_seconds() {
         let flow = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "time_test".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 120)],
@@ -990,6 +1023,7 @@ mod tests {
     fn xml_entities_are_escaped() {
         let flow = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "flow & <friends>".to_string(),
             success: false,
             step_results: vec![failed_step(
@@ -1117,6 +1151,7 @@ mod tests {
     fn junit_includes_perf_properties() {
         let flow = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "perf_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],
@@ -1151,6 +1186,7 @@ mod tests {
     fn junit_includes_covered_axes_property() {
         let flow = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "cov_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],
@@ -1184,6 +1220,7 @@ mod tests {
     fn junit_omits_properties_when_no_perf() {
         let flow = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "no_perf_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],
@@ -1382,6 +1419,7 @@ mod tests {
             success: true,
             step_results: vec![step],
             first_failure_code: None,
+            a11y_audits: vec![],
             ..sample_flow()
         };
         let xml = format_flow_junit(&flow);
@@ -1405,6 +1443,7 @@ mod tests {
             success: true,
             step_results: vec![success_step("launch", "", 100)],
             first_failure_code: None,
+            a11y_audits: vec![],
             ..sample_flow()
         };
         let xml = format_flow_junit(&flow);
@@ -1432,6 +1471,7 @@ mod tests {
             success: true,
             step_results: vec![step],
             first_failure_code: None,
+            a11y_audits: vec![],
             ..sample_flow()
         };
         let xml = format_flow_junit(&flow);
@@ -1456,6 +1496,7 @@ mod tests {
             success: false,
             step_results: vec![step],
             first_failure_code: None,
+            a11y_audits: vec![],
             ..sample_flow()
         };
         let xml = format_flow_junit(&flow);
@@ -1475,6 +1516,7 @@ mod tests {
             step_results: vec![],
             skipped_reason: None,
             first_failure_code: None,
+            a11y_audits: vec![],
             ..sample_flow()
         };
         let xml = format_flow_junit(&flow);
@@ -1504,6 +1546,7 @@ mod tests {
             success: true,
             step_results: vec![step],
             first_failure_code: None,
+            a11y_audits: vec![],
             started_at: Some("2026-06-15T10:00:00Z".to_string()),
             ..sample_flow()
         };
@@ -1527,6 +1570,7 @@ mod tests {
             success: true,
             step_results: vec![success_step("launch", "", 100)],
             first_failure_code: None,
+            a11y_audits: vec![],
             recordings: vec![crate::RecordingEntry {
                 block: "checkout".to_string(),
                 iteration: 2,
@@ -1554,6 +1598,7 @@ mod tests {
             success: true,
             step_results: vec![success_step("launch", "", 100)],
             first_failure_code: None,
+            a11y_audits: vec![],
             perf_snapshots: vec![sample_perf_snapshot()],
             ..sample_flow()
         };
@@ -1599,6 +1644,7 @@ mod tests {
             success: true,
             step_results: vec![success_step("launch", "", 100)],
             first_failure_code: None,
+            a11y_audits: vec![],
             perf_snapshots: vec![snap],
             ..sample_flow()
         };
@@ -1624,6 +1670,7 @@ mod tests {
             success: true,
             step_results: vec![success_step("launch", "", 100)],
             first_failure_code: None,
+            a11y_audits: vec![],
             os_major: Some(26),
             ..sample_flow()
         };
@@ -1747,6 +1794,7 @@ mod tests {
             success,
             step_results: vec![],
             first_failure_code: None,
+            a11y_audits: vec![],
             repeat: Some(golem_events::RepeatContext { index: 0, total: 2 }),
             ..sample_flow()
         }

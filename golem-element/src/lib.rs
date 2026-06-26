@@ -99,6 +99,16 @@ impl Bounds {
     pub fn contains_point(&self, px: i32, py: i32) -> bool {
         px >= self.x && px < self.right() && py >= self.y && py < self.bottom()
     }
+
+    /// True when these bounds overlap `other` with non-zero area. Edge-only
+    /// contact (touching borders, no interior overlap) is `false`. Distinct
+    /// from [`Bounds::intersect`], which returns the overlapping region.
+    pub fn intersects(&self, other: &Bounds) -> bool {
+        self.x < other.right()
+            && other.x < self.right()
+            && self.y < other.bottom()
+            && other.y < self.bottom()
+    }
 }
 
 impl Element {
@@ -454,6 +464,30 @@ mod tests {
             drawing_order: None,
             children: Vec::new(),
         }
+    }
+
+    // ── Bounds::intersects / is_offscreen (a11y geometry) ───────────
+
+    #[test]
+    fn intersects_overlapping_partial() {
+        assert!(make_bounds(0, 0, 100, 100).intersects(&make_bounds(50, 50, 100, 100)));
+    }
+
+    #[test]
+    fn intersects_fully_contained() {
+        assert!(make_bounds(0, 0, 100, 100).intersects(&make_bounds(10, 10, 20, 20)));
+        assert!(make_bounds(10, 10, 20, 20).intersects(&make_bounds(0, 0, 100, 100)));
+    }
+
+    #[test]
+    fn intersects_edge_contact_is_false() {
+        // Right edge of A (x=100) touches left edge of B (x=100): no interior overlap.
+        assert!(!make_bounds(0, 0, 100, 100).intersects(&make_bounds(100, 0, 100, 100)));
+    }
+
+    #[test]
+    fn intersects_disjoint_is_false() {
+        assert!(!make_bounds(0, 0, 50, 50).intersects(&make_bounds(200, 200, 50, 50)));
     }
 
     // ── native occlusion hit-test ───────────────────────────────────

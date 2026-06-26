@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use golem_devices::DeviceInfo;
+use golem_element::Element;
 use golem_events::emitter::DeviceEmitter;
 use golem_events::{EventKind, SubstepEvent, TreeStats};
 use rand_chacha::ChaCha8Rng;
@@ -30,8 +31,19 @@ pub struct ExecutionContext<'a> {
     pub last_launch_ms: AtomicU64,
     /// Event emitter for structured test output.
     pub emitter: Option<&'a DeviceEmitter>,
+    /// Resolved accessibility audit level for this flow. `Off` disables the
+    /// block-end audit (the default in non-suite contexts, e.g. unit tests);
+    /// the suite resolves it from CLI `--a11y` / `[flow.options].a11y`.
+    pub a11y_level: crate::accessibility::A11yLevel,
     /// Tree fetch statistics for the current step (reset between steps).
     pub step_tree_stats: Mutex<TreeStats>,
+    /// The last settled UI tree captured by the post-step settle, tagged with
+    /// the `global_step_index` at capture. The block-end a11y audit reuses it
+    /// (instead of a fresh `/hierarchy` fetch) when the block's last step
+    /// settled. Per-`ctx`, so safe across concurrent flows — unlike the global
+    /// `TreeStats` statics. The settle's tree is otherwise dropped, so storing
+    /// it is a move, not a clone.
+    pub last_settled_tree: Mutex<Option<(Element, u64)>>,
     /// Seeded RNG for deterministic fake data generation.
     pub rng: Mutex<ChaCha8Rng>,
     /// Resolved record-default visible to blocks in the current flow.
@@ -87,6 +99,31 @@ impl ExecutionContext<'_> {
             TreeStats::default()
         }
     }
+
+    /// Cache the settled tree from a post-step settle, tagged with the step's
+    /// `global_step_index`. The tree is moved in (the settle would otherwise
+    /// drop it), overwriting any prior step's cached tree.
+    pub fn cache_settled_tree(&self, tree: Element, step_index: u64) {
+        if let Ok(mut slot) = self.last_settled_tree.lock() {
+            *slot = Some((tree, step_index));
+        }
+    }
+
+    /// Take the cached settled tree iff it was captured at `expect_step_index`
+    /// — i.e. the block's last-executed step settled and the tree reflects the
+    /// final UI. Returns `None` otherwise (last step didn't settle / cache is
+    /// from an earlier step), signalling the caller to fetch a fresh
+    /// hierarchy. Always clears the slot.
+    pub fn take_settled_tree_at(&self, expect_step_index: u64) -> Option<Element> {
+        if let Ok(mut slot) = self.last_settled_tree.lock() {
+            match slot.take() {
+                Some((tree, idx)) if idx == expect_step_index => Some(tree),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -110,7 +147,8 @@ pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
         perf_collector: None,
         last_launch_ms: AtomicU64::new(0),
         emitter: None,
-        step_tree_stats: Mutex::new(TreeStats::default()),
+        a11y_level: crate::accessibility::A11yLevel::Off,
+        step_tree_stats: Mutex::new(TreeStats::default()),        last_settled_tree: Mutex::new(None),
         rng: Mutex::new(ChaCha8Rng::from_entropy()),
         inherited_record_default: false,
     }
@@ -177,7 +215,8 @@ impl TestHarness {
             perf_collector: Some(&self.perf),
             last_launch_ms: AtomicU64::new(0),
             emitter: Some(&self.emitter),
-            step_tree_stats: Mutex::new(TreeStats::default()),
+            a11y_level: crate::accessibility::A11yLevel::Off,
+            step_tree_stats: Mutex::new(TreeStats::default()),            last_settled_tree: Mutex::new(None),
             rng: Mutex::new(ChaCha8Rng::from_entropy()),
             inherited_record_default: false,
         }
@@ -295,6 +334,61 @@ mod tests {
         assert_eq!(
             stats.max_nodes, 50,
             "largest node_count SHALL be forwarded intact to stats"
+        );
+    }
+
+    fn tiny_tree() -> Element {
+        Element {
+            element_type: "Root".into(),
+            text: None,
+            accessibility_label: None,
+            placeholder: None,
+            enabled: true,
+            checked: false,
+            clickable: false,
+            focused: false,
+            bounds: golem_element::Bounds::new(0, 0, 100, 100),
+            visible_bounds: None,
+            hit_points: vec![],
+            drawing_order: None,
+            children: vec![],
+        }
+    }
+
+    // 7b. Settled-tree cache: reused only when the requested step index matches
+    //     the captured one (the block's last step settled).
+    #[test]
+    fn settled_tree_reused_on_matching_index() {
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let ctx = test_ctx(tmp.path());
+        ctx.cache_settled_tree(tiny_tree(), 5);
+        assert!(
+            ctx.take_settled_tree_at(5).is_some(),
+            "matching step index SHALL reuse the cached tree"
+        );
+    }
+
+    #[test]
+    fn settled_tree_skipped_on_stale_index() {
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let ctx = test_ctx(tmp.path());
+        // Cached during step 3, but the block's last step is 7 → stale → None.
+        ctx.cache_settled_tree(tiny_tree(), 3);
+        assert!(
+            ctx.take_settled_tree_at(7).is_none(),
+            "stale cache (different step) SHALL signal a fresh fetch"
+        );
+    }
+
+    #[test]
+    fn settled_tree_taken_once() {
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let ctx = test_ctx(tmp.path());
+        ctx.cache_settled_tree(tiny_tree(), 1);
+        assert!(ctx.take_settled_tree_at(1).is_some());
+        assert!(
+            ctx.take_settled_tree_at(1).is_none(),
+            "the slot SHALL be cleared after taking"
         );
     }
 

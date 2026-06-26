@@ -39,6 +39,7 @@ golem run [FILES...] [OPTIONS]
 | `--no-teardown` | Skip teardown blocks (not yet wired) |
 | `--keep-devices` | Keep devices running after completion (not yet wired) |
 | `--no-perf` | Disable performance capture |
+| `--a11y <off\|critical\|relaxed\|strict>` | Override every flow's accessibility audit level (default `relaxed`). `off` disables; `critical` runs tree checks only; `relaxed` adds opportunistic contrast; `strict` forces a per-block screenshot + AAA bands |
 | `--rebuild` | Bypass the persistent install cache for this run (rebuild + reinstall every app on every device). Cache is still written after a successful build, so the next run benefits. |
 | `--no-build` | Skip build+install entirely. If the device already has the bundle, golem trusts it and runs flows; if not, the flow fails loudly. The cache is left untouched. Use when iterating on flow files against a known-good binary. |
 | `--verbose` | Show substeps (scroll coordinates, strategies, tree stats) + plan summary (flow runs, install matrix, device availability) + cache hits/misses |

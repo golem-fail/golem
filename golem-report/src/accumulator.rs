@@ -392,6 +392,9 @@ impl ReportAccumulator {
                         explicit_code,
                         first_failure_code,
                     ),
+                    // a11y audits travel the direct executor→FlowReport path
+                    // (suite.rs), not the event stream — same as perf_snapshots.
+                    a11y_audits: Vec::new(),
                 }
             })
             .collect();

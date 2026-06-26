@@ -387,6 +387,38 @@ pub async fn stream_human(
                 }
             }
             EventKind::BlockFinished { .. } => {}
+            EventKind::A11yAudit { audit } => {
+                // Only surface blocks with findings; clean audits stay quiet.
+                if !audit.issues.is_empty() {
+                    let errors = audit.error_count();
+                    let warnings = audit.warning_count();
+                    let summary = format!("{errors} error(s), {warnings} warning(s)");
+                    if use_color {
+                        eprintln!("{ts}     {dp}{DIM}\u{2570}\u{2500} a11y: {summary}{RESET}");
+                    } else {
+                        eprintln!("{ts}     {dp}\u{2570}\u{2500} a11y: {summary}");
+                    }
+                    if verbose {
+                        for issue in &audit.issues {
+                            let (tag, color) = match issue.severity {
+                                golem_events::Severity::Error => ("ERR", BOLD_RED),
+                                golem_events::Severity::Warning => ("WRN", YELLOW),
+                            };
+                            if use_color {
+                                eprintln!(
+                                    "{ts}        {dp}{color}[{tag}]{RESET} {DIM}{}{RESET} {}",
+                                    issue.check_id, issue.message
+                                );
+                            } else {
+                                eprintln!(
+                                    "{ts}        {dp}[{tag}] {} {}",
+                                    issue.check_id, issue.message
+                                );
+                            }
+                        }
+                    }
+                }
+            }
             EventKind::StepStarted {
                 global_step_index,
                 step_index_in_block,

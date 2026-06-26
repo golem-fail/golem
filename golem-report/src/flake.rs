@@ -83,6 +83,7 @@ mod tests {
             recordings: Vec::new(),
             repeat,
             first_failure_code: None,
+            a11y_audits: vec![],
         }
     }
 

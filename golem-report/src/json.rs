@@ -61,9 +61,31 @@ struct JsonFlow {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     perf_snapshots: Vec<JsonPerfSnapshot>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    a11y_audits: Vec<JsonA11yAudit>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     covered_axes: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     recordings: Vec<JsonRecording>,
+}
+
+#[derive(Serialize)]
+struct JsonA11yAudit {
+    label: String,
+    errors: usize,
+    warnings: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    screenshot_path: Option<String>,
+    issues: Vec<JsonA11yIssue>,
+}
+
+#[derive(Serialize)]
+struct JsonA11yIssue {
+    check: String,
+    severity: golem_events::Severity,
+    message: String,
+    element_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    element_label: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -200,6 +222,26 @@ fn perf_to_json(snap: &PerfSnapshot) -> JsonPerfSnapshot {
     }
 }
 
+fn a11y_to_json(audit: &crate::A11yAudit) -> JsonA11yAudit {
+    JsonA11yAudit {
+        label: audit.label.clone(),
+        errors: audit.error_count(),
+        warnings: audit.warning_count(),
+        screenshot_path: audit.screenshot_path.clone(),
+        issues: audit
+            .issues
+            .iter()
+            .map(|i| JsonA11yIssue {
+                check: i.check_id.clone(),
+                severity: i.severity,
+                message: i.message.clone(),
+                element_type: i.element_type.clone(),
+                element_label: i.element_label.clone(),
+            })
+            .collect(),
+    }
+}
+
 fn flow_to_json(report: &FlowReport) -> JsonFlow {
     JsonFlow {
         name: report.flow_name.clone(),
@@ -219,6 +261,7 @@ fn flow_to_json(report: &FlowReport) -> JsonFlow {
         steps: report.step_results.iter().map(step_to_json).collect(),
         warnings: report.warnings.clone(),
         perf_snapshots: report.perf_snapshots.iter().map(perf_to_json).collect(),
+        a11y_audits: report.a11y_audits.iter().map(a11y_to_json).collect(),
         covered_axes: report.covered_axes.clone(),
         recordings: report
             .recordings
@@ -393,6 +436,7 @@ mod tests {
     fn sample_flow() -> FlowReport {
         FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "login_flow".to_string(),
             success: false,
             step_results: vec![
@@ -426,6 +470,7 @@ mod tests {
             flows: vec![
                 FlowReport {
                     first_failure_code: None,
+                    a11y_audits: vec![],
                     flow_name: "login_flow".to_string(),
                     success: true,
                     step_results: vec![
@@ -448,6 +493,7 @@ mod tests {
                 },
                 FlowReport {
                     first_failure_code: None,
+                    a11y_audits: vec![],
                     flow_name: "signup_flow".to_string(),
                     success: true,
                     step_results: vec![success_step("launch", "", 80)],
@@ -467,6 +513,7 @@ mod tests {
                 },
                 FlowReport {
                     first_failure_code: None,
+                    a11y_audits: vec![],
                     flow_name: "checkout_flow".to_string(),
                     success: true,
                     step_results: vec![success_step("launch", "", 90)],
@@ -486,6 +533,7 @@ mod tests {
                 },
                 FlowReport {
                     first_failure_code: None,
+                    a11y_audits: vec![],
                     flow_name: "broken_flow".to_string(),
                     success: false,
                     step_results: vec![
@@ -585,6 +633,7 @@ mod tests {
         };
         let report = FlowReport {
             first_failure_code: Some(golem_events::FailureCode::FlowStepTimeout),
+            a11y_audits: vec![],
             flow_name: "timeout_flow".to_string(),
             success: false,
             step_results: vec![step],
@@ -618,6 +667,7 @@ mod tests {
     fn warning_step_includes_warning() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "warn_flow".to_string(),
             success: true,
             step_results: vec![warning_step(
@@ -717,6 +767,7 @@ mod tests {
     fn none_fields_omitted() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "minimal_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 50)],
@@ -778,6 +829,7 @@ mod tests {
     fn skipped_step_outcome() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "skip_flow".to_string(),
             success: true,
             step_results: vec![skipped_step("tap", "Cancel")],
@@ -838,6 +890,7 @@ mod tests {
     fn json_includes_perf_snapshots() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "perf_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],
@@ -880,6 +933,7 @@ mod tests {
         };
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "warn_flow".to_string(),
             success: true,
             step_results: vec![step],
@@ -912,6 +966,7 @@ mod tests {
     fn success_and_skipped_steps_omit_optional_fields() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "mixed_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 10), skipped_step("tap", "X")],
@@ -1235,6 +1290,7 @@ mod tests {
         // toward the suite's skipped tally via the all-steps branch.
         suite.flows.push(FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "all_skipped_flow".to_string(),
             success: true,
             step_results: vec![skipped_step("tap", "A"), skipped_step("tap", "B")],
@@ -1270,6 +1326,7 @@ mod tests {
         let mut suite = sample_suite();
         suite.flows.push(FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "spared_flow".to_string(),
             success: true,
             step_results: vec![],
@@ -1311,6 +1368,7 @@ mod tests {
         // a flake entry SHALL surface.
         let mk = |success: bool, idx: u32| FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "flaky".to_string(),
             success,
             step_results: vec![success_step("launch", "", 10)],
@@ -1380,6 +1438,7 @@ mod tests {
     fn json_omits_perf_when_empty() {
         let report = FlowReport {
             first_failure_code: None,
+            a11y_audits: vec![],
             flow_name: "no_perf_flow".to_string(),
             success: true,
             step_results: vec![success_step("launch", "", 100)],
