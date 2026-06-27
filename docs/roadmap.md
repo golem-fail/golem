@@ -1,24 +1,36 @@
 # Roadmap
 
-## iOS webview element bounds: ~9pt constant vertical offset
+## iOS embedded (non-full-screen) webview support
 
-iOS **webview** (WebKit-Inspector DOM) element bounds sit a constant **~9pt
-(~27px at scale 3)** too high vs the rendered pixels. Measured via the a11y
-annotation: blue label text-centres land ~27px below the drawn box top at both
-y=222 and y=1047 (constant, so an additive offset, not a scale error). **Native
-(XCUITest) bounds are pixel-perfect** — isolated to the webview path. Root: the
-DOM→screen vertical mapping (`golem-driver/src/ios.rs` `safe_area_top` +
-`golem-driver/src/webkit.rs` `bcr·scale + offset`) — most of the safe-area inset
-is applied, one additive term (likely a `visualViewport.offsetTop`/safe-area
-rounding) is ~9pt short.
+Surfaced by the embedded-webview fixture in `test-app-b` (a small WKWebView/
+Android WebView at a known non-top offset). **Two coupled gaps, iOS-specific:**
 
-Impact (all minor, pre-existing): webview **taps** land ~9pt off-centre (within
-button tolerance — e2e passes), **occlusion** hit-test points shift the same,
-and the **a11y contrast crop + annotation** are offset (crop box is taller than
-the offset so contrast still reads correctly; annotation rect looks ~9pt high).
-Fix = correct the short additive term at the source, then re-validate iOS
-webview e2e (taps/occlusion/annotation tighten together). Localize ~30–60min;
-fix likely a few lines; low risk.
+1. **golem detects an embedded WKWebView but never reads its DOM.**
+   `find_webview_bounds` locates the embedded webview (live run: native frame
+   `wv_y=174`), but the WebKit-Inspector enrichment never fires — the inner DOM
+   (`wv-alpha`/`wv-beta`/`wv-faint`) never enters the tree, so golem sees an
+   opaque native node and can't target/assert/audit anything inside it. Likely
+   cause (dig in `golem-driver/src/webkit.rs`): the inspector locks onto the
+   primary inspectable page, so a *secondary* embedded webview's page isn't
+   enriched. Detection works; enrichment/page-selection is the gap.
+2. **`ios.rs` adds `safe_area_top` to the webview y unconditionally** — correct
+   for a top-anchored full-screen webview (Tauri: `native_wv_y≈0`), but wrong
+   for an embedded webview whose native frame is already screen-absolute
+   (`native_wv_y=174` → would be shoved +54pt low). **Latent today** (only
+   manifests once #1 is fixed and embedded DOM is actually placed), so it's
+   coupled to #1 — fix together: make the inset conditional on the webview
+   being top-anchored/cover, else let the native frame carry placement.
+
+Real-world relevant (in-app browsers, OAuth, hybrid screens) but lower priority
+than full-screen webviews (handled). **Android embedded WebViews untested** —
+CDP enumerates targets, so it may behave differently; check when tackling.
+Validation vehicle: a `test-app-b` embedded-webview fixture (was prototyped
+this session — a small WKWebView/Android WebView at a known offset — then
+reverted; re-add when tackling this).
+
+(The related *full-screen* cover-webview offset — native safe-area inset 54 vs
+CSS env 62 → −8pt on every Tauri/full-screen webview — is already fixed:
+`webkit.rs` cancels the native inset `ios.rs` added, not the CSS env.)
 
 ## A11y audit follow-ups (from the audit feature)
 

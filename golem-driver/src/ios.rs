@@ -301,8 +301,9 @@ async fn try_enrich(
     mut state: WebKitState,
     wv_x: i32,
     wv_y: i32,
+    safe_area_top: i32,
 ) -> Option<WebKitState> {
-    match crate::webkit::fetch_webview_dom(&mut state.inspector, wv_x, wv_y).await {
+    match crate::webkit::fetch_webview_dom(&mut state.inspector, wv_x, wv_y, safe_area_top).await {
         Some(dom) => {
             replace_webview_children(raw, dom);
             Some(state)
@@ -410,14 +411,14 @@ impl PlatformDriver for IosDriver {
 
             // Now do async WebKit work outside the lock
             if let WebKitAction::Enrich(state) = webkit_action {
-                if let Some(state) = try_enrich(&mut raw, state, wv_x, wv_y).await {
+                if let Some(state) = try_enrich(&mut raw, state, wv_x, wv_y, safe_area_top).await {
                     // Put state back
                     let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
                     *wk = WebKitLifecycle::Ready(state);
                 } else {
                     // Inspector failed — reconnect immediately
                     if let Some(new_state) = setup_webkit(&self.device_id).await {
-                        if let Some(new_state) = try_enrich(&mut raw, new_state, wv_x, wv_y).await {
+                        if let Some(new_state) = try_enrich(&mut raw, new_state, wv_x, wv_y, safe_area_top).await {
                             let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
                             *wk = WebKitLifecycle::Ready(new_state);
                         } else {

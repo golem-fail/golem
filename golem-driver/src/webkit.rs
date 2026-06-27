@@ -892,6 +892,34 @@ impl WebKitInspector {
 // Public API: fetch WebView DOM
 // ---------------------------------------------------------------------------
 
+/// Map webview DOM (layout-viewport) coords to screen coords as a `(dx, dy)`
+/// offset added to each node's bounds. `ios.rs` folded the NATIVE safe-area
+/// inset into `webview_bounds_top`; for a `viewport-fit=cover` page (detected
+/// by a non-zero CSS `env(safe-area-inset-top)`) the layout viewport top is the
+/// screen top, so that inset must be cancelled — using the value actually added
+/// (`native_safe_area_top`), NOT the CSS env, which can differ (e.g. native 54
+/// vs CSS 62 on a Dynamic-Island device) and would over-cancel, shifting every
+/// element up by the difference. Non-cover pages cancel nothing. The visual-
+/// viewport offset (keyboard) is always subtracted.
+fn webview_screen_offset(
+    webview_bounds_left: i32,
+    webview_bounds_top: i32,
+    css_safe_area_left: i32,
+    css_safe_area_top: i32,
+    native_safe_area_top: i32,
+    vv_offset_left: i32,
+    vv_offset_top: i32,
+) -> (i32, i32) {
+    let cancel_top = if css_safe_area_top > 0 {
+        native_safe_area_top
+    } else {
+        0
+    };
+    let dx = webview_bounds_left - css_safe_area_left - vv_offset_left;
+    let dy = webview_bounds_top - cancel_top - vv_offset_top;
+    (dx, dy)
+}
+
 /// Fetch the live DOM tree from an iOS WKWebView via WebKit Inspector.
 ///
 /// Connects to the simulator's inspector socket, evaluates the DOM traversal
@@ -907,6 +935,10 @@ pub(crate) async fn fetch_webview_dom(
     inspector: &mut WebKitInspector,
     webview_bounds_left: i32,
     webview_bounds_top: i32,
+    // The NATIVE safe-area top inset that `ios.rs` folded into
+    // `webview_bounds_top`. Used to cancel exactly that inset for cover pages
+    // (the page's CSS env can differ and must not be used as the amount).
+    native_safe_area_top: i32,
 ) -> Option<serde_json::Value> {
     let dom_json = match inspector
         .evaluate_js(crate::cdp::DOM_TRAVERSAL_JS.trim())
@@ -991,20 +1023,15 @@ pub(crate) async fn fetch_webview_dom(
         if (vv_scale - 1.0).abs() > 0.01 {
             crate::cdp::scale_bounds_by_dpr(&mut tree, vv_scale);
         }
-        // Final screen Y for a DOM node:
-        //   bcr + webview_bounds_top - css_safe_area_top
-        //
-        // - `viewport-fit=cover` page: bcr is in screen coords (layout
-        //   viewport top = screen 0), css env returns the native inset
-        //   (e.g. 54). webview_bounds_top already includes that 54
-        //   (added by the caller). Subtracting css_safe_area_top cancels
-        //   it out, leaving bcr + (wv_native_y) — correct.
-        // - Non-cover page: layout viewport sits below the safe area, so
-        //   bcr is offset by 0 from there. webview_bounds_top has the
-        //   native inset added. css env returns 0. Subtracting 0 leaves
-        //   the existing behaviour intact.
-        let dx = webview_bounds_left - css_safe_area_left - vv_offset_left;
-        let dy = webview_bounds_top - css_safe_area_top - vv_offset_top;
+        let (dx, dy) = webview_screen_offset(
+            webview_bounds_left,
+            webview_bounds_top,
+            css_safe_area_left,
+            css_safe_area_top,
+            native_safe_area_top,
+            vv_offset_left,
+            vv_offset_top,
+        );
         crate::cdp::offset_bounds(&mut tree, dx, dy);
         Some(tree)
     } else {
@@ -1015,6 +1042,30 @@ pub(crate) async fn fetch_webview_dom(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // webview_screen_offset: cover pages cancel the NATIVE inset (what was
+    // added), not the CSS env — the bug that put every webview element ~8pt
+    // too high when native(54) ≠ CSS(62).
+    #[test]
+    fn webview_offset_cover_cancels_native_inset_not_css() {
+        // native inset 54 folded into webview_bounds_top; CSS env reports 62.
+        let (_, dy) = webview_screen_offset(0, 54, 0, 62, 54, 0, 0);
+        assert_eq!(dy, 0, "cover cancels the native 54, not the CSS 62 (was -8)");
+    }
+
+    #[test]
+    fn webview_offset_noncover_keeps_inset() {
+        // Non-cover (CSS env 0): cancel nothing → content sits below the inset.
+        let (_, dy) = webview_screen_offset(0, 54, 0, 0, 54, 0, 0);
+        assert_eq!(dy, 54);
+    }
+
+    #[test]
+    fn webview_offset_subtracts_visual_viewport() {
+        // Keyboard-shifted visual viewport is always subtracted (cover case).
+        let (_, dy) = webview_screen_offset(0, 54, 0, 62, 54, 0, 10);
+        assert_eq!(dy, -10);
+    }
 
     // 1. build_rpc nests the selector and argument dictionary under the
     //    expected `__selector` / `__argument` keys.
