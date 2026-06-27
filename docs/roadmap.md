@@ -1242,15 +1242,50 @@ No app data cleaning logic exists in the execution path. The flag is accepted bu
 
 Flag is defined but never read. `ResourceManager` uses default concurrency config regardless of this value.
 
-## Ethereal Email Integration
+## Ethereal email: `create_inbox` action (provision) + live IMAP receive
 
-`golem-email` crate has a working `EtherealClient` that creates temporary inboxes via the Nodemailer API (`https://api.nodemailer.com/user`), and an `ImapPoller` that polls IMAP for matching emails. Both are tested but not wired into the runner or generator system.
+`golem-email` has a working **async** `EtherealClient` (provisions temp inboxes
+via the Nodemailer API, injectable `HttpClient` for tests) and an `ImapPoller`.
+`await_email` (golem-runner) is **fully implemented** — poll loop, glob `subject`/
+`to` match, `extract` (regex, capture-group-1 → one piece like an OTP), `save_to`.
+Two gaps remain: provisioning isn't wired, and the real IMAP backend is a stub.
 
-Intended usage: a `fake:email(ethereal=true)` parameter or a dedicated `fake:ethereal_email` generator that creates a real temporary inbox and exposes IMAP credentials as structured fields (`imap_host`, `imap_port`, `user`, `pass`). This would feed directly into `await_email`'s `inbox` parameter for end-to-end email verification flows.
+**Design decided (not a `fake:` generator).** Provisioning is an async network
+call, and `${}` generator resolution is intentionally sync + pure (the `--seed`
+reproducibility contract; the resolver is a non-async `Fn` in the hot
+`interpolate` loop). So this is NOT `fake:email(ethereal=true)` / `${ethereal:email}`.
+It uses the existing **action + `save_to`** pattern (as `http`/`await_email`/`bash`
+already do — async work → `set_in_scope(Flow, save_to, …)` → later `${var}`):
 
-This needs design work before implementation. The full email verification flow spans multiple concerns: creating the inbox, sending the email (via the app under test), polling for arrival, extracting content (verification URLs, OTP codes), and feeding extracted values back into the flow as variables. The `await_email` action already has `extract` (regex patterns) and `save_to`, but the end-to-end ergonomics — how a test author wires up `fake:email` → app signup → `await_email` → `open_link` — need to be planned as a cohesive feature.
+```toml
+{ action = "create_inbox", provider = "ethereal", save_to = "inbox" }
+# app signs up with ${inbox.address}
+{ action = "await_email", inbox = "inbox", subject = "*verify*",
+  extract = { otp = "code: (\\d{6})" }, save_to = "mail" }   # → ${mail.otp}
+```
 
-Files: `golem-email/src/ethereal.rs`, `golem-email/src/imap_poller.rs`.
+`create_inbox`: `provider` (built-in `ethereal`; pluggable later) + required
+`save_to`; async with a default + overridable `timeout`. Writes an object
+`{address(=user), user, pass, imap_host, imap_port, smtp_host, smtp_port}` at
+Flow scope — the `imap_*`/`user`/`pass` fields are exactly what `await_email`
+reads from its `inbox` namespace. **Non-deterministic by design** (network; not
+`--seed`-reproducible — the side-effecting action signals that, unlike a pure
+`${}` value). I/O actions should carry a timeout even if not overridable.
+
+**Phase 1 — `create_inbox` (provision):** dispatch arm (`actions.rs`) + handler
+(`actions/external.rs`, reuse `EtherealClient`) + validation (add to
+KNOWN_ACTIONS, require `provider`/`save_to`) + policy I/O-timeout classification +
+unit tests (injected mock `HttpClient`, no network) + `actions-reference.md` docs.
+Yields a usable `${inbox.address}` (the "send" half); can't receive yet.
+
+**Phase 2 — live IMAP receive:** implement `RealImapConnection::fetch_inbox`
+(`golem-email/src/imap_poller.rs:196`, currently a `bail!` stub) via an `imap`
+crate + TLS, so `await_email` polls the real inbox → OTP/URL → `open_link`.
+New deps; real-server testing; bigger lift.
+
+Files: `golem-email/src/{ethereal.rs,imap_poller.rs}`,
+`golem-runner/src/{actions.rs,actions/external.rs,policy.rs}`,
+`golem-parser/src/validation.rs`, `docs/actions-reference.md`.
 
 ## TOON Timestamp Representation
 
