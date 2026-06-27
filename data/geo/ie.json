@@ -9,7 +9,8 @@
       "+353-#-###-####"
     ],
     "postcode_format": "A## A#A# (Eircode)",
-    "name_order": "given_first"
+    "name_order": "given_first",
+    "person": { "name": ["local", "ascii"], "reading": [], "local": ["ascii", "diacritics_ga"] }
   },
   "states": [
     {

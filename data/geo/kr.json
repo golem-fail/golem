@@ -10,7 +10,8 @@
       "+82-##-####-####"
     ],
     "postcode_format": "#####",
-    "name_order": "family_first"
+    "name_order": "family_first",
+    "person": { "name": ["local", "ascii"], "reading": ["hangul"], "local": ["hangul"] }
   },
   "states": [
     {

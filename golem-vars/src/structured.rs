@@ -1,6 +1,7 @@
 mod address;
 mod credit_card;
 mod person;
+mod repertoire;
 
 use anyhow::Result;
 use rand::Rng;

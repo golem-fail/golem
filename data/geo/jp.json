@@ -9,7 +9,8 @@
       "+81-###-###-####"
     ],
     "postcode_format": "###-####",
-    "name_order": "family_first"
+    "name_order": "family_first",
+    "person": { "name": ["local", "ascii"], "reading": ["katakana"], "local": ["kanji", "hiragana"] }
   },
   "states": [
     {

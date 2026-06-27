@@ -300,7 +300,7 @@ fn fixture_with_generators_evaluates_fake_values() {
     write_fixture(
         dir,
         "gen_user",
-        "[vars]\nemail = \"${fake:email}\"\nfirst = \"${fake:first_name}\"\n",
+        "[vars]\nemail = \"${fake:email}\"\nfirst = \"${fake:city}\"\n",
     );
 
     let mut store = VariableStore::new();

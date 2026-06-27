@@ -10,7 +10,8 @@
       "+370-37-###-###"
     ],
     "postcode_format": "LT-#####",
-    "name_order": "given_first"
+    "name_order": "given_first",
+    "person": { "name": ["local", "ascii"], "reading": [], "local": ["ascii", "diacritics_lt"] }
   },
   "states": [
     {

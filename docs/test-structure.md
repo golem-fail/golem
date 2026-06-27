@@ -450,88 +450,25 @@ steps = [
 
 ## Fake Data Generators
 
-Generate realistic test data with `${fake:…}`. Generators work anywhere `${…}`
-interpolation does — in variable declarations and inline in step fields (e.g.
-`input = "${fake:email}"`). A whole-value declaration keeps an object
-(`card = "${fake:credit_card()}"`, then `${card.number}`); used in a string or
-step field a generator must resolve to a scalar (use `.field` for objects).
-Generators produce random but valid values; use `--seed <N>` for deterministic
-replay.
+Generate realistic test data with `${fake:…}` — `email`, `password`, `uuid`,
+`number`, `phone`, `city`, and the structured `person` / `address` /
+`credit_card`. Values are random but valid; `--seed <N>` replays deterministically.
 
 ```toml
 [flow.vars]
 email = "${fake:email}"
-user = "${fake:person(country=JP)}"
-addr = "${fake:address(country=GB)}"
-card = "${fake:credit_card(brand=visa)}"
+user  = "${fake:person(country=JP)}"
+addr  = "${fake:address(country=GB)}"
 ```
 
-Access structured fields with dot notation: `${user.name}`, `${addr.city}`, `${card.number}`.
+`${fake:person}` is country-aware and exposes names across scripts —
+`person.name` (the primary field for the country), `person.reading.name`
+(furigana/reading), `person.ascii.name` (Latin), plus raw per-script branches
+like `person.katakana.name` and `person.hangul.name`.
 
-### Simple generators
-
-| Generator | Output | Parameters |
-|-----------|--------|------------|
-| `${fake:email}` | `abc123@example.com` | `prefix`, `domain` |
-| `${fake:first_name}` | Random first name | — |
-| `${fake:last_name}` | Random last name | — |
-| `${fake:password}` | Random password | `length` (default 12), `symbols` (default true) |
-| `${fake:uuid}` | UUID v4 | — |
-| `${fake:number}` | Random integer string | `min` (default 0), `max` (default 100) |
-| `${fake:sentence}` | Simple English sentence | — |
-| `${fake:timestamp}` | ISO 8601 within last year | — |
-| `${fake:phone}` | Country-formatted phone | `country` (ISO code), `format` (`#` = digit) |
-| `${fake:city}` | City name | `country`, `region` |
-| `${fake:postcode}` | Postal code | `country` |
-| `${fake:street}` | Street address | `country` |
-
-### Structured generators
-
-These return objects with multiple fields.
-
-**`${fake:person}`** — `country` parameter affects name ordering and phone format.
-
-| Field | Example |
-|-------|---------|
-| `first` | Yuki |
-| `last` | Tanaka |
-| `name` | Tanaka Yuki (family-first for JP/CN/KR) |
-| `email` | yuki.tanaka@example.com |
-| `phone` | +81-90-1234-5678 |
-
-**`${fake:address}`** — Parameters: `country`, `state`, `region`.
-
-| Field | Example |
-|-------|---------|
-| `street` | 42 Baker Street |
-| `city` | London |
-| `state` | England |
-| `postcode` | SW1A 1AA |
-| `country` | United Kingdom |
-| `country_code` | GB |
-
-**`${fake:credit_card}`** — Generates Luhn-valid card numbers. Parameters: `brand` (visa/mastercard/amex/discover), `provider` (stripe/adyen/square/etc.), `status`.
-
-| Field | Example |
-|-------|---------|
-| `number` | 4532015112830366 |
-| `expiry` | 03/28 |
-| `cvv` | 123 |
-| `brand` | visa |
-| `status` | (empty if approved) |
-
-Status options without provider: `approved`, `declined:invalid_number`, `declined:expired`, `declined:invalid_cvv`, `threeds`. Provider-specific statuses vary.
-
-### Cross-references
-
-Later generators can reference earlier variables:
-
-```toml
-[flow.vars]
-addr = "${fake:address(country=JP)}"
-phone = "${fake:phone(country=${addr.country_code})}"
-person = "${fake:person(country=${addr.country_code})}"
-```
+**See [Fake Data Generators](fake-data.md) for the full reference**: every
+simple generator, the structured generators, and the `person` representation /
+chain / `country` model.
 
 ## Multi-App Flows
 

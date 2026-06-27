@@ -7,8 +7,6 @@ use uuid::Uuid;
 pub fn generate_simple(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue, VarError> {
     match def.name.as_str() {
         "email" => generate_email(def, rng),
-        "first_name" => generate_first_name(rng),
-        "last_name" => generate_last_name(rng),
         "password" => generate_password(def, rng),
         "uuid" => generate_uuid(),
         "number" => generate_number(def, rng),
@@ -46,46 +44,6 @@ fn generate_email(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue, Va
 
     let email = format!("{prefix}{random_part}@{domain}");
     Ok(VarValue::String(email))
-}
-
-// ---------------------------------------------------------------------------
-// Name pool — loaded from data/names.json
-// ---------------------------------------------------------------------------
-
-static NAMES_JSON: &str = include_str!("../../data/names.json");
-
-#[derive(serde::Deserialize)]
-struct NamesData {
-    first_names: Vec<NameEntry>,
-    last_names: Vec<NameEntry>,
-}
-
-#[derive(serde::Deserialize)]
-struct NameEntry {
-    #[allow(dead_code)]
-    name: String,
-    name_en: String,
-}
-
-fn names_data() -> &'static NamesData {
-    static INSTANCE: std::sync::OnceLock<NamesData> = std::sync::OnceLock::new();
-    INSTANCE.get_or_init(|| {
-        serde_json::from_str(NAMES_JSON).expect("data/names.json should be valid JSON")
-    })
-}
-
-/// Pick a random first name from the global names pool.
-fn generate_first_name(rng: &mut impl Rng) -> Result<VarValue, VarError> {
-    let data = names_data();
-    let idx = rng.gen_range(0..data.first_names.len());
-    Ok(VarValue::String(data.first_names[idx].name_en.clone()))
-}
-
-/// Pick a random last name from the global names pool.
-fn generate_last_name(rng: &mut impl Rng) -> Result<VarValue, VarError> {
-    let data = names_data();
-    let idx = rng.gen_range(0..data.last_names.len());
-    Ok(VarValue::String(data.last_names[idx].name_en.clone()))
 }
 
 /// Generate a random password.
@@ -272,24 +230,6 @@ mod tests {
         assert!(email.contains('+'), "SHALL contain +, got: {email}");
     }
 
-    // 4. first_name returns non-empty string
-    #[test]
-    fn first_name_returns_non_empty() {
-        let mut rng = seeded_rng();
-        let result = generate_simple(&def("first_name"), &mut rng).expect("should generate");
-        let name = result.as_str().expect("should be string");
-        assert!(!name.is_empty());
-    }
-
-    // 5. last_name returns non-empty string
-    #[test]
-    fn last_name_returns_non_empty() {
-        let mut rng = seeded_rng();
-        let result = generate_simple(&def("last_name"), &mut rng).expect("should generate");
-        let name = result.as_str().expect("should be string");
-        assert!(!name.is_empty());
-    }
-
     // 6. password default — 12+ chars, contains letters and digits
     #[test]
     fn password_default_length_and_content() {
@@ -409,40 +349,6 @@ mod tests {
         assert_ne!(
             email1, email2,
             "successive calls should produce different values"
-        );
-    }
-
-    // 16. first_name pool diversity: >50 unique names from 200 draws (Issue 13)
-    #[test]
-    fn first_name_pool_diversity() {
-        let mut unique: std::collections::HashSet<String> = std::collections::HashSet::new();
-        for seed in 0u64..200 {
-            let mut rng = ChaCha8Rng::seed_from_u64(seed);
-            let result = generate_simple(&def("first_name"), &mut rng).expect("SHALL generate");
-            let name = result.as_str().expect("SHALL be string").to_string();
-            unique.insert(name);
-        }
-        assert!(
-            unique.len() > 50,
-            "SHALL draw from pool >50 unique first names in 200 draws, got {}",
-            unique.len()
-        );
-    }
-
-    // 17. last_name pool diversity: >50 unique names from 200 draws (Issue 13)
-    #[test]
-    fn last_name_pool_diversity() {
-        let mut unique: std::collections::HashSet<String> = std::collections::HashSet::new();
-        for seed in 0u64..200 {
-            let mut rng = ChaCha8Rng::seed_from_u64(seed);
-            let result = generate_simple(&def("last_name"), &mut rng).expect("SHALL generate");
-            let name = result.as_str().expect("SHALL be string").to_string();
-            unique.insert(name);
-        }
-        assert!(
-            unique.len() > 50,
-            "SHALL draw from pool >50 unique last names in 200 draws, got {}",
-            unique.len()
         );
     }
 

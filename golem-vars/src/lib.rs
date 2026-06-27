@@ -6,8 +6,11 @@ pub mod generators;
 pub mod geo;
 pub mod geo_loader;
 pub mod interpolation;
+mod kana;
+mod script;
 pub mod seed;
 pub mod structured;
+mod transcribe;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -288,7 +291,7 @@ impl GeneratorDef {
 
             let mut params = HashMap::new();
             if !params_str.is_empty() {
-                for pair in params_str.split(',') {
+                for pair in split_top_level_commas(params_str) {
                     let mut parts = pair.splitn(2, '=');
                     let key = parts.next()?.trim().to_string();
                     let value = parts.next()?.trim().to_string();
@@ -304,6 +307,28 @@ impl GeneratorDef {
             })
         }
     }
+}
+
+/// Split a parameter string on top-level commas only, leaving commas inside
+/// `[...]` intact so array-valued params (`name=[local, ascii]`) survive as a
+/// single `key=value` pair.
+fn split_top_level_commas(s: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut depth = 0usize;
+    let mut start = 0usize;
+    for (i, c) in s.char_indices() {
+        match c {
+            '[' => depth += 1,
+            ']' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                out.push(&s[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    out.push(&s[start..]);
+    out
 }
 
 #[cfg(test)]
@@ -411,6 +436,21 @@ mod tests {
         assert_eq!(gen.name, "email");
         assert_eq!(gen.params.get("prefix"), Some(&"test".to_string()));
         assert_eq!(gen.params.get("domain"), Some(&"acme.com".to_string()));
+    }
+
+    #[test]
+    fn generator_def_parse_keeps_bracketed_array_value_intact() {
+        // Commas inside [...] SHALL NOT split the params: the whole list is one
+        // value, so chain params like name=[local, ascii] survive parsing.
+        let gen = GeneratorDef::parse("fake:person(country=JP,name=[local, ascii])")
+            .expect("should parse");
+        assert_eq!(gen.name, "person");
+        assert_eq!(gen.params.get("country"), Some(&"JP".to_string()));
+        assert_eq!(
+            gen.params.get("name"),
+            Some(&"[local, ascii]".to_string()),
+            "bracketed array value SHALL survive as a single param"
+        );
     }
 
     #[test]

@@ -148,7 +148,7 @@ mod tests {
     #[test]
     fn integration_same_seed_same_generated_values() {
         let def = GeneratorDef {
-            name: "first_name".to_string(),
+            name: "email".to_string(),
             params: HashMap::new(),
         };
 

@@ -9,7 +9,8 @@
       "+20-#-####-####"
     ],
     "postcode_format": "#####",
-    "name_order": "given_first"
+    "name_order": "given_first",
+    "person": { "name": ["local", "ascii"], "reading": [], "local": ["arabic"] }
   },
   "states": [
     {

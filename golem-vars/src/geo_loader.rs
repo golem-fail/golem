@@ -67,8 +67,27 @@ pub(crate) struct GeoCountry {
     pub(crate) phone_formats: Vec<String>,
     #[allow(dead_code)]
     pub(crate) postcode_format: String,
-    #[allow(dead_code)]
+    /// Personal-name ordering for this country: `"family_first"` or
+    /// `"given_first"`. Consumed by the person generator.
     pub(crate) name_order: String,
+    /// Per-country person-name preset: the `name`/`reading` resolution chains
+    /// and the `local` accepted repertoire, as repertoire/representation token
+    /// names (see `structured::repertoire` / `structured::person`). Empty when
+    /// a country file omits the block.
+    #[serde(default)]
+    pub(crate) person: PersonPreset,
+}
+
+/// Token-name lists for a country's person-name preset. Parsed into
+/// representation/repertoire enums by the person generator.
+#[derive(Deserialize, Default)]
+pub(crate) struct PersonPreset {
+    #[serde(default)]
+    pub(crate) name: Vec<String>,
+    #[serde(default)]
+    pub(crate) reading: Vec<String>,
+    #[serde(default)]
+    pub(crate) local: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -131,6 +150,7 @@ impl GeoCountry {
             phone_formats,
             postcode_format: String::new(),
             name_order: "western".to_string(),
+            person: PersonPreset::default(),
         }
     }
 }

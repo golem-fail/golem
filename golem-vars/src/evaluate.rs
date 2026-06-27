@@ -337,7 +337,7 @@ mod tests {
                 "${fake:address(country=JP)}".to_string(),
             ),
             ("email".to_string(), "${fake:email}".to_string()),
-            ("name".to_string(), "${fake:first_name}".to_string()),
+            ("name".to_string(), "${fake:city}".to_string()),
         ];
 
         let mut rng1 = seeded_rng();

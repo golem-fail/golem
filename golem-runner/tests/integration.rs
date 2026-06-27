@@ -360,7 +360,7 @@ steps = [
 }
 
 // ---------------------------------------------------------------------------
-// 5. Fake data generation: flow vars with fake:email, fake:first_name
+// 5. Fake data generation: flow vars with fake:email, fake:city
 // ---------------------------------------------------------------------------
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_fake_data_generation_in_flow_vars() {
@@ -370,7 +370,7 @@ name = "fake data test"
 
 [flow.vars]
 user_email = "${fake:email}"
-user_name = "${fake:first_name}"
+user_name = "${fake:city}"
 
 [[block]]
 name = "verify"
@@ -420,12 +420,12 @@ steps = [
         "generated email should contain @, got: {email_str}"
     );
 
-    // Verify first_name was generated and is non-empty
+    // Verify user_name was generated and is non-empty
     let name_val = vars.get("user_name").expect("user_name should exist");
     let name_str = name_val.as_str().expect("should be a string");
     assert!(
         !name_str.is_empty(),
-        "generated first_name should not be empty"
+        "generated user_name should not be empty"
     );
 }
 

@@ -8,7 +8,8 @@
       "+1-###-###-####"
     ],
     "postcode_format": "A#A #A#",
-    "name_order": "given_first"
+    "name_order": "given_first",
+    "person": { "name": ["local", "ascii"], "reading": [], "local": ["ascii", "diacritics_fr"] }
   },
   "states": [
     {

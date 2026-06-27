@@ -10,7 +10,8 @@
       "+32-###-##-##-##"
     ],
     "postcode_format": "####",
-    "name_order": "given_first"
+    "name_order": "given_first",
+    "person": { "name": ["local", "ascii"], "reading": [], "local": ["ascii", "diacritics_fr", "diacritics_nl", "diacritics_de"] }
   },
   "states": [
     {
