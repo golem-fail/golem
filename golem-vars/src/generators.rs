@@ -221,10 +221,16 @@ fn capitalize_first(s: &str) -> String {
     }
 }
 
-/// Subtract `years` whole calendar years from `dt` (clamping Feb-29 → Feb-28).
-fn sub_years(dt: DateTime<Utc>, years: u32) -> DateTime<Utc> {
-    dt.checked_sub_months(Months::new(years.saturating_mul(12)))
-        .unwrap_or(dt)
+/// `dt` minus `years` whole calendar years (clamping Feb-29 → Feb-28). A
+/// **negative** `years` moves into the future (subtracting a negative). Saturates
+/// on overflow rather than panicking.
+fn sub_years(dt: DateTime<Utc>, years: i32) -> DateTime<Utc> {
+    let months = Months::new(years.unsigned_abs().saturating_mul(12));
+    if years >= 0 {
+        dt.checked_sub_months(months).unwrap_or(dt)
+    } else {
+        dt.checked_add_months(months).unwrap_or(dt)
+    }
 }
 
 /// Generate a timestamp **object** anchored on the run's reference instant
@@ -235,21 +241,24 @@ fn sub_years(dt: DateTime<Utc>, years: u32) -> DateTime<Utc> {
 /// the zero-padded parts `year` / `month` / `day` — the parts suit forms with
 /// separate date inputs (e.g. a three-field date of birth).
 ///
-/// Window params, both counted **back from the anchor in whole years**:
-/// - `max_years` — the oldest the date may be (far edge; default 1).
-/// - `min_years` — the youngest (near edge; default 0, i.e. the anchor).
+/// Window params, both counted **in whole years relative to the anchor** —
+/// positive = into the past, **negative = into the future**:
+/// - `max_years` — the far edge (default 1).
+/// - `min_years` — the near edge (default 0, i.e. the anchor).
 ///
 /// The date is drawn uniformly from `[anchor - max_years, anchor - min_years]`.
-/// Default (no params) → within the last year. A date of birth is just a window
-/// pushed back: `min_years=18, max_years=90`. Reversed bounds are swapped.
+/// Default (no params) → within the last year. A date of birth pushes the window
+/// back: `min_years=18, max_years=90`. A future window (e.g. a licence/renewal
+/// expiry up to 5 years out) uses negatives: `min_years=-5, max_years=0`.
+/// Reversed bounds are swapped.
 fn generate_timestamp(def: &GeneratorDef, rng: &mut FakeRng) -> Result<VarValue, VarError> {
     let anchor = rng.anchor();
 
-    let parse_years = |key: &str, default: u32| -> Result<u32, VarError> {
+    let parse_years = |key: &str, default: i32| -> Result<i32, VarError> {
         def.params
             .get(key)
             .map(|v| {
-                v.parse::<u32>()
+                v.parse::<i32>()
                     .map_err(|_| VarError::Other(format!("invalid {key}: {v}")))
             })
             .transpose()
@@ -447,7 +456,11 @@ mod tests {
             ts_field(&result, "month"),
             ts_field(&result, "day"),
         );
-        assert_eq!(date, format!("{year}-{month}-{day}"), "parts SHALL build date");
+        assert_eq!(
+            date,
+            format!("{year}-{month}-{day}"),
+            "parts SHALL build date"
+        );
         assert_eq!(month.len(), 2, "month SHALL be zero-padded, got: {month}");
         assert_eq!(day.len(), 2, "day SHALL be zero-padded, got: {day}");
         assert_eq!(
@@ -476,6 +489,24 @@ mod tests {
         assert!(
             (17..=41).contains(&age),
             "date SHALL be ~[18,40] years before anchor {anchor_year}, birth {birth_year}"
+        );
+    }
+
+    // 11c. Negative min/max produce a FUTURE window (e.g. a licence/renewal
+    //      expiry up to 5 years out): the drawn year is on/after the anchor.
+    #[test]
+    fn timestamp_negative_years_window_is_future() {
+        use chrono::Datelike;
+        let mut rng = seeded_rng();
+        let d = def_with_params("timestamp", &[("min_years", "-5"), ("max_years", "0")]);
+        let result = generate_simple(&d, &mut rng).expect("should generate");
+        let year: i32 = ts_field(&result, "year").parse().expect("year");
+        let anchor_year = seeded_rng().anchor().year();
+        let ahead = year - anchor_year;
+        // Whole-year-bucketed window [anchor, anchor+5]; allow the boundary years.
+        assert!(
+            (0..=6).contains(&ahead),
+            "date SHALL be ~0..5 years after anchor {anchor_year}, got {year}"
         );
     }
 
@@ -895,7 +926,8 @@ mod tests {
         let mut rng = seeded_rng();
         let err = generate_simple(&parsed, &mut rng).expect_err("empty one_of SHALL error");
         assert!(
-            err.to_string().contains("one_of requires at least one choice"),
+            err.to_string()
+                .contains("one_of requires at least one choice"),
             "got: {err}"
         );
     }

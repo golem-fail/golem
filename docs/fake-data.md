@@ -408,17 +408,19 @@ string context, like the other object generators).
 
 Anchored on the run's reference instant (see
 [Determinism and seeds](#determinism-and-seeds)) and **seed-reproducible**.
-The date is drawn from a window measured **back from the anchor in whole
-years**; by default that is the last year.
+The date is drawn from a window measured **in whole years relative to the
+anchor** — positive years are in the past, **negative years in the future**; by
+default that is the last year.
 
 | Param | Effect |
 |-------|--------|
-| `max_years` | Oldest the date may be — the far edge (default 1). `fake:timestamp(max_years=5).date` → within the last 5 years |
-| `min_years` | Youngest the date may be — the near edge (default 0, i.e. the anchor) |
+| `max_years` | The far edge (default 1). `fake:timestamp(max_years=5).date` → within the last 5 years |
+| `min_years` | The near edge (default 0, i.e. the anchor) |
 
-A **date of birth** is just a window pushed back — set both edges:
+A **date of birth** is a window pushed into the past — set both edges:
 `fake:timestamp(min_years=18, max_years=90).date` → someone aged 18–90 at the
-anchor.
+anchor. A **future** date (a licence/subscription expiry up to 5 years out) uses
+negatives: `fake:timestamp(min_years=-5, max_years=0).date`.
 
 ## Cross-references
 
