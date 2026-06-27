@@ -1,0 +1,40 @@
+{
+  "patterns": [
+    "Go na le {noun}.",
+    "Go na le {noun} le {noun}.",
+    "Go na le {noun}, {noun} le {noun}.",
+    "Fa go na le {noun}, go na le {noun}.",
+    "Go bonala {noun} le {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "setshwantsho",
+      "letsopa",
+      "seretse",
+      "setena",
+      "letlapa",
+      "leje",
+      "mmu",
+      "lerole",
+      "lefatshe",
+      "molora",
+      "moriti",
+      "senatla",
+      "modisa",
+      "thaba",
+      "noka",
+      "sekgwa",
+      "legodimo",
+      "tsela",
+      "tshipi",
+      "motlhaba",
+      "lobota",
+      "tora",
+      "kgoro",
+      "molelo",
+      "leru",
+      "phefo",
+      "metsi"
+    ]
+  }
+}

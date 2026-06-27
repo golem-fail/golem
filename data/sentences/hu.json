@@ -1,0 +1,36 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans} és {verb_intrans}.",
+    "{noun} {verb_trans} {noun} és {noun}.",
+    "{noun} {adj}.",
+    "{noun} {verb_trans} {noun}, és {noun} {verb_intrans}."
+  ],
+  "slots": {
+    "noun": [
+      "a gólem", "az agyag", "a sár", "a tégla", "a kő",
+      "a szobor", "az őrző", "az óriás", "az árnyék", "a por",
+      "a föld", "a kohó", "a bálvány", "a totem", "a kísértet",
+      "a hamu", "a kolosszus", "a barlang", "a tekercs", "a felirat",
+      "a hegy", "a folyó", "az erdő", "az ég", "az út",
+      "a vár", "a vas", "a homok", "a torony", "a fal",
+      "a kapu", "a láng", "a szikla", "a parázs", "a mocsár"
+    ],
+    "verb_intrans": [
+      "felébred", "összeomlik", "szunnyad", "feláll", "bolyong",
+      "remeg", "elsüllyed", "fordul", "növekszik", "ébredezik",
+      "dübörög", "moccan", "porlik"
+    ],
+    "verb_trans": [
+      "őrzi", "összezúzza", "cipeli", "védi", "formálja",
+      "emeli", "töri", "ragadja", "vonszolja", "fedi",
+      "alakítja", "tartja"
+    ],
+    "adj": [
+      "ősi", "néma", "hatalmas", "üreges", "repedezett",
+      "nyugtalan", "agyagból van", "törékeny", "örök", "földszínű",
+      "súlyos", "mozdulatlan"
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "patterns": [
+    "Kuna {noun}.",
+    "Hapa kuna {noun}.",
+    "Kuna {noun} na {noun}.",
+    "Kuna {noun}, {noun}, na {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "jitu la udongo",
+      "udongo",
+      "matope",
+      "tofali",
+      "jiwe",
+      "sanamu",
+      "mlinzi",
+      "jitu",
+      "kivuli",
+      "majivu",
+      "vumbi",
+      "ardhi",
+      "sanamu ya udongo",
+      "kinyago",
+      "mhunzi",
+      "mlima",
+      "mto",
+      "msitu",
+      "anga",
+      "barabara",
+      "chuma",
+      "mchanga",
+      "ukuta",
+      "mnara",
+      "lango",
+      "moto",
+      "mwamba",
+      "ngome"
+    ]
+  }
+}

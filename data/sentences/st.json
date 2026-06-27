@@ -1,0 +1,50 @@
+{
+  "patterns": [
+    "ho na le {noun}.",
+    "ho na le {noun} le {noun}.",
+    "ke bona {noun}.",
+    "ke bona {noun} le {noun}.",
+    "ho na le {noun}, {noun}, le {noun}.",
+    "ke bona {noun}, {noun}, le {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "letsopa",
+      "seretse",
+      "setene",
+      "lejwe",
+      "lefika",
+      "lehlabathe",
+      "setshwantsho",
+      "senatla",
+      "mohlokomeli",
+      "moriti",
+      "molora",
+      "lerole",
+      "mobu",
+      "mollo",
+      "thaba",
+      "noka",
+      "moru",
+      "leholimo",
+      "tsela",
+      "tshepe",
+      "lerako",
+      "terata",
+      "tora",
+      "heke",
+      "moutlwa",
+      "leqhwa",
+      "pula",
+      "kgwedi",
+      "naledi",
+      "sefate",
+      "sekgwa",
+      "letlapa",
+      "thota",
+      "motse",
+      "selepe",
+      "lehadima"
+    ]
+  }
+}

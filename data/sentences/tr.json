@@ -1,0 +1,32 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {obj} {verb_trans}.",
+    "{noun} {verb_intrans} ve {verb_intrans}.",
+    "{noun} {obj} ve {obj} {verb_trans}.",
+    "{noun} ile {noun} {verb_intrans}."
+  ],
+  "slots": {
+    "noun": [
+      "golem", "kil", "çamur", "tuğla", "taş", "heykel", "muhafız", "dev",
+      "gölge", "kül", "toz", "toprak", "ocak", "put", "totem", "kaya",
+      "dağ", "nehir", "orman", "gökyüzü", "yol", "demir", "kum", "duvar",
+      "kule", "kapı", "alev", "köprü", "kuyu", "kale"
+    ],
+    "obj": [
+      "golemi", "kili", "çamuru", "tuğlayı", "taşı", "heykeli", "muhafızı",
+      "devi", "gölgeyi", "külü", "tozu", "toprağı", "ocağı", "putu",
+      "totemi", "kayayı", "dağı", "nehri", "ormanı", "gökyüzünü", "yolu",
+      "demiri", "kumu", "duvarı", "kuleyi", "kapıyı", "alevi", "köprüyü",
+      "kuyuyu", "kaleyi"
+    ],
+    "verb_intrans": [
+      "uyanır", "yükselir", "çöker", "uyur", "kalkar", "kıpırdar", "titrer",
+      "dağılır", "sertleşir", "dolaşır"
+    ],
+    "verb_trans": [
+      "korur", "ezer", "taşır", "şekillendirir", "kaldırır", "kırar",
+      "kavrar", "sürükler", "örter", "yoğurur"
+    ]
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "patterns": [
+    "Waliwo {noun}.",
+    "Waliwo {noun} ne {noun}.",
+    "Waliwo {noun}, {noun}, ne {noun}.",
+    "Ndaba {noun}.",
+    "Ndaba {noun} ne {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "ebbumba",
+      "ettosi",
+      "ettoffaali",
+      "ejjinja",
+      "ekifaananyi",
+      "ekibumbe",
+      "omukuumi",
+      "omuzimu",
+      "ekisiikirize",
+      "evvu",
+      "enfuufu",
+      "ettaka",
+      "ekkomera",
+      "olwazi",
+      "olusozi",
+      "omugga",
+      "ekibira",
+      "eggulu",
+      "oluguudo",
+      "ekyuma",
+      "omusenyi",
+      "ekisenge",
+      "omunaala",
+      "omulyango",
+      "olulimi",
+      "omuliro",
+      "ekkubo",
+      "amayinja",
+      "ekifo"
+    ]
+  }
+}

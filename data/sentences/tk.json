@@ -1,0 +1,32 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {obj} {verb_trans}.",
+    "{noun} {verb_intrans} we {verb_intrans}.",
+    "{noun} {obj} we {obj} {verb_trans}.",
+    "{noun} bilen {noun} {obj} {verb_trans}."
+  ],
+  "slots": {
+    "noun": [
+      "golem", "palçyk", "läbik", "kerpiç", "daş", "heýkel", "but", "kölege",
+      "tozan", "toprak", "dew", "äpet", "gorag", "kül", "ojak", "totem",
+      "dag", "derýa", "tokaý", "asman", "demir", "çäge", "diwar", "diň",
+      "derweze", "ot", "gaýa", "ýol", "gum", "köl"
+    ],
+    "obj": [
+      "golemi", "palçygy", "läbigi", "kerpiji", "daşy", "heýkeli", "buty",
+      "kölegäni", "tozany", "topragy", "dewi", "äpeti", "goragy", "küli",
+      "ojagy", "totemi", "dagy", "derýany", "tokaýy", "asmany", "demri",
+      "çägäni", "diwary", "diňi", "derwezäni", "ody", "gaýany", "ýoly",
+      "gumy", "köli"
+    ],
+    "verb_intrans": [
+      "oýanýar", "ýykylýar", "ýatýar", "galýar", "titreýär", "ýöreýär",
+      "batýar", "ýanýar", "döreýär", "gaýdýar"
+    ],
+    "verb_trans": [
+      "goraýar", "ýumurýar", "göterýär", "ýasaýar", "döwýär", "saklaýar",
+      "çekýär", "gurýar", "ýapýar", "büreýär"
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans} dan {verb_intrans}.",
+    "{noun} yang {adj} {verb_trans} {noun}.",
+    "{noun} {verb_trans} {noun} dan {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "golem", "tanah liat", "lumpur", "bata", "batu", "tanah", "debu",
+      "sungai", "penjaga", "patung", "raksasa", "bayangan", "bara", "abu",
+      "arca", "gunung", "hutan", "langit", "jalan", "besi", "pasir",
+      "dinding", "menara", "gerbang", "api", "tugu", "perapian", "berhala",
+      "tebing", "lembah"
+    ],
+    "verb_intrans": [
+      "bangun", "runtuh", "tidur", "berdiri", "mengembara", "bergetar",
+      "terbangun", "bangkit", "berjalan", "goyah", "diam", "jatuh"
+    ],
+    "verb_trans": [
+      "menjaga", "menghancurkan", "membawa", "melindungi", "membentuk",
+      "mengangkat", "memecahkan", "menyeret", "menutupi", "memikul",
+      "menumbuk", "menggenggam"
+    ],
+    "adj": [
+      "tua", "kuno", "diam", "berat", "retak", "kosong", "besar", "kokoh",
+      "rapuh", "abadi", "gelap", "keras"
+    ]
+  }
+}

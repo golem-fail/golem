@@ -347,7 +347,7 @@ pub(crate) async fn handle_load_fixture(
         ctx.flow_dir,
         ctx.project_root,
         vars,
-        &mut *rng,
+        &mut rng,
     )
 }
 

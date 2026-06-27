@@ -1,0 +1,30 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {obj}.",
+    "{noun} {verb_intrans} ja {verb_intrans}.",
+    "{noun} {verb_trans} {obj} ja {obj}."
+  ],
+  "slots": {
+    "noun": [
+      "golem", "savi", "muta", "tiili", "kivi", "patsas", "vartija", "jättiläinen",
+      "varjo", "tuhka", "pöly", "maa", "ahjo", "epäjumala", "toteemi", "hahmo",
+      "vuori", "joki", "metsä", "taivas", "tie", "rauta", "hiekka", "torni",
+      "muuri", "portti", "liekki", "kallio"
+    ],
+    "obj": [
+      "golemia", "savea", "mutaa", "tiiltä", "kiveä", "patsasta", "vartijaa", "jättiläistä",
+      "varjoa", "tuhkaa", "pölyä", "maata", "ahjoa", "epäjumalaa", "toteemia", "hahmoa",
+      "vuorta", "jokea", "metsää", "taivasta", "tietä", "rautaa", "hiekkaa", "tornia",
+      "muuria", "porttia", "liekkiä", "kalliota"
+    ],
+    "verb_intrans": [
+      "herää", "luhistuu", "nukkuu", "nousee", "vaeltaa", "vapisee",
+      "vajoaa", "huojuu", "vaikenee", "kasvaa"
+    ],
+    "verb_trans": [
+      "vartioi", "murskaa", "kantaa", "suojelee", "muovaa", "nostaa",
+      "rikkoo", "hakkaa", "raahaa", "peittää"
+    ]
+  }
+}

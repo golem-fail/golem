@@ -1,0 +1,35 @@
+{
+  "patterns": [
+    "{subj} {vi}.",
+    "{adj} {subj} {vi}.",
+    "{subj} {obj} {vt}.",
+    "{adj} {subj} {obj} {vt}."
+  ],
+  "slots": {
+    "subj": [
+      "t'uru runa", "allpa runa", "rumi runa", "wak'a", "sayaq", "hatun runa",
+      "t'uru", "mit'u", "rumi", "allpa", "llanthu", "nina", "aqu", "q'illay",
+      "urqu", "mayu", "sach'a", "hanan pacha", "ñan", "pirqa", "punku", "raqay",
+      "k'illimsa", "ushpha", "ch'aki allpa", "qaqa"
+    ],
+    "obj": [
+      "t'uru runata", "allpa runata", "rumi runata", "wak'ata", "sayaqta",
+      "hatun runata", "t'uruta", "mit'uta", "rumita", "allpata", "llanthuta",
+      "ninata", "aquta", "q'illayta", "urquta", "mayuta", "sach'ata",
+      "hanan pachata", "ñanta", "pirqata", "punkuta", "raqayta", "k'illimsata",
+      "ushphata", "ch'aki allpata", "qaqata"
+    ],
+    "adj": [
+      "hatun", "thanta", "ch'in", "llasaq", "mawk'a", "sinchi", "p'aki",
+      "chiri", "ñawpa", "yana", "q'illu", "puka"
+    ],
+    "vi": [
+      "hatarin", "puñun", "kuyun", "thuñin", "rikhurin", "sayan", "purin",
+      "wañun", "qhatatan", "kutimun", "phawan", "qaparin"
+    ],
+    "vt": [
+      "rikun", "hap'in", "ruwan", "waqaychan", "apan", "qhawan", "p'akin",
+      "haywan", "marq'an", "maskhan", "tarin", "munan"
+    ]
+  }
+}

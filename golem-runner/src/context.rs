@@ -6,7 +6,7 @@ use golem_devices::DeviceInfo;
 use golem_element::Element;
 use golem_events::emitter::DeviceEmitter;
 use golem_events::{EventKind, SubstepEvent, TreeStats};
-use rand_chacha::ChaCha8Rng;
+use golem_vars::seed::FakeRng;
 
 use crate::capture::CaptureConfig;
 use crate::perf::PerfCollectorSet;
@@ -44,8 +44,9 @@ pub struct ExecutionContext<'a> {
     /// `TreeStats` statics. The settle's tree is otherwise dropped, so storing
     /// it is a move, not a clone.
     pub last_settled_tree: Mutex<Option<(Element, u64)>>,
-    /// Seeded RNG for deterministic fake data generation.
-    pub rng: Mutex<ChaCha8Rng>,
+    /// Seeded RNG for deterministic fake data generation, carrying the run's
+    /// date anchor (see [`golem_vars::seed::FakeRng`]).
+    pub rng: Mutex<FakeRng>,
     /// Resolved record-default visible to blocks in the current flow.
     /// Computed by `execute_flow` at entry as
     /// `flow.options.record.or(parent_default).or(project_record)`,
@@ -128,7 +129,6 @@ impl ExecutionContext<'_> {
 
 #[cfg(test)]
 pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
-    use rand::SeedableRng;
     use std::sync::LazyLock;
     static DEFAULT_CAPTURE: LazyLock<CaptureConfig> = LazyLock::new(|| CaptureConfig {
         screenshot_on_failure: false,
@@ -149,7 +149,7 @@ pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
         emitter: None,
         a11y_level: crate::accessibility::A11yLevel::Off,
         step_tree_stats: Mutex::new(TreeStats::default()),        last_settled_tree: Mutex::new(None),
-        rng: Mutex::new(ChaCha8Rng::from_entropy()),
+        rng: Mutex::new(FakeRng::from_optional_seed(None)),
         inherited_record_default: false,
     }
 }
@@ -201,7 +201,6 @@ impl TestHarness {
     /// Build an [`ExecutionContext`] borrowing this harness's owned values, with
     /// the injected perf collector and capturing emitter wired in.
     pub fn ctx(&self) -> ExecutionContext<'_> {
-        use rand::SeedableRng;
         ExecutionContext {
             flow_dir: &self.tmp,
             project_root: &self.tmp,
@@ -217,7 +216,7 @@ impl TestHarness {
             emitter: Some(&self.emitter),
             a11y_level: crate::accessibility::A11yLevel::Off,
             step_tree_stats: Mutex::new(TreeStats::default()),            last_settled_tree: Mutex::new(None),
-            rng: Mutex::new(ChaCha8Rng::from_entropy()),
+            rng: Mutex::new(FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
         }
     }

@@ -1,0 +1,40 @@
+{
+  "patterns": [
+    "Nĩ kũrĩ {noun}.",
+    "Nĩ kũrĩ {noun} na {noun}.",
+    "Nĩ kũrĩ {noun}, {noun}, na {noun}.",
+    "Nĩ kũrĩ {noun} na {noun} kũu."
+  ],
+  "slots": {
+    "noun": [
+      "ndaka",
+      "ndoro",
+      "ihiga",
+      "nyaigĩ",
+      "thĩ",
+      "rũkũngũ",
+      "mũhu",
+      "kĩĩruru",
+      "mwaki",
+      "ndogo",
+      "rĩũa",
+      "njata",
+      "ihũa",
+      "mũtĩ",
+      "kĩrĩma",
+      "mũtitũ",
+      "igũrũ",
+      "rũhuho",
+      "njĩra",
+      "rũthingo",
+      "mũrango",
+      "gĩthima",
+      "rũũĩ",
+      "maĩ",
+      "mũnene",
+      "mũndũ",
+      "mũhianano",
+      "kĩhumo"
+    ]
+  }
+}

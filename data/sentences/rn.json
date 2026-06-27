@@ -1,0 +1,41 @@
+{
+  "patterns": [
+    "Hari {noun}.",
+    "Hari {noun} na {noun}.",
+    "Hari {noun}, {noun}, na {noun}.",
+    "Ndabona {noun}.",
+    "Ndabona {noun} na {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "ibumba",
+      "ibuye",
+      "amabuye",
+      "itafari",
+      "igishusho",
+      "igihangange",
+      "umurinzi",
+      "igicucu",
+      "ivu",
+      "umukungugu",
+      "ubutaka",
+      "umusozi",
+      "uruzi",
+      "ishamba",
+      "ikirere",
+      "umuhanda",
+      "icuma",
+      "umusenyi",
+      "urukuta",
+      "umunara",
+      "irembo",
+      "umuriro",
+      "urutare",
+      "ikigirwamana",
+      "inkingi",
+      "umuyaga",
+      "umugezi",
+      "ikiziga"
+    ]
+  }
+}

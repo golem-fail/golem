@@ -1,0 +1,33 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {adj} {verb_intrans}.",
+    "{noun} {verb_trans} {noun} {adj}.",
+    "{noun} {verb_intrans} và {verb_intrans}.",
+    "{noun} {verb_trans} {noun} và {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "golem", "đất sét", "bùn", "gạch", "đá", "đất", "bụi", "sông",
+      "lò rèn", "người bảo vệ", "người khổng lồ", "bức tượng", "thần tượng",
+      "vị thần đất", "cái bóng", "tro", "than hồng", "vật tổ", "hình nộm",
+      "ngọn núi", "dòng sông", "khu rừng", "bầu trời", "con đường",
+      "lâu đài", "sắt", "cát", "ngọn tháp", "bức tường", "cánh cổng",
+      "ngọn lửa", "tảng đá"
+    ],
+    "adj": [
+      "cổ xưa", "khổng lồ", "im lặng", "nặng nề", "đổ nát", "rỗng",
+      "to lớn", "bất động", "vô danh", "cao chót vót", "lầy lội",
+      "nứt nẻ", "bồn chồn", "lờ mờ", "bằng đất", "giòn", "vĩnh cửu", "lạnh lẽo"
+    ],
+    "verb_intrans": [
+      "thức dậy", "lê bước", "sụp đổ", "ngủ yên", "trỗi dậy", "lay động",
+      "hiện ra", "vỡ tan", "cứng lại", "lang thang", "run rẩy", "lớn lên"
+    ],
+    "verb_trans": [
+      "canh giữ", "nghiền nát", "mang", "bảo vệ", "nặn", "nâng", "đập vỡ",
+      "nắm lấy", "kéo", "che phủ", "tạo nên", "vâng lời"
+    ]
+  }
+}

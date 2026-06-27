@@ -1,0 +1,26 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans} și {verb_intrans}.",
+    "{noun} {verb_trans} {noun} și {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "golemul", "lutul", "noroiul", "cărămida", "piatra",
+      "statuia", "gardianul", "uriașul", "argila", "peștera",
+      "umbra", "colosul", "pulberea", "totemul", "idolul",
+      "muntele", "fluviul", "pădurea", "cerul", "drumul",
+      "cetatea", "fierul", "nisipul", "turnul", "zidul", "poarta",
+      "flacăra", "stânca", "cenușa", "forja"
+    ],
+    "verb_intrans": [
+      "se trezește", "se prăbușește", "doarme", "se ridică", "rătăcește",
+      "se clatină", "tremură", "se scufundă", "se rotește", "crește"
+    ],
+    "verb_trans": [
+      "păzește", "strivește", "poartă", "protejează", "modelează",
+      "ridică", "sfărâmă", "apucă", "târăște", "acoperă"
+    ]
+  }
+}

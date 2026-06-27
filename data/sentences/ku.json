@@ -1,0 +1,25 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {noun} {verb_trans}.",
+    "{noun} {verb_intrans} û {verb_intrans}.",
+    "{noun} {noun} û {noun} {verb_trans}."
+  ],
+  "slots": {
+    "noun": [
+      "golem", "herole", "herî", "ax", "kerpîç", "kevir", "peyker",
+      "parêzvan", "dêw", "sî", "toz", "xwelî", "kûre", "pût", "totem",
+      "çiya", "çem", "daristan", "ezman", "rê", "hesin", "qûm", "birc",
+      "dîwar", "derî", "agir", "tax", "zinar", "kanî", "deşt", "newal",
+      "kelat", "stûn", "gir"
+    ],
+    "verb_intrans": [
+      "şiyar dibe", "hildiweşe", "radizê", "radibe", "digere", "dilerize",
+      "dihej", "dadikeve", "dizivire", "mezin dibe", "diçe", "disekine"
+    ],
+    "verb_trans": [
+      "diparêze", "dipelçiqîne", "hildigire", "dişkîne", "digire",
+      "dikişîne", "datîne", "diafirîne", "dihejîne", "vedişêre"
+    ]
+  }
+}

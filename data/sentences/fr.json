@@ -1,0 +1,26 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans} et {verb_intrans}.",
+    "{noun} {verb_trans} {noun} et {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "le golem", "la glaise", "la boue", "la brique", "la pierre",
+      "la statue", "le gardien", "le rabbin", "l'argile", "la cave",
+      "l'ombre", "le colosse", "la poussière", "le totem", "l'idole",
+      "la montagne", "le fleuve", "la forêt", "le ciel", "la route",
+      "le château", "le fer", "le sable", "la tour", "le mur", "la porte",
+      "la flamme", "le rocher"
+    ],
+    "verb_intrans": [
+      "s'éveille", "s'effondre", "sommeille", "se dresse", "erre", "vacille",
+      "tremble", "sombre", "tourne", "grandit"
+    ],
+    "verb_trans": [
+      "garde", "écrase", "porte", "protège", "façonne", "soulève", "brise",
+      "saisit", "traîne", "couvre"
+    ]
+  }
+}

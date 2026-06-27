@@ -1,0 +1,77 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{adj} {noun} {verb_intrans}.",
+    "{noun} {noun} {verb_trans}.",
+    "{adj} {noun} {noun} {verb_trans}.",
+    "{noun} {verb_intrans}, ukatxa {noun} {verb_intrans}.",
+    "{noun} {noun} {verb_trans}, ukatxa {noun} {verb_intrans}.",
+    "{adj} {noun} utji."
+  ],
+  "slots": {
+    "noun": [
+      "ñiq'i",
+      "llink'i",
+      "tika",
+      "qala",
+      "ch'iwi",
+      "jach'a jaqi",
+      "uywa",
+      "uraqi",
+      "wak'a",
+      "achachila",
+      "qullu",
+      "jawira",
+      "quqa",
+      "alaxpacha",
+      "yawri",
+      "ch'alla",
+      "amaya",
+      "pirqa",
+      "punku",
+      "nina",
+      "qaqa",
+      "thaki",
+      "lurawi",
+      "ñiq'i jaqi",
+      "qala uywa",
+      "jach'a tika"
+    ],
+    "adj": [
+      "layra",
+      "jach'a",
+      "ch'iyara",
+      "ch'amani",
+      "thaya",
+      "jathi",
+      "wila",
+      "q'ara",
+      "jila",
+      "muruq'u",
+      "machaqa",
+      "llamp'u",
+      "junt'u"
+    ],
+    "verb_intrans": [
+      "sayt'i",
+      "thalti",
+      "tinki",
+      "iki",
+      "khatati",
+      "saraqi",
+      "amukti",
+      "jilti"
+    ],
+    "verb_trans": [
+      "imi",
+      "p'aki",
+      "api",
+      "luri",
+      "jark'aqi",
+      "ayti",
+      "q'api",
+      "khari",
+      "katu"
+    ]
+  }
+}

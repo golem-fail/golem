@@ -1,0 +1,20 @@
+{
+  "patterns": [
+    "{noun}{verb_intrans}。",
+    "{noun}{noun}{verb_trans}。",
+    "{noun}{noun}ꉬ。",
+    "{noun}{noun}{verb_trans}，{noun}{verb_intrans}。"
+  ],
+  "slots": {
+    "noun": [
+      "ꁧ", "ꒉ", "ꃅ", "ꃰ", "ꇐ", "ꊈ", "ꊿ", "ꂷ",
+      "ꃆ", "ꈌ", "ꑿ", "ꃬ", "ꆪ", "ꏤ"
+    ],
+    "verb_intrans": [
+      "ꇁ", "ꑌ", "ꆈ", "ꒉ", "ꁧ"
+    ],
+    "verb_trans": [
+      "ꋠ", "ꃼ", "ꐥ", "ꅝ", "ꇸ", "ꉜ", "ꄉ"
+    ]
+  }
+}

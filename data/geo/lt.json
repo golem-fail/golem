@@ -1,7 +1,6 @@
 {
   "country": {
     "name": "Lietuva",
-    "name_en": "Lithuania",
     "iso_code": "LT",
     "phone_prefix": "+370",
     "phone_formats": [
@@ -10,13 +9,21 @@
       "+370-37-###-###"
     ],
     "postcode_format": "LT-#####",
-    "name_order": "given_first",
-    "person": { "name": ["local", "ascii"], "reading": [], "local": ["ascii", "diacritics_lt"] }
+    "person": {
+      "name": [
+        "local",
+        "ascii"
+      ],
+      "reading": [],
+      "local": [
+        "ascii",
+        "diacritics_lt"
+      ]
+    }
   },
   "states": [
     {
       "name": "Vilniaus apskritis",
-      "name_en": "Vilnius County",
       "region_tags": [
         "Aukštaitija",
         "Dzūkija"
@@ -24,133 +31,112 @@
       "cities": [
         {
           "name": "Vilnius",
-          "name_en": "Vilnius",
           "lat": 54.6872,
           "lon": 25.2797,
           "postcodes": [
             {
               "code": "LT-01103",
               "street": "Gedimino pr.",
-              "street_en": "Gediminas Avenue",
-              "pattern": "Gedimino pr. n{1,64}"
+              "pattern": "{street} n{1,64}"
             },
             {
               "code": "LT-01403",
               "street": "Pilies g.",
-              "street_en": "Pilies Street",
-              "pattern": "Pilies g. n{1,19}"
+              "pattern": "{street} n{1,19}"
             },
             {
               "code": "LT-01128",
               "street": "Didžioji g.",
-              "street_en": "Didzioji Street",
-              "pattern": "Didžioji g. n{1,36}"
+              "pattern": "{street} n{1,36}"
             },
             {
               "code": "LT-01102",
               "street": "Vilniaus g.",
-              "street_en": "Vilnius Street",
-              "pattern": "Vilniaus g. n{1,28}"
+              "pattern": "{street} n{1,28}"
             },
             {
               "code": "LT-01116",
               "street": "Jogailos g.",
-              "street_en": "Jogailos Street",
-              "pattern": "Jogailos g. n{1,16}"
+              "pattern": "{street} n{1,16}"
             },
             {
               "code": "LT-09308",
               "street": "Konstitucijos pr.",
-              "street_en": "Constitution Avenue",
-              "pattern": "Konstitucijos pr. n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "LT-08100",
               "street": "Ukmergės g.",
-              "street_en": "Ukmerges Street",
-              "pattern": "Ukmergės g. n{1,322}"
+              "pattern": "{street} n{1,322}"
             },
             {
               "code": "LT-09309",
               "street": "Kalvarijų g.",
-              "street_en": "Kalvariju Street",
-              "pattern": "Kalvarijų g. n{1,150}"
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "LT-03116",
               "street": "Savanorių pr.",
-              "street_en": "Savanoriu Avenue",
-              "pattern": "Savanorių pr. n{1,250}"
+              "pattern": "{street} n{1,250}"
             },
             {
               "code": "LT-03231",
               "street": "Naugarduko g.",
-              "street_en": "Naugarduko Street",
-              "pattern": "Naugarduko g. n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "LT-09101",
               "street": "Žirmūnų g.",
-              "street_en": "Zirmunu Street",
-              "pattern": "Žirmūnų g. n{1,150}"
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "LT-04132",
               "street": "Laisvės pr.",
-              "street_en": "Laisves Avenue",
-              "pattern": "Laisvės pr. n{1,125}"
+              "pattern": "{street} n{1,125}"
             }
           ]
         },
         {
           "name": "Trakai",
-          "name_en": "Trakai",
           "lat": 54.6379,
           "lon": 24.9346,
           "postcodes": [
             {
               "code": "LT-21105",
               "street": "Vytauto g.",
-              "street_en": "Vytautas Street",
-              "pattern": "Vytauto g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-21104",
               "street": "Karaimų g.",
-              "street_en": "Karaimu Street",
-              "pattern": "Karaimų g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-21106",
               "street": "Birutės g.",
-              "street_en": "Birutes Street",
-              "pattern": "Birutės g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "Šalčininkai",
-          "name_en": "Salcininkai",
           "lat": 54.31,
           "lon": 25.387,
           "postcodes": [
             {
               "code": "LT-17102",
               "street": "Vilniaus g.",
-              "street_en": "Vilnius Street",
-              "pattern": "Vilniaus g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-17115",
               "street": "Nepriklausomybės g.",
-              "street_en": "Nepriklausomybes Street",
-              "pattern": "Nepriklausomybės g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-17116",
               "street": "Architekto g.",
-              "street_en": "Architekto Street",
-              "pattern": "Architekto g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         }
@@ -158,7 +144,6 @@
     },
     {
       "name": "Kauno apskritis",
-      "name_en": "Kaunas County",
       "region_tags": [
         "Suvalkija",
         "Aukštaitija"
@@ -166,85 +151,72 @@
       "cities": [
         {
           "name": "Kaunas",
-          "name_en": "Kaunas",
           "lat": 54.8985,
           "lon": 23.9036,
           "postcodes": [
             {
               "code": "LT-44215",
               "street": "Laisvės al.",
-              "street_en": "Laisves Alley",
-              "pattern": "Laisvės al. n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "LT-44354",
               "street": "Vytauto pr.",
-              "street_en": "Vytautas Avenue",
-              "pattern": "Vytauto pr. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-44213",
               "street": "K. Donelaičio g.",
-              "street_en": "K. Donelaicio Street",
-              "pattern": "K. Donelaičio g. n{1,90}"
+              "pattern": "{street} n{1,90}"
             },
             {
               "code": "LT-44255",
               "street": "Savanorių pr.",
-              "street_en": "Savanoriu Avenue",
-              "pattern": "Savanorių pr. n{1,400}"
+              "pattern": "{street} n{1,400}"
             }
           ]
         },
         {
           "name": "Jonava",
-          "name_en": "Jonava",
           "lat": 55.072,
           "lon": 24.279,
           "postcodes": [
             {
               "code": "LT-55169",
               "street": "Vasario 16-osios g.",
-              "street_en": "Vasario 16-osios Street",
-              "pattern": "Vasario 16-osios g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-55238",
               "street": "Chemikų g.",
-              "street_en": "Chemiku Street",
-              "pattern": "Chemikų g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-55134",
               "street": "Žeimių g.",
-              "street_en": "Zeimiu Street",
-              "pattern": "Žeimių g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "Kėdainiai",
-          "name_en": "Kedainiai",
           "lat": 55.288,
           "lon": 23.973,
           "postcodes": [
             {
               "code": "LT-57248",
               "street": "Didžioji g.",
-              "street_en": "Didzioji Street",
-              "pattern": "Didžioji g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-57171",
               "street": "J. Basanavičiaus g.",
-              "street_en": "J. Basanaviciaus Street",
-              "pattern": "J. Basanavičiaus g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-57395",
               "street": "Respublikos g.",
-              "street_en": "Respublikos Street",
-              "pattern": "Respublikos g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         }
@@ -252,7 +224,6 @@
     },
     {
       "name": "Klaipėdos apskritis",
-      "name_en": "Klaipeda County",
       "region_tags": [
         "Mažoji Lietuva",
         "Žemaitija"
@@ -260,97 +231,82 @@
       "cities": [
         {
           "name": "Klaipėda",
-          "name_en": "Klaipeda",
           "lat": 55.7033,
           "lon": 21.1443,
           "postcodes": [
             {
               "code": "LT-92128",
               "street": "H. Manto g.",
-              "street_en": "Herkus Mantas Street",
-              "pattern": "H. Manto g. n{1,92}"
+              "pattern": "{street} n{1,92}"
             },
             {
               "code": "LT-91249",
               "street": "Tiltų g.",
-              "street_en": "Tiltu Street",
-              "pattern": "Tiltų g. n{1,21}"
+              "pattern": "{street} n{1,21}"
             },
             {
               "code": "LT-91133",
               "street": "Taikos pr.",
-              "street_en": "Taikos Avenue",
-              "pattern": "Taikos pr. n{1,150}"
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "LT-92113",
               "street": "Liepų g.",
-              "street_en": "Liepu Street",
-              "pattern": "Liepų g. n{1,20}"
+              "pattern": "{street} n{1,20}"
             },
             {
               "code": "LT-91200",
               "street": "Minijos g.",
-              "street_en": "Minijos Street",
-              "pattern": "Minijos g. n{1,50}"
+              "pattern": "{street} n{1,50}"
             },
             {
               "code": "LT-94106",
               "street": "Baltijos pr.",
-              "street_en": "Baltijos Avenue",
-              "pattern": "Baltijos pr. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "Palanga",
-          "name_en": "Palanga",
           "lat": 55.92,
           "lon": 21.068,
           "postcodes": [
             {
               "code": "LT-00135",
               "street": "J. Basanavičiaus g.",
-              "street_en": "J. Basanaviciaus Street",
-              "pattern": "J. Basanavičiaus g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-00101",
               "street": "Vytauto g.",
-              "street_en": "Vytautas Street",
-              "pattern": "Vytauto g. n{1,150}"
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "LT-00160",
               "street": "S. Dariaus ir S. Girėno g.",
-              "street_en": "Darius and Girenas Street",
-              "pattern": "S. Dariaus ir S. Girėno g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "Neringa",
-          "name_en": "Neringa",
           "lat": 55.458,
           "lon": 21.078,
           "postcodes": [
             {
               "code": "LT-93123",
               "street": "Naglių g.",
-              "street_en": "Nagliu Street",
-              "pattern": "Naglių g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-93124",
               "street": "Pamario g.",
-              "street_en": "Pamario Street",
-              "pattern": "Pamario g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-93121",
               "street": "Taikos g.",
-              "street_en": "Taikos Street",
-              "pattern": "Taikos g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         }
@@ -358,7 +314,6 @@
     },
     {
       "name": "Šiaulių apskritis",
-      "name_en": "Siauliai County",
       "region_tags": [
         "Žemaitija",
         "Aukštaitija"
@@ -366,53 +321,45 @@
       "cities": [
         {
           "name": "Šiauliai",
-          "name_en": "Siauliai",
           "lat": 55.9349,
           "lon": 23.3137,
           "postcodes": [
             {
               "code": "LT-78322",
               "street": "Tilžės g.",
-              "street_en": "Tilzes Street",
-              "pattern": "Tilžės g. n{1,300}"
+              "pattern": "{street} n{1,300}"
             },
             {
               "code": "LT-76273",
               "street": "Vilniaus g.",
-              "street_en": "Vilnius Street",
-              "pattern": "Vilniaus g. n{1,250}"
+              "pattern": "{street} n{1,250}"
             },
             {
               "code": "LT-76297",
               "street": "Aušros al.",
-              "street_en": "Ausros Alley",
-              "pattern": "Aušros al. n{1,60}"
+              "pattern": "{street} n{1,60}"
             }
           ]
         },
         {
           "name": "Radviliškis",
-          "name_en": "Radviliskis",
           "lat": 55.81,
           "lon": 23.54,
           "postcodes": [
             {
               "code": "LT-82135",
               "street": "Vasario 16-osios g.",
-              "street_en": "Vasario 16-osios Street",
-              "pattern": "Vasario 16-osios g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-82172",
               "street": "Gedimino g.",
-              "street_en": "Gedimino Street",
-              "pattern": "Gedimino g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-82133",
               "street": "Maironio g.",
-              "street_en": "Maironio Street",
-              "pattern": "Maironio g. n{1,101}"
+              "pattern": "{street} n{1,101}"
             }
           ]
         }
@@ -420,60 +367,51 @@
     },
     {
       "name": "Panevėžio apskritis",
-      "name_en": "Panevezys County",
       "region_tags": [
         "Aukštaitija"
       ],
       "cities": [
         {
           "name": "Panevėžys",
-          "name_en": "Panevezys",
           "lat": 55.7348,
           "lon": 24.3575,
           "postcodes": [
             {
               "code": "LT-35199",
               "street": "Respublikos g.",
-              "street_en": "Respublikos Street",
-              "pattern": "Respublikos g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-35210",
               "street": "Klaipėdos g.",
-              "street_en": "Klaipedos Street",
-              "pattern": "Klaipėdos g. n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "LT-35143",
               "street": "Smėlynės g.",
-              "street_en": "Smelynes Street",
-              "pattern": "Smėlynės g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "Biržai",
-          "name_en": "Birzai",
           "lat": 56.2,
           "lon": 24.755,
           "postcodes": [
             {
               "code": "LT-41146",
               "street": "Vytauto g.",
-              "street_en": "Vytautas Street",
-              "pattern": "Vytauto g. n{1,90}"
+              "pattern": "{street} n{1,90}"
             },
             {
               "code": "LT-41111",
               "street": "Respublikos g.",
-              "street_en": "Respublikos Street",
-              "pattern": "Respublikos g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-41175",
               "street": "Rotušės g.",
-              "street_en": "Rotuses Street",
-              "pattern": "Rotušės g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         }
@@ -481,60 +419,51 @@
     },
     {
       "name": "Alytaus apskritis",
-      "name_en": "Alytus County",
       "region_tags": [
         "Dzūkija"
       ],
       "cities": [
         {
           "name": "Alytus",
-          "name_en": "Alytus",
           "lat": 54.3963,
           "lon": 24.0459,
           "postcodes": [
             {
               "code": "LT-62141",
               "street": "Pulko g.",
-              "street_en": "Pulko Street",
-              "pattern": "Pulko g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-62119",
               "street": "Naujoji g.",
-              "street_en": "Naujoji Street",
-              "pattern": "Naujoji g. n{1,130}"
+              "pattern": "{street} n{1,130}"
             },
             {
               "code": "LT-62116",
               "street": "Jotvingių g.",
-              "street_en": "Jotvingiu Street",
-              "pattern": "Jotvingių g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "Druskininkai",
-          "name_en": "Druskininkai",
           "lat": 54.0196,
           "lon": 23.9705,
           "postcodes": [
             {
               "code": "LT-66119",
               "street": "Vilniaus al.",
-              "street_en": "Vilnius Alley",
-              "pattern": "Vilniaus al. n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "LT-66161",
               "street": "M. K. Čiurlionio g.",
-              "street_en": "M. K. Ciurlionio Street",
-              "pattern": "M. K. Čiurlionio g. n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "LT-66225",
               "street": "Gardino g.",
-              "street_en": "Gardino Street",
-              "pattern": "Gardino g. n{1,100}"
+              "pattern": "{street} n{1,100}"
             }
           ]
         }
@@ -542,60 +471,51 @@
     },
     {
       "name": "Marijampolės apskritis",
-      "name_en": "Marijampole County",
       "region_tags": [
         "Suvalkija"
       ],
       "cities": [
         {
           "name": "Marijampolė",
-          "name_en": "Marijampole",
           "lat": 54.5592,
           "lon": 23.35,
           "postcodes": [
             {
               "code": "LT-68298",
               "street": "Vytauto g.",
-              "street_en": "Vytautas Street",
-              "pattern": "Vytauto g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-68175",
               "street": "Kauno g.",
-              "street_en": "Kaunas Street",
-              "pattern": "Kauno g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-68309",
               "street": "Bažnyčios g.",
-              "street_en": "Baznycios Street",
-              "pattern": "Bažnyčios g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "Vilkaviškis",
-          "name_en": "Vilkaviskis",
           "lat": 54.652,
           "lon": 23.035,
           "postcodes": [
             {
               "code": "LT-70134",
               "street": "Vytauto g.",
-              "street_en": "Vytautas Street",
-              "pattern": "Vytauto g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-70103",
               "street": "Maironio g.",
-              "street_en": "Maironio Street",
-              "pattern": "Maironio g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-70147",
               "street": "S. Nėries g.",
-              "street_en": "S. Neries Street",
-              "pattern": "S. Nėries g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         }
@@ -603,60 +523,51 @@
     },
     {
       "name": "Tauragės apskritis",
-      "name_en": "Taurage County",
       "region_tags": [
         "Žemaitija"
       ],
       "cities": [
         {
           "name": "Tauragė",
-          "name_en": "Taurage",
           "lat": 55.2514,
           "lon": 22.2901,
           "postcodes": [
             {
               "code": "LT-72201",
               "street": "Dariaus ir Girėno g.",
-              "street_en": "Darius and Girenas Street",
-              "pattern": "Dariaus ir Girėno g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-72238",
               "street": "Prezidento g.",
-              "street_en": "Prezidento Street",
-              "pattern": "Prezidento g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-72257",
               "street": "Vasario 16-osios g.",
-              "street_en": "Vasario 16-osios Street",
-              "pattern": "Vasario 16-osios g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "Jurbarkas",
-          "name_en": "Jurbarkas",
           "lat": 55.078,
           "lon": 22.764,
           "postcodes": [
             {
               "code": "LT-74119",
               "street": "Dariaus ir Girėno g.",
-              "street_en": "Darius and Girenas Street",
-              "pattern": "Dariaus ir Girėno g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-74123",
               "street": "Kauno g.",
-              "street_en": "Kaunas Street",
-              "pattern": "Kauno g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-74122",
               "street": "Vytauto Didžiojo g.",
-              "street_en": "Vytautas the Great Street",
-              "pattern": "Vytauto Didžiojo g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         }
@@ -664,60 +575,51 @@
     },
     {
       "name": "Telšių apskritis",
-      "name_en": "Telsiai County",
       "region_tags": [
         "Žemaitija"
       ],
       "cities": [
         {
           "name": "Telšiai",
-          "name_en": "Telsiai",
           "lat": 55.982,
           "lon": 22.248,
           "postcodes": [
             {
               "code": "LT-87130",
               "street": "Respublikos g.",
-              "street_en": "Respublikos Street",
-              "pattern": "Respublikos g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-87121",
               "street": "Kęstučio g.",
-              "street_en": "Kestucio Street",
-              "pattern": "Kęstučio g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-87133",
               "street": "Žemaitės g.",
-              "street_en": "Zemaites Street",
-              "pattern": "Žemaitės g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "Mažeikiai",
-          "name_en": "Mazeikiai",
           "lat": 56.31,
           "lon": 22.34,
           "postcodes": [
             {
               "code": "LT-89212",
               "street": "Laisvės g.",
-              "street_en": "Laisves Street",
-              "pattern": "Laisvės g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-89164",
               "street": "Naftininkų g.",
-              "street_en": "Naftininku Street",
-              "pattern": "Naftininkų g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-89103",
               "street": "Ventos g.",
-              "street_en": "Ventos Street",
-              "pattern": "Ventos g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         }
@@ -725,60 +627,51 @@
     },
     {
       "name": "Utenos apskritis",
-      "name_en": "Utena County",
       "region_tags": [
         "Aukštaitija"
       ],
       "cities": [
         {
           "name": "Utena",
-          "name_en": "Utena",
           "lat": 55.5,
           "lon": 25.6,
           "postcodes": [
             {
               "code": "LT-28241",
               "street": "Utenio a.",
-              "street_en": "Utenio Square",
-              "pattern": "Utenio a. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-28134",
               "street": "J. Basanavičiaus g.",
-              "street_en": "J. Basanaviciaus Street",
-              "pattern": "J. Basanavičiaus g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-28145",
               "street": "Aušros g.",
-              "street_en": "Ausros Street",
-              "pattern": "Aušros g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "Visaginas",
-          "name_en": "Visaginas",
           "lat": 55.596,
           "lon": 26.43,
           "postcodes": [
             {
               "code": "LT-31107",
               "street": "Taikos pr.",
-              "street_en": "Taikos Avenue",
-              "pattern": "Taikos pr. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-31121",
               "street": "Sedulinos al.",
-              "street_en": "Sedulinos Alley",
-              "pattern": "Sedulinos al. n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "LT-31114",
               "street": "Veteranų g.",
-              "street_en": "Veteranu Street",
-              "pattern": "Veteranų g. n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         }

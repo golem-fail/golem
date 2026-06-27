@@ -1,0 +1,25 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans} jeung {verb_intrans}.",
+    "{noun} {verb_trans} {noun} jeung {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "golem", "lempung", "leutak", "bata", "batu", "taneuh", "lebu",
+      "walungan", "arca", "raksasa", "kalangkang", "panjaga", "cadas",
+      "gunung", "leuweung", "langit", "jalan", "beusi", "keusik",
+      "tembok", "munara", "gapura", "panto", "seuneu", "lautan",
+      "imah", "patung", "tugu"
+    ],
+    "verb_intrans": [
+      "hudang", "nangtung", "leumpang", "saré", "ragrag", "ruag",
+      "goyang", "ngapung", "ngahuleng", "ngagolér"
+    ],
+    "verb_trans": [
+      "ngajaga", "mawa", "ngalindungan", "nyieun", "ngangkat", "nyekel",
+      "ngaruksak", "nyandak", "nyumputkeun", "neunggeul"
+    ]
+  }
+}

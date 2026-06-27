@@ -7,6 +7,12 @@ tags = ["cross-platform", "form", "text-input", "interaction"]
 # needs independent validation, so force Cartesian expansion.
 coverage = "full"
 
+[flow.vars]
+# Generated email — exercises the fake:email generator on-device. Declared as a
+# var (not inline) so the type, assert, and later read-back all reference the
+# identical seed-deterministic value.
+email = "${fake:email}"
+
 [[flow.apps]]
 name = "app"
 [[flow.apps.devices]]
@@ -16,9 +22,9 @@ type = ["phone", "tablet"]
 [[block]]
 name = "fill_form_fields"
 steps = [
-  # Type into the email field and verify
-  { action = "type", on_text = "Enter email", input = "testuser@example.com" },
-  { action = "assert_visible", on_text = "testuser@example.com" },
+  # Type a generated email into the email field and verify
+  { action = "type", on_text = "Enter email", input = "${email}" },
+  { action = "assert_visible", on_text = "${email}" },
 
   # Type into the password field
   { action = "type", on_text = "Password", input = "P@ssw0rd!123" },
@@ -54,7 +60,7 @@ steps = [
   { action = "hide_keyboard" },
 
   # Read back form values to verify (fields show typed content)
-  { action = "read", on_text = "testuser@example.com", save_to = "filled_email" },
+  { action = "read", on_text = "${email}", save_to = "filled_email" },
   { action = "read", on_text = "golem test query", save_to = "filled_search" },
 
   # Take a screenshot before submitting

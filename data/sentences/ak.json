@@ -1,0 +1,64 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} ne {noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun} ne {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "golem",
+      "dɔteɛ",
+      "dɔte",
+      "ɛboɔ",
+      "ɔboɔ",
+      "ohoni",
+      "ɔwɛmfoɔ",
+      "ɔbran",
+      "sunsum",
+      "nsõ",
+      "mfutuma",
+      "asaase",
+      "bepɔ",
+      "asubɔnten",
+      "kwaeɛ",
+      "wiem",
+      "ɛkwan",
+      "dadeɛ",
+      "anwea",
+      "ɔfasuo",
+      "abantenten",
+      "ɛpono",
+      "ogya",
+      "abotan",
+      "ɛserɛ",
+      "ɛpo",
+      "abansoro",
+      "ɔdan"
+    ],
+    "verb_intrans": [
+      "nyane",
+      "nante",
+      "dwiri",
+      "da",
+      "sɔre",
+      "woso",
+      "popo",
+      "kyinkyin",
+      "hwe",
+      "gyina"
+    ],
+    "verb_trans": [
+      "wɛn",
+      "bubu",
+      "soa",
+      "bɔ",
+      "kora",
+      "kura",
+      "twe",
+      "pia",
+      "ma",
+      "fa"
+    ]
+  }
+}

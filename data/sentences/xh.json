@@ -1,0 +1,30 @@
+{
+  "patterns": [
+    "{subj} {verb_intrans}.",
+    "{subj} {verb_trans} {obj}.",
+    "{subj} {verb_intrans}, {subj} {verb_intrans}.",
+    "{subj} {verb_trans} {obj}, {subj} {verb_intrans}."
+  ],
+  "slots": {
+    "subj": [
+      "intaba", "indlela", "induli", "intsimbi", "intsika", "imbokodo",
+      "intlango", "inkungu", "imvula", "inyanga", "inkwenkwezi", "intsimi",
+      "indlu", "into", "inqaba", "inyoka", "inkanyezi",
+      "imbewu", "ingqele", "intlambo", "inkundla"
+    ],
+    "verb_intrans": [
+      "iyavela", "iyawa", "iyalala", "iyavuka", "iyema",
+      "iyangcangcazela", "iyatshona", "iyahamba", "iyabhukuqa", "iyabhubha"
+    ],
+    "verb_trans": [
+      "igcina", "ithwala", "ikhusela", "itshabalalisa", "iqhekeza",
+      "ibetha", "ifihla", "iqhuba"
+    ],
+    "obj": [
+      "udongwe", "udaka", "isitena", "ilitye", "umhlaba", "uthuli",
+      "umlambo", "isithunzi", "umlilo", "isithixo", "umlindi", "isithombe",
+      "intsimbi", "ilizwe", "ihlathi", "intaba", "indlela", "umoya",
+      "umthi", "iliwa", "udonga", "inqaba", "isango"
+    ]
+  }
+}

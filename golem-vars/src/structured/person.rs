@@ -24,8 +24,8 @@ static NAMES_JSON: &str = include_str!("../../../data/names.json");
 
 #[derive(Deserialize)]
 struct NamesData {
-    first_names: Vec<NameEntry>,
-    last_names: Vec<NameEntry>,
+    given_names: Vec<NameEntry>,
+    family_names: Vec<NameEntry>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -172,31 +172,14 @@ fn resolve(chain: &[Rep], e: &NameEntry, local_set: &[Repertoire]) -> String {
         .unwrap_or_default()
 }
 
-/// Join a resolved first/last into a full name in the country's order, skipping
-/// empty parts so a half-resolved name never carries a stray space.
-fn join_name(first: &str, last: &str, family_first: bool) -> String {
-    let (a, b) = if family_first {
-        (last, first)
-    } else {
-        (first, last)
-    };
-    match (a.is_empty(), b.is_empty()) {
-        (true, true) => String::new(),
-        (false, true) => a.to_string(),
-        (true, false) => b.to_string(),
-        (false, false) => format!("{a} {b}"),
-    }
-}
-
-/// Build a `{first, last, name}` object from two already-resolved part strings.
-fn branch(first: &str, last: &str, family_first: bool) -> VarValue {
+/// Build a `{given, family}` object from two already-resolved part strings. No
+/// full name is assembled: a form decides the order and separator (Western uses
+/// a space; JP/KR/CN run the parts together), so the caller concatenates the
+/// parts it needs rather than receiving a guessed join.
+fn branch(given: &str, family: &str) -> VarValue {
     VarValue::object(vec![
-        ("first", VarValue::string(first)),
-        ("last", VarValue::string(last)),
-        (
-            "name",
-            VarValue::string(join_name(first, last, family_first)),
-        ),
+        ("given", VarValue::string(given)),
+        ("family", VarValue::string(family)),
     ])
 }
 
@@ -205,25 +188,23 @@ fn branch(first: &str, last: &str, family_first: bool) -> VarValue {
 // ---------------------------------------------------------------------------
 
 /// The configurable triple a country preset bundles: the `local` accepted
-/// repertoire, the primary `name` chain, the `reading` chain, and the name
-/// order. Each is independently overridable by a `fake:person(...)` param.
+/// repertoire, the primary `name` chain, and the `reading` chain. Each is
+/// independently overridable by a `fake:person(...)` param.
 struct Preset {
-    family_first: bool,
     local: Vec<Repertoire>,
     name: Vec<Rep>,
     reading: Vec<Rep>,
 }
 
-/// Per-country person-name preset, sourced from the country's `data/geo/*.json`
-/// block: `name_order` plus the `person.{name, reading, local}` token lists.
-/// An unknown/absent country accepts everything and renders the raw native name
+/// Per-country person-name preset, sourced from the `person.{name, reading,
+/// local}` token lists in the country's `data/geo/*.json` block. An
+/// unknown/absent country accepts everything and renders the raw native name
 /// (`name=[native]`). Token definitions (what `kanji`, `diacritics_fr`, … mean)
 /// are shared and live in [`crate::structured::repertoire`]; only the *choice*
 /// of tokens is per-country data here.
 fn country_preset(country: &str) -> Preset {
     let Some(geo) = geo_database().get(country) else {
         return Preset {
-            family_first: false,
             local: vec![],
             name: vec![Rep::Native],
             reading: vec![],
@@ -240,7 +221,6 @@ fn country_preset(country: &str) -> Preset {
     let reading = p.reading.iter().filter_map(|t| Rep::parse(t)).collect();
     let name: Vec<Rep> = p.name.iter().filter_map(|t| Rep::parse(t)).collect();
     Preset {
-        family_first: geo.country.name_order == "family_first",
         local,
         name: if name.is_empty() {
             vec![Rep::Native]
@@ -285,15 +265,14 @@ pub(crate) fn generate_person(
     let data = names_data();
     let country = params.get("country").map(|s| s.as_str());
 
-    // Pick first and last names from the global pool.
-    let fi = rng.gen_range(0..data.first_names.len());
-    let li = rng.gen_range(0..data.last_names.len());
-    let fe = &data.first_names[fi];
-    let le = &data.last_names[li];
+    // Pick a given and a family name from the global pools.
+    let gi = rng.gen_range(0..data.given_names.len());
+    let fi = rng.gen_range(0..data.family_names.len());
+    let given = &data.given_names[gi];
+    let family = &data.family_names[fi];
 
     // Country preset, with per-field param overrides (precedence: param > country).
     let preset = country_preset(country.unwrap_or(""));
-    let family_first = preset.family_first;
     let local_set = match params.get("local") {
         Some(v) => parse_repertoires(v)?,
         None => preset.local,
@@ -311,31 +290,26 @@ pub(crate) fn generate_person(
     // own key, independent of the resolved semantic fields.
     let raw = |rep: Rep| {
         branch(
-            &rep_value(rep, fe, &local_set),
-            &rep_value(rep, le, &local_set),
-            family_first,
+            &rep_value(rep, given, &local_set),
+            &rep_value(rep, family, &local_set),
         )
     };
 
-    // Semantic fields, each resolved through its chain.
-    let name_first = resolve(&name_chain, fe, &local_set);
-    let name_last = resolve(&name_chain, le, &local_set);
-    let read_first = resolve(&reading_chain, fe, &local_set);
-    let read_last = resolve(&reading_chain, le, &local_set);
+    // Semantic fields: each name part resolved through its chain. `person` is
+    // names only — no full name (the form decides order + separator) and no
+    // email/phone (use the `fake:email` / `fake:phone` generators).
+    let name_given = resolve(&name_chain, given, &local_set);
+    let name_family = resolve(&name_chain, family, &local_set);
+    let read_given = resolve(&reading_chain, given, &local_set);
+    let read_family = resolve(&reading_chain, family, &local_set);
 
     let map: Vec<(&str, VarValue)> = vec![
-        // Primary semantic field == the country-aware `name` chain (what a
-        // local would type). `person` is names only — email and phone have
-        // their own generators (`fake:email`, `fake:phone`).
-        ("first", VarValue::string(&name_first)),
-        ("last", VarValue::string(&name_last)),
-        (
-            "name",
-            VarValue::string(join_name(&name_first, &name_last, family_first)),
-        ),
+        // Primary fields, resolved through the country-aware `name` chain.
+        ("given", VarValue::string(&name_given)),
+        ("family", VarValue::string(&name_family)),
         // Reading / furigana field (empty branch when the country declares no
         // reading chain).
-        ("reading", branch(&read_first, &read_last, family_first)),
+        ("reading", branch(&read_given, &read_family)),
         // Raw representation branches — every script, always present.
         ("native", raw(Rep::Native)),
         ("ascii", raw(Rep::Ascii)),
@@ -359,19 +333,19 @@ pub(crate) fn generate_person(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::seed::FakeRng;
     use crate::structured::generate_structured;
     use crate::GeneratorDef;
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha8Rng;
 
-    fn seeded_rng() -> ChaCha8Rng {
-        ChaCha8Rng::seed_from_u64(42)
+    fn seeded_rng() -> FakeRng {
+        FakeRng::from_seed(42)
     }
 
     fn def(name: &str) -> GeneratorDef {
         GeneratorDef {
             name: name.to_string(),
             params: HashMap::new(),
+            positional: Vec::new(),
         }
     }
 
@@ -383,6 +357,7 @@ mod tests {
         GeneratorDef {
             name: name.to_string(),
             params,
+            positional: Vec::new(),
         }
     }
 
@@ -403,30 +378,11 @@ mod tests {
         let mut rng = seeded_rng();
         let result = generate_structured(&def("person"), &mut rng).expect("should generate");
         let obj = result.as_object().expect("should be object");
-        assert!(obj.contains_key("first"), "missing 'first'");
-        assert!(obj.contains_key("last"), "missing 'last'");
-        assert!(obj.contains_key("name"), "missing 'name'");
+        assert!(obj.contains_key("given"), "missing 'given'");
+        assert!(obj.contains_key("family"), "missing 'family'");
+        assert!(obj.contains_key("reading"), "missing 'reading' branch");
         assert!(obj.contains_key("native"), "missing 'native' branch");
         assert!(obj.contains_key("ascii"), "missing 'ascii' branch");
-    }
-
-    // 2. Person with country=JP uses family_first name order
-    #[test]
-    fn person_jp_uses_family_first_order() {
-        let mut rng = seeded_rng();
-        let d = def_with_params("person", &[("country", "JP")]);
-        let result = generate_structured(&d, &mut rng).expect("should generate");
-
-        let first = field(&result, "first");
-        let last = field(&result, "last");
-        let name = field(&result, "name");
-
-        // Family first means "Last First"
-        assert_eq!(
-            name,
-            format!("{last} {first}"),
-            "JP name should be in family_first order"
-        );
     }
 
     // 10. Deterministic seed produces same output (person portion)
@@ -440,135 +396,87 @@ mod tests {
         assert_eq!(person1, person2, "same seed SHALL produce same person");
     }
 
-    // 14. Person with country=JP picks from the global name pool. The drawn
+    // 14. Person with country=JP picks from the global name pools. The drawn
     //     entry is the NATIVE name (the primary field may be romanised when the
     //     name doesn't fit the JP repertoire), so this checks the native branch.
     #[test]
     fn person_jp_picks_from_global_pool() {
-        let all_first: Vec<&str> = names_data()
-            .first_names
+        let all_given: Vec<&str> = names_data()
+            .given_names
             .iter()
             .map(|n| n.name.as_str())
             .collect();
-        let all_last: Vec<&str> = names_data()
-            .last_names
+        let all_family: Vec<&str> = names_data()
+            .family_names
             .iter()
             .map(|n| n.name.as_str())
             .collect();
 
         for seed in 0u64..20 {
-            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            let mut rng = FakeRng::from_seed(seed);
             let d = def_with_params("person", &[("country", "JP")]);
             let result = generate_structured(&d, &mut rng).expect("should generate");
             let native = result.get_path("native").expect("native branch");
-            let first = field(native, "first");
-            let last = field(native, "last");
+            let given = field(native, "given");
+            let family = field(native, "family");
 
             assert!(
-                all_first.contains(&first.as_str()),
-                "seed={seed}: first name '{first}' SHALL be in global pool"
+                all_given.contains(&given.as_str()),
+                "seed={seed}: given name '{given}' SHALL be in global pool"
             );
             assert!(
-                all_last.contains(&last.as_str()),
-                "seed={seed}: last name '{last}' SHALL be in global pool"
+                all_family.contains(&family.as_str()),
+                "seed={seed}: family name '{family}' SHALL be in global pool"
             );
         }
     }
 
-    // 19. Person with country=CN uses family_first order
-    #[test]
-    fn person_cn_uses_family_first_order() {
-        let mut rng = seeded_rng();
-        let d = def_with_params("person", &[("country", "CN")]);
-        let result = generate_structured(&d, &mut rng).expect("should generate");
-
-        let first = field(&result, "first");
-        let last = field(&result, "last");
-        let name = field(&result, "name");
-
-        assert_eq!(
-            name,
-            format!("{last} {first}"),
-            "CN name should be in family_first order"
-        );
-    }
-
-    // 23. first_name pool diversity: >20 unique names from 100 draws (Issue 13)
+    // 23. given-name pool diversity: >20 unique names from 100 draws (Issue 13)
     #[test]
     fn person_name_pool_diversity() {
-        let mut unique_first: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut unique_given: std::collections::HashSet<String> = std::collections::HashSet::new();
         for seed in 0u64..100 {
-            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            let mut rng = FakeRng::from_seed(seed);
             let result =
                 generate_structured(&def("person"), &mut rng).expect("SHALL generate person");
-            unique_first.insert(field(&result, "first"));
+            unique_given.insert(field(&result, "given"));
         }
         assert!(
-            unique_first.len() > 20,
-            "SHALL draw from pool >20 unique first names in 100 draws, got {}",
-            unique_first.len()
+            unique_given.len() > 20,
+            "SHALL draw from pool >20 unique given names in 100 draws, got {}",
+            unique_given.len()
         );
     }
 
-    // 27. Non-family-first country SHALL render name as "First Last"
+    // 28. On a KR form the primary parts follow the [local=hangul, ascii] chain:
+    //     a Korean (hangul) name stays native, any other name has no hangul so
+    //     local is empty and it falls through to the ascii fold (the regression
+    //     this guards: a default that wrongly returned native). No full name /
+    //     ordering is involved — order is the form's concern.
     #[test]
-    fn person_us_uses_first_last_order() {
-        let mut rng = seeded_rng();
-        let d = def_with_params("person", &[("country", "US")]);
-        let result = generate_structured(&d, &mut rng).expect("should generate");
-
-        let first = field(&result, "first");
-        let last = field(&result, "last");
-        let name = field(&result, "name");
-
-        assert_eq!(
-            name,
-            format!("{first} {last}"),
-            "US name SHALL be in First Last order"
-        );
-    }
-
-    // 28. KR person SHALL render family-first ("Last First") over the
-    //     [local, ascii] chain. Stated behaviourally (not pinned to a specific
-    //     drawn name) so it survives name-pool edits: the seed-42 draw is a
-    //     foreign Latin pair, so local=hangul is empty and the primary field
-    //     falls through to the ascii fold — NOT the native default (the
-    //     regression this guards: a default that wrongly returned native).
-    #[test]
-    fn person_kr_uses_family_first_order() {
+    fn person_kr_given_is_local_or_ascii() {
         let mut rng = seeded_rng();
         let d = def_with_params("person", &[("country", "KR")]);
         let result = generate_structured(&d, &mut rng).expect("should generate");
 
-        let first = field(&result, "first");
-        let last = field(&result, "last");
-        let name = field(&result, "name");
+        let given = field(&result, "given");
         let ascii = result.get_path("ascii").expect("ascii branch");
         let native = result.get_path("native").expect("native branch");
 
-        // Family-first: the full name is "Last First".
-        assert_eq!(
-            name,
-            format!("{last} {first}"),
-            "KR name SHALL be family-first (Last First)"
-        );
-        // The KR primary field is the chain [local=hangul, ascii]: a Korean
-        // (hangul) name is kept native; any other name has no hangul, so local
-        // is empty and it falls through to the ascii fold.
-        let nf = field(native, "first");
+        let ng = field(native, "given");
         let is_hangul =
-            !nf.is_empty() && nf.chars().all(|c| ('\u{AC00}'..='\u{D7A3}').contains(&c));
+            !ng.is_empty() && ng.chars().all(|c| ('\u{AC00}'..='\u{D7A3}').contains(&c));
         if is_hangul {
-            assert_eq!(first, nf, "a hangul name SHALL stay native on a KR form");
+            assert_eq!(given, ng, "a hangul name SHALL stay native on a KR form");
         } else {
             assert_eq!(
-                first,
-                field(ascii, "first"),
+                given,
+                field(ascii, "given"),
                 "a foreign name SHALL fall to the ascii fold on a KR form"
             );
             assert!(
-                first.is_ascii(),
-                "the ascii fold SHALL be pure ASCII, got {first:?}"
+                given.is_ascii(),
+                "the ascii fold SHALL be pure ASCII, got {given:?}"
             );
         }
     }
@@ -581,7 +489,7 @@ mod tests {
 
     fn all_entries() -> impl Iterator<Item = &'static NameEntry> {
         let d = names_data();
-        d.first_names.iter().chain(d.last_names.iter())
+        d.given_names.iter().chain(d.family_names.iter())
     }
 
     // 37. Every entry SHALL carry non-empty name/kana/ipa. `ascii` is optional:
@@ -820,14 +728,14 @@ mod tests {
     // ---- Phase A: per-script resolver (person.<script>.<part>) -------------
 
     // 44. person SHALL expose the always-present script branches carrying
-    //     non-empty first/last/name. (hiragana is omitted: it is empty for
-    //     foreign names by design — see person_hiragana_empty_for_foreign.)
+    //     non-empty given/family. (hiragana is omitted: it is empty for foreign
+    //     names by design — see person_hiragana_branch_has_no_katakana.)
     #[test]
     fn person_exposes_all_stored_script_branches() {
         let mut rng = seeded_rng();
         let r = generate_structured(&def("person"), &mut rng).expect("should generate");
         for script in ["native", "ascii", "kana", "katakana"] {
-            for part in ["first", "last", "name"] {
+            for part in ["given", "family"] {
                 let path = format!("{script}.{part}");
                 let val = r.get_path(&path).and_then(|v| v.as_str());
                 assert!(
@@ -843,7 +751,7 @@ mod tests {
     fn person_default_mirrors_native_branch() {
         let mut rng = seeded_rng();
         let r = generate_structured(&def("person"), &mut rng).expect("should generate");
-        for part in ["first", "last", "name"] {
+        for part in ["given", "family"] {
             assert_eq!(
                 r.get_path(part).and_then(|v| v.as_str()),
                 r.get_path(&format!("native.{part}"))
@@ -853,40 +761,19 @@ mod tests {
         }
     }
 
-    // 46. A script branch's `name` SHALL honour family-first order (JP).
-    #[test]
-    fn person_native_branch_uses_family_first_order_for_jp() {
-        let mut rng = seeded_rng();
-        let d = def_with_params("person", &[("country", "JP")]);
-        let r = generate_structured(&d, &mut rng).expect("should generate");
-        let f = r
-            .get_path("native.first")
-            .and_then(|v| v.as_str())
-            .expect("first");
-        let l = r
-            .get_path("native.last")
-            .and_then(|v| v.as_str())
-            .expect("last");
-        let n = r
-            .get_path("native.name")
-            .and_then(|v| v.as_str())
-            .expect("name");
-        assert_eq!(n, format!("{l} {f}"), "JP native.name SHALL be Last First");
-    }
-
     // 47. The katakana branch SHALL contain only katakana (and the ー mark).
     #[test]
     fn person_katakana_branch_is_katakana_only() {
         for seed in 0u64..30 {
-            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            let mut rng = FakeRng::from_seed(seed);
             let r = generate_structured(&def("person"), &mut rng).expect("should generate");
             let f = r
-                .get_path("katakana.first")
+                .get_path("katakana.given")
                 .and_then(|v| v.as_str())
-                .expect("first");
+                .expect("given");
             assert!(
                 !f.is_empty() && f.chars().all(|c| matches!(c as u32, 0x30A0..=0x30FF)),
-                "seed={seed}: katakana.first '{f}' SHALL be katakana only"
+                "seed={seed}: katakana.given '{f}' SHALL be katakana only"
             );
         }
     }
@@ -895,15 +782,15 @@ mod tests {
     #[test]
     fn person_hiragana_branch_has_no_katakana() {
         for seed in 0u64..30 {
-            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            let mut rng = FakeRng::from_seed(seed);
             let r = generate_structured(&def("person"), &mut rng).expect("should generate");
             let f = r
-                .get_path("hiragana.first")
+                .get_path("hiragana.given")
                 .and_then(|v| v.as_str())
-                .expect("first");
+                .expect("given");
             assert!(
                 f.chars().all(|c| !matches!(c as u32, 0x30A1..=0x30FA)),
-                "seed={seed}: hiragana.first '{f}' SHALL have no katakana letters"
+                "seed={seed}: hiragana.given '{f}' SHALL have no katakana letters"
             );
         }
     }
@@ -964,39 +851,29 @@ mod tests {
         assert_eq!(rep_value(Rep::Katakana, &pierre(), &[]), "ピエール");
     }
 
-    // 53. join_name SHALL drop empty parts (no stray space) and honour order.
-    #[test]
-    fn join_name_skips_empty_parts() {
-        assert_eq!(join_name("Jean", "Dupont", false), "Jean Dupont");
-        assert_eq!(join_name("Jean", "Dupont", true), "Dupont Jean");
-        assert_eq!(join_name("", "Dupont", false), "Dupont");
-        assert_eq!(join_name("Jean", "", false), "Jean");
-        assert_eq!(join_name("", "", false), "");
-    }
-
     // 54. country=JP `reading` SHALL be katakana; the default (no country)
     //     `reading` SHALL be an all-empty branch.
     #[test]
     fn reading_field_is_katakana_for_jp_empty_by_default() {
         for seed in 0u64..20 {
-            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            let mut rng = FakeRng::from_seed(seed);
             let jp =
                 generate_structured(&def_with_params("person", &[("country", "JP")]), &mut rng)
                     .expect("should generate");
             let reading = jp.get_path("reading").expect("reading branch");
-            let rf = field(reading, "first");
+            let rf = field(reading, "given");
             assert!(
                 !rf.is_empty() && rf.chars().all(|c| matches!(c as u32, 0x30A0..=0x30FF)),
-                "seed={seed}: JP reading.first '{rf}' SHALL be non-empty katakana"
+                "seed={seed}: JP reading.given '{rf}' SHALL be non-empty katakana"
             );
 
-            let mut rng2 = ChaCha8Rng::seed_from_u64(seed);
+            let mut rng2 = FakeRng::from_seed(seed);
             let dflt = generate_structured(&def("person"), &mut rng2).expect("should generate");
             let dr = dflt.get_path("reading").expect("reading branch");
             assert_eq!(
-                field(dr, "first"),
+                field(dr, "given"),
                 "",
-                "seed={seed}: default reading.first SHALL be empty"
+                "seed={seed}: default reading.given SHALL be empty"
             );
         }
     }
@@ -1010,8 +887,8 @@ mod tests {
         let d = def_with_params("person", &[("country", "JP"), ("name", "[native]")]);
         let r = generate_structured(&d, &mut rng).expect("should generate");
         assert_eq!(
-            field(&r, "first"),
-            field(r.get_path("native").expect("native"), "first"),
+            field(&r, "given"),
+            field(r.get_path("native").expect("native"), "given"),
             "name=[native] SHALL force the native form despite country=JP"
         );
     }
@@ -1044,7 +921,7 @@ mod tests {
         ];
         for country in ["", "JP", "KR", "FR", "RU"] {
             for seed in 0u64..15 {
-                let mut rng = ChaCha8Rng::seed_from_u64(seed);
+                let mut rng = FakeRng::from_seed(seed);
                 let params: &[(&str, &str)] = if country.is_empty() {
                     &[]
                 } else {
@@ -1053,7 +930,7 @@ mod tests {
                 let d = def_with_params("person", params);
                 let r = generate_structured(&d, &mut rng).expect("should generate");
                 for b in branches {
-                    for part in ["first", "last", "name"] {
+                    for part in ["given", "family"] {
                         let path = format!("{b}.{part}");
                         assert!(
                             r.get_path(&path).and_then(|v| v.as_str()).is_some(),

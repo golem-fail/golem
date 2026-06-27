@@ -1,0 +1,43 @@
+{
+  "patterns": [
+    "Kune {noun}.",
+    "Pane {noun}.",
+    "Kune {noun} ne {noun}.",
+    "Pane {noun} ne {noun}.",
+    "Kune {noun}, {noun} ne {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "chidhori",
+      "ivhu",
+      "dhaka",
+      "chidhinha",
+      "dombo",
+      "guruva",
+      "madota",
+      "chifananidzo",
+      "mumvuri",
+      "hofori",
+      "murindi",
+      "chivako",
+      "gomo",
+      "rwizi",
+      "sango",
+      "denga",
+      "mugwagwa",
+      "simbi",
+      "jecha",
+      "rusvingo",
+      "shongwe",
+      "gedhi",
+      "moto",
+      "musha",
+      "bako",
+      "mvura",
+      "mhepo",
+      "ruware",
+      "ibwe",
+      "huruva"
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "patterns": [
+    "Kuli {noun}.",
+    "Kuli {noun} ndi {noun}.",
+    "{noun} ndi {noun}.",
+    "Kuli {noun}, {noun}, ndi {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "dongo", "matope", "njerwa", "mwala", "fano", "chithunzi", "mlonda",
+      "phanga", "mthunzi", "phulusa", "fumbi", "dothi", "ng'anjo",
+      "thanthwe", "phiri", "mtsinje", "nkhalango", "thambo", "msewu",
+      "chitsulo", "mchenga", "khoma", "nsanja", "chipata", "lawi", "moto",
+      "nyanja", "mvula", "mtengo", "chimphona", "dziko", "mwamba", "nthaka",
+      "chisanu", "dzuwa", "mwezi", "nyenyezi", "mtambo",
+      "mphepo", "madzi", "denga", "khwawa", "chigwa", "manda"
+    ]
+  }
+}

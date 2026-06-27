@@ -1,7 +1,7 @@
 {
   "country": {
     "name": "新加坡",
-    "name_en": "Singapore",
+    "name_ascii": "Singapore",
     "iso_code": "SG",
     "phone_prefix": "+65",
     "phone_formats": [
@@ -10,392 +10,336 @@
       "+65-9###-####"
     ],
     "postcode_format": "######",
-    "name_order": "given_first",
-    "person": { "name": ["local", "ascii"], "reading": [], "local": ["ascii"] }
+    "person": {
+      "name": [
+        "local",
+        "ascii"
+      ],
+      "reading": [],
+      "local": [
+        "ascii"
+      ]
+    }
   },
   "states": [
     {
       "name": "Singapore",
-      "name_en": "Singapore",
       "region_tags": [],
       "cities": [
         {
           "name": "Singapore",
-          "name_en": "Singapore",
           "lat": 1.3521,
           "lon": 103.8198,
           "postcodes": [
             {
               "code": "018956",
               "street": "Raffles Place",
-              "street_en": "Raffles Place",
-              "pattern": "n{1,50} Raffles Place"
+              "pattern": "n{1,50} {street}"
             },
             {
               "code": "068805",
               "street": "Shenton Way",
-              "street_en": "Shenton Way",
-              "pattern": "n{1,80} Shenton Way"
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "068882",
               "street": "Robinson Road",
-              "street_en": "Robinson Road",
-              "pattern": "n{1,120} Robinson Road"
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "018971",
               "street": "Marina Boulevard",
-              "street_en": "Marina Boulevard",
-              "pattern": "n{1,30} Marina Boulevard"
+              "pattern": "n{1,30} {street}"
             },
             {
               "code": "018982",
               "street": "Bayfront Avenue",
-              "street_en": "Bayfront Avenue",
-              "pattern": "n{1,20} Bayfront Avenue"
+              "pattern": "n{1,20} {street}"
             },
             {
               "code": "238823",
               "street": "Orchard Road",
-              "street_en": "Orchard Road",
-              "pattern": "n{1,400} Orchard Road"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "228209",
               "street": "Scotts Road",
-              "street_en": "Scotts Road",
-              "pattern": "n{1,120} Scotts Road"
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "247905",
               "street": "Tanglin Road",
-              "street_en": "Tanglin Road",
-              "pattern": "n{1,150} Tanglin Road"
+              "pattern": "n{1,150} {street}"
             },
             {
               "code": "307684",
               "street": "Thomson Road",
-              "street_en": "Thomson Road",
-              "pattern": "n{1,350} Thomson Road"
+              "pattern": "n{1,350} {street}"
             },
             {
               "code": "329675",
               "street": "Balestier Road",
-              "street_en": "Balestier Road",
-              "pattern": "n{1,400} Balestier Road"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "310101",
               "street": "Lorong 1 Toa Payoh",
-              "street_en": "Lorong 1 Toa Payoh",
-              "pattern": "n{1,150} Lorong 1 Toa Payoh"
+              "pattern": "n{1,150} {street}"
             },
             {
               "code": "310188",
               "street": "Toa Payoh Central",
-              "street_en": "Toa Payoh Central",
-              "pattern": "n{1,80} Toa Payoh Central"
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "570201",
               "street": "Bishan Street 22",
-              "street_en": "Bishan Street 22",
-              "pattern": "n{1,150} Bishan Street 22"
+              "pattern": "n{1,150} {street}"
             },
             {
               "code": "570202",
               "street": "Bishan Street 23",
-              "street_en": "Bishan Street 23",
-              "pattern": "n{1,120} Bishan Street 23"
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "530101",
               "street": "Hougang Avenue 1",
-              "street_en": "Hougang Avenue 1",
-              "pattern": "n{1,200} Hougang Avenue 1"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "530201",
               "street": "Hougang Avenue 2",
-              "street_en": "Hougang Avenue 2",
-              "pattern": "n{1,150} Hougang Avenue 2"
+              "pattern": "n{1,150} {street}"
             },
             {
               "code": "541101",
               "street": "Sengkang East Way",
-              "street_en": "Sengkang East Way",
-              "pattern": "n{1,150} Sengkang East Way"
+              "pattern": "n{1,150} {street}"
             },
             {
               "code": "544801",
               "street": "Compassvale Road",
-              "street_en": "Compassvale Road",
-              "pattern": "n{1,100} Compassvale Road"
+              "pattern": "n{1,100} {street}"
             },
             {
               "code": "821101",
               "street": "Punggol Field",
-              "street_en": "Punggol Field",
-              "pattern": "n{1,200} Punggol Field"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "821301",
               "street": "Punggol Drive",
-              "street_en": "Punggol Drive",
-              "pattern": "n{1,150} Punggol Drive"
+              "pattern": "n{1,150} {street}"
             },
             {
               "code": "556201",
               "street": "Serangoon Avenue 3",
-              "street_en": "Serangoon Avenue 3",
-              "pattern": "n{1,200} Serangoon Avenue 3"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "534209",
               "street": "Upper Serangoon Road",
-              "street_en": "Upper Serangoon Road",
-              "pattern": "n{1,400} Upper Serangoon Road"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "560101",
               "street": "Ang Mo Kio Avenue 1",
-              "street_en": "Ang Mo Kio Avenue 1",
-              "pattern": "n{1,100} Ang Mo Kio Avenue 1"
+              "pattern": "n{1,100} {street}"
             },
             {
               "code": "560201",
               "street": "Ang Mo Kio Avenue 3",
-              "street_en": "Ang Mo Kio Avenue 3",
-              "pattern": "n{1,200} Ang Mo Kio Avenue 3"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "560401",
               "street": "Ang Mo Kio Avenue 6",
-              "street_en": "Ang Mo Kio Avenue 6",
-              "pattern": "n{1,180} Ang Mo Kio Avenue 6"
+              "pattern": "n{1,180} {street}"
             },
             {
               "code": "730201",
               "street": "Woodlands Avenue 3",
-              "street_en": "Woodlands Avenue 3",
-              "pattern": "n{1,120} Woodlands Avenue 3"
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "730401",
               "street": "Woodlands Street 31",
-              "street_en": "Woodlands Street 31",
-              "pattern": "n{1,150} Woodlands Street 31"
+              "pattern": "n{1,150} {street}"
             },
             {
               "code": "750101",
               "street": "Sembawang Drive",
-              "street_en": "Sembawang Drive",
-              "pattern": "n{1,100} Sembawang Drive"
+              "pattern": "n{1,100} {street}"
             },
             {
               "code": "750201",
               "street": "Sembawang Road",
-              "street_en": "Sembawang Road",
-              "pattern": "n{1,200} Sembawang Road"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "760101",
               "street": "Yishun Avenue 2",
-              "street_en": "Yishun Avenue 2",
-              "pattern": "n{1,200} Yishun Avenue 2"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "760301",
               "street": "Yishun Ring Road",
-              "street_en": "Yishun Ring Road",
-              "pattern": "n{1,500} Yishun Ring Road"
+              "pattern": "n{1,500} {street}"
             },
             {
               "code": "760401",
               "street": "Yishun Central",
-              "street_en": "Yishun Central",
-              "pattern": "n{1,50} Yishun Central"
+              "pattern": "n{1,50} {street}"
             },
             {
               "code": "670101",
               "street": "Bukit Panjang Ring Road",
-              "street_en": "Bukit Panjang Ring Road",
-              "pattern": "n{1,200} Bukit Panjang Ring Road"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "670201",
               "street": "Petir Road",
-              "street_en": "Petir Road",
-              "pattern": "n{1,80} Petir Road"
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "680101",
               "street": "Choa Chu Kang Avenue 1",
-              "street_en": "Choa Chu Kang Avenue 1",
-              "pattern": "n{1,100} Choa Chu Kang Avenue 1"
+              "pattern": "n{1,100} {street}"
             },
             {
               "code": "680401",
               "street": "Choa Chu Kang Drive",
-              "street_en": "Choa Chu Kang Drive",
-              "pattern": "n{1,150} Choa Chu Kang Drive"
+              "pattern": "n{1,150} {street}"
             },
             {
               "code": "460101",
               "street": "Bedok North Avenue 1",
-              "street_en": "Bedok North Avenue 1",
-              "pattern": "n{1,200} Bedok North Avenue 1"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "460501",
               "street": "New Upper Changi Road",
-              "street_en": "New Upper Changi Road",
-              "pattern": "n{1,500} New Upper Changi Road"
+              "pattern": "n{1,500} {street}"
             },
             {
               "code": "520201",
               "street": "Tampines Avenue 4",
-              "street_en": "Tampines Avenue 4",
-              "pattern": "n{1,200} Tampines Avenue 4"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "520401",
               "street": "Tampines Street 21",
-              "street_en": "Tampines Street 21",
-              "pattern": "n{1,80} Tampines Street 21"
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "510101",
               "street": "Pasir Ris Drive 1",
-              "street_en": "Pasir Ris Drive 1",
-              "pattern": "n{1,100} Pasir Ris Drive 1"
+              "pattern": "n{1,100} {street}"
             },
             {
               "code": "510301",
               "street": "Pasir Ris Drive 6",
-              "street_en": "Pasir Ris Drive 6",
-              "pattern": "n{1,120} Pasir Ris Drive 6"
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "440101",
               "street": "Marine Parade Road",
-              "street_en": "Marine Parade Road",
-              "pattern": "n{1,300} Marine Parade Road"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "428768",
               "street": "East Coast Road",
-              "street_en": "East Coast Road",
-              "pattern": "n{1,500} East Coast Road"
+              "pattern": "n{1,500} {street}"
             },
             {
               "code": "380101",
               "street": "Geylang Road",
-              "street_en": "Geylang Road",
-              "pattern": "n{1,400} Geylang Road"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "380201",
               "street": "Sims Avenue",
-              "street_en": "Sims Avenue",
-              "pattern": "n{1,350} Sims Avenue"
+              "pattern": "n{1,350} {street}"
             },
             {
               "code": "380501",
               "street": "Changi Road",
-              "street_en": "Changi Road",
-              "pattern": "n{1,300} Changi Road"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "600101",
               "street": "Jurong East Avenue 1",
-              "street_en": "Jurong East Avenue 1",
-              "pattern": "n{1,120} Jurong East Avenue 1"
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "600201",
               "street": "Jurong East Street 21",
-              "street_en": "Jurong East Street 21",
-              "pattern": "n{1,80} Jurong East Street 21"
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "640101",
               "street": "Jurong West Avenue 1",
-              "street_en": "Jurong West Avenue 1",
-              "pattern": "n{1,150} Jurong West Avenue 1"
+              "pattern": "n{1,150} {street}"
             },
             {
               "code": "640301",
               "street": "Jurong West Street 52",
-              "street_en": "Jurong West Street 52",
-              "pattern": "n{1,120} Jurong West Street 52"
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "650101",
               "street": "Bukit Batok Central",
-              "street_en": "Bukit Batok Central",
-              "pattern": "n{1,50} Bukit Batok Central"
+              "pattern": "n{1,50} {street}"
             },
             {
               "code": "650301",
               "street": "Bukit Batok West Avenue 6",
-              "street_en": "Bukit Batok West Avenue 6",
-              "pattern": "n{1,150} Bukit Batok West Avenue 6"
+              "pattern": "n{1,150} {street}"
             },
             {
               "code": "120301",
               "street": "Clementi Avenue 3",
-              "street_en": "Clementi Avenue 3",
-              "pattern": "n{1,120} Clementi Avenue 3"
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "129588",
               "street": "Commonwealth Avenue West",
-              "street_en": "Commonwealth Avenue West",
-              "pattern": "n{1,200} Commonwealth Avenue West"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "030201",
               "street": "Queensway",
-              "street_en": "Queensway",
-              "pattern": "n{1,300} Queensway"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "030501",
               "street": "Tanglin Halt Road",
-              "street_en": "Tanglin Halt Road",
-              "pattern": "n{1,150} Tanglin Halt Road"
+              "pattern": "n{1,150} {street}"
             },
             {
               "code": "218101",
               "street": "Serangoon Road",
-              "street_en": "Serangoon Road",
-              "pattern": "n{1,300} Serangoon Road"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "058665",
               "street": "South Bridge Road",
-              "street_en": "South Bridge Road",
-              "pattern": "n{1,200} South Bridge Road"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "199724",
               "street": "Arab Street",
-              "street_en": "Arab Street",
-              "pattern": "n{1,80} Arab Street"
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "427726",
               "street": "Joo Chiat Road",
-              "street_en": "Joo Chiat Road",
-              "pattern": "n{1,200} Joo Chiat Road"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "259686",
               "street": "Bukit Timah Road",
-              "street_en": "Bukit Timah Road",
-              "pattern": "n{1,500} Bukit Timah Road"
+              "pattern": "n{1,500} {street}"
             }
           ]
         }

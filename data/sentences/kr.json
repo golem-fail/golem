@@ -1,0 +1,55 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {noun} {verb_trans}.",
+    "{noun} {noun} {verb_trans}, {noun} {verb_intrans}.",
+    "{noun} {noun} {noun} {verb_trans}."
+  ],
+  "slots": {
+    "noun": [
+      "gúnkì",
+      "túló",
+      "tóló",
+      "kâu",
+      "cídí",
+      "césà",
+      "bə́rbə̀r",
+      "búgə́",
+      "njî",
+      "kánnú",
+      "fátò",
+      "kə̀ská",
+      "kâm",
+      "kwâ",
+      "sû",
+      "gàrú",
+      "tígə̀",
+      "ngòrə̂m",
+      "kàùdí",
+      "kalia",
+      "dina",
+      "bə́rə̀m",
+      "kàrwâ",
+      "sàmî"
+    ],
+    "verb_intrans": [
+      "nò",
+      "léttə́",
+      "nzùrò",
+      "tàwátə́",
+      "fátə́"
+    ],
+    "verb_trans": [
+      "bù",
+      "njâ",
+      "báktə́",
+      "tàndò",
+      "túltə́",
+      "kámtə́",
+      "tàbtə́",
+      "gə̀btə́",
+      "njèzò",
+      "máltə́"
+    ]
+  }
+}

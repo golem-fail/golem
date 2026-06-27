@@ -11,9 +11,9 @@ type = "phone"
 [[block]]
 name = "type_into_fields"
 steps = [
-  # Type into the email field
-  { action = "type", on_text = "Enter email", input = "user@example.com" },
-  { action = "assert_visible", on_text = "user@example.com" },
+  # Type a generated email into the email field (a real address; has '@').
+  { action = "type", on_text = "Enter email", input = "${fake:email}" },
+  { action = "assert_visible", on_text = "*@*" },
 
   # Type into the password field
   { action = "type", on_text = "Password", input = "s3cret!" },

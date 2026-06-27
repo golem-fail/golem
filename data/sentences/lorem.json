@@ -1,0 +1,16 @@
+{
+  "patterns": [
+    "Lorem ipsum {word} {word} {word} {word} {word}.",
+    "Sed {word} {word} {word} {word}, {word} {word}.",
+    "Dolor {word} {word} {word} {word} {word} {word}."
+  ],
+  "slots": {
+    "word": [
+      "dolor", "sit", "amet", "consectetur", "adipiscing", "elit", "eiusmod",
+      "tempor", "incididunt", "labore", "dolore", "magna", "aliqua", "enim",
+      "minim", "veniam", "quis", "nostrud", "exercitation", "ullamco",
+      "laboris", "nisi", "aliquip", "commodo", "consequat", "duis", "aute",
+      "irure", "reprehenderit", "voluptate"
+    ]
+  }
+}

@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
-use rand::Rng;
 
 use crate::generators::generate_simple;
+use crate::seed::FakeRng;
 use crate::structured::generate_structured;
 use crate::{GeneratorDef, VarError, VarValue};
 
@@ -12,7 +12,7 @@ use crate::{GeneratorDef, VarError, VarValue};
 /// Tries structured generators (person/address/credit_card/…) first, then
 /// simple ones (email/uuid/…). Public so callers that own an RNG (the
 /// runner) can supply generation to the interpolation context.
-pub fn generate_fake(def_str: &str, rng: &mut impl Rng) -> Result<VarValue, VarError> {
+pub fn generate_fake(def_str: &str, rng: &mut FakeRng) -> Result<VarValue, VarError> {
     let def = GeneratorDef::parse(def_str)
         .ok_or_else(|| VarError::Other(format!("invalid generator: {def_str}")))?;
     match generate_structured(&def, rng) {
@@ -72,7 +72,7 @@ pub fn split_fake_ref(reference: &str) -> (&str, Option<&str>) {
 /// generator args resolves against already-evaluated vars (correlated data).
 pub fn evaluate_generators(
     vars: &[(String, String)],
-    rng: &mut impl Rng,
+    rng: &mut FakeRng,
 ) -> Result<HashMap<String, VarValue>> {
     use crate::interpolation::{evaluate_value, GeneratorResolver, InterpolationContext};
     use crate::{Scope, ScopeLevel, VariableStore};
@@ -81,7 +81,7 @@ pub fn evaluate_generators(
     // The generator callback owns the RNG via a RefCell so it can be a plain
     // `Fn` inside the (immutable) interpolation context.
     let rng_cell = RefCell::new(rng);
-    let gen = |def: &str| generate_fake(def, &mut **rng_cell.borrow_mut());
+    let gen = |def: &str| generate_fake(def, &mut rng_cell.borrow_mut());
     let gen_ref: &GeneratorResolver = &gen;
 
     // Evaluate each var against a store of those already evaluated, so later
@@ -107,11 +107,9 @@ pub fn evaluate_generators(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha8Rng;
 
-    fn seeded_rng() -> ChaCha8Rng {
-        ChaCha8Rng::seed_from_u64(42)
+    fn seeded_rng() -> FakeRng {
+        FakeRng::from_seed(42)
     }
 
     /// Helper: extract a string field from a VarValue::Object.
@@ -223,7 +221,7 @@ mod tests {
             ),
             (
                 "city2".to_string(),
-                "${fake:city(country=${addr.country_code})}".to_string(),
+                "${fake:address(country=${addr.country_code}).city}".to_string(),
             ),
             (
                 "person".to_string(),
@@ -337,7 +335,7 @@ mod tests {
                 "${fake:address(country=JP)}".to_string(),
             ),
             ("email".to_string(), "${fake:email}".to_string()),
-            ("name".to_string(), "${fake:city}".to_string()),
+            ("name".to_string(), "${fake:address.city}".to_string()),
         ];
 
         let mut rng1 = seeded_rng();

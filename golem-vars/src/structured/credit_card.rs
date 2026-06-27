@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
 use anyhow::{bail, Result};
+use chrono::Datelike;
 use rand::Rng;
 
 use crate::card_loader::{card_database, find_cards, CardConfig, ProviderFile};
+use crate::seed::FakeRng;
 use crate::VarValue;
 
 // ---------------------------------------------------------------------------
@@ -70,7 +72,7 @@ const GENERIC_STATUSES: &[&str] = &[
 
 pub(crate) fn generate_credit_card(
     params: &HashMap<String, String>,
-    rng: &mut impl Rng,
+    rng: &mut FakeRng,
 ) -> Result<VarValue> {
     match params.get("provider").map(|s| s.as_str()) {
         Some(provider) => generate_provider_card(provider, params, rng),
@@ -79,7 +81,7 @@ pub(crate) fn generate_credit_card(
 }
 
 /// Generate a random Luhn-valid card (no provider), with optional generic status.
-fn generate_random_card(params: &HashMap<String, String>, rng: &mut impl Rng) -> Result<VarValue> {
+fn generate_random_card(params: &HashMap<String, String>, rng: &mut FakeRng) -> Result<VarValue> {
     let status = params.get("status").map(|s| s.as_str());
     let brand_param = params.get("brand").map(|s| s.as_str());
 
@@ -118,7 +120,12 @@ fn generate_random_card(params: &HashMap<String, String>, rng: &mut impl Rng) ->
     };
 
     let cvv = match status {
-        "declined:invalid_cvv" => random_digits(2, rng),
+        // Invalid CVV = one digit too short for the brand (Visa/MC/Discover → 2,
+        // Amex → 3). A too-long CVV can't be tested — input fields cap at the
+        // brand's length — so "too few" is the only enterable invalid. Brand-
+        // aware, unlike the old hardcoded 2 (which left Amex at 2 instead of the
+        // realistic 3-digit mistake).
+        "declined:invalid_cvv" => random_digits(brand.cvv_len - 1, rng),
         _ => random_digits(brand.cvv_len, rng),
     };
 
@@ -145,7 +152,7 @@ fn generate_random_card(params: &HashMap<String, String>, rng: &mut impl Rng) ->
 fn generate_provider_card(
     provider: &str,
     params: &HashMap<String, String>,
-    rng: &mut impl Rng,
+    rng: &mut FakeRng,
 ) -> Result<VarValue> {
     let db = card_database();
     let pf = db.get(provider).ok_or_else(|| {
@@ -190,7 +197,7 @@ struct ResolvedCard {
     otp: Option<String>,
 }
 
-fn resolve_card(card: &CardConfig, pf: &ProviderFile, rng: &mut impl Rng) -> ResolvedCard {
+fn resolve_card(card: &CardConfig, pf: &ProviderFile, rng: &mut FakeRng) -> ResolvedCard {
     let brand_name = card.brand.clone().unwrap_or_else(|| "visa".to_string());
     let is_amex = brand_name.to_lowercase() == "amex";
 
@@ -253,9 +260,14 @@ fn resolve_card(card: &CardConfig, pf: &ProviderFile, rng: &mut impl Rng) -> Res
 }
 
 /// Resolve a default string value, handling magic values.
-fn resolve_string(value: &str, brand_name: &str, rng: &mut impl Rng) -> String {
+fn resolve_string(value: &str, brand_name: &str, rng: &mut FakeRng) -> String {
     if value == "random_luhn" {
-        let brand = brand_by_name(brand_name).unwrap_or(&CARD_BRANDS[0]);
+        // Fall back to a *random* brand for an unrecognised name rather than
+        // silently biasing every unknown card to Visa (`CARD_BRANDS[0]`).
+        let brand = match brand_by_name(brand_name) {
+            Some(b) => b,
+            None => &CARD_BRANDS[rng.gen_range(0..CARD_BRANDS.len())],
+        };
         generate_luhn_number(brand.prefix, brand.length, rng)
     } else if value == "random_future" {
         random_future_expiry(rng)
@@ -315,10 +327,14 @@ fn build_output(card: &ResolvedCard, provider: &str, status: &str) -> Result<Var
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn random_future_expiry(rng: &mut impl Rng) -> String {
+/// A future expiry date, 1–5 years after the run's anchor year (`rng.anchor()`
+/// — see [`FakeRng`]). Anchoring on the seed-packed instant keeps it
+/// seed-reproducible while a no-`--seed` run tracks the real current year.
+fn random_future_expiry(rng: &mut FakeRng) -> String {
+    let anchor_year = rng.anchor().year();
     let month: u32 = rng.gen_range(1..=12);
-    let year: u32 = rng.gen_range(27..=31);
-    format!("{month:02}/{year}")
+    let year = (anchor_year + rng.gen_range(1..=5)) % 100;
+    format!("{month:02}/{year:02}")
 }
 
 fn random_digits(len: usize, rng: &mut impl Rng) -> String {
@@ -395,17 +411,16 @@ mod tests {
     use super::*;
     use crate::structured::generate_structured;
     use crate::GeneratorDef;
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha8Rng;
 
-    fn seeded_rng() -> ChaCha8Rng {
-        ChaCha8Rng::seed_from_u64(42)
+    fn seeded_rng() -> FakeRng {
+        FakeRng::from_seed(42)
     }
 
     fn def(name: &str) -> GeneratorDef {
         GeneratorDef {
             name: name.to_string(),
             params: HashMap::new(),
+            positional: Vec::new(),
         }
     }
 
@@ -417,6 +432,7 @@ mod tests {
         GeneratorDef {
             name: name.to_string(),
             params,
+            positional: Vec::new(),
         }
     }
 
@@ -450,10 +466,51 @@ mod tests {
         assert!(obj.contains_key("status"), "missing 'status'");
     }
 
+    // Brands only drive Luhn synthesis (prefix + length) when a card has no
+    // explicit number and would fall through to `random_luhn`. For those, the
+    // brand MUST be known (`CARD_BRANDS`) — otherwise the unknown-brand path
+    // picks a *random* brand and the synthesised number's prefix/length won't
+    // match the declared brand. Cards with a fixed number carry their brand as
+    // a display-only label (jcb, diners, mada, …) and are intentionally allowed
+    // to name brands golem can't synthesise.
+    #[test]
+    fn random_luhn_provider_cards_have_known_brand() {
+        let db = card_database();
+        let mut unknown: Vec<String> = Vec::new();
+        for id in db.provider_ids() {
+            let Some(pf) = db.get(id) else { continue };
+            // Absent provider-default number behaves as "random_luhn".
+            let default_is_luhn = pf
+                .defaults
+                .number
+                .as_deref()
+                .map(|n| n == "random_luhn")
+                .unwrap_or(true);
+            for (status, cards) in &pf.statuses {
+                for card in cards {
+                    let synthesises_luhn = card.number.is_none() && default_is_luhn;
+                    if !synthesises_luhn {
+                        continue; // fixed number → brand is a display-only label
+                    }
+                    let brand = card.brand.as_deref().unwrap_or("visa");
+                    if brand_by_name(brand).is_none() {
+                        unknown.push(format!("{id}/{status}: {brand}"));
+                    }
+                }
+            }
+        }
+        assert!(
+            unknown.is_empty(),
+            "provider cards that synthesise Luhn numbers declare unknown \
+             brand(s) (would fall back to a random brand with mismatched \
+             prefix/length): {unknown:?}"
+        );
+    }
+
     #[test]
     fn credit_card_cvv_length_matches_brand() {
         for seed in 0u64..50 {
-            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            let mut rng = FakeRng::from_seed(seed);
             let result =
                 generate_structured(&def("credit_card"), &mut rng).expect("should generate");
             let brand = field(&result, "brand");
@@ -482,7 +539,7 @@ mod tests {
     #[test]
     fn credit_card_number_is_luhn_valid() {
         for seed in 0u64..20 {
-            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            let mut rng = FakeRng::from_seed(seed);
             let result =
                 generate_structured(&def("credit_card"), &mut rng).expect("should generate");
             let number = field(&result, "number");
@@ -496,7 +553,7 @@ mod tests {
     #[test]
     fn credit_card_number_correct_length() {
         for seed in 0u64..50 {
-            let mut rng = ChaCha8Rng::seed_from_u64(seed);
+            let mut rng = FakeRng::from_seed(seed);
             let result =
                 generate_structured(&def("credit_card"), &mut rng).expect("should generate");
             let brand = field(&result, "brand");
@@ -718,12 +775,22 @@ mod tests {
     #[test]
     fn credit_card_generic_declined_invalid_cvv() {
         let mut rng = seeded_rng();
-        let d = def_with_params("credit_card", &[("status", "declined:invalid_cvv")]);
-        let result = generate_structured(&d, &mut rng).expect("SHALL generate");
-        let cvv = field(&result, "cvv");
-        assert_eq!(cvv.len(), 2, "SHALL have 2-digit CVV");
-        let status = field(&result, "status");
-        assert_eq!(status, "declined:invalid_cvv");
+        // invalid_cvv emits a CVV one digit short of the brand's valid length:
+        // 3-digit brands → 2, Amex (4) → 3. Always too-short (the only enterable
+        // invalid, since fields cap at the brand length).
+        for (brand, expected_len) in [("visa", 2), ("mastercard", 2), ("amex", 3)] {
+            let d = def_with_params(
+                "credit_card",
+                &[("status", "declined:invalid_cvv"), ("brand", brand)],
+            );
+            let result = generate_structured(&d, &mut rng).expect("SHALL generate");
+            assert_eq!(
+                field(&result, "cvv").len(),
+                expected_len,
+                "{brand}: invalid_cvv SHALL be one digit short"
+            );
+            assert_eq!(field(&result, "status"), "declined:invalid_cvv");
+        }
     }
 
     #[test]

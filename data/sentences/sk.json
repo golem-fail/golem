@@ -1,0 +1,34 @@
+{
+  "patterns": [
+    "{subj} {verb_intrans}.",
+    "{subj} {verb_trans} {obj}.",
+    "{subj} {verb_intrans} a {verb_intrans}.",
+    "{subj} {verb_trans} {obj} a {obj}."
+  ],
+  "slots": {
+    "subj": [
+      "golem", "hlina", "blato", "tehla", "kameň",
+      "socha", "strážca", "rabín", "íl", "jaskyňa",
+      "tieň", "obor", "prach", "totem", "modla",
+      "hora", "rieka", "les", "obloha", "cesta",
+      "hrad", "železo", "piesok", "veža", "múr", "brána",
+      "plameň", "skala"
+    ],
+    "obj": [
+      "golema", "hlinu", "blato", "tehlu", "kameň",
+      "sochu", "strážcu", "rabína", "íl", "jaskyňu",
+      "tieň", "obra", "prach", "totem", "modlu",
+      "horu", "rieku", "les", "oblohu", "cestu",
+      "hrad", "železo", "piesok", "vežu", "múr", "bránu",
+      "plameň", "skalu"
+    ],
+    "verb_intrans": [
+      "sa prebúdza", "sa rúca", "spí", "stojí", "blúdi", "kolíše",
+      "sa trasie", "klesá", "sa otáča", "rastie"
+    ],
+    "verb_trans": [
+      "stráži", "drví", "nesie", "chráni", "tvaruje", "dvíha", "láme",
+      "zviera", "vlečie", "halí"
+    ]
+  }
+}

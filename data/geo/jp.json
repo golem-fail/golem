@@ -1,7 +1,7 @@
 {
   "country": {
     "name": "日本",
-    "name_en": "Japan",
+    "name_ascii": "Nihon",
     "iso_code": "JP",
     "phone_prefix": "+81",
     "phone_formats": [
@@ -9,168 +9,189 @@
       "+81-###-###-####"
     ],
     "postcode_format": "###-####",
-    "name_order": "family_first",
-    "person": { "name": ["local", "ascii"], "reading": ["katakana"], "local": ["kanji", "hiragana"] }
+    "person": {
+      "name": [
+        "local",
+        "ascii"
+      ],
+      "reading": [
+        "katakana"
+      ],
+      "local": [
+        "kanji",
+        "hiragana"
+      ]
+    },
+    "markers": {
+      "chome": {
+        "native": "丁目",
+        "ascii": "-chome "
+      },
+      "ban": {
+        "native": "番",
+        "ascii": "-ban"
+      }
+    }
   },
   "states": [
     {
       "name": "北海道",
-      "name_en": "Hokkaido",
+      "name_ascii": "Hokkaido",
       "region_tags": [
         "Hokkaido"
       ],
       "cities": [
         {
           "name": "札幌市",
-          "name_en": "Sapporo",
+          "name_ascii": "Sapporo",
           "lat": 43.0621,
           "lon": 141.3544,
           "postcodes": [
             {
               "code": "060-0001",
               "street": "北一条西",
-              "street_en": "Kita 1-jo Nishi",
-              "pattern": "北一条西n{１,２０}"
+              "street_ascii": "Kita 1-jo Nishi",
+              "pattern": "{street}n{１,２０}"
             },
             {
               "code": "060-0042",
               "street": "大通西",
-              "street_en": "Odori Nishi",
-              "pattern": "大通西n{１,１２５}"
+              "street_ascii": "Odori Nishi",
+              "pattern": "{street}n{１,１２５}"
             },
             {
               "code": "064-0801",
               "street": "南一条西",
-              "street_en": "Minami 1-jo Nishi",
-              "pattern": "南一条西n{１,２７}"
+              "street_ascii": "Minami 1-jo Nishi",
+              "pattern": "{street}n{１,２７}"
             },
             {
               "code": "004-0041",
               "street": "清田一条",
-              "street_en": "Kiyota 1-jo",
-              "pattern": "清田一条n{１,４}丁目n{１,１５}番"
+              "street_ascii": "Kiyota 1-jo",
+              "pattern": "{street}n{１,４}{chome}n{１,１５}{ban}"
             },
             {
               "code": "001-0010",
               "street": "北十条西",
-              "street_en": "Kita 10-jo Nishi",
-              "pattern": "北十条西n{１,４}丁目n{１,１５}番"
+              "street_ascii": "Kita 10-jo Nishi",
+              "pattern": "{street}n{１,４}{chome}n{１,１５}{ban}"
             },
             {
               "code": "003-0021",
               "street": "北二十一条東",
-              "street_en": "Kita 21-jo Higashi",
-              "pattern": "北二十一条東n{１,２０}"
+              "street_ascii": "Kita 21-jo Higashi",
+              "pattern": "{street}n{１,２０}"
             }
           ]
         },
         {
           "name": "旭川市",
-          "name_en": "Asahikawa",
+          "name_ascii": "Asahikawa",
           "lat": 43.7709,
           "lon": 142.3649,
           "postcodes": [
             {
               "code": "070-0031",
               "street": "一条通",
-              "street_en": "Ichijo-dori",
-              "pattern": "一条通n{１,１２５}"
+              "street_ascii": "Ichijo-dori",
+              "pattern": "{street}n{１,１２５}"
             },
             {
               "code": "070-0033",
               "street": "三条通",
-              "street_en": "Sanjo-dori",
-              "pattern": "三条通n{１,２５}"
+              "street_ascii": "Sanjo-dori",
+              "pattern": "{street}n{１,２５}"
             },
             {
               "code": "070-0036",
               "street": "六条通",
-              "street_en": "Rokujo-dori",
-              "pattern": "六条通n{１,２５}"
+              "street_ascii": "Rokujo-dori",
+              "pattern": "{street}n{１,２５}"
             },
             {
               "code": "070-8525",
               "street": "宮下通",
-              "street_en": "Miyashita-dori",
-              "pattern": "宮下通n{１,２５}"
+              "street_ascii": "Miyashita-dori",
+              "pattern": "{street}n{１,２５}"
             }
           ]
         },
         {
           "name": "函館市",
-          "name_en": "Hakodate",
+          "name_ascii": "Hakodate",
           "lat": 41.7687,
           "lon": 140.7288,
           "postcodes": [
             {
               "code": "040-0001",
               "street": "五稜郭町",
-              "street_en": "Goryokaku-cho",
-              "pattern": "五稜郭町n{１,１３０}"
+              "street_ascii": "Goryokaku-cho",
+              "pattern": "{street}n{１,１３０}"
             },
             {
               "code": "040-0011",
               "street": "本町",
-              "street_en": "Honcho",
-              "pattern": "本町n{１,４０}"
+              "street_ascii": "Honcho",
+              "pattern": "{street}n{１,４０}"
             },
             {
               "code": "040-0034",
               "street": "大手町",
-              "street_en": "Otemachi",
-              "pattern": "大手町n{１,３０}"
+              "street_ascii": "Otemachi",
+              "pattern": "{street}n{１,３０}"
             }
           ]
         },
         {
           "name": "釧路市",
-          "name_en": "Kushiro",
+          "name_ascii": "Kushiro",
           "lat": 42.9849,
           "lon": 144.382,
           "postcodes": [
             {
               "code": "085-0016",
               "street": "錦町",
-              "street_en": "Nishiki-cho",
-              "pattern": "錦町n{１,１００}"
+              "street_ascii": "Nishiki-cho",
+              "pattern": "{street}n{１,１００}"
             },
             {
               "code": "085-0017",
               "street": "幸町",
-              "street_en": "Saiwai-cho",
-              "pattern": "幸町n{１,５０}"
+              "street_ascii": "Saiwai-cho",
+              "pattern": "{street}n{１,５０}"
             },
             {
               "code": "085-0014",
               "street": "末広町",
-              "street_en": "Suehiro-cho",
-              "pattern": "末広町n{１,５０}"
+              "street_ascii": "Suehiro-cho",
+              "pattern": "{street}n{１,５０}"
             }
           ]
         },
         {
           "name": "帯広市",
-          "name_en": "Obihiro",
+          "name_ascii": "Obihiro",
           "lat": 42.9236,
           "lon": 143.1966,
           "postcodes": [
             {
               "code": "080-0012",
               "street": "西二条南",
-              "street_en": "Nishi 2-jo Minami",
-              "pattern": "西二条南n{１,１３０}"
+              "street_ascii": "Nishi 2-jo Minami",
+              "pattern": "{street}n{１,１３０}"
             },
             {
               "code": "080-0013",
               "street": "西三条南",
-              "street_en": "Nishi 3-jo Minami",
-              "pattern": "西三条南n{１,４０}"
+              "street_ascii": "Nishi 3-jo Minami",
+              "pattern": "{street}n{１,４０}"
             },
             {
               "code": "080-0801",
               "street": "東一条南",
-              "street_en": "Higashi 1-jo Minami",
-              "pattern": "東一条南n{１,３０}"
+              "street_ascii": "Higashi 1-jo Minami",
+              "pattern": "{street}n{１,３０}"
             }
           ]
         }
@@ -178,86 +199,86 @@
     },
     {
       "name": "青森県",
-      "name_en": "Aomori",
+      "name_ascii": "Aomori",
       "region_tags": [
         "Tohoku"
       ],
       "cities": [
         {
           "name": "青森市",
-          "name_en": "Aomori",
+          "name_ascii": "Aomori",
           "lat": 40.8246,
           "lon": 140.74,
           "postcodes": [
             {
               "code": "030-0801",
               "street": "新町",
-              "street_en": "Shinmachi",
-              "pattern": "新町n{１,２}丁目n{１,５０}番"
+              "street_ascii": "Shinmachi",
+              "pattern": "{street}n{１,２}{chome}n{１,５０}{ban}"
             },
             {
               "code": "030-0861",
               "street": "長島",
-              "street_en": "Nagashima",
-              "pattern": "長島n{１,１９６}丁目n{１,３０}番"
+              "street_ascii": "Nagashima",
+              "pattern": "{street}n{１,１９６}{chome}n{１,３０}{ban}"
             },
             {
               "code": "030-0812",
               "street": "堤町",
-              "street_en": "Tsutsumi-cho",
-              "pattern": "堤町n{１,２}丁目n{１,５０}番"
+              "street_ascii": "Tsutsumi-cho",
+              "pattern": "{street}n{１,２}{chome}n{１,５０}{ban}"
             }
           ]
         },
         {
           "name": "弘前市",
-          "name_en": "Hirosaki",
+          "name_ascii": "Hirosaki",
           "lat": 40.6031,
           "lon": 140.4641,
           "postcodes": [
             {
               "code": "036-8001",
               "street": "大字北瓦ヶ町",
-              "street_en": "Kitakawarakemachi",
-              "pattern": "大字北瓦ヶ町n{１,５０}"
+              "street_ascii": "Kitakawarakemachi",
+              "pattern": "{street}n{１,５０}"
             },
             {
               "code": "036-8182",
               "street": "土手町",
-              "street_en": "Dote-machi",
-              "pattern": "土手町n{１,１００}"
+              "street_ascii": "Dote-machi",
+              "pattern": "{street}n{１,１００}"
             },
             {
               "code": "036-8003",
               "street": "駅前町",
-              "street_en": "Ekimae-cho",
-              "pattern": "駅前町n{１,５０}"
+              "street_ascii": "Ekimae-cho",
+              "pattern": "{street}n{１,５０}"
             }
           ]
         },
         {
           "name": "八戸市",
-          "name_en": "Hachinohe",
+          "name_ascii": "Hachinohe",
           "lat": 40.5124,
           "lon": 141.4883,
           "postcodes": [
             {
               "code": "031-0042",
               "street": "十三日町",
-              "street_en": "Jusannichi-machi",
-              "pattern": "十三日町n{１,１８９}"
+              "street_ascii": "Jusannichi-machi",
+              "pattern": "{street}n{１,１８９}"
             },
             {
               "code": "031-0075",
               "street": "内丸",
-              "street_en": "Uchimaru",
-              "pattern": "内丸n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Uchimaru",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "031-0802",
               "street": "小中野",
-              "street_en": "Konakano",
-              "pattern": "小中野n{１,８}丁目n{１,３０}番"
+              "street_ascii": "Konakano",
+              "pattern": "{street}n{１,８}{chome}n{１,３０}{ban}"
             }
           ]
         }
@@ -265,66 +286,66 @@
     },
     {
       "name": "岩手県",
-      "name_en": "Iwate",
+      "name_ascii": "Iwate",
       "region_tags": [
         "Tohoku"
       ],
       "cities": [
         {
           "name": "盛岡市",
-          "name_en": "Morioka",
+          "name_ascii": "Morioka",
           "lat": 39.7036,
           "lon": 141.1527,
           "postcodes": [
             {
               "code": "020-0022",
               "street": "大通",
-              "street_en": "Odori",
-              "pattern": "大通n{１,１９３}丁目n{１,４０}番"
+              "street_ascii": "Odori",
+              "pattern": "{street}n{１,１９３}{chome}n{１,４０}{ban}"
             },
             {
               "code": "020-0024",
               "street": "菜園",
-              "street_en": "Saien",
-              "pattern": "菜園n{１,２}丁目n{１,５０}番"
+              "street_ascii": "Saien",
+              "pattern": "{street}n{１,２}{chome}n{１,５０}{ban}"
             },
             {
               "code": "020-0871",
               "street": "中ノ橋通",
-              "street_en": "Nakanohashi-dori",
-              "pattern": "中ノ橋通n{１,２}丁目n{１,３０}番"
+              "street_ascii": "Nakanohashi-dori",
+              "pattern": "{street}n{１,２}{chome}n{１,３０}{ban}"
             },
             {
               "code": "020-0015",
               "street": "本町通",
-              "street_en": "Honcho-dori",
-              "pattern": "本町通n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Honcho-dori",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             }
           ]
         },
         {
           "name": "一関市",
-          "name_en": "Ichinoseki",
+          "name_ascii": "Ichinoseki",
           "lat": 38.9345,
           "lon": 141.1286,
           "postcodes": [
             {
               "code": "021-0881",
               "street": "大町",
-              "street_en": "Omachi",
-              "pattern": "大町n{１,８０}"
+              "street_ascii": "Omachi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "021-0882",
               "street": "上大槻街",
-              "street_en": "Kamiozuki-machi",
-              "pattern": "上大槻街n{１,７０}"
+              "street_ascii": "Kamiozuki-machi",
+              "pattern": "{street}n{１,７０}"
             },
             {
               "code": "021-0884",
               "street": "田村町",
-              "street_en": "Tamura-cho",
-              "pattern": "田村町n{１,６０}"
+              "street_ascii": "Tamura-cho",
+              "pattern": "{street}n{１,６０}"
             }
           ]
         }
@@ -332,98 +353,98 @@
     },
     {
       "name": "宮城県",
-      "name_en": "Miyagi",
+      "name_ascii": "Miyagi",
       "region_tags": [
         "Tohoku"
       ],
       "cities": [
         {
           "name": "仙台市",
-          "name_en": "Sendai",
+          "name_ascii": "Sendai",
           "lat": 38.2682,
           "lon": 140.8694,
           "postcodes": [
             {
               "code": "980-0021",
               "street": "中央",
-              "street_en": "Chuo",
-              "pattern": "中央n{１,４}丁目n{１,３０}番"
+              "street_ascii": "Chuo",
+              "pattern": "{street}n{１,４}{chome}n{１,３０}{ban}"
             },
             {
               "code": "980-0811",
               "street": "一番町",
-              "street_en": "Ichibancho",
-              "pattern": "一番町n{１,４}丁目n{１,３０}番"
+              "street_ascii": "Ichibancho",
+              "pattern": "{street}n{１,４}{chome}n{１,３０}{ban}"
             },
             {
               "code": "980-0014",
               "street": "本町",
-              "street_en": "Honcho",
-              "pattern": "本町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Honcho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "981-3133",
               "street": "泉中央",
-              "street_en": "Izumi-Chuo",
-              "pattern": "泉中央n{１,４}丁目n{１,３０}番"
+              "street_ascii": "Izumi-Chuo",
+              "pattern": "{street}n{１,４}{chome}n{１,３０}{ban}"
             },
             {
               "code": "983-0852",
               "street": "榴ヶ岡",
-              "street_en": "Tsutsujigaoka",
-              "pattern": "榴ヶ岡n{１,１８５}"
+              "street_ascii": "Tsutsujigaoka",
+              "pattern": "{street}n{１,１８５}"
             }
           ]
         },
         {
           "name": "石巻市",
-          "name_en": "Ishinomaki",
+          "name_ascii": "Ishinomaki",
           "lat": 38.4346,
           "lon": 141.3029,
           "postcodes": [
             {
               "code": "986-0824",
               "street": "立町",
-              "street_en": "Tachi-machi",
-              "pattern": "立町n{１,２}丁目n{１,５０}番"
+              "street_ascii": "Tachi-machi",
+              "pattern": "{street}n{１,２}{chome}n{１,５０}{ban}"
             },
             {
               "code": "986-0861",
               "street": "蛇田",
-              "street_en": "Hebita",
-              "pattern": "蛇田n{１,１２８}"
+              "street_ascii": "Hebita",
+              "pattern": "{street}n{１,１２８}"
             },
             {
               "code": "986-0825",
               "street": "穀町",
-              "street_en": "Koku-machi",
-              "pattern": "穀町n{１,７０}"
+              "street_ascii": "Koku-machi",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         },
         {
           "name": "名取市",
-          "name_en": "Natori",
+          "name_ascii": "Natori",
           "lat": 38.1714,
           "lon": 140.8918,
           "postcodes": [
             {
               "code": "981-1224",
               "street": "増田",
-              "street_en": "Masuda",
-              "pattern": "増田n{１,８}丁目n{１,３０}番"
+              "street_ascii": "Masuda",
+              "pattern": "{street}n{１,８}{chome}n{１,３０}{ban}"
             },
             {
               "code": "981-1231",
               "street": "手倉田",
-              "street_en": "Tekurada",
-              "pattern": "手倉田n{１,１２２}"
+              "street_ascii": "Tekurada",
+              "pattern": "{street}n{１,１２２}"
             },
             {
               "code": "981-1225",
               "street": "飯野坂",
-              "street_en": "Iinozaka",
-              "pattern": "飯野坂n{１,７０}"
+              "street_ascii": "Iinozaka",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         }
@@ -431,60 +452,60 @@
     },
     {
       "name": "秋田県",
-      "name_en": "Akita",
+      "name_ascii": "Akita",
       "region_tags": [
         "Tohoku"
       ],
       "cities": [
         {
           "name": "秋田市",
-          "name_en": "Akita",
+          "name_ascii": "Akita",
           "lat": 39.72,
           "lon": 140.1025,
           "postcodes": [
             {
               "code": "010-0001",
               "street": "中通",
-              "street_en": "Nakadori",
-              "pattern": "中通n{１,１８７}丁目n{１,３０}番"
+              "street_ascii": "Nakadori",
+              "pattern": "{street}n{１,１８７}{chome}n{１,３０}{ban}"
             },
             {
               "code": "010-0921",
               "street": "大町",
-              "street_en": "Omachi",
-              "pattern": "大町n{１,６}丁目n{１,３０}番"
+              "street_ascii": "Omachi",
+              "pattern": "{street}n{１,６}{chome}n{１,３０}{ban}"
             },
             {
               "code": "010-0951",
               "street": "山王",
-              "street_en": "Sanno",
-              "pattern": "山王n{１,７}丁目n{１,３０}番"
+              "street_ascii": "Sanno",
+              "pattern": "{street}n{１,７}{chome}n{１,３０}{ban}"
             }
           ]
         },
         {
           "name": "横手市",
-          "name_en": "Yokote",
+          "name_ascii": "Yokote",
           "lat": 39.3112,
           "lon": 140.553,
           "postcodes": [
             {
               "code": "013-0023",
               "street": "中央町",
-              "street_en": "Chuo-cho",
-              "pattern": "中央町n{１,８０}"
+              "street_ascii": "Chuo-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "013-0036",
               "street": "駅前町",
-              "street_en": "Ekimae-cho",
-              "pattern": "駅前町n{１,７０}"
+              "street_ascii": "Ekimae-cho",
+              "pattern": "{street}n{１,７０}"
             },
             {
               "code": "013-0046",
               "street": "神明町",
-              "street_en": "Shinmei-cho",
-              "pattern": "神明町n{１,６０}"
+              "street_ascii": "Shinmei-cho",
+              "pattern": "{street}n{１,６０}"
             }
           ]
         }
@@ -492,86 +513,86 @@
     },
     {
       "name": "山形県",
-      "name_en": "Yamagata",
+      "name_ascii": "Yamagata",
       "region_tags": [
         "Tohoku"
       ],
       "cities": [
         {
           "name": "山形市",
-          "name_en": "Yamagata",
+          "name_ascii": "Yamagata",
           "lat": 38.2404,
           "lon": 140.3633,
           "postcodes": [
             {
               "code": "990-0039",
               "street": "香澄町",
-              "street_en": "Kasumi-cho",
-              "pattern": "香澄町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Kasumi-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "990-0042",
               "street": "七日町",
-              "street_en": "Nanokamachi",
-              "pattern": "七日町n{１,１９４}丁目n{１,３０}番"
+              "street_ascii": "Nanokamachi",
+              "pattern": "{street}n{１,１９４}{chome}n{１,３０}{ban}"
             },
             {
               "code": "990-0047",
               "street": "旅篭町",
-              "street_en": "Hatago-machi",
-              "pattern": "旅篭町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Hatago-machi",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             }
           ]
         },
         {
           "name": "鶴岡市",
-          "name_en": "Tsuruoka",
+          "name_ascii": "Tsuruoka",
           "lat": 38.7275,
           "lon": 139.8367,
           "postcodes": [
             {
               "code": "997-0015",
               "street": "末広町",
-              "street_en": "Suehiro-cho",
-              "pattern": "末広町n{１,１２７}"
+              "street_ascii": "Suehiro-cho",
+              "pattern": "{street}n{１,１２７}"
             },
             {
               "code": "997-0028",
               "street": "山王町",
-              "street_en": "Sanno-machi",
-              "pattern": "山王町n{１,７０}"
+              "street_ascii": "Sanno-machi",
+              "pattern": "{street}n{１,７０}"
             },
             {
               "code": "997-0034",
               "street": "本町",
-              "street_en": "Honcho",
-              "pattern": "本町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Honcho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             }
           ]
         },
         {
           "name": "酒田市",
-          "name_en": "Sakata",
+          "name_ascii": "Sakata",
           "lat": 38.9146,
           "lon": 139.8364,
           "postcodes": [
             {
               "code": "998-0044",
               "street": "中町",
-              "street_en": "Naka-machi",
-              "pattern": "中町n{１,１９６}丁目n{１,３０}番"
+              "street_ascii": "Naka-machi",
+              "pattern": "{street}n{１,１９６}{chome}n{１,３０}{ban}"
             },
             {
               "code": "998-0037",
               "street": "日吉町",
-              "street_en": "Hiyoshi-cho",
-              "pattern": "日吉町n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Hiyoshi-cho",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "998-0023",
               "street": "幸町",
-              "street_en": "Saiwai-cho",
-              "pattern": "幸町n{１,２}丁目n{１,５０}番"
+              "street_ascii": "Saiwai-cho",
+              "pattern": "{street}n{１,２}{chome}n{１,５０}{ban}"
             }
           ]
         }
@@ -579,112 +600,112 @@
     },
     {
       "name": "福島県",
-      "name_en": "Fukushima",
+      "name_ascii": "Fukushima",
       "region_tags": [
         "Tohoku"
       ],
       "cities": [
         {
           "name": "福島市",
-          "name_en": "Fukushima",
+          "name_ascii": "Fukushima",
           "lat": 37.7608,
           "lon": 140.4748,
           "postcodes": [
             {
               "code": "960-8031",
               "street": "栄町",
-              "street_en": "Sakae-machi",
-              "pattern": "栄町n{１,８０}"
+              "street_ascii": "Sakae-machi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "960-8035",
               "street": "本町",
-              "street_en": "Honcho",
-              "pattern": "本町n{１,８０}"
+              "street_ascii": "Honcho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "960-8041",
               "street": "大町",
-              "street_en": "Omachi",
-              "pattern": "大町n{１,７０}"
+              "street_ascii": "Omachi",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         },
         {
           "name": "郡山市",
-          "name_en": "Koriyama",
+          "name_ascii": "Koriyama",
           "lat": 37.3999,
           "lon": 140.3594,
           "postcodes": [
             {
               "code": "963-8001",
               "street": "大町",
-              "street_en": "Omachi",
-              "pattern": "大町n{１,２}丁目n{１,５０}番"
+              "street_ascii": "Omachi",
+              "pattern": "{street}n{１,２}{chome}n{１,５０}{ban}"
             },
             {
               "code": "963-8004",
               "street": "中町",
-              "street_en": "Naka-machi",
-              "pattern": "中町n{１,１９６}"
+              "street_ascii": "Naka-machi",
+              "pattern": "{street}n{１,１９６}"
             },
             {
               "code": "963-8811",
               "street": "方八町",
-              "street_en": "Hohaccho",
-              "pattern": "方八町n{１,２}丁目n{１,５０}番"
+              "street_ascii": "Hohatcho",
+              "pattern": "{street}n{１,２}{chome}n{１,５０}{ban}"
             }
           ]
         },
         {
           "name": "いわき市",
-          "name_en": "Iwaki",
+          "name_ascii": "Iwaki",
           "lat": 37.0504,
           "lon": 140.8878,
           "postcodes": [
             {
               "code": "970-8026",
               "street": "平字田町",
-              "street_en": "Taira-Tamachi",
-              "pattern": "平字田町n{１,８０}"
+              "street_ascii": "Taira-Tamachi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "970-8036",
               "street": "平字新川町",
-              "street_en": "Taira-Shinkawa",
-              "pattern": "平字新川町n{１,７０}"
+              "street_ascii": "Taira-Shinkawa",
+              "pattern": "{street}n{１,７０}"
             },
             {
               "code": "970-8025",
               "street": "平字研町",
-              "street_en": "Taira-Togimachi",
-              "pattern": "平字研町n{１,６０}"
+              "street_ascii": "Taira-Togimachi",
+              "pattern": "{street}n{１,６０}"
             }
           ]
         },
         {
           "name": "会津若松市",
-          "name_en": "Aizuwakamatsu",
+          "name_ascii": "Aizuwakamatsu",
           "lat": 37.4948,
           "lon": 139.9299,
           "postcodes": [
             {
               "code": "965-0042",
               "street": "大町",
-              "street_en": "Omachi",
-              "pattern": "大町n{１,２}丁目n{１,５０}番"
+              "street_ascii": "Omachi",
+              "pattern": "{street}n{１,２}{chome}n{１,５０}{ban}"
             },
             {
               "code": "965-0871",
               "street": "栄町",
-              "street_en": "Sakae-machi",
-              "pattern": "栄町n{１,１２８}"
+              "street_ascii": "Sakae-machi",
+              "pattern": "{street}n{１,１２８}"
             },
             {
               "code": "965-0878",
               "street": "中町",
-              "street_en": "Naka-machi",
-              "pattern": "中町n{１,７０}"
+              "street_ascii": "Naka-machi",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         }
@@ -692,86 +713,86 @@
     },
     {
       "name": "茨城県",
-      "name_en": "Ibaraki",
+      "name_ascii": "Ibaraki",
       "region_tags": [
         "Kanto"
       ],
       "cities": [
         {
           "name": "水戸市",
-          "name_en": "Mito",
+          "name_ascii": "Mito",
           "lat": 36.3418,
           "lon": 140.4468,
           "postcodes": [
             {
               "code": "310-0015",
               "street": "宮町",
-              "street_en": "Miya-machi",
-              "pattern": "宮町n{１,１９４}丁目n{１,３０}番"
+              "street_ascii": "Miya-machi",
+              "pattern": "{street}n{１,１９４}{chome}n{１,３０}{ban}"
             },
             {
               "code": "310-0011",
               "street": "三の丸",
-              "street_en": "Sannomaru",
-              "pattern": "三の丸n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Sannomaru",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "310-0062",
               "street": "大町",
-              "street_en": "Omachi",
-              "pattern": "大町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Omachi",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             }
           ]
         },
         {
           "name": "つくば市",
-          "name_en": "Tsukuba",
+          "name_ascii": "Tsukuba",
           "lat": 36.0835,
           "lon": 140.0764,
           "postcodes": [
             {
               "code": "305-0031",
               "street": "吾妻",
-              "street_en": "Azuma",
-              "pattern": "吾妻n{１,４}丁目n{１,３０}番"
+              "street_ascii": "Azuma",
+              "pattern": "{street}n{１,４}{chome}n{１,３０}{ban}"
             },
             {
               "code": "305-0032",
               "street": "竹園",
-              "street_en": "Takezono",
-              "pattern": "竹園n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Takezono",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "305-0817",
               "street": "研究学園",
-              "street_en": "Kenkyu-Gakuen",
-              "pattern": "研究学園n{１,１９３}丁目n{１,２０}番"
+              "street_ascii": "Kenkyu-Gakuen",
+              "pattern": "{street}n{１,１９３}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "日立市",
-          "name_en": "Hitachi",
+          "name_ascii": "Hitachi",
           "lat": 36.5991,
           "lon": 140.6515,
           "postcodes": [
             {
               "code": "317-0073",
               "street": "幸町",
-              "street_en": "Saiwai-cho",
-              "pattern": "幸町n{１,１９４}丁目n{１,３０}番"
+              "street_ascii": "Saiwai-cho",
+              "pattern": "{street}n{１,１９４}{chome}n{１,３０}{ban}"
             },
             {
               "code": "317-0071",
               "street": "鹿島町",
-              "street_en": "Kashima-cho",
-              "pattern": "鹿島町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Kashima-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "317-0076",
               "street": "会瀬町",
-              "street_en": "Ose-cho",
-              "pattern": "会瀬町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Ose-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             }
           ]
         }
@@ -779,86 +800,86 @@
     },
     {
       "name": "栃木県",
-      "name_en": "Tochigi",
+      "name_ascii": "Tochigi",
       "region_tags": [
         "Kanto"
       ],
       "cities": [
         {
           "name": "宇都宮市",
-          "name_en": "Utsunomiya",
+          "name_ascii": "Utsunomiya",
           "lat": 36.5551,
           "lon": 139.8829,
           "postcodes": [
             {
               "code": "320-0026",
               "street": "馬場通り",
-              "street_en": "Baba-dori",
-              "pattern": "馬場通りn{１,４}丁目n{１,２５}番"
+              "street_ascii": "Baba-dori",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "320-0033",
               "street": "本町",
-              "street_en": "Honcho",
-              "pattern": "本町n{１,１２６}"
+              "street_ascii": "Honcho",
+              "pattern": "{street}n{１,１２６}"
             },
             {
               "code": "320-0802",
               "street": "江野町",
-              "street_en": "Eno-machi",
-              "pattern": "江野町n{１,７０}"
+              "street_ascii": "Eno-machi",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         },
         {
           "name": "小山市",
-          "name_en": "Oyama",
+          "name_ascii": "Oyama",
           "lat": 36.3145,
           "lon": 139.8003,
           "postcodes": [
             {
               "code": "323-0022",
               "street": "駅東通り",
-              "street_en": "Ekihigashi-dori",
-              "pattern": "駅東通りn{１,１９４}丁目n{１,３０}番"
+              "street_ascii": "Ekihigashi-dori",
+              "pattern": "{street}n{１,１９４}{chome}n{１,３０}{ban}"
             },
             {
               "code": "323-0023",
               "street": "中央町",
-              "street_en": "Chuo-cho",
-              "pattern": "中央町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Chuo-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "323-0025",
               "street": "城山町",
-              "street_en": "Shiroyama-cho",
-              "pattern": "城山町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Shiroyama-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             }
           ]
         },
         {
           "name": "日光市",
-          "name_en": "Nikko",
+          "name_ascii": "Nikko",
           "lat": 36.7199,
           "lon": 139.6982,
           "postcodes": [
             {
               "code": "321-1261",
               "street": "今市",
-              "street_en": "Imaichi",
-              "pattern": "今市n{１,８０}"
+              "street_ascii": "Imaichi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "321-1434",
               "street": "安川町",
-              "street_en": "Yasukawa-cho",
-              "pattern": "安川町n{１,６０}"
+              "street_ascii": "Yasukawa-cho",
+              "pattern": "{street}n{１,６０}"
             },
             {
               "code": "321-1406",
               "street": "日光",
-              "street_en": "Nikko",
-              "pattern": "日光n{１,７０}"
+              "street_ascii": "Nikko",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         }
@@ -866,86 +887,86 @@
     },
     {
       "name": "群馬県",
-      "name_en": "Gunma",
+      "name_ascii": "Gunma",
       "region_tags": [
         "Kanto"
       ],
       "cities": [
         {
           "name": "前橋市",
-          "name_en": "Maebashi",
+          "name_ascii": "Maebashi",
           "lat": 36.3911,
           "lon": 139.0608,
           "postcodes": [
             {
               "code": "371-0024",
               "street": "表町",
-              "street_en": "Omote-machi",
-              "pattern": "表町n{１,２}丁目n{１,５０}番"
+              "street_ascii": "Omote-machi",
+              "pattern": "{street}n{１,２}{chome}n{１,５０}{ban}"
             },
             {
               "code": "371-0022",
               "street": "千代田町",
-              "street_en": "Chiyoda-machi",
-              "pattern": "千代田町n{１,１９５}丁目n{１,２５}番"
+              "street_ascii": "Chiyoda-machi",
+              "pattern": "{street}n{１,１９５}{chome}n{１,２５}{ban}"
             },
             {
               "code": "371-0023",
               "street": "本町",
-              "street_en": "Honcho",
-              "pattern": "本町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Honcho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             }
           ]
         },
         {
           "name": "高崎市",
-          "name_en": "Takasaki",
+          "name_ascii": "Takasaki",
           "lat": 36.3222,
           "lon": 139.0028,
           "postcodes": [
             {
               "code": "370-0849",
               "street": "八島町",
-              "street_en": "Yashima-cho",
-              "pattern": "八島町n{１,８０}"
+              "street_ascii": "Yashima-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "370-0841",
               "street": "栄町",
-              "street_en": "Sakae-cho",
-              "pattern": "栄町n{１,７０}"
+              "street_ascii": "Sakae-cho",
+              "pattern": "{street}n{１,７０}"
             },
             {
               "code": "370-0828",
               "street": "宮元町",
-              "street_en": "Miyamoto-cho",
-              "pattern": "宮元町n{１,７０}"
+              "street_ascii": "Miyamoto-cho",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         },
         {
           "name": "桐生市",
-          "name_en": "Kiryu",
+          "name_ascii": "Kiryu",
           "lat": 36.4048,
           "lon": 139.334,
           "postcodes": [
             {
               "code": "376-0011",
               "street": "相生町",
-              "street_en": "Aioi-cho",
-              "pattern": "相生町n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Aioi-cho",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             },
             {
               "code": "376-0023",
               "street": "錦町",
-              "street_en": "Nishiki-cho",
-              "pattern": "錦町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Nishiki-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "376-0031",
               "street": "本町",
-              "street_en": "Honcho",
-              "pattern": "本町n{１,１９２}丁目n{１,２０}番"
+              "street_ascii": "Honcho",
+              "pattern": "{street}n{１,１９２}{chome}n{１,２０}{ban}"
             }
           ]
         }
@@ -953,144 +974,144 @@
     },
     {
       "name": "埼玉県",
-      "name_en": "Saitama",
+      "name_ascii": "Saitama",
       "region_tags": [
         "Kanto"
       ],
       "cities": [
         {
           "name": "さいたま市",
-          "name_en": "Saitama",
+          "name_ascii": "Saitama",
           "lat": 35.8617,
           "lon": 139.6455,
           "postcodes": [
             {
               "code": "330-0802",
               "street": "宮町",
-              "street_en": "Miya-cho",
-              "pattern": "宮町n{１,５}丁目n{１,２５}番"
+              "street_ascii": "Miya-cho",
+              "pattern": "{street}n{１,５}{chome}n{１,２５}{ban}"
             },
             {
               "code": "330-0846",
               "street": "大門町",
-              "street_en": "Daimon-cho",
-              "pattern": "大門町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Daimon-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "330-0063",
               "street": "浦和駅前",
-              "street_en": "Urawa-Ekimae",
-              "pattern": "浦和駅前n{１,１９０}"
+              "street_ascii": "Urawa-Ekimae",
+              "pattern": "{street}n{１,１９０}"
             },
             {
               "code": "336-0018",
               "street": "南本町",
-              "street_en": "Minamihoncho",
-              "pattern": "南本町n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Minamihoncho",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             }
           ]
         },
         {
           "name": "川口市",
-          "name_en": "Kawaguchi",
+          "name_ascii": "Kawaguchi",
           "lat": 35.8078,
           "lon": 139.7241,
           "postcodes": [
             {
               "code": "332-0017",
               "street": "栄町",
-              "street_en": "Sakae-cho",
-              "pattern": "栄町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Sakae-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "332-0012",
               "street": "本町",
-              "street_en": "Honcho",
-              "pattern": "本町n{１,１９３}丁目n{１,２５}番"
+              "street_ascii": "Honcho",
+              "pattern": "{street}n{１,１９３}{chome}n{１,２５}{ban}"
             },
             {
               "code": "332-0034",
               "street": "並木",
-              "street_en": "Namiki",
-              "pattern": "並木n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Namiki",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             }
           ]
         },
         {
           "name": "川越市",
-          "name_en": "Kawagoe",
+          "name_ascii": "Kawagoe",
           "lat": 35.9251,
           "lon": 139.4856,
           "postcodes": [
             {
               "code": "350-0043",
               "street": "新富町",
-              "street_en": "Shintomi-cho",
-              "pattern": "新富町n{１,２}丁目n{１,５０}番"
+              "street_ascii": "Shintomi-cho",
+              "pattern": "{street}n{１,２}{chome}n{１,５０}{ban}"
             },
             {
               "code": "350-0062",
               "street": "元町",
-              "street_en": "Motomachi",
-              "pattern": "元町n{１,２}丁目n{１,５０}番"
+              "street_ascii": "Motomachi",
+              "pattern": "{street}n{１,２}{chome}n{１,５０}{ban}"
             },
             {
               "code": "350-0065",
               "street": "仲町",
-              "street_en": "Naka-machi",
-              "pattern": "仲町n{１,１９６}"
+              "street_ascii": "Naka-machi",
+              "pattern": "{street}n{１,１９６}"
             }
           ]
         },
         {
           "name": "所沢市",
-          "name_en": "Tokorozawa",
+          "name_ascii": "Tokorozawa",
           "lat": 35.7991,
           "lon": 139.469,
           "postcodes": [
             {
               "code": "359-0037",
               "street": "くすのき台",
-              "street_en": "Kusunoki-dai",
-              "pattern": "くすのき台n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Kusunoki-dai",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "359-1123",
               "street": "日吉町",
-              "street_en": "Hiyoshi-cho",
-              "pattern": "日吉町n{１,１２７}"
+              "street_ascii": "Hiyoshi-cho",
+              "pattern": "{street}n{１,１２７}"
             },
             {
               "code": "359-0038",
               "street": "北秋津",
-              "street_en": "Kita-Akitsu",
-              "pattern": "北秋津n{１,７０}"
+              "street_ascii": "Kita-Akitsu",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         },
         {
           "name": "越谷市",
-          "name_en": "Koshigaya",
+          "name_ascii": "Koshigaya",
           "lat": 35.8911,
           "lon": 139.7904,
           "postcodes": [
             {
               "code": "343-0813",
               "street": "越ヶ谷",
-              "street_en": "Koshigaya",
-              "pattern": "越ヶ谷n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Koshigaya",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "343-0845",
               "street": "南越谷",
-              "street_en": "Minami-Koshigaya",
-              "pattern": "南越谷n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Minami-Koshigaya",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "343-0816",
               "street": "弥生町",
-              "street_en": "Yayoi-cho",
-              "pattern": "弥生町n{１,１９２}"
+              "street_ascii": "Yayoi-cho",
+              "pattern": "{street}n{１,１９２}"
             }
           ]
         }
@@ -1098,144 +1119,144 @@
     },
     {
       "name": "千葉県",
-      "name_en": "Chiba",
+      "name_ascii": "Chiba",
       "region_tags": [
         "Kanto"
       ],
       "cities": [
         {
           "name": "千葉市",
-          "name_en": "Chiba",
+          "name_ascii": "Chiba",
           "lat": 35.6073,
           "lon": 140.1065,
           "postcodes": [
             {
               "code": "260-0013",
               "street": "中央",
-              "street_en": "Chuo",
-              "pattern": "中央n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Chuo",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "260-0028",
               "street": "新町",
-              "street_en": "Shinmachi",
-              "pattern": "新町n{１,１９０}"
+              "street_ascii": "Shinmachi",
+              "pattern": "{street}n{１,１９０}"
             },
             {
               "code": "260-0015",
               "street": "富士見",
-              "street_en": "Fujimi",
-              "pattern": "富士見n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Fujimi",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "263-0043",
               "street": "都賀の台",
-              "street_en": "Tsuga-no-dai",
-              "pattern": "都賀の台n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Tsuga-no-dai",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             }
           ]
         },
         {
           "name": "船橋市",
-          "name_en": "Funabashi",
+          "name_ascii": "Funabashi",
           "lat": 35.6946,
           "lon": 139.9828,
           "postcodes": [
             {
               "code": "273-0005",
               "street": "本町",
-              "street_en": "Honcho",
-              "pattern": "本町n{１,１９１}丁目n{１,２０}番"
+              "street_ascii": "Honcho",
+              "pattern": "{street}n{１,１９１}{chome}n{１,２０}{ban}"
             },
             {
               "code": "273-0011",
               "street": "湊町",
-              "street_en": "Minato-cho",
-              "pattern": "湊町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Minato-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "274-0824",
               "street": "前原東",
-              "street_en": "Maebara-Higashi",
-              "pattern": "前原東n{１,６}丁目n{１,２０}番"
+              "street_ascii": "Maebara-Higashi",
+              "pattern": "{street}n{１,６}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "柏市",
-          "name_en": "Kashiwa",
+          "name_ascii": "Kashiwa",
           "lat": 35.8681,
           "lon": 139.9756,
           "postcodes": [
             {
               "code": "277-0005",
               "street": "柏",
-              "street_en": "Kashiwa",
-              "pattern": "柏n{１,７}丁目n{１,２５}番"
+              "street_ascii": "Kashiwa",
+              "pattern": "{street}n{１,７}{chome}n{１,２５}{ban}"
             },
             {
               "code": "277-0842",
               "street": "末広町",
-              "street_en": "Suehiro-cho",
-              "pattern": "末広町n{１,１８５}"
+              "street_ascii": "Suehiro-cho",
+              "pattern": "{street}n{１,１８５}"
             },
             {
               "code": "277-0852",
               "street": "旭町",
-              "street_en": "Asahi-cho",
-              "pattern": "旭町n{１,８}丁目n{１,２０}番"
+              "street_ascii": "Asahi-cho",
+              "pattern": "{street}n{１,８}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "市川市",
-          "name_en": "Ichikawa",
+          "name_ascii": "Ichikawa",
           "lat": 35.7319,
           "lon": 139.9241,
           "postcodes": [
             {
               "code": "272-0034",
               "street": "市川",
-              "street_en": "Ichikawa",
-              "pattern": "市川n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Ichikawa",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "272-0023",
               "street": "南八幡",
-              "street_en": "Minami-Yawata",
-              "pattern": "南八幡n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Minami-Yawata",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             },
             {
               "code": "272-0021",
               "street": "八幡",
-              "street_en": "Yawata",
-              "pattern": "八幡n{１,１９１}丁目n{１,２０}番"
+              "street_ascii": "Yawata",
+              "pattern": "{street}n{１,１９１}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "松戸市",
-          "name_en": "Matsudo",
+          "name_ascii": "Matsudo",
           "lat": 35.7878,
           "lon": 139.9036,
           "postcodes": [
             {
               "code": "271-0091",
               "street": "本町",
-              "street_en": "Honcho",
-              "pattern": "本町n{１,８０}"
+              "street_ascii": "Honcho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "271-0077",
               "street": "根本",
-              "street_en": "Nemoto",
-              "pattern": "根本n{１,８０}"
+              "street_ascii": "Nemoto",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "271-0092",
               "street": "松戸",
-              "street_en": "Matsudo",
-              "pattern": "松戸n{１,７０}"
+              "street_ascii": "Matsudo",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         }
@@ -1243,464 +1264,464 @@
     },
     {
       "name": "東京都",
-      "name_en": "Tokyo",
+      "name_ascii": "Tokyo",
       "region_tags": [
         "Kanto"
       ],
       "cities": [
         {
           "name": "千代田区",
-          "name_en": "Chiyoda",
+          "name_ascii": "Chiyoda",
           "lat": 35.694,
           "lon": 139.7536,
           "postcodes": [
             {
               "code": "100-0005",
               "street": "丸の内",
-              "street_en": "Marunouchi",
-              "pattern": "丸の内n{１,３}丁目n{１,１５}番"
+              "street_ascii": "Marunouchi",
+              "pattern": "{street}n{１,３}{chome}n{１,１５}{ban}"
             },
             {
               "code": "100-0006",
               "street": "有楽町",
-              "street_en": "Yurakucho",
-              "pattern": "有楽町n{１,２}丁目n{１,１５}番"
+              "street_ascii": "Yurakucho",
+              "pattern": "{street}n{１,２}{chome}n{１,１５}{ban}"
             },
             {
               "code": "101-0021",
               "street": "外神田",
-              "street_en": "Sotokanda",
-              "pattern": "外神田n{１,１８７}丁目n{１,２０}番"
+              "street_ascii": "Sotokanda",
+              "pattern": "{street}n{１,１８７}{chome}n{１,２０}{ban}"
             },
             {
               "code": "101-0041",
               "street": "神田須田町",
-              "street_en": "Kanda-Sudacho",
-              "pattern": "神田須田町n{１,２}丁目n{１,３０}番"
+              "street_ascii": "Kanda-Sudacho",
+              "pattern": "{street}n{１,２}{chome}n{１,３０}{ban}"
             },
             {
               "code": "102-0083",
               "street": "麹町",
-              "street_en": "Kojimachi",
-              "pattern": "麹町n{１,６}丁目n{１,１５}番"
+              "street_ascii": "Kojimachi",
+              "pattern": "{street}n{１,６}{chome}n{１,１５}{ban}"
             }
           ]
         },
         {
           "name": "中央区",
-          "name_en": "Chuo",
+          "name_ascii": "Chuo",
           "lat": 35.6709,
           "lon": 139.7723,
           "postcodes": [
             {
               "code": "104-0061",
               "street": "銀座",
-              "street_en": "Ginza",
-              "pattern": "銀座n{１,１９１}丁目n{１,２０}番"
+              "street_ascii": "Ginza",
+              "pattern": "{street}n{１,１９１}{chome}n{１,２０}{ban}"
             },
             {
               "code": "103-0027",
               "street": "日本橋",
-              "street_en": "Nihonbashi",
-              "pattern": "日本橋n{１,３}丁目n{１,２０}番"
+              "street_ascii": "Nihonbashi",
+              "pattern": "{street}n{１,３}{chome}n{１,２０}{ban}"
             },
             {
               "code": "104-0031",
               "street": "京橋",
-              "street_en": "Kyobashi",
-              "pattern": "京橋n{１,３}丁目n{１,２０}番"
+              "street_ascii": "Kyobashi",
+              "pattern": "{street}n{１,３}{chome}n{１,２０}{ban}"
             },
             {
               "code": "103-0013",
               "street": "日本橋人形町",
-              "street_en": "Nihonbashi-Ningyo-cho",
-              "pattern": "日本橋人形町n{１,３}丁目n{１,２０}番"
+              "street_ascii": "Nihonbashi-Ningyo-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "港区",
-          "name_en": "Minato",
+          "name_ascii": "Minato",
           "lat": 35.6581,
           "lon": 139.7514,
           "postcodes": [
             {
               "code": "105-0001",
               "street": "虎ノ門",
-              "street_en": "Toranomon",
-              "pattern": "虎ノ門n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Toranomon",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             },
             {
               "code": "106-0032",
               "street": "六本木",
-              "street_en": "Roppongi",
-              "pattern": "六本木n{１,７}丁目n{１,２０}番"
+              "street_ascii": "Roppongi",
+              "pattern": "{street}n{１,７}{chome}n{１,２０}{ban}"
             },
             {
               "code": "107-0052",
               "street": "赤坂",
-              "street_en": "Akasaka",
-              "pattern": "赤坂n{１,１８０}丁目n{１,２０}番"
+              "street_ascii": "Akasaka",
+              "pattern": "{street}n{１,１８０}{chome}n{１,２０}{ban}"
             },
             {
               "code": "108-0073",
               "street": "三田",
-              "street_en": "Mita",
-              "pattern": "三田n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Mita",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             },
             {
               "code": "106-0046",
               "street": "元麻布",
-              "street_en": "Moto-Azabu",
-              "pattern": "元麻布n{１,３}丁目n{１,２０}番"
+              "street_ascii": "Moto-Azabu",
+              "pattern": "{street}n{１,３}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "新宿区",
-          "name_en": "Shinjuku",
+          "name_ascii": "Shinjuku",
           "lat": 35.6938,
           "lon": 139.7035,
           "postcodes": [
             {
               "code": "160-0022",
               "street": "新宿",
-              "street_en": "Shinjuku",
-              "pattern": "新宿n{１,７}丁目n{１,３０}番"
+              "street_ascii": "Shinjuku",
+              "pattern": "{street}n{１,７}{chome}n{１,３０}{ban}"
             },
             {
               "code": "160-0023",
               "street": "西新宿",
-              "street_en": "Nishi-Shinjuku",
-              "pattern": "西新宿n{１,８}丁目n{１,２５}番"
+              "street_ascii": "Nishi-Shinjuku",
+              "pattern": "{street}n{１,８}{chome}n{１,２５}{ban}"
             },
             {
               "code": "162-0065",
               "street": "住吉町",
-              "street_en": "Sumiyoshi-cho",
-              "pattern": "住吉町n{１,１０１}"
+              "street_ascii": "Sumiyoshi-cho",
+              "pattern": "{street}n{１,１０１}"
             },
             {
               "code": "169-0073",
               "street": "百人町",
-              "street_en": "Hyakunin-cho",
-              "pattern": "百人町n{１,４}丁目n{１,２０}番"
+              "street_ascii": "Hyakunin-cho",
+              "pattern": "{street}n{１,４}{chome}n{１,２０}{ban}"
             },
             {
               "code": "162-0067",
               "street": "富久町",
-              "street_en": "Tomihisa-cho",
-              "pattern": "富久町n{１,８０}"
+              "street_ascii": "Tomihisa-cho",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "渋谷区",
-          "name_en": "Shibuya",
+          "name_ascii": "Shibuya",
           "lat": 35.6619,
           "lon": 139.7036,
           "postcodes": [
             {
               "code": "150-0002",
               "street": "渋谷",
-              "street_en": "Shibuya",
-              "pattern": "渋谷n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Shibuya",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "150-0001",
               "street": "神宮前",
-              "street_en": "Jingumae",
-              "pattern": "神宮前n{１,１９２}丁目n{１,３０}番"
+              "street_ascii": "Jingumae",
+              "pattern": "{street}n{１,１９２}{chome}n{１,３０}{ban}"
             },
             {
               "code": "150-0043",
               "street": "道玄坂",
-              "street_en": "Dogenzaka",
-              "pattern": "道玄坂n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Dogenzaka",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "151-0063",
               "street": "富ヶ谷",
-              "street_en": "Tomigaya",
-              "pattern": "富ヶ谷n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Tomigaya",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             }
           ]
         },
         {
           "name": "豊島区",
-          "name_en": "Toshima",
+          "name_ascii": "Toshima",
           "lat": 35.7295,
           "lon": 139.7109,
           "postcodes": [
             {
               "code": "170-0013",
               "street": "東池袋",
-              "street_en": "Higashi-Ikebukuro",
-              "pattern": "東池袋n{１,１８６}丁目n{１,２５}番"
+              "street_ascii": "Higashi-Ikebukuro",
+              "pattern": "{street}n{１,１８６}{chome}n{１,２５}{ban}"
             },
             {
               "code": "171-0014",
               "street": "池袋",
-              "street_en": "Ikebukuro",
-              "pattern": "池袋n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Ikebukuro",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "171-0021",
               "street": "西池袋",
-              "street_en": "Nishi-Ikebukuro",
-              "pattern": "西池袋n{１,５}丁目n{１,２５}番"
+              "street_ascii": "Nishi-Ikebukuro",
+              "pattern": "{street}n{１,５}{chome}n{１,２５}{ban}"
             },
             {
               "code": "170-0002",
               "street": "巣鴨",
-              "street_en": "Sugamo",
-              "pattern": "巣鴨n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Sugamo",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "文京区",
-          "name_en": "Bunkyo",
+          "name_ascii": "Bunkyo",
           "lat": 35.7081,
           "lon": 139.7522,
           "postcodes": [
             {
               "code": "113-0033",
               "street": "本郷",
-              "street_en": "Hongo",
-              "pattern": "本郷n{１,１８４}丁目n{１,２０}番"
+              "street_ascii": "Hongo",
+              "pattern": "{street}n{１,１８４}{chome}n{１,２０}{ban}"
             },
             {
               "code": "112-0002",
               "street": "小石川",
-              "street_en": "Koishikawa",
-              "pattern": "小石川n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Koishikawa",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             },
             {
               "code": "112-0012",
               "street": "大塚",
-              "street_en": "Otsuka",
-              "pattern": "大塚n{１,６}丁目n{１,２０}番"
+              "street_ascii": "Otsuka",
+              "pattern": "{street}n{１,６}{chome}n{１,２０}{ban}"
             },
             {
               "code": "113-0022",
               "street": "千駄木",
-              "street_en": "Sendagi",
-              "pattern": "千駄木n{１,５}丁目n{１,２５}番"
+              "street_ascii": "Sendagi",
+              "pattern": "{street}n{１,５}{chome}n{１,２５}{ban}"
             }
           ]
         },
         {
           "name": "台東区",
-          "name_en": "Taito",
+          "name_ascii": "Taito",
           "lat": 35.7125,
           "lon": 139.78,
           "postcodes": [
             {
               "code": "110-0005",
               "street": "上野",
-              "street_en": "Ueno",
-              "pattern": "上野n{１,１８７}丁目n{１,２５}番"
+              "street_ascii": "Ueno",
+              "pattern": "{street}n{１,１８７}{chome}n{１,２５}{ban}"
             },
             {
               "code": "111-0032",
               "street": "浅草",
-              "street_en": "Asakusa",
-              "pattern": "浅草n{１,７}丁目n{１,２０}番"
+              "street_ascii": "Asakusa",
+              "pattern": "{street}n{１,７}{chome}n{１,２０}{ban}"
             },
             {
               "code": "110-0015",
               "street": "東上野",
-              "street_en": "Higashi-Ueno",
-              "pattern": "東上野n{１,６}丁目n{１,２０}番"
+              "street_ascii": "Higashi-Ueno",
+              "pattern": "{street}n{１,６}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "江東区",
-          "name_en": "Koto",
+          "name_ascii": "Koto",
           "lat": 35.6727,
           "lon": 139.8171,
           "postcodes": [
             {
               "code": "135-0061",
               "street": "豊洲",
-              "street_en": "Toyosu",
-              "pattern": "豊洲n{１,６}丁目n{１,２０}番"
+              "street_ascii": "Toyosu",
+              "pattern": "{street}n{１,６}{chome}n{１,２０}{ban}"
             },
             {
               "code": "136-0071",
               "street": "亀戸",
-              "street_en": "Kameido",
-              "pattern": "亀戸n{１,１８７}丁目n{１,２０}番"
+              "street_ascii": "Kameido",
+              "pattern": "{street}n{１,１８７}{chome}n{１,２０}{ban}"
             },
             {
               "code": "135-0016",
               "street": "東陽",
-              "street_en": "Toyo",
-              "pattern": "東陽n{１,７}丁目n{１,２０}番"
+              "street_ascii": "Toyo",
+              "pattern": "{street}n{１,７}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "品川区",
-          "name_en": "Shinagawa",
+          "name_ascii": "Shinagawa",
           "lat": 35.6093,
           "lon": 139.7302,
           "postcodes": [
             {
               "code": "108-0075",
               "street": "港南",
-              "street_en": "Konan",
-              "pattern": "港南n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Konan",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "141-0032",
               "street": "大崎",
-              "street_en": "Osaki",
-              "pattern": "大崎n{１,１９２}丁目n{１,２５}番"
+              "street_ascii": "Osaki",
+              "pattern": "{street}n{１,１９２}{chome}n{１,２５}{ban}"
             },
             {
               "code": "142-0043",
               "street": "二葉",
-              "street_en": "Futaba",
-              "pattern": "二葉n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Futaba",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             }
           ]
         },
         {
           "name": "目黒区",
-          "name_en": "Meguro",
+          "name_ascii": "Meguro",
           "lat": 35.6338,
           "lon": 139.7151,
           "postcodes": [
             {
               "code": "153-0064",
               "street": "下目黒",
-              "street_en": "Shimo-Meguro",
-              "pattern": "下目黒n{１,１９３}丁目n{１,２０}番"
+              "street_ascii": "Shimo-Meguro",
+              "pattern": "{street}n{１,１９３}{chome}n{１,２０}{ban}"
             },
             {
               "code": "153-0042",
               "street": "青葉台",
-              "street_en": "Aobadai",
-              "pattern": "青葉台n{１,４}丁目n{１,２０}番"
+              "street_ascii": "Aobadai",
+              "pattern": "{street}n{１,４}{chome}n{１,２０}{ban}"
             },
             {
               "code": "152-0004",
               "street": "鷹番",
-              "street_en": "Takaban",
-              "pattern": "鷹番n{１,３}丁目n{１,２５}番"
+              "street_ascii": "Takaban",
+              "pattern": "{street}n{１,３}{chome}n{１,２５}{ban}"
             }
           ]
         },
         {
           "name": "世田谷区",
-          "name_en": "Setagaya",
+          "name_ascii": "Setagaya",
           "lat": 35.6461,
           "lon": 139.6532,
           "postcodes": [
             {
               "code": "154-0024",
               "street": "三軒茶屋",
-              "street_en": "Sangenjaya",
-              "pattern": "三軒茶屋n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Sangenjaya",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "155-0031",
               "street": "北沢",
-              "street_en": "Kitazawa",
-              "pattern": "北沢n{１,５}丁目n{１,２５}番"
+              "street_ascii": "Kitazawa",
+              "pattern": "{street}n{１,５}{chome}n{１,２５}{ban}"
             },
             {
               "code": "158-0083",
               "street": "奥沢",
-              "street_en": "Okusawa",
-              "pattern": "奥沢n{１,１８８}丁目n{１,２０}番"
+              "street_ascii": "Okusawa",
+              "pattern": "{street}n{１,１８８}{chome}n{１,２０}{ban}"
             },
             {
               "code": "156-0044",
               "street": "赤堤",
-              "street_en": "Akatsutsumi",
-              "pattern": "赤堤n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Akatsutsumi",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "八王子市",
-          "name_en": "Hachioji",
+          "name_ascii": "Hachioji",
           "lat": 35.6563,
           "lon": 139.3239,
           "postcodes": [
             {
               "code": "192-0083",
               "street": "旭町",
-              "street_en": "Asahi-cho",
-              "pattern": "旭町n{１,１１６}"
+              "street_ascii": "Asahi-cho",
+              "pattern": "{street}n{１,１１６}"
             },
             {
               "code": "192-0046",
               "street": "明神町",
-              "street_en": "Myojin-cho",
-              "pattern": "明神町n{１,４}丁目n{１,２０}番"
+              "street_ascii": "Myojin-cho",
+              "pattern": "{street}n{１,４}{chome}n{１,２０}{ban}"
             },
             {
               "code": "192-0082",
               "street": "東町",
-              "street_en": "Higashi-cho",
-              "pattern": "東町n{１,８０}"
+              "street_ascii": "Higashi-cho",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "町田市",
-          "name_en": "Machida",
+          "name_ascii": "Machida",
           "lat": 35.5483,
           "lon": 139.4466,
           "postcodes": [
             {
               "code": "194-0013",
               "street": "原町田",
-              "street_en": "Haramachida",
-              "pattern": "原町田n{１,６}丁目n{１,３０}番"
+              "street_ascii": "Haramachida",
+              "pattern": "{street}n{１,６}{chome}n{１,３０}{ban}"
             },
             {
               "code": "194-0021",
               "street": "中町",
-              "street_en": "Naka-machi",
-              "pattern": "中町n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Naka-machi",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "195-0053",
               "street": "能ヶ谷",
-              "street_en": "Nogaya",
-              "pattern": "能ヶ谷n{１,１９０}丁目n{１,２０}番"
+              "street_ascii": "Nogaya",
+              "pattern": "{street}n{１,１９０}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "立川市",
-          "name_en": "Tachikawa",
+          "name_ascii": "Tachikawa",
           "lat": 35.6982,
           "lon": 139.4131,
           "postcodes": [
             {
               "code": "190-0012",
               "street": "曙町",
-              "street_en": "Akebono-cho",
-              "pattern": "曙町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Akebono-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "190-0023",
               "street": "柴崎町",
-              "street_en": "Shibasaki-cho",
-              "pattern": "柴崎町n{１,１９４}丁目n{１,２０}番"
+              "street_ascii": "Shibasaki-cho",
+              "pattern": "{street}n{１,１９４}{chome}n{１,２０}{ban}"
             },
             {
               "code": "190-0013",
               "street": "高松町",
-              "street_en": "Takamatsu-cho",
-              "pattern": "高松町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Takamatsu-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             }
           ]
         }
@@ -1708,150 +1729,150 @@
     },
     {
       "name": "神奈川県",
-      "name_en": "Kanagawa",
+      "name_ascii": "Kanagawa",
       "region_tags": [
         "Kanto"
       ],
       "cities": [
         {
           "name": "横浜市",
-          "name_en": "Yokohama",
+          "name_ascii": "Yokohama",
           "lat": 35.4437,
           "lon": 139.638,
           "postcodes": [
             {
               "code": "220-0004",
               "street": "西区北幸",
-              "street_en": "Nishi-ku Kitasaiwai",
-              "pattern": "西区北幸n{１,２}丁目n{１,１５}番"
+              "street_ascii": "Nishi-ku Kitasaiwai",
+              "pattern": "{street}n{１,２}{chome}n{１,１５}{ban}"
             },
             {
               "code": "231-0023",
               "street": "中区山下町",
-              "street_en": "Naka-ku Yamashita-cho",
-              "pattern": "中区山下町n{１,１２９}"
+              "street_ascii": "Naka-ku Yamashita-cho",
+              "pattern": "{street}n{１,１２９}"
             },
             {
               "code": "231-0005",
               "street": "中区本町",
-              "street_en": "Naka-ku Honcho",
-              "pattern": "中区本町n{１,６}丁目n{１,２０}番"
+              "street_ascii": "Naka-ku Honcho",
+              "pattern": "{street}n{１,６}{chome}n{１,２０}{ban}"
             },
             {
               "code": "222-0033",
               "street": "港北区新横浜",
-              "street_en": "Kohoku-ku Shin-Yokohama",
-              "pattern": "港北区新横浜n{１,３}丁目n{１,２０}番"
+              "street_ascii": "Kohoku-ku Shin-Yokohama",
+              "pattern": "{street}n{１,３}{chome}n{１,２０}{ban}"
             },
             {
               "code": "224-0032",
               "street": "都筑区茅ケ崎中央",
-              "street_en": "Tsuzuki-ku Chigasaki-Chuo",
-              "pattern": "都筑区茅ケ崎中央n{１,６０}"
+              "street_ascii": "Tsuzuki-ku Chigasaki-Chuo",
+              "pattern": "{street}n{１,６０}"
             }
           ]
         },
         {
           "name": "川崎市",
-          "name_en": "Kawasaki",
+          "name_ascii": "Kawasaki",
           "lat": 35.5308,
           "lon": 139.703,
           "postcodes": [
             {
               "code": "210-0007",
               "street": "川崎区駅前本町",
-              "street_en": "Kawasaki-ku Ekimae-Honcho",
-              "pattern": "川崎区駅前本町n{１,１９１}"
+              "street_ascii": "Kawasaki-ku Ekimae-Honcho",
+              "pattern": "{street}n{１,１９１}"
             },
             {
               "code": "211-0063",
               "street": "中原区小杉町",
-              "street_en": "Nakahara-ku Kosugi-cho",
-              "pattern": "中原区小杉町n{１,３}丁目n{１,２５}番"
+              "street_ascii": "Nakahara-ku Kosugi-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,２５}{ban}"
             },
             {
               "code": "213-0001",
               "street": "高津区溝口",
-              "street_en": "Takatsu-ku Mizonokuchi",
-              "pattern": "高津区溝口n{１,６}丁目n{１,２０}番"
+              "street_ascii": "Takatsu-ku Mizonokuchi",
+              "pattern": "{street}n{１,６}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "相模原市",
-          "name_en": "Sagamihara",
+          "name_ascii": "Sagamihara",
           "lat": 35.5714,
           "lon": 139.3732,
           "postcodes": [
             {
               "code": "252-0231",
               "street": "中央区相模原",
-              "street_en": "Chuo-ku Sagamihara",
-              "pattern": "中央区相模原n{１,１８４}丁目n{１,２０}番"
+              "street_ascii": "Chuo-ku Sagamihara",
+              "pattern": "{street}n{１,１８４}{chome}n{１,２０}{ban}"
             },
             {
               "code": "252-0143",
               "street": "緑区橋本",
-              "street_en": "Midori-ku Hashimoto",
-              "pattern": "緑区橋本n{１,８}丁目n{１,２０}番"
+              "street_ascii": "Midori-ku Hashimoto",
+              "pattern": "{street}n{１,８}{chome}n{１,２０}{ban}"
             },
             {
               "code": "252-0303",
               "street": "南区相模大野",
-              "street_en": "Minami-ku Sagami-Ono",
-              "pattern": "南区相模大野n{１,８}丁目n{１,２０}番"
+              "street_ascii": "Minami-ku Sagami-Ono",
+              "pattern": "{street}n{１,８}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "鎌倉市",
-          "name_en": "Kamakura",
+          "name_ascii": "Kamakura",
           "lat": 35.3192,
           "lon": 139.5467,
           "postcodes": [
             {
               "code": "248-0006",
               "street": "小町",
-              "street_en": "Komachi",
-              "pattern": "小町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Komachi",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "248-0012",
               "street": "御成町",
-              "street_en": "Onari-machi",
-              "pattern": "御成町n{１,１９３}"
+              "street_ascii": "Onari-machi",
+              "pattern": "{street}n{１,１９３}"
             },
             {
               "code": "248-0014",
               "street": "由比ガ浜",
-              "street_en": "Yuigahama",
-              "pattern": "由比ガ浜n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Yuigahama",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             }
           ]
         },
         {
           "name": "藤沢市",
-          "name_en": "Fujisawa",
+          "name_ascii": "Fujisawa",
           "lat": 35.3389,
           "lon": 139.4917,
           "postcodes": [
             {
               "code": "251-0052",
               "street": "藤沢",
-              "street_en": "Fujisawa",
-              "pattern": "藤沢n{１,１１７}"
+              "street_ascii": "Fujisawa",
+              "pattern": "{street}n{１,１１７}"
             },
             {
               "code": "251-0025",
               "street": "鵠沼石上",
-              "street_en": "Kugenuma-Ishigami",
-              "pattern": "鵠沼石上n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Kugenuma-Ishigami",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "251-0055",
               "street": "南藤沢",
-              "street_en": "Minami-Fujisawa",
-              "pattern": "南藤沢n{１,８０}"
+              "street_ascii": "Minami-Fujisawa",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         }
@@ -1859,92 +1880,92 @@
     },
     {
       "name": "新潟県",
-      "name_en": "Niigata",
+      "name_ascii": "Niigata",
       "region_tags": [
         "Chubu"
       ],
       "cities": [
         {
           "name": "新潟市",
-          "name_en": "Niigata",
+          "name_ascii": "Niigata",
           "lat": 37.9022,
           "lon": 139.0236,
           "postcodes": [
             {
               "code": "950-0088",
               "street": "万代",
-              "street_en": "Bandai",
-              "pattern": "万代n{１,６}丁目n{１,２０}番"
+              "street_ascii": "Bandai",
+              "pattern": "{street}n{１,６}{chome}n{１,２０}{ban}"
             },
             {
               "code": "951-8063",
               "street": "古町通",
-              "street_en": "Furumachi-dori",
-              "pattern": "古町通n{１,１８９}"
+              "street_ascii": "Furumachi-dori",
+              "pattern": "{street}n{１,１８９}"
             },
             {
               "code": "950-0087",
               "street": "東大通",
-              "street_en": "Higashi-Odori",
-              "pattern": "東大通n{１,２}丁目n{１,３０}番"
+              "street_ascii": "Higashi-Odori",
+              "pattern": "{street}n{１,２}{chome}n{１,３０}{ban}"
             },
             {
               "code": "950-0911",
               "street": "笹口",
-              "street_en": "Sasaguchi",
-              "pattern": "笹口n{１,３}丁目n{１,２５}番"
+              "street_ascii": "Sasaguchi",
+              "pattern": "{street}n{１,３}{chome}n{１,２５}{ban}"
             }
           ]
         },
         {
           "name": "長岡市",
-          "name_en": "Nagaoka",
+          "name_ascii": "Nagaoka",
           "lat": 37.4483,
           "lon": 138.8508,
           "postcodes": [
             {
               "code": "940-0062",
               "street": "大手通",
-              "street_en": "Ote-dori",
-              "pattern": "大手通n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Ote-dori",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "940-0048",
               "street": "台町",
-              "street_en": "Dai-machi",
-              "pattern": "台町n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Dai-machi",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "940-0066",
               "street": "東坂之上町",
-              "street_en": "Higashi-Sakanoue-machi",
-              "pattern": "東坂之上町n{１,１９６}丁目n{１,３０}番"
+              "street_ascii": "Higashi-Sakanoue-machi",
+              "pattern": "{street}n{１,１９６}{chome}n{１,３０}{ban}"
             }
           ]
         },
         {
           "name": "上越市",
-          "name_en": "Joetsu",
+          "name_ascii": "Joetsu",
           "lat": 37.148,
           "lon": 138.2364,
           "postcodes": [
             {
               "code": "943-0831",
               "street": "仲町",
-              "street_en": "Naka-machi",
-              "pattern": "仲町n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Naka-machi",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "943-0832",
               "street": "本町",
-              "street_en": "Honcho",
-              "pattern": "本町n{１,１９１}丁目n{１,２０}番"
+              "street_ascii": "Honcho",
+              "pattern": "{street}n{１,１９１}{chome}n{１,２０}{ban}"
             },
             {
               "code": "943-0835",
               "street": "大町",
-              "street_en": "Omachi",
-              "pattern": "大町n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Omachi",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             }
           ]
         }
@@ -1952,60 +1973,60 @@
     },
     {
       "name": "富山県",
-      "name_en": "Toyama",
+      "name_ascii": "Toyama",
       "region_tags": [
         "Chubu"
       ],
       "cities": [
         {
           "name": "富山市",
-          "name_en": "Toyama",
+          "name_ascii": "Toyama",
           "lat": 36.6953,
           "lon": 137.2114,
           "postcodes": [
             {
               "code": "930-0003",
               "street": "桜町",
-              "street_en": "Sakura-machi",
-              "pattern": "桜町n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Sakura-machi",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "930-0083",
               "street": "総曲輪",
-              "street_en": "Sogawa",
-              "pattern": "総曲輪n{１,４}丁目n{１,３０}番"
+              "street_ascii": "Sogawa",
+              "pattern": "{street}n{１,４}{chome}n{１,３０}{ban}"
             },
             {
               "code": "930-0005",
               "street": "新桜町",
-              "street_en": "Shin-Sakura-machi",
-              "pattern": "新桜町n{１,１９４}"
+              "street_ascii": "Shin-Sakura-machi",
+              "pattern": "{street}n{１,１９４}"
             }
           ]
         },
         {
           "name": "高岡市",
-          "name_en": "Takaoka",
+          "name_ascii": "Takaoka",
           "lat": 36.754,
           "lon": 137.0258,
           "postcodes": [
             {
               "code": "933-0023",
               "street": "末広町",
-              "street_en": "Suehiro-cho",
-              "pattern": "末広町n{１,１２７}"
+              "street_ascii": "Suehiro-cho",
+              "pattern": "{street}n{１,１２７}"
             },
             {
               "code": "933-0029",
               "street": "御旅屋町",
-              "street_en": "Otaya-machi",
-              "pattern": "御旅屋町n{１,７０}"
+              "street_ascii": "Otaya-machi",
+              "pattern": "{street}n{１,７０}"
             },
             {
               "code": "933-0039",
               "street": "大手町",
-              "street_en": "Otemachi",
-              "pattern": "大手町n{１,３}丁目n{１,２５}番"
+              "street_ascii": "Otemachi",
+              "pattern": "{street}n{１,３}{chome}n{１,２５}{ban}"
             }
           ]
         }
@@ -2013,7 +2034,7 @@
     },
     {
       "name": "石川県",
-      "name_en": "Ishikawa",
+      "name_ascii": "Ishikawa",
       "region_tags": [
         "Chubu",
         "Hokuriku"
@@ -2021,59 +2042,59 @@
       "cities": [
         {
           "name": "金沢市",
-          "name_en": "Kanazawa",
+          "name_ascii": "Kanazawa",
           "lat": 36.5613,
           "lon": 136.6562,
           "postcodes": [
             {
               "code": "920-0853",
               "street": "本町",
-              "street_en": "Honcho",
-              "pattern": "本町n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Honcho",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "920-0981",
               "street": "片町",
-              "street_en": "Katamachi",
-              "pattern": "片町n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Katamachi",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "920-0919",
               "street": "南町",
-              "street_en": "Minami-cho",
-              "pattern": "南町n{１,１９１}"
+              "street_ascii": "Minami-cho",
+              "pattern": "{street}n{１,１９１}"
             },
             {
               "code": "920-0025",
               "street": "駅西本町",
-              "street_en": "Ekinishi-Honmachi",
-              "pattern": "駅西本町n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Ekinishi-Honmachi",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "小松市",
-          "name_en": "Komatsu",
+          "name_ascii": "Komatsu",
           "lat": 36.4083,
           "lon": 136.4452,
           "postcodes": [
             {
               "code": "923-0921",
               "street": "土居原町",
-              "street_en": "Doihara-machi",
-              "pattern": "土居原町n{１,８０}"
+              "street_ascii": "Doihara-machi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "923-0801",
               "street": "園町",
-              "street_en": "Sono-machi",
-              "pattern": "園町n{１,７０}"
+              "street_ascii": "Sono-machi",
+              "pattern": "{street}n{１,７０}"
             },
             {
               "code": "923-0864",
               "street": "有明町",
-              "street_en": "Ariake-cho",
-              "pattern": "有明町n{１,６０}"
+              "street_ascii": "Ariake-cho",
+              "pattern": "{street}n{１,６０}"
             }
           ]
         }
@@ -2081,7 +2102,7 @@
     },
     {
       "name": "福井県",
-      "name_en": "Fukui",
+      "name_ascii": "Fukui",
       "region_tags": [
         "Chubu",
         "Hokuriku"
@@ -2089,53 +2110,53 @@
       "cities": [
         {
           "name": "福井市",
-          "name_en": "Fukui",
+          "name_ascii": "Fukui",
           "lat": 36.0652,
           "lon": 136.2217,
           "postcodes": [
             {
               "code": "910-0006",
               "street": "中央",
-              "street_en": "Chuo",
-              "pattern": "中央n{１,１９５}丁目n{１,３０}番"
+              "street_ascii": "Chuo",
+              "pattern": "{street}n{１,１９５}{chome}n{１,３０}{ban}"
             },
             {
               "code": "910-0005",
               "street": "大手",
-              "street_en": "Ote",
-              "pattern": "大手n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Ote",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "910-0858",
               "street": "手寄",
-              "street_en": "Teyose",
-              "pattern": "手寄n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Teyose",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             }
           ]
         },
         {
           "name": "敦賀市",
-          "name_en": "Tsuruga",
+          "name_ascii": "Tsuruga",
           "lat": 35.6454,
           "lon": 136.0556,
           "postcodes": [
             {
               "code": "914-0052",
               "street": "清水町",
-              "street_en": "Shimizu-cho",
-              "pattern": "清水町n{１,２}丁目n{１,５０}番"
+              "street_ascii": "Shimizu-cho",
+              "pattern": "{street}n{１,２}{chome}n{１,５０}{ban}"
             },
             {
               "code": "914-0062",
               "street": "相生町",
-              "street_en": "Aioi-cho",
-              "pattern": "相生町n{１,１２８}"
+              "street_ascii": "Aioi-cho",
+              "pattern": "{street}n{１,１２８}"
             },
             {
               "code": "914-0054",
               "street": "白銀町",
-              "street_en": "Shirogane-cho",
-              "pattern": "白銀町n{１,７０}"
+              "street_ascii": "Shirogane-cho",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         }
@@ -2143,60 +2164,60 @@
     },
     {
       "name": "山梨県",
-      "name_en": "Yamanashi",
+      "name_ascii": "Yamanashi",
       "region_tags": [
         "Chubu"
       ],
       "cities": [
         {
           "name": "甲府市",
-          "name_en": "Kofu",
+          "name_ascii": "Kofu",
           "lat": 35.6636,
           "lon": 138.5685,
           "postcodes": [
             {
               "code": "400-0031",
               "street": "丸の内",
-              "street_en": "Marunouchi",
-              "pattern": "丸の内n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Marunouchi",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "400-0032",
               "street": "中央",
-              "street_en": "Chuo",
-              "pattern": "中央n{１,１９４}丁目n{１,２５}番"
+              "street_ascii": "Chuo",
+              "pattern": "{street}n{１,１９４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "400-0024",
               "street": "北口",
-              "street_en": "Kitaguchi",
-              "pattern": "北口n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Kitaguchi",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             }
           ]
         },
         {
           "name": "富士吉田市",
-          "name_en": "Fujiyoshida",
+          "name_ascii": "Fujiyoshida",
           "lat": 35.4874,
           "lon": 138.8079,
           "postcodes": [
             {
               "code": "403-0004",
               "street": "下吉田",
-              "street_en": "Shimo-Yoshida",
-              "pattern": "下吉田n{１,１９０}丁目n{１,３０}番"
+              "street_ascii": "Shimo-Yoshida",
+              "pattern": "{street}n{１,１９０}{chome}n{１,３０}{ban}"
             },
             {
               "code": "403-0005",
               "street": "上吉田",
-              "street_en": "Kami-Yoshida",
-              "pattern": "上吉田n{１,８}丁目n{１,３０}番"
+              "street_ascii": "Kami-Yoshida",
+              "pattern": "{street}n{１,８}{chome}n{１,３０}{ban}"
             },
             {
               "code": "403-0013",
               "street": "緑ケ丘",
-              "street_en": "Midorigaoka",
-              "pattern": "緑ケ丘n{１,２}丁目n{１,５０}番"
+              "street_ascii": "Midorigaoka",
+              "pattern": "{street}n{１,２}{chome}n{１,５０}{ban}"
             }
           ]
         }
@@ -2204,86 +2225,86 @@
     },
     {
       "name": "長野県",
-      "name_en": "Nagano",
+      "name_ascii": "Nagano",
       "region_tags": [
         "Chubu"
       ],
       "cities": [
         {
           "name": "長野市",
-          "name_en": "Nagano",
+          "name_ascii": "Nagano",
           "lat": 36.6513,
           "lon": 138.181,
           "postcodes": [
             {
               "code": "380-0833",
               "street": "権堂町",
-              "street_en": "Gondo-cho",
-              "pattern": "権堂町n{１,８０}"
+              "street_ascii": "Gondo-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "380-0824",
               "street": "南石堂町",
-              "street_en": "Minami-Ishido-cho",
-              "pattern": "南石堂町n{１,８０}"
+              "street_ascii": "Minami-Ishido-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "380-0838",
               "street": "県町",
-              "street_en": "Agata-machi",
-              "pattern": "県町n{１,８０}"
+              "street_ascii": "Agata-machi",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "松本市",
-          "name_en": "Matsumoto",
+          "name_ascii": "Matsumoto",
           "lat": 36.2381,
           "lon": 137.972,
           "postcodes": [
             {
               "code": "390-0811",
               "street": "中央",
-              "street_en": "Chuo",
-              "pattern": "中央n{１,４}丁目n{１,３０}番"
+              "street_ascii": "Chuo",
+              "pattern": "{street}n{１,４}{chome}n{１,３０}{ban}"
             },
             {
               "code": "390-0815",
               "street": "深志",
-              "street_en": "Fukashi",
-              "pattern": "深志n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Fukashi",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "390-0874",
               "street": "大手",
-              "street_en": "Ote",
-              "pattern": "大手n{１,１９３}丁目n{１,２０}番"
+              "street_ascii": "Ote",
+              "pattern": "{street}n{１,１９３}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "上田市",
-          "name_en": "Ueda",
+          "name_ascii": "Ueda",
           "lat": 36.4019,
           "lon": 138.2497,
           "postcodes": [
             {
               "code": "386-0012",
               "street": "中央",
-              "street_en": "Chuo",
-              "pattern": "中央n{１,６}丁目n{１,２０}番"
+              "street_ascii": "Chuo",
+              "pattern": "{street}n{１,６}{chome}n{１,２０}{ban}"
             },
             {
               "code": "386-0025",
               "street": "天神",
-              "street_en": "Tenjin",
-              "pattern": "天神n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Tenjin",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "386-0032",
               "street": "諏訪形",
-              "street_en": "Suwakata",
-              "pattern": "諏訪形n{１,１９０}"
+              "street_ascii": "Suwakata",
+              "pattern": "{street}n{１,１９０}"
             }
           ]
         }
@@ -2291,86 +2312,86 @@
     },
     {
       "name": "岐阜県",
-      "name_en": "Gifu",
+      "name_ascii": "Gifu",
       "region_tags": [
         "Chubu"
       ],
       "cities": [
         {
           "name": "岐阜市",
-          "name_en": "Gifu",
+          "name_ascii": "Gifu",
           "lat": 35.4232,
           "lon": 136.7606,
           "postcodes": [
             {
               "code": "500-8833",
               "street": "神田町",
-              "street_en": "Kanda-machi",
-              "pattern": "神田町n{１,９}丁目n{１,２０}番"
+              "street_ascii": "Kanda-machi",
+              "pattern": "{street}n{１,９}{chome}n{１,２０}{ban}"
             },
             {
               "code": "500-8175",
               "street": "長住町",
-              "street_en": "Nagasumi-cho",
-              "pattern": "長住町n{１,１１１}"
+              "street_ascii": "Nagasumi-cho",
+              "pattern": "{street}n{１,１１１}"
             },
             {
               "code": "500-8076",
               "street": "司町",
-              "street_en": "Tsukasa-machi",
-              "pattern": "司町n{１,８０}"
+              "street_ascii": "Tsukasa-machi",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "大垣市",
-          "name_en": "Ogaki",
+          "name_ascii": "Ogaki",
           "lat": 35.3616,
           "lon": 136.6131,
           "postcodes": [
             {
               "code": "503-0901",
               "street": "高屋町",
-              "street_en": "Takaya-cho",
-              "pattern": "高屋町n{１,１２８}"
+              "street_ascii": "Takaya-cho",
+              "pattern": "{street}n{１,１２８}"
             },
             {
               "code": "503-0905",
               "street": "宮町",
-              "street_en": "Miya-cho",
-              "pattern": "宮町n{１,７０}"
+              "street_ascii": "Miya-cho",
+              "pattern": "{street}n{１,７０}"
             },
             {
               "code": "503-0903",
               "street": "丸の内",
-              "street_en": "Marunouchi",
-              "pattern": "丸の内n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Marunouchi",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             }
           ]
         },
         {
           "name": "高山市",
-          "name_en": "Takayama",
+          "name_ascii": "Takayama",
           "lat": 36.1461,
           "lon": 137.2524,
           "postcodes": [
             {
               "code": "506-0009",
               "street": "花岡町",
-              "street_en": "Hanaoka-cho",
-              "pattern": "花岡町n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Hanaoka-cho",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "506-0017",
               "street": "朝日町",
-              "street_en": "Asahi-machi",
-              "pattern": "朝日町n{１,１２８}"
+              "street_ascii": "Asahi-machi",
+              "pattern": "{street}n{１,１２８}"
             },
             {
               "code": "506-0838",
               "street": "上三之町",
-              "street_en": "Kami-Sannomachi",
-              "pattern": "上三之町n{１,７０}"
+              "street_ascii": "Kami-Sannomachi",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         }
@@ -2378,118 +2399,118 @@
     },
     {
       "name": "静岡県",
-      "name_en": "Shizuoka",
+      "name_ascii": "Shizuoka",
       "region_tags": [
         "Chubu"
       ],
       "cities": [
         {
           "name": "静岡市",
-          "name_en": "Shizuoka",
+          "name_ascii": "Shizuoka",
           "lat": 34.9756,
           "lon": 138.3826,
           "postcodes": [
             {
               "code": "420-0857",
               "street": "御幸町",
-              "street_en": "Miyuki-cho",
-              "pattern": "御幸町n{１,１１５}"
+              "street_ascii": "Miyuki-cho",
+              "pattern": "{street}n{１,１１５}"
             },
             {
               "code": "420-0031",
               "street": "呉服町",
-              "street_en": "Gofuku-cho",
-              "pattern": "呉服町n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Gofuku-cho",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "420-0858",
               "street": "伝馬町",
-              "street_en": "Tenma-cho",
-              "pattern": "伝馬町n{１,８０}"
+              "street_ascii": "Tenma-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "424-0816",
               "street": "清水区入江",
-              "street_en": "Shimizu-ku Irie",
-              "pattern": "清水区入江n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Shimizu-ku Irie",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             }
           ]
         },
         {
           "name": "浜松市",
-          "name_en": "Hamamatsu",
+          "name_ascii": "Hamamatsu",
           "lat": 34.7108,
           "lon": 137.7261,
           "postcodes": [
             {
               "code": "430-0933",
               "street": "鍛冶町",
-              "street_en": "Kaji-machi",
-              "pattern": "鍛冶町n{１,８０}"
+              "street_ascii": "Kaji-machi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "430-0926",
               "street": "砂山町",
-              "street_en": "Sunayama-cho",
-              "pattern": "砂山町n{１,８０}"
+              "street_ascii": "Sunayama-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "430-0946",
               "street": "元城町",
-              "street_en": "Motoshiro-cho",
-              "pattern": "元城町n{１,８０}"
+              "street_ascii": "Motoshiro-cho",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "沼津市",
-          "name_en": "Numazu",
+          "name_ascii": "Numazu",
           "lat": 35.096,
           "lon": 138.8638,
           "postcodes": [
             {
               "code": "410-0801",
               "street": "大手町",
-              "street_en": "Otemachi",
-              "pattern": "大手町n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Otemachi",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             },
             {
               "code": "410-0053",
               "street": "寿町",
-              "street_en": "Kotobuki-cho",
-              "pattern": "寿町n{１,１１５}"
+              "street_ascii": "Kotobuki-cho",
+              "pattern": "{street}n{１,１１５}"
             },
             {
               "code": "410-0022",
               "street": "大岡",
-              "street_en": "Ooka",
-              "pattern": "大岡n{１,８０}"
+              "street_ascii": "Ooka",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "富士市",
-          "name_en": "Fuji",
+          "name_ascii": "Fuji",
           "lat": 35.1613,
           "lon": 138.6765,
           "postcodes": [
             {
               "code": "417-0055",
               "street": "永田町",
-              "street_en": "Nagata-cho",
-              "pattern": "永田町n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Nagata-cho",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "417-0045",
               "street": "錦町",
-              "street_en": "Nishiki-cho",
-              "pattern": "錦町n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Nishiki-cho",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "417-0057",
               "street": "瓜島町",
-              "street_en": "Urishima-cho",
-              "pattern": "瓜島町n{１,１９６}"
+              "street_ascii": "Urishima-cho",
+              "pattern": "{street}n{１,１９６}"
             }
           ]
         }
@@ -2497,156 +2518,156 @@
     },
     {
       "name": "愛知県",
-      "name_en": "Aichi",
+      "name_ascii": "Aichi",
       "region_tags": [
         "Chubu"
       ],
       "cities": [
         {
           "name": "名古屋市",
-          "name_en": "Nagoya",
+          "name_ascii": "Nagoya",
           "lat": 35.1815,
           "lon": 136.9066,
           "postcodes": [
             {
               "code": "460-0003",
               "street": "中区錦",
-              "street_en": "Naka-ku Nishiki",
-              "pattern": "中区錦n{１,３}丁目n{１,２５}番"
+              "street_ascii": "Naka-ku Nishiki",
+              "pattern": "{street}n{１,３}{chome}n{１,２５}{ban}"
             },
             {
               "code": "460-0008",
               "street": "中区栄",
-              "street_en": "Naka-ku Sakae",
-              "pattern": "中区栄n{１,１８４}丁目n{１,２５}番"
+              "street_ascii": "Naka-ku Sakae",
+              "pattern": "{street}n{１,１８４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "450-0002",
               "street": "中村区名駅",
-              "street_en": "Nakamura-ku Meieki",
-              "pattern": "中村区名駅n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Nakamura-ku Meieki",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             },
             {
               "code": "464-0075",
               "street": "千種区内山",
-              "street_en": "Chikusa-ku Uchiyama",
-              "pattern": "千種区内山n{１,３}丁目n{１,２５}番"
+              "street_ascii": "Chikusa-ku Uchiyama",
+              "pattern": "{street}n{１,３}{chome}n{１,２５}{ban}"
             },
             {
               "code": "456-0002",
               "street": "熱田区金山町",
-              "street_en": "Atsuta-ku Kanayama-cho",
-              "pattern": "熱田区金山町n{１,２}丁目n{１,３０}番"
+              "street_ascii": "Atsuta-ku Kanayama-cho",
+              "pattern": "{street}n{１,２}{chome}n{１,３０}{ban}"
             },
             {
               "code": "462-0825",
               "street": "北区大曽根",
-              "street_en": "Kita-ku Ozone",
-              "pattern": "北区大曽根n{１,３}丁目n{１,２５}番"
+              "street_ascii": "Kita-ku Ozone",
+              "pattern": "{street}n{１,３}{chome}n{１,２５}{ban}"
             }
           ]
         },
         {
           "name": "豊橋市",
-          "name_en": "Toyohashi",
+          "name_ascii": "Toyohashi",
           "lat": 34.7693,
           "lon": 137.3914,
           "postcodes": [
             {
               "code": "440-0075",
               "street": "花田町",
-              "street_en": "Hanada-cho",
-              "pattern": "花田町n{１,１９２}"
+              "street_ascii": "Hanada-cho",
+              "pattern": "{street}n{１,１９２}"
             },
             {
               "code": "440-0897",
               "street": "松葉町",
-              "street_en": "Matsuba-cho",
-              "pattern": "松葉町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Matsuba-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "440-0881",
               "street": "広小路",
-              "street_en": "Hirokoji",
-              "pattern": "広小路n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Hirokoji",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "岡崎市",
-          "name_en": "Okazaki",
+          "name_ascii": "Okazaki",
           "lat": 34.9553,
           "lon": 137.1747,
           "postcodes": [
             {
               "code": "444-0038",
               "street": "伝馬通",
-              "street_en": "Tenma-dori",
-              "pattern": "伝馬通n{１,１９２}丁目n{１,２０}番"
+              "street_ascii": "Tenma-dori",
+              "pattern": "{street}n{１,１９２}{chome}n{１,２０}{ban}"
             },
             {
               "code": "444-0059",
               "street": "康生通西",
-              "street_en": "Kosei-dori-Nishi",
-              "pattern": "康生通西n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Kosei-dori-Nishi",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "444-0860",
               "street": "明大寺本町",
-              "street_en": "Myodaiji-Honmachi",
-              "pattern": "明大寺本町n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Myodaiji-Honmachi",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             }
           ]
         },
         {
           "name": "豊田市",
-          "name_en": "Toyota",
+          "name_ascii": "Toyota",
           "lat": 35.0826,
           "lon": 137.1566,
           "postcodes": [
             {
               "code": "471-0026",
               "street": "若宮町",
-              "street_en": "Wakamiya-cho",
-              "pattern": "若宮町n{１,１８４}丁目n{１,２０}番"
+              "street_ascii": "Wakamiya-cho",
+              "pattern": "{street}n{１,１８４}{chome}n{１,２０}{ban}"
             },
             {
               "code": "471-0034",
               "street": "小坂本町",
-              "street_en": "Kozakahon-machi",
-              "pattern": "小坂本町n{１,８}丁目n{１,２０}番"
+              "street_ascii": "Kozakahon-machi",
+              "pattern": "{street}n{１,８}{chome}n{１,２０}{ban}"
             },
             {
               "code": "471-0027",
               "street": "喜多町",
-              "street_en": "Kita-machi",
-              "pattern": "喜多町n{１,８}丁目n{１,２０}番"
+              "street_ascii": "Kita-machi",
+              "pattern": "{street}n{１,８}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "春日井市",
-          "name_en": "Kasugai",
+          "name_ascii": "Kasugai",
           "lat": 35.2475,
           "lon": 136.9723,
           "postcodes": [
             {
               "code": "486-0844",
               "street": "鳥居松町",
-              "street_en": "Torimatsu-cho",
-              "pattern": "鳥居松町n{１,１８４}丁目n{１,２０}番"
+              "street_ascii": "Torimatsu-cho",
+              "pattern": "{street}n{１,１８４}{chome}n{１,２０}{ban}"
             },
             {
               "code": "486-0825",
               "street": "中央台",
-              "street_en": "Chuodai",
-              "pattern": "中央台n{１,８}丁目n{１,２０}番"
+              "street_ascii": "Chuodai",
+              "pattern": "{street}n{１,８}{chome}n{１,２０}{ban}"
             },
             {
               "code": "486-0928",
               "street": "松新町",
-              "street_en": "Matsushin-cho",
-              "pattern": "松新町n{１,８}丁目n{１,２０}番"
+              "street_ascii": "Matsushin-cho",
+              "pattern": "{street}n{１,８}{chome}n{１,２０}{ban}"
             }
           ]
         }
@@ -2654,7 +2675,7 @@
     },
     {
       "name": "三重県",
-      "name_en": "Mie",
+      "name_ascii": "Mie",
       "region_tags": [
         "Kinki",
         "Kansai"
@@ -2662,79 +2683,79 @@
       "cities": [
         {
           "name": "津市",
-          "name_en": "Tsu",
+          "name_ascii": "Tsu",
           "lat": 34.7303,
           "lon": 136.5086,
           "postcodes": [
             {
               "code": "514-0009",
               "street": "羽所町",
-              "street_en": "Hadokoro-cho",
-              "pattern": "羽所町n{１,１１７}"
+              "street_ascii": "Hadokoro-cho",
+              "pattern": "{street}n{１,１１７}"
             },
             {
               "code": "514-0003",
               "street": "桜橋",
-              "street_en": "Sakurabashi",
-              "pattern": "桜橋n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Sakurabashi",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "514-0008",
               "street": "上浜町",
-              "street_en": "Kamihama-cho",
-              "pattern": "上浜町n{１,８０}"
+              "street_ascii": "Kamihama-cho",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "四日市市",
-          "name_en": "Yokkaichi",
+          "name_ascii": "Yokkaichi",
           "lat": 34.9648,
           "lon": 136.6248,
           "postcodes": [
             {
               "code": "510-0075",
               "street": "安島",
-              "street_en": "Yasujima",
-              "pattern": "安島n{１,２}丁目n{１,５０}番"
+              "street_ascii": "Yasujima",
+              "pattern": "{street}n{１,２}{chome}n{１,５０}{ban}"
             },
             {
               "code": "510-0067",
               "street": "浜田町",
-              "street_en": "Hamada-cho",
-              "pattern": "浜田町n{１,１１８}"
+              "street_ascii": "Hamada-cho",
+              "pattern": "{street}n{１,１１８}"
             },
             {
               "code": "510-0061",
               "street": "朝日町",
-              "street_en": "Asahi-cho",
-              "pattern": "朝日町n{１,８０}"
+              "street_ascii": "Asahi-cho",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "伊勢市",
-          "name_en": "Ise",
+          "name_ascii": "Ise",
           "lat": 34.4871,
           "lon": 136.7092,
           "postcodes": [
             {
               "code": "516-0037",
               "street": "岩渕",
-              "street_en": "Iwabuchi",
-              "pattern": "岩渕n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Iwabuchi",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "516-0072",
               "street": "宮後",
-              "street_en": "Miyago",
-              "pattern": "宮後n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Miyago",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "516-0074",
               "street": "本町",
-              "street_en": "Honmachi",
-              "pattern": "本町n{１,１９４}"
+              "street_ascii": "Honmachi",
+              "pattern": "{street}n{１,１９４}"
             }
           ]
         }
@@ -2742,7 +2763,7 @@
     },
     {
       "name": "滋賀県",
-      "name_en": "Shiga",
+      "name_ascii": "Shiga",
       "region_tags": [
         "Kinki",
         "Kansai"
@@ -2750,53 +2771,53 @@
       "cities": [
         {
           "name": "大津市",
-          "name_en": "Otsu",
+          "name_ascii": "Otsu",
           "lat": 35.0045,
           "lon": 135.8686,
           "postcodes": [
             {
               "code": "520-0043",
               "street": "中央",
-              "street_en": "Chuo",
-              "pattern": "中央n{１,１９２}丁目n{１,２５}番"
+              "street_ascii": "Chuo",
+              "pattern": "{street}n{１,１９２}{chome}n{１,２５}{ban}"
             },
             {
               "code": "520-0047",
               "street": "浜大津",
-              "street_en": "Hama-Otsu",
-              "pattern": "浜大津n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Hama-Otsu",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "520-0044",
               "street": "京町",
-              "street_en": "Kyo-machi",
-              "pattern": "京町n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Kyo-machi",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             }
           ]
         },
         {
           "name": "草津市",
-          "name_en": "Kusatsu",
+          "name_ascii": "Kusatsu",
           "lat": 35.0156,
           "lon": 135.9607,
           "postcodes": [
             {
               "code": "525-0037",
               "street": "西大路町",
-              "street_en": "Nishi-Oji-cho",
-              "pattern": "西大路町n{１,１９６}"
+              "street_ascii": "Nishi-Oji-cho",
+              "pattern": "{street}n{１,１９６}"
             },
             {
               "code": "525-0032",
               "street": "大路",
-              "street_en": "Oji",
-              "pattern": "大路n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Oji",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "525-0026",
               "street": "渋川",
-              "street_en": "Shibukawa",
-              "pattern": "渋川n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Shibukawa",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             }
           ]
         }
@@ -2804,7 +2825,7 @@
     },
     {
       "name": "京都府",
-      "name_en": "Kyoto",
+      "name_ascii": "Kyoto",
       "region_tags": [
         "Kinki",
         "Kansai"
@@ -2812,97 +2833,97 @@
       "cities": [
         {
           "name": "京都市",
-          "name_en": "Kyoto",
+          "name_ascii": "Kyoto",
           "lat": 35.0116,
           "lon": 135.7681,
           "postcodes": [
             {
               "code": "600-8216",
               "street": "下京区烏丸通",
-              "street_en": "Shimogyo-ku Karasuma-dori",
-              "pattern": "下京区烏丸通n{１,８０}"
+              "street_ascii": "Shimogyo-ku Karasuma-dori",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "604-8006",
               "street": "中京区河原町通",
-              "street_en": "Nakagyo-ku Kawaramachi-dori",
-              "pattern": "中京区河原町通n{１,８０}"
+              "street_ascii": "Nakagyo-ku Kawaramachi-dori",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "605-0073",
               "street": "東山区祇園町",
-              "street_en": "Higashiyama-ku Gion-machi",
-              "pattern": "東山区祇園町n{１,８０}"
+              "street_ascii": "Higashiyama-ku Gion-machi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "606-8301",
               "street": "左京区吉田本町",
-              "street_en": "Sakyo-ku Yoshida-Honmachi",
-              "pattern": "左京区吉田本町n{１,７０}"
+              "street_ascii": "Sakyo-ku Yoshida-Honmachi",
+              "pattern": "{street}n{１,７０}"
             },
             {
               "code": "602-0898",
               "street": "上京区今出川通",
-              "street_en": "Kamigyo-ku Imadegawa-dori",
-              "pattern": "上京区今出川通n{１,７０}"
+              "street_ascii": "Kamigyo-ku Imadegawa-dori",
+              "pattern": "{street}n{１,７０}"
             },
             {
               "code": "615-0021",
               "street": "右京区西院三蔵町",
-              "street_en": "Ukyo-ku Saiin-Sanzo-cho",
-              "pattern": "右京区西院三蔵町n{１,６０}"
+              "street_ascii": "Ukyo-ku Saiin-Sanzo-cho",
+              "pattern": "{street}n{１,６０}"
             }
           ]
         },
         {
           "name": "宇治市",
-          "name_en": "Uji",
+          "name_ascii": "Uji",
           "lat": 34.8843,
           "lon": 135.7997,
           "postcodes": [
             {
               "code": "611-0021",
               "street": "宇治",
-              "street_en": "Uji",
-              "pattern": "宇治n{１,８０}"
+              "street_ascii": "Uji",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "611-0033",
               "street": "大久保町",
-              "street_en": "Okubo-cho",
-              "pattern": "大久保町n{１,８０}"
+              "street_ascii": "Okubo-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "611-0042",
               "street": "小倉町",
-              "street_en": "Ogura-cho",
-              "pattern": "小倉町n{１,７０}"
+              "street_ascii": "Ogura-cho",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         },
         {
           "name": "舞鶴市",
-          "name_en": "Maizuru",
+          "name_ascii": "Maizuru",
           "lat": 35.475,
           "lon": 135.3843,
           "postcodes": [
             {
               "code": "624-0841",
               "street": "引土",
-              "street_en": "Hikitsuchi",
-              "pattern": "引土n{１,８０}"
+              "street_ascii": "Hikitsuchi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "625-0036",
               "street": "浜",
-              "street_en": "Hama",
-              "pattern": "浜n{１,８０}"
+              "street_ascii": "Hama",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "624-0906",
               "street": "倉谷",
-              "street_en": "Kuratani",
-              "pattern": "倉谷n{１,７０}"
+              "street_ascii": "Kuratani",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         }
@@ -2910,7 +2931,7 @@
     },
     {
       "name": "大阪府",
-      "name_en": "Osaka",
+      "name_ascii": "Osaka",
       "region_tags": [
         "Kinki",
         "Kansai"
@@ -2918,175 +2939,175 @@
       "cities": [
         {
           "name": "大阪市",
-          "name_en": "Osaka",
+          "name_ascii": "Osaka",
           "lat": 34.6937,
           "lon": 135.5023,
           "postcodes": [
             {
               "code": "530-0001",
               "street": "北区梅田",
-              "street_en": "Kita-ku Umeda",
-              "pattern": "北区梅田n{１,３}丁目n{１,２０}番"
+              "street_ascii": "Kita-ku Umeda",
+              "pattern": "{street}n{１,３}{chome}n{１,２０}{ban}"
             },
             {
               "code": "541-0047",
               "street": "中央区淡路町",
-              "street_en": "Chuo-ku Awaji-machi",
-              "pattern": "中央区淡路町n{１,４}丁目n{１,２０}番"
+              "street_ascii": "Chuo-ku Awaji-machi",
+              "pattern": "{street}n{１,４}{chome}n{１,２０}{ban}"
             },
             {
               "code": "542-0076",
               "street": "中央区難波",
-              "street_en": "Chuo-ku Namba",
-              "pattern": "中央区難波n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Chuo-ku Namba",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             },
             {
               "code": "556-0011",
               "street": "浪速区難波中",
-              "street_en": "Naniwa-ku Namba-Naka",
-              "pattern": "浪速区難波中n{１,３}丁目n{１,２０}番"
+              "street_ascii": "Naniwa-ku Namba-Naka",
+              "pattern": "{street}n{１,３}{chome}n{１,２０}{ban}"
             },
             {
               "code": "532-0011",
               "street": "淀川区西中島",
-              "street_en": "Yodogawa-ku Nishi-Nakajima",
-              "pattern": "淀川区西中島n{１,７}丁目n{１,２０}番"
+              "street_ascii": "Yodogawa-ku Nishi-Nakajima",
+              "pattern": "{street}n{１,７}{chome}n{１,２０}{ban}"
             },
             {
               "code": "543-0001",
               "street": "天王寺区上本町",
-              "street_en": "Tennoji-ku Uehonmachi",
-              "pattern": "天王寺区上本町n{１,１７８}丁目n{１,１５}番"
+              "street_ascii": "Tennoji-ku Uehonmachi",
+              "pattern": "{street}n{１,１７８}{chome}n{１,１５}{ban}"
             }
           ]
         },
         {
           "name": "堺市",
-          "name_en": "Sakai",
+          "name_ascii": "Sakai",
           "lat": 34.5733,
           "lon": 135.483,
           "postcodes": [
             {
               "code": "590-0028",
               "street": "堺区三国ヶ丘御幸通",
-              "street_en": "Sakai-ku Mikunigaoka-Miyuki-dori",
-              "pattern": "堺区三国ヶ丘御幸通n{１,１１６}"
+              "street_ascii": "Sakai-ku Mikunigaoka-Miyuki-dori",
+              "pattern": "{street}n{１,１１６}"
             },
             {
               "code": "590-0013",
               "street": "堺区東雲西町",
-              "street_en": "Sakai-ku Shinonomonishi-cho",
-              "pattern": "堺区東雲西町n{１,４}丁目n{１,２０}番"
+              "street_ascii": "Sakai-ku Shinonome-Nishi-cho",
+              "pattern": "{street}n{１,４}{chome}n{１,２０}{ban}"
             },
             {
               "code": "591-8025",
               "street": "北区長曽根町",
-              "street_en": "Kita-ku Nagasone-cho",
-              "pattern": "北区長曽根町n{１,８０}"
+              "street_ascii": "Kita-ku Nagasone-cho",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "東大阪市",
-          "name_en": "Higashiosaka",
+          "name_ascii": "Higashiosaka",
           "lat": 34.6795,
           "lon": 135.6009,
           "postcodes": [
             {
               "code": "577-0056",
               "street": "長堂",
-              "street_en": "Nagado",
-              "pattern": "長堂n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Nagado",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "578-0941",
               "street": "岩田町",
-              "street_en": "Iwata-cho",
-              "pattern": "岩田町n{１,１９４}丁目n{１,２０}番"
+              "street_ascii": "Iwata-cho",
+              "pattern": "{street}n{１,１９４}{chome}n{１,２０}{ban}"
             },
             {
               "code": "577-0801",
               "street": "小阪",
-              "street_en": "Kosaka",
-              "pattern": "小阪n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Kosaka",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             }
           ]
         },
         {
           "name": "豊中市",
-          "name_en": "Toyonaka",
+          "name_ascii": "Toyonaka",
           "lat": 34.781,
           "lon": 135.4694,
           "postcodes": [
             {
               "code": "560-0021",
               "street": "本町",
-              "street_en": "Honcho",
-              "pattern": "本町n{１,１９０}丁目n{１,１５}番"
+              "street_ascii": "Honcho",
+              "pattern": "{street}n{１,１９０}{chome}n{１,１５}{ban}"
             },
             {
               "code": "560-0026",
               "street": "玉井町",
-              "street_en": "Tamai-cho",
-              "pattern": "玉井町n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Tamai-cho",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "561-0802",
               "street": "曽根東町",
-              "street_en": "Sone-Higashi-cho",
-              "pattern": "曽根東町n{１,６}丁目n{１,２０}番"
+              "street_ascii": "Sone-Higashi-cho",
+              "pattern": "{street}n{１,６}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "吹田市",
-          "name_en": "Suita",
+          "name_ascii": "Suita",
           "lat": 34.7614,
           "lon": 135.5176,
           "postcodes": [
             {
               "code": "564-0082",
               "street": "片山町",
-              "street_en": "Katayama-cho",
-              "pattern": "片山町n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Katayama-cho",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "565-0826",
               "street": "千里万博公園",
-              "street_en": "Senri-Banpaku-Koen",
-              "pattern": "千里万博公園n{１,１１６}"
+              "street_ascii": "Senri-Banpaku-Koen",
+              "pattern": "{street}n{１,１１６}"
             },
             {
               "code": "564-0051",
               "street": "豊津町",
-              "street_en": "Toyotsu-cho",
-              "pattern": "豊津町n{１,８０}"
+              "street_ascii": "Toyotsu-cho",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "高槻市",
-          "name_en": "Takatsuki",
+          "name_ascii": "Takatsuki",
           "lat": 34.8464,
           "lon": 135.617,
           "postcodes": [
             {
               "code": "569-0802",
               "street": "北園町",
-              "street_en": "Kitazono-cho",
-              "pattern": "北園町n{１,１１８}"
+              "street_ascii": "Kitazono-cho",
+              "pattern": "{street}n{１,１１８}"
             },
             {
               "code": "569-0071",
               "street": "城北町",
-              "street_en": "Johoku-cho",
-              "pattern": "城北町n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Johoku-cho",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "569-0804",
               "street": "紺屋町",
-              "street_en": "Konya-cho",
-              "pattern": "紺屋町n{１,８０}"
+              "street_ascii": "Konya-cho",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         }
@@ -3094,7 +3115,7 @@
     },
     {
       "name": "兵庫県",
-      "name_en": "Hyogo",
+      "name_ascii": "Hyogo",
       "region_tags": [
         "Kinki",
         "Kansai"
@@ -3102,143 +3123,143 @@
       "cities": [
         {
           "name": "神戸市",
-          "name_en": "Kobe",
+          "name_ascii": "Kobe",
           "lat": 34.6901,
           "lon": 135.1956,
           "postcodes": [
             {
               "code": "650-0021",
               "street": "中央区三宮町",
-              "street_en": "Chuo-ku Sannomiya-cho",
-              "pattern": "中央区三宮町n{１,３}丁目n{１,２０}番"
+              "street_ascii": "Chuo-ku Sannomiya-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,２０}{ban}"
             },
             {
               "code": "650-0044",
               "street": "中央区東川崎町",
-              "street_en": "Chuo-ku Higashi-Kawasaki-cho",
-              "pattern": "中央区東川崎町n{１,１８０}"
+              "street_ascii": "Chuo-ku Higashi-Kawasaki-cho",
+              "pattern": "{street}n{１,１８０}"
             },
             {
               "code": "651-0084",
               "street": "中央区磯辺通",
-              "street_en": "Chuo-ku Isobe-dori",
-              "pattern": "中央区磯辺通n{１,４}丁目n{１,２０}番"
+              "street_ascii": "Chuo-ku Isobe-dori",
+              "pattern": "{street}n{１,４}{chome}n{１,２０}{ban}"
             },
             {
               "code": "657-0836",
               "street": "灘区城の下通",
-              "street_en": "Nada-ku Shironoshita-dori",
-              "pattern": "灘区城の下通n{１,３}丁目n{１,２５}番"
+              "street_ascii": "Nada-ku Shironoshita-dori",
+              "pattern": "{street}n{１,３}{chome}n{１,２５}{ban}"
             },
             {
               "code": "652-0803",
               "street": "兵庫区大開通",
-              "street_en": "Hyogo-ku Obiraki-dori",
-              "pattern": "兵庫区大開通n{１,１０}丁目n{１,１５}番"
+              "street_ascii": "Hyogo-ku Obiraki-dori",
+              "pattern": "{street}n{１,１０}{chome}n{１,１５}{ban}"
             }
           ]
         },
         {
           "name": "姫路市",
-          "name_en": "Himeji",
+          "name_ascii": "Himeji",
           "lat": 34.8151,
           "lon": 134.6855,
           "postcodes": [
             {
               "code": "670-0927",
               "street": "駅前町",
-              "street_en": "Ekimae-cho",
-              "pattern": "駅前町n{１,８０}"
+              "street_ascii": "Ekimae-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "670-0012",
               "street": "本町",
-              "street_en": "Honmachi",
-              "pattern": "本町n{１,８０}"
+              "street_ascii": "Honmachi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "670-0925",
               "street": "亀井町",
-              "street_en": "Kamei-cho",
-              "pattern": "亀井町n{１,７０}"
+              "street_ascii": "Kamei-cho",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         },
         {
           "name": "西宮市",
-          "name_en": "Nishinomiya",
+          "name_ascii": "Nishinomiya",
           "lat": 34.7379,
           "lon": 135.3417,
           "postcodes": [
             {
               "code": "662-0911",
               "street": "池田町",
-              "street_en": "Ikeda-cho",
-              "pattern": "池田町n{１,８０}"
+              "street_ascii": "Ikeda-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "663-8035",
               "street": "北口町",
-              "street_en": "Kitaguchi-cho",
-              "pattern": "北口町n{１,８０}"
+              "street_ascii": "Kitaguchi-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "663-8204",
               "street": "高松町",
-              "street_en": "Takamatsu-cho",
-              "pattern": "高松町n{１,８０}"
+              "street_ascii": "Takamatsu-cho",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "尼崎市",
-          "name_en": "Amagasaki",
+          "name_ascii": "Amagasaki",
           "lat": 34.7333,
           "lon": 135.4064,
           "postcodes": [
             {
               "code": "660-0861",
               "street": "御園町",
-              "street_en": "Misono-cho",
-              "pattern": "御園町n{１,１８８}"
+              "street_ascii": "Misono-cho",
+              "pattern": "{street}n{１,１８８}"
             },
             {
               "code": "660-0881",
               "street": "昭和通",
-              "street_en": "Showa-dori",
-              "pattern": "昭和通n{１,９}丁目n{１,１５}番"
+              "street_ascii": "Showa-dori",
+              "pattern": "{street}n{１,９}{chome}n{１,１５}{ban}"
             },
             {
               "code": "660-0876",
               "street": "竹谷町",
-              "street_en": "Taketani-cho",
-              "pattern": "竹谷町n{１,３}丁目n{１,２５}番"
+              "street_ascii": "Taketani-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,２５}{ban}"
             }
           ]
         },
         {
           "name": "明石市",
-          "name_en": "Akashi",
+          "name_ascii": "Akashi",
           "lat": 34.6434,
           "lon": 134.9971,
           "postcodes": [
             {
               "code": "673-0891",
               "street": "大明石町",
-              "street_en": "Oakashi-cho",
-              "pattern": "大明石町n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Oakashi-cho",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "673-0016",
               "street": "松の内",
-              "street_en": "Matsunouchi",
-              "pattern": "松の内n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Matsunouchi",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "673-0886",
               "street": "東仲ノ町",
-              "street_en": "Higashi-Nakanocho",
-              "pattern": "東仲ノ町n{１,１９６}"
+              "street_ascii": "Higashi-Nakanocho",
+              "pattern": "{street}n{１,１９６}"
             }
           ]
         }
@@ -3246,7 +3267,7 @@
     },
     {
       "name": "奈良県",
-      "name_en": "Nara",
+      "name_ascii": "Nara",
       "region_tags": [
         "Kinki",
         "Kansai"
@@ -3254,53 +3275,53 @@
       "cities": [
         {
           "name": "奈良市",
-          "name_en": "Nara",
+          "name_ascii": "Nara",
           "lat": 34.6851,
           "lon": 135.8049,
           "postcodes": [
             {
               "code": "630-8122",
               "street": "三条本町",
-              "street_en": "Sanjo-Honmachi",
-              "pattern": "三条本町n{１,８０}"
+              "street_ascii": "Sanjo-Honmachi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "630-8226",
               "street": "小西町",
-              "street_en": "Konishi-machi",
-              "pattern": "小西町n{１,８０}"
+              "street_ascii": "Konishi-machi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "630-8241",
               "street": "高天町",
-              "street_en": "Takama-cho",
-              "pattern": "高天町n{１,８０}"
+              "street_ascii": "Takama-cho",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "橿原市",
-          "name_en": "Kashihara",
+          "name_ascii": "Kashihara",
           "lat": 34.5091,
           "lon": 135.7925,
           "postcodes": [
             {
               "code": "634-0078",
               "street": "八木町",
-              "street_en": "Yagi-cho",
-              "pattern": "八木町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Yagi-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "634-0804",
               "street": "内膳町",
-              "street_en": "Naizen-cho",
-              "pattern": "内膳町n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Naizen-cho",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             },
             {
               "code": "634-0063",
               "street": "久米町",
-              "street_en": "Kume-cho",
-              "pattern": "久米町n{１,１９２}"
+              "street_ascii": "Kume-cho",
+              "pattern": "{street}n{１,１９２}"
             }
           ]
         }
@@ -3308,7 +3329,7 @@
     },
     {
       "name": "和歌山県",
-      "name_en": "Wakayama",
+      "name_ascii": "Wakayama",
       "region_tags": [
         "Kinki",
         "Kansai"
@@ -3316,53 +3337,53 @@
       "cities": [
         {
           "name": "和歌山市",
-          "name_en": "Wakayama",
+          "name_ascii": "Wakayama",
           "lat": 34.2306,
           "lon": 135.1711,
           "postcodes": [
             {
               "code": "640-8033",
               "street": "本町",
-              "street_en": "Honmachi",
-              "pattern": "本町n{１,１１５}"
+              "street_ascii": "Honmachi",
+              "pattern": "{street}n{１,１１５}"
             },
             {
               "code": "640-8154",
               "street": "友田町",
-              "street_en": "Tomoda-cho",
-              "pattern": "友田町n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Tomoda-cho",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             },
             {
               "code": "640-8108",
               "street": "雑賀町",
-              "street_en": "Saika-cho",
-              "pattern": "雑賀町n{１,８０}"
+              "street_ascii": "Saika-cho",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "田辺市",
-          "name_en": "Tanabe",
+          "name_ascii": "Tanabe",
           "lat": 33.7264,
           "lon": 135.3767,
           "postcodes": [
             {
               "code": "646-0031",
               "street": "湊",
-              "street_en": "Minato",
-              "pattern": "湊n{１,８０}"
+              "street_ascii": "Minato",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "646-0050",
               "street": "北新町",
-              "street_en": "Kita-Shinmachi",
-              "pattern": "北新町n{１,８０}"
+              "street_ascii": "Kita-Shinmachi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "646-0029",
               "street": "東陽",
-              "street_en": "Toyo",
-              "pattern": "東陽n{１,７０}"
+              "street_ascii": "Toyo",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         }
@@ -3370,60 +3391,60 @@
     },
     {
       "name": "鳥取県",
-      "name_en": "Tottori",
+      "name_ascii": "Tottori",
       "region_tags": [
         "Chugoku"
       ],
       "cities": [
         {
           "name": "鳥取市",
-          "name_en": "Tottori",
+          "name_ascii": "Tottori",
           "lat": 35.5011,
           "lon": 134.2351,
           "postcodes": [
             {
               "code": "680-0022",
               "street": "西町",
-              "street_en": "Nishi-machi",
-              "pattern": "西町n{１,８０}"
+              "street_ascii": "Nishi-machi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "680-0031",
               "street": "本町",
-              "street_en": "Honcho",
-              "pattern": "本町n{１,８０}"
+              "street_ascii": "Honcho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "680-0055",
               "street": "戎町",
-              "street_en": "Ebisu-cho",
-              "pattern": "戎町n{１,７０}"
+              "street_ascii": "Ebisu-cho",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         },
         {
           "name": "米子市",
-          "name_en": "Yonago",
+          "name_ascii": "Yonago",
           "lat": 35.4283,
           "lon": 133.331,
           "postcodes": [
             {
               "code": "683-0067",
               "street": "東町",
-              "street_en": "Higashi-machi",
-              "pattern": "東町n{１,１９２}"
+              "street_ascii": "Higashi-machi",
+              "pattern": "{street}n{１,１９２}"
             },
             {
               "code": "683-0812",
               "street": "角盤町",
-              "street_en": "Kakuban-cho",
-              "pattern": "角盤町n{１,４}丁目n{１,２０}番"
+              "street_ascii": "Kakuban-cho",
+              "pattern": "{street}n{１,４}{chome}n{１,２０}{ban}"
             },
             {
               "code": "683-0064",
               "street": "道笑町",
-              "street_en": "Dosho-cho",
-              "pattern": "道笑町n{１,４}丁目n{１,２０}番"
+              "street_ascii": "Dosho-cho",
+              "pattern": "{street}n{１,４}{chome}n{１,２０}{ban}"
             }
           ]
         }
@@ -3431,60 +3452,60 @@
     },
     {
       "name": "島根県",
-      "name_en": "Shimane",
+      "name_ascii": "Shimane",
       "region_tags": [
         "Chugoku"
       ],
       "cities": [
         {
           "name": "松江市",
-          "name_en": "Matsue",
+          "name_ascii": "Matsue",
           "lat": 35.4723,
           "lon": 133.0505,
           "postcodes": [
             {
               "code": "690-0003",
               "street": "朝日町",
-              "street_en": "Asahi-machi",
-              "pattern": "朝日町n{１,１１５}"
+              "street_ascii": "Asahi-machi",
+              "pattern": "{street}n{１,１１５}"
             },
             {
               "code": "690-0846",
               "street": "末次町",
-              "street_en": "Suetsugu-cho",
-              "pattern": "末次町n{１,８０}"
+              "street_ascii": "Suetsugu-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "690-0842",
               "street": "東本町",
-              "street_en": "Higashi-Honmachi",
-              "pattern": "東本町n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Higashi-Honmachi",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "出雲市",
-          "name_en": "Izumo",
+          "name_ascii": "Izumo",
           "lat": 35.357,
           "lon": 132.7551,
           "postcodes": [
             {
               "code": "693-0001",
               "street": "今市町",
-              "street_en": "Imaichi-cho",
-              "pattern": "今市町n{１,８０}"
+              "street_ascii": "Imaichi-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "693-0023",
               "street": "塩冶有原町",
-              "street_en": "Enya-Arihara-cho",
-              "pattern": "塩冶有原町n{１,８０}"
+              "street_ascii": "Enya-Arihara-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "693-0068",
               "street": "大津町",
-              "street_en": "Otsu-cho",
-              "pattern": "大津町n{１,７０}"
+              "street_ascii": "Otsu-cho",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         }
@@ -3492,92 +3513,92 @@
     },
     {
       "name": "岡山県",
-      "name_en": "Okayama",
+      "name_ascii": "Okayama",
       "region_tags": [
         "Chugoku"
       ],
       "cities": [
         {
           "name": "岡山市",
-          "name_en": "Okayama",
+          "name_ascii": "Okayama",
           "lat": 34.6617,
           "lon": 133.935,
           "postcodes": [
             {
               "code": "700-0024",
               "street": "北区駅前町",
-              "street_en": "Kita-ku Ekimae-cho",
-              "pattern": "北区駅前町n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Kita-ku Ekimae-cho",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "700-0901",
               "street": "北区本町",
-              "street_en": "Kita-ku Honcho",
-              "pattern": "北区本町n{１,８０}"
+              "street_ascii": "Kita-ku Honcho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "700-0826",
               "street": "北区磨屋町",
-              "street_en": "Kita-ku Togiya-cho",
-              "pattern": "北区磨屋町n{１,８０}"
+              "street_ascii": "Kita-ku Togiya-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "702-8006",
               "street": "中区藤崎",
-              "street_en": "Naka-ku Fujisaki",
-              "pattern": "中区藤崎n{１,８０}"
+              "street_ascii": "Naka-ku Fujisaki",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "倉敷市",
-          "name_en": "Kurashiki",
+          "name_ascii": "Kurashiki",
           "lat": 34.585,
           "lon": 133.772,
           "postcodes": [
             {
               "code": "710-0055",
               "street": "阿知",
-              "street_en": "Achi",
-              "pattern": "阿知n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Achi",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "710-0046",
               "street": "中央",
-              "street_en": "Chuo",
-              "pattern": "中央n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Chuo",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "710-0834",
               "street": "笹沖",
-              "street_en": "Sasaoki",
-              "pattern": "笹沖n{１,１９５}"
+              "street_ascii": "Sasaoki",
+              "pattern": "{street}n{１,１９５}"
             }
           ]
         },
         {
           "name": "津山市",
-          "name_en": "Tsuyama",
+          "name_ascii": "Tsuyama",
           "lat": 35.0688,
           "lon": 134.0065,
           "postcodes": [
             {
               "code": "708-0022",
               "street": "山下",
-              "street_en": "Yamashita",
-              "pattern": "山下n{１,８０}"
+              "street_ascii": "Yamashita",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "708-0023",
               "street": "大手町",
-              "street_en": "Otemachi",
-              "pattern": "大手町n{１,８０}"
+              "street_ascii": "Otemachi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "708-0051",
               "street": "椿高下",
-              "street_en": "Tsubaki-Takashita",
-              "pattern": "椿高下n{１,７０}"
+              "street_ascii": "Tsubaki-Takashita",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         }
@@ -3585,124 +3606,124 @@
     },
     {
       "name": "広島県",
-      "name_en": "Hiroshima",
+      "name_ascii": "Hiroshima",
       "region_tags": [
         "Chugoku"
       ],
       "cities": [
         {
           "name": "広島市",
-          "name_en": "Hiroshima",
+          "name_ascii": "Hiroshima",
           "lat": 34.3853,
           "lon": 132.4553,
           "postcodes": [
             {
               "code": "730-0035",
               "street": "中区本通",
-              "street_en": "Naka-ku Hondori",
-              "pattern": "中区本通n{１,８０}"
+              "street_ascii": "Naka-ku Hondori",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "730-0051",
               "street": "中区大手町",
-              "street_en": "Naka-ku Otemachi",
-              "pattern": "中区大手町n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Naka-ku Otemachi",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             },
             {
               "code": "730-0011",
               "street": "中区基町",
-              "street_en": "Naka-ku Motomachi",
-              "pattern": "中区基町n{１,８０}"
+              "street_ascii": "Naka-ku Motomachi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "732-0822",
               "street": "南区松原町",
-              "street_en": "Minami-ku Matsubara-cho",
-              "pattern": "南区松原町n{１,８０}"
+              "street_ascii": "Minami-ku Matsubara-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "733-0011",
               "street": "西区横川町",
-              "street_en": "Nishi-ku Yokogawa-cho",
-              "pattern": "西区横川町n{１,３}丁目n{１,２５}番"
+              "street_ascii": "Nishi-ku Yokogawa-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,２５}{ban}"
             }
           ]
         },
         {
           "name": "福山市",
-          "name_en": "Fukuyama",
+          "name_ascii": "Fukuyama",
           "lat": 34.4861,
           "lon": 133.3625,
           "postcodes": [
             {
               "code": "720-0066",
               "street": "三之丸町",
-              "street_en": "Sannomaru-cho",
-              "pattern": "三之丸町n{１,１１６}"
+              "street_ascii": "Sannomaru-cho",
+              "pattern": "{street}n{１,１１６}"
             },
             {
               "code": "720-0812",
               "street": "霞町",
-              "street_en": "Kasumi-cho",
-              "pattern": "霞町n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Kasumi-cho",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "720-0043",
               "street": "船町",
-              "street_en": "Funa-machi",
-              "pattern": "船町n{１,８０}"
+              "street_ascii": "Funa-machi",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "呉市",
-          "name_en": "Kure",
+          "name_ascii": "Kure",
           "lat": 34.2492,
           "lon": 132.5656,
           "postcodes": [
             {
               "code": "737-0045",
               "street": "本通",
-              "street_en": "Hondori",
-              "pattern": "本通n{１,１９０}丁目n{１,２０}番"
+              "street_ascii": "Hondori",
+              "pattern": "{street}n{１,１９０}{chome}n{１,２０}{ban}"
             },
             {
               "code": "737-0051",
               "street": "中央",
-              "street_en": "Chuo",
-              "pattern": "中央n{１,６}丁目n{１,２０}番"
+              "street_ascii": "Chuo",
+              "pattern": "{street}n{１,６}{chome}n{１,２０}{ban}"
             },
             {
               "code": "737-0046",
               "street": "中通",
-              "street_en": "Nakadori",
-              "pattern": "中通n{１,４}丁目n{１,２０}番"
+              "street_ascii": "Nakadori",
+              "pattern": "{street}n{１,４}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "尾道市",
-          "name_en": "Onomichi",
+          "name_ascii": "Onomichi",
           "lat": 34.4089,
           "lon": 133.205,
           "postcodes": [
             {
               "code": "722-0036",
               "street": "東御所町",
-              "street_en": "Higashi-Gosho-cho",
-              "pattern": "東御所町n{１,１９５}"
+              "street_ascii": "Higashi-Gosho-cho",
+              "pattern": "{street}n{１,１９５}"
             },
             {
               "code": "722-0035",
               "street": "土堂",
-              "street_en": "Tsuchido",
-              "pattern": "土堂n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Tsuchido",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "722-0045",
               "street": "久保",
-              "street_en": "Kubo",
-              "pattern": "久保n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Kubo",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             }
           ]
         }
@@ -3710,86 +3731,86 @@
     },
     {
       "name": "山口県",
-      "name_en": "Yamaguchi",
+      "name_ascii": "Yamaguchi",
       "region_tags": [
         "Chugoku"
       ],
       "cities": [
         {
           "name": "山口市",
-          "name_en": "Yamaguchi",
+          "name_ascii": "Yamaguchi",
           "lat": 34.1785,
           "lon": 131.4745,
           "postcodes": [
             {
               "code": "753-0047",
               "street": "道場門前",
-              "street_en": "Dojomon-zen",
-              "pattern": "道場門前n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Dojomon-zen",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "753-0087",
               "street": "米屋町",
-              "street_en": "Komeya-cho",
-              "pattern": "米屋町n{１,１９６}"
+              "street_ascii": "Komeya-cho",
+              "pattern": "{street}n{１,１９６}"
             },
             {
               "code": "753-0048",
               "street": "駅通り",
-              "street_en": "Eki-dori",
-              "pattern": "駅通りn{１,２}丁目n{１,４０}番"
+              "street_ascii": "Eki-dori",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             }
           ]
         },
         {
           "name": "下関市",
-          "name_en": "Shimonoseki",
+          "name_ascii": "Shimonoseki",
           "lat": 33.9508,
           "lon": 130.9264,
           "postcodes": [
             {
               "code": "750-0018",
               "street": "豊前田町",
-              "street_en": "Buzen-da-cho",
-              "pattern": "豊前田町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Buzen-da-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "750-0006",
               "street": "南部町",
-              "street_en": "Nanbu-cho",
-              "pattern": "南部町n{１,１９３}"
+              "street_ascii": "Nanbu-cho",
+              "pattern": "{street}n{１,１９３}"
             },
             {
               "code": "750-0025",
               "street": "竹崎町",
-              "street_en": "Takezaki-cho",
-              "pattern": "竹崎町n{１,４}丁目n{１,２０}番"
+              "street_ascii": "Takezaki-cho",
+              "pattern": "{street}n{１,４}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "岩国市",
-          "name_en": "Iwakuni",
+          "name_ascii": "Iwakuni",
           "lat": 34.1668,
           "lon": 132.2198,
           "postcodes": [
             {
               "code": "740-0018",
               "street": "麻里布町",
-              "street_en": "Marifu-cho",
-              "pattern": "麻里布町n{１,７}丁目n{１,１５}番"
+              "street_ascii": "Marifu-cho",
+              "pattern": "{street}n{１,７}{chome}n{１,１５}{ban}"
             },
             {
               "code": "740-0022",
               "street": "山手町",
-              "street_en": "Yamate-cho",
-              "pattern": "山手町n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Yamate-cho",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "740-0016",
               "street": "三笠町",
-              "street_en": "Mikasa-cho",
-              "pattern": "三笠町n{１,１８９}"
+              "street_ascii": "Mikasa-cho",
+              "pattern": "{street}n{１,１８９}"
             }
           ]
         }
@@ -3797,60 +3818,60 @@
     },
     {
       "name": "徳島県",
-      "name_en": "Tokushima",
+      "name_ascii": "Tokushima",
       "region_tags": [
         "Shikoku"
       ],
       "cities": [
         {
           "name": "徳島市",
-          "name_en": "Tokushima",
+          "name_ascii": "Tokushima",
           "lat": 34.0658,
           "lon": 134.5593,
           "postcodes": [
             {
               "code": "770-0831",
               "street": "寺島本町西",
-              "street_en": "Terashima-Honcho-Nishi",
-              "pattern": "寺島本町西n{１,１９５}丁目n{１,３０}番"
+              "street_ascii": "Terashima-Honcho-Nishi",
+              "pattern": "{street}n{１,１９５}{chome}n{１,３０}{ban}"
             },
             {
               "code": "770-0841",
               "street": "八百屋町",
-              "street_en": "Yaoya-machi",
-              "pattern": "八百屋町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Yaoya-machi",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "770-0901",
               "street": "西新浜町",
-              "street_en": "Nishi-Shinhama-cho",
-              "pattern": "西新浜町n{１,２}丁目n{１,５０}番"
+              "street_ascii": "Nishi-Shinhama-cho",
+              "pattern": "{street}n{１,２}{chome}n{１,５０}{ban}"
             }
           ]
         },
         {
           "name": "鳴門市",
-          "name_en": "Naruto",
+          "name_ascii": "Naruto",
           "lat": 34.1778,
           "lon": 134.6095,
           "postcodes": [
             {
               "code": "772-0003",
               "street": "撫養町南浜",
-              "street_en": "Muya-cho Minamihama",
-              "pattern": "撫養町南浜n{１,８０}"
+              "street_ascii": "Muya-cho Minamihama",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "772-0002",
               "street": "撫養町斎田",
-              "street_en": "Muya-cho Saida",
-              "pattern": "撫養町斎田n{１,８０}"
+              "street_ascii": "Muya-cho Saida",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "772-0012",
               "street": "撫養町小桑島",
-              "street_en": "Muya-cho Kokuwajima",
-              "pattern": "撫養町小桑島n{１,７０}"
+              "street_ascii": "Muya-cho Kokuwajima",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         }
@@ -3858,66 +3879,66 @@
     },
     {
       "name": "香川県",
-      "name_en": "Kagawa",
+      "name_ascii": "Kagawa",
       "region_tags": [
         "Shikoku"
       ],
       "cities": [
         {
           "name": "高松市",
-          "name_en": "Takamatsu",
+          "name_ascii": "Takamatsu",
           "lat": 34.3401,
           "lon": 134.0434,
           "postcodes": [
             {
               "code": "760-0023",
               "street": "寿町",
-              "street_en": "Kotobuki-cho",
-              "pattern": "寿町n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Kotobuki-cho",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "760-0050",
               "street": "亀井町",
-              "street_en": "Kamei-cho",
-              "pattern": "亀井町n{１,８０}"
+              "street_ascii": "Kamei-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "760-0029",
               "street": "丸亀町",
-              "street_en": "Marugame-machi",
-              "pattern": "丸亀町n{１,８０}"
+              "street_ascii": "Marugame-machi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "761-8071",
               "street": "伏石町",
-              "street_en": "Fushiishi-cho",
-              "pattern": "伏石町n{１,８０}"
+              "street_ascii": "Fushiishi-cho",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "丸亀市",
-          "name_en": "Marugame",
+          "name_ascii": "Marugame",
           "lat": 34.2897,
           "lon": 133.798,
           "postcodes": [
             {
               "code": "763-0022",
               "street": "浜町",
-              "street_en": "Hama-cho",
-              "pattern": "浜町n{１,１２７}"
+              "street_ascii": "Hama-cho",
+              "pattern": "{street}n{１,１２７}"
             },
             {
               "code": "763-0023",
               "street": "塩飽町",
-              "street_en": "Shiwaku-cho",
-              "pattern": "塩飽町n{１,７０}"
+              "street_ascii": "Shiwaku-cho",
+              "pattern": "{street}n{１,７０}"
             },
             {
               "code": "763-0034",
               "street": "大手町",
-              "street_en": "Otemachi",
-              "pattern": "大手町n{１,３}丁目n{１,２５}番"
+              "street_ascii": "Otemachi",
+              "pattern": "{street}n{１,３}{chome}n{１,２５}{ban}"
             }
           ]
         }
@@ -3925,92 +3946,92 @@
     },
     {
       "name": "愛媛県",
-      "name_en": "Ehime",
+      "name_ascii": "Ehime",
       "region_tags": [
         "Shikoku"
       ],
       "cities": [
         {
           "name": "松山市",
-          "name_en": "Matsuyama",
+          "name_ascii": "Matsuyama",
           "lat": 33.8392,
           "lon": 132.7657,
           "postcodes": [
             {
               "code": "790-0004",
               "street": "大街道",
-              "street_en": "Okaido",
-              "pattern": "大街道n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Okaido",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "790-0001",
               "street": "一番町",
-              "street_en": "Ichibancho",
-              "pattern": "一番町n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Ichibancho",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "790-0012",
               "street": "湊町",
-              "street_en": "Minato-machi",
-              "pattern": "湊町n{１,１８９}丁目n{１,１５}番"
+              "street_ascii": "Minato-machi",
+              "pattern": "{street}n{１,１８９}{chome}n{１,１５}{ban}"
             },
             {
               "code": "790-0005",
               "street": "二番町",
-              "street_en": "Nibancho",
-              "pattern": "二番町n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Nibancho",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             }
           ]
         },
         {
           "name": "今治市",
-          "name_en": "Imabari",
+          "name_ascii": "Imabari",
           "lat": 34.0662,
           "lon": 133.0026,
           "postcodes": [
             {
               "code": "794-0015",
               "street": "常盤町",
-              "street_en": "Tokiwa-cho",
-              "pattern": "常盤町n{１,１９３}丁目n{１,１５}番"
+              "street_ascii": "Tokiwa-cho",
+              "pattern": "{street}n{１,１９３}{chome}n{１,１５}{ban}"
             },
             {
               "code": "794-0042",
               "street": "旭町",
-              "street_en": "Asahi-cho",
-              "pattern": "旭町n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Asahi-cho",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "794-0027",
               "street": "南大門町",
-              "street_en": "Minami-Daimon-cho",
-              "pattern": "南大門町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Minami-Daimon-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             }
           ]
         },
         {
           "name": "新居浜市",
-          "name_en": "Niihama",
+          "name_ascii": "Niihama",
           "lat": 33.9603,
           "lon": 133.2835,
           "postcodes": [
             {
               "code": "792-0025",
               "street": "一宮町",
-              "street_en": "Ichinomiya-cho",
-              "pattern": "一宮町n{１,１９４}丁目n{１,３０}番"
+              "street_ascii": "Ichinomiya-cho",
+              "pattern": "{street}n{１,１９４}{chome}n{１,３０}{ban}"
             },
             {
               "code": "792-0812",
               "street": "坂井町",
-              "street_en": "Sakai-cho",
-              "pattern": "坂井町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Sakai-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "792-0003",
               "street": "新田町",
-              "street_en": "Shindencho",
-              "pattern": "新田町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Shindencho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             }
           ]
         }
@@ -4018,60 +4039,60 @@
     },
     {
       "name": "高知県",
-      "name_en": "Kochi",
+      "name_ascii": "Kochi",
       "region_tags": [
         "Shikoku"
       ],
       "cities": [
         {
           "name": "高知市",
-          "name_en": "Kochi",
+          "name_ascii": "Kochi",
           "lat": 33.5597,
           "lon": 133.5311,
           "postcodes": [
             {
               "code": "780-0870",
               "street": "本町",
-              "street_en": "Honcho",
-              "pattern": "本町n{１,１９５}丁目n{１,２５}番"
+              "street_ascii": "Honcho",
+              "pattern": "{street}n{１,１９５}{chome}n{１,２５}{ban}"
             },
             {
               "code": "780-0841",
               "street": "帯屋町",
-              "street_en": "Obiyamachi",
-              "pattern": "帯屋町n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Obiyamachi",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "780-0822",
               "street": "はりまや町",
-              "street_en": "Harimaya-cho",
-              "pattern": "はりまや町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Harimaya-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             }
           ]
         },
         {
           "name": "南国市",
-          "name_en": "Nankoku",
+          "name_ascii": "Nankoku",
           "lat": 33.5756,
           "lon": 133.6391,
           "postcodes": [
             {
               "code": "783-0006",
               "street": "篠原",
-              "street_en": "Shinohara",
-              "pattern": "篠原n{１,８０}"
+              "street_ascii": "Shinohara",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "783-0004",
               "street": "大そね",
-              "street_en": "Osone",
-              "pattern": "大そねn{１,８０}"
+              "street_ascii": "Osone",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "783-0011",
               "street": "後免町",
-              "street_en": "Gomen-cho",
-              "pattern": "後免町n{１,７０}"
+              "street_ascii": "Gomen-cho",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         }
@@ -4079,130 +4100,130 @@
     },
     {
       "name": "福岡県",
-      "name_en": "Fukuoka",
+      "name_ascii": "Fukuoka",
       "region_tags": [
         "Kyushu"
       ],
       "cities": [
         {
           "name": "福岡市",
-          "name_en": "Fukuoka",
+          "name_ascii": "Fukuoka",
           "lat": 33.5904,
           "lon": 130.4017,
           "postcodes": [
             {
               "code": "812-0011",
               "street": "博多区博多駅前",
-              "street_en": "Hakata-ku Hakata-Ekimae",
-              "pattern": "博多区博多駅前n{１,４}丁目n{１,２０}番"
+              "street_ascii": "Hakata-ku Hakata-Ekimae",
+              "pattern": "{street}n{１,４}{chome}n{１,２０}{ban}"
             },
             {
               "code": "810-0001",
               "street": "中央区天神",
-              "street_en": "Chuo-ku Tenjin",
-              "pattern": "中央区天神n{１,５}丁目n{１,２０}番"
+              "street_ascii": "Chuo-ku Tenjin",
+              "pattern": "{street}n{１,５}{chome}n{１,２０}{ban}"
             },
             {
               "code": "810-0041",
               "street": "中央区大名",
-              "street_en": "Chuo-ku Daimyo",
-              "pattern": "中央区大名n{１,２}丁目n{１,３０}番"
+              "street_ascii": "Chuo-ku Daimyo",
+              "pattern": "{street}n{１,２}{chome}n{１,３０}{ban}"
             },
             {
               "code": "812-0013",
               "street": "博多区博多駅東",
-              "street_en": "Hakata-ku Hakata-Ekihigashi",
-              "pattern": "博多区博多駅東n{１,３}丁目n{１,２０}番"
+              "street_ascii": "Hakata-ku Hakata-Ekihigashi",
+              "pattern": "{street}n{１,３}{chome}n{１,２０}{ban}"
             },
             {
               "code": "814-0002",
               "street": "早良区西新",
-              "street_en": "Sawara-ku Nishijin",
-              "pattern": "早良区西新n{１,１８６}丁目n{１,２０}番"
+              "street_ascii": "Sawara-ku Nishijin",
+              "pattern": "{street}n{１,１８６}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "北九州市",
-          "name_en": "Kitakyushu",
+          "name_ascii": "Kitakyushu",
           "lat": 33.8834,
           "lon": 130.8752,
           "postcodes": [
             {
               "code": "802-0006",
               "street": "小倉北区魚町",
-              "street_en": "Kokurakita-ku Uomachi",
-              "pattern": "小倉北区魚町n{１,４}丁目n{１,２０}番"
+              "street_ascii": "Kokurakita-ku Uomachi",
+              "pattern": "{street}n{１,４}{chome}n{１,２０}{ban}"
             },
             {
               "code": "802-0001",
               "street": "小倉北区浅野",
-              "street_en": "Kokurakita-ku Asano",
-              "pattern": "小倉北区浅野n{１,３}丁目n{１,２５}番"
+              "street_ascii": "Kokurakita-ku Asano",
+              "pattern": "{street}n{１,３}{chome}n{１,２５}{ban}"
             },
             {
               "code": "806-0021",
               "street": "八幡西区黒崎",
-              "street_en": "Yahatanishi-ku Kurosaki",
-              "pattern": "八幡西区黒崎n{１,１９１}丁目n{１,２０}番"
+              "street_ascii": "Yahatanishi-ku Kurosaki",
+              "pattern": "{street}n{１,１９１}{chome}n{１,２０}{ban}"
             },
             {
               "code": "803-0811",
               "street": "小倉北区大門",
-              "street_en": "Kokurakita-ku Daimon",
-              "pattern": "小倉北区大門n{１,２}丁目n{１,３０}番"
+              "street_ascii": "Kokurakita-ku Daimon",
+              "pattern": "{street}n{１,２}{chome}n{１,３０}{ban}"
             }
           ]
         },
         {
           "name": "久留米市",
-          "name_en": "Kurume",
+          "name_ascii": "Kurume",
           "lat": 33.3192,
           "lon": 130.5083,
           "postcodes": [
             {
               "code": "830-0032",
               "street": "東町",
-              "street_en": "Higashi-machi",
-              "pattern": "東町n{１,８０}"
+              "street_ascii": "Higashi-machi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "830-0033",
               "street": "天神町",
-              "street_en": "Tenjin-cho",
-              "pattern": "天神町n{１,８０}"
+              "street_ascii": "Tenjin-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "830-0017",
               "street": "日吉町",
-              "street_en": "Hiyoshi-cho",
-              "pattern": "日吉町n{１,８０}"
+              "street_ascii": "Hiyoshi-cho",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "飯塚市",
-          "name_en": "Iizuka",
+          "name_ascii": "Iizuka",
           "lat": 33.646,
           "lon": 130.6912,
           "postcodes": [
             {
               "code": "820-0040",
               "street": "吉原町",
-              "street_en": "Yoshiwara-machi",
-              "pattern": "吉原町n{１,８０}"
+              "street_ascii": "Yoshiwara-machi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "820-0041",
               "street": "菰田",
-              "street_en": "Komoda",
-              "pattern": "菰田n{１,８０}"
+              "street_ascii": "Komoda",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "820-0067",
               "street": "川津",
-              "street_en": "Kawatsu",
-              "pattern": "川津n{１,７０}"
+              "street_ascii": "Kawatsu",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         }
@@ -4210,60 +4231,60 @@
     },
     {
       "name": "佐賀県",
-      "name_en": "Saga",
+      "name_ascii": "Saga",
       "region_tags": [
         "Kyushu"
       ],
       "cities": [
         {
           "name": "佐賀市",
-          "name_en": "Saga",
+          "name_ascii": "Saga",
           "lat": 33.2635,
           "lon": 130.3009,
           "postcodes": [
             {
               "code": "840-0801",
               "street": "駅前中央",
-              "street_en": "Ekimae-Chuo",
-              "pattern": "駅前中央n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Ekimae-Chuo",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "840-0831",
               "street": "松原",
-              "street_en": "Matsubara",
-              "pattern": "松原n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Matsubara",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "840-0054",
               "street": "水ヶ江",
-              "street_en": "Mizugae",
-              "pattern": "水ヶ江n{１,１９３}丁目n{１,２０}番"
+              "street_ascii": "Mizugae",
+              "pattern": "{street}n{１,１９３}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "唐津市",
-          "name_en": "Karatsu",
+          "name_ascii": "Karatsu",
           "lat": 33.4503,
           "lon": 129.9694,
           "postcodes": [
             {
               "code": "847-0012",
               "street": "大名小路",
-              "street_en": "Daimyo-Koji",
-              "pattern": "大名小路n{１,８０}"
+              "street_ascii": "Daimyo-Koji",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "847-0013",
               "street": "南城内",
-              "street_en": "Minami-Jonai",
-              "pattern": "南城内n{１,８０}"
+              "street_ascii": "Minami-Jonai",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "847-0014",
               "street": "西城内",
-              "street_en": "Nishi-Jonai",
-              "pattern": "西城内n{１,７０}"
+              "street_ascii": "Nishi-Jonai",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         }
@@ -4271,66 +4292,66 @@
     },
     {
       "name": "長崎県",
-      "name_en": "Nagasaki",
+      "name_ascii": "Nagasaki",
       "region_tags": [
         "Kyushu"
       ],
       "cities": [
         {
           "name": "長崎市",
-          "name_en": "Nagasaki",
+          "name_ascii": "Nagasaki",
           "lat": 32.7503,
           "lon": 129.8779,
           "postcodes": [
             {
               "code": "850-0853",
               "street": "浜町",
-              "street_en": "Hamamachi",
-              "pattern": "浜町n{１,８０}"
+              "street_ascii": "Hamamachi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "850-0841",
               "street": "銅座町",
-              "street_en": "Doza-machi",
-              "pattern": "銅座町n{１,８０}"
+              "street_ascii": "Doza-machi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "850-0033",
               "street": "万才町",
-              "street_en": "Manzai-machi",
-              "pattern": "万才町n{１,７０}"
+              "street_ascii": "Manzai-machi",
+              "pattern": "{street}n{１,７０}"
             },
             {
               "code": "850-0877",
               "street": "築町",
-              "street_en": "Tsuki-machi",
-              "pattern": "築町n{１,７０}"
+              "street_ascii": "Tsuki-machi",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         },
         {
           "name": "佐世保市",
-          "name_en": "Sasebo",
+          "name_ascii": "Sasebo",
           "lat": 33.1803,
           "lon": 129.7154,
           "postcodes": [
             {
               "code": "857-0871",
               "street": "上京町",
-              "street_en": "Kamikyo-machi",
-              "pattern": "上京町n{１,８０}"
+              "street_ascii": "Kamikyo-machi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "857-0863",
               "street": "三浦町",
-              "street_en": "Miura-cho",
-              "pattern": "三浦町n{１,８０}"
+              "street_ascii": "Miura-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "857-0054",
               "street": "栄町",
-              "street_en": "Sakae-cho",
-              "pattern": "栄町n{１,７０}"
+              "street_ascii": "Sakae-cho",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         }
@@ -4338,66 +4359,66 @@
     },
     {
       "name": "熊本県",
-      "name_en": "Kumamoto",
+      "name_ascii": "Kumamoto",
       "region_tags": [
         "Kyushu"
       ],
       "cities": [
         {
           "name": "熊本市",
-          "name_en": "Kumamoto",
+          "name_ascii": "Kumamoto",
           "lat": 32.8032,
           "lon": 130.7079,
           "postcodes": [
             {
               "code": "860-0845",
               "street": "中央区上通町",
-              "street_en": "Chuo-ku Kamidori-cho",
-              "pattern": "中央区上通町n{１,８０}"
+              "street_ascii": "Chuo-ku Kamidori-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "860-0844",
               "street": "中央区水道町",
-              "street_en": "Chuo-ku Suido-cho",
-              "pattern": "中央区水道町n{１,８０}"
+              "street_ascii": "Chuo-ku Suido-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "860-0803",
               "street": "中央区新市街",
-              "street_en": "Chuo-ku Shinshigai",
-              "pattern": "中央区新市街n{１,８０}"
+              "street_ascii": "Chuo-ku Shinshigai",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "860-0806",
               "street": "中央区花畑町",
-              "street_en": "Chuo-ku Hanabata-cho",
-              "pattern": "中央区花畑町n{１,８０}"
+              "street_ascii": "Chuo-ku Hanabata-cho",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "八代市",
-          "name_en": "Yatsushiro",
+          "name_ascii": "Yatsushiro",
           "lat": 32.5066,
           "lon": 130.6024,
           "postcodes": [
             {
               "code": "866-0862",
               "street": "松江城町",
-              "street_en": "Matsue-jo-machi",
-              "pattern": "松江城町n{１,８０}"
+              "street_ascii": "Matsue-jo-machi",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "866-0863",
               "street": "西松江城町",
-              "street_en": "Nishi-Matsue-jo-machi",
-              "pattern": "西松江城町n{１,７０}"
+              "street_ascii": "Nishi-Matsue-jo-machi",
+              "pattern": "{street}n{１,７０}"
             },
             {
               "code": "866-0852",
               "street": "松江町",
-              "street_en": "Matsue-machi",
-              "pattern": "松江町n{１,７０}"
+              "street_ascii": "Matsue-machi",
+              "pattern": "{street}n{１,７０}"
             }
           ]
         }
@@ -4405,60 +4426,60 @@
     },
     {
       "name": "大分県",
-      "name_en": "Oita",
+      "name_ascii": "Oita",
       "region_tags": [
         "Kyushu"
       ],
       "cities": [
         {
           "name": "大分市",
-          "name_en": "Oita",
+          "name_ascii": "Oita",
           "lat": 33.2382,
           "lon": 131.6126,
           "postcodes": [
             {
               "code": "870-0021",
               "street": "府内町",
-              "street_en": "Funai-cho",
-              "pattern": "府内町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Funai-cho",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "870-0027",
               "street": "末広町",
-              "street_en": "Suehiro-cho",
-              "pattern": "末広町n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Suehiro-cho",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "870-0035",
               "street": "中央町",
-              "street_en": "Chuo-machi",
-              "pattern": "中央町n{１,１９５}丁目n{１,２５}番"
+              "street_ascii": "Chuo-machi",
+              "pattern": "{street}n{１,１９５}{chome}n{１,２５}{ban}"
             }
           ]
         },
         {
           "name": "別府市",
-          "name_en": "Beppu",
+          "name_ascii": "Beppu",
           "lat": 33.2846,
           "lon": 131.5003,
           "postcodes": [
             {
               "code": "874-0920",
               "street": "北浜",
-              "street_en": "Kitahama",
-              "pattern": "北浜n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Kitahama",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "874-0937",
               "street": "秋葉町",
-              "street_en": "Akiba-cho",
-              "pattern": "秋葉町n{１,１１７}"
+              "street_ascii": "Akiba-cho",
+              "pattern": "{street}n{１,１１７}"
             },
             {
               "code": "874-0931",
               "street": "楠町",
-              "street_en": "Kusunoki-cho",
-              "pattern": "楠町n{１,８０}"
+              "street_ascii": "Kusunoki-cho",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         }
@@ -4466,60 +4487,60 @@
     },
     {
       "name": "宮崎県",
-      "name_en": "Miyazaki",
+      "name_ascii": "Miyazaki",
       "region_tags": [
         "Kyushu"
       ],
       "cities": [
         {
           "name": "宮崎市",
-          "name_en": "Miyazaki",
+          "name_ascii": "Miyazaki",
           "lat": 31.9111,
           "lon": 131.4239,
           "postcodes": [
             {
               "code": "880-0001",
               "street": "橘通西",
-              "street_en": "Tachibana-dori-Nishi",
-              "pattern": "橘通西n{１,５}丁目n{１,２５}番"
+              "street_ascii": "Tachibana-dori-Nishi",
+              "pattern": "{street}n{１,５}{chome}n{１,２５}{ban}"
             },
             {
               "code": "880-0805",
               "street": "橘通東",
-              "street_en": "Tachibana-dori-Higashi",
-              "pattern": "橘通東n{１,５}丁目n{１,２５}番"
+              "street_ascii": "Tachibana-dori-Higashi",
+              "pattern": "{street}n{１,５}{chome}n{１,２５}{ban}"
             },
             {
               "code": "880-0811",
               "street": "錦町",
-              "street_en": "Nishiki-cho",
-              "pattern": "錦町n{１,１９０}"
+              "street_ascii": "Nishiki-cho",
+              "pattern": "{street}n{１,１９０}"
             }
           ]
         },
         {
           "name": "延岡市",
-          "name_en": "Nobeoka",
+          "name_ascii": "Nobeoka",
           "lat": 32.5823,
           "lon": 131.6681,
           "postcodes": [
             {
               "code": "882-0053",
               "street": "幸町",
-              "street_en": "Saiwai-cho",
-              "pattern": "幸町n{１,１９４}丁目n{１,３０}番"
+              "street_ascii": "Saiwai-cho",
+              "pattern": "{street}n{１,１９４}{chome}n{１,３０}{ban}"
             },
             {
               "code": "882-0812",
               "street": "中央通",
-              "street_en": "Chuo-dori",
-              "pattern": "中央通n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Chuo-dori",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "882-0823",
               "street": "中町",
-              "street_en": "Naka-machi",
-              "pattern": "中町n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Naka-machi",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             }
           ]
         }
@@ -4527,66 +4548,66 @@
     },
     {
       "name": "鹿児島県",
-      "name_en": "Kagoshima",
+      "name_ascii": "Kagoshima",
       "region_tags": [
         "Kyushu"
       ],
       "cities": [
         {
           "name": "鹿児島市",
-          "name_en": "Kagoshima",
+          "name_ascii": "Kagoshima",
           "lat": 31.5966,
           "lon": 130.5571,
           "postcodes": [
             {
               "code": "892-0842",
               "street": "東千石町",
-              "street_en": "Higashi-Sengoku-cho",
-              "pattern": "東千石町n{１,８０}"
+              "street_ascii": "Higashi-Sengoku-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "892-0847",
               "street": "西千石町",
-              "street_en": "Nishi-Sengoku-cho",
-              "pattern": "西千石町n{１,８０}"
+              "street_ascii": "Nishi-Sengoku-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "892-0844",
               "street": "山之口町",
-              "street_en": "Yamanokuchi-cho",
-              "pattern": "山之口町n{１,８０}"
+              "street_ascii": "Yamanokuchi-cho",
+              "pattern": "{street}n{１,８０}"
             },
             {
               "code": "890-0053",
               "street": "中央町",
-              "street_en": "Chuo-cho",
-              "pattern": "中央町n{１,８０}"
+              "street_ascii": "Chuo-cho",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         },
         {
           "name": "霧島市",
-          "name_en": "Kirishima",
+          "name_ascii": "Kirishima",
           "lat": 31.7413,
           "lon": 130.763,
           "postcodes": [
             {
               "code": "899-4332",
               "street": "国分中央",
-              "street_en": "Kokubu-Chuo",
-              "pattern": "国分中央n{１,６}丁目n{１,２０}番"
+              "street_ascii": "Kokubu-Chuo",
+              "pattern": "{street}n{１,６}{chome}n{１,２０}{ban}"
             },
             {
               "code": "899-4301",
               "street": "国分上之段",
-              "street_en": "Kokubu-Uenodan",
-              "pattern": "国分上之段n{１,１１４}"
+              "street_ascii": "Kokubu-Uenodan",
+              "pattern": "{street}n{１,１１４}"
             },
             {
               "code": "899-4341",
               "street": "国分野口",
-              "street_en": "Kokubu-Noguchi",
-              "pattern": "国分野口n{１,８０}"
+              "street_ascii": "Kokubu-Noguchi",
+              "pattern": "{street}n{１,８０}"
             }
           ]
         }
@@ -4594,7 +4615,7 @@
     },
     {
       "name": "沖縄県",
-      "name_en": "Okinawa",
+      "name_ascii": "Okinawa",
       "region_tags": [
         "Kyushu",
         "Okinawa"
@@ -4602,85 +4623,85 @@
       "cities": [
         {
           "name": "那覇市",
-          "name_en": "Naha",
+          "name_ascii": "Naha",
           "lat": 26.3344,
           "lon": 127.6809,
           "postcodes": [
             {
               "code": "900-0013",
               "street": "牧志",
-              "street_en": "Makishi",
-              "pattern": "牧志n{１,１９３}丁目n{１,３０}番"
+              "street_ascii": "Makishi",
+              "pattern": "{street}n{１,１９３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "900-0015",
               "street": "久茂地",
-              "street_en": "Kumoji",
-              "pattern": "久茂地n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Kumoji",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "900-0014",
               "street": "松尾",
-              "street_en": "Matsuo",
-              "pattern": "松尾n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Matsuo",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "900-0032",
               "street": "松山",
-              "street_en": "Matsuyama",
-              "pattern": "松山n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Matsuyama",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             }
           ]
         },
         {
           "name": "沖縄市",
-          "name_en": "Okinawa City",
+          "name_ascii": "Okinawa City",
           "lat": 26.3342,
           "lon": 127.8056,
           "postcodes": [
             {
               "code": "904-0004",
               "street": "中央",
-              "street_en": "Chuo",
-              "pattern": "中央n{１,４}丁目n{１,２５}番"
+              "street_ascii": "Chuo",
+              "pattern": "{street}n{１,４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "904-0003",
               "street": "住吉",
-              "street_en": "Sumiyoshi",
-              "pattern": "住吉n{１,２}丁目n{１,４０}番"
+              "street_ascii": "Sumiyoshi",
+              "pattern": "{street}n{１,２}{chome}n{１,４０}{ban}"
             },
             {
               "code": "904-0021",
               "street": "胡屋",
-              "street_en": "Goya",
-              "pattern": "胡屋n{１,１９４}丁目n{１,２０}番"
+              "street_ascii": "Goya",
+              "pattern": "{street}n{１,１９４}{chome}n{１,２０}{ban}"
             }
           ]
         },
         {
           "name": "宜野湾市",
-          "name_en": "Ginowan",
+          "name_ascii": "Ginowan",
           "lat": 26.2816,
           "lon": 127.7785,
           "postcodes": [
             {
               "code": "901-2221",
               "street": "伊佐",
-              "street_en": "Isa",
-              "pattern": "伊佐n{１,１９４}丁目n{１,２５}番"
+              "street_ascii": "Isa",
+              "pattern": "{street}n{１,１９４}{chome}n{１,２５}{ban}"
             },
             {
               "code": "901-2224",
               "street": "真志喜",
-              "street_en": "Mashiki",
-              "pattern": "真志喜n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Mashiki",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             },
             {
               "code": "901-2211",
               "street": "宜野湾",
-              "street_en": "Ginowan",
-              "pattern": "宜野湾n{１,３}丁目n{１,３０}番"
+              "street_ascii": "Ginowan",
+              "pattern": "{street}n{１,３}{chome}n{１,３０}{ban}"
             }
           ]
         }

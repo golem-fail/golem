@@ -2688,11 +2688,12 @@ async fn run_flow_on_device(
         vars.push_scope(cli_scope);
     }
 
-    // Create seeded RNG: --seed for deterministic, random otherwise.
-    // Always capture the actual seed for reproducibility in reports.
-    use rand::SeedableRng;
-    let actual_seed: u64 = seed.unwrap_or_else(rand::random);
-    let rng = rand_chacha::ChaCha8Rng::seed_from_u64(actual_seed);
+    // Create seeded RNG: `--seed` for deterministic replay, else a freshly
+    // packed seed whose high bits encode the current time bucket (so time-based
+    // generators track real "now") and whose low bits are random. Always
+    // capture the actual seed for reproducibility in reports.
+    let rng = golem_vars::seed::FakeRng::from_optional_seed(seed);
+    let actual_seed: u64 = rng.seed();
 
     // Recording resolution is layered:
     //   * `cli_force_record` is a per-block override (forces effective

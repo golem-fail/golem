@@ -10,16 +10,14 @@ use golem_runner::data_driven::{apply_data_vars, expand_data_rows, get_runs};
 use golem_runner::fixture_loader::load_fixture_into_store;
 use golem_runner::subflow::{extract_subflow_config, prepare_child_vars, propagate_results};
 use golem_vars::{Scope, ScopeLevel, VarValue, VariableStore};
-use rand::SeedableRng;
-use rand_chacha::ChaCha8Rng;
 use tempfile::TempDir;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn seeded_rng() -> ChaCha8Rng {
-    ChaCha8Rng::seed_from_u64(42)
+fn seeded_rng() -> golem_vars::seed::FakeRng {
+    golem_vars::seed::FakeRng::from_seed(42)
 }
 
 fn make_parent_store() -> VariableStore {
@@ -300,7 +298,7 @@ fn fixture_with_generators_evaluates_fake_values() {
     write_fixture(
         dir,
         "gen_user",
-        "[vars]\nemail = \"${fake:email}\"\nfirst = \"${fake:city}\"\n",
+        "[vars]\nemail = \"${fake:email}\"\nfirst = \"${fake:address.city}\"\n",
     );
 
     let mut store = VariableStore::new();

@@ -1,0 +1,33 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {object}.",
+    "{noun} {verb_intrans} y {verb_intrans}.",
+    "{noun} {verb_trans} {object} y {object}."
+  ],
+  "slots": {
+    "noun": [
+      "el gólem", "la arcilla", "el barro", "el ladrillo", "la piedra",
+      "la estatua", "el guardián", "el rabino", "la greda", "la cueva",
+      "la sombra", "el coloso", "el polvo", "el tótem", "el ídolo",
+      "la montaña", "el río", "el bosque", "el cielo", "el camino",
+      "el castillo", "el hierro", "la arena", "la torre", "el muro",
+      "la puerta", "la llama", "la roca", "el gigante", "la ceniza"
+    ],
+    "object": [
+      "la arcilla", "el barro", "el ladrillo", "la piedra", "la estatua",
+      "la greda", "la cueva", "la sombra", "el polvo", "la montaña",
+      "el río", "el bosque", "el cielo", "el camino", "el castillo",
+      "el hierro", "la arena", "la torre", "el muro", "la puerta",
+      "la llama", "la roca", "la ceniza"
+    ],
+    "verb_intrans": [
+      "despierta", "se derrumba", "duerme", "se alza", "vaga", "vacila",
+      "tiembla", "se hunde", "gira", "crece"
+    ],
+    "verb_trans": [
+      "guarda", "aplasta", "carga", "protege", "moldea", "levanta", "rompe",
+      "agarra", "arrastra", "cubre"
+    ]
+  }
+}

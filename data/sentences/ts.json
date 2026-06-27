@@ -1,0 +1,42 @@
+{
+  "patterns": [
+    "Ku na {noun}.",
+    "Ku na {noun} na {noun}.",
+    "Ku na {noun}, ku na {noun}.",
+    "Ku na {noun} na {noun} na {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "ribye",
+      "vumba",
+      "xitina",
+      "switina",
+      "xifaniso",
+      "ntshava",
+      "nambu",
+      "nhova",
+      "tilo",
+      "gondzo",
+      "nsimbi",
+      "sava",
+      "khumbi",
+      "ndzilo",
+      "misava",
+      "murhi",
+      "nsinya",
+      "ndhawu",
+      "homu",
+      "mati",
+      "moya",
+      "vusiku",
+      "dyambu",
+      "n'walungu",
+      "masimu",
+      "xiharhi",
+      "huvo",
+      "tiko",
+      "rhambu",
+      "khombo"
+    ]
+  }
+}

@@ -4,8 +4,8 @@ mod person;
 mod repertoire;
 
 use anyhow::Result;
-use rand::Rng;
 
+use crate::seed::FakeRng;
 use crate::{GeneratorDef, VarValue};
 
 // ---------------------------------------------------------------------------
@@ -15,7 +15,7 @@ use crate::{GeneratorDef, VarValue};
 /// Generate a structured (Object) value from a generator definition.
 ///
 /// Supported generators: `person`, `address`, `credit_card`.
-pub fn generate_structured(def: &GeneratorDef, rng: &mut impl Rng) -> Result<VarValue> {
+pub fn generate_structured(def: &GeneratorDef, rng: &mut FakeRng) -> Result<VarValue> {
     match def.name.as_str() {
         "person" => person::generate_person(&def.params, rng),
         "address" => address::generate_address(&def.params, rng),
@@ -34,18 +34,17 @@ pub fn generate_structured(def: &GeneratorDef, rng: &mut impl Rng) -> Result<Var
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha8Rng;
     use std::collections::HashMap;
 
-    fn seeded_rng() -> ChaCha8Rng {
-        ChaCha8Rng::seed_from_u64(42)
+    fn seeded_rng() -> FakeRng {
+        FakeRng::from_seed(42)
     }
 
     fn def(name: &str) -> GeneratorDef {
         GeneratorDef {
             name: name.to_string(),
             params: HashMap::new(),
+            positional: Vec::new(),
         }
     }
 

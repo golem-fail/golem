@@ -1,7 +1,7 @@
 {
   "country": {
     "name": "ประเทศไทย",
-    "name_en": "Thailand",
+    "name_ascii": "Prathet Thai",
     "iso_code": "TH",
     "phone_prefix": "+66",
     "phone_formats": [
@@ -11,46 +11,54 @@
       "+66-9#-###-####"
     ],
     "postcode_format": "#####",
-    "name_order": "given_first",
-    "person": { "name": ["local", "ascii"], "reading": [], "local": ["thai"] }
+    "person": {
+      "name": [
+        "local",
+        "ascii"
+      ],
+      "reading": [],
+      "local": [
+        "thai"
+      ]
+    }
   },
   "states": [
     {
       "name": "ภูเก็ต",
-      "name_en": "Phuket",
+      "name_ascii": "Phuket",
       "region_tags": [
         "Southern Thailand"
       ],
       "cities": [
         {
           "name": "ภูเก็ต",
-          "name_en": "Phuket",
+          "name_ascii": "Phuket",
           "lat": 7.8906,
           "lon": 98.3981,
           "postcodes": [
             {
               "code": "83000",
               "street": "ถนนเทพกระษัตรี",
-              "street_en": "Thep Krasattri Road",
-              "pattern": "n{1,180} ถนนเทพกระษัตรี"
+              "street_ascii": "Thep Krasattri Road",
+              "pattern": "n{1,180} {street}"
             },
             {
               "code": "83000",
               "street": "ถนนถลาง",
-              "street_en": "Thalang Road",
-              "pattern": "n{1,80} ถนนถลาง"
+              "street_ascii": "Thalang Road",
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "83000",
               "street": "ถนนภูเก็ต",
-              "street_en": "Phuket Road",
-              "pattern": "n{1,90} ถนนภูเก็ต"
+              "street_ascii": "Phuket Road",
+              "pattern": "n{1,90} {street}"
             },
             {
               "code": "83150",
               "street": "ถนนป่าตอง",
-              "street_en": "Patong Road",
-              "pattern": "n{1,100} ถนนป่าตอง"
+              "street_ascii": "Patong Road",
+              "pattern": "n{1,100} {street}"
             }
           ]
         }
@@ -58,34 +66,34 @@
     },
     {
       "name": "จังหวัดประจวบคีรีขันธ์",
-      "name_en": "Prachuap Khiri Khan",
+      "name_ascii": "Prachuap Khiri Khan",
       "region_tags": [
         "Western Thailand"
       ],
       "cities": [
         {
           "name": "หัวหิน",
-          "name_en": "Hua Hin",
+          "name_ascii": "Hua Hin",
           "lat": 12.5707,
           "lon": 99.9588,
           "postcodes": [
             {
               "code": "77110",
               "street": "ถนนเพชรเกษม",
-              "street_en": "Phetkasem Road",
-              "pattern": "n{1,200} ถนนเพชรเกษม"
+              "street_ascii": "Phetkasem Road",
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "77110",
               "street": "ถนนนเรศดำริห์",
-              "street_en": "Naret Damri Road",
-              "pattern": "n{1,80} ถนนนเรศดำริห์"
+              "street_ascii": "Naret Damri Road",
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "77110",
               "street": "ถนนแนบเคหาสน์",
-              "street_en": "Naep Kehat Road",
-              "pattern": "n{1,70} ถนนแนบเคหาสน์"
+              "street_ascii": "Naep Kehat Road",
+              "pattern": "n{1,70} {street}"
             }
           ]
         }
@@ -93,40 +101,40 @@
     },
     {
       "name": "จังหวัดเพชรบุรี",
-      "name_en": "Phetchaburi",
+      "name_ascii": "Phetchaburi",
       "region_tags": [
         "Western Thailand"
       ],
       "cities": [
         {
           "name": "ชะอำ",
-          "name_en": "Cha-am",
+          "name_ascii": "Cha-am",
           "lat": 12.8,
           "lon": 99.9667,
           "postcodes": [
             {
               "code": "76120",
               "street": "ถนนเพชรเกษม",
-              "street_en": "Phetkasem Road",
-              "pattern": "n{1,120} ถนนเพชรเกษม"
+              "street_ascii": "Phetkasem Road",
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "77110",
               "street": "ซอยชะอำเหนือ 7",
-              "street_en": "Soi Cha-am North 7",
-              "pattern": "n{1,98} ซอยชะอำเหนือ 7"
+              "street_ascii": "Soi Cha-am North 7",
+              "pattern": "n{1,98} {street}"
             },
             {
               "code": "76150",
               "street": "ถนนนราธิป",
-              "street_en": "Narathip Road",
-              "pattern": "n{1,96} ถนนนราธิป"
+              "street_ascii": "Narathip Road",
+              "pattern": "n{1,96} {street}"
             },
             {
               "code": "76000",
               "street": "ซอยโรงกุ้ง",
-              "street_en": "Soi Rong Gung",
-              "pattern": "n{1,182} ซอยโรงกุ้ง"
+              "street_ascii": "Soi Rong Gung",
+              "pattern": "n{1,182} {street}"
             }
           ]
         }
@@ -134,34 +142,34 @@
     },
     {
       "name": "จังหวัดตรัง",
-      "name_en": "Trang",
+      "name_ascii": "Trang",
       "region_tags": [
         "Southern Thailand"
       ],
       "cities": [
         {
           "name": "ตรัง",
-          "name_en": "Trang",
+          "name_ascii": "Trang",
           "lat": 7.5563,
           "lon": 99.6114,
           "postcodes": [
             {
               "code": "92000",
               "street": "ถนนพระราม 6",
-              "street_en": "Rama VI Road",
-              "pattern": "n{1,120} ถนนพระราม 6"
+              "street_ascii": "Rama VI Road",
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "92000",
               "street": "ถนนวิเศษกุล",
-              "street_en": "Wiset Kun Road",
-              "pattern": "n{1,80} ถนนวิเศษกุล"
+              "street_ascii": "Wiset Kun Road",
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "92000",
               "street": "ถนนห้วยยอด",
-              "street_en": "Huai Yot Road",
-              "pattern": "n{1,90} ถนนห้วยยอด"
+              "street_ascii": "Huai Yot Road",
+              "pattern": "n{1,90} {street}"
             }
           ]
         }
@@ -169,34 +177,34 @@
     },
     {
       "name": "จังหวัดนครศรีธรรมราช",
-      "name_en": "Nakhon Si Thammarat",
+      "name_ascii": "Nakhon Si Thammarat",
       "region_tags": [
         "Southern Thailand"
       ],
       "cities": [
         {
           "name": "นครศรีธรรมราช",
-          "name_en": "Nakhon Si Thammarat",
+          "name_ascii": "Nakhon Si Thammarat",
           "lat": 8.4333,
           "lon": 99.9667,
           "postcodes": [
             {
               "code": "80000",
               "street": "ถนนราชดำเนิน",
-              "street_en": "Ratchadamnoen Road",
-              "pattern": "n{1,200} ถนนราชดำเนิน"
+              "street_ascii": "Ratchadamnoen Road",
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "80000",
               "street": "ถนนพัฒนาการคูขวาง",
-              "street_en": "Phatthanakan Khu Khwang Road",
-              "pattern": "n{1,100} ถนนพัฒนาการคูขวาง"
+              "street_ascii": "Phatthanakan Khu Khwang Road",
+              "pattern": "n{1,100} {street}"
             },
             {
               "code": "80000",
               "street": "ถนนศรีธรรมราช",
-              "street_en": "Si Thammarat Road",
-              "pattern": "n{1,80} ถนนศรีธรรมราช"
+              "street_ascii": "Si Thammarat Road",
+              "pattern": "n{1,80} {street}"
             }
           ]
         }
@@ -204,34 +212,34 @@
     },
     {
       "name": "จังหวัดลำปาง",
-      "name_en": "Lampang",
+      "name_ascii": "Lampang",
       "region_tags": [
         "Northern Thailand"
       ],
       "cities": [
         {
           "name": "ลำปาง",
-          "name_en": "Lampang",
+          "name_ascii": "Lampang",
           "lat": 18.2923,
           "lon": 99.4928,
           "postcodes": [
             {
               "code": "52000",
               "street": "ถนนบุญวาทย์",
-              "street_en": "Bun Wat Road",
-              "pattern": "n{1,100} ถนนบุญวาทย์"
+              "street_ascii": "Bun Wat Road",
+              "pattern": "n{1,100} {street}"
             },
             {
               "code": "52000",
               "street": "ถนนฉัตรไชย",
-              "street_en": "Chatchai Road",
-              "pattern": "n{1,80} ถนนฉัตรไชย"
+              "street_ascii": "Chatchai Road",
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "52100",
               "street": "ถนนพหลโยธิน",
-              "street_en": "Phahonyothin Road",
-              "pattern": "n{1,150} ถนนพหลโยธิน"
+              "street_ascii": "Phahonyothin Road",
+              "pattern": "n{1,150} {street}"
             }
           ]
         }
@@ -239,40 +247,40 @@
     },
     {
       "name": "จังหวัดอุทัยธานี",
-      "name_en": "Uthai Thani",
+      "name_ascii": "Uthai Thani",
       "region_tags": [
         "Northern Thailand"
       ],
       "cities": [
         {
           "name": "อุทัยธานี",
-          "name_en": "Uthai Thani",
+          "name_ascii": "Uthai Thani",
           "lat": 15.3794,
           "lon": 100.0245,
           "postcodes": [
             {
               "code": "61000",
               "street": "ถนนศรีอุทัย",
-              "street_en": "Si Uthai Road",
-              "pattern": "n{1,92} ถนนศรีอุทัย"
+              "street_ascii": "Si Uthai Road",
+              "pattern": "n{1,92} {street}"
             },
             {
               "code": "17110",
               "street": "ถนนวงศาโรจน์",
-              "street_en": "Wongsarot Road",
-              "pattern": "n{1,143} ถนนวงศาโรจน์"
+              "street_ascii": "Wongsarot Road",
+              "pattern": "n{1,143} {street}"
             },
             {
               "code": "61130",
               "street": "ถนนท่าช้าง",
-              "street_en": "Tha Chang Road",
-              "pattern": "n{1,106} ถนนท่าช้าง"
+              "street_ascii": "Tha Chang Road",
+              "pattern": "n{1,106} {street}"
             },
             {
               "code": "17120",
               "street": "ซอยศรีอุทัย 1",
-              "street_en": "Si Uthai 1 Road",
-              "pattern": "n{1,64} ซอยศรีอุทัย 1"
+              "street_ascii": "Si Uthai 1 Road",
+              "pattern": "n{1,64} {street}"
             }
           ]
         }
@@ -280,34 +288,34 @@
     },
     {
       "name": "จังหวัดกาญจนบุรี",
-      "name_en": "Kanchanaburi",
+      "name_ascii": "Kanchanaburi",
       "region_tags": [
         "Western Thailand"
       ],
       "cities": [
         {
           "name": "กาญจนบุรี",
-          "name_en": "Kanchanaburi",
+          "name_ascii": "Kanchanaburi",
           "lat": 14.0041,
           "lon": 99.5483,
           "postcodes": [
             {
               "code": "71000",
               "street": "ถนนแสงชูโต",
-              "street_en": "Saengchuto Road",
-              "pattern": "n{1,200} ถนนแสงชูโต"
+              "street_ascii": "Saengchuto Road",
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "71000",
               "street": "ถนนแม่น้ำแคว",
-              "street_en": "Mae Nam Khwae Road",
-              "pattern": "n{1,80} ถนนแม่น้ำแคว"
+              "street_ascii": "Mae Nam Khwae Road",
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "71000",
               "street": "ถนนปากแพรก",
-              "street_en": "Pak Phraek Road",
-              "pattern": "n{1,70} ถนนปากแพรก"
+              "street_ascii": "Pak Phraek Road",
+              "pattern": "n{1,70} {street}"
             }
           ]
         }
@@ -315,34 +323,34 @@
     },
     {
       "name": "จังหวัดตาก",
-      "name_en": "Tak",
+      "name_ascii": "Tak",
       "region_tags": [
         "Northern Thailand"
       ],
       "cities": [
         {
           "name": "แม่สอด",
-          "name_en": "Mae Sot",
+          "name_ascii": "Mae Sot",
           "lat": 16.7167,
           "lon": 98.5667,
           "postcodes": [
             {
               "code": "63110",
               "street": "ถนนศรีพานิช",
-              "street_en": "Si Phanit Road",
-              "pattern": "n{1,85} ถนนศรีพานิช"
+              "street_ascii": "Si Phanit Road",
+              "pattern": "n{1,85} {street}"
             },
             {
               "code": "63160",
               "street": "ถนนวัดป่า",
-              "street_en": "Wat Pa Road",
-              "pattern": "n{1,122} ถนนวัดป่า"
+              "street_ascii": "Wat Pa Road",
+              "pattern": "n{1,122} {street}"
             },
             {
               "code": "63140",
               "street": "ถนนอินทรคีรี",
-              "street_en": "Intharakhiri Road",
-              "pattern": "n{1,94} ถนนอินทรคีรี"
+              "street_ascii": "Intharakhiri Road",
+              "pattern": "n{1,94} {street}"
             }
           ]
         }
@@ -350,34 +358,34 @@
     },
     {
       "name": "จังหวัดสุราษฎร์ธานี",
-      "name_en": "Surat Thani",
+      "name_ascii": "Surat Thani",
       "region_tags": [
         "Southern Thailand"
       ],
       "cities": [
         {
           "name": "สุราษฎร์ธานี",
-          "name_en": "Surat Thani",
+          "name_ascii": "Surat Thani",
           "lat": 9.1401,
           "lon": 99.3331,
           "postcodes": [
             {
               "code": "84000",
               "street": "ถนนตลาดใหม่",
-              "street_en": "Talat Mai Road",
-              "pattern": "n{1,120} ถนนตลาดใหม่"
+              "street_ascii": "Talat Mai Road",
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "84000",
               "street": "ถนนดอนนก",
-              "street_en": "Don Nok Road",
-              "pattern": "n{1,90} ถนนดอนนก"
+              "street_ascii": "Don Nok Road",
+              "pattern": "n{1,90} {street}"
             },
             {
               "code": "84000",
               "street": "ถนนศรีวิชัย",
-              "street_en": "Si Wichai Road",
-              "pattern": "n{1,100} ถนนศรีวิชัย"
+              "street_ascii": "Si Wichai Road",
+              "pattern": "n{1,100} {street}"
             }
           ]
         }
@@ -385,40 +393,40 @@
     },
     {
       "name": "จังหวัดสุโขทัย",
-      "name_en": "Sukhothai",
+      "name_ascii": "Sukhothai",
       "region_tags": [
         "Northern Thailand"
       ],
       "cities": [
         {
           "name": "บ้านนา",
-          "name_en": "Ban Na",
+          "name_ascii": "Ban Na",
           "lat": 17.0172,
           "lon": 99.7328,
           "postcodes": [
             {
               "code": "64140",
               "street": "ถนนจรดวิถีถ่อง",
-              "street_en": "Charot Withi Thong Road",
-              "pattern": "n{1,94} ถนนจรดวิถีถ่อง"
+              "street_ascii": "Charot Withi Thong Road",
+              "pattern": "n{1,94} {street}"
             },
             {
               "code": "64000",
               "street": "ถนนจรดวิถีถ่อง",
-              "street_en": "Charot Withi Thong Road",
-              "pattern": "n{1,94} ถนนจรดวิถีถ่อง"
+              "street_ascii": "Charot Withi Thong Road",
+              "pattern": "n{1,94} {street}"
             },
             {
               "code": "64120",
               "street": "ถนนจรดวิถีถ่อง",
-              "street_en": "Charot Withi Thong Road",
-              "pattern": "n{1,94} ถนนจรดวิถีถ่อง"
+              "street_ascii": "Charot Withi Thong Road",
+              "pattern": "n{1,94} {street}"
             },
             {
               "code": "64160",
               "street": "ถนนจรดวิถีถ่อง",
-              "street_en": "Charot Withi Thong Road",
-              "pattern": "n{1,94} ถนนจรดวิถีถ่อง"
+              "street_ascii": "Charot Withi Thong Road",
+              "pattern": "n{1,94} {street}"
             }
           ]
         }
@@ -426,40 +434,40 @@
     },
     {
       "name": "จังหวัดเชียงใหม่",
-      "name_en": "Chiang Mai",
+      "name_ascii": "Chiang Mai",
       "region_tags": [
         "Northern Thailand"
       ],
       "cities": [
         {
           "name": "เชียงใหม่",
-          "name_en": "Chiang Mai",
+          "name_ascii": "Chiang Mai",
           "lat": 18.7904,
           "lon": 98.9847,
           "postcodes": [
             {
               "code": "50000",
               "street": "ถนนท่าแพ",
-              "street_en": "Tha Phae Road",
-              "pattern": "n{1,120} ถนนท่าแพ"
+              "street_ascii": "Tha Phae Road",
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "50100",
               "street": "ถนนห้วยแก้ว",
-              "street_en": "Huay Kaew Road",
-              "pattern": "n{1,100} ถนนห้วยแก้ว"
+              "street_ascii": "Huay Kaew Road",
+              "pattern": "n{1,100} {street}"
             },
             {
               "code": "50200",
               "street": "ถนนนิมมานเหมินท์",
-              "street_en": "Nimmanhaemin Road",
-              "pattern": "n{1,80} ถนนนิมมานเหมินท์"
+              "street_ascii": "Nimmanhaemin Road",
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "50300",
               "street": "ถนนสุเทพ",
-              "street_en": "Suthep Road",
-              "pattern": "n{1,100} ถนนสุเทพ"
+              "street_ascii": "Suthep Road",
+              "pattern": "n{1,100} {street}"
             }
           ]
         }
@@ -467,40 +475,40 @@
     },
     {
       "name": "จังหวัดราชบุรี",
-      "name_en": "Ratchaburi",
+      "name_ascii": "Ratchaburi",
       "region_tags": [
         "Western Thailand"
       ],
       "cities": [
         {
           "name": "บ้านอีจาง",
-          "name_en": "Ban I Chang",
+          "name_ascii": "Ban I Chang",
           "lat": 13.7106,
           "lon": 99.8962,
           "postcodes": [
             {
               "code": "70160",
               "street": "ถนนชูศักดิ์",
-              "street_en": "Chusak Road",
-              "pattern": "n{1,99} ถนนชูศักดิ์"
+              "street_ascii": "Chusak Road",
+              "pattern": "n{1,99} {street}"
             },
             {
               "code": "70120",
-              "street": "ถนนสมุทรสงคราม–บางแพ",
-              "street_en": "thnnsmuthrsngkhraam-baangaeph",
-              "pattern": "n{1,163} ถนนสมุทรสงคราม–บางแพ"
+              "street": "ถนนสมุทรสงคราม-บางแพ",
+              "street_ascii": "Samut Songkhram-Bang Phae Road",
+              "pattern": "n{1,163} {street}"
             },
             {
               "code": "70110",
               "street": "ถนนชูศักดิ์",
-              "street_en": "Chusak Road",
-              "pattern": "n{1,99} ถนนชูศักดิ์"
+              "street_ascii": "Chusak Road",
+              "pattern": "n{1,99} {street}"
             },
             {
               "code": "70000",
-              "street": "ถนนสมุทรสงคราม–บางแพ",
-              "street_en": "thnnsmuthrsngkhraam-baangaeph",
-              "pattern": "n{1,163} ถนนสมุทรสงคราม–บางแพ"
+              "street": "ถนนสมุทรสงคราม-บางแพ",
+              "street_ascii": "Samut Songkhram-Bang Phae Road",
+              "pattern": "n{1,163} {street}"
             }
           ]
         }
@@ -508,40 +516,40 @@
     },
     {
       "name": "จังหวัดระนอง",
-      "name_en": "Ranong",
+      "name_ascii": "Ranong",
       "region_tags": [
         "Southern Thailand"
       ],
       "cities": [
         {
           "name": "ระนอง",
-          "name_en": "Ranong",
+          "name_ascii": "Ranong",
           "lat": 9.9658,
           "lon": 98.6348,
           "postcodes": [
             {
               "code": "85000",
               "street": "ถนนเพิ่มผล",
-              "street_en": "Phoem Phon Road",
-              "pattern": "n{1,187} ถนนเพิ่มผล"
+              "street_ascii": "Phoem Phon Road",
+              "pattern": "n{1,187} {street}"
             },
             {
               "code": "85130",
               "street": "ถนนชลระอุ",
-              "street_en": "Chon Ra-u Road",
-              "pattern": "n{1,76} ถนนชลระอุ"
+              "street_ascii": "Chon Ra-u Road",
+              "pattern": "n{1,76} {street}"
             },
             {
               "code": "86180",
               "street": "ถนนท่าเมือง",
-              "street_en": "Tha Mueang Road",
-              "pattern": "n{1,148} ถนนท่าเมือง"
+              "street_ascii": "Tha Mueang Road",
+              "pattern": "n{1,148} {street}"
             },
             {
               "code": "85120",
               "street": "ซอยมิตรภาพ 3",
-              "street_en": "Soi Mittraphap 3",
-              "pattern": "n{1,187} ซอยมิตรภาพ 3"
+              "street_ascii": "Soi Mittraphap 3",
+              "pattern": "n{1,187} {street}"
             }
           ]
         }
@@ -549,40 +557,40 @@
     },
     {
       "name": "จังหวัดพะเยา",
-      "name_en": "Phayao",
+      "name_ascii": "Phayao",
       "region_tags": [
         "Northern Thailand"
       ],
       "cities": [
         {
           "name": "ดอกคำใต้",
-          "name_en": "Dok Kham Tai",
+          "name_ascii": "Dok Kham Tai",
           "lat": 19.1624,
           "lon": 99.9934,
           "postcodes": [
             {
               "code": "56000",
               "street": "ถนนพิศาล",
-              "street_en": "thnnphisaal",
-              "pattern": "n{1,92} ถนนพิศาล"
+              "street_ascii": "Phisan Road",
+              "pattern": "n{1,92} {street}"
             },
             {
               "code": "56150",
               "street": "ถนนพิศาล",
-              "street_en": "thnnphisaal",
-              "pattern": "n{1,92} ถนนพิศาล"
+              "street_ascii": "Phisan Road",
+              "pattern": "n{1,92} {street}"
             },
             {
               "code": "56140",
               "street": "ถนนพิศาล",
-              "street_en": "thnnphisaal",
-              "pattern": "n{1,92} ถนนพิศาล"
+              "street_ascii": "Phisan Road",
+              "pattern": "n{1,92} {street}"
             },
             {
               "code": "56120",
               "street": "ถนนพิศาล",
-              "street_en": "thnnphisaal",
-              "pattern": "n{1,92} ถนนพิศาล"
+              "street_ascii": "Phisan Road",
+              "pattern": "n{1,92} {street}"
             }
           ]
         }
@@ -590,40 +598,40 @@
     },
     {
       "name": "จังหวัดลำพูน",
-      "name_en": "Lamphun",
+      "name_ascii": "Lamphun",
       "region_tags": [
         "Northern Thailand"
       ],
       "cities": [
         {
           "name": "ลำพูน",
-          "name_en": "Lamphun",
+          "name_ascii": "Lamphun",
           "lat": 18.5805,
           "lon": 99.0075,
           "postcodes": [
             {
               "code": "51000",
               "street": "ถนนรอบเมืองใน",
-              "street_en": "Inner Ring Road",
-              "pattern": "n{1,113} ถนนรอบเมืองใน"
+              "street_ascii": "Inner Ring Road",
+              "pattern": "n{1,113} {street}"
             },
             {
               "code": "51120",
               "street": "ถนนเจริญราษฎร์",
-              "street_en": "Charoenrat Road",
-              "pattern": "n{1,110} ถนนเจริญราษฎร์"
+              "street_ascii": "Charoenrat Road",
+              "pattern": "n{1,110} {street}"
             },
             {
               "code": "50120",
               "street": "ถนนชัยมงคล",
-              "street_en": "thnnchaymngkhl",
-              "pattern": "n{1,70} ถนนชัยมงคล"
+              "street_ascii": "Chai Mongkhon Road",
+              "pattern": "n{1,70} {street}"
             },
             {
               "code": "50140",
               "street": "ถนนช่างฆ้อง",
-              "street_en": "Chang Khong Road",
-              "pattern": "n{1,100} ถนนช่างฆ้อง"
+              "street_ascii": "Chang Khong Road",
+              "pattern": "n{1,100} {street}"
             }
           ]
         }
@@ -631,34 +639,34 @@
     },
     {
       "name": "จังหวัดเชียงราย",
-      "name_en": "Chiang Rai",
+      "name_ascii": "Chiang Rai",
       "region_tags": [
         "Northern Thailand"
       ],
       "cities": [
         {
           "name": "เชียงราย",
-          "name_en": "Chiang Rai",
+          "name_ascii": "Chiang Rai",
           "lat": 19.9086,
           "lon": 99.8325,
           "postcodes": [
             {
               "code": "57000",
               "street": "ถนนพหลโยธิน",
-              "street_en": "Phahonyothin Road",
-              "pattern": "n{1,150} ถนนพหลโยธิน"
+              "street_ascii": "Phahonyothin Road",
+              "pattern": "n{1,150} {street}"
             },
             {
               "code": "57000",
               "street": "ถนนบรรพปราการ",
-              "street_en": "Banphaphrakan Road",
-              "pattern": "n{1,80} ถนนบรรพปราการ"
+              "street_ascii": "Banphaphrakan Road",
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "57000",
               "street": "ถนนสิงหไคล",
-              "street_en": "Singhakhlai Road",
-              "pattern": "n{1,70} ถนนสิงหไคล"
+              "street_ascii": "Singhakhlai Road",
+              "pattern": "n{1,70} {street}"
             }
           ]
         }
@@ -666,34 +674,34 @@
     },
     {
       "name": "จังหวัดนครสวรรค์",
-      "name_en": "Nakhon Sawan",
+      "name_ascii": "Nakhon Sawan",
       "region_tags": [
         "Northern Thailand"
       ],
       "cities": [
         {
           "name": "นครสวรรค์",
-          "name_en": "Nakhon Sawan",
+          "name_ascii": "Nakhon Sawan",
           "lat": 15.7047,
           "lon": 100.1372,
           "postcodes": [
             {
               "code": "60000",
               "street": "ถนนสวรรค์วิถี",
-              "street_en": "Sawanwithi Road",
-              "pattern": "n{1,120} ถนนสวรรค์วิถี"
+              "street_ascii": "Sawanwithi Road",
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "60000",
               "street": "ถนนโกสีย์",
-              "street_en": "Kosi Road",
-              "pattern": "n{1,90} ถนนโกสีย์"
+              "street_ascii": "Kosi Road",
+              "pattern": "n{1,90} {street}"
             },
             {
               "code": "60000",
               "street": "ถนนมาตุลี",
-              "street_en": "Matuli Road",
-              "pattern": "n{1,70} ถนนมาตุลี"
+              "street_ascii": "Matuli Road",
+              "pattern": "n{1,70} {street}"
             }
           ]
         }
@@ -701,34 +709,34 @@
     },
     {
       "name": "จังหวัดชุมพร",
-      "name_en": "Chumphon",
+      "name_ascii": "Chumphon",
       "region_tags": [
         "Southern Thailand"
       ],
       "cities": [
         {
           "name": "ชุมพร",
-          "name_en": "Chumphon",
+          "name_ascii": "Chumphon",
           "lat": 10.4957,
           "lon": 99.1797,
           "postcodes": [
             {
               "code": "86000",
               "street": "ถนนปรมินทรมรรคา",
-              "street_en": "Poramin Mankha Road",
-              "pattern": "n{1,100} ถนนปรมินทรมรรคา"
+              "street_ascii": "Poramin Mankha Road",
+              "pattern": "n{1,100} {street}"
             },
             {
               "code": "86000",
               "street": "ถนนประชาอุทิศ",
-              "street_en": "Pracha Uthit Road",
-              "pattern": "n{1,80} ถนนประชาอุทิศ"
+              "street_ascii": "Pracha Uthit Road",
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "86000",
               "street": "ถนนกรมหลวงชุมพร",
-              "street_en": "Krom Luang Chumphon Road",
-              "pattern": "n{1,70} ถนนกรมหลวงชุมพร"
+              "street_ascii": "Krom Luang Chumphon Road",
+              "pattern": "n{1,70} {street}"
             }
           ]
         }
@@ -736,34 +744,34 @@
     },
     {
       "name": "จังหวัดกระบี่",
-      "name_en": "Krabi",
+      "name_ascii": "Krabi",
       "region_tags": [
         "Southern Thailand"
       ],
       "cities": [
         {
           "name": "กระบี่",
-          "name_en": "Krabi",
+          "name_ascii": "Krabi",
           "lat": 8.0726,
           "lon": 98.9105,
           "postcodes": [
             {
               "code": "81000",
               "street": "ถนนมหาราช",
-              "street_en": "Maharat Road",
-              "pattern": "n{1,120} ถนนมหาราช"
+              "street_ascii": "Maharat Road",
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "81000",
               "street": "ถนนอุตรกิจ",
-              "street_en": "Uttarakit Road",
-              "pattern": "n{1,80} ถนนอุตรกิจ"
+              "street_ascii": "Uttarakit Road",
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "81180",
               "street": "ถนนอ่าวนาง",
-              "street_en": "Ao Nang Road",
-              "pattern": "n{1,70} ถนนอ่าวนาง"
+              "street_ascii": "Ao Nang Road",
+              "pattern": "n{1,70} {street}"
             }
           ]
         }
@@ -771,40 +779,40 @@
     },
     {
       "name": "จังหวัดกำแพงเพชร",
-      "name_en": "Kamphaeng Phet",
+      "name_ascii": "Kamphaeng Phet",
       "region_tags": [
         "Northern Thailand"
       ],
       "cities": [
         {
           "name": "กำแพงเพชร",
-          "name_en": "Kamphaeng Phet",
+          "name_ascii": "Kamphaeng Phet",
           "lat": 16.4834,
           "lon": 99.5215,
           "postcodes": [
             {
               "code": "62110",
               "street": "ถนนกำแพงเพชร",
-              "street_en": "Kamphaeng Phet Road",
-              "pattern": "n{1,134} ถนนกำแพงเพชร"
+              "street_ascii": "Kamphaeng Phet Road",
+              "pattern": "n{1,134} {street}"
             },
             {
               "code": "62000",
               "street": "ถนนราชดำเนิน 2",
-              "street_en": "Ratchadamnoen 2 Road",
-              "pattern": "n{1,164} ถนนราชดำเนิน 2"
+              "street_ascii": "Ratchadamnoen 2 Road",
+              "pattern": "n{1,164} {street}"
             },
             {
               "code": "62170",
               "street": "ถนนเทศา 1",
-              "street_en": "Thesa 1 Road",
-              "pattern": "n{1,149} ถนนเทศา 1"
+              "street_ascii": "Thesa 1 Road",
+              "pattern": "n{1,149} {street}"
             },
             {
               "code": "62190",
               "street": "ถนนราชดำเนิน 1",
-              "street_en": "Ratchadamnoen 1 Road",
-              "pattern": "n{1,115} ถนนราชดำเนิน 1"
+              "street_ascii": "Ratchadamnoen 1 Road",
+              "pattern": "n{1,115} {street}"
             }
           ]
         }
@@ -812,7 +820,7 @@
     },
     {
       "name": "จังหวัดกาฬสินธุ์",
-      "name_en": "Kalasin",
+      "name_ascii": "Kalasin",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -820,33 +828,33 @@
       "cities": [
         {
           "name": "กาฬสินธุ์",
-          "name_en": "Kalasin",
+          "name_ascii": "Kalasin",
           "lat": 16.4328,
           "lon": 103.5066,
           "postcodes": [
             {
               "code": "46000",
               "street": "ถนนกาฬสินธุ์",
-              "street_en": "Kalasin Road",
-              "pattern": "n{1,173} ถนนกาฬสินธุ์"
+              "street_ascii": "Kalasin Road",
+              "pattern": "n{1,173} {street}"
             },
             {
               "code": "46120",
               "street": "ถนนแก่งสำโรง",
-              "street_en": "Kaeng Samrong Road",
-              "pattern": "n{1,181} ถนนแก่งสำโรง"
+              "street_ascii": "Kaeng Samrong Road",
+              "pattern": "n{1,181} {street}"
             },
             {
               "code": "46130",
               "street": "ถนนบุญกว้าง",
-              "street_en": "Bun Kwang Road",
-              "pattern": "n{1,167} ถนนบุญกว้าง"
+              "street_ascii": "Bun Kwang Road",
+              "pattern": "n{1,167} {street}"
             },
             {
               "code": "44150",
               "street": "ถนนอรรถเปศล",
-              "street_en": "Atthapeson Road",
-              "pattern": "n{1,116} ถนนอรรถเปศล"
+              "street_ascii": "Atthapeson Road",
+              "pattern": "n{1,116} {street}"
             }
           ]
         }
@@ -854,7 +862,7 @@
     },
     {
       "name": "จังหวัดอุดรธานี",
-      "name_en": "Udon Thani",
+      "name_ascii": "Udon Thani",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -862,27 +870,27 @@
       "cities": [
         {
           "name": "อุดรธานี",
-          "name_en": "Udon Thani",
+          "name_ascii": "Udon Thani",
           "lat": 17.4157,
           "lon": 102.7859,
           "postcodes": [
             {
               "code": "41000",
               "street": "ถนนโพศรี",
-              "street_en": "Pho Si Road",
-              "pattern": "n{1,100} ถนนโพศรี"
+              "street_ascii": "Pho Si Road",
+              "pattern": "n{1,100} {street}"
             },
             {
               "code": "41000",
               "street": "ถนนประจักษ์ศิลปาคม",
-              "street_en": "Prachak Sinlapakhom Road",
-              "pattern": "n{1,90} ถนนประจักษ์ศิลปาคม"
+              "street_ascii": "Prachak Sinlapakhom Road",
+              "pattern": "n{1,90} {street}"
             },
             {
               "code": "41000",
               "street": "ถนนทหาร",
-              "street_en": "Thahan Road",
-              "pattern": "n{1,80} ถนนทหาร"
+              "street_ascii": "Thahan Road",
+              "pattern": "n{1,80} {street}"
             }
           ]
         }
@@ -890,40 +898,40 @@
     },
     {
       "name": "จังหวัดสงขลา",
-      "name_en": "Songkhla",
+      "name_ascii": "Songkhla",
       "region_tags": [
         "Southern Thailand"
       ],
       "cities": [
         {
           "name": "หาดใหญ่",
-          "name_en": "Hat Yai",
+          "name_ascii": "Hat Yai",
           "lat": 7.0084,
           "lon": 100.4767,
           "postcodes": [
             {
               "code": "90110",
               "street": "ถนนนิพัทธ์อุทิศ 1",
-              "street_en": "Niphat Uthit 1 Road",
-              "pattern": "n{1,120} ถนนนิพัทธ์อุทิศ 1"
+              "street_ascii": "Niphat Uthit 1 Road",
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "90110",
               "street": "ถนนเพชรเกษม",
-              "street_en": "Phetkasem Road",
-              "pattern": "n{1,200} ถนนเพชรเกษม"
+              "street_ascii": "Phetkasem Road",
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "90110",
               "street": "ถนนกาญจนวนิช",
-              "street_en": "Kanchanawanit Road",
-              "pattern": "n{1,150} ถนนกาญจนวนิช"
+              "street_ascii": "Kanchanawanit Road",
+              "pattern": "n{1,150} {street}"
             },
             {
               "code": "90250",
               "street": "ถนนปุณณกัณฑ์",
-              "street_en": "Punnakan Road",
-              "pattern": "n{1,80} ถนนปุณณกัณฑ์"
+              "street_ascii": "Punnakan Road",
+              "pattern": "n{1,80} {street}"
             }
           ]
         }
@@ -931,204 +939,203 @@
     },
     {
       "name": "กรุงเทพมหานคร",
-      "name_en": "Bangkok",
+      "name_ascii": "Bangkok",
       "region_tags": [
         "Central Thailand"
       ],
       "cities": [
         {
           "name": "กรุงเทพ",
-          "name_en": "Bangkok",
+          "name_ascii": "Bangkok",
           "lat": 13.754,
           "lon": 100.5014,
           "postcodes": [
             {
               "code": "10100",
               "street": "ถนนเจริญกรุง",
-              "street_en": "Charoen Krung Road",
-              "pattern": "n{1,200} ถนนเจริญกรุง"
+              "street_ascii": "Charoen Krung Road",
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "10110",
               "street": "ถนนสุขุมวิท",
-              "street_en": "Sukhumvit Road",
-              "pattern": "n{1,105} ถนนสุขุมวิท"
+              "street_ascii": "Sukhumvit Road",
+              "pattern": "n{1,105} {street}"
             },
             {
               "code": "10120",
               "street": "ถนนสีลม",
-              "street_en": "Silom Road",
-              "pattern": "n{1,150} ถนนสีลม"
+              "street_ascii": "Silom Road",
+              "pattern": "n{1,150} {street}"
             },
             {
               "code": "10200",
               "street": "ถนนพระราม 4",
-              "street_en": "Rama IV Road",
-              "pattern": "n{1,180} ถนนพระราม 4"
+              "street_ascii": "Rama IV Road",
+              "pattern": "n{1,180} {street}"
             },
             {
               "code": "10240",
               "street": "ถนนรามคำแหง",
-              "street_en": "Ramkhamhaeng Road",
-              "pattern": "n{1,200} ถนนรามคำแหง"
+              "street_ascii": "Ramkhamhaeng Road",
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "10310",
               "street": "ถนนพหลโยธิน",
-              "street_en": "Phahonyothin Road",
-              "pattern": "n{1,180} ถนนพหลโยธิน"
+              "street_ascii": "Phahonyothin Road",
+              "pattern": "n{1,180} {street}"
             },
             {
               "code": "10400",
               "street": "ถนนเพชรบุรี",
-              "street_en": "Phetchaburi Road",
-              "pattern": "n{1,150} ถนนเพชรบุรี"
+              "street_ascii": "Phetchaburi Road",
+              "pattern": "n{1,150} {street}"
             },
             {
               "code": "10500",
               "street": "ถนนเจริญกรุง",
-              "street_en": "Charoen Krung Road",
-              "pattern": "n{1,100} ถนนเจริญกรุง"
+              "street_ascii": "Charoen Krung Road",
+              "pattern": "n{1,100} {street}"
             },
             {
               "code": "10600",
               "street": "ถนนเจริญนคร",
-              "street_en": "Charoen Nakhon Road",
-              "pattern": "n{1,120} ถนนเจริญนคร"
+              "street_ascii": "Charoen Nakhon Road",
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "10900",
               "street": "ถนนวิภาวดีรังสิต",
-              "street_en": "Vibhavadi Rangsit Road",
-              "pattern": "n{1,160} ถนนวิภาวดีรังสิต"
+              "street_ascii": "Vibhavadi Rangsit Road",
+              "pattern": "n{1,160} {street}"
             }
           ]
         },
         {
           "name": "บางแค",
-          "name_en": "Bang Khae",
+          "name_ascii": "Bang Khae",
           "lat": 13.693,
           "lon": 100.4076,
           "postcodes": [
             {
               "code": "10160",
               "street": "ถนนเพชรเกษม",
-              "street_en": "Phet Kasem Road",
-              "pattern": "n{1,120} ถนนเพชรเกษม"
+              "street_ascii": "Phet Kasem Road",
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "10110",
               "street": "ซอยหมู่บ้านปริญลักษณ์ไลท์ วงแหวนสาทร ซอย 11",
-              "street_en": "Soi Muban Parin Lak Lai Wongwaen Sathon Soi 11",
-              "pattern": "n{1,139} ซอยหมู่บ้านปริญลักษณ์ไลท์ วงแหวนสาทร ซอย 11"
+              "street_ascii": "Soi Muban Parin Lak Lai Wongwaen Sathon Soi 11",
+              "pattern": "n{1,139} {street}"
             },
             {
               "code": "10120",
               "street": "ซอยหมู่บ้านปริญลักษณ์ไลท์ วงแหวนสาทร ซอย 10",
-              "street_en": "Soi Muban Parin Lak Lai Wongwaen Sathon Soi 10",
-              "pattern": "n{1,162} ซอยหมู่บ้านปริญลักษณ์ไลท์ วงแหวนสาทร ซอย 10"
+              "street_ascii": "Soi Muban Parin Lak Lai Wongwaen Sathon Soi 10",
+              "pattern": "n{1,162} {street}"
             },
             {
               "code": "10150",
               "street": "ซอยหมู่บ้านปริญลักษณ์ไลท์ วงแหวนสาทร ซอย 4",
-              "street_en": "Soi Muban Parin Lak Lai Wongwaen Sathon Soi 4",
-              "pattern": "n{1,73} ซอยหมู่บ้านปริญลักษณ์ไลท์ วงแหวนสาทร ซอย 4"
+              "street_ascii": "Soi Muban Parin Lak Lai Wongwaen Sathon Soi 4",
+              "pattern": "n{1,73} {street}"
             }
           ]
         },
         {
           "name": "สายไหม",
-          "name_en": "Sai Mai",
+          "name_ascii": "Sai Mai",
           "lat": 13.9207,
           "lon": 100.6455,
           "postcodes": [
             {
               "code": "10220",
               "street": "ถนนพหลโยธิน",
-              "street_en": "Phahon Yothin Road",
-              "pattern": "n{1,164} ถนนพหลโยธิน"
+              "street_ascii": "Phahon Yothin Road",
+              "pattern": "n{1,164} {street}"
             },
             {
               "code": "12150",
               "street": "ซอยสายไหม 33",
-              "street_en": "Soi Sai Mai 33",
-              "pattern": "n{1,159} ซอยสายไหม 33"
+              "street_ascii": "Soi Sai Mai 33",
+              "pattern": "n{1,159} {street}"
             },
             {
               "code": "12000",
               "street": "ซอยสายไหม 27",
-              "street_en": "Soi Sai Mai 27",
-              "pattern": "n{1,142} ซอยสายไหม 27"
+              "street_ascii": "Soi Sai Mai 27",
+              "pattern": "n{1,142} {street}"
             },
             {
               "code": "12110",
               "street": "ซอยสายไหม 25",
-              "street_en": "Soi Sai Mai 25",
-              "pattern": "n{1,177} ซอยสายไหม 25"
+              "street_ascii": "Soi Sai Mai 25",
+              "pattern": "n{1,177} {street}"
             }
           ]
         },
         {
           "name": "วัฒนา",
-          "name_en": "Watthana",
+          "name_ascii": "Watthana",
           "lat": 13.7298,
           "lon": 100.5854,
           "postcodes": [
             {
               "code": "10260",
               "street": "ถนนรัชดาภิเษก",
-              "street_en": "Ratchadaphisek Road",
-              "pattern": "n{1,141} ถนนรัชดาภิเษก"
+              "street_ascii": "Ratchadaphisek Road",
+              "pattern": "n{1,141} {street}"
             },
             {
               "code": "10500",
               "street": "ถนนพระราม 9",
-              "street_en": "Rama IX Road",
-              "pattern": "n{1,134} ถนนพระราม 9"
+              "street_ascii": "Rama IX Road",
+              "pattern": "n{1,134} {street}"
             },
             {
               "code": "10400",
               "street": "ซอยพบมิตร",
-              "street_en": "Soi Phop Mit",
-              "pattern": "n{1,179} ซอยพบมิตร"
+              "street_ascii": "Soi Phop Mit",
+              "pattern": "n{1,179} {street}"
             },
             {
               "code": "10200",
               "street": "ซอยพร้อมจิต",
-              "street_en": "Soi Phrom Chit",
-              "pattern": "n{1,130} ซอยพร้อมจิต"
+              "street_ascii": "Soi Phrom Chit",
+              "pattern": "n{1,130} {street}"
             }
           ]
         },
         {
           "name": "Khlong Sam Wa",
-          "name_en": "Khlong Sam Wa",
           "lat": 13.8714,
           "lon": 100.7372,
           "postcodes": [
             {
               "code": "10510",
               "street": "ทางเข้าหมู่บ้านเคซีการ์เด้นโฮม",
-              "street_en": "thaangekhaahmuubaanekhchiikaarednohm",
-              "pattern": "n{1,180} ทางเข้าหมู่บ้านเคซีการ์เด้นโฮม"
+              "street_ascii": "Thang Khao Muban KC Garden Home",
+              "pattern": "n{1,180} {street}"
             },
             {
               "code": "12150",
               "street": "ซอยนิมิตใหม่ 50",
-              "street_en": "Soi Nimit Mai 50",
-              "pattern": "n{1,89} ซอยนิมิตใหม่ 50"
+              "street_ascii": "Soi Nimit Mai 50",
+              "pattern": "n{1,89} {street}"
             },
             {
               "code": "10530",
               "street": "ซอยนิมิตใหม่ 40",
-              "street_en": "Soi Nimit Mai 40",
-              "pattern": "n{1,109} ซอยนิมิตใหม่ 40"
+              "street_ascii": "Soi Nimit Mai 40",
+              "pattern": "n{1,109} {street}"
             },
             {
               "code": "10220",
               "street": "ซอย นิมิตรใหม่ 40",
-              "street_en": "ch`y nimitraihm 40",
-              "pattern": "n{1,116} ซอย นิมิตรใหม่ 40"
+              "street_ascii": "Soi Nimit Mai 40",
+              "pattern": "n{1,116} {street}"
             }
           ]
         }
@@ -1136,7 +1143,7 @@
     },
     {
       "name": "จังหวัดนครราชสีมา",
-      "name_en": "Nakhon Ratchasima",
+      "name_ascii": "Nakhon Ratchasima",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -1144,33 +1151,33 @@
       "cities": [
         {
           "name": "นครราชสีมา",
-          "name_en": "Nakhon Ratchasima",
+          "name_ascii": "Nakhon Ratchasima",
           "lat": 14.9707,
           "lon": 102.102,
           "postcodes": [
             {
               "code": "30280",
               "street": "ประจักษ์ชัยณรงค์",
-              "street_en": "Prajak Chairnarong",
-              "pattern": "n{1,117} ประจักษ์ชัยณรงค์"
+              "street_ascii": "Prajak Chairnarong",
+              "pattern": "n{1,117} {street}"
             },
             {
               "code": "30000",
               "street": "ถนนชุมพล",
-              "street_en": "Chumphol Road",
-              "pattern": "n{1,82} ถนนชุมพล"
+              "street_ascii": "Chumphol Road",
+              "pattern": "n{1,82} {street}"
             },
             {
               "code": "30230",
               "street": "ถนนกุดั่น",
-              "street_en": "Kuddan Road",
-              "pattern": "n{1,103} ถนนกุดั่น"
+              "street_ascii": "Kuddan Road",
+              "pattern": "n{1,103} {street}"
             },
             {
               "code": "30360",
               "street": "ถนนจอมพล",
-              "street_en": "Chom Phon Road",
-              "pattern": "n{1,197} ถนนจอมพล"
+              "street_ascii": "Chom Phon Road",
+              "pattern": "n{1,197} {street}"
             }
           ]
         }
@@ -1178,72 +1185,72 @@
     },
     {
       "name": "จังหวัดสมุทรปราการ",
-      "name_en": "Samut Prakan",
+      "name_ascii": "Samut Prakan",
       "region_tags": [
         "Central Thailand"
       ],
       "cities": [
         {
           "name": "สมุทรปราการ",
-          "name_en": "Samut Prakan",
+          "name_ascii": "Samut Prakan",
           "lat": 13.5976,
           "lon": 100.5972,
           "postcodes": [
             {
               "code": "10270",
               "street": "ถนนสุขุมวิท",
-              "street_en": "Sukhumvit Road",
-              "pattern": "n{1,200} ถนนสุขุมวิท"
+              "street_ascii": "Sukhumvit Road",
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "10270",
               "street": "ถนนเทพารักษ์",
-              "street_en": "Thepharak Road",
-              "pattern": "n{1,130} ถนนเทพารักษ์"
+              "street_ascii": "Thepharak Road",
+              "pattern": "n{1,130} {street}"
             },
             {
               "code": "10130",
               "street": "ถนนปู่เจ้าสมิงพราย",
-              "street_en": "Pu Chao Saming Phrai Road",
-              "pattern": "n{1,100} ถนนปู่เจ้าสมิงพราย"
+              "street_ascii": "Pu Chao Saming Phrai Road",
+              "pattern": "n{1,100} {street}"
             },
             {
               "code": "10560",
               "street": "ถนนบางนา-ตราด",
-              "street_en": "Bangna-Trad Road",
-              "pattern": "n{1,180} ถนนบางนา-ตราด"
+              "street_ascii": "Bangna-Trad Road",
+              "pattern": "n{1,180} {street}"
             }
           ]
         },
         {
           "name": "พระประแดง",
-          "name_en": "Phra Pradaeng",
+          "name_ascii": "Phra Pradaeng",
           "lat": 13.6585,
           "lon": 100.5336,
           "postcodes": [
             {
               "code": "10130",
               "street": "ถนนสุขสวัสดิ์",
-              "street_en": "Suk Sawat Road",
-              "pattern": "n{1,133} ถนนสุขสวัสดิ์"
+              "street_ascii": "Suk Sawat Road",
+              "pattern": "n{1,133} {street}"
             },
             {
               "code": "10140",
               "street": "ถนนพระราชวิริยาภรณ์",
-              "street_en": "Phra Ratchawiriyaphon Road",
-              "pattern": "n{1,159} ถนนพระราชวิริยาภรณ์"
+              "street_ascii": "Phra Ratchawiriyaphon Road",
+              "pattern": "n{1,159} {street}"
             },
             {
               "code": "10260",
               "street": "ถนนพระรามที่ 3",
-              "street_en": "Rama III Road",
-              "pattern": "n{1,159} ถนนพระรามที่ 3"
+              "street_ascii": "Rama III Road",
+              "pattern": "n{1,159} {street}"
             },
             {
               "code": "34360",
               "street": "ถนนเพชรหึงษ์",
-              "street_en": "Phetchahueng Road",
-              "pattern": "n{1,72} ถนนเพชรหึงษ์"
+              "street_ascii": "Phetchahueng Road",
+              "pattern": "n{1,72} {street}"
             }
           ]
         }
@@ -1251,7 +1258,7 @@
     },
     {
       "name": "จังหวัดหนองบัวลำภู",
-      "name_en": "Nong Bua Lamphu",
+      "name_ascii": "Nong Bua Lamphu",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -1259,33 +1266,33 @@
       "cities": [
         {
           "name": "หนองบัวลำภู",
-          "name_en": "Nong Bua Lamphu",
+          "name_ascii": "Nong Bua Lamphu",
           "lat": 17.2041,
           "lon": 102.4407,
           "postcodes": [
             {
               "code": "39000",
               "street": "ซอยสันติโชคชัย",
-              "street_en": "ch`ysantiochkhchay",
-              "pattern": "n{1,180} ซอยสันติโชคชัย"
+              "street_ascii": "Soi Santi Chokchai",
+              "pattern": "n{1,180} {street}"
             },
             {
               "code": "39270",
               "street": "ถนนบุญยาหาร",
-              "street_en": "Bunyahan Road",
-              "pattern": "n{1,178} ถนนบุญยาหาร"
+              "street_ascii": "Bunyahan Road",
+              "pattern": "n{1,178} {street}"
             },
             {
               "code": "39170",
               "street": "ถนนนเรศวร",
-              "street_en": "Naresuan Road",
-              "pattern": "n{1,170} ถนนนเรศวร"
+              "street_ascii": "Naresuan Road",
+              "pattern": "n{1,170} {street}"
             },
             {
               "code": "39180",
               "street": "ถนนดำรงค์บูรณะ",
-              "street_en": "thnndamrngkhbuurna",
-              "pattern": "n{1,182} ถนนดำรงค์บูรณะ"
+              "street_ascii": "Damrong Burana Road",
+              "pattern": "n{1,182} {street}"
             }
           ]
         }
@@ -1293,7 +1300,7 @@
     },
     {
       "name": "จังหวัดยโสธร",
-      "name_en": "Yasothon",
+      "name_ascii": "Yasothon",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -1301,33 +1308,33 @@
       "cities": [
         {
           "name": "ยโสธร",
-          "name_en": "Yasothon",
+          "name_ascii": "Yasothon",
           "lat": 15.7941,
           "lon": 104.1451,
           "postcodes": [
             {
               "code": "35000",
               "street": "ถนนอรุณประเสริฐ",
-              "street_en": "Arun Prasoet Road",
-              "pattern": "n{1,97} ถนนอรุณประเสริฐ"
+              "street_ascii": "Arun Prasoet Road",
+              "pattern": "n{1,97} {street}"
             },
             {
               "code": "35170",
               "street": "ถนนแจ้งสนิท",
-              "street_en": "Chaeng Sanit Road",
-              "pattern": "n{1,194} ถนนแจ้งสนิท"
+              "street_ascii": "Chaeng Sanit Road",
+              "pattern": "n{1,194} {street}"
             },
             {
               "code": "35120",
               "street": "ถนนวารีราชเดช",
-              "street_en": "Wari Ratchadet Road",
-              "pattern": "n{1,109} ถนนวารีราชเดช"
+              "street_ascii": "Wari Ratchadet Road",
+              "pattern": "n{1,109} {street}"
             },
             {
               "code": "35140",
               "street": "ถนนโนนตาล",
-              "street_en": "thnnonntaal",
-              "pattern": "n{1,129} ถนนโนนตาล"
+              "street_ascii": "Non Tan Road",
+              "pattern": "n{1,129} {street}"
             }
           ]
         }
@@ -1335,34 +1342,34 @@
     },
     {
       "name": "จังหวัดปัตตานี",
-      "name_en": "Pattani",
+      "name_ascii": "Pattani",
       "region_tags": [
         "Southern Thailand"
       ],
       "cities": [
         {
           "name": "ปัตตานี",
-          "name_en": "Pattani",
+          "name_ascii": "Pattani",
           "lat": 6.8681,
           "lon": 101.2501,
           "postcodes": [
             {
               "code": "94000",
               "street": "ถนนปัตตานีภิรมย์",
-              "street_en": "Pattani Phirom Road",
-              "pattern": "n{1,90} ถนนปัตตานีภิรมย์"
+              "street_ascii": "Pattani Phirom Road",
+              "pattern": "n{1,90} {street}"
             },
             {
               "code": "94000",
               "street": "ถนนยะรัง",
-              "street_en": "Yarang Road",
-              "pattern": "n{1,100} ถนนยะรัง"
+              "street_ascii": "Yarang Road",
+              "pattern": "n{1,100} {street}"
             },
             {
               "code": "94000",
               "street": "ถนนนาเกลือ",
-              "street_en": "Na Kluea Road",
-              "pattern": "n{1,70} ถนนนาเกลือ"
+              "street_ascii": "Na Kluea Road",
+              "pattern": "n{1,70} {street}"
             }
           ]
         }
@@ -1370,34 +1377,34 @@
     },
     {
       "name": "จังหวัดยะลา",
-      "name_en": "Yala",
+      "name_ascii": "Yala",
       "region_tags": [
         "Southern Thailand"
       ],
       "cities": [
         {
           "name": "ยะลา",
-          "name_en": "Yala",
+          "name_ascii": "Yala",
           "lat": 6.54,
           "lon": 101.2813,
           "postcodes": [
             {
               "code": "95000",
               "street": "ถนนสิโรรส",
-              "street_en": "Sirorot Road",
-              "pattern": "n{1,120} ถนนสิโรรส"
+              "street_ascii": "Sirorot Road",
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "95000",
               "street": "ถนนพิพิธภักดี",
-              "street_en": "Phiphit Phakdi Road",
-              "pattern": "n{1,80} ถนนพิพิธภักดี"
+              "street_ascii": "Phiphit Phakdi Road",
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "95000",
               "street": "ถนนรัฐกิจ",
-              "street_en": "Ratthakit Road",
-              "pattern": "n{1,70} ถนนรัฐกิจ"
+              "street_ascii": "Ratthakit Road",
+              "pattern": "n{1,70} {street}"
             }
           ]
         }
@@ -1405,40 +1412,40 @@
     },
     {
       "name": "จังหวัดเพชรบูรณ์",
-      "name_en": "Phetchabun",
+      "name_ascii": "Phetchabun",
       "region_tags": [
         "Northern Thailand"
       ],
       "cities": [
         {
           "name": "เพชรบูรณ์",
-          "name_en": "Phetchabun",
+          "name_ascii": "Phetchabun",
           "lat": 16.419,
           "lon": 101.1606,
           "postcodes": [
             {
               "code": "67000",
               "street": "ถนนหลักเมือง",
-              "street_en": "Lak Mueang Road",
-              "pattern": "n{1,152} ถนนหลักเมือง"
+              "street_ascii": "Lak Mueang Road",
+              "pattern": "n{1,152} {street}"
             },
             {
               "code": "67270",
               "street": "ถนนสนามชัย",
-              "street_en": "Sanam Chai Road",
-              "pattern": "n{1,154} ถนนสนามชัย"
+              "street_ascii": "Sanam Chai Road",
+              "pattern": "n{1,154} {street}"
             },
             {
               "code": "67240",
               "street": "ถนนกลางเมืองพัฒนา",
-              "street_en": "Klang Mueang Phatthana Road",
-              "pattern": "n{1,153} ถนนกลางเมืองพัฒนา"
+              "street_ascii": "Klang Mueang Phatthana Road",
+              "pattern": "n{1,153} {street}"
             },
             {
               "code": "67110",
               "street": "ถนนเพชรพัฒนา",
-              "street_en": "Petch Pattana Rd",
-              "pattern": "n{1,134} ถนนเพชรพัฒนา"
+              "street_ascii": "Petch Pattana Rd",
+              "pattern": "n{1,134} {street}"
             }
           ]
         }
@@ -1446,7 +1453,7 @@
     },
     {
       "name": "จังหวัดอุบลราชธานี",
-      "name_en": "Ubon Ratchathani",
+      "name_ascii": "Ubon Ratchathani",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -1454,27 +1461,27 @@
       "cities": [
         {
           "name": "อุบลราชธานี",
-          "name_en": "Ubon Ratchathani",
+          "name_ascii": "Ubon Ratchathani",
           "lat": 15.2384,
           "lon": 104.8487,
           "postcodes": [
             {
               "code": "34000",
               "street": "ถนนชยางกูร",
-              "street_en": "Chayangkun Road",
-              "pattern": "n{1,200} ถนนชยางกูร"
+              "street_ascii": "Chayangkun Road",
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "34000",
               "street": "ถนนเขื่อนธานี",
-              "street_en": "Khuean Thani Road",
-              "pattern": "n{1,90} ถนนเขื่อนธานี"
+              "street_ascii": "Khuean Thani Road",
+              "pattern": "n{1,90} {street}"
             },
             {
               "code": "34000",
               "street": "ถนนอุปราช",
-              "street_en": "Uparat Road",
-              "pattern": "n{1,80} ถนนอุปราช"
+              "street_ascii": "Uparat Road",
+              "pattern": "n{1,80} {street}"
             }
           ]
         }
@@ -1482,7 +1489,7 @@
     },
     {
       "name": "จังหวัดสกลนคร",
-      "name_en": "Sakon Nakhon",
+      "name_ascii": "Sakon Nakhon",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -1490,33 +1497,33 @@
       "cities": [
         {
           "name": "สกลนคร",
-          "name_en": "Sakon Nakhon",
+          "name_ascii": "Sakon Nakhon",
           "lat": 17.1612,
           "lon": 104.1472,
           "postcodes": [
             {
               "code": "47260",
               "street": "รัฐพัฒนา",
-              "street_en": "rathphathnaa",
-              "pattern": "n{1,92} รัฐพัฒนา"
+              "street_ascii": "Rat Phatthana",
+              "pattern": "n{1,92} {street}"
             },
             {
               "code": "47230",
               "street": "ใสสว่าง",
-              "street_en": "aisswaang",
-              "pattern": "n{1,158} ใสสว่าง"
+              "street_ascii": "Sai Sawang",
+              "pattern": "n{1,158} {street}"
             },
             {
               "code": "47280",
               "street": "รอบเมือง",
-              "street_en": "r`bemuue`ng",
-              "pattern": "n{1,168} รอบเมือง"
+              "street_ascii": "Rop Mueang",
+              "pattern": "n{1,168} {street}"
             },
             {
               "code": "47290",
               "street": "ถนนทอง",
-              "street_en": "thnnth`ng",
-              "pattern": "n{1,182} ถนนทอง"
+              "street_ascii": "Thong Road",
+              "pattern": "n{1,182} {street}"
             }
           ]
         }
@@ -1524,7 +1531,7 @@
     },
     {
       "name": "จังหวัดเลย",
-      "name_en": "Loei",
+      "name_ascii": "Loei",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -1532,33 +1539,33 @@
       "cities": [
         {
           "name": "เลย",
-          "name_en": "Loei",
+          "name_ascii": "Loei",
           "lat": 17.4905,
           "lon": 101.7275,
           "postcodes": [
             {
               "code": "42000",
               "street": "ถนนสถลเชียงคาน",
-              "street_en": "Sathon - Chiang Khan Road",
-              "pattern": "n{1,109} ถนนสถลเชียงคาน"
+              "street_ascii": "Sathon - Chiang Khan Road",
+              "pattern": "n{1,109} {street}"
             },
             {
               "code": "42130",
               "street": "ถนนชุมสาย",
-              "street_en": "Chum-Saai Road",
-              "pattern": "n{1,158} ถนนชุมสาย"
+              "street_ascii": "Chum-Saai Road",
+              "pattern": "n{1,158} {street}"
             },
             {
               "code": "42240",
               "street": "ถนนเจริญรัฐ",
-              "street_en": "Charoen Rat Road",
-              "pattern": "n{1,92} ถนนเจริญรัฐ"
+              "street_ascii": "Charoen Rat Road",
+              "pattern": "n{1,92} {street}"
             },
             {
               "code": "42210",
               "street": "ถนนพิพัฒน์มงคล",
-              "street_en": "Phiphat Mongkhon Road",
-              "pattern": "n{1,150} ถนนพิพัฒน์มงคล"
+              "street_ascii": "Phiphat Mongkhon Road",
+              "pattern": "n{1,150} {street}"
             }
           ]
         }
@@ -1566,40 +1573,40 @@
     },
     {
       "name": "จังหวัดพระนครศรีอยุธยา",
-      "name_en": "Phra Nakhon Si Ayutthaya",
+      "name_ascii": "Phra Nakhon Si Ayutthaya",
       "region_tags": [
         "Central Thailand"
       ],
       "cities": [
         {
           "name": "พระนครศรีอยุธยา",
-          "name_en": "Phra Nakhon Si Ayutthaya",
+          "name_ascii": "Phra Nakhon Si Ayutthaya",
           "lat": 14.3517,
           "lon": 100.5774,
           "postcodes": [
             {
               "code": "13120",
               "street": "ถนนเทศบาลเมืองอโยธยา 4",
-              "street_en": "Thetsaban Mueang Ayothaya 4 Road",
-              "pattern": "n{1,112} ถนนเทศบาลเมืองอโยธยา 4"
+              "street_ascii": "Thetsaban Mueang Ayothaya 4 Road",
+              "pattern": "n{1,112} {street}"
             },
             {
               "code": "13000",
               "street": "ซอยอโยธยา 4/11",
-              "street_en": "Soi Ayothaya 4/11",
-              "pattern": "n{1,139} ซอยอโยธยา 4/11"
+              "street_ascii": "Soi Ayothaya 4/11",
+              "pattern": "n{1,139} {street}"
             },
             {
               "code": "13210",
               "street": "ถนนอยุธยา-อ่างทอง",
-              "street_en": "Ayutthaya-Ang Thong Road",
-              "pattern": "n{1,73} ถนนอยุธยา-อ่างทอง"
+              "street_ascii": "Ayutthaya-Ang Thong Road",
+              "pattern": "n{1,73} {street}"
             },
             {
               "code": "13220",
               "street": "ถนนสายวัดหน้าพระเมรุ-วัดครุธาราม",
-              "street_en": "Wat Na Phra Men-Wat Khrutharam Road",
-              "pattern": "n{1,83} ถนนสายวัดหน้าพระเมรุ-วัดครุธาราม"
+              "street_ascii": "Wat Na Phra Men-Wat Khrutharam Road",
+              "pattern": "n{1,83} {street}"
             }
           ]
         }
@@ -1607,40 +1614,40 @@
     },
     {
       "name": "จังหวัดสระแก้ว",
-      "name_en": "Sa Kaeo",
+      "name_ascii": "Sa Kaeo",
       "region_tags": [
         "Eastern Thailand"
       ],
       "cities": [
         {
           "name": "สระแก้ว",
-          "name_en": "Sa Kaeo",
+          "name_ascii": "Sa Kaeo",
           "lat": 13.8141,
           "lon": 102.0722,
           "postcodes": [
             {
               "code": "31000",
               "street": "ถนนสระแก้ว - แซร์ออ",
-              "street_en": "thnnsraaekw - aechr``",
-              "pattern": "n{1,157} ถนนสระแก้ว - แซร์ออ"
+              "street_ascii": "Sa Kaeo - Sae O Road",
+              "pattern": "n{1,157} {street}"
             },
             {
               "code": "25110",
-              "street": "ถนนจันทบุรี–สระแก้ว",
-              "street_en": "Chanthaburi - Sa Kaeo Road",
-              "pattern": "n{1,121} ถนนจันทบุรี–สระแก้ว"
+              "street": "ถนนจันทบุรี-สระแก้ว",
+              "street_ascii": "Chanthaburi-Sa Kaeo Road",
+              "pattern": "n{1,121} {street}"
             },
             {
               "code": "27120",
               "street": "ถนนเทศบาล 21",
-              "street_en": "thnnethsbaal 21",
-              "pattern": "n{1,191} ถนนเทศบาล 21"
+              "street_ascii": "Thetsaban 21 Road",
+              "pattern": "n{1,191} {street}"
             },
             {
               "code": "25220",
               "street": "ซอยสวนตาล 4",
-              "street_en": "ch`yswntaal 4",
-              "pattern": "n{1,188} ซอยสวนตาล 4"
+              "street_ascii": "Soi Suan Tan 4",
+              "pattern": "n{1,188} {street}"
             }
           ]
         }
@@ -1648,40 +1655,40 @@
     },
     {
       "name": "จังหวัดอุตรดิตถ์",
-      "name_en": "Uttaradit",
+      "name_ascii": "Uttaradit",
       "region_tags": [
         "Northern Thailand"
       ],
       "cities": [
         {
           "name": "อุตรดิตถ์",
-          "name_en": "Uttaradit",
+          "name_ascii": "Uttaradit",
           "lat": 17.6256,
           "lon": 100.0942,
           "postcodes": [
             {
               "code": "53140",
               "street": "ถนน เจริญราษฎร์",
-              "street_en": "thnn ecchriyraasdr",
-              "pattern": "n{1,167} ถนน เจริญราษฎร์"
+              "street_ascii": "Charoenrat Road",
+              "pattern": "n{1,167} {street}"
             },
             {
               "code": "64180",
               "street": "ซอย ตุลาสถิตย์",
-              "street_en": "ch`y tulaasthity",
-              "pattern": "n{1,190} ซอย ตุลาสถิตย์"
+              "street_ascii": "Soi Tula Sathit",
+              "pattern": "n{1,190} {street}"
             },
             {
               "code": "64130",
               "street": "ซอย เพลินฤดี",
-              "street_en": "ch`y ephlinRdii",
-              "pattern": "n{1,92} ซอย เพลินฤดี"
+              "street_ascii": "Soi Phloen Ruedi",
+              "pattern": "n{1,92} {street}"
             },
             {
               "code": "53120",
               "street": "ซอย ศรีอุตรา",
-              "street_en": "ch`y srii`utraa",
-              "pattern": "n{1,110} ซอย ศรีอุตรา"
+              "street_ascii": "Soi Si Utra",
+              "pattern": "n{1,110} {street}"
             }
           ]
         }
@@ -1689,40 +1696,38 @@
     },
     {
       "name": "จังหวัดตราด",
-      "name_en": "Trat",
+      "name_ascii": "Trat",
       "region_tags": [
         "Eastern Thailand"
       ],
       "cities": [
         {
           "name": "เขาสมิง",
-          "name_en": "Khao Saming",
+          "name_ascii": "Khao Saming",
           "lat": 12.3537,
           "lon": 102.4343,
           "postcodes": [
             {
               "code": "23130",
               "street": "เทศบาล2",
-              "street_en": "ethsbaal2",
-              "pattern": "n{1,97} เทศบาล2"
+              "street_ascii": "Thetsaban 2",
+              "pattern": "n{1,97} {street}"
             },
             {
               "code": "23120",
               "street": "Municipal Road",
-              "street_en": "Municipal Road",
-              "pattern": "n{1,78} Municipal Road"
+              "pattern": "n{1,78} {street}"
             },
             {
               "code": "23000",
               "street": "เทศบาล2",
-              "street_en": "ethsbaal2",
-              "pattern": "n{1,97} เทศบาล2"
+              "street_ascii": "Thetsaban 2",
+              "pattern": "n{1,97} {street}"
             },
             {
               "code": "22110",
               "street": "Municipal Road",
-              "street_en": "Municipal Road",
-              "pattern": "n{1,78} Municipal Road"
+              "pattern": "n{1,78} {street}"
             }
           ]
         }
@@ -1730,40 +1735,40 @@
     },
     {
       "name": "จังหวัดพิจิตร",
-      "name_en": "Phichit",
+      "name_ascii": "Phichit",
       "region_tags": [
         "Northern Thailand"
       ],
       "cities": [
         {
           "name": "พิจิตร",
-          "name_en": "Phichit",
+          "name_ascii": "Phichit",
           "lat": 16.4418,
           "lon": 100.3488,
           "postcodes": [
             {
               "code": "66000",
               "street": "ถนนสระหลวง",
-              "street_en": "Sa Luang Road",
-              "pattern": "n{1,95} ถนนสระหลวง"
+              "street_ascii": "Sa Luang Road",
+              "pattern": "n{1,95} {street}"
             },
             {
               "code": "65110",
               "street": "ซอยพิจิตร 5",
-              "street_en": "Soi Pra Phichit 5",
-              "pattern": "n{1,155} ซอยพิจิตร 5"
+              "street_ascii": "Soi Pra Phichit 5",
+              "pattern": "n{1,155} {street}"
             },
             {
               "code": "66160",
               "street": "ทางเลี่ยงเมืองพิจิตร",
-              "street_en": "Pichit Bypass Road",
-              "pattern": "n{1,98} ทางเลี่ยงเมืองพิจิตร"
+              "street_ascii": "Pichit Bypass Road",
+              "pattern": "n{1,98} {street}"
             },
             {
               "code": "66190",
               "street": "ถนนบุษบา",
-              "street_en": "Boossaba Road",
-              "pattern": "n{1,164} ถนนบุษบา"
+              "street_ascii": "Boossaba Road",
+              "pattern": "n{1,164} {street}"
             }
           ]
         }
@@ -1771,40 +1776,40 @@
     },
     {
       "name": "จังหวัดจันทบุรี",
-      "name_en": "Chanthaburi",
+      "name_ascii": "Chanthaburi",
       "region_tags": [
         "Eastern Thailand"
       ],
       "cities": [
         {
           "name": "จันทบุรี",
-          "name_en": "Chanthaburi",
+          "name_ascii": "Chanthaburi",
           "lat": 12.6096,
           "lon": 102.1045,
           "postcodes": [
             {
               "code": "22000",
               "street": "ถนนเลียบเนิน",
-              "street_en": "Lieab Noen Road",
-              "pattern": "n{1,118} ถนนเลียบเนิน"
+              "street_ascii": "Lieab Noen Road",
+              "pattern": "n{1,118} {street}"
             },
             {
               "code": "22180",
               "street": "ถนนเทศบาล 3",
-              "street_en": "Thetsaban 3 Road",
-              "pattern": "n{1,104} ถนนเทศบาล 3"
+              "street_ascii": "Thetsaban 3 Road",
+              "pattern": "n{1,104} {street}"
             },
             {
               "code": "22210",
               "street": "ถนนขวาง",
-              "street_en": "Khwang Road",
-              "pattern": "n{1,181} ถนนขวาง"
+              "street_ascii": "Khwang Road",
+              "pattern": "n{1,181} {street}"
             },
             {
               "code": "22120",
               "street": "ถนนศรีจันทร์",
-              "street_en": "Srichan Road",
-              "pattern": "n{1,199} ถนนศรีจันทร์"
+              "street_ascii": "Srichan Road",
+              "pattern": "n{1,199} {street}"
             }
           ]
         }
@@ -1812,7 +1817,7 @@
     },
     {
       "name": "จังหวัดหนองคาย",
-      "name_en": "Nong Khai",
+      "name_ascii": "Nong Khai",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -1820,33 +1825,33 @@
       "cities": [
         {
           "name": "หนองคาย",
-          "name_en": "Nong Khai",
+          "name_ascii": "Nong Khai",
           "lat": 17.8785,
           "lon": 102.742,
           "postcodes": [
             {
               "code": "43110",
               "street": "ถนนหายโศก",
-              "street_en": "Haisok Rd",
-              "pattern": "n{1,141} ถนนหายโศก"
+              "street_ascii": "Haisok Rd",
+              "pattern": "n{1,141} {street}"
             },
             {
               "code": "43130",
               "street": "ถนนประจักษ์ศิลปคม",
-              "street_en": "Prajak Sillapakhom Road",
-              "pattern": "n{1,130} ถนนประจักษ์ศิลปคม"
+              "street_ascii": "Prajak Sillapakhom Road",
+              "pattern": "n{1,130} {street}"
             },
             {
               "code": "43120",
               "street": "ถนนปราบฮ่อ",
-              "street_en": "Prab Hor Road",
-              "pattern": "n{1,100} ถนนปราบฮ่อ"
+              "street_ascii": "Prab Hor Road",
+              "pattern": "n{1,100} {street}"
             },
             {
               "code": "43180",
               "street": "ถนนสุริยวงศ์",
-              "street_en": "Suriyawong Road",
-              "pattern": "n{1,127} ถนนสุริยวงศ์"
+              "street_ascii": "Suriyawong Road",
+              "pattern": "n{1,127} {street}"
             }
           ]
         }
@@ -1854,40 +1859,40 @@
     },
     {
       "name": "จังหวัดนราธิวาส",
-      "name_en": "Narathiwat",
+      "name_ascii": "Narathiwat",
       "region_tags": [
         "Southern Thailand"
       ],
       "cities": [
         {
           "name": "นราธิวาส",
-          "name_en": "Narathiwat",
+          "name_ascii": "Narathiwat",
           "lat": 6.4264,
           "lon": 101.8231,
           "postcodes": [
             {
               "code": "96130",
               "street": "ถนนสุริยะประดิษฐ์",
-              "street_en": "Suriya Pradit Road",
-              "pattern": "n{1,73} ถนนสุริยะประดิษฐ์"
+              "street_ascii": "Suriya Pradit Road",
+              "pattern": "n{1,73} {street}"
             },
             {
               "code": "96180",
               "street": "ถนนสถิตรายา",
-              "street_en": "thnnsthitraayaa",
-              "pattern": "n{1,87} ถนนสถิตรายา"
+              "street_ascii": "Sathit Raya Road",
+              "pattern": "n{1,87} {street}"
             },
             {
               "code": "94220",
               "street": "ถนนรามโกมุท",
-              "street_en": "Ramkomut Road",
-              "pattern": "n{1,122} ถนนรามโกมุท"
+              "street_ascii": "Ramkomut Road",
+              "pattern": "n{1,122} {street}"
             },
             {
               "code": "94230",
               "street": "ซอยประชาสันติ",
-              "street_en": "ch`yprachaasanti",
-              "pattern": "n{1,155} ซอยประชาสันติ"
+              "street_ascii": "Soi Pracha Santi",
+              "pattern": "n{1,155} {street}"
             }
           ]
         }
@@ -1895,7 +1900,7 @@
     },
     {
       "name": "จังหวัดสุรินทร์",
-      "name_en": "Surin",
+      "name_ascii": "Surin",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -1903,33 +1908,33 @@
       "cities": [
         {
           "name": "สุรินทร์",
-          "name_en": "Surin",
+          "name_ascii": "Surin",
           "lat": 14.8818,
           "lon": 103.4936,
           "postcodes": [
             {
               "code": "31160",
               "street": "ถนนเทศบาล 3",
-              "street_en": "Thetsaban 3 Rd",
-              "pattern": "n{1,104} ถนนเทศบาล 3"
+              "street_ascii": "Thetsaban 3 Rd",
+              "pattern": "n{1,104} {street}"
             },
             {
               "code": "31180",
               "street": "ถนนศิริรัตน์",
-              "street_en": "thnnsiriratn",
-              "pattern": "n{1,92} ถนนศิริรัตน์"
+              "street_ascii": "Siri Rat Road",
+              "pattern": "n{1,92} {street}"
             },
             {
               "code": "34000",
               "street": "ถนนโคกมาเมียน",
-              "street_en": "Koakmamien Rd",
-              "pattern": "n{1,183} ถนนโคกมาเมียน"
+              "street_ascii": "Koakmamien Rd",
+              "pattern": "n{1,183} {street}"
             },
             {
               "code": "31150",
               "street": "ถนนกรุงศรีใน",
-              "street_en": "Krungsri Nai Road",
-              "pattern": "n{1,79} ถนนกรุงศรีใน"
+              "street_ascii": "Krungsri Nai Road",
+              "pattern": "n{1,79} {street}"
             }
           ]
         }
@@ -1937,40 +1942,39 @@
     },
     {
       "name": "จังหวัดสุพรรณบุรี",
-      "name_en": "Suphan Buri",
+      "name_ascii": "Suphan Buri",
       "region_tags": [
         "Central Thailand"
       ],
       "cities": [
         {
           "name": "สุพรรณบุรี",
-          "name_en": "Suphan Buri",
+          "name_ascii": "Suphan Buri",
           "lat": 14.4742,
           "lon": 100.1222,
           "postcodes": [
             {
               "code": "72150",
               "street": "ถนนมาลัยแมน",
-              "street_en": "Malai Maen Road",
-              "pattern": "n{1,99} ถนนมาลัยแมน"
+              "street_ascii": "Malai Maen Road",
+              "pattern": "n{1,99} {street}"
             },
             {
               "code": "72000",
               "street": "ทางคู่ขนาน",
-              "street_en": "Frontage Road",
-              "pattern": "n{1,107} ทางคู่ขนาน"
+              "street_ascii": "Frontage Road",
+              "pattern": "n{1,107} {street}"
             },
             {
               "code": "72120",
               "street": "Nen Kaeo Road",
-              "street_en": "Nen Kaeo Road",
-              "pattern": "n{1,111} Nen Kaeo Road"
+              "pattern": "n{1,111} {street}"
             },
             {
               "code": "72160",
               "street": "ถนนหมื่นหาญ",
-              "street_en": "Muen Han Road",
-              "pattern": "n{1,133} ถนนหมื่นหาญ"
+              "street_ascii": "Muen Han Road",
+              "pattern": "n{1,133} {street}"
             }
           ]
         }
@@ -1978,7 +1982,7 @@
     },
     {
       "name": "จังหวัดศรีสะเกษ",
-      "name_en": "Si Sa Ket",
+      "name_ascii": "Si Sa Ket",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -1986,33 +1990,33 @@
       "cities": [
         {
           "name": "ศรีสะเกษ",
-          "name_en": "Si Sa Ket",
+          "name_ascii": "Si Sa Ket",
           "lat": 15.1148,
           "lon": 104.3294,
           "postcodes": [
             {
               "code": "33000",
               "street": "ถนนขุขันธ์",
-              "street_en": "Khukhan Road",
-              "pattern": "n{1,187} ถนนขุขันธ์"
+              "street_ascii": "Khukhan Road",
+              "pattern": "n{1,187} {street}"
             },
             {
               "code": "33140",
               "street": "ถนนกวงเฮง",
-              "street_en": "Kuang Heng Road",
-              "pattern": "n{1,197} ถนนกวงเฮง"
+              "street_ascii": "Kuang Heng Road",
+              "pattern": "n{1,197} {street}"
             },
             {
               "code": "33230",
               "street": "ถนนเฉลิมราชย์ 60 ปี",
-              "street_en": "Chalermraj 60 Year Road",
-              "pattern": "n{1,164} ถนนเฉลิมราชย์ 60 ปี"
+              "street_ascii": "Chalermraj 60 Year Road",
+              "pattern": "n{1,164} {street}"
             },
             {
               "code": "33190",
               "street": "ถนนวันลูกเสือ",
-              "street_en": "Wan Luk Sua Road",
-              "pattern": "n{1,83} ถนนวันลูกเสือ"
+              "street_ascii": "Wan Luk Sua Road",
+              "pattern": "n{1,83} {street}"
             }
           ]
         }
@@ -2020,66 +2024,66 @@
     },
     {
       "name": "จังหวัดชลบุรี",
-      "name_en": "Chon Buri",
+      "name_ascii": "Chon Buri",
       "region_tags": [
         "Eastern Thailand"
       ],
       "cities": [
         {
           "name": "ชลบุรี",
-          "name_en": "Chon Buri",
+          "name_ascii": "Chon Buri",
           "lat": 13.3622,
           "lon": 100.9835,
           "postcodes": [
             {
               "code": "20000",
               "street": "ถนนสุขุมวิท",
-              "street_en": "Sukhumvit Road",
-              "pattern": "n{1,200} ถนนสุขุมวิท"
+              "street_ascii": "Sukhumvit Road",
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "20000",
               "street": "ถนนพระยาสัจจา",
-              "street_en": "Phraya Satcha Road",
-              "pattern": "n{1,80} ถนนพระยาสัจจา"
+              "street_ascii": "Phraya Satcha Road",
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "20000",
               "street": "ถนนวชิรปราการ",
-              "street_en": "Wachiraprakan Road",
-              "pattern": "n{1,70} ถนนวชิรปราการ"
+              "street_ascii": "Wachiraprakan Road",
+              "pattern": "n{1,70} {street}"
             }
           ]
         },
         {
           "name": "ศรีราชา",
-          "name_en": "Si Racha",
+          "name_ascii": "Si Racha",
           "lat": 13.1728,
           "lon": 100.9316,
           "postcodes": [
             {
               "code": "20110",
               "street": "ถนนศรีราชา-หนองยายบู่",
-              "street_en": "Sriracha-Nongyaybu Road",
-              "pattern": "n{1,126} ถนนศรีราชา-หนองยายบู่"
+              "street_ascii": "Sriracha-Nongyaybu Road",
+              "pattern": "n{1,126} {street}"
             },
             {
               "code": "20150",
               "street": "ศรีราชา-หนองยายบู่ ซอย 20",
-              "street_en": "sriiraachaa-hn`ngyaaybuu ch`y 20",
-              "pattern": "n{1,126} ศรีราชา-หนองยายบู่ ซอย 20"
+              "street_ascii": "Sriracha-Nong Yai Bu Soi 20",
+              "pattern": "n{1,126} {street}"
             },
             {
               "code": "20170",
               "street": "ถนนเก้ากิโล",
-              "street_en": "Kao Kilo Road",
-              "pattern": "n{1,105} ถนนเก้ากิโล"
+              "street_ascii": "Kao Kilo Road",
+              "pattern": "n{1,105} {street}"
             },
             {
               "code": "20120",
               "street": "สุขุมวิท 21",
-              "street_en": "sukhumwith 21",
-              "pattern": "n{1,146} สุขุมวิท 21"
+              "street_ascii": "Sukhumvit 21",
+              "pattern": "n{1,146} {street}"
             }
           ]
         }
@@ -2087,40 +2091,40 @@
     },
     {
       "name": "จังหวัดสิงห์บุรี",
-      "name_en": "Sing Buri",
+      "name_ascii": "Sing Buri",
       "region_tags": [
         "Central Thailand"
       ],
       "cities": [
         {
           "name": "สิงห์บุรี",
-          "name_en": "Sing Buri",
+          "name_ascii": "Sing Buri",
           "lat": 14.8879,
           "lon": 100.4046,
           "postcodes": [
             {
               "code": "16000",
               "street": "ถนน นายจันหนวดเขี้ยว",
-              "street_en": "Nai Chan Nuat Khiao Rd.",
-              "pattern": "n{1,172} ถนน นายจันหนวดเขี้ยว"
+              "street_ascii": "Nai Chan Nuat Khiao Rd.",
+              "pattern": "n{1,172} {street}"
             },
             {
               "code": "16150",
               "street": "ทางเลี่ยงเมืองสิงห์บุรี",
-              "street_en": "thaangeliiyngemuue`ngsinghburii",
-              "pattern": "n{1,164} ทางเลี่ยงเมืองสิงห์บุรี"
+              "street_ascii": "Sing Buri Bypass Road",
+              "pattern": "n{1,164} {street}"
             },
             {
               "code": "16120",
               "street": "ถนนลพบุรี-ชัยนาท",
-              "street_en": "thnnlphburii-chaynaath",
-              "pattern": "n{1,172} ถนนลพบุรี-ชัยนาท"
+              "street_ascii": "Lop Buri-Chai Nat Road",
+              "pattern": "n{1,172} {street}"
             },
             {
               "code": "16130",
               "street": "ถนน ชลประทาน",
-              "street_en": "Chonlaprathan",
-              "pattern": "n{1,124} ถนน ชลประทาน"
+              "street_ascii": "Chonlaprathan",
+              "pattern": "n{1,124} {street}"
             }
           ]
         }
@@ -2128,40 +2132,40 @@
     },
     {
       "name": "จังหวัดปราจีนบุรี",
-      "name_en": "Prachin Buri",
+      "name_ascii": "Prachin Buri",
       "region_tags": [
         "Eastern Thailand"
       ],
       "cities": [
         {
           "name": "กบินทร์บุรี",
-          "name_en": "Kabin Buri",
+          "name_ascii": "Kabin Buri",
           "lat": 13.9513,
           "lon": 101.7174,
           "postcodes": [
             {
               "code": "25110",
               "street": "ถนนสุวรรณศร",
-              "street_en": "Suwannason Road",
-              "pattern": "n{1,188} ถนนสุวรรณศร"
+              "street_ascii": "Suwannason Road",
+              "pattern": "n{1,188} {street}"
             },
             {
               "code": "25220",
               "street": "เลี่ยงเมือง 304",
-              "street_en": "304 Frontage Road",
-              "pattern": "n{1,67} เลี่ยงเมือง 304"
+              "street_ascii": "304 Frontage Road",
+              "pattern": "n{1,67} {street}"
             },
             {
               "code": "25140",
               "street": "ถนนเทศบาล 5",
-              "street_en": "thnnethsbaal 5",
-              "pattern": "n{1,134} ถนนเทศบาล 5"
+              "street_ascii": "Thetsaban 5 Road",
+              "pattern": "n{1,134} {street}"
             },
             {
               "code": "25000",
               "street": "ซอยท่าหิน 3",
-              "street_en": "ch`ythaahin 3",
-              "pattern": "n{1,104} ซอยท่าหิน 3"
+              "street_ascii": "Soi Tha Hin 3",
+              "pattern": "n{1,104} {street}"
             }
           ]
         }
@@ -2169,40 +2173,40 @@
     },
     {
       "name": "จังหวัดสตูล",
-      "name_en": "Satun",
+      "name_ascii": "Satun",
       "region_tags": [
         "Southern Thailand"
       ],
       "cities": [
         {
           "name": "สตูล",
-          "name_en": "Satun",
+          "name_ascii": "Satun",
           "lat": 6.6231,
           "lon": 100.0668,
           "postcodes": [
             {
               "code": "91130",
               "street": "ถนนบุรีวานิช",
-              "street_en": "Buriwanich Road",
-              "pattern": "n{1,69} ถนนบุรีวานิช"
+              "street_ascii": "Buriwanich Road",
+              "pattern": "n{1,69} {street}"
             },
             {
               "code": "91150",
               "street": "ถนนศุลกานุกูล",
-              "street_en": "thnnsulkaanukuul",
-              "pattern": "n{1,118} ถนนศุลกานุกูล"
+              "street_ascii": "Sunlakanukun Road",
+              "pattern": "n{1,118} {street}"
             },
             {
               "code": "91000",
               "street": "สตูลธานี 5",
-              "street_en": "Satun Thanee 5",
-              "pattern": "n{1,152} สตูลธานี 5"
+              "street_ascii": "Satun Thanee 5",
+              "pattern": "n{1,152} {street}"
             },
             {
               "code": "91160",
               "street": "ถนนยาตราสวัสดี",
-              "street_en": "Yattra Sawaddee Road",
-              "pattern": "n{1,136} ถนนยาตราสวัสดี"
+              "street_ascii": "Yattra Sawaddee Road",
+              "pattern": "n{1,136} {street}"
             }
           ]
         }
@@ -2210,34 +2214,34 @@
     },
     {
       "name": "จังหวัดสระบุรี",
-      "name_en": "Saraburi",
+      "name_ascii": "Saraburi",
       "region_tags": [
         "Central Thailand"
       ],
       "cities": [
         {
           "name": "สระบุรี",
-          "name_en": "Saraburi",
+          "name_ascii": "Saraburi",
           "lat": 14.5333,
           "lon": 100.9167,
           "postcodes": [
             {
               "code": "18000",
               "street": "ถนนพหลโยธิน",
-              "street_en": "Phahonyothin Road",
-              "pattern": "n{1,200} ถนนพหลโยธิน"
+              "street_ascii": "Phahonyothin Road",
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "18000",
               "street": "ถนนมิตรภาพ",
-              "street_en": "Mittraphap Road",
-              "pattern": "n{1,180} ถนนมิตรภาพ"
+              "street_ascii": "Mittraphap Road",
+              "pattern": "n{1,180} {street}"
             },
             {
               "code": "18000",
               "street": "ถนนสุดบรรทัด",
-              "street_en": "Sut Banthat Road",
-              "pattern": "n{1,90} ถนนสุดบรรทัด"
+              "street_ascii": "Sut Banthat Road",
+              "pattern": "n{1,90} {street}"
             }
           ]
         }
@@ -2245,40 +2249,40 @@
     },
     {
       "name": "จังหวัดสมุทรสงคราม",
-      "name_en": "Samut Songkhram",
+      "name_ascii": "Samut Songkhram",
       "region_tags": [
         "Central Thailand"
       ],
       "cities": [
         {
           "name": "สมุทรสงคราม",
-          "name_en": "Samut Songkhram",
+          "name_ascii": "Samut Songkhram",
           "lat": 13.4146,
           "lon": 100.0026,
           "postcodes": [
             {
               "code": "75000",
               "street": "ถนนเจริญชมปรีดา",
-              "street_en": "thnnecchriychmpriidaa",
-              "pattern": "n{1,75} ถนนเจริญชมปรีดา"
+              "street_ascii": "Charoen Chom Prida Road",
+              "pattern": "n{1,75} {street}"
             },
             {
               "code": "75110",
               "street": "ถนนศรีจำปา",
-              "street_en": "Srejumpa Road",
-              "pattern": "n{1,166} ถนนศรีจำปา"
+              "street_ascii": "Srejumpa Road",
+              "pattern": "n{1,166} {street}"
             },
             {
               "code": "75120",
               "street": "ถนนราชญาติรักษา",
-              "street_en": "Ratchayat Raksa Road",
-              "pattern": "n{1,115} ถนนราชญาติรักษา"
+              "street_ascii": "Ratchayat Raksa Road",
+              "pattern": "n{1,115} {street}"
             },
             {
               "code": "70170",
               "street": "ถนนชูศักดิ์",
-              "street_en": "Chusak Road",
-              "pattern": "n{1,99} ถนนชูศักดิ์"
+              "street_ascii": "Chusak Road",
+              "pattern": "n{1,99} {street}"
             }
           ]
         }
@@ -2286,40 +2290,40 @@
     },
     {
       "name": "จังหวัดสมุทรสาคร",
-      "name_en": "Samut Sakhon",
+      "name_ascii": "Samut Sakhon",
       "region_tags": [
         "Central Thailand"
       ],
       "cities": [
         {
           "name": "กระทุ่มแบน",
-          "name_en": "Krathum Baen",
+          "name_ascii": "Krathum Baen",
           "lat": 13.6533,
           "lon": 100.2597,
           "postcodes": [
             {
               "code": "74110",
               "street": "ถนนเศรษฐกิจ 1",
-              "street_en": "Setthakit 1 Road",
-              "pattern": "n{1,127} ถนนเศรษฐกิจ 1"
+              "street_ascii": "Setthakit 1 Road",
+              "pattern": "n{1,127} {street}"
             },
             {
               "code": "73110",
               "street": "ถนนเทศบาล 4",
-              "street_en": "thnnethsbaal 4",
-              "pattern": "n{1,124} ถนนเทศบาล 4"
+              "street_ascii": "Thetsaban 4 Road",
+              "pattern": "n{1,124} {street}"
             },
             {
               "code": "10160",
               "street": "ถนนเทศบาล 2/4",
-              "street_en": "thnnethsbaal 2/4",
-              "pattern": "n{1,163} ถนนเทศบาล 2/4"
+              "street_ascii": "Thetsaban 2/4 Road",
+              "pattern": "n{1,163} {street}"
             },
             {
               "code": "74000",
               "street": "ถนนศรีสุคนธ์",
-              "street_en": "Sisukhon Road",
-              "pattern": "n{1,91} ถนนศรีสุคนธ์"
+              "street_ascii": "Sisukhon Road",
+              "pattern": "n{1,91} {street}"
             }
           ]
         }
@@ -2327,34 +2331,34 @@
     },
     {
       "name": "จังหวัดนครปฐม",
-      "name_en": "Nakhon Pathom",
+      "name_ascii": "Nakhon Pathom",
       "region_tags": [
         "Central Thailand"
       ],
       "cities": [
         {
           "name": "นครปฐม",
-          "name_en": "Nakhon Pathom",
+          "name_ascii": "Nakhon Pathom",
           "lat": 13.8196,
           "lon": 100.0443,
           "postcodes": [
             {
               "code": "73000",
               "street": "ถนนเพชรเกษม",
-              "street_en": "Phetkasem Road",
-              "pattern": "n{1,200} ถนนเพชรเกษม"
+              "street_ascii": "Phetkasem Road",
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "73000",
               "street": "ถนนราชดำเนิน",
-              "street_en": "Ratchadamnoen Road",
-              "pattern": "n{1,80} ถนนราชดำเนิน"
+              "street_ascii": "Ratchadamnoen Road",
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "73000",
               "street": "ถนนทรงพล",
-              "street_en": "Song Phon Road",
-              "pattern": "n{1,70} ถนนทรงพล"
+              "street_ascii": "Song Phon Road",
+              "pattern": "n{1,70} {street}"
             }
           ]
         }
@@ -2362,7 +2366,7 @@
     },
     {
       "name": "จังหวัดร้อยเอ็ด",
-      "name_en": "Roi Et",
+      "name_ascii": "Roi Et",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -2370,33 +2374,33 @@
       "cities": [
         {
           "name": "ร้อยเอ็ด",
-          "name_en": "Roi Et",
+          "name_ascii": "Roi Et",
           "lat": 16.0567,
           "lon": 103.6531,
           "postcodes": [
             {
               "code": "45000",
               "street": "ถนนผดุงพานิช",
-              "street_en": "Phadung Phanit Road",
-              "pattern": "n{1,88} ถนนผดุงพานิช"
+              "street_ascii": "Phadung Phanit Road",
+              "pattern": "n{1,88} {street}"
             },
             {
               "code": "45110",
               "street": "ถนนกองพลสิบ",
-              "street_en": "Kongpon 10 Road",
-              "pattern": "n{1,82} ถนนกองพลสิบ"
+              "street_ascii": "Kongpon 10 Road",
+              "pattern": "n{1,82} {street}"
             },
             {
               "code": "45170",
               "street": "ถนนราชการดำเนิน",
-              "street_en": "Ratchakan Damnoen Road",
-              "pattern": "n{1,121} ถนนราชการดำเนิน"
+              "street_ascii": "Ratchakan Damnoen Road",
+              "pattern": "n{1,121} {street}"
             },
             {
               "code": "46210",
               "street": "ถนนเทวาภิบาล",
-              "street_en": "Thewaphiban Road",
-              "pattern": "n{1,88} ถนนเทวาภิบาล"
+              "street_ascii": "Thewaphiban Road",
+              "pattern": "n{1,88} {street}"
             }
           ]
         }
@@ -2404,40 +2408,40 @@
     },
     {
       "name": "จังหวัดระยอง",
-      "name_en": "Rayong",
+      "name_ascii": "Rayong",
       "region_tags": [
         "Eastern Thailand"
       ],
       "cities": [
         {
           "name": "ระยอง",
-          "name_en": "Rayong",
+          "name_ascii": "Rayong",
           "lat": 12.6809,
           "lon": 101.258,
           "postcodes": [
             {
               "code": "21000",
               "street": "ถนนสุขุมวิท",
-              "street_en": "Sukhumvit Road",
-              "pattern": "n{1,200} ถนนสุขุมวิท"
+              "street_ascii": "Sukhumvit Road",
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "21000",
               "street": "ถนนตากสินมหาราช",
-              "street_en": "Taksin Maharat Road",
-              "pattern": "n{1,120} ถนนตากสินมหาราช"
+              "street_ascii": "Taksin Maharat Road",
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "21000",
               "street": "ถนนจันทอุดม",
-              "street_en": "Chan Udom Road",
-              "pattern": "n{1,90} ถนนจันทอุดม"
+              "street_ascii": "Chan Udom Road",
+              "pattern": "n{1,90} {street}"
             },
             {
               "code": "21160",
               "street": "ถนนเพ-แกลง",
-              "street_en": "Phe-Klaeng Road",
-              "pattern": "n{1,80} ถนนเพ-แกลง"
+              "street_ascii": "Phe-Klaeng Road",
+              "pattern": "n{1,80} {street}"
             }
           ]
         }
@@ -2445,7 +2449,7 @@
     },
     {
       "name": "จังหวัดบุรีรัมย์",
-      "name_en": "Buri Ram",
+      "name_ascii": "Buri Ram",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -2453,33 +2457,33 @@
       "cities": [
         {
           "name": "บุรีรัมย์",
-          "name_en": "Buri Ram",
+          "name_ascii": "Buri Ram",
           "lat": 14.9943,
           "lon": 103.1039,
           "postcodes": [
             {
               "code": "31180",
               "street": "ถนนหลักเมือง",
-              "street_en": "Lak Mueang Road",
-              "pattern": "n{1,152} ถนนหลักเมือง"
+              "street_ascii": "Lak Mueang Road",
+              "pattern": "n{1,152} {street}"
             },
             {
               "code": "31130",
               "street": "ถนนบุลำดวน",
-              "street_en": "Bulamduan Road",
-              "pattern": "n{1,175} ถนนบุลำดวน"
+              "street_ascii": "Bulamduan Road",
+              "pattern": "n{1,175} {street}"
             },
             {
               "code": "31160",
               "street": "ซอยลำดวน 1",
-              "street_en": "Soi Lam Duan 1",
-              "pattern": "n{1,135} ซอยลำดวน 1"
+              "street_ascii": "Soi Lam Duan 1",
+              "pattern": "n{1,135} {street}"
             },
             {
               "code": "31190",
               "street": "ถนนอินจันทร์ณรงค์",
-              "street_en": "In Jandra Narong Rd",
-              "pattern": "n{1,109} ถนนอินจันทร์ณรงค์"
+              "street_ascii": "In Jandra Narong Rd",
+              "pattern": "n{1,109} {street}"
             }
           ]
         }
@@ -2487,7 +2491,7 @@
     },
     {
       "name": "จังหวัดชัยภูมิ",
-      "name_en": "Chaiyaphum",
+      "name_ascii": "Chaiyaphum",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -2495,33 +2499,32 @@
       "cities": [
         {
           "name": "ชัยภูมิ",
-          "name_en": "Chaiyaphum",
+          "name_ascii": "Chaiyaphum",
           "lat": 15.8105,
           "lon": 102.0288,
           "postcodes": [
             {
               "code": "36170",
               "street": "Burapha Rd",
-              "street_en": "Burapha Rd",
-              "pattern": "n{1,112} Burapha Rd"
+              "pattern": "n{1,112} {street}"
             },
             {
               "code": "36000",
               "street": "ถนนชัยภูมิ-สีคิ้ว",
-              "street_en": "Chaiyaphum-Sikhio Road",
-              "pattern": "n{1,60} ถนนชัยภูมิ-สีคิ้ว"
+              "street_ascii": "Chaiyaphum-Sikhio Road",
+              "pattern": "n{1,60} {street}"
             },
             {
               "code": "30350",
               "street": "ถนนชัยภูมิ-ตาดโตน",
-              "street_en": "Chaiyaphum–Tat Ton Road",
-              "pattern": "n{1,74} ถนนชัยภูมิ-ตาดโตน"
+              "street_ascii": "Chaiyaphum-Tat Ton Road",
+              "pattern": "n{1,74} {street}"
             },
             {
               "code": "36230",
               "street": "ถนนบรรณาการ",
-              "street_en": "Bannakan Road",
-              "pattern": "n{1,152} ถนนบรรณาการ"
+              "street_ascii": "Bannakan Road",
+              "pattern": "n{1,152} {street}"
             }
           ]
         }
@@ -2529,40 +2532,40 @@
     },
     {
       "name": "จังหวัดแพร่",
-      "name_en": "Phrae",
+      "name_ascii": "Phrae",
       "region_tags": [
         "Northern Thailand"
       ],
       "cities": [
         {
           "name": "แพร่",
-          "name_en": "Phrae",
+          "name_ascii": "Phrae",
           "lat": 18.1459,
           "lon": 100.141,
           "postcodes": [
             {
               "code": "54000",
               "street": "ถนนเหมืองหิต",
-              "street_en": "Muang Hit Road",
-              "pattern": "n{1,86} ถนนเหมืองหิต"
+              "street_ascii": "Muang Hit Road",
+              "pattern": "n{1,86} {street}"
             },
             {
               "code": "54130",
               "street": "ถนนบ้านใหม่",
-              "street_en": "Ban Mai Road",
-              "pattern": "n{1,72} ถนนบ้านใหม่"
+              "street_ascii": "Ban Mai Road",
+              "pattern": "n{1,72} {street}"
             },
             {
               "code": "54170",
               "street": "เจริญเมือง",
-              "street_en": "Charoen Mueang",
-              "pattern": "n{1,142} เจริญเมือง"
+              "street_ascii": "Charoen Mueang",
+              "pattern": "n{1,142} {street}"
             },
             {
               "code": "54140",
               "street": "วีระ",
-              "street_en": "wiira",
-              "pattern": "n{1,199} วีระ"
+              "street_ascii": "Wira",
+              "pattern": "n{1,199} {street}"
             }
           ]
         }
@@ -2570,34 +2573,34 @@
     },
     {
       "name": "จังหวัดพิษณุโลก",
-      "name_en": "Phitsanulok",
+      "name_ascii": "Phitsanulok",
       "region_tags": [
         "Northern Thailand"
       ],
       "cities": [
         {
           "name": "พิษณุโลก",
-          "name_en": "Phitsanulok",
+          "name_ascii": "Phitsanulok",
           "lat": 16.8248,
           "lon": 100.2586,
           "postcodes": [
             {
               "code": "65000",
               "street": "ถนนบรมไตรโลกนารถ",
-              "street_en": "Borommatrailokkanat Road",
-              "pattern": "n{1,120} ถนนบรมไตรโลกนารถ"
+              "street_ascii": "Borommatrailokkanat Road",
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "65000",
               "street": "ถนนสุรสีห์",
-              "street_en": "Surasi Road",
-              "pattern": "n{1,80} ถนนสุรสีห์"
+              "street_ascii": "Surasi Road",
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "65000",
               "street": "ถนนนเรศวร",
-              "street_en": "Naresuan Road",
-              "pattern": "n{1,90} ถนนนเรศวร"
+              "street_ascii": "Naresuan Road",
+              "pattern": "n{1,90} {street}"
             }
           ]
         }
@@ -2605,40 +2608,40 @@
     },
     {
       "name": "จังหวัดพัทลุง",
-      "name_en": "Phatthalung",
+      "name_ascii": "Phatthalung",
       "region_tags": [
         "Southern Thailand"
       ],
       "cities": [
         {
           "name": "พัทลุง",
-          "name_en": "Phatthalung",
+          "name_ascii": "Phatthalung",
           "lat": 7.6179,
           "lon": 100.0779,
           "postcodes": [
             {
               "code": "93000",
               "street": "ถนนราเมศวร์",
-              "street_en": "Ramet Road",
-              "pattern": "n{1,173} ถนนราเมศวร์"
+              "street_ascii": "Ramet Road",
+              "pattern": "n{1,173} {street}"
             },
             {
               "code": "93140",
               "street": "ถนนดอนรุน",
-              "street_en": "Donrun Road",
-              "pattern": "n{1,160} ถนนดอนรุน"
+              "street_ascii": "Donrun Road",
+              "pattern": "n{1,160} {street}"
             },
             {
               "code": "93170",
               "street": "ถนนสุรินทร์",
-              "street_en": "thnnsurinthr",
-              "pattern": "n{1,89} ถนนสุรินทร์"
+              "street_ascii": "Surin Road",
+              "pattern": "n{1,89} {street}"
             },
             {
               "code": "93110",
               "street": "ทัณฑ์บำรุง",
-              "street_en": "thanthbamrung",
-              "pattern": "n{1,71} ทัณฑ์บำรุง"
+              "street_ascii": "Than Bamrung",
+              "pattern": "n{1,71} {street}"
             }
           ]
         }
@@ -2646,34 +2649,34 @@
     },
     {
       "name": "จังหวัดฉะเชิงเทรา",
-      "name_en": "Chachoengsao",
+      "name_ascii": "Chachoengsao",
       "region_tags": [
         "Eastern Thailand"
       ],
       "cities": [
         {
           "name": "ฉะเชิงเทรา",
-          "name_en": "Chachoengsao",
+          "name_ascii": "Chachoengsao",
           "lat": 13.6882,
           "lon": 101.0716,
           "postcodes": [
             {
               "code": "24000",
               "street": "ถนนมหาจักรพรรดิ์",
-              "street_en": "Maha Chakkraphat Road",
-              "pattern": "n{1,120} ถนนมหาจักรพรรดิ์"
+              "street_ascii": "Maha Chakkraphat Road",
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "24000",
               "street": "ถนนศุภกิจ",
-              "street_en": "Suphakit Road",
-              "pattern": "n{1,80} ถนนศุภกิจ"
+              "street_ascii": "Suphakit Road",
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "24000",
               "street": "ถนนชุมพล",
-              "street_en": "Chumphon Road",
-              "pattern": "n{1,70} ถนนชุมพล"
+              "street_ascii": "Chumphon Road",
+              "pattern": "n{1,70} {street}"
             }
           ]
         }
@@ -2681,40 +2684,40 @@
     },
     {
       "name": "จังหวัดปทุมธานี",
-      "name_en": "Pathum Thani",
+      "name_ascii": "Pathum Thani",
       "region_tags": [
         "Central Thailand"
       ],
       "cities": [
         {
           "name": "คลองหลวง",
-          "name_en": "Khlong Luang",
+          "name_ascii": "Khlong Luang",
           "lat": 14.0647,
           "lon": 100.6458,
           "postcodes": [
             {
               "code": "12120",
               "street": "ถนนคลองหลวง",
-              "street_en": "Khlong Luang Road",
-              "pattern": "n{1,86} ถนนคลองหลวง"
+              "street_ascii": "Khlong Luang Road",
+              "pattern": "n{1,86} {street}"
             },
             {
               "code": "12000",
               "street": "ถนนสีขาว",
-              "street_en": "Thanon Si Khao",
-              "pattern": "n{1,132} ถนนสีขาว"
+              "street_ascii": "Si Khao Road",
+              "pattern": "n{1,132} {street}"
             },
             {
               "code": "12110",
               "street": "ถนนเลียบคลองสาม",
-              "street_en": "Liap Khlong Sam Road",
-              "pattern": "n{1,185} ถนนเลียบคลองสาม"
+              "street_ascii": "Liap Khlong Sam Road",
+              "pattern": "n{1,185} {street}"
             },
             {
               "code": "12160",
               "street": "ซอยเทพกุญชร 13/1",
-              "street_en": "ch`yethphkuychr 13/1",
-              "pattern": "n{1,183} ซอยเทพกุญชร 13/1"
+              "street_ascii": "Soi Thep Kunchon 13/1",
+              "pattern": "n{1,183} {street}"
             }
           ]
         }
@@ -2722,66 +2725,66 @@
     },
     {
       "name": "จังหวัดนนทบุรี",
-      "name_en": "Nonthaburi",
+      "name_ascii": "Nonthaburi",
       "region_tags": [
         "Central Thailand"
       ],
       "cities": [
         {
           "name": "เทศบาลนครนนทบุรี",
-          "name_en": "Mueang Nonthaburi",
+          "name_ascii": "Mueang Nonthaburi",
           "lat": 13.8607,
           "lon": 100.5148,
           "postcodes": [
             {
               "code": "10250",
               "street": "ถนนงามวงศ์วาน",
-              "street_en": "Ngam Wong Wan Road",
-              "pattern": "n{1,178} ถนนงามวงศ์วาน"
+              "street_ascii": "Ngam Wong Wan Road",
+              "pattern": "n{1,178} {street}"
             },
             {
               "code": "10290",
               "street": "ซอยสามัคคี 1",
-              "street_en": "Soi Samakkee 1",
-              "pattern": "n{1,103} ซอยสามัคคี 1"
+              "street_ascii": "Soi Samakkee 1",
+              "pattern": "n{1,103} {street}"
             },
             {
               "code": "11120",
               "street": "ซอยสามัคคี 3",
-              "street_en": "Soi Samakkee 3",
-              "pattern": "n{1,61} ซอยสามัคคี 3"
+              "street_ascii": "Soi Samakkee 3",
+              "pattern": "n{1,61} {street}"
             },
             {
               "code": "10800",
               "street": "ถนนประชาราษฎร์",
-              "street_en": "Pracha Rat Road",
-              "pattern": "n{1,192} ถนนประชาราษฎร์"
+              "street_ascii": "Pracha Rat Road",
+              "pattern": "n{1,192} {street}"
             }
           ]
         },
         {
           "name": "ปากเกร็ด",
-          "name_en": "Pak Kret",
+          "name_ascii": "Pak Kret",
           "lat": 13.9118,
           "lon": 100.4977,
           "postcodes": [
             {
               "code": "11120",
               "street": "ถนนแจ้งวัฒนะ",
-              "street_en": "Chaeng Watthana Road",
-              "pattern": "n{1,130} ถนนแจ้งวัฒนะ"
+              "street_ascii": "Chaeng Watthana Road",
+              "pattern": "n{1,130} {street}"
             },
             {
               "code": "11120",
               "street": "ถนนติวานนท์",
-              "street_en": "Tiwanon Road",
-              "pattern": "n{1,110} ถนนติวานนท์"
+              "street_ascii": "Tiwanon Road",
+              "pattern": "n{1,110} {street}"
             },
             {
               "code": "11120",
               "street": "ถนนสามัคคี",
-              "street_en": "Samakkhi Road",
-              "pattern": "n{1,70} ถนนสามัคคี"
+              "street_ascii": "Samakkhi Road",
+              "pattern": "n{1,70} {street}"
             }
           ]
         }
@@ -2789,40 +2792,40 @@
     },
     {
       "name": "จังหวัดน่าน",
-      "name_en": "Nan",
+      "name_ascii": "Nan",
       "region_tags": [
         "Northern Thailand"
       ],
       "cities": [
         {
           "name": "น่าน",
-          "name_en": "Nan",
+          "name_ascii": "Nan",
           "lat": 18.7838,
           "lon": 100.779,
           "postcodes": [
             {
               "code": "55000",
               "street": "หมาวงศ์ ซอย 3",
-              "street_en": "Mahawong Soi 3",
-              "pattern": "n{1,102} หมาวงศ์ ซอย 3"
+              "street_ascii": "Mahawong Soi 3",
+              "pattern": "n{1,102} {street}"
             },
             {
               "code": "55110",
               "street": "ถนนเจตบุตร",
-              "street_en": "Thanon Chettabut",
-              "pattern": "n{1,68} ถนนเจตบุตร"
+              "street_ascii": "Chettabut Road",
+              "pattern": "n{1,68} {street}"
             },
             {
               "code": "55170",
               "street": "ถนนมหาพรหม",
-              "street_en": "Thanon Mahaprom",
-              "pattern": "n{1,182} ถนนมหาพรหม"
+              "street_ascii": "Maha Phrom Road",
+              "pattern": "n{1,182} {street}"
             },
             {
               "code": "55190",
               "street": "ถนนมหายศ",
-              "street_en": "Mahayot Road",
-              "pattern": "n{1,161} ถนนมหายศ"
+              "street_ascii": "Mahayot Road",
+              "pattern": "n{1,161} {street}"
             }
           ]
         }
@@ -2830,7 +2833,7 @@
     },
     {
       "name": "จังหวัดนครพนม",
-      "name_en": "Nakhon Phanom",
+      "name_ascii": "Nakhon Phanom",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -2838,33 +2841,31 @@
       "cities": [
         {
           "name": "นครพนม",
-          "name_en": "Nakhon Phanom",
+          "name_ascii": "Nakhon Phanom",
           "lat": 17.4108,
           "lon": 104.7786,
           "postcodes": [
             {
               "code": "48000",
               "street": "ถนนเฟื่องนคร",
-              "street_en": "Fueang Nakhon Road",
-              "pattern": "n{1,104} ถนนเฟื่องนคร"
+              "street_ascii": "Fueang Nakhon Road",
+              "pattern": "n{1,104} {street}"
             },
             {
               "code": "48120",
               "street": "ซอยบำรุงเมือง",
-              "street_en": "ch`ybamrungemuue`ng",
-              "pattern": "n{1,169} ซอยบำรุงเมือง"
+              "street_ascii": "Soi Bamrung Mueang",
+              "pattern": "n{1,169} {street}"
             },
             {
               "code": "48190",
               "street": "Setthathilat Road",
-              "street_en": "Setthathilat Road",
-              "pattern": "n{1,142} Setthathilat Road"
+              "pattern": "n{1,142} {street}"
             },
             {
               "code": "48160",
               "street": "Chou Anou Road",
-              "street_en": "Chou Anou Road",
-              "pattern": "n{1,179} Chou Anou Road"
+              "pattern": "n{1,179} {street}"
             }
           ]
         }
@@ -2872,40 +2873,40 @@
     },
     {
       "name": "จังหวัดนครนายก",
-      "name_en": "Nakhon Nayok",
+      "name_ascii": "Nakhon Nayok",
       "region_tags": [
         "Central Thailand"
       ],
       "cities": [
         {
           "name": "นครนายก",
-          "name_en": "Nakhon Nayok",
+          "name_ascii": "Nakhon Nayok",
           "lat": 14.2046,
           "lon": 101.213,
           "postcodes": [
             {
               "code": "26000",
               "street": "ถนนชลประสิทธิ์",
-              "street_en": "Chon Prasit Road",
-              "pattern": "n{1,105} ถนนชลประสิทธิ์"
+              "street_ascii": "Chon Prasit Road",
+              "pattern": "n{1,105} {street}"
             },
             {
               "code": "26120",
               "street": "ถนนนครนายก-สาริกา",
-              "street_en": "thnnnkhrnaayk-saarikaa",
-              "pattern": "n{1,77} ถนนนครนายก-สาริกา"
+              "street_ascii": "Nakhon Nayok-Sarika Road",
+              "pattern": "n{1,77} {street}"
             },
             {
               "code": "26130",
               "street": "ถนนสุวรรณศร (สายใน)",
-              "street_en": "Suwannason (Sai Nai) Road",
-              "pattern": "n{1,84} ถนนสุวรรณศร (สายใน)"
+              "street_ascii": "Suwannason (Sai Nai) Road",
+              "pattern": "n{1,84} {street}"
             },
             {
               "code": "26110",
               "street": "ถนนสุวรรณศร",
-              "street_en": "Suwannason Road",
-              "pattern": "n{1,188} ถนนสุวรรณศร"
+              "street_ascii": "Suwannason Road",
+              "pattern": "n{1,188} {street}"
             }
           ]
         }
@@ -2913,7 +2914,7 @@
     },
     {
       "name": "จังหวัดมุกดาหาร",
-      "name_en": "Mukdahan",
+      "name_ascii": "Mukdahan",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -2921,33 +2922,32 @@
       "cities": [
         {
           "name": "มุกดาหาร",
-          "name_en": "Mukdahan",
+          "name_ascii": "Mukdahan",
           "lat": 16.5453,
           "lon": 104.7235,
           "postcodes": [
             {
               "code": "49000",
               "street": "ຖະໜົນຄັນທະບູລີ",
-              "street_en": "Khanthabouli Road",
-              "pattern": "n{1,93} ຖະໜົນຄັນທະບູລີ"
+              "street_ascii": "Khanthabouli Road",
+              "pattern": "n{1,93} {street}"
             },
             {
               "code": "49140",
               "street": "ຖະໜົນລາດສະວົງເສິກ",
-              "street_en": "Latsavongseuk Road",
-              "pattern": "n{1,116} ຖະໜົນລາດສະວົງເສິກ"
+              "street_ascii": "Latsavongseuk Road",
+              "pattern": "n{1,116} {street}"
             },
             {
               "code": "49160",
               "street": "Chaimeuang Road",
-              "street_en": "Chaimeuang Road",
-              "pattern": "n{1,144} Chaimeuang Road"
+              "pattern": "n{1,144} {street}"
             },
             {
               "code": "49150",
               "street": "ຖະໜົນທ່າແຮ່",
-              "street_en": "Tha He Road",
-              "pattern": "n{1,169} ຖະໜົນທ່າແຮ່"
+              "street_ascii": "Tha He Road",
+              "pattern": "n{1,169} {street}"
             }
           ]
         }
@@ -2955,7 +2955,7 @@
     },
     {
       "name": "จังหวัดมหาสารคาม",
-      "name_en": "Maha Sarakham",
+      "name_ascii": "Maha Sarakham",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -2963,33 +2963,33 @@
       "cities": [
         {
           "name": "มหาสารคาม",
-          "name_en": "Maha Sarakham",
+          "name_ascii": "Maha Sarakham",
           "lat": 16.1848,
           "lon": 103.3007,
           "postcodes": [
             {
               "code": "44150",
               "street": "ถนนผดุงวิถี",
-              "street_en": "Phadung Withi Road",
-              "pattern": "n{1,138} ถนนผดุงวิถี"
+              "street_ascii": "Phadung Withi Road",
+              "pattern": "n{1,138} {street}"
             },
             {
               "code": "44190",
               "street": "วงเวียนหอนาฬืกา",
-              "street_en": "wngewiiynh`naaluuekaa",
-              "pattern": "n{1,160} วงเวียนหอนาฬืกา"
+              "street_ascii": "Wong Wian Ho Nalika",
+              "pattern": "n{1,160} {street}"
             },
             {
               "code": "45000",
               "street": "ถนนนครสวรรค์",
-              "street_en": "Nakhon Sawan Road",
-              "pattern": "n{1,159} ถนนนครสวรรค์"
+              "street_ascii": "Nakhon Sawan Road",
+              "pattern": "n{1,159} {street}"
             },
             {
               "code": "46120",
               "street": "ถนนนครสวรรค์ ซอย 4",
-              "street_en": "Soi Nakhon Sawan 4",
-              "pattern": "n{1,109} ถนนนครสวรรค์ ซอย 4"
+              "street_ascii": "Soi Nakhon Sawan 4",
+              "pattern": "n{1,109} {street}"
             }
           ]
         }
@@ -2997,40 +2997,40 @@
     },
     {
       "name": "จังหวัดลพบุรี",
-      "name_en": "Lop Buri",
+      "name_ascii": "Lop Buri",
       "region_tags": [
         "Central Thailand"
       ],
       "cities": [
         {
           "name": "ลพบุรี",
-          "name_en": "Lop Buri",
+          "name_ascii": "Lop Buri",
           "lat": 14.7981,
           "lon": 100.654,
           "postcodes": [
             {
               "code": "15000",
               "street": "ถนนนารายณ์มหาราช",
-              "street_en": "Narai Maha Rat Road",
-              "pattern": "n{1,95} ถนนนารายณ์มหาราช"
+              "street_ascii": "Narai Maha Rat Road",
+              "pattern": "n{1,95} {street}"
             },
             {
               "code": "15150",
               "street": "ถนนรามเดโช",
-              "street_en": "Ramdacho Road",
-              "pattern": "n{1,61} ถนนรามเดโช"
+              "street_ascii": "Ramdacho Road",
+              "pattern": "n{1,61} {street}"
             },
             {
               "code": "80000",
               "street": "ถนนนเรศวร",
-              "street_en": "Naresuan Road",
-              "pattern": "n{1,170} ถนนนเรศวร"
+              "street_ascii": "Naresuan Road",
+              "pattern": "n{1,170} {street}"
             },
             {
               "code": "18120",
               "street": "วงเวียนศรีสุริโยทัย",
-              "street_en": "Si Suriyothai Roundabout",
-              "pattern": "n{1,82} วงเวียนศรีสุริโยทัย"
+              "street_ascii": "Si Suriyothai Roundabout",
+              "pattern": "n{1,82} {street}"
             }
           ]
         }
@@ -3038,7 +3038,7 @@
     },
     {
       "name": "จังหวัดขอนแก่น",
-      "name_en": "Khon Kaen",
+      "name_ascii": "Khon Kaen",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -3046,33 +3046,33 @@
       "cities": [
         {
           "name": "ขอนแก่น",
-          "name_en": "Khon Kaen",
+          "name_ascii": "Khon Kaen",
           "lat": 16.4467,
           "lon": 102.833,
           "postcodes": [
             {
               "code": "40000",
               "street": "ถนนศรีจันทร์",
-              "street_en": "Si Chan Road",
-              "pattern": "n{1,120} ถนนศรีจันทร์"
+              "street_ascii": "Si Chan Road",
+              "pattern": "n{1,120} {street}"
             },
             {
               "code": "40000",
               "street": "ถนนหน้าเมือง",
-              "street_en": "Na Mueang Road",
-              "pattern": "n{1,90} ถนนหน้าเมือง"
+              "street_ascii": "Na Mueang Road",
+              "pattern": "n{1,90} {street}"
             },
             {
               "code": "40000",
               "street": "ถนนกลางเมือง",
-              "street_en": "Klang Mueang Road",
-              "pattern": "n{1,80} ถนนกลางเมือง"
+              "street_ascii": "Klang Mueang Road",
+              "pattern": "n{1,80} {street}"
             },
             {
               "code": "40000",
               "street": "ถนนมิตรภาพ",
-              "street_en": "Mittraphap Road",
-              "pattern": "n{1,180} ถนนมิตรภาพ"
+              "street_ascii": "Mittraphap Road",
+              "pattern": "n{1,180} {street}"
             }
           ]
         }
@@ -3080,40 +3080,39 @@
     },
     {
       "name": "จังหวัดชัยนาท",
-      "name_en": "Chai Nat",
+      "name_ascii": "Chai Nat",
       "region_tags": [
         "Central Thailand"
       ],
       "cities": [
         {
           "name": "ชัยนาท",
-          "name_en": "Chai Nat",
+          "name_ascii": "Chai Nat",
           "lat": 15.1864,
           "lon": 100.1235,
           "postcodes": [
             {
               "code": "17000",
               "street": "ถนนวงษ์โต",
-              "street_en": "Wong To Road",
-              "pattern": "n{1,127} ถนนวงษ์โต"
+              "street_ascii": "Wong To Road",
+              "pattern": "n{1,127} {street}"
             },
             {
               "code": "17120",
               "street": "ทางคู่ขนาน",
-              "street_en": "Frontage Rd.",
-              "pattern": "n{1,107} ทางคู่ขนาน"
+              "street_ascii": "Frontage Rd.",
+              "pattern": "n{1,107} {street}"
             },
             {
               "code": "17150",
               "street": "Frontage Road",
-              "street_en": "Frontage Road",
-              "pattern": "n{1,75} Frontage Road"
+              "pattern": "n{1,75} {street}"
             },
             {
               "code": "17110",
               "street": "สะพานศรีธรรมจักร",
-              "street_en": "Si Dhamma Jak Bridge",
-              "pattern": "n{1,172} สะพานศรีธรรมจักร"
+              "street_ascii": "Si Dhamma Jak Bridge",
+              "pattern": "n{1,172} {street}"
             }
           ]
         }
@@ -3121,7 +3120,7 @@
     },
     {
       "name": "จังหวัดอำนาจเจริญ",
-      "name_en": "Amnat Charoen",
+      "name_ascii": "Amnat Charoen",
       "region_tags": [
         "Northeastern Thailand",
         "Isan"
@@ -3129,33 +3128,33 @@
       "cities": [
         {
           "name": "อำนาจเจริญ",
-          "name_en": "Amnat Charoen",
+          "name_ascii": "Amnat Charoen",
           "lat": 15.8585,
           "lon": 104.6288,
           "postcodes": [
             {
               "code": "37000",
               "street": "ถนนอรุณประเสริฐ",
-              "street_en": "Arun Prasoet Road",
-              "pattern": "n{1,97} ถนนอรุณประเสริฐ"
+              "street_ascii": "Arun Prasoet Road",
+              "pattern": "n{1,97} {street}"
             },
             {
               "code": "37210",
               "street": "ถนนอรุณประเสริฐ",
-              "street_en": "Arun Prasoet Road",
-              "pattern": "n{1,97} ถนนอรุณประเสริฐ"
+              "street_ascii": "Arun Prasoet Road",
+              "pattern": "n{1,97} {street}"
             },
             {
               "code": "37240",
               "street": "ถนนอรุณประเสริฐ",
-              "street_en": "Arun Prasoet Road",
-              "pattern": "n{1,97} ถนนอรุณประเสริฐ"
+              "street_ascii": "Arun Prasoet Road",
+              "pattern": "n{1,97} {street}"
             },
             {
               "code": "37290",
               "street": "ถนนอรุณประเสริฐ",
-              "street_en": "Arun Prasoet Road",
-              "pattern": "n{1,97} ถนนอรุณประเสริฐ"
+              "street_ascii": "Arun Prasoet Road",
+              "pattern": "n{1,97} {street}"
             }
           ]
         }

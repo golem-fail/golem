@@ -1,0 +1,67 @@
+{
+  "patterns": [
+    "{noun} ya {verb_intrans}.",
+    "{noun} ya {verb_trans} {noun}.",
+    "{noun} ya {verb_intrans} kuma ya {verb_intrans}.",
+    "{noun} ya {verb_trans} {noun} da {noun}.",
+    "{noun} ya {verb_trans} {noun} a {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "golem",
+      "yumɓu",
+      "laka",
+      "bulo",
+      "dutse",
+      "ƙasa",
+      "ƙura",
+      "kogi",
+      "makera",
+      "mai gadi",
+      "gunki",
+      "mutum-mutumi",
+      "inuwa",
+      "kato",
+      "toka",
+      "garu",
+      "ƙofa",
+      "hasumiya",
+      "hanya",
+      "daji",
+      "sama",
+      "dutsen tsauni",
+      "ƙarfe",
+      "rairayi",
+      "wuta",
+      "tudu",
+      "fadama",
+      "shimfiɗa",
+      "katanga",
+      "tuddai"
+    ],
+    "verb_intrans": [
+      "farka",
+      "tashi",
+      "rushe",
+      "barci",
+      "yi tafiya",
+      "girgiza",
+      "faɗi",
+      "yi raini",
+      "juya",
+      "girma"
+    ],
+    "verb_trans": [
+      "tsare",
+      "murƙushe",
+      "ɗauka",
+      "kare",
+      "gina",
+      "ɗaga",
+      "karya",
+      "kama",
+      "ja",
+      "rufe"
+    ]
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans} {conj} {verb_intrans}.",
+    "{noun} {verb_trans} {noun} {conj} {noun}.",
+    "{noun} {verb_trans} {noun} e {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "loopal",
+      "ɓakkere",
+      "tuufeere",
+      "haayre",
+      "kaaƴe",
+      "leydi",
+      "ndiyam",
+      "maayo",
+      "ndoondi",
+      "yiite",
+      "njamndi",
+      "ceenal",
+      "punndi",
+      "ladde",
+      "asamaan",
+      "laawol",
+      "lekki",
+      "wuro",
+      "saare",
+      "ngenndi",
+      "fello",
+      "weendu",
+      "ɓunndu",
+      "damal",
+      "mbeelu",
+      "tata"
+    ],
+    "verb_intrans": [
+      "finii",
+      "ummii",
+      "yanii",
+      "ɗaanii",
+      "dillii",
+      "diwii",
+      "jippii",
+      "sumii",
+      "yahii",
+      "mawnii"
+    ],
+    "verb_trans": [
+      "reenii",
+      "yoɓii",
+      "roondii",
+      "tawii",
+      "mahii",
+      "ɓamtii",
+      "helii",
+      "nanngii",
+      "fooɗii",
+      "uddii"
+    ],
+    "conj": [
+      "e"
+    ]
+  }
+}

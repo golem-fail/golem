@@ -1,0 +1,64 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans} na.",
+    "{noun} {verb_trans} na {noun}.",
+    "{noun} {verb_intrans} na te {verb_intrans} na.",
+    "{noun} {verb_trans} na {noun} ak {noun}.",
+    "Am na {noun} ak {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "golem bi",
+      "ban bi",
+      "doj wi",
+      "xeer wi",
+      "suuf si",
+      "safara si",
+      "miir mi",
+      "bunt bi",
+      "pénc mi",
+      "tund wi",
+      "dex gi",
+      "àll bi",
+      "asamaan si",
+      "yoon wi",
+      "weñ gi",
+      "garab gi",
+      "ndox mi",
+      "gént gi",
+      "taw bi",
+      "guy gi",
+      "xob wi",
+      "tànk bi",
+      "loxo bi",
+      "fas wi",
+      "nag wi",
+      "mbaam mi",
+      "wall bi"
+    ],
+    "verb_intrans": [
+      "yeewu",
+      "dem",
+      "ñów",
+      "daanu",
+      "taxaw",
+      "tassu",
+      "lakk",
+      "rëcc",
+      "tëdd",
+      "yengu"
+    ],
+    "verb_trans": [
+      "wattu",
+      "yor",
+      "yobbu",
+      "indi",
+      "defar",
+      "yékkati",
+      "damm",
+      "tëj",
+      "génne",
+      "jël"
+    ]
+  }
+}

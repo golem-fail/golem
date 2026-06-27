@@ -8,18 +8,8 @@ use std::collections::HashMap;
 
 use rand::Rng;
 
-use crate::geo_loader::{geo_database, GeoData, GeoPostcode};
+use crate::geo_loader::geo_database;
 use crate::{VarError, VarValue};
-
-// ---------------------------------------------------------------------------
-// Country resolution
-// ---------------------------------------------------------------------------
-
-/// Resolve an optional country param to a `&GeoData`, or `None` if unset/unknown.
-fn resolve_geo(params: &HashMap<String, String>) -> Option<&'static GeoData> {
-    let code = params.get("country")?;
-    geo_database().get(code)
-}
 
 // ---------------------------------------------------------------------------
 // Phone generator
@@ -39,271 +29,143 @@ pub fn generate_phone(
         return Ok(VarValue::String(expand_format(fmt, rng)));
     }
 
-    let geo = resolve_geo(params);
-    let geo = match geo {
-        Some(g) if !g.country.phone_formats.is_empty() => g,
-        _ => geo_database().random(rng),
+    // Unset country → random; a present-but-unknown code → error (a typo
+    // shouldn't silently produce some other country's number).
+    let geo = match params.get("country") {
+        Some(code) => geo_database()
+            .get(code)
+            .ok_or_else(|| VarError::Other(format!("unknown country code: {code}")))?,
+        None => geo_database().random(rng),
     };
+
+    if geo.country.phone_formats.is_empty() {
+        return Err(VarError::Other(format!(
+            "no phone formats for country {}",
+            geo.country.iso_code
+        )));
+    }
 
     let idx = rng.gen_range(0..geo.country.phone_formats.len());
     let fmt = &geo.country.phone_formats[idx];
     Ok(VarValue::String(expand_format(fmt, rng)))
 }
 
-// ---------------------------------------------------------------------------
-// City generator
-// ---------------------------------------------------------------------------
-
-/// Generate a city name.
+/// Expand a native street `pattern` containing zero or more `n{min,max}`
+/// house-number tokens, drawing each number once. Returns the rendered native
+/// string (numbers in the pattern's own numeral style — full-width for JP,
+/// Arabic-Indic for AR, …) AND the list of drawn integer VALUES in token order,
+/// so an ascii rendering can reuse the SAME house number(s).
 ///
-/// Params:
-/// - `country`: "JP" | "GB" etc. (default: picks from any loaded geo data)
-/// - `region`: narrows city pool to states whose `region_tags` contain this value
-pub fn generate_city(
-    params: &HashMap<String, String>,
-    rng: &mut impl Rng,
-) -> Result<VarValue, VarError> {
-    let geo = resolve_geo(params);
-    let region = params.get("region").map(|s| s.as_str());
-
-    let cities = collect_city_names(geo, region);
-
-    if cities.is_empty() {
-        return Err(VarError::Other(
-            "no cities found for the given country/region combination".to_string(),
-        ));
-    }
-
-    let idx = rng.gen_range(0..cities.len());
-    Ok(VarValue::String(cities[idx].clone()))
-}
-
-/// Collect city names, optionally filtered by geo data and region tag.
-fn collect_city_names(geo: Option<&GeoData>, region: Option<&str>) -> Vec<String> {
-    match geo {
-        Some(g) => {
-            let mut names = Vec::new();
-            for state in &g.states {
-                if let Some(r) = region {
-                    if !state.region_tags.iter().any(|t| t.eq_ignore_ascii_case(r)) {
-                        continue;
-                    }
-                }
-                for city in &state.cities {
-                    names.push(city.name_en.clone());
-                }
-            }
-            names
-        }
-        None => {
-            // No country specified: pull from all loaded geo data.
-            let mut names = Vec::new();
-            for g in geo_database().all() {
-                for state in &g.states {
-                    if let Some(r) = region {
-                        if !state.region_tags.iter().any(|t| t.eq_ignore_ascii_case(r)) {
-                            continue;
-                        }
-                    }
-                    for city in &state.cities {
-                        names.push(city.name_en.clone());
-                    }
-                }
-            }
-            names
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Postcode generator
-// ---------------------------------------------------------------------------
-
-/// Generate a postcode string.
-///
-/// Params:
-/// - `country`: "JP" | "GB" etc. (default: picks from any loaded geo data)
-pub fn generate_postcode(
-    params: &HashMap<String, String>,
-    rng: &mut impl Rng,
-) -> Result<VarValue, VarError> {
-    let geo = resolve_geo(params);
-
-    let postcodes = collect_postcodes(geo);
-
-    if postcodes.is_empty() {
-        return Err(VarError::Other(
-            "no postcodes found for the given country".to_string(),
-        ));
-    }
-
-    let idx = rng.gen_range(0..postcodes.len());
-    Ok(VarValue::String(postcodes[idx].clone()))
-}
-
-/// Collect all postcode codes from geo data.
-fn collect_postcodes(geo: Option<&GeoData>) -> Vec<String> {
-    match geo {
-        Some(g) => {
-            let mut codes = Vec::new();
-            for state in &g.states {
-                for city in &state.cities {
-                    for pc in &city.postcodes {
-                        codes.push(pc.code.clone());
-                    }
-                }
-            }
-            codes
-        }
-        None => {
-            let mut codes = Vec::new();
-            for g in geo_database().all() {
-                for state in &g.states {
-                    for city in &state.cities {
-                        for pc in &city.postcodes {
-                            codes.push(pc.code.clone());
-                        }
-                    }
-                }
-            }
-            codes
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Street generator
-// ---------------------------------------------------------------------------
-
-/// Generate a street address string.
-///
-/// Params:
-/// - `country`: "JP" | "GB" etc. (default: random from geo database)
-pub fn generate_street(
-    params: &HashMap<String, String>,
-    rng: &mut impl Rng,
-) -> Result<VarValue, VarError> {
-    let geo = resolve_geo(params);
-    let geo = match geo {
-        Some(g) => g,
-        None => geo_database().random(rng),
-    };
-
-    let entry = pick_random_postcode_entry(geo, rng)?;
-    let street = expand_street_from_entry(entry, rng);
-    Ok(VarValue::String(street))
-}
-
-/// Pick a random postcode entry from a `GeoData`.
-fn pick_random_postcode_entry<'a>(
-    geo: &'a GeoData,
-    rng: &mut impl Rng,
-) -> Result<&'a GeoPostcode, VarError> {
-    // Flatten all postcode entries and pick one.
-    let total: usize = geo
-        .states
-        .iter()
-        .flat_map(|s| &s.cities)
-        .map(|c| c.postcodes.len())
-        .sum();
-
-    if total == 0 {
-        return Err(VarError::Other(
-            "no postcode entries in geo data".to_string(),
-        ));
-    }
-
-    let mut target = rng.gen_range(0..total);
-    for state in &geo.states {
-        for city in &state.cities {
-            for pc in &city.postcodes {
-                if target == 0 {
-                    return Ok(pc);
-                }
-                target -= 1;
-            }
-        }
-    }
-
-    // Should not reach here, but satisfy the compiler.
-    Err(VarError::Other("failed to pick postcode entry".to_string()))
-}
-
-/// Expand a `GeoPostcode` entry into a street address string.
-fn expand_street_from_entry(entry: &GeoPostcode, rng: &mut impl Rng) -> String {
-    if let Some(ref pattern) = entry.pattern {
-        expand_street_pattern(pattern, &entry.street_en, rng)
-    } else if let Some(ref fixed) = entry.fixed {
-        if fixed.is_empty() {
-            format!("1 {}", entry.street_en)
-        } else {
-            let idx = rng.gen_range(0..fixed.len());
-            fixed[idx].clone()
-        }
-    } else {
-        let num: u32 = rng.gen_range(1..200);
-        format!("{num} {}", entry.street_en)
-    }
-}
-
-/// Expand a street pattern containing one or more `n{min,max}` tokens.
-///
-/// Each `n{min,max}` is replaced with a random integer in `[min, max]`.
-/// Supports multiple tokens per pattern, e.g. `"清田一条n{１,４}丁目n{１,１５}番"`.
-///
-/// The numeral system is detected from the min value's digits:
-/// - ASCII `0-9` → ASCII output (default)
-/// - Full-width `０-９` → full-width output (Japanese addresses)
-/// - Arabic-Indic `٠-٩` → Arabic-Indic output
-/// - Hebrew numerals not yet supported (Hebrew addresses use ASCII)
-///
-/// If `street_en` is non-empty and the expanded result doesn't contain it,
-/// falls back to `"NUM street_en"` format using the first generated number.
-pub(crate) fn expand_street_pattern(pattern: &str, street_en: &str, rng: &mut impl Rng) -> String {
+/// The numeral system is detected per token from the min value's digits (ASCII
+/// `0-9` default, full-width `０-９`, Arabic-Indic `٠-٩`). A malformed token
+/// (no `}`, no comma, non-numeric bound) stops expansion, leaving the rest of
+/// the pattern verbatim — current data is well-formed, this only avoids panics.
+pub(crate) fn expand_native_tokens(pattern: &str, rng: &mut impl Rng) -> (String, Vec<u32>) {
     let mut result = pattern.to_string();
-    let mut first_num: Option<String> = None;
+    let mut nums = Vec::new();
+    let mut from = 0usize;
 
-    // Replace all n{min,max} tokens left-to-right.
-    while let Some(start) = result.find("n{") {
-        let Some(close) = result[start..].find('}') else {
+    while let Some(rel) = result[from..].find("n{") {
+        let start = from + rel;
+        let Some(close_rel) = result[start..].find('}') else {
             break;
         };
-        let range_str = &result[start + 2..start + close];
+        let close = start + close_rel;
+        let range_str = &result[start + 2..close];
         let Some((min_s, max_s)) = range_str.split_once(',') else {
             break;
         };
-        let min_s = min_s.trim();
-        let max_s = max_s.trim();
+        let (min_s, max_s) = (min_s.trim(), max_s.trim());
 
-        // Detect numeral system from min value.
         let style = detect_numeral_style(min_s);
-
-        let Some(min) = parse_numerals(min_s) else {
+        let (Some(min), Some(max)) = (parse_numerals(min_s), parse_numerals(max_s)) else {
             break;
         };
-        let Some(max) = parse_numerals(max_s) else {
-            break;
-        };
+        // Tolerate reversed bounds (e.g. `n{5,1}`) by swapping rather than
+        // panicking in `gen_range(min..=max)`.
+        let (min, max) = if min > max { (max, min) } else { (min, max) };
 
         let num = rng.gen_range(min..=max);
+        nums.push(num);
         let num_str = format_numerals(num, style);
-        if first_num.is_none() {
-            first_num = Some(num_str.clone());
-        }
 
         let prefix = &result[..start];
-        let suffix = &result[start + close + 1..];
+        let suffix = &result[close + 1..];
         result = format!("{prefix}{num_str}{suffix}");
+        from = start + num_str.len();
     }
 
-    // If expanded text contains the English street name (or no English name), return as-is.
-    if result.contains(street_en) || street_en.is_empty() {
-        return result;
+    (result, nums)
+}
+
+/// Fill an ASCII street `pattern`'s `n{…}` tokens with pre-drawn house numbers
+/// (ASCII digits), reusing `nums` in token order so the ascii street names the
+/// SAME building as its native counterpart. The tokens' own ranges are ignored
+/// (the value is already chosen); a token past the end of `nums` yields `0`.
+pub(crate) fn fill_ascii_tokens(pattern: &str, nums: &[u32]) -> String {
+    let mut result = pattern.to_string();
+    let mut idx = 0usize;
+    let mut from = 0usize;
+
+    while let Some(rel) = result[from..].find("n{") {
+        let start = from + rel;
+        let Some(close_rel) = result[start..].find('}') else {
+            break;
+        };
+        let close = start + close_rel;
+        let num_str = nums.get(idx).copied().unwrap_or(0).to_string();
+        idx += 1;
+
+        let prefix = &result[..start];
+        let suffix = &result[close + 1..];
+        result = format!("{prefix}{num_str}{suffix}");
+        from = start + num_str.len();
     }
 
-    // Fallback: "NUM street_en" using the first number we generated.
-    let num_str = first_num.unwrap_or_else(|| rng.gen_range(1..200u32).to_string());
-    format!("{num_str} {street_en}")
+    result
+}
+
+/// Fold full-width digits (U+FF10–FF19) to ASCII, leaving everything else
+/// untouched. Used for the ascii postcode, since [`crate::script::ascii_fold`]
+/// (NFD) does not decompose full-width digits (that is NFKD).
+pub(crate) fn fold_fullwidth_digits(s: &str) -> String {
+    s.chars()
+        .map(|c| match c as u32 {
+            0xFF10..=0xFF19 => char::from(b'0' + (c as u32 - 0xFF10) as u8),
+            _ => c,
+        })
+        .collect()
+}
+
+/// Tidy a derived ascii street: insert a space at letter→digit joins (the
+/// native scripts run a street name straight into its house number, e.g.
+/// `Kiyota 1-jo4` → `Kiyota 1-jo 4`) and collapse any resulting double spaces.
+/// ASCII-only — the native string keeps its run-together form (`清田一条４`).
+pub(crate) fn tidy_ascii_spacing(s: &str) -> String {
+    let mut spaced = String::with_capacity(s.len() + 4);
+    let mut prev: Option<char> = None;
+    for c in s.chars() {
+        if prev.is_some_and(|p| p.is_alphabetic()) && c.is_ascii_digit() {
+            spaced.push(' ');
+        }
+        spaced.push(c);
+        prev = Some(c);
+    }
+    // Collapse runs of spaces and trim (markers may introduce an extra space).
+    let mut out = String::with_capacity(spaced.len());
+    let mut last_space = false;
+    for c in spaced.chars() {
+        if c == ' ' {
+            if !last_space {
+                out.push(' ');
+            }
+            last_space = true;
+        } else {
+            out.push(c);
+            last_space = false;
+        }
+    }
+    out.trim().to_string()
 }
 
 /// Numeral systems supported in street patterns.
@@ -399,7 +261,6 @@ fn expand_format(fmt: &str, rng: &mut impl Rng) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geo_loader::{GeoCity, GeoCountry, GeoState};
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
 
@@ -416,16 +277,6 @@ mod tests {
 
     fn empty_params() -> HashMap<String, String> {
         HashMap::new()
-    }
-
-    /// Convenience: get JP GeoData from the database.
-    fn geo_jp() -> &'static GeoData {
-        geo_database().get("JP").expect("JP should be loaded")
-    }
-
-    /// Convenience: get GB GeoData from the database.
-    fn geo_gb() -> &'static GeoData {
-        geo_database().get("GB").expect("GB should be loaded")
     }
 
     // -----------------------------------------------------------------------
@@ -499,178 +350,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // 5. City country=JP returns a Japanese city
-    // -----------------------------------------------------------------------
-    #[test]
-    fn city_jp_returns_japanese_city() {
-        let mut rng = seeded_rng();
-        let p = params(&[("country", "JP")]);
-        let result = generate_city(&p, &mut rng).expect("should generate");
-        let city = result.as_str().expect("should be string");
-
-        // Verify it is among JP geo data cities.
-        let jp_cities = collect_city_names(Some(geo_jp()), None);
-        assert!(
-            jp_cities.contains(&city.to_string()),
-            "city '{city}' should be a JP city"
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    // 6. City country=GB returns a British city
-    // -----------------------------------------------------------------------
-    #[test]
-    fn city_gb_returns_british_city() {
-        let mut rng = seeded_rng();
-        let p = params(&[("country", "GB")]);
-        let result = generate_city(&p, &mut rng).expect("should generate");
-        let city = result.as_str().expect("should be string");
-
-        let gb_cities = collect_city_names(Some(geo_gb()), None);
-        assert!(
-            gb_cities.contains(&city.to_string()),
-            "city '{city}' should be a GB city"
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    // 7. City with region filter narrows results
-    // -----------------------------------------------------------------------
-    #[test]
-    fn city_region_filter_narrows_results() {
-        let all_jp = collect_city_names(Some(geo_jp()), None);
-        let kansai_only = collect_city_names(Some(geo_jp()), Some("Kansai"));
-
-        assert!(!kansai_only.is_empty(), "should have Kansai cities");
-        assert!(
-            kansai_only.len() < all_jp.len(),
-            "Kansai subset ({}) should be smaller than all JP ({})",
-            kansai_only.len(),
-            all_jp.len()
-        );
-
-        // Actually generate one with region filter.
-        let mut rng = seeded_rng();
-        let p = params(&[("country", "JP"), ("region", "Kansai")]);
-        let result = generate_city(&p, &mut rng).expect("should generate");
-        let city = result.as_str().expect("should be string");
-        assert!(
-            kansai_only.contains(&city.to_string()),
-            "city '{city}' should be in Kansai region"
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    // 8. Postcode country=JP returns valid JP postcode
-    // -----------------------------------------------------------------------
-    #[test]
-    fn postcode_jp_has_hyphen_format() {
-        let mut rng = seeded_rng();
-        let p = params(&[("country", "JP")]);
-        let result = generate_postcode(&p, &mut rng).expect("should generate");
-        let postcode = result.as_str().expect("should be string");
-
-        // JP postcodes are in ###-#### format.
-        assert!(
-            postcode.contains('-'),
-            "JP postcode should contain hyphen, got: {postcode}"
-        );
-        let parts: Vec<&str> = postcode.split('-').collect();
-        assert_eq!(
-            parts.len(),
-            2,
-            "JP postcode should have 2 parts, got: {postcode}"
-        );
-        assert_eq!(
-            parts[0].len(),
-            3,
-            "JP postcode first part should be 3 digits, got: {postcode}"
-        );
-        assert_eq!(
-            parts[1].len(),
-            4,
-            "JP postcode second part should be 4 digits, got: {postcode}"
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    // 9. Postcode country=GB returns valid GB postcode
-    // -----------------------------------------------------------------------
-    #[test]
-    fn postcode_gb_has_space_format() {
-        let mut rng = seeded_rng();
-        let p = params(&[("country", "GB")]);
-        let result = generate_postcode(&p, &mut rng).expect("should generate");
-        let postcode = result.as_str().expect("should be string");
-
-        // GB postcodes have a space between outward and inward parts.
-        assert!(
-            postcode.contains(' '),
-            "GB postcode should contain space, got: {postcode}"
-        );
-
-        // Verify it is a real postcode from gb.json.
-        let all_gb_codes = collect_postcodes(Some(geo_gb()));
-        assert!(
-            all_gb_codes.contains(&postcode.to_string()),
-            "postcode '{postcode}' should be from GB geo data"
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    // 10. Street country=JP returns chome-ban-go style
-    // -----------------------------------------------------------------------
-    #[test]
-    fn street_jp_returns_japanese_style() {
-        // Run with multiple seeds to cover different patterns.
-        for seed in 0u64..20 {
-            let mut rng = ChaCha8Rng::seed_from_u64(seed);
-            let p = params(&[("country", "JP")]);
-            let result = generate_street(&p, &mut rng).expect("should generate");
-            let street = result.as_str().expect("should be string");
-            assert!(
-                !street.is_empty(),
-                "JP street should not be empty (seed={seed})"
-            );
-            // JP streets are typically CJK text with numbers, or English fallbacks
-            // containing the street_en. They should not start with a '+' (phone-like).
-            assert!(
-                !street.starts_with('+'),
-                "JP street should not look like a phone, got: {street} (seed={seed})"
-            );
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // 11. Street country=GB returns number + street name
-    // -----------------------------------------------------------------------
-    #[test]
-    fn street_gb_returns_number_and_name() {
-        for seed in 0u64..20 {
-            let mut rng = ChaCha8Rng::seed_from_u64(seed);
-            let p = params(&[("country", "GB")]);
-            let result = generate_street(&p, &mut rng).expect("should generate");
-            let street = result.as_str().expect("should be string");
-            assert!(
-                !street.is_empty(),
-                "GB street should not be empty (seed={seed})"
-            );
-            // GB streets should have a numeric part followed by a name.
-            // Pattern is "n{...} Name" so the expanded form is "NUM Name".
-            let first_char = street.chars().next().expect("non-empty");
-            assert!(
-                first_char.is_ascii_digit(),
-                "GB street should start with digit, got: '{street}' (seed={seed})"
-            );
-            assert!(
-                street.contains(' '),
-                "GB street should contain a space between number and name, got: '{street}' (seed={seed})"
-            );
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // 12. Deterministic seed produces same output
+    // 12. Deterministic seed produces same phone output
     // -----------------------------------------------------------------------
     #[test]
     fn deterministic_seed_same_output() {
@@ -682,73 +362,25 @@ mod tests {
         let phone1 = generate_phone(&p_jp, &mut rng1).expect("should generate");
         let phone2 = generate_phone(&p_jp, &mut rng2).expect("should generate");
         assert_eq!(phone1, phone2, "same seed SHALL produce same phone");
-
-        let mut rng1 = seeded_rng();
-        let mut rng2 = seeded_rng();
-
-        let city1 = generate_city(&p_jp, &mut rng1).expect("should generate");
-        let city2 = generate_city(&p_jp, &mut rng2).expect("should generate");
-        assert_eq!(city1, city2, "same seed SHALL produce same city");
-
-        let mut rng1 = seeded_rng();
-        let mut rng2 = seeded_rng();
-
-        let pc1 = generate_postcode(&p_jp, &mut rng1).expect("should generate");
-        let pc2 = generate_postcode(&p_jp, &mut rng2).expect("should generate");
-        assert_eq!(pc1, pc2, "same seed SHALL produce same postcode");
-
-        let mut rng1 = seeded_rng();
-        let mut rng2 = seeded_rng();
-
-        let st1 = generate_street(&p_jp, &mut rng1).expect("should generate");
-        let st2 = generate_street(&p_jp, &mut rng2).expect("should generate");
-        assert_eq!(st1, st2, "same seed SHALL produce same street");
     }
 
     // -----------------------------------------------------------------------
-    // 13. Unknown country falls back to random geo data
+    // 13. Unknown country: phone errors (a typo shouldn't silently yield
+    //     another country's number); an unset country picks one at random.
     // -----------------------------------------------------------------------
     #[test]
-    fn unknown_country_falls_back() {
+    fn unknown_country_phone_errors() {
         let mut rng = seeded_rng();
         let p = params(&[("country", "XX")]);
 
-        // Phone falls back to a random geo country.
-        let phone = generate_phone(&p, &mut rng).expect("should generate");
-        let phone_str = phone.as_str().expect("should be string");
+        let err = generate_phone(&p, &mut rng).expect_err("unknown country SHALL error");
         assert!(
-            phone_str.starts_with('+'),
-            "unknown country phone SHALL fall back to geo data, got: {phone_str}"
+            err.to_string().contains("unknown country code: XX"),
+            "got: {err}"
         );
 
-        // City falls back to all loaded data.
-        let mut rng = seeded_rng();
-        let city = generate_city(&p, &mut rng).expect("should generate");
-        let city_str = city.as_str().expect("should be string");
-        assert!(!city_str.is_empty(), "fallback city SHALL NOT be empty");
-
-        // Postcode falls back to all loaded data.
-        let mut rng = seeded_rng();
-        let pc = generate_postcode(&p, &mut rng).expect("should generate");
-        let pc_str = pc.as_str().expect("should be string");
-        assert!(!pc_str.is_empty(), "fallback postcode SHALL NOT be empty");
-
-        // Street falls back to a random geo country.
-        let mut rng = seeded_rng();
-        let st = generate_street(&p, &mut rng).expect("should generate");
-        let st_str = st.as_str().expect("should be string");
-        assert!(!st_str.is_empty(), "fallback street SHALL NOT be empty");
-    }
-
-    // -----------------------------------------------------------------------
-    // 14. City with no matching region returns error
-    // -----------------------------------------------------------------------
-    #[test]
-    fn city_nonexistent_region_returns_error() {
-        let mut rng = seeded_rng();
-        let p = params(&[("country", "JP"), ("region", "Narnia")]);
-        let result = generate_city(&p, &mut rng);
-        assert!(result.is_err(), "SHALL error for nonexistent region");
+        // No country param → random country (no error).
+        generate_phone(&empty_params(), &mut rng).expect("unset country SHALL generate");
     }
 
     // -----------------------------------------------------------------------
@@ -767,46 +399,32 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // 16. Default city (no params) returns a city from combined data
+    // 18. expand_native_tokens: single token returns the rendered string AND the
+    //     drawn value (so an ascii rendering can reuse the same number).
     // -----------------------------------------------------------------------
     #[test]
-    fn default_city_returns_from_combined_data() {
+    fn expand_native_tokens_single_token() {
         let mut rng = seeded_rng();
-        let result = generate_city(&empty_params(), &mut rng).expect("should generate");
-        let city = result.as_str().expect("should be string");
-
-        let all = collect_city_names(None, None);
+        let (result, nums) = expand_native_tokens("n{1,100} Baker Street", &mut rng);
         assert!(
-            all.contains(&city.to_string()),
-            "default city '{city}' should be from combined JP+GB data"
+            result.ends_with("Baker Street"),
+            "SHALL contain street name, got: {result}"
         );
+        assert_eq!(nums.len(), 1, "SHALL record one drawn number");
+        let num: u32 = result.split_whitespace().next().unwrap().parse().unwrap();
+        assert!(
+            (1..=100).contains(&num),
+            "number SHALL be in range, got: {num}"
+        );
+        assert_eq!(num, nums[0], "rendered number SHALL equal recorded value");
     }
 
-    // -----------------------------------------------------------------------
-    // 17. GB region filter works
-    // -----------------------------------------------------------------------
+    // Reversed bounds (`n{max,min}`) SHALL be tolerated by swapping, not panic
+    // in `gen_range(min..=max)`.
     #[test]
-    fn city_gb_scotland_region_filter() {
-        let scotland = collect_city_names(Some(geo_gb()), Some("Scotland"));
-        assert!(!scotland.is_empty(), "should have Scottish cities");
-
+    fn expand_native_tokens_reversed_bounds_no_panic() {
         let mut rng = seeded_rng();
-        let p = params(&[("country", "GB"), ("region", "Scotland")]);
-        let result = generate_city(&p, &mut rng).expect("should generate");
-        let city = result.as_str().expect("should be string");
-        assert!(
-            scotland.contains(&city.to_string()),
-            "city '{city}' should be in Scotland region"
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    // 18. expand_street_pattern: single token
-    // -----------------------------------------------------------------------
-    #[test]
-    fn expand_street_pattern_single_token() {
-        let mut rng = seeded_rng();
-        let result = expand_street_pattern("n{1,100} Baker Street", "Baker Street", &mut rng);
+        let (result, _) = expand_native_tokens("n{100,1} Baker Street", &mut rng);
         assert!(
             result.ends_with("Baker Street"),
             "SHALL contain street name, got: {result}"
@@ -814,17 +432,18 @@ mod tests {
         let num: u32 = result.split_whitespace().next().unwrap().parse().unwrap();
         assert!(
             (1..=100).contains(&num),
-            "number SHALL be in range, got: {num}"
+            "swapped range SHALL yield a number in [1,100], got: {num}"
         );
     }
 
     // -----------------------------------------------------------------------
-    // 19. expand_street_pattern: multiple tokens (JP style)
+    // 19. expand_native_tokens: multiple tokens (JP style), values recorded in
+    //     order.
     // -----------------------------------------------------------------------
     #[test]
-    fn expand_street_pattern_multiple_tokens() {
+    fn expand_native_tokens_multiple_tokens() {
         let mut rng = seeded_rng();
-        let result = expand_street_pattern("清田一条n{1,4}-n{1,15}", "", &mut rng);
+        let (result, nums) = expand_native_tokens("清田一条n{1,4}-n{1,15}", &mut rng);
         assert!(
             result.starts_with("清田一条"),
             "SHALL keep prefix, got: {result}"
@@ -848,40 +467,42 @@ mod tests {
             (1..=15).contains(&n2),
             "second num SHALL be 1-15, got: {n2}"
         );
+        assert_eq!(nums, vec![n1, n2], "recorded values SHALL match, in order");
     }
 
     // -----------------------------------------------------------------------
-    // 20. expand_street_pattern: deterministic with seed
+    // 20. expand_native_tokens: deterministic with seed
     // -----------------------------------------------------------------------
     #[test]
-    fn expand_street_pattern_deterministic() {
+    fn expand_native_tokens_deterministic() {
         let mut rng1 = seeded_rng();
         let mut rng2 = seeded_rng();
-        let a = expand_street_pattern("新町n{1,2}-n{1,50}", "", &mut rng1);
-        let b = expand_street_pattern("新町n{1,2}-n{1,50}", "", &mut rng2);
+        let a = expand_native_tokens("新町n{1,2}-n{1,50}", &mut rng1);
+        let b = expand_native_tokens("新町n{1,2}-n{1,50}", &mut rng2);
         assert_eq!(a, b, "same seed SHALL produce same result");
     }
 
     // -----------------------------------------------------------------------
-    // 21. expand_street_pattern: no tokens falls back
+    // 21. expand_native_tokens: no tokens returns the pattern unchanged, no nums
     // -----------------------------------------------------------------------
     #[test]
-    fn expand_street_pattern_no_tokens_returns_as_is() {
+    fn expand_native_tokens_no_tokens_returns_as_is() {
         let mut rng = seeded_rng();
-        let result = expand_street_pattern("Fixed Street Name", "Fixed Street Name", &mut rng);
+        let (result, nums) = expand_native_tokens("Fixed Street Name", &mut rng);
         assert_eq!(
             result, "Fixed Street Name",
             "no tokens SHALL return pattern unchanged"
         );
+        assert!(nums.is_empty(), "no tokens SHALL record no numbers");
     }
 
     // -----------------------------------------------------------------------
-    // 22. expand_street_pattern: full-width numerals (JP)
+    // 22. expand_native_tokens: full-width numerals (JP)
     // -----------------------------------------------------------------------
     #[test]
-    fn expand_street_pattern_fullwidth_numerals() {
+    fn expand_native_tokens_fullwidth_numerals() {
         let mut rng = seeded_rng();
-        let result = expand_street_pattern("清田一条n{１,４}丁目n{１,１５}番", "", &mut rng);
+        let (result, _) = expand_native_tokens("清田一条n{１,４}丁目n{１,１５}番", &mut rng);
         assert!(
             result.starts_with("清田一条"),
             "SHALL keep prefix, got: {result}"
@@ -907,13 +528,13 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // 23. expand_street_pattern: mixed styles use min's style
+    // 23. expand_native_tokens: mixed styles use min's style
     // -----------------------------------------------------------------------
     #[test]
-    fn expand_street_pattern_mixed_uses_min_style() {
+    fn expand_native_tokens_mixed_uses_min_style() {
         let mut rng = seeded_rng();
         // Full-width min, ASCII max — should output full-width
-        let result = expand_street_pattern("町n{１,20}", "", &mut rng);
+        let (result, _) = expand_native_tokens("町n{１,20}", &mut rng);
         assert!(
             !result.chars().any(|c| c.is_ascii_digit()),
             "SHALL use full-width (from min), got: {result}"
@@ -942,169 +563,71 @@ mod tests {
         assert_eq!(format_numerals(7, NumeralStyle::ArabicIndic), "٧");
     }
 
-    /// Convenience: build a `GeoPostcode` for entry-expansion tests.
-    fn postcode_entry(
-        street_en: &str,
-        pattern: Option<&str>,
-        fixed: Option<Vec<&str>>,
-    ) -> GeoPostcode {
-        GeoPostcode {
-            code: "0000-000".to_string(),
-            street: String::new(),
-            street_en: street_en.to_string(),
-            pattern: pattern.map(|s| s.to_string()),
-            fixed: fixed.map(|v| v.into_iter().map(|s| s.to_string()).collect()),
-        }
-    }
-
     // -----------------------------------------------------------------------
-    // 26. expand_street_from_entry: pattern branch delegates to pattern expansion
+    // 30. fill_ascii_tokens: reuses the pre-drawn house numbers (ASCII digits),
+    //     in token order, so the ascii street names the SAME building.
     // -----------------------------------------------------------------------
     #[test]
-    fn expand_street_from_entry_pattern_branch() {
-        let mut rng = seeded_rng();
-        let entry = postcode_entry("Baker Street", Some("n{1,9} Baker Street"), None);
-        let result = expand_street_from_entry(&entry, &mut rng);
-        assert!(
-            result.ends_with("Baker Street"),
-            "pattern branch SHALL expand to street name, got: {result}"
-        );
-        assert!(
-            !result.contains("n{"),
-            "pattern branch SHALL replace token, got: {result}"
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    // 27. expand_street_from_entry: empty fixed list uses "1 street_en"
-    // -----------------------------------------------------------------------
-    #[test]
-    fn expand_street_from_entry_empty_fixed_uses_one() {
-        let mut rng = seeded_rng();
-        let entry = postcode_entry("High Street", None, Some(vec![]));
-        let result = expand_street_from_entry(&entry, &mut rng);
+    fn fill_ascii_tokens_reuses_drawn_numbers() {
+        // Two tokens, two recorded values → filled in order, ASCII digits.
+        let filled = fill_ascii_tokens("Kiyota 1-jo n{1,4}-n{1,15}", &[3, 12]);
         assert_eq!(
-            result, "1 High Street",
-            "empty fixed list SHALL produce '1 street_en', got: {result}"
+            filled, "Kiyota 1-jo 3-12",
+            "tokens SHALL be filled with the recorded numbers in order"
         );
+        // A token past the end of the recorded values yields 0.
+        assert_eq!(fill_ascii_tokens("Rd n{1,9}", &[]), "Rd 0");
+        // No tokens → returned unchanged.
+        assert_eq!(fill_ascii_tokens("Plain Road", &[5]), "Plain Road");
     }
 
     // -----------------------------------------------------------------------
-    // 28. expand_street_from_entry: non-empty fixed list picks an entry verbatim
+    // 30b. fold_fullwidth_digits: full-width digits → ASCII, rest untouched.
     // -----------------------------------------------------------------------
     #[test]
-    fn expand_street_from_entry_fixed_picks_verbatim() {
+    fn fold_fullwidth_digits_maps_only_fullwidth() {
+        assert_eq!(fold_fullwidth_digits("０６０-０００１"), "060-0001");
+        assert_eq!(fold_fullwidth_digits("12345"), "12345");
+        // Non-digit native characters pass through.
+        assert_eq!(fold_fullwidth_digits("〒１２３"), "〒123");
+    }
+
+    // -----------------------------------------------------------------------
+    // 31. expand_native_tokens: malformed token (no closing brace) breaks the
+    //     loop, leaving the rest verbatim and recording no number.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn expand_native_tokens_unclosed_token_breaks() {
         let mut rng = seeded_rng();
-        let entry = postcode_entry("ignored", None, Some(vec!["Only One Address"]));
-        let result = expand_street_from_entry(&entry, &mut rng);
+        let (result, nums) = expand_native_tokens("n{1,5 Foo", &mut rng);
         assert_eq!(
-            result, "Only One Address",
-            "single-element fixed list SHALL be returned verbatim, got: {result}"
+            result, "n{1,5 Foo",
+            "unclosed token SHALL leave the pattern unchanged, got: {result}"
         );
+        assert!(nums.is_empty(), "no number SHALL be recorded");
     }
 
     // -----------------------------------------------------------------------
-    // 29. expand_street_from_entry: no pattern, no fixed → "NUM street_en"
+    // 32. expand_native_tokens: token without comma breaks loop, returns as-is.
     // -----------------------------------------------------------------------
     #[test]
-    fn expand_street_from_entry_default_numeric_prefix() {
-        let entry = postcode_entry("Main Road", None, None);
-        // Cover the random-number range with several seeds.
-        for seed in 0u64..10 {
-            let mut rng = ChaCha8Rng::seed_from_u64(seed);
-            let result = expand_street_from_entry(&entry, &mut rng);
-            assert!(
-                result.ends_with(" Main Road"),
-                "default branch SHALL end with street name, got: {result} (seed={seed})"
-            );
-            let num: u32 = result
-                .split_whitespace()
-                .next()
-                .expect("SHALL have a leading number")
-                .parse()
-                .expect("leading token SHALL be numeric");
-            assert!(
-                (1..200).contains(&num),
-                "default number SHALL be in 1..200, got: {num} (seed={seed})"
-            );
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // 30. expand_street_pattern: tokenless pattern with non-matching street_en
-    //     falls back to "NUM street_en" using a freshly generated number.
-    // -----------------------------------------------------------------------
-    #[test]
-    fn expand_street_pattern_fallback_when_name_absent() {
-        for seed in 0u64..10 {
-            let mut rng = ChaCha8Rng::seed_from_u64(seed);
-            // Pattern has no token and does not contain the (non-empty) street_en.
-            let result = expand_street_pattern("Some Lane", "Baker Street", &mut rng);
-            assert!(
-                result.ends_with("Baker Street"),
-                "fallback SHALL append street_en, got: {result} (seed={seed})"
-            );
-            let num: u32 = result
-                .split_whitespace()
-                .next()
-                .expect("SHALL have a leading number")
-                .parse()
-                .expect("leading token SHALL be numeric");
-            assert!(
-                (1..200).contains(&num),
-                "fallback number SHALL be in 1..200, got: {num} (seed={seed})"
-            );
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // 31. expand_street_pattern: malformed token (no closing brace) breaks loop
-    //     and the fallback appends the absent street name.
-    // -----------------------------------------------------------------------
-    #[test]
-    fn expand_street_pattern_unclosed_token_breaks() {
+    fn expand_native_tokens_token_without_comma_returns_as_is() {
         let mut rng = seeded_rng();
-        // "n{1,5 Foo" has no closing brace → loop breaks, no token replaced.
-        // The unchanged pattern lacks the non-empty street_en, so the fallback
-        // builds "NUM street_en" with a freshly generated number.
-        let result = expand_street_pattern("n{1,5 Foo", "Bar", &mut rng);
-        assert!(
-            result.ends_with(" Bar"),
-            "unclosed token SHALL fall back to 'NUM street_en', got: {result}"
-        );
-        let num: u32 = result
-            .split_whitespace()
-            .next()
-            .expect("SHALL have a leading number")
-            .parse()
-            .expect("leading token SHALL be numeric");
-        assert!(
-            (1..200).contains(&num),
-            "fallback number SHALL be in 1..200, got: {num}"
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    // 32. expand_street_pattern: token without comma breaks loop, returns as-is.
-    // -----------------------------------------------------------------------
-    #[test]
-    fn expand_street_pattern_token_without_comma_returns_as_is() {
-        let mut rng = seeded_rng();
-        // No comma inside braces → split_once fails → break; street_en empty → return as-is.
-        let result = expand_street_pattern("Road n{5}", "", &mut rng);
+        let (result, nums) = expand_native_tokens("Road n{5}", &mut rng);
         assert_eq!(
             result, "Road n{5}",
             "comma-less token SHALL leave pattern unchanged, got: {result}"
         );
+        assert!(nums.is_empty());
     }
 
     // -----------------------------------------------------------------------
-    // 33. expand_street_pattern: non-numeric min breaks loop, returns as-is.
+    // 33. expand_native_tokens: non-numeric min breaks loop, returns as-is.
     // -----------------------------------------------------------------------
     #[test]
-    fn expand_street_pattern_non_numeric_bounds_returns_as_is() {
+    fn expand_native_tokens_non_numeric_bounds_returns_as_is() {
         let mut rng = seeded_rng();
-        let result = expand_street_pattern("Road n{a,b}", "", &mut rng);
+        let (result, _) = expand_native_tokens("Road n{a,b}", &mut rng);
         assert_eq!(
             result, "Road n{a,b}",
             "non-numeric bounds SHALL leave pattern unchanged, got: {result}"
@@ -1112,12 +635,12 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // 34. expand_street_pattern: bounds are trimmed of whitespace.
+    // 34. expand_native_tokens: bounds are trimmed of whitespace.
     // -----------------------------------------------------------------------
     #[test]
-    fn expand_street_pattern_trims_bound_whitespace() {
+    fn expand_native_tokens_trims_bound_whitespace() {
         let mut rng = seeded_rng();
-        let result = expand_street_pattern("n{ 3 , 3 } Way", "Way", &mut rng);
+        let (result, _) = expand_native_tokens("n{ 3 , 3 } Way", &mut rng);
         assert_eq!(
             result, "3 Way",
             "trimmed bounds SHALL parse and equal-range yields the value, got: {result}"
@@ -1125,13 +648,13 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // 35. expand_street_pattern: Arabic-Indic min yields Arabic-Indic output.
+    // 35. expand_native_tokens: Arabic-Indic min yields Arabic-Indic output.
     // -----------------------------------------------------------------------
     #[test]
-    fn expand_street_pattern_arabic_indic_output() {
+    fn expand_native_tokens_arabic_indic_output() {
         let mut rng = seeded_rng();
         // Equal range so output is deterministic: ٧ (Arabic-Indic 7).
-        let result = expand_street_pattern("شارع n{٧,٧}", "", &mut rng);
+        let (result, _) = expand_native_tokens("شارع n{٧,٧}", &mut rng);
         assert!(
             result.contains('٧'),
             "Arabic-Indic min SHALL produce Arabic-Indic digit, got: {result}"
@@ -1208,99 +731,5 @@ mod tests {
         assert_eq!(parse_numerals("４2"), Some(42));
         // Trailing non-digit makes the whole parse fail.
         assert_eq!(parse_numerals("4x"), None);
-    }
-
-    /// Convenience: build a `GeoData` fixture with one state holding the given
-    /// region tags and one city per (name, postcode-codes) pair supplied.
-    fn geo_fixture(region_tags: &[&str], cities: &[(&str, &[&str])]) -> GeoData {
-        let cities: Vec<GeoCity> = cities
-            .iter()
-            .map(|(name, codes)| {
-                let postcodes: Vec<GeoPostcode> = codes
-                    .iter()
-                    .map(|code| GeoPostcode::for_test(code, "St", None, None))
-                    .collect();
-                GeoCity::for_test(name, postcodes)
-            })
-            .collect();
-        let state = GeoState::for_test(region_tags.iter().map(|s| s.to_string()).collect(), cities);
-        let country = GeoCountry::for_test("ZZ", vec!["+99 ### ####".to_string()]);
-        GeoData::for_test(country, vec![state])
-    }
-
-    // -----------------------------------------------------------------------
-    // 40. collect_city_names with a hand-built GeoData returns every city name.
-    // -----------------------------------------------------------------------
-    #[test]
-    fn collect_city_names_from_fixture_returns_all() {
-        let geo = geo_fixture(&["r1"], &[("Alpha", &["1"]), ("Beta", &["2"])]);
-        let names = collect_city_names(Some(&geo), None);
-        assert_eq!(
-            names,
-            vec!["Alpha".to_string(), "Beta".to_string()],
-            "SHALL return every city name in order, got: {names:?}"
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    // 41. collect_city_names region filter is case-insensitive and excludes
-    //     states whose region_tags do not contain the requested tag.
-    // -----------------------------------------------------------------------
-    #[test]
-    fn collect_city_names_region_filter_case_insensitive() {
-        let geo = geo_fixture(&["Kansai"], &[("Osaka", &["1"])]);
-        // 1. Matching tag with different casing SHALL still match.
-        let matched = collect_city_names(Some(&geo), Some("kansai"));
-        assert_eq!(
-            matched,
-            vec!["Osaka".to_string()],
-            "case-insensitive region match SHALL include the city, got: {matched:?}"
-        );
-        // 2. A non-matching tag SHALL exclude the state entirely.
-        let missed = collect_city_names(Some(&geo), Some("Narnia"));
-        assert!(
-            missed.is_empty(),
-            "non-matching region SHALL yield no cities, got: {missed:?}"
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    // 42. collect_postcodes flattens every postcode code across cities.
-    // -----------------------------------------------------------------------
-    #[test]
-    fn collect_postcodes_from_fixture_flattens_codes() {
-        let geo = geo_fixture(&["r1"], &[("Alpha", &["100", "101"]), ("Beta", &["200"])]);
-        let codes = collect_postcodes(Some(&geo));
-        assert_eq!(
-            codes,
-            vec!["100".to_string(), "101".to_string(), "200".to_string()],
-            "SHALL flatten every postcode code, got: {codes:?}"
-        );
-    }
-
-    // -----------------------------------------------------------------------
-    // 43. pick_random_postcode_entry returns one of the fixture's entries and
-    //     errors when the fixture has no postcodes.
-    // -----------------------------------------------------------------------
-    #[test]
-    fn pick_random_postcode_entry_returns_member_or_errors() {
-        // 1. With entries, the picked code SHALL be one we put in.
-        let geo = geo_fixture(&["r1"], &[("Alpha", &["100", "101"])]);
-        let mut rng = seeded_rng();
-        let entry = pick_random_postcode_entry(&geo, &mut rng).expect("SHALL pick an entry");
-        assert!(
-            entry.code == "100" || entry.code == "101",
-            "picked code SHALL be a fixture entry, got: {}",
-            entry.code
-        );
-
-        // 2. With no postcodes at all, it SHALL error.
-        let empty = geo_fixture(&["r1"], &[("Alpha", &[])]);
-        let mut rng = seeded_rng();
-        let result = pick_random_postcode_entry(&empty, &mut rng);
-        assert!(
-            result.is_err(),
-            "empty geo data SHALL error from pick_random_postcode_entry"
-        );
     }
 }

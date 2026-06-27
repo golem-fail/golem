@@ -1,7 +1,6 @@
 {
   "country": {
     "name": "Australia",
-    "name_en": "Australia",
     "iso_code": "AU",
     "phone_prefix": "+61",
     "phone_formats": [
@@ -9,218 +8,193 @@
       "+61-#-####-####"
     ],
     "postcode_format": "####",
-    "name_order": "given_first",
-    "person": { "name": ["local", "ascii"], "reading": [], "local": ["ascii"] }
+    "person": {
+      "name": [
+        "local",
+        "ascii"
+      ],
+      "reading": [],
+      "local": [
+        "ascii"
+      ]
+    }
   },
   "states": [
     {
       "name": "New South Wales",
-      "name_en": "New South Wales",
       "region_tags": [
         "Eastern Australia"
       ],
       "cities": [
         {
           "name": "Sydney",
-          "name_en": "Sydney",
           "lat": -33.8688,
           "lon": 151.2093,
           "postcodes": [
             {
               "code": "2000",
               "street": "George Street",
-              "street_en": "George Street",
-              "pattern": "n{1,300} George Street"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "2010",
               "street": "Oxford Street",
-              "street_en": "Oxford Street",
-              "pattern": "n{1,250} Oxford Street"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "2011",
               "street": "William Street",
-              "street_en": "William Street",
-              "pattern": "n{1,200} William Street"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "2015",
               "street": "Botany Road",
-              "street_en": "Botany Road",
-              "pattern": "n{1,350} Botany Road"
+              "pattern": "n{1,350} {street}"
             },
             {
               "code": "2021",
               "street": "Queen Street",
-              "street_en": "Queen Street",
-              "pattern": "n{1,200} Queen Street"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "2026",
               "street": "Old South Head Road",
-              "street_en": "Old South Head Road",
-              "pattern": "n{1,300} Old South Head Road"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "2031",
               "street": "King Street",
-              "street_en": "King Street",
-              "pattern": "n{1,400} King Street"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "2060",
               "street": "Military Road",
-              "street_en": "Military Road",
-              "pattern": "n{1,300} Military Road"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "2065",
               "street": "Pacific Highway",
-              "street_en": "Pacific Highway",
-              "pattern": "n{1,400} Pacific Highway"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "2042",
               "street": "Enmore Road",
-              "street_en": "Enmore Road",
-              "pattern": "n{1,200} Enmore Road"
+              "pattern": "n{1,200} {street}"
             }
           ]
         },
         {
           "name": "Newcastle",
-          "name_en": "Newcastle",
           "lat": -32.9283,
           "lon": 151.7817,
           "postcodes": [
             {
               "code": "2300",
               "street": "Hunter Street",
-              "street_en": "Hunter Street",
-              "pattern": "n{1,300} Hunter Street"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "2302",
               "street": "King Street",
-              "street_en": "King Street",
-              "pattern": "n{1,250} King Street"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "2303",
               "street": "Pacific Highway",
-              "street_en": "Pacific Highway",
-              "pattern": "n{1,350} Pacific Highway"
+              "pattern": "n{1,350} {street}"
             },
             {
               "code": "2304",
               "street": "Maitland Road",
-              "street_en": "Maitland Road",
-              "pattern": "n{1,400} Maitland Road"
+              "pattern": "n{1,400} {street}"
             }
           ]
         },
         {
           "name": "Wollongong",
-          "name_en": "Wollongong",
           "lat": -34.4278,
           "lon": 150.8931,
           "postcodes": [
             {
               "code": "2500",
               "street": "Crown Street",
-              "street_en": "Crown Street",
-              "pattern": "n{1,300} Crown Street"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "2502",
               "street": "Princes Highway",
-              "street_en": "Princes Highway",
-              "pattern": "n{1,400} Princes Highway"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "2505",
               "street": "Flinders Street",
-              "street_en": "Flinders Street",
-              "pattern": "n{1,200} Flinders Street"
+              "pattern": "n{1,200} {street}"
             }
           ]
         },
         {
           "name": "Central Coast",
-          "name_en": "Central Coast",
           "lat": -33.4274,
           "lon": 151.3419,
           "postcodes": [
             {
               "code": "2250",
               "street": "Mann Street",
-              "street_en": "Mann Street",
-              "pattern": "n{1,250} Mann Street"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "2256",
               "street": "The Entrance Road",
-              "street_en": "The Entrance Road",
-              "pattern": "n{1,300} The Entrance Road"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "2260",
               "street": "Pacific Highway",
-              "street_en": "Pacific Highway",
-              "pattern": "n{1,350} Pacific Highway"
+              "pattern": "n{1,350} {street}"
             }
           ]
         },
         {
           "name": "Parramatta",
-          "name_en": "Parramatta",
           "lat": -33.8151,
           "lon": 151.0011,
           "postcodes": [
             {
               "code": "2150",
               "street": "Church Street",
-              "street_en": "Church Street",
-              "pattern": "n{1,300} Church Street"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "2151",
               "street": "Victoria Road",
-              "street_en": "Victoria Road",
-              "pattern": "n{1,400} Victoria Road"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "2153",
               "street": "Old Windsor Road",
-              "street_en": "Old Windsor Road",
-              "pattern": "n{1,350} Old Windsor Road"
+              "pattern": "n{1,350} {street}"
             }
           ]
         },
         {
           "name": "Coffs Harbour",
-          "name_en": "Coffs Harbour",
           "lat": -30.2963,
           "lon": 153.1135,
           "postcodes": [
             {
               "code": "2450",
               "street": "High Street",
-              "street_en": "High Street",
-              "pattern": "n{1,200} High Street"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "2452",
               "street": "Pacific Highway",
-              "street_en": "Pacific Highway",
-              "pattern": "n{1,350} Pacific Highway"
+              "pattern": "n{1,350} {street}"
             },
             {
               "code": "2454",
               "street": "Orlando Street",
-              "street_en": "Orlando Street",
-              "pattern": "n{1,150} Orlando Street"
+              "pattern": "n{1,150} {street}"
             }
           ]
         }
@@ -228,174 +202,147 @@
     },
     {
       "name": "Victoria",
-      "name_en": "Victoria",
       "region_tags": [
         "Eastern Australia"
       ],
       "cities": [
         {
           "name": "Melbourne",
-          "name_en": "Melbourne",
           "lat": -37.8136,
           "lon": 144.9631,
           "postcodes": [
             {
               "code": "3000",
               "street": "Swanston Street",
-              "street_en": "Swanston Street",
-              "pattern": "n{1,300} Swanston Street"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "3001",
               "street": "Bourke Street",
-              "street_en": "Bourke Street",
-              "pattern": "n{1,250} Bourke Street"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "3004",
               "street": "St Kilda Road",
-              "street_en": "St Kilda Road",
-              "pattern": "n{1,400} St Kilda Road"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "3006",
               "street": "Southbank Boulevard",
-              "street_en": "Southbank Boulevard",
-              "pattern": "n{1,200} Southbank Boulevard"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "3011",
               "street": "Barkly Street",
-              "street_en": "Barkly Street",
-              "pattern": "n{1,300} Barkly Street"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "3065",
               "street": "Smith Street",
-              "street_en": "Smith Street",
-              "pattern": "n{1,300} Smith Street"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "3121",
               "street": "Church Street",
-              "street_en": "Church Street",
-              "pattern": "n{1,350} Church Street"
+              "pattern": "n{1,350} {street}"
             },
             {
               "code": "3141",
               "street": "Chapel Street",
-              "street_en": "Chapel Street",
-              "pattern": "n{1,300} Chapel Street"
+              "pattern": "n{1,300} {street}"
             }
           ]
         },
         {
           "name": "Geelong",
-          "name_en": "Geelong",
           "lat": -38.1499,
           "lon": 144.3617,
           "postcodes": [
             {
               "code": "3220",
               "street": "Moorabool Street",
-              "street_en": "Moorabool Street",
-              "pattern": "n{1,250} Moorabool Street"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "3214",
               "street": "Pakington Street",
-              "street_en": "Pakington Street",
-              "pattern": "n{1,300} Pakington Street"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "3216",
               "street": "Shannon Avenue",
-              "street_en": "Shannon Avenue",
-              "pattern": "n{1,200} Shannon Avenue"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "3218",
               "street": "Melbourne Road",
-              "street_en": "Melbourne Road",
-              "pattern": "n{1,350} Melbourne Road"
+              "pattern": "n{1,350} {street}"
             }
           ]
         },
         {
           "name": "Ballarat",
-          "name_en": "Ballarat",
           "lat": -37.5622,
           "lon": 143.8503,
           "postcodes": [
             {
               "code": "3350",
               "street": "Sturt Street",
-              "street_en": "Sturt Street",
-              "pattern": "n{1,300} Sturt Street"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "3353",
               "street": "Skipton Street",
-              "street_en": "Skipton Street",
-              "pattern": "n{1,200} Skipton Street"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "3355",
               "street": "Albert Street",
-              "street_en": "Albert Street",
-              "pattern": "n{1,200} Albert Street"
+              "pattern": "n{1,200} {street}"
             }
           ]
         },
         {
           "name": "Bendigo",
-          "name_en": "Bendigo",
           "lat": -36.757,
           "lon": 144.2794,
           "postcodes": [
             {
               "code": "3550",
               "street": "Pall Mall",
-              "street_en": "Pall Mall",
-              "pattern": "n{1,200} Pall Mall"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "3551",
               "street": "High Street",
-              "street_en": "High Street",
-              "pattern": "n{1,300} High Street"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "3556",
               "street": "Midland Highway",
-              "street_en": "Midland Highway",
-              "pattern": "n{1,350} Midland Highway"
+              "pattern": "n{1,350} {street}"
             }
           ]
         },
         {
           "name": "Shepparton",
-          "name_en": "Shepparton",
           "lat": -36.3833,
           "lon": 145.3988,
           "postcodes": [
             {
               "code": "3630",
               "street": "Wyndham Street",
-              "street_en": "Wyndham Street",
-              "pattern": "n{1,250} Wyndham Street"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "3631",
               "street": "Midland Highway",
-              "street_en": "Midland Highway",
-              "pattern": "n{1,300} Midland Highway"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "3632",
               "street": "Benalla Road",
-              "street_en": "Benalla Road",
-              "pattern": "n{1,200} Benalla Road"
+              "pattern": "n{1,200} {street}"
             }
           ]
         }
@@ -403,214 +350,181 @@
     },
     {
       "name": "Queensland",
-      "name_en": "Queensland",
       "region_tags": [
         "Eastern Australia"
       ],
       "cities": [
         {
           "name": "Brisbane",
-          "name_en": "Brisbane",
           "lat": -27.4698,
           "lon": 153.0251,
           "postcodes": [
             {
               "code": "4000",
               "street": "Queen Street",
-              "street_en": "Queen Street",
-              "pattern": "n{1,300} Queen Street"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "4001",
               "street": "Adelaide Street",
-              "street_en": "Adelaide Street",
-              "pattern": "n{1,250} Adelaide Street"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "4005",
               "street": "Brunswick Street",
-              "street_en": "Brunswick Street",
-              "pattern": "n{1,300} Brunswick Street"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "4006",
               "street": "Montague Road",
-              "street_en": "Montague Road",
-              "pattern": "n{1,250} Montague Road"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "4101",
               "street": "Melbourne Street",
-              "street_en": "Melbourne Street",
-              "pattern": "n{1,200} Melbourne Street"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "4102",
               "street": "Logan Road",
-              "street_en": "Logan Road",
-              "pattern": "n{1,400} Logan Road"
+              "pattern": "n{1,400} {street}"
             }
           ]
         },
         {
           "name": "Gold Coast",
-          "name_en": "Gold Coast",
           "lat": -28.0167,
           "lon": 153.4,
           "postcodes": [
             {
               "code": "4217",
               "street": "Cavill Avenue",
-              "street_en": "Cavill Avenue",
-              "pattern": "n{1,200} Cavill Avenue"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "4218",
               "street": "Ferry Road",
-              "street_en": "Ferry Road",
-              "pattern": "n{1,250} Ferry Road"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "4220",
               "street": "Gold Coast Highway",
-              "street_en": "Gold Coast Highway",
-              "pattern": "n{1,400} Gold Coast Highway"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "4215",
               "street": "Nerang Street",
-              "street_en": "Nerang Street",
-              "pattern": "n{1,300} Nerang Street"
+              "pattern": "n{1,300} {street}"
             }
           ]
         },
         {
           "name": "Cairns",
-          "name_en": "Cairns",
           "lat": -16.9186,
           "lon": 145.7781,
           "postcodes": [
             {
               "code": "4870",
               "street": "Sheridan Street",
-              "street_en": "Sheridan Street",
-              "pattern": "n{1,300} Sheridan Street"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "4868",
               "street": "Lake Street",
-              "street_en": "Lake Street",
-              "pattern": "n{1,200} Lake Street"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "4871",
               "street": "Bruce Highway",
-              "street_en": "Bruce Highway",
-              "pattern": "n{1,400} Bruce Highway"
+              "pattern": "n{1,400} {street}"
             }
           ]
         },
         {
           "name": "Townsville",
-          "name_en": "Townsville",
           "lat": -19.259,
           "lon": 146.8169,
           "postcodes": [
             {
               "code": "4810",
               "street": "Flinders Street",
-              "street_en": "Flinders Street",
-              "pattern": "n{1,250} Flinders Street"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "4811",
               "street": "Stuart Drive",
-              "street_en": "Stuart Drive",
-              "pattern": "n{1,300} Stuart Drive"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "4812",
               "street": "Ross River Road",
-              "street_en": "Ross River Road",
-              "pattern": "n{1,350} Ross River Road"
+              "pattern": "n{1,350} {street}"
             }
           ]
         },
         {
           "name": "Sunshine Coast",
-          "name_en": "Sunshine Coast",
           "lat": -26.65,
           "lon": 153.0667,
           "postcodes": [
             {
               "code": "4557",
               "street": "Ocean Street",
-              "street_en": "Ocean Street",
-              "pattern": "n{1,200} Ocean Street"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "4558",
               "street": "Aerodrome Road",
-              "street_en": "Aerodrome Road",
-              "pattern": "n{1,250} Aerodrome Road"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "4556",
               "street": "Maroochydore Road",
-              "street_en": "Maroochydore Road",
-              "pattern": "n{1,300} Maroochydore Road"
+              "pattern": "n{1,300} {street}"
             }
           ]
         },
         {
           "name": "Toowoomba",
-          "name_en": "Toowoomba",
           "lat": -27.5598,
           "lon": 151.9507,
           "postcodes": [
             {
               "code": "4350",
               "street": "Ruthven Street",
-              "street_en": "Ruthven Street",
-              "pattern": "n{1,300} Ruthven Street"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "4352",
               "street": "James Street",
-              "street_en": "James Street",
-              "pattern": "n{1,200} James Street"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "4355",
               "street": "Glenvale Road",
-              "street_en": "Glenvale Road",
-              "pattern": "n{1,250} Glenvale Road"
+              "pattern": "n{1,250} {street}"
             }
           ]
         },
         {
           "name": "Mackay",
-          "name_en": "Mackay",
           "lat": -21.1411,
           "lon": 149.1861,
           "postcodes": [
             {
               "code": "4740",
               "street": "Victoria Street",
-              "street_en": "Victoria Street",
-              "pattern": "n{1,250} Victoria Street"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "4741",
               "street": "Shakespeare Street",
-              "street_en": "Shakespeare Street",
-              "pattern": "n{1,200} Shakespeare Street"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "4742",
               "street": "Peak Downs Highway",
-              "street_en": "Peak Downs Highway",
-              "pattern": "n{1,300} Peak Downs Highway"
+              "pattern": "n{1,300} {street}"
             }
           ]
         }
@@ -618,124 +532,105 @@
     },
     {
       "name": "Western Australia",
-      "name_en": "Western Australia",
       "region_tags": [
         "Western Australia"
       ],
       "cities": [
         {
           "name": "Perth",
-          "name_en": "Perth",
           "lat": -31.9505,
           "lon": 115.8605,
           "postcodes": [
             {
               "code": "6000",
               "street": "St Georges Terrace",
-              "street_en": "St Georges Terrace",
-              "pattern": "n{1,300} St Georges Terrace"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "6003",
               "street": "Beaufort Street",
-              "street_en": "Beaufort Street",
-              "pattern": "n{1,350} Beaufort Street"
+              "pattern": "n{1,350} {street}"
             },
             {
               "code": "6005",
               "street": "Stirling Highway",
-              "street_en": "Stirling Highway",
-              "pattern": "n{1,400} Stirling Highway"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "6008",
               "street": "Hay Street",
-              "street_en": "Hay Street",
-              "pattern": "n{1,300} Hay Street"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "6010",
               "street": "Hampden Road",
-              "street_en": "Hampden Road",
-              "pattern": "n{1,200} Hampden Road"
+              "pattern": "n{1,200} {street}"
             }
           ]
         },
         {
           "name": "Fremantle",
-          "name_en": "Fremantle",
           "lat": -32.0569,
           "lon": 115.7439,
           "postcodes": [
             {
               "code": "6160",
               "street": "South Terrace",
-              "street_en": "South Terrace",
-              "pattern": "n{1,250} South Terrace"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "6162",
               "street": "Hampton Road",
-              "street_en": "Hampton Road",
-              "pattern": "n{1,300} Hampton Road"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "6163",
               "street": "Rockingham Road",
-              "street_en": "Rockingham Road",
-              "pattern": "n{1,350} Rockingham Road"
+              "pattern": "n{1,350} {street}"
             }
           ]
         },
         {
           "name": "Bunbury",
-          "name_en": "Bunbury",
           "lat": -33.3271,
           "lon": 115.6414,
           "postcodes": [
             {
               "code": "6230",
               "street": "Victoria Street",
-              "street_en": "Victoria Street",
-              "pattern": "n{1,250} Victoria Street"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "6231",
               "street": "Spencer Street",
-              "street_en": "Spencer Street",
-              "pattern": "n{1,200} Spencer Street"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "6232",
               "street": "Bussell Highway",
-              "street_en": "Bussell Highway",
-              "pattern": "n{1,300} Bussell Highway"
+              "pattern": "n{1,300} {street}"
             }
           ]
         },
         {
           "name": "Geraldton",
-          "name_en": "Geraldton",
           "lat": -28.7745,
           "lon": 114.615,
           "postcodes": [
             {
               "code": "6530",
               "street": "Marine Terrace",
-              "street_en": "Marine Terrace",
-              "pattern": "n{1,200} Marine Terrace"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "6531",
               "street": "Chapman Road",
-              "street_en": "Chapman Road",
-              "pattern": "n{1,250} Chapman Road"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "6532",
               "street": "North West Coastal Highway",
-              "street_en": "North West Coastal Highway",
-              "pattern": "n{1,350} North West Coastal Highway"
+              "pattern": "n{1,350} {street}"
             }
           ]
         }
@@ -743,98 +638,83 @@
     },
     {
       "name": "South Australia",
-      "name_en": "South Australia",
       "region_tags": [
         "Central Australia"
       ],
       "cities": [
         {
           "name": "Adelaide",
-          "name_en": "Adelaide",
           "lat": -34.9285,
           "lon": 138.6007,
           "postcodes": [
             {
               "code": "5000",
               "street": "King William Street",
-              "street_en": "King William Street",
-              "pattern": "n{1,300} King William Street"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "5006",
               "street": "North Terrace",
-              "street_en": "North Terrace",
-              "pattern": "n{1,250} North Terrace"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "5008",
               "street": "Port Road",
-              "street_en": "Port Road",
-              "pattern": "n{1,400} Port Road"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "5011",
               "street": "Henley Beach Road",
-              "street_en": "Henley Beach Road",
-              "pattern": "n{1,350} Henley Beach Road"
+              "pattern": "n{1,350} {street}"
             },
             {
               "code": "5034",
               "street": "Unley Road",
-              "street_en": "Unley Road",
-              "pattern": "n{1,300} Unley Road"
+              "pattern": "n{1,300} {street}"
             }
           ]
         },
         {
           "name": "Mount Gambier",
-          "name_en": "Mount Gambier",
           "lat": -37.8318,
           "lon": 140.7828,
           "postcodes": [
             {
               "code": "5290",
               "street": "Commercial Street",
-              "street_en": "Commercial Street",
-              "pattern": "n{1,250} Commercial Street"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "5291",
               "street": "Penola Road",
-              "street_en": "Penola Road",
-              "pattern": "n{1,300} Penola Road"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "5292",
               "street": "Jubilee Highway",
-              "street_en": "Jubilee Highway",
-              "pattern": "n{1,250} Jubilee Highway"
+              "pattern": "n{1,250} {street}"
             }
           ]
         },
         {
           "name": "Port Augusta",
-          "name_en": "Port Augusta",
           "lat": -32.492,
           "lon": 137.7831,
           "postcodes": [
             {
               "code": "5700",
               "street": "Commercial Road",
-              "street_en": "Commercial Road",
-              "pattern": "n{1,200} Commercial Road"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "5701",
               "street": "Stuart Highway",
-              "street_en": "Stuart Highway",
-              "pattern": "n{1,300} Stuart Highway"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "5710",
               "street": "Augusta Highway",
-              "street_en": "Augusta Highway",
-              "pattern": "n{1,350} Augusta Highway"
+              "pattern": "n{1,350} {street}"
             }
           ]
         }
@@ -842,92 +722,78 @@
     },
     {
       "name": "Tasmania",
-      "name_en": "Tasmania",
       "region_tags": [
         "Southern Australia"
       ],
       "cities": [
         {
           "name": "Hobart",
-          "name_en": "Hobart",
           "lat": -42.8821,
           "lon": 147.3272,
           "postcodes": [
             {
               "code": "7000",
               "street": "Elizabeth Street",
-              "street_en": "Elizabeth Street",
-              "pattern": "n{1,300} Elizabeth Street"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "7001",
               "street": "Liverpool Street",
-              "street_en": "Liverpool Street",
-              "pattern": "n{1,200} Liverpool Street"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "7004",
               "street": "Sandy Bay Road",
-              "street_en": "Sandy Bay Road",
-              "pattern": "n{1,350} Sandy Bay Road"
+              "pattern": "n{1,350} {street}"
             },
             {
               "code": "7005",
               "street": "Davey Street",
-              "street_en": "Davey Street",
-              "pattern": "n{1,200} Davey Street"
+              "pattern": "n{1,200} {street}"
             }
           ]
         },
         {
           "name": "Launceston",
-          "name_en": "Launceston",
           "lat": -41.4332,
           "lon": 147.1441,
           "postcodes": [
             {
               "code": "7250",
               "street": "Brisbane Street",
-              "street_en": "Brisbane Street",
-              "pattern": "n{1,250} Brisbane Street"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "7248",
               "street": "Wellington Street",
-              "street_en": "Wellington Street",
-              "pattern": "n{1,200} Wellington Street"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "7249",
               "street": "Westbury Road",
-              "street_en": "Westbury Road",
-              "pattern": "n{1,300} Westbury Road"
+              "pattern": "n{1,300} {street}"
             }
           ]
         },
         {
           "name": "Devonport",
-          "name_en": "Devonport",
           "lat": -41.1796,
           "lon": 146.3513,
           "postcodes": [
             {
               "code": "7310",
               "street": "Rooke Street",
-              "street_en": "Rooke Street",
-              "pattern": "n{1,200} Rooke Street"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "7315",
               "street": "Bass Highway",
-              "street_en": "Bass Highway",
-              "pattern": "n{1,300} Bass Highway"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "7316",
               "street": "Formby Road",
-              "street_en": "Formby Road",
-              "pattern": "n{1,200} Formby Road"
+              "pattern": "n{1,200} {street}"
             }
           ]
         }
@@ -935,46 +801,39 @@
     },
     {
       "name": "Australian Capital Territory",
-      "name_en": "Australian Capital Territory",
       "region_tags": [
         "Eastern Australia"
       ],
       "cities": [
         {
           "name": "Canberra",
-          "name_en": "Canberra",
           "lat": -35.2809,
           "lon": 149.13,
           "postcodes": [
             {
               "code": "2600",
               "street": "London Circuit",
-              "street_en": "London Circuit",
-              "pattern": "n{1,250} London Circuit"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "2601",
               "street": "Commonwealth Avenue",
-              "street_en": "Commonwealth Avenue",
-              "pattern": "n{1,300} Commonwealth Avenue"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "2602",
               "street": "Northbourne Avenue",
-              "street_en": "Northbourne Avenue",
-              "pattern": "n{1,350} Northbourne Avenue"
+              "pattern": "n{1,350} {street}"
             },
             {
               "code": "2604",
               "street": "Adelaide Avenue",
-              "street_en": "Adelaide Avenue",
-              "pattern": "n{1,250} Adelaide Avenue"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "2612",
               "street": "Barry Drive",
-              "street_en": "Barry Drive",
-              "pattern": "n{1,200} Barry Drive"
+              "pattern": "n{1,200} {street}"
             }
           ]
         }
@@ -982,7 +841,6 @@
     },
     {
       "name": "Northern Territory",
-      "name_en": "Northern Territory",
       "region_tags": [
         "Northern Australia",
         "Outback"
@@ -990,85 +848,72 @@
       "cities": [
         {
           "name": "Darwin",
-          "name_en": "Darwin",
           "lat": -12.4634,
           "lon": 130.8456,
           "postcodes": [
             {
               "code": "0800",
               "street": "Mitchell Street",
-              "street_en": "Mitchell Street",
-              "pattern": "n{1,200} Mitchell Street"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "0801",
               "street": "Smith Street",
-              "street_en": "Smith Street",
-              "pattern": "n{1,250} Smith Street"
+              "pattern": "n{1,250} {street}"
             },
             {
               "code": "0810",
               "street": "Stuart Highway",
-              "street_en": "Stuart Highway",
-              "pattern": "n{1,400} Stuart Highway"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "0812",
               "street": "McMillans Road",
-              "street_en": "McMillans Road",
-              "pattern": "n{1,300} McMillans Road"
+              "pattern": "n{1,300} {street}"
             }
           ]
         },
         {
           "name": "Alice Springs",
-          "name_en": "Alice Springs",
           "lat": -23.698,
           "lon": 133.8807,
           "postcodes": [
             {
               "code": "0870",
               "street": "Todd Mall",
-              "street_en": "Todd Mall",
-              "pattern": "n{1,200} Todd Mall"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "0871",
               "street": "Stuart Highway",
-              "street_en": "Stuart Highway",
-              "pattern": "n{1,350} Stuart Highway"
+              "pattern": "n{1,350} {street}"
             },
             {
               "code": "0872",
               "street": "Larapinta Drive",
-              "street_en": "Larapinta Drive",
-              "pattern": "n{1,300} Larapinta Drive"
+              "pattern": "n{1,300} {street}"
             }
           ]
         },
         {
           "name": "Katherine",
-          "name_en": "Katherine",
           "lat": -14.4524,
           "lon": 132.2635,
           "postcodes": [
             {
               "code": "0850",
               "street": "Katherine Terrace",
-              "street_en": "Katherine Terrace",
-              "pattern": "n{1,200} Katherine Terrace"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "0851",
               "street": "Stuart Highway",
-              "street_en": "Stuart Highway",
-              "pattern": "n{1,300} Stuart Highway"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "0852",
               "street": "Giles Street",
-              "street_en": "Giles Street",
-              "pattern": "n{1,150} Giles Street"
+              "pattern": "n{1,150} {street}"
             }
           ]
         }

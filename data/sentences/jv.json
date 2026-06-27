@@ -1,0 +1,25 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans} lan {verb_intrans}.",
+    "{noun} {verb_trans} {noun} lan {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "golem", "lempung", "endhut", "bata", "watu", "reca", "tugu",
+      "raseksa", "wewayangan", "awu", "bledug", "lemah", "perapen",
+      "brahala", "gunung", "kali", "alas", "langit", "dalan", "wesi",
+      "wedhi", "tembok", "menara", "gapura", "geni", "krikil", "pager",
+      "kutha", "segara", "watu gedhe"
+    ],
+    "verb_intrans": [
+      "tangi", "ambruk", "turu", "ngadeg", "mlaku", "obah", "gemeter",
+      "runtuh", "njedhul", "sirna"
+    ],
+    "verb_trans": [
+      "njaga", "ngremuk", "nggawa", "nglindhungi", "mbentuk", "ngangkat",
+      "mecah", "nyekel", "nyeret", "nutupi"
+    ]
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans} eye {noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun} kple {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "legba",
+      "trɔ̃",
+      "anyi",
+      "anyigba",
+      "kpe",
+      "ke",
+      "ʋuʋudedi",
+      "dzofi",
+      "to",
+      "tɔsisi",
+      "ave",
+      "dziƒo",
+      "mɔ",
+      "ga",
+      "gli",
+      "gbedoxɔ",
+      "agbo",
+      "dzo",
+      "tsi",
+      "ati",
+      "aƒe"
+    ],
+    "verb_intrans": [
+      "nyɔ",
+      "mu",
+      "dɔ alɔ̃",
+      "tsi tsitre",
+      "zɔ",
+      "dze anyi",
+      "tsi",
+      "le agbe"
+    ],
+    "verb_trans": [
+      "kɔ",
+      "tsɔ",
+      "kpɔ",
+      "wɔ",
+      "fɔ",
+      "gbã",
+      "lé",
+      "he",
+      "tu"
+    ]
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {noun} {verb_trans}.",
+    "{noun} {verb_intrans}, {noun} ammoo {verb_intrans}.",
+    "{noun} {noun}fi {noun} {verb_trans}."
+  ],
+  "slots": {
+    "noun": [
+      "goolemiin",
+      "supheen",
+      "dhoqqeen",
+      "xuubiin",
+      "dhagaan",
+      "lafeen",
+      "awwaarri",
+      "lagni",
+      "tumtuun",
+      "eegduun",
+      "siidaan",
+      "waaqeffannaan",
+      "gaaddidduun",
+      "guddichi",
+      "daaraan",
+      "biyyeen",
+      "tulluun",
+      "bosonni",
+      "samiin",
+      "karaan",
+      "sibiilli",
+      "cirrachi",
+      "gamoon",
+      "dallaan",
+      "balballi",
+      "arrabni ibiddaa",
+      "kattaan",
+      "gaarri",
+      "haroon",
+      "muka"
+    ],
+    "verb_intrans": [
+      "ka'a",
+      "kufa",
+      "rafa",
+      "dhaabbata",
+      "joora",
+      "raafama",
+      "hollata",
+      "liqimsama",
+      "naanna'a",
+      "guddata"
+    ],
+    "verb_trans": [
+      "eega",
+      "caccabsa",
+      "baata",
+      "kunuunsa",
+      "tolcha",
+      "ol kaasa",
+      "cabsa",
+      "qaba",
+      "harkisa",
+      "haguuga",
+      "dhoksa",
+      "dhiiba"
+    ]
+  }
+}

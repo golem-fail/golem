@@ -1,0 +1,22 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "Miz {noun}.",
+    "{noun} {verb_trans} {noun} caeuq {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "rin", "namh", "naez", "doem", "dieg", "sa", "diet", "feiz",
+      "daeuh", "fangz", "ngaeuz", "saenz", "baed", "ciengz", "dou", "gamj",
+      "faex", "bya", "dah", "ndoeng", "mbwn", "roen", "haij", "fwj",
+      "bo", "lueg", "raemx", "mboq", "hwnz", "doxgaiq"
+    ],
+    "verb_intrans": [
+      "doek", "ninz", "hwnj", "byaij", "caem", "dai", "doengh"
+    ],
+    "verb_trans": [
+      "dwk", "dub", "bag", "aeu", "gaj", "gyaep", "cuk", "daiq"
+    ]
+  }
+}

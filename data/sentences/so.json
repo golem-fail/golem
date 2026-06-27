@@ -1,0 +1,60 @@
+{
+  "patterns": [
+    "{noun} waa {pred}.",
+    "{noun} iyo {noun} waa {pred}.",
+    "{noun} waa {pred}, {noun}na waa {pred}.",
+    "{noun} waa {pred} iyo {pred}."
+  ],
+  "slots": {
+    "noun": [
+      "golemka",
+      "dhoobada",
+      "dhoobo",
+      "dhagaxa",
+      "dhagax",
+      "leben",
+      "lebenka",
+      "taallada",
+      "ilaaliyaha",
+      "sanamka",
+      "hooska",
+      "cawlanaha",
+      "dambaska",
+      "boodhka",
+      "ciidda",
+      "buurta",
+      "webiga",
+      "kaymta",
+      "cirka",
+      "jidka",
+      "birta",
+      "cammuudda",
+      "darbiga",
+      "munaaradda",
+      "albaabka",
+      "ololka",
+      "weynaha",
+      "tuurka"
+    ],
+    "pred": [
+      "dhagax",
+      "dhoobo",
+      "leben",
+      "taallo",
+      "ilaaliye",
+      "sanam",
+      "hoos",
+      "cawlan",
+      "dambas",
+      "boodh",
+      "ciid",
+      "buur",
+      "bir",
+      "darbi",
+      "munaarad",
+      "albaab",
+      "olol",
+      "tuur"
+    ]
+  }
+}

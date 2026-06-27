@@ -1,0 +1,33 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} is {adj}.",
+    "{noun} {verb_trans} die {adj} {noun}.",
+    "{noun} {verb_intrans} en {verb_intrans}.",
+    "{noun} {verb_trans} {noun} en {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "die golem", "die klei", "die modder", "die baksteen", "die klip",
+      "die steen", "die standbeeld", "die wagter", "die reus", "die skaduwee",
+      "die as", "die stof", "die aarde", "die smidse", "die afgod",
+      "die totem", "die beeld", "die grond", "die berg", "die rivier",
+      "die woud", "die lug", "die pad", "die yster", "die sand",
+      "die muur", "die toring", "die hek", "die vlam", "die rots"
+    ],
+    "verb_intrans": [
+      "ontwaak", "wankel", "sluimer", "verrys", "dwaal", "bewe",
+      "verbrokkel", "val", "draai", "groei"
+    ],
+    "verb_trans": [
+      "bewaak", "vergruis", "dra", "beskerm", "vorm", "lig",
+      "breek", "gryp", "sleep", "bedek"
+    ],
+    "adj": [
+      "ou", "stil", "massiewe", "hol", "gebarste", "lomp",
+      "stadige", "donker", "verlate", "ewige", "kraggelose", "klam",
+      "rustelose", "verweerde", "klipharde", "magtige"
+    ]
+  }
+}

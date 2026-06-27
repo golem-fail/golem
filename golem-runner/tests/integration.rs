@@ -15,7 +15,6 @@ use golem_runner::context::ExecutionContext;
 use golem_runner::executor::{execute_flow, FlowResult};
 use golem_runner::teardown::execute_teardown;
 use golem_vars::{Scope, ScopeLevel, VarValue, VariableStore};
-use rand::SeedableRng;
 
 // See note on the same constant in policy_tests.rs — short timeout keeps
 // failure-path tests fast (resolution loop hits deadline in ~1 s instead
@@ -47,7 +46,7 @@ fn test_ctx() -> ExecutionContext<'static> {
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
         a11y_level: golem_runner::accessibility::A11yLevel::Off,
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(0)),
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
         inherited_record_default: false,
     }
 }
@@ -360,7 +359,7 @@ steps = [
 }
 
 // ---------------------------------------------------------------------------
-// 5. Fake data generation: flow vars with fake:email, fake:city
+// 5. Fake data generation: flow vars with fake:email, fake:address dot-notation
 // ---------------------------------------------------------------------------
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_fake_data_generation_in_flow_vars() {
@@ -370,7 +369,7 @@ name = "fake data test"
 
 [flow.vars]
 user_email = "${fake:email}"
-user_name = "${fake:city}"
+user_name = "${fake:address.city}"
 
 [[block]]
 name = "verify"
@@ -384,10 +383,8 @@ steps = [
     let mut ctx = test_ctx();
 
     // Simulate runner's fake data evaluation
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha8Rng;
 
-    let mut rng = ChaCha8Rng::seed_from_u64(flow.flow.seed.unwrap_or(42));
+    let mut rng = golem_vars::seed::FakeRng::from_seed(flow.flow.seed.unwrap_or(42));
     let ordered_vars: Vec<(String, String)> = flow.flow.vars.clone().into_iter().collect();
     let evaluated = golem_vars::evaluate::evaluate_generators(&ordered_vars, &mut rng)
         .expect("generator evaluation should succeed");

@@ -9,6 +9,7 @@ pub mod interpolation;
 mod kana;
 mod script;
 pub mod seed;
+mod sentence_loader;
 pub mod structured;
 mod transcribe;
 
@@ -276,6 +277,10 @@ impl Default for VariableStore {
 pub struct GeneratorDef {
     pub name: String,
     pub params: HashMap<String, String>,
+    /// Positional args — comma-separated arguments with no `key=`, e.g. the
+    /// choices in `one_of(free|pro|enterprise)`. (`key=value` args go to
+    /// `params`; anything else is positional, in source order.)
+    pub positional: Vec<String>,
 }
 
 impl GeneratorDef {
@@ -290,20 +295,28 @@ impl GeneratorDef {
             let params_str = rest.get(paren_start + 1..)?.strip_suffix(')')?;
 
             let mut params = HashMap::new();
+            let mut positional = Vec::new();
             if !params_str.is_empty() {
                 for pair in split_top_level_commas(params_str) {
-                    let mut parts = pair.splitn(2, '=');
-                    let key = parts.next()?.trim().to_string();
-                    let value = parts.next()?.trim().to_string();
-                    params.insert(key, value);
+                    // `key=value` → param; bare token → positional arg.
+                    if let Some((key, value)) = pair.split_once('=') {
+                        params.insert(key.trim().to_string(), value.trim().to_string());
+                    } else {
+                        positional.push(pair.trim().to_string());
+                    }
                 }
             }
 
-            Some(Self { name, params })
+            Some(Self {
+                name,
+                params,
+                positional,
+            })
         } else {
             Some(Self {
                 name: rest.to_string(),
                 params: HashMap::new(),
+                positional: Vec::new(),
             })
         }
     }
@@ -425,6 +438,7 @@ mod tests {
             Some(GeneratorDef {
                 name: "email".to_string(),
                 params: HashMap::new(),
+                positional: Vec::new(),
             })
         );
     }
@@ -963,13 +977,19 @@ mod tests {
         );
     }
 
-    // 19. a param with no '=' fails to parse (missing value side).
+    // 19. an arg with no '=' is captured as a positional arg (e.g. one_of
+    //     choices), not a key=value param.
     #[test]
-    fn generator_def_parse_param_without_equals_returns_none() {
-        assert!(
-            GeneratorDef::parse("fake:name(bare)").is_none(),
-            "param lacking '=' SHALL fail to parse"
-        );
+    fn generator_def_parse_bare_arg_is_positional() {
+        let gen = GeneratorDef::parse("fake:one_of(a|b|c)").expect("should parse");
+        assert_eq!(gen.name, "one_of");
+        assert!(gen.params.is_empty(), "bare arg SHALL NOT become a param");
+        assert_eq!(gen.positional, vec!["a|b|c".to_string()]);
+
+        // key=value and positional can coexist; each goes to its bucket.
+        let mixed = GeneratorDef::parse("fake:x(k=v, bare)").expect("should parse");
+        assert_eq!(mixed.params.get("k"), Some(&"v".to_string()));
+        assert_eq!(mixed.positional, vec!["bare".to_string()]);
     }
 
     // 20. surrounding whitespace in params is trimmed from keys and values.

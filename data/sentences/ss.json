@@ -1,0 +1,41 @@
+{
+  "patterns": [
+    "kukhona {noun}.",
+    "ngibona {noun}.",
+    "kukhona {noun}, {noun}.",
+    "ngibona {noun}, {noun}.",
+    "kukhona {noun}, {noun}, {noun}.",
+    "ngibona {noun}, {noun}, {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "sidalwa",
+      "libumba",
+      "ludzaka",
+      "sitini",
+      "litje",
+      "umhlaba",
+      "lutfuli",
+      "umfula",
+      "litfunti",
+      "umfanekiso",
+      "sithico",
+      "umlindzi",
+      "intsaba",
+      "lihlatsi",
+      "sibhakabhaka",
+      "umgwaco",
+      "insimbi",
+      "sihlabatsi",
+      "lidolobha",
+      "umbhoshongo",
+      "lisango",
+      "litsafa",
+      "lidvwala",
+      "umlilo",
+      "lifu",
+      "inkhungu",
+      "umoya"
+    ]
+  }
+}

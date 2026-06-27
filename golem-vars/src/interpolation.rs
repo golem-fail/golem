@@ -1235,9 +1235,8 @@ mod tests {
 
     /// Build a generator callback backed by a seeded RNG (kept alive by the
     /// caller's RefCell). Mirrors what the runner supplies.
-    fn seeded_rng_cell(seed: u64) -> std::cell::RefCell<rand_chacha::ChaCha8Rng> {
-        use rand::SeedableRng;
-        std::cell::RefCell::new(rand_chacha::ChaCha8Rng::seed_from_u64(seed))
+    fn seeded_rng_cell(seed: u64) -> std::cell::RefCell<crate::seed::FakeRng> {
+        std::cell::RefCell::new(crate::seed::FakeRng::from_seed(seed))
     }
 
     // 45. Inline generator resolves to a scalar within surrounding text.
@@ -1245,7 +1244,7 @@ mod tests {
     fn generator_inline_scalar() {
         let store = VariableStore::new();
         let rng = seeded_rng_cell(1);
-        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut *rng.borrow_mut());
+        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut rng.borrow_mut());
         let mut ctx = InterpolationContext::new(&store);
         ctx.generator = Some(&gen);
         let out = interpolate("user=${fake:email}", &ctx).expect("inline generator");
@@ -1262,11 +1261,11 @@ mod tests {
     fn generator_object_field() {
         let store = VariableStore::new();
         let rng = seeded_rng_cell(2);
-        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut *rng.borrow_mut());
+        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut rng.borrow_mut());
         let mut ctx = InterpolationContext::new(&store);
         ctx.generator = Some(&gen);
-        let out = interpolate("${fake:person(country=JP).first}", &ctx).expect("field access");
-        assert!(!out.is_empty(), "person.first SHALL be a non-empty string");
+        let out = interpolate("${fake:person(country=JP).given}", &ctx).expect("field access");
+        assert!(!out.is_empty(), "person.given SHALL be a non-empty string");
     }
 
     // 47. A bare generator object (no `.field`) in a string is an error.
@@ -1274,7 +1273,7 @@ mod tests {
     fn generator_bare_object_errors() {
         let store = VariableStore::new();
         let rng = seeded_rng_cell(3);
-        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut *rng.borrow_mut());
+        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut rng.borrow_mut());
         let mut ctx = InterpolationContext::new(&store);
         ctx.generator = Some(&gen);
         let err = interpolate("${fake:person(country=JP)}", &ctx)
@@ -1293,7 +1292,7 @@ mod tests {
             )],
         );
         let rng = seeded_rng_cell(4);
-        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut *rng.borrow_mut());
+        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut rng.borrow_mut());
         let mut ctx = InterpolationContext::new(&store);
         ctx.generator = Some(&gen);
         let out = interpolate("${fake:phone(country=${addr.country_code})}", &ctx)
@@ -1321,7 +1320,7 @@ mod tests {
     fn evaluate_value_preserves_whole_value_object() {
         let store = VariableStore::new();
         let rng = seeded_rng_cell(5);
-        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut *rng.borrow_mut());
+        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut rng.borrow_mut());
         let mut ctx = InterpolationContext::new(&store);
         ctx.generator = Some(&gen);
         let v = evaluate_value("${fake:person(country=JP)}", &ctx).expect("whole-value object");
@@ -1336,7 +1335,7 @@ mod tests {
     fn evaluate_value_embedded_is_string() {
         let store = VariableStore::new();
         let rng = seeded_rng_cell(6);
-        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut *rng.borrow_mut());
+        let gen = |d: &str| crate::evaluate::generate_fake(d, &mut rng.borrow_mut());
         let mut ctx = InterpolationContext::new(&store);
         ctx.generator = Some(&gen);
         let v = evaluate_value("id-${fake:uuid}", &ctx).expect("embedded");

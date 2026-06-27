@@ -1,7 +1,6 @@
 {
   "country": {
     "name": "Brasil",
-    "name_en": "Brazil",
     "iso_code": "BR",
     "phone_prefix": "+55",
     "phone_formats": [
@@ -9,170 +8,153 @@
       "+55-##-####-####"
     ],
     "postcode_format": "#####-###",
-    "name_order": "given_first",
-    "person": { "name": ["local", "ascii"], "reading": [], "local": ["ascii", "diacritics_pt"] }
+    "person": {
+      "name": [
+        "local",
+        "ascii"
+      ],
+      "reading": [],
+      "local": [
+        "ascii",
+        "diacritics_pt"
+      ]
+    }
   },
   "states": [
     {
       "name": "São Paulo",
-      "name_en": "Sao Paulo",
       "region_tags": [
         "Sudeste"
       ],
       "cities": [
         {
           "name": "São Paulo",
-          "name_en": "Sao Paulo",
           "lat": -23.5505,
           "lon": -46.6333,
           "postcodes": [
             {
               "code": "01310-100",
               "street": "Avenida Paulista",
-              "street_en": "Paulista Avenue",
-              "pattern": "n{1,2500} Avenida Paulista"
+              "pattern": "n{1,2500} {street}"
             },
             {
               "code": "01305-100",
               "street": "Rua Augusta",
-              "street_en": "Augusta Street",
-              "pattern": "n{1,3000} Rua Augusta"
+              "pattern": "n{1,3000} {street}"
             },
             {
               "code": "01426-001",
               "street": "Rua Oscar Freire",
-              "street_en": "Oscar Freire Street",
-              "pattern": "n{1,1200} Rua Oscar Freire"
+              "pattern": "n{1,1200} {street}"
             },
             {
               "code": "01301-000",
               "street": "Rua da Consolação",
-              "street_en": "Consolacao Street",
-              "pattern": "n{1,3500} Rua da Consolação"
+              "pattern": "n{1,3500} {street}"
             },
             {
               "code": "01046-001",
               "street": "Praça da República",
-              "street_en": "Republic Square",
-              "pattern": "n{1,500} Praça da República"
+              "pattern": "n{1,500} {street}"
             },
             {
               "code": "01002-010",
               "street": "Rua Direita",
-              "street_en": "Direita Street",
-              "pattern": "n{1,400} Rua Direita"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "01310-200",
               "street": "Alameda Santos",
-              "street_en": "Santos Alley",
-              "pattern": "n{1,2300} Alameda Santos"
+              "pattern": "n{1,2300} {street}"
             },
             {
               "code": "04101-000",
               "street": "Avenida Brigadeiro Luís Antônio",
-              "street_en": "Brigadeiro Luis Antonio Avenue",
-              "pattern": "n{1,5000} Avenida Brigadeiro Luís Antônio"
+              "pattern": "n{1,5000} {street}"
             },
             {
               "code": "04543-011",
               "street": "Avenida Faria Lima",
-              "street_en": "Faria Lima Avenue",
-              "pattern": "n{1,5500} Avenida Faria Lima"
+              "pattern": "n{1,5500} {street}"
             },
             {
               "code": "01414-001",
               "street": "Rua Haddock Lobo",
-              "street_en": "Haddock Lobo Street",
-              "pattern": "n{1,1800} Rua Haddock Lobo"
+              "pattern": "n{1,1800} {street}"
             },
             {
               "code": "05001-100",
               "street": "Rua Clélia",
-              "street_en": "Clelia Street",
-              "pattern": "n{1,900} Rua Clélia"
+              "pattern": "n{1,900} {street}"
             },
             {
               "code": "03301-000",
               "street": "Rua do Gasômetro",
-              "street_en": "Gasometro Street",
-              "pattern": "n{1,600} Rua do Gasômetro"
+              "pattern": "n{1,600} {street}"
             },
             {
               "code": "02012-001",
               "street": "Rua Voluntários da Pátria",
-              "street_en": "Voluntarios da Patria Street",
-              "pattern": "n{1,2500} Rua Voluntários da Pátria"
+              "pattern": "n{1,2500} {street}"
             },
             {
               "code": "04547-005",
               "street": "Rua Funchal",
-              "street_en": "Funchal Street",
-              "pattern": "n{1,700} Rua Funchal"
+              "pattern": "n{1,700} {street}"
             },
             {
               "code": "05413-001",
               "street": "Rua dos Pinheiros",
-              "street_en": "Pinheiros Street",
-              "pattern": "n{1,1100} Rua dos Pinheiros"
+              "pattern": "n{1,1100} {street}"
             },
             {
               "code": "01311-000",
               "street": "Alameda Jaú",
-              "street_en": "Jau Alley",
-              "pattern": "n{1,2000} Alameda Jaú"
+              "pattern": "n{1,2000} {street}"
             }
           ]
         },
         {
           "name": "Campinas",
-          "name_en": "Campinas",
           "lat": -22.9099,
           "lon": -47.0626,
           "postcodes": [
             {
               "code": "13015-001",
               "street": "Rua Barão de Jaguara",
-              "street_en": "Barao de Jaguara Street",
-              "pattern": "n{1,1200} Rua Barão de Jaguara"
+              "pattern": "n{1,1200} {street}"
             },
             {
               "code": "13024-430",
               "street": "Avenida Francisco Glicério",
-              "street_en": "Francisco Glicerio Avenue",
-              "pattern": "n{1,1800} Avenida Francisco Glicério"
+              "pattern": "n{1,1800} {street}"
             },
             {
               "code": "13076-148",
               "street": "Avenida Norte-Sul",
-              "street_en": "Norte-Sul Avenue",
-              "pattern": "n{1,2000} Avenida Norte-Sul"
+              "pattern": "n{1,2000} {street}"
             }
           ]
         },
         {
           "name": "Santos",
-          "name_en": "Santos",
           "lat": -23.9608,
           "lon": -46.3336,
           "postcodes": [
             {
               "code": "11010-101",
               "street": "Rua XV de Novembro",
-              "street_en": "XV de Novembro Street",
-              "pattern": "n{1,400} Rua XV de Novembro"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "11045-001",
               "street": "Avenida Ana Costa",
-              "street_en": "Ana Costa Avenue",
-              "pattern": "n{1,700} Avenida Ana Costa"
+              "pattern": "n{1,700} {street}"
             },
             {
               "code": "11060-002",
               "street": "Avenida Conselheiro Nébias",
-              "street_en": "Conselheiro Nebias Avenue",
-              "pattern": "n{1,600} Avenida Conselheiro Nébias"
+              "pattern": "n{1,600} {street}"
             }
           ]
         }
@@ -180,108 +162,91 @@
     },
     {
       "name": "Rio de Janeiro",
-      "name_en": "Rio de Janeiro",
       "region_tags": [
         "Sudeste"
       ],
       "cities": [
         {
           "name": "Rio de Janeiro",
-          "name_en": "Rio de Janeiro",
           "lat": -22.9068,
           "lon": -43.1729,
           "postcodes": [
             {
               "code": "22021-001",
               "street": "Avenida Atlântica",
-              "street_en": "Atlantica Avenue",
-              "pattern": "n{1,4500} Avenida Atlântica"
+              "pattern": "n{1,4500} {street}"
             },
             {
               "code": "22410-003",
               "street": "Rua Visconde de Pirajá",
-              "street_en": "Visconde de Piraja Street",
-              "pattern": "n{1,600} Rua Visconde de Pirajá"
+              "pattern": "n{1,600} {street}"
             },
             {
               "code": "20040-020",
               "street": "Avenida Rio Branco",
-              "street_en": "Rio Branco Avenue",
-              "pattern": "n{1,300} Avenida Rio Branco"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "22070-002",
               "street": "Rua Barata Ribeiro",
-              "street_en": "Barata Ribeiro Street",
-              "pattern": "n{1,500} Rua Barata Ribeiro"
+              "pattern": "n{1,500} {street}"
             },
             {
               "code": "20031-170",
               "street": "Avenida Presidente Vargas",
-              "street_en": "Presidente Vargas Avenue",
-              "pattern": "n{1,3000} Avenida Presidente Vargas"
+              "pattern": "n{1,3000} {street}"
             },
             {
               "code": "22041-080",
               "street": "Rua Tonelero",
-              "street_en": "Tonelero Street",
-              "pattern": "n{1,400} Rua Tonelero"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "22250-040",
               "street": "Rua Voluntários da Pátria",
-              "street_en": "Voluntarios da Patria Street",
-              "pattern": "n{1,600} Rua Voluntários da Pátria"
+              "pattern": "n{1,600} {street}"
             },
             {
               "code": "22440-032",
               "street": "Rua Dias Ferreira",
-              "street_en": "Dias Ferreira Street",
-              "pattern": "n{1,800} Rua Dias Ferreira"
+              "pattern": "n{1,800} {street}"
             },
             {
               "code": "20050-090",
               "street": "Rua do Ouvidor",
-              "street_en": "Ouvidor Street",
-              "pattern": "n{1,200} Rua do Ouvidor"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "20230-024",
               "street": "Rua do Catete",
-              "street_en": "Catete Street",
-              "pattern": "n{1,350} Rua do Catete"
+              "pattern": "n{1,350} {street}"
             },
             {
               "code": "22461-000",
               "street": "Avenida Niemeyer",
-              "street_en": "Niemeyer Avenue",
-              "pattern": "n{1,1000} Avenida Niemeyer"
+              "pattern": "n{1,1000} {street}"
             }
           ]
         },
         {
           "name": "Niterói",
-          "name_en": "Niteroi",
           "lat": -22.8833,
           "lon": -43.1036,
           "postcodes": [
             {
               "code": "24020-091",
               "street": "Rua Visconde do Uruguai",
-              "street_en": "Visconde do Uruguai Street",
-              "pattern": "n{1,300} Rua Visconde do Uruguai"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "24030-015",
               "street": "Rua da Conceição",
-              "street_en": "Conceicao Street",
-              "pattern": "n{1,400} Rua da Conceição"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "24020-005",
               "street": "Avenida Ernani do Amaral Peixoto",
-              "street_en": "Ernani do Amaral Peixoto Avenue",
-              "pattern": "n{1,600} Avenida Ernani do Amaral Peixoto"
+              "pattern": "n{1,600} {street}"
             }
           ]
         }
@@ -289,96 +254,81 @@
     },
     {
       "name": "Minas Gerais",
-      "name_en": "Minas Gerais",
       "region_tags": [
         "Sudeste"
       ],
       "cities": [
         {
           "name": "Belo Horizonte",
-          "name_en": "Belo Horizonte",
           "lat": -19.9191,
           "lon": -43.9386,
           "postcodes": [
             {
               "code": "30130-000",
               "street": "Avenida Afonso Pena",
-              "street_en": "Afonso Pena Avenue",
-              "pattern": "n{1,4500} Avenida Afonso Pena"
+              "pattern": "n{1,4500} {street}"
             },
             {
               "code": "30120-010",
               "street": "Rua da Bahia",
-              "street_en": "Bahia Street",
-              "pattern": "n{1,2500} Rua da Bahia"
+              "pattern": "n{1,2500} {street}"
             },
             {
               "code": "30140-071",
               "street": "Avenida Augusto de Lima",
-              "street_en": "Augusto de Lima Avenue",
-              "pattern": "n{1,2000} Avenida Augusto de Lima"
+              "pattern": "n{1,2000} {street}"
             },
             {
               "code": "30180-010",
               "street": "Rua dos Caetés",
-              "street_en": "Caetes Street",
-              "pattern": "n{1,1200} Rua dos Caetés"
+              "pattern": "n{1,1200} {street}"
             },
             {
               "code": "30150-260",
               "street": "Rua Espírito Santo",
-              "street_en": "Espirito Santo Street",
-              "pattern": "n{1,1800} Rua Espírito Santo"
+              "pattern": "n{1,1800} {street}"
             },
             {
               "code": "30110-012",
               "street": "Rua dos Tupinambás",
-              "street_en": "Tupinambas Street",
-              "pattern": "n{1,900} Rua dos Tupinambás"
+              "pattern": "n{1,900} {street}"
             },
             {
               "code": "30190-001",
               "street": "Avenida do Contorno",
-              "street_en": "Contorno Avenue",
-              "pattern": "n{1,10000} Avenida do Contorno"
+              "pattern": "n{1,10000} {street}"
             },
             {
               "code": "30170-010",
               "street": "Rua Sergipe",
-              "street_en": "Sergipe Street",
-              "pattern": "n{1,1500} Rua Sergipe"
+              "pattern": "n{1,1500} {street}"
             },
             {
               "code": "30380-280",
               "street": "Avenida Raja Gabáglia",
-              "street_en": "Raja Gabaglia Avenue",
-              "pattern": "n{1,3000} Avenida Raja Gabáglia"
+              "pattern": "n{1,3000} {street}"
             }
           ]
         },
         {
           "name": "Uberlândia",
-          "name_en": "Uberlandia",
           "lat": -18.9186,
           "lon": -48.2772,
           "postcodes": [
             {
               "code": "38400-100",
               "street": "Avenida Afonso Pena",
-              "street_en": "Afonso Pena Avenue",
-              "pattern": "n{1,2000} Avenida Afonso Pena"
+              "pattern": "n{1,2000} {street}"
             },
             {
               "code": "38408-100",
               "street": "Avenida Rondon Pacheco",
-              "street_en": "Rondon Pacheco Avenue",
-              "pattern": "n{1,4000} Avenida Rondon Pacheco"
+              "pattern": "n{1,4000} {street}"
             },
             {
               "code": "38400-200",
               "street": "Rua Santos Dumont",
-              "street_en": "Santos Dumont Street",
-              "pattern": "n{1,800} Rua Santos Dumont"
+              "pattern": "n{1,800} {street}"
             }
           ]
         }
@@ -386,60 +336,51 @@
     },
     {
       "name": "Espírito Santo",
-      "name_en": "Espirito Santo",
       "region_tags": [
         "Sudeste"
       ],
       "cities": [
         {
           "name": "Vitória",
-          "name_en": "Vitoria",
           "lat": -20.3155,
           "lon": -40.3128,
           "postcodes": [
             {
               "code": "29010-002",
               "street": "Avenida Jerônimo Monteiro",
-              "street_en": "Jeronimo Monteiro Avenue",
-              "pattern": "n{1,1000} Avenida Jerônimo Monteiro"
+              "pattern": "n{1,1000} {street}"
             },
             {
               "code": "29050-335",
               "street": "Avenida Nossa Senhora da Penha",
-              "street_en": "Nossa Senhora da Penha Avenue",
-              "pattern": "n{1,2500} Avenida Nossa Senhora da Penha"
+              "pattern": "n{1,2500} {street}"
             },
             {
               "code": "29025-080",
               "street": "Rua Sete de Setembro",
-              "street_en": "Sete de Setembro Street",
-              "pattern": "n{1,600} Rua Sete de Setembro"
+              "pattern": "n{1,600} {street}"
             }
           ]
         },
         {
           "name": "Vila Velha",
-          "name_en": "Vila Velha",
           "lat": -20.3297,
           "lon": -40.2925,
           "postcodes": [
             {
               "code": "29101-300",
               "street": "Avenida Champagnat",
-              "street_en": "Champagnat Avenue",
-              "pattern": "n{1,1500} Avenida Champagnat"
+              "pattern": "n{1,1500} {street}"
             },
             {
               "code": "29100-021",
               "street": "Rua Vinte e Três de Maio",
-              "street_en": "Vinte e Tres de Maio Street",
-              "pattern": "n{1,800} Rua Vinte e Três de Maio"
+              "pattern": "n{1,800} {street}"
             },
             {
               "code": "29102-020",
               "street": "Avenida Carlos Lindenberg",
-              "street_en": "Carlos Lindenberg Avenue",
-              "pattern": "n{1,2000} Avenida Carlos Lindenberg"
+              "pattern": "n{1,2000} {street}"
             }
           ]
         }
@@ -447,7 +388,6 @@
     },
     {
       "name": "Bahia",
-      "name_en": "Bahia",
       "region_tags": [
         "Nordeste",
         "Sertão"
@@ -455,65 +395,55 @@
       "cities": [
         {
           "name": "Salvador",
-          "name_en": "Salvador",
           "lat": -12.9714,
           "lon": -38.5124,
           "postcodes": [
             {
               "code": "40020-000",
               "street": "Rua Chile",
-              "street_en": "Chile Street",
-              "pattern": "n{1,300} Rua Chile"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "40060-001",
               "street": "Avenida Sete de Setembro",
-              "street_en": "Sete de Setembro Avenue",
-              "pattern": "n{1,2500} Avenida Sete de Setembro"
+              "pattern": "n{1,2500} {street}"
             },
             {
               "code": "41810-000",
               "street": "Avenida Tancredo Neves",
-              "street_en": "Tancredo Neves Avenue",
-              "pattern": "n{1,3000} Avenida Tancredo Neves"
+              "pattern": "n{1,3000} {street}"
             },
             {
               "code": "40170-110",
               "street": "Largo do Pelourinho",
-              "street_en": "Pelourinho Square",
-              "pattern": "n{1,100} Largo do Pelourinho"
+              "pattern": "n{1,100} {street}"
             },
             {
               "code": "40140-130",
               "street": "Rua Carlos Gomes",
-              "street_en": "Carlos Gomes Street",
-              "pattern": "n{1,500} Rua Carlos Gomes"
+              "pattern": "n{1,500} {street}"
             }
           ]
         },
         {
           "name": "Feira de Santana",
-          "name_en": "Feira de Santana",
           "lat": -12.2669,
           "lon": -38.9668,
           "postcodes": [
             {
               "code": "44001-120",
               "street": "Avenida Getúlio Vargas",
-              "street_en": "Getulio Vargas Avenue",
-              "pattern": "n{1,2000} Avenida Getúlio Vargas"
+              "pattern": "n{1,2000} {street}"
             },
             {
               "code": "44003-005",
               "street": "Rua Conselheiro Franco",
-              "street_en": "Conselheiro Franco Street",
-              "pattern": "n{1,500} Rua Conselheiro Franco"
+              "pattern": "n{1,500} {street}"
             },
             {
               "code": "44010-000",
               "street": "Avenida Senhor dos Passos",
-              "street_en": "Senhor dos Passos Avenue",
-              "pattern": "n{1,1500} Avenida Senhor dos Passos"
+              "pattern": "n{1,1500} {street}"
             }
           ]
         }
@@ -521,7 +451,6 @@
     },
     {
       "name": "Pernambuco",
-      "name_en": "Pernambuco",
       "region_tags": [
         "Nordeste",
         "Sertão"
@@ -529,59 +458,50 @@
       "cities": [
         {
           "name": "Recife",
-          "name_en": "Recife",
           "lat": -8.0476,
           "lon": -34.877,
           "postcodes": [
             {
               "code": "50030-230",
               "street": "Rua da Aurora",
-              "street_en": "Aurora Street",
-              "pattern": "n{1,800} Rua da Aurora"
+              "pattern": "n{1,800} {street}"
             },
             {
               "code": "51021-000",
               "street": "Avenida Boa Viagem",
-              "street_en": "Boa Viagem Avenue",
-              "pattern": "n{1,6000} Avenida Boa Viagem"
+              "pattern": "n{1,6000} {street}"
             },
             {
               "code": "50050-230",
               "street": "Avenida Guararapes",
-              "street_en": "Guararapes Avenue",
-              "pattern": "n{1,500} Avenida Guararapes"
+              "pattern": "n{1,500} {street}"
             },
             {
               "code": "50070-000",
               "street": "Rua do Sol",
-              "street_en": "Sol Street",
-              "pattern": "n{1,400} Rua do Sol"
+              "pattern": "n{1,400} {street}"
             }
           ]
         },
         {
           "name": "Olinda",
-          "name_en": "Olinda",
           "lat": -8.0089,
           "lon": -34.8553,
           "postcodes": [
             {
               "code": "53010-090",
               "street": "Rua do Amparo",
-              "street_en": "Amparo Street",
-              "pattern": "n{1,200} Rua do Amparo"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "53020-080",
               "street": "Avenida Sigismundo Gonçalves",
-              "street_en": "Sigismundo Goncalves Avenue",
-              "pattern": "n{1,600} Avenida Sigismundo Gonçalves"
+              "pattern": "n{1,600} {street}"
             },
             {
               "code": "53030-010",
               "street": "Rua de São Bento",
-              "street_en": "Sao Bento Street",
-              "pattern": "n{1,300} Rua de São Bento"
+              "pattern": "n{1,300} {street}"
             }
           ]
         }
@@ -589,7 +509,6 @@
     },
     {
       "name": "Ceará",
-      "name_en": "Ceara",
       "region_tags": [
         "Nordeste",
         "Sertão"
@@ -597,59 +516,50 @@
       "cities": [
         {
           "name": "Fortaleza",
-          "name_en": "Fortaleza",
           "lat": -3.7172,
           "lon": -38.5433,
           "postcodes": [
             {
               "code": "60060-440",
               "street": "Avenida Beira Mar",
-              "street_en": "Beira Mar Avenue",
-              "pattern": "n{1,4000} Avenida Beira Mar"
+              "pattern": "n{1,4000} {street}"
             },
             {
               "code": "60025-100",
               "street": "Rua Barão do Rio Branco",
-              "street_en": "Barao do Rio Branco Street",
-              "pattern": "n{1,1500} Rua Barão do Rio Branco"
+              "pattern": "n{1,1500} {street}"
             },
             {
               "code": "60175-055",
               "street": "Avenida Abolição",
-              "street_en": "Abolicao Avenue",
-              "pattern": "n{1,3500} Avenida Abolição"
+              "pattern": "n{1,3500} {street}"
             },
             {
               "code": "60115-221",
               "street": "Avenida Domingos Olímpio",
-              "street_en": "Domingos Olimpio Avenue",
-              "pattern": "n{1,2000} Avenida Domingos Olímpio"
+              "pattern": "n{1,2000} {street}"
             }
           ]
         },
         {
           "name": "Juazeiro do Norte",
-          "name_en": "Juazeiro do Norte",
           "lat": -7.2131,
           "lon": -39.315,
           "postcodes": [
             {
               "code": "63010-010",
               "street": "Rua São Pedro",
-              "street_en": "Sao Pedro Street",
-              "pattern": "n{1,600} Rua São Pedro"
+              "pattern": "n{1,600} {street}"
             },
             {
               "code": "63020-025",
               "street": "Rua do Cruzeiro",
-              "street_en": "Cruzeiro Street",
-              "pattern": "n{1,400} Rua do Cruzeiro"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "63024-200",
               "street": "Avenida Padre Cícero",
-              "street_en": "Padre Cicero Avenue",
-              "pattern": "n{1,3000} Avenida Padre Cícero"
+              "pattern": "n{1,3000} {street}"
             }
           ]
         }
@@ -657,7 +567,6 @@
     },
     {
       "name": "Rio Grande do Norte",
-      "name_en": "Rio Grande do Norte",
       "region_tags": [
         "Nordeste",
         "Sertão"
@@ -665,53 +574,45 @@
       "cities": [
         {
           "name": "Natal",
-          "name_en": "Natal",
           "lat": -5.7945,
           "lon": -35.211,
           "postcodes": [
             {
               "code": "59012-300",
               "street": "Avenida Rio Branco",
-              "street_en": "Rio Branco Avenue",
-              "pattern": "n{1,800} Avenida Rio Branco"
+              "pattern": "n{1,800} {street}"
             },
             {
               "code": "59064-180",
               "street": "Avenida Engenheiro Roberto Freire",
-              "street_en": "Engenheiro Roberto Freire Avenue",
-              "pattern": "n{1,5000} Avenida Engenheiro Roberto Freire"
+              "pattern": "n{1,5000} {street}"
             },
             {
               "code": "59025-400",
               "street": "Rua João Pessoa",
-              "street_en": "Joao Pessoa Street",
-              "pattern": "n{1,600} Rua João Pessoa"
+              "pattern": "n{1,600} {street}"
             }
           ]
         },
         {
           "name": "Mossoró",
-          "name_en": "Mossoro",
           "lat": -5.1878,
           "lon": -37.3442,
           "postcodes": [
             {
               "code": "59600-220",
               "street": "Rua Coronel Gurgel",
-              "street_en": "Coronel Gurgel Street",
-              "pattern": "n{1,400} Rua Coronel Gurgel"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "59610-100",
               "street": "Avenida Augusto Severo",
-              "street_en": "Augusto Severo Avenue",
-              "pattern": "n{1,1000} Avenida Augusto Severo"
+              "pattern": "n{1,1000} {street}"
             },
             {
               "code": "59607-360",
               "street": "Rua Frei Miguelinho",
-              "street_en": "Frei Miguelinho Street",
-              "pattern": "n{1,300} Rua Frei Miguelinho"
+              "pattern": "n{1,300} {street}"
             }
           ]
         }
@@ -719,7 +620,6 @@
     },
     {
       "name": "Paraíba",
-      "name_en": "Paraiba",
       "region_tags": [
         "Nordeste",
         "Sertão"
@@ -727,53 +627,45 @@
       "cities": [
         {
           "name": "João Pessoa",
-          "name_en": "Joao Pessoa",
           "lat": -7.1195,
           "lon": -34.845,
           "postcodes": [
             {
               "code": "58013-420",
               "street": "Rua Duque de Caxias",
-              "street_en": "Duque de Caxias Street",
-              "pattern": "n{1,600} Rua Duque de Caxias"
+              "pattern": "n{1,600} {street}"
             },
             {
               "code": "58039-000",
               "street": "Avenida Epitácio Pessoa",
-              "street_en": "Epitacio Pessoa Avenue",
-              "pattern": "n{1,5000} Avenida Epitácio Pessoa"
+              "pattern": "n{1,5000} {street}"
             },
             {
               "code": "58030-000",
               "street": "Avenida Dom Pedro II",
-              "street_en": "Dom Pedro II Avenue",
-              "pattern": "n{1,800} Avenida Dom Pedro II"
+              "pattern": "n{1,800} {street}"
             }
           ]
         },
         {
           "name": "Campina Grande",
-          "name_en": "Campina Grande",
           "lat": -7.2306,
           "lon": -35.8811,
           "postcodes": [
             {
               "code": "58100-001",
               "street": "Rua Maciel Pinheiro",
-              "street_en": "Maciel Pinheiro Street",
-              "pattern": "n{1,600} Rua Maciel Pinheiro"
+              "pattern": "n{1,600} {street}"
             },
             {
               "code": "58102-560",
               "street": "Avenida Canal",
-              "street_en": "Canal Avenue",
-              "pattern": "n{1,1500} Avenida Canal"
+              "pattern": "n{1,1500} {street}"
             },
             {
               "code": "58104-100",
               "street": "Rua Venâncio Neiva",
-              "street_en": "Venancio Neiva Street",
-              "pattern": "n{1,400} Rua Venâncio Neiva"
+              "pattern": "n{1,400} {street}"
             }
           ]
         }
@@ -781,7 +673,6 @@
     },
     {
       "name": "Alagoas",
-      "name_en": "Alagoas",
       "region_tags": [
         "Nordeste",
         "Sertão"
@@ -789,53 +680,45 @@
       "cities": [
         {
           "name": "Maceió",
-          "name_en": "Maceio",
           "lat": -9.6658,
           "lon": -35.7353,
           "postcodes": [
             {
               "code": "57020-600",
               "street": "Rua do Comércio",
-              "street_en": "Comercio Street",
-              "pattern": "n{1,500} Rua do Comércio"
+              "pattern": "n{1,500} {street}"
             },
             {
               "code": "57035-000",
               "street": "Avenida da Paz",
-              "street_en": "Paz Avenue",
-              "pattern": "n{1,2000} Avenida da Paz"
+              "pattern": "n{1,2000} {street}"
             },
             {
               "code": "57030-170",
               "street": "Rua do Sol",
-              "street_en": "Sol Street",
-              "pattern": "n{1,400} Rua do Sol"
+              "pattern": "n{1,400} {street}"
             }
           ]
         },
         {
           "name": "Arapiraca",
-          "name_en": "Arapiraca",
           "lat": -9.7525,
           "lon": -36.6611,
           "postcodes": [
             {
               "code": "57300-025",
               "street": "Rua Manoel Pereira",
-              "street_en": "Manoel Pereira Street",
-              "pattern": "n{1,400} Rua Manoel Pereira"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "57304-050",
               "street": "Avenida Deputado Silvestre Péricles",
-              "street_en": "Deputado Silvestre Pericles Avenue",
-              "pattern": "n{1,1000} Avenida Deputado Silvestre Péricles"
+              "pattern": "n{1,1000} {street}"
             },
             {
               "code": "57302-060",
               "street": "Rua Governador Silvestre Péricles",
-              "street_en": "Governador Silvestre Pericles Street",
-              "pattern": "n{1,500} Rua Governador Silvestre Péricles"
+              "pattern": "n{1,500} {street}"
             }
           ]
         }
@@ -843,7 +726,6 @@
     },
     {
       "name": "Sergipe",
-      "name_en": "Sergipe",
       "region_tags": [
         "Nordeste",
         "Sertão"
@@ -851,53 +733,45 @@
       "cities": [
         {
           "name": "Aracaju",
-          "name_en": "Aracaju",
           "lat": -10.9091,
           "lon": -37.0677,
           "postcodes": [
             {
               "code": "49010-150",
               "street": "Rua Laranjeiras",
-              "street_en": "Laranjeiras Street",
-              "pattern": "n{1,800} Rua Laranjeiras"
+              "pattern": "n{1,800} {street}"
             },
             {
               "code": "49035-730",
               "street": "Avenida Beira Mar",
-              "street_en": "Beira Mar Avenue",
-              "pattern": "n{1,3000} Avenida Beira Mar"
+              "pattern": "n{1,3000} {street}"
             },
             {
               "code": "49015-230",
               "street": "Avenida Barão de Maruim",
-              "street_en": "Barao de Maruim Avenue",
-              "pattern": "n{1,1200} Avenida Barão de Maruim"
+              "pattern": "n{1,1200} {street}"
             }
           ]
         },
         {
           "name": "Itabaiana",
-          "name_en": "Itabaiana",
           "lat": -10.6851,
           "lon": -37.4258,
           "postcodes": [
             {
               "code": "49500-000",
               "street": "Rua Coronel Eraldo Menezes",
-              "street_en": "Coronel Eraldo Menezes Street",
-              "pattern": "n{1,300} Rua Coronel Eraldo Menezes"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "49500-070",
               "street": "Praça Fausto Cardoso",
-              "street_en": "Fausto Cardoso Square",
-              "pattern": "n{1,100} Praça Fausto Cardoso"
+              "pattern": "n{1,100} {street}"
             },
             {
               "code": "49506-010",
               "street": "Avenida Otoniel Dórea",
-              "street_en": "Otoniel Dorea Avenue",
-              "pattern": "n{1,600} Avenida Otoniel Dórea"
+              "pattern": "n{1,600} {street}"
             }
           ]
         }
@@ -905,7 +779,6 @@
     },
     {
       "name": "Piauí",
-      "name_en": "Piaui",
       "region_tags": [
         "Nordeste",
         "Sertão"
@@ -913,53 +786,45 @@
       "cities": [
         {
           "name": "Teresina",
-          "name_en": "Teresina",
           "lat": -5.0892,
           "lon": -42.8019,
           "postcodes": [
             {
               "code": "64001-280",
               "street": "Rua Álvaro Mendes",
-              "street_en": "Alvaro Mendes Street",
-              "pattern": "n{1,1000} Rua Álvaro Mendes"
+              "pattern": "n{1,1000} {street}"
             },
             {
               "code": "64000-060",
               "street": "Avenida Frei Serafim",
-              "street_en": "Frei Serafim Avenue",
-              "pattern": "n{1,4000} Avenida Frei Serafim"
+              "pattern": "n{1,4000} {street}"
             },
             {
               "code": "64003-700",
               "street": "Rua Coelho Rodrigues",
-              "street_en": "Coelho Rodrigues Street",
-              "pattern": "n{1,600} Rua Coelho Rodrigues"
+              "pattern": "n{1,600} {street}"
             }
           ]
         },
         {
           "name": "Parnaíba",
-          "name_en": "Parnaiba",
           "lat": -2.9055,
           "lon": -41.7768,
           "postcodes": [
             {
               "code": "64200-240",
               "street": "Avenida São Sebastião",
-              "street_en": "Sao Sebastiao Avenue",
-              "pattern": "n{1,800} Avenida São Sebastião"
+              "pattern": "n{1,800} {street}"
             },
             {
               "code": "64200-020",
               "street": "Rua Grande",
-              "street_en": "Grande Street",
-              "pattern": "n{1,300} Rua Grande"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "64202-090",
               "street": "Avenida Presidente Getúlio Vargas",
-              "street_en": "Presidente Getulio Vargas Avenue",
-              "pattern": "n{1,1200} Avenida Presidente Getúlio Vargas"
+              "pattern": "n{1,1200} {street}"
             }
           ]
         }
@@ -967,60 +832,51 @@
     },
     {
       "name": "Maranhão",
-      "name_en": "Maranhao",
       "region_tags": [
         "Nordeste"
       ],
       "cities": [
         {
           "name": "São Luís",
-          "name_en": "Sao Luis",
           "lat": -2.5297,
           "lon": -44.2825,
           "postcodes": [
             {
               "code": "65010-580",
               "street": "Rua do Sol",
-              "street_en": "Sol Street",
-              "pattern": "n{1,500} Rua do Sol"
+              "pattern": "n{1,500} {street}"
             },
             {
               "code": "65020-600",
               "street": "Rua Grande",
-              "street_en": "Grande Street",
-              "pattern": "n{1,400} Rua Grande"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "65075-440",
               "street": "Avenida Litorânea",
-              "street_en": "Litoranea Avenue",
-              "pattern": "n{1,5000} Avenida Litorânea"
+              "pattern": "n{1,5000} {street}"
             }
           ]
         },
         {
           "name": "Imperatriz",
-          "name_en": "Imperatriz",
           "lat": -5.5189,
           "lon": -47.4914,
           "postcodes": [
             {
               "code": "65900-410",
               "street": "Avenida Babaçulândia",
-              "street_en": "Babaculandia Avenue",
-              "pattern": "n{1,1500} Avenida Babaçulândia"
+              "pattern": "n{1,1500} {street}"
             },
             {
               "code": "65903-010",
               "street": "Rua Pará",
-              "street_en": "Para Street",
-              "pattern": "n{1,500} Rua Pará"
+              "pattern": "n{1,500} {street}"
             },
             {
               "code": "65907-070",
               "street": "Avenida Dorgival Pinheiro de Sousa",
-              "street_en": "Dorgival Pinheiro de Sousa Avenue",
-              "pattern": "n{1,2000} Avenida Dorgival Pinheiro de Sousa"
+              "pattern": "n{1,2000} {street}"
             }
           ]
         }
@@ -1028,72 +884,61 @@
     },
     {
       "name": "Rio Grande do Sul",
-      "name_en": "Rio Grande do Sul",
       "region_tags": [
         "Sul"
       ],
       "cities": [
         {
           "name": "Porto Alegre",
-          "name_en": "Porto Alegre",
           "lat": -30.0346,
           "lon": -51.2177,
           "postcodes": [
             {
               "code": "90020-160",
               "street": "Rua dos Andradas",
-              "street_en": "Andradas Street",
-              "pattern": "n{1,1800} Rua dos Andradas"
+              "pattern": "n{1,1800} {street}"
             },
             {
               "code": "90035-003",
               "street": "Avenida Borges de Medeiros",
-              "street_en": "Borges de Medeiros Avenue",
-              "pattern": "n{1,3000} Avenida Borges de Medeiros"
+              "pattern": "n{1,3000} {street}"
             },
             {
               "code": "90050-170",
               "street": "Rua da República",
-              "street_en": "Republica Street",
-              "pattern": "n{1,800} Rua da República"
+              "pattern": "n{1,800} {street}"
             },
             {
               "code": "91330-002",
               "street": "Avenida Assis Brasil",
-              "street_en": "Assis Brasil Avenue",
-              "pattern": "n{1,7000} Avenida Assis Brasil"
+              "pattern": "n{1,7000} {street}"
             },
             {
               "code": "90040-130",
               "street": "Rua General Câmara",
-              "street_en": "General Camara Street",
-              "pattern": "n{1,400} Rua General Câmara"
+              "pattern": "n{1,400} {street}"
             }
           ]
         },
         {
           "name": "Caxias do Sul",
-          "name_en": "Caxias do Sul",
           "lat": -29.1681,
           "lon": -51.1794,
           "postcodes": [
             {
               "code": "95020-450",
               "street": "Rua Sinimbu",
-              "street_en": "Sinimbu Street",
-              "pattern": "n{1,2500} Rua Sinimbu"
+              "pattern": "n{1,2500} {street}"
             },
             {
               "code": "95010-000",
               "street": "Rua Os Dezoito do Forte",
-              "street_en": "Os Dezoito do Forte Street",
-              "pattern": "n{1,1500} Rua Os Dezoito do Forte"
+              "pattern": "n{1,1500} {street}"
             },
             {
               "code": "95020-190",
               "street": "Avenida Júlio de Castilhos",
-              "street_en": "Julio de Castilhos Avenue",
-              "pattern": "n{1,3000} Avenida Júlio de Castilhos"
+              "pattern": "n{1,3000} {street}"
             }
           ]
         }
@@ -1101,72 +946,61 @@
     },
     {
       "name": "Paraná",
-      "name_en": "Parana",
       "region_tags": [
         "Sul"
       ],
       "cities": [
         {
           "name": "Curitiba",
-          "name_en": "Curitiba",
           "lat": -25.4284,
           "lon": -49.2733,
           "postcodes": [
             {
               "code": "80020-300",
               "street": "Rua XV de Novembro",
-              "street_en": "XV de Novembro Street",
-              "pattern": "n{1,1000} Rua XV de Novembro"
+              "pattern": "n{1,1000} {street}"
             },
             {
               "code": "80060-150",
               "street": "Rua Marechal Deodoro",
-              "street_en": "Marechal Deodoro Street",
-              "pattern": "n{1,1200} Rua Marechal Deodoro"
+              "pattern": "n{1,1200} {street}"
             },
             {
               "code": "80230-080",
               "street": "Avenida Visconde de Guarapuava",
-              "street_en": "Visconde de Guarapuava Avenue",
-              "pattern": "n{1,5000} Avenida Visconde de Guarapuava"
+              "pattern": "n{1,5000} {street}"
             },
             {
               "code": "80040-010",
               "street": "Rua Barão do Rio Branco",
-              "street_en": "Barao do Rio Branco Street",
-              "pattern": "n{1,700} Rua Barão do Rio Branco"
+              "pattern": "n{1,700} {street}"
             },
             {
               "code": "80410-150",
               "street": "Rua Bispo Dom José",
-              "street_en": "Bispo Dom Jose Street",
-              "pattern": "n{1,300} Rua Bispo Dom José"
+              "pattern": "n{1,300} {street}"
             }
           ]
         },
         {
           "name": "Londrina",
-          "name_en": "Londrina",
           "lat": -23.3103,
           "lon": -51.1628,
           "postcodes": [
             {
               "code": "86010-390",
               "street": "Avenida Paraná",
-              "street_en": "Parana Avenue",
-              "pattern": "n{1,800} Avenida Paraná"
+              "pattern": "n{1,800} {street}"
             },
             {
               "code": "86020-130",
               "street": "Rua Sergipe",
-              "street_en": "Sergipe Street",
-              "pattern": "n{1,600} Rua Sergipe"
+              "pattern": "n{1,600} {street}"
             },
             {
               "code": "86010-180",
               "street": "Avenida Higienópolis",
-              "street_en": "Higienopolis Avenue",
-              "pattern": "n{1,1500} Avenida Higienópolis"
+              "pattern": "n{1,1500} {street}"
             }
           ]
         }
@@ -1174,60 +1008,51 @@
     },
     {
       "name": "Santa Catarina",
-      "name_en": "Santa Catarina",
       "region_tags": [
         "Sul"
       ],
       "cities": [
         {
           "name": "Florianópolis",
-          "name_en": "Florianopolis",
           "lat": -27.5954,
           "lon": -48.548,
           "postcodes": [
             {
               "code": "88010-400",
               "street": "Rua Felipe Schmidt",
-              "street_en": "Felipe Schmidt Street",
-              "pattern": "n{1,700} Rua Felipe Schmidt"
+              "pattern": "n{1,700} {street}"
             },
             {
               "code": "88015-205",
               "street": "Rua Conselheiro Mafra",
-              "street_en": "Conselheiro Mafra Street",
-              "pattern": "n{1,600} Rua Conselheiro Mafra"
+              "pattern": "n{1,600} {street}"
             },
             {
               "code": "88034-000",
               "street": "Avenida Beira Mar Norte",
-              "street_en": "Beira Mar Norte Avenue",
-              "pattern": "n{1,4000} Avenida Beira Mar Norte"
+              "pattern": "n{1,4000} {street}"
             }
           ]
         },
         {
           "name": "Joinville",
-          "name_en": "Joinville",
           "lat": -26.3045,
           "lon": -48.8487,
           "postcodes": [
             {
               "code": "89201-100",
               "street": "Rua do Príncipe",
-              "street_en": "Principe Street",
-              "pattern": "n{1,800} Rua do Príncipe"
+              "pattern": "n{1,800} {street}"
             },
             {
               "code": "89201-510",
               "street": "Rua XV de Novembro",
-              "street_en": "XV de Novembro Street",
-              "pattern": "n{1,500} Rua XV de Novembro"
+              "pattern": "n{1,500} {street}"
             },
             {
               "code": "89202-300",
               "street": "Rua Nove de Março",
-              "street_en": "Nove de Marco Street",
-              "pattern": "n{1,600} Rua Nove de Março"
+              "pattern": "n{1,600} {street}"
             }
           ]
         }
@@ -1235,22 +1060,19 @@
     },
     {
       "name": "Distrito Federal",
-      "name_en": "Federal District",
       "region_tags": [
         "Centro-Oeste"
       ],
       "cities": [
         {
           "name": "Brasília",
-          "name_en": "Brasilia",
           "lat": -15.7975,
           "lon": -47.8919,
           "postcodes": [
             {
               "code": "70040-020",
               "street": "Esplanada dos Ministérios",
-              "street_en": "Esplanade of Ministries",
-              "fixed": [
+              "pattern": [
                 "Bloco A Esplanada dos Ministerios",
                 "Bloco B Esplanada dos Ministerios",
                 "Bloco C Esplanada dos Ministerios",
@@ -1277,126 +1099,114 @@
             {
               "code": "70297-400",
               "street": "SQS 308",
-              "street_en": "SQS 308",
-              "fixed": [
-                "Bloco A SQS 308",
-                "Bloco B SQS 308",
-                "Bloco C SQS 308",
-                "Bloco D SQS 308",
-                "Bloco E SQS 308",
-                "Bloco F SQS 308",
-                "Bloco G SQS 308",
-                "Bloco H SQS 308",
-                "Bloco I SQS 308",
-                "Bloco J SQS 308",
-                "Bloco K SQS 308",
-                "Bloco L SQS 308"
+              "pattern": [
+                "Bloco A {street}",
+                "Bloco B {street}",
+                "Bloco C {street}",
+                "Bloco D {street}",
+                "Bloco E {street}",
+                "Bloco F {street}",
+                "Bloco G {street}",
+                "Bloco H {street}",
+                "Bloco I {street}",
+                "Bloco J {street}",
+                "Bloco K {street}",
+                "Bloco L {street}"
               ]
             },
             {
               "code": "70070-120",
               "street": "SBS Quadra 2",
-              "street_en": "SBS Block 2",
-              "pattern": "Lote n{1,30} SBS Quadra 2"
+              "pattern": "Lote n{1,30} {street}"
             },
             {
               "code": "70770-100",
               "street": "SQN 314",
-              "street_en": "SQN 314",
-              "fixed": [
-                "Bloco A SQN 314",
-                "Bloco B SQN 314",
-                "Bloco C SQN 314",
-                "Bloco D SQN 314",
-                "Bloco E SQN 314",
-                "Bloco F SQN 314",
-                "Bloco G SQN 314",
-                "Bloco H SQN 314",
-                "Bloco I SQN 314",
-                "Bloco J SQN 314",
-                "Bloco K SQN 314"
+              "pattern": [
+                "Bloco A {street}",
+                "Bloco B {street}",
+                "Bloco C {street}",
+                "Bloco D {street}",
+                "Bloco E {street}",
+                "Bloco F {street}",
+                "Bloco G {street}",
+                "Bloco H {street}",
+                "Bloco I {street}",
+                "Bloco J {street}",
+                "Bloco K {street}"
               ]
             },
             {
               "code": "71020-400",
               "street": "Avenida das Nações",
-              "street_en": "Nations Avenue",
-              "pattern": "Lote n{1,50} Avenida das Nações"
+              "pattern": "Lote n{1,50} {street}"
             },
             {
               "code": "70390-025",
               "street": "Asa Sul CLS 404",
-              "street_en": "South Wing CLS 404",
-              "fixed": [
-                "Bloco A Asa Sul CLS 404",
-                "Bloco B Asa Sul CLS 404",
-                "Bloco C Asa Sul CLS 404",
-                "Bloco D Asa Sul CLS 404"
+              "pattern": [
+                "Bloco A {street}",
+                "Bloco B {street}",
+                "Bloco C {street}",
+                "Bloco D {street}"
               ]
             },
             {
               "code": "70610-410",
               "street": "SGAN 605",
-              "street_en": "SGAN 605",
-              "fixed": [
-                "Bloco A SGAN 605",
-                "Bloco B SGAN 605",
-                "Bloco C SGAN 605",
-                "Bloco D SGAN 605",
-                "Bloco E SGAN 605",
-                "Bloco F SGAN 605",
-                "Bloco G SGAN 605",
-                "Bloco H SGAN 605"
+              "pattern": [
+                "Bloco A {street}",
+                "Bloco B {street}",
+                "Bloco C {street}",
+                "Bloco D {street}",
+                "Bloco E {street}",
+                "Bloco F {street}",
+                "Bloco G {street}",
+                "Bloco H {street}"
               ]
             },
             {
               "code": "72015-560",
               "street": "Avenida Hélio Prates",
-              "street_en": "Helio Prates Avenue",
-              "pattern": "n{1,3000} Avenida Hélio Prates"
+              "pattern": "n{1,3000} {street}"
             },
             {
               "code": "70200-003",
               "street": "SQS 108",
-              "street_en": "SQS 108",
-              "fixed": [
-                "Bloco A SQS 108",
-                "Bloco B SQS 108",
-                "Bloco C SQS 108",
-                "Bloco D SQS 108",
-                "Bloco E SQS 108",
-                "Bloco F SQS 108",
-                "Bloco G SQS 108",
-                "Bloco H SQS 108",
-                "Bloco I SQS 108",
-                "Bloco J SQS 108"
+              "pattern": [
+                "Bloco A {street}",
+                "Bloco B {street}",
+                "Bloco C {street}",
+                "Bloco D {street}",
+                "Bloco E {street}",
+                "Bloco F {street}",
+                "Bloco G {street}",
+                "Bloco H {street}",
+                "Bloco I {street}",
+                "Bloco J {street}"
               ]
             }
           ]
         },
         {
           "name": "Taguatinga",
-          "name_en": "Taguatinga",
           "lat": -15.8356,
           "lon": -48.0547,
           "postcodes": [
             {
               "code": "72010-620",
               "street": "Avenida Samdu",
-              "street_en": "Samdu Avenue",
-              "pattern": "n{1,2000} Avenida Samdu"
+              "pattern": "n{1,2000} {street}"
             },
             {
               "code": "72015-000",
               "street": "Avenida Central",
-              "street_en": "Central Avenue",
-              "pattern": "n{1,1500} Avenida Central"
+              "pattern": "n{1,1500} {street}"
             },
             {
               "code": "72020-010",
               "street": "Avenida Comercial",
-              "street_en": "Comercial Avenue",
-              "pattern": "n{1,800} Avenida Comercial"
+              "pattern": "n{1,800} {street}"
             }
           ]
         }
@@ -1404,66 +1214,56 @@
     },
     {
       "name": "Goiás",
-      "name_en": "Goias",
       "region_tags": [
         "Centro-Oeste"
       ],
       "cities": [
         {
           "name": "Goiânia",
-          "name_en": "Goiania",
           "lat": -16.6869,
           "lon": -49.2648,
           "postcodes": [
             {
               "code": "74015-030",
               "street": "Avenida Goiás",
-              "street_en": "Goias Avenue",
-              "pattern": "n{1,3500} Avenida Goiás"
+              "pattern": "n{1,3500} {street}"
             },
             {
               "code": "74023-010",
               "street": "Rua 3",
-              "street_en": "Street 3",
-              "pattern": "n{1,1200} Rua 3"
+              "pattern": "n{1,1200} {street}"
             },
             {
               "code": "74083-010",
               "street": "Avenida T-63",
-              "street_en": "T-63 Avenue",
-              "pattern": "n{1,2000} Avenida T-63"
+              "pattern": "n{1,2000} {street}"
             },
             {
               "code": "74063-010",
               "street": "Avenida Anhanguera",
-              "street_en": "Anhanguera Avenue",
-              "pattern": "n{1,8000} Avenida Anhanguera"
+              "pattern": "n{1,8000} {street}"
             }
           ]
         },
         {
           "name": "Anápolis",
-          "name_en": "Anapolis",
           "lat": -16.3281,
           "lon": -48.953,
           "postcodes": [
             {
               "code": "75020-040",
               "street": "Avenida Brasil",
-              "street_en": "Brasil Avenue",
-              "pattern": "n{1,2500} Avenida Brasil"
+              "pattern": "n{1,2500} {street}"
             },
             {
               "code": "75023-050",
               "street": "Rua Quinze de Dezembro",
-              "street_en": "Quinze de Dezembro Street",
-              "pattern": "n{1,600} Rua Quinze de Dezembro"
+              "pattern": "n{1,600} {street}"
             },
             {
               "code": "75024-170",
               "street": "Avenida Goiás",
-              "street_en": "Goias Avenue",
-              "pattern": "n{1,1200} Avenida Goiás"
+              "pattern": "n{1,1200} {street}"
             }
           ]
         }
@@ -1471,7 +1271,6 @@
     },
     {
       "name": "Mato Grosso",
-      "name_en": "Mato Grosso",
       "region_tags": [
         "Centro-Oeste",
         "Pantanal"
@@ -1479,53 +1278,45 @@
       "cities": [
         {
           "name": "Cuiabá",
-          "name_en": "Cuiaba",
           "lat": -15.6014,
           "lon": -56.0979,
           "postcodes": [
             {
               "code": "78005-500",
               "street": "Avenida Isaac Póvoas",
-              "street_en": "Isaac Povoas Avenue",
-              "pattern": "n{1,1500} Avenida Isaac Póvoas"
+              "pattern": "n{1,1500} {street}"
             },
             {
               "code": "78020-400",
               "street": "Rua Barão de Melgaço",
-              "street_en": "Barao de Melgaco Street",
-              "pattern": "n{1,3000} Rua Barão de Melgaço"
+              "pattern": "n{1,3000} {street}"
             },
             {
               "code": "78045-400",
               "street": "Avenida Miguel Sutil",
-              "street_en": "Miguel Sutil Avenue",
-              "pattern": "n{1,8000} Avenida Miguel Sutil"
+              "pattern": "n{1,8000} {street}"
             }
           ]
         },
         {
           "name": "Rondonópolis",
-          "name_en": "Rondonopolis",
           "lat": -16.4673,
           "lon": -54.6372,
           "postcodes": [
             {
               "code": "78700-110",
               "street": "Avenida Fernando Corrêa da Costa",
-              "street_en": "Fernando Correa da Costa Avenue",
-              "pattern": "n{1,2000} Avenida Fernando Corrêa da Costa"
+              "pattern": "n{1,2000} {street}"
             },
             {
               "code": "78705-050",
               "street": "Rua Dom Pedro II",
-              "street_en": "Dom Pedro II Street",
-              "pattern": "n{1,800} Rua Dom Pedro II"
+              "pattern": "n{1,800} {street}"
             },
             {
               "code": "78710-020",
               "street": "Avenida Lions Internacional",
-              "street_en": "Lions Internacional Avenue",
-              "pattern": "n{1,1200} Avenida Lions Internacional"
+              "pattern": "n{1,1200} {street}"
             }
           ]
         }
@@ -1533,7 +1324,6 @@
     },
     {
       "name": "Mato Grosso do Sul",
-      "name_en": "Mato Grosso do Sul",
       "region_tags": [
         "Centro-Oeste",
         "Pantanal"
@@ -1541,53 +1331,45 @@
       "cities": [
         {
           "name": "Campo Grande",
-          "name_en": "Campo Grande",
           "lat": -20.4697,
           "lon": -54.6201,
           "postcodes": [
             {
               "code": "79002-170",
               "street": "Rua 14 de Julho",
-              "street_en": "14 de Julho Street",
-              "pattern": "n{1,4000} Rua 14 de Julho"
+              "pattern": "n{1,4000} {street}"
             },
             {
               "code": "79020-310",
               "street": "Avenida Afonso Pena",
-              "street_en": "Afonso Pena Avenue",
-              "pattern": "n{1,6000} Avenida Afonso Pena"
+              "pattern": "n{1,6000} {street}"
             },
             {
               "code": "79010-180",
               "street": "Rua Barão do Rio Branco",
-              "street_en": "Barao do Rio Branco Street",
-              "pattern": "n{1,1200} Rua Barão do Rio Branco"
+              "pattern": "n{1,1200} {street}"
             }
           ]
         },
         {
           "name": "Dourados",
-          "name_en": "Dourados",
           "lat": -22.2233,
           "lon": -54.8083,
           "postcodes": [
             {
               "code": "79801-010",
               "street": "Avenida Marcelino Pires",
-              "street_en": "Marcelino Pires Avenue",
-              "pattern": "n{1,3000} Avenida Marcelino Pires"
+              "pattern": "n{1,3000} {street}"
             },
             {
               "code": "79804-030",
               "street": "Rua João Rosa Goes",
-              "street_en": "Joao Rosa Goes Street",
-              "pattern": "n{1,600} Rua João Rosa Goes"
+              "pattern": "n{1,600} {street}"
             },
             {
               "code": "79802-010",
               "street": "Rua Coronel Ponciano",
-              "street_en": "Coronel Ponciano Street",
-              "pattern": "n{1,400} Rua Coronel Ponciano"
+              "pattern": "n{1,400} {street}"
             }
           ]
         }
@@ -1595,7 +1377,6 @@
     },
     {
       "name": "Pará",
-      "name_en": "Para",
       "region_tags": [
         "Norte",
         "Amazônia"
@@ -1603,59 +1384,50 @@
       "cities": [
         {
           "name": "Belém",
-          "name_en": "Belem",
           "lat": -1.4558,
           "lon": -48.5024,
           "postcodes": [
             {
               "code": "66017-060",
               "street": "Avenida Presidente Vargas",
-              "street_en": "Presidente Vargas Avenue",
-              "pattern": "n{1,5000} Avenida Presidente Vargas"
+              "pattern": "n{1,5000} {street}"
             },
             {
               "code": "66023-710",
               "street": "Rua João Alfredo",
-              "street_en": "Joao Alfredo Street",
-              "pattern": "n{1,600} Rua João Alfredo"
+              "pattern": "n{1,600} {street}"
             },
             {
               "code": "66055-090",
               "street": "Avenida Nazaré",
-              "street_en": "Nazare Avenue",
-              "pattern": "n{1,1200} Avenida Nazaré"
+              "pattern": "n{1,1200} {street}"
             },
             {
               "code": "66035-065",
               "street": "Travessa Campos Sales",
-              "street_en": "Campos Sales Passage",
-              "pattern": "n{1,300} Travessa Campos Sales"
+              "pattern": "n{1,300} {street}"
             }
           ]
         },
         {
           "name": "Ananindeua",
-          "name_en": "Ananindeua",
           "lat": -1.3659,
           "lon": -48.3888,
           "postcodes": [
             {
               "code": "67013-230",
               "street": "Avenida Augusto Montenegro",
-              "street_en": "Augusto Montenegro Avenue",
-              "pattern": "n{1,5000} Avenida Augusto Montenegro"
+              "pattern": "n{1,5000} {street}"
             },
             {
               "code": "67015-480",
               "street": "Rodovia Mário Covas",
-              "street_en": "Mario Covas Highway",
-              "pattern": "n{1,3000} Rodovia Mário Covas"
+              "pattern": "n{1,3000} {street}"
             },
             {
               "code": "67020-000",
               "street": "Avenida Cláudio Sanders",
-              "street_en": "Claudio Sanders Avenue",
-              "pattern": "n{1,2000} Avenida Cláudio Sanders"
+              "pattern": "n{1,2000} {street}"
             }
           ]
         }
@@ -1663,7 +1435,6 @@
     },
     {
       "name": "Amazonas",
-      "name_en": "Amazonas",
       "region_tags": [
         "Norte",
         "Amazônia"
@@ -1671,53 +1442,45 @@
       "cities": [
         {
           "name": "Manaus",
-          "name_en": "Manaus",
           "lat": -3.119,
           "lon": -60.0217,
           "postcodes": [
             {
               "code": "69005-140",
               "street": "Avenida Eduardo Ribeiro",
-              "street_en": "Eduardo Ribeiro Avenue",
-              "pattern": "n{1,1500} Avenida Eduardo Ribeiro"
+              "pattern": "n{1,1500} {street}"
             },
             {
               "code": "69025-050",
               "street": "Rua 10 de Julho",
-              "street_en": "10 de Julho Street",
-              "pattern": "n{1,800} Rua 10 de Julho"
+              "pattern": "n{1,800} {street}"
             },
             {
               "code": "69050-001",
               "street": "Avenida Djalma Batista",
-              "street_en": "Djalma Batista Avenue",
-              "pattern": "n{1,4000} Avenida Djalma Batista"
+              "pattern": "n{1,4000} {street}"
             }
           ]
         },
         {
           "name": "Parintins",
-          "name_en": "Parintins",
           "lat": -2.6284,
           "lon": -56.7353,
           "postcodes": [
             {
               "code": "69151-020",
               "street": "Rua Fausto Bulcão",
-              "street_en": "Fausto Bulcao Street",
-              "pattern": "n{1,300} Rua Fausto Bulcão"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "69152-040",
               "street": "Avenida Amazonas",
-              "street_en": "Amazonas Avenue",
-              "pattern": "n{1,500} Avenida Amazonas"
+              "pattern": "n{1,500} {street}"
             },
             {
               "code": "69151-430",
               "street": "Rua Gomes de Castro",
-              "street_en": "Gomes de Castro Street",
-              "pattern": "n{1,200} Rua Gomes de Castro"
+              "pattern": "n{1,200} {street}"
             }
           ]
         }
@@ -1725,60 +1488,51 @@
     },
     {
       "name": "Tocantins",
-      "name_en": "Tocantins",
       "region_tags": [
         "Norte"
       ],
       "cities": [
         {
           "name": "Palmas",
-          "name_en": "Palmas",
           "lat": -10.1689,
           "lon": -48.3317,
           "postcodes": [
             {
               "code": "77001-002",
               "street": "Avenida JK",
-              "street_en": "JK Avenue",
-              "pattern": "n{1,3000} Avenida JK"
+              "pattern": "n{1,3000} {street}"
             },
             {
               "code": "77015-400",
               "street": "Avenida Teotônio Segurado",
-              "street_en": "Teotonio Segurado Avenue",
-              "pattern": "n{1,5000} Avenida Teotônio Segurado"
+              "pattern": "n{1,5000} {street}"
             },
             {
               "code": "77021-634",
               "street": "Avenida LO-09",
-              "street_en": "LO-09 Avenue",
-              "pattern": "n{1,2000} Avenida LO-09"
+              "pattern": "n{1,2000} {street}"
             }
           ]
         },
         {
           "name": "Araguaína",
-          "name_en": "Araguaina",
           "lat": -7.1913,
           "lon": -48.2074,
           "postcodes": [
             {
               "code": "77804-010",
               "street": "Avenida Cônego João Lima",
-              "street_en": "Conego Joao Lima Avenue",
-              "pattern": "n{1,1500} Avenida Cônego João Lima"
+              "pattern": "n{1,1500} {street}"
             },
             {
               "code": "77807-020",
               "street": "Rua Santa Cruz",
-              "street_en": "Santa Cruz Street",
-              "pattern": "n{1,400} Rua Santa Cruz"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "77809-050",
               "street": "Avenida Neblina",
-              "street_en": "Neblina Avenue",
-              "pattern": "n{1,800} Avenida Neblina"
+              "pattern": "n{1,800} {street}"
             }
           ]
         }
@@ -1786,7 +1540,6 @@
     },
     {
       "name": "Rondônia",
-      "name_en": "Rondonia",
       "region_tags": [
         "Norte",
         "Amazônia"
@@ -1794,53 +1547,45 @@
       "cities": [
         {
           "name": "Porto Velho",
-          "name_en": "Porto Velho",
           "lat": -8.7612,
           "lon": -63.9004,
           "postcodes": [
             {
               "code": "76801-059",
               "street": "Avenida Sete de Setembro",
-              "street_en": "Sete de Setembro Avenue",
-              "pattern": "n{1,3000} Avenida Sete de Setembro"
+              "pattern": "n{1,3000} {street}"
             },
             {
               "code": "76804-080",
               "street": "Avenida Carlos Gomes",
-              "street_en": "Carlos Gomes Avenue",
-              "pattern": "n{1,2000} Avenida Carlos Gomes"
+              "pattern": "n{1,2000} {street}"
             },
             {
               "code": "76801-200",
               "street": "Rua José de Alencar",
-              "street_en": "Jose de Alencar Street",
-              "pattern": "n{1,600} Rua José de Alencar"
+              "pattern": "n{1,600} {street}"
             }
           ]
         },
         {
           "name": "Ji-Paraná",
-          "name_en": "Ji-Parana",
           "lat": -10.8853,
           "lon": -61.9519,
           "postcodes": [
             {
               "code": "76900-028",
               "street": "Avenida Marechal Rondon",
-              "street_en": "Marechal Rondon Avenue",
-              "pattern": "n{1,3000} Avenida Marechal Rondon"
+              "pattern": "n{1,3000} {street}"
             },
             {
               "code": "76900-060",
               "street": "Rua Rio Madeira",
-              "street_en": "Rio Madeira Street",
-              "pattern": "n{1,400} Rua Rio Madeira"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "76901-020",
               "street": "Avenida Transcontinental",
-              "street_en": "Transcontinental Avenue",
-              "pattern": "n{1,2000} Avenida Transcontinental"
+              "pattern": "n{1,2000} {street}"
             }
           ]
         }
@@ -1848,7 +1593,6 @@
     },
     {
       "name": "Acre",
-      "name_en": "Acre",
       "region_tags": [
         "Norte",
         "Amazônia"
@@ -1856,53 +1600,45 @@
       "cities": [
         {
           "name": "Rio Branco",
-          "name_en": "Rio Branco",
           "lat": -9.9747,
           "lon": -67.81,
           "postcodes": [
             {
               "code": "69900-084",
               "street": "Rua Epaminondas Jácome",
-              "street_en": "Epaminondas Jacome Street",
-              "pattern": "n{1,500} Rua Epaminondas Jácome"
+              "pattern": "n{1,500} {street}"
             },
             {
               "code": "69908-560",
               "street": "Avenida Ceará",
-              "street_en": "Ceara Avenue",
-              "pattern": "n{1,2000} Avenida Ceará"
+              "pattern": "n{1,2000} {street}"
             },
             {
               "code": "69900-620",
               "street": "Avenida Getúlio Vargas",
-              "street_en": "Getulio Vargas Avenue",
-              "pattern": "n{1,1500} Avenida Getúlio Vargas"
+              "pattern": "n{1,1500} {street}"
             }
           ]
         },
         {
           "name": "Cruzeiro do Sul",
-          "name_en": "Cruzeiro do Sul",
           "lat": -7.6281,
           "lon": -72.6725,
           "postcodes": [
             {
               "code": "69980-000",
               "street": "Avenida 25 de Agosto",
-              "street_en": "25 de Agosto Avenue",
-              "pattern": "n{1,600} Avenida 25 de Agosto"
+              "pattern": "n{1,600} {street}"
             },
             {
               "code": "69980-080",
               "street": "Rua Mâncio Lima",
-              "street_en": "Mancio Lima Street",
-              "pattern": "n{1,300} Rua Mâncio Lima"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "69980-130",
               "street": "Rua Rio Branco",
-              "street_en": "Rio Branco Street",
-              "pattern": "n{1,400} Rua Rio Branco"
+              "pattern": "n{1,400} {street}"
             }
           ]
         }
@@ -1910,7 +1646,6 @@
     },
     {
       "name": "Amapá",
-      "name_en": "Amapa",
       "region_tags": [
         "Norte",
         "Amazônia"
@@ -1918,53 +1653,45 @@
       "cities": [
         {
           "name": "Macapá",
-          "name_en": "Macapa",
           "lat": 0.0349,
           "lon": -51.0694,
           "postcodes": [
             {
               "code": "68900-073",
               "street": "Avenida FAB",
-              "street_en": "FAB Avenue",
-              "pattern": "n{1,1500} Avenida FAB"
+              "pattern": "n{1,1500} {street}"
             },
             {
               "code": "68906-360",
               "street": "Rua Cândido Mendes",
-              "street_en": "Candido Mendes Street",
-              "pattern": "n{1,800} Rua Cândido Mendes"
+              "pattern": "n{1,800} {street}"
             },
             {
               "code": "68900-110",
               "street": "Avenida Mendonça Furtado",
-              "street_en": "Mendonca Furtado Avenue",
-              "pattern": "n{1,1200} Avenida Mendonça Furtado"
+              "pattern": "n{1,1200} {street}"
             }
           ]
         },
         {
           "name": "Santana",
-          "name_en": "Santana",
           "lat": -0.0583,
           "lon": -51.1811,
           "postcodes": [
             {
               "code": "68925-000",
               "street": "Avenida Santana",
-              "street_en": "Santana Avenue",
-              "pattern": "n{1,800} Avenida Santana"
+              "pattern": "n{1,800} {street}"
             },
             {
               "code": "68925-120",
               "street": "Rua Salvador Diniz",
-              "street_en": "Salvador Diniz Street",
-              "pattern": "n{1,300} Rua Salvador Diniz"
+              "pattern": "n{1,300} {street}"
             },
             {
               "code": "68925-200",
               "street": "Avenida Augusto Corrêa",
-              "street_en": "Augusto Correa Avenue",
-              "pattern": "n{1,600} Avenida Augusto Corrêa"
+              "pattern": "n{1,600} {street}"
             }
           ]
         }
@@ -1972,7 +1699,6 @@
     },
     {
       "name": "Roraima",
-      "name_en": "Roraima",
       "region_tags": [
         "Norte",
         "Amazônia"
@@ -1980,53 +1706,45 @@
       "cities": [
         {
           "name": "Boa Vista",
-          "name_en": "Boa Vista",
           "lat": 2.8195,
           "lon": -60.6714,
           "postcodes": [
             {
               "code": "69301-380",
               "street": "Avenida Ville Roy",
-              "street_en": "Ville Roy Avenue",
-              "pattern": "n{1,1000} Avenida Ville Roy"
+              "pattern": "n{1,1000} {street}"
             },
             {
               "code": "69304-560",
               "street": "Avenida Capitão Ene Garcez",
-              "street_en": "Capitao Ene Garcez Avenue",
-              "pattern": "n{1,2500} Avenida Capitão Ene Garcez"
+              "pattern": "n{1,2500} {street}"
             },
             {
               "code": "69301-020",
               "street": "Rua Coronel Pinto",
-              "street_en": "Coronel Pinto Street",
-              "pattern": "n{1,500} Rua Coronel Pinto"
+              "pattern": "n{1,500} {street}"
             }
           ]
         },
         {
           "name": "Rorainópolis",
-          "name_en": "Rorainopolis",
           "lat": 0.9394,
           "lon": -60.4394,
           "postcodes": [
             {
               "code": "69373-000",
               "street": "Avenida Senador Hélio Campos",
-              "street_en": "Senador Helio Campos Avenue",
-              "pattern": "n{1,400} Avenida Senador Hélio Campos"
+              "pattern": "n{1,400} {street}"
             },
             {
               "code": "69373-050",
               "street": "Rua Principal",
-              "street_en": "Principal Street",
-              "pattern": "n{1,200} Rua Principal"
+              "pattern": "n{1,200} {street}"
             },
             {
               "code": "69373-080",
               "street": "Rua Amazonas",
-              "street_en": "Amazonas Street",
-              "pattern": "n{1,300} Rua Amazonas"
+              "pattern": "n{1,300} {street}"
             }
           ]
         }

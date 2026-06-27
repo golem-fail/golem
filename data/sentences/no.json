@@ -1,0 +1,25 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans} og {verb_intrans}.",
+    "{noun} {verb_trans} {noun} og {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "golemen", "leiren", "gjørma", "leirklumpen", "mursteinen", "steinen",
+      "statuen", "vokteren", "rabbineren", "skyggen", "kolossen", "kjempen",
+      "støvet", "totempælen", "idolet", "asken", "fjellet", "elva",
+      "skogen", "himmelen", "veien", "borgen", "jernet", "sanden",
+      "tårnet", "muren", "porten", "klippen", "smia", "jorda"
+    ],
+    "verb_intrans": [
+      "våkner", "raser", "sover", "reiser seg", "vandrer", "vakler",
+      "skjelver", "synker", "vender seg", "vokser"
+    ],
+    "verb_trans": [
+      "vokter", "knuser", "bærer", "beskytter", "former", "løfter",
+      "bryter", "griper", "sleper", "dekker"
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {noun_acc} {verb_trans}.",
+    "{noun} {verb_intrans} va {verb_intrans}.",
+    "{noun} {noun_acc} va {noun_acc} {verb_trans}.",
+    "{noun} {noun_acc} {verb_trans} va {verb_intrans}."
+  ],
+  "slots": {
+    "noun": [
+      "golem", "loy", "balchiq", "g'isht", "tosh", "haykal", "qo'riqchi",
+      "soqchi", "ulkan", "soya", "but", "totem", "kul", "chang", "tuproq",
+      "qo'rg'on", "devor", "minora", "darvoza", "tog'", "daryo", "o'rmon",
+      "osmon", "yo'l", "temir", "qum", "alanga", "qoya", "olov", "pechka",
+      "qoraltir", "ruh", "soqqa"
+    ],
+    "noun_acc": [
+      "golemni", "loyni", "balchiqni", "g'ishtni", "toshni", "haykalni",
+      "qo'riqchini", "soyani", "butni", "totemni", "kulni", "changni",
+      "tuproqni", "qo'rg'onni", "devorni", "minorani", "darvozani", "tog'ni",
+      "daryoni", "o'rmonni", "osmonni", "yo'lni", "temirni", "qumni",
+      "alangani", "qoyani", "olovni", "qoraltirni", "ruhni", "soqqani"
+    ],
+    "verb_intrans": [
+      "uyg'onadi", "qulaydi", "uxlaydi", "ko'tariladi", "tebranadi",
+      "titraydi", "yuradi", "qaltiraydi", "aylanadi", "o'sadi", "yonadi",
+      "sinadi"
+    ],
+    "verb_trans": [
+      "qo'riqlaydi", "ezadi", "ko'taradi", "himoya qiladi", "yasaydi",
+      "sindiradi", "ushlaydi", "sudraydi", "yopadi", "qoplaydi", "tashiydi",
+      "buzadi"
+    ]
+  }
+}

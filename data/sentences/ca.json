@@ -1,0 +1,26 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans} i {verb_intrans}.",
+    "{noun} {verb_trans} {noun} i {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "el gòlem", "l'argila", "el fang", "el maó", "la pedra",
+      "l'estàtua", "el guardià", "el rabí", "la terra", "el celler",
+      "l'ombra", "el colós", "la pols", "el tòtem", "l'ídol",
+      "la muntanya", "el riu", "el bosc", "el cel", "el camí",
+      "el castell", "el ferro", "la sorra", "la torre", "el mur", "la porta",
+      "la flama", "la roca", "el gegant", "la cendra"
+    ],
+    "verb_intrans": [
+      "es desperta", "s'esfondra", "dorm", "s'alça", "vaga", "vacil·la",
+      "tremola", "s'enfonsa", "gira", "creix"
+    ],
+    "verb_trans": [
+      "guarda", "esclafa", "porta", "protegeix", "modela", "aixeca", "trenca",
+      "agafa", "arrossega", "cobreix"
+    ]
+  }
+}

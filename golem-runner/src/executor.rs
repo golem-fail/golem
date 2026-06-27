@@ -6,7 +6,6 @@ use golem_driver::PlatformDriver;
 use golem_parser::{Block, FlowFile, FlowOptions};
 use golem_report::PerfSnapshot;
 use golem_vars::{ScopeLevel, VarValue, VariableStore};
-use rand::SeedableRng;
 
 use crate::barrier::FailureBarrier;
 use crate::branch::evaluate_branch;
@@ -300,13 +299,14 @@ pub async fn execute_flow<'a>(
 
             // Build a child execution context scoped to the child flow's lifetime.
             let child_flow_dir = child_path.parent().unwrap_or(ctx.flow_dir);
-            // Derive child RNG from parent for deterministic sub-flow generation.
-            let child_rng = {
-                use rand::Rng;
-                let mut parent_rng = ctx.rng.lock().expect("parent rng mutex poisoned");
-                let child_seed: u64 = parent_rng.gen();
-                rand_chacha::ChaCha8Rng::seed_from_u64(child_seed)
-            };
+            // Derive child RNG from parent for deterministic sub-flow
+            // generation. `child()` carries the parent's date anchor — the run
+            // has one "now" shared by every (sub-)flow.
+            let child_rng = ctx
+                .rng
+                .lock()
+                .expect("parent rng mutex poisoned")
+                .child();
             let mut child_ctx = ExecutionContext {
                 flow_dir: child_flow_dir,
                 project_root: ctx.project_root,
@@ -525,7 +525,7 @@ pub async fn execute_flow<'a>(
                 let generator = |def: &str| {
                     golem_vars::evaluate::generate_fake(
                         def,
-                        &mut *rng.lock().expect("flow rng mutex poisoned"),
+                        &mut rng.lock().expect("flow rng mutex poisoned"),
                     )
                 };
                 let mut ictx = golem_vars::interpolation::InterpolationContext::new(&*vars);
@@ -1271,7 +1271,7 @@ fn seed_vars_with_generators(
     raw: &HashMap<String, String>,
     target: &mut VariableStore,
     scope: ScopeLevel,
-    rng: &std::sync::Mutex<rand_chacha::ChaCha8Rng>,
+    rng: &std::sync::Mutex<golem_vars::seed::FakeRng>,
 ) -> Result<()> {
     if raw.is_empty() {
         return Ok(());
@@ -1281,7 +1281,7 @@ fn seed_vars_with_generators(
     pairs.sort_by(|a, b| a.0.cmp(&b.0));
     let evaluated = {
         let mut guard = rng.lock().expect("flow rng mutex poisoned");
-        golem_vars::evaluate::evaluate_generators(&pairs, &mut *guard)?
+        golem_vars::evaluate::evaluate_generators(&pairs, &mut guard)?
     };
     for (key, value) in evaluated {
         target.set_in_scope(scope, key, value);
@@ -2243,9 +2243,8 @@ mod tests {
     // ---------------------------------------------------------------
     // 16b. seed_vars_with_generators — fake: eval + seed determinism
     // ---------------------------------------------------------------
-    fn seeded_rng(seed: u64) -> std::sync::Mutex<rand_chacha::ChaCha8Rng> {
-        use rand::SeedableRng;
-        std::sync::Mutex::new(rand_chacha::ChaCha8Rng::seed_from_u64(seed))
+    fn seeded_rng(seed: u64) -> std::sync::Mutex<golem_vars::seed::FakeRng> {
+        std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(seed))
     }
 
     #[test]
@@ -3142,7 +3141,7 @@ action = "screenshot"
             emitter: None,
             a11y_level: crate::accessibility::A11yLevel::Off,
             step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),            last_settled_tree: std::sync::Mutex::new(None),
-            rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::from_entropy()),
+            rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
         };
 
@@ -3209,7 +3208,7 @@ action = "screenshot"
             emitter: None,
             a11y_level: crate::accessibility::A11yLevel::Off,
             step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),            last_settled_tree: std::sync::Mutex::new(None),
-            rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::from_entropy()),
+            rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
         };
 
@@ -3285,7 +3284,7 @@ action = "screenshot"
             emitter: None,
             a11y_level: crate::accessibility::A11yLevel::Off,
             step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),            last_settled_tree: std::sync::Mutex::new(None),
-            rng: std::sync::Mutex::new(rand_chacha::ChaCha8Rng::from_entropy()),
+            rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
         };
 

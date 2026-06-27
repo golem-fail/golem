@@ -1,0 +1,33 @@
+{
+  "patterns": [
+    "{subj} {verb_intrans}.",
+    "{subj} {verb_trans} {obj}.",
+    "{subj} {verb_intrans} i {verb_intrans}.",
+    "{subj} {verb_trans} {obj} i {obj}.",
+    "{subj} {verb_intrans}, a {subj} {verb_intrans}."
+  ],
+  "slots": {
+    "subj": [
+      "golem", "glina", "blato", "cigla", "kamen", "kip", "sjena",
+      "prašina", "idol", "totem", "pepeo", "zemlja", "planina", "rijeka",
+      "šuma", "nebo", "željezo", "pijesak", "kula", "zid", "stijena",
+      "vatra", "kovačnica", "cesta", "div", "čuvar", "kolos", "glineni div",
+      "prah", "brdo", "kamena statua", "ognjište"
+    ],
+    "obj": [
+      "golema", "glinu", "blato", "ciglu", "kamen", "kip", "sjenu",
+      "prašinu", "idol", "totem", "pepeo", "zemlju", "planinu", "rijeku",
+      "šumu", "nebo", "željezo", "pijesak", "kulu", "zid", "stijenu",
+      "vatru", "kovačnicu", "cestu", "diva", "čuvara", "kolos", "glinenog diva",
+      "prah", "brdo", "kamenu statuu", "ognjište"
+    ],
+    "verb_intrans": [
+      "se budi", "se ruši", "spava", "ustaje", "korača", "drhti",
+      "tone", "se njiše", "šuti", "raste", "stoji", "počiva"
+    ],
+    "verb_trans": [
+      "čuva", "drobi", "nosi", "štiti", "oblikuje", "podiže",
+      "lomi", "hvata", "vuče", "pokriva", "gradi", "ruši"
+    ]
+  }
+}

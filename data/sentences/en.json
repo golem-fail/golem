@@ -1,0 +1,35 @@
+{
+  "patterns": [
+    "The {adj} {noun} {verb_intrans}.",
+    "A {adj} {noun} {verb_trans} the {noun}.",
+    "The {noun} is a {adj} {noun}.",
+    "The {noun} is {adj}.",
+    "The {noun} {verb_ditrans} the {noun} a {noun}.",
+    "The {noun} {verb_trans} the {adj} {noun}.",
+    "Every {adj} {noun} {verb_trans} a {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "golem", "clay", "mud", "brick", "stone", "earth", "dust", "river",
+      "forge", "guardian", "colossus", "statue", "idol", "rabbi", "inscription",
+      "scroll", "cellar", "shadow", "giant", "ember", "ash", "totem", "effigy",
+      "riverbank", "talisman"
+    ],
+    "adj": [
+      "clay", "ancient", "hulking", "silent", "lumbering", "crumbling",
+      "hollow", "massive", "dormant", "faceless", "towering", "muddy",
+      "cracked", "restless", "looming", "earthen", "brittle", "eternal"
+    ],
+    "verb_intrans": [
+      "awakens", "lumbers", "crumbles", "slumbers", "rises", "stirs", "looms",
+      "shatters", "hardens", "wanders"
+    ],
+    "verb_trans": [
+      "guards", "crushes", "carries", "shapes", "protects", "obeys", "shields",
+      "hauls", "molds", "smashes"
+    ],
+    "verb_ditrans": [
+      "gives", "brings", "offers", "hands", "bears"
+    ]
+  }
+}

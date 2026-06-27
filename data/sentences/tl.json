@@ -1,0 +1,27 @@
+{
+  "patterns": [
+    "{verb_intrans} ang {noun}.",
+    "{verb_trans} ng {noun} ang {noun}.",
+    "{verb_intrans} ang {noun} at ang {noun}.",
+    "{verb_trans} ng {noun} at ng {noun} ang {noun}.",
+    "Ang {noun} ay {verb_intrans}.",
+    "May {noun} sa {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "golem", "putik", "luwad", "tisa", "bato", "lupa", "alabok",
+      "ilog", "pandayan", "bantay", "higante", "rebulto", "diyos-diyosan",
+      "anino", "abo", "totem", "estatwa", "bundok", "gubat", "langit",
+      "daan", "bakal", "buhangin", "tore", "pader", "pintuan", "apoy",
+      "guho", "yelo", "ulap", "dagat", "hangin", "araw", "buwan", "puno"
+    ],
+    "verb_intrans": [
+      "gumising", "bumagsak", "natutulog", "tumayo", "gumagala",
+      "yumanig", "lumakad", "nahulog", "umusbong", "umalon"
+    ],
+    "verb_trans": [
+      "bumuhat", "gumawa", "humawak", "nagtanggol", "bumasag",
+      "umangat", "humila", "tumakip", "nagbantay", "humukay"
+    ]
+  }
+}

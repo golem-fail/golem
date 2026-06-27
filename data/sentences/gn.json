@@ -1,0 +1,60 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans} ha {verb_intrans}.",
+    "{noun} {verb_trans} {noun} ha {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "tuju",
+      "yvy",
+      "tuju raʼanga",
+      "ita",
+      "ita raʼanga",
+      "taʼanga",
+      "okara",
+      "tujukue",
+      "yvytimbo",
+      "kuarahyʼã",
+      "yvytu",
+      "ysyry",
+      "kaʼaguy",
+      "yvága",
+      "tape",
+      "kuarepoti",
+      "yvykuʼi",
+      "tata",
+      "ogyke",
+      "óga rokẽ",
+      "tatarendy",
+      "ñu",
+      "yvyty",
+      "árai"
+    ],
+    "verb_intrans": [
+      "opáy",
+      "hoʼa",
+      "oke",
+      "opuʼã",
+      "oguata",
+      "oryrýi",
+      "oñemboty",
+      "okañy",
+      "ojere",
+      "okakuaa"
+    ],
+    "verb_trans": [
+      "oñangareko",
+      "ojoka",
+      "ogueraha",
+      "omoʼã",
+      "oapo",
+      "ohupi",
+      "omopẽ",
+      "ojapyhy",
+      "osãmbyhy",
+      "oguahẽ"
+    ]
+  }
+}

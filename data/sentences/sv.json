@@ -1,0 +1,25 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans} och {verb_intrans}.",
+    "{noun} {verb_trans} {noun} och {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "golemen", "leran", "gyttjan", "lerklumpen", "tegelstenen", "stenen",
+      "statyn", "väktaren", "rabbinen", "skuggan", "kolossen", "jätten",
+      "dammet", "totempålen", "idolen", "askan", "berget", "floden",
+      "skogen", "himlen", "vägen", "borgen", "järnet", "sanden",
+      "tornet", "muren", "porten", "klippan"
+    ],
+    "verb_intrans": [
+      "vaknar", "rasar", "sover", "reser sig", "vandrar", "vacklar",
+      "skälver", "sjunker", "vänder sig", "växer"
+    ],
+    "verb_trans": [
+      "vaktar", "krossar", "bär", "skyddar", "formar", "lyfter",
+      "bryter", "griper", "släpar", "täcker"
+    ]
+  }
+}

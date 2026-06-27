@@ -1,0 +1,65 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_trans} {noun} na {noun}.",
+    "{noun} ayeke {adj}.",
+    "{noun} na {noun} {verb_intrans}."
+  ],
+  "slots": {
+    "noun": [
+      "zo tî têmê",
+      "zo tî potopoto",
+      "zo tî sêse",
+      "têmê",
+      "potopoto",
+      "ndôo",
+      "sêse",
+      "moule",
+      "ngû",
+      "gbakô",
+      "ndûzü",
+      "lêgë",
+      "wên",
+      "kêkê",
+      "wâ",
+      "hötö",
+      "pupu",
+      "mbutu",
+      "kötä-zo",
+      "da",
+      "Nzapä",
+      "kûâ"
+    ],
+    "verb_intrans": [
+      "alôndô",
+      "agoe",
+      "akpe",
+      "angbâ",
+      "atï",
+      "aduti",
+      "akîri",
+      "awara"
+    ],
+    "verb_trans": [
+      "abata",
+      "amû",
+      "asâra",
+      "agirisa",
+      "abi",
+      "akanga",
+      "akamâta",
+      "azîa"
+    ],
+    "adj": [
+      "kötä",
+      "kêtê",
+      "ngangô",
+      "vukö",
+      "finî",
+      "pendere",
+      "sïönî",
+      "nzönî"
+    ]
+  }
+}

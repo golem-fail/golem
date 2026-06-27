@@ -1,0 +1,30 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {obj}.",
+    "{noun} {verb_intrans} i {verb_intrans}.",
+    "{noun} {verb_trans} {obj} i {obj}."
+  ],
+  "slots": {
+    "noun": [
+      "golem", "glina", "blato", "cigla", "kamen", "kip", "sjena",
+      "prašina", "idol", "totem", "pepeo", "zemlja", "planina", "rijeka",
+      "šuma", "nebo", "željezo", "pijesak", "toranj", "zid", "stijena",
+      "vatra", "kovačnica", "cesta", "div", "čuvar", "vrata", "mulj"
+    ],
+    "obj": [
+      "golema", "glinu", "blato", "ciglu", "kamen", "kip", "sjenu",
+      "prašinu", "idol", "totem", "pepeo", "zemlju", "planinu", "rijeku",
+      "šumu", "nebo", "željezo", "pijesak", "toranj", "zid", "stijenu",
+      "vatru", "kovačnicu", "cestu", "diva", "čuvara", "vrata", "mulj"
+    ],
+    "verb_intrans": [
+      "budi se", "ruši se", "spava", "diže se", "hoda", "drhti", "tone",
+      "ljulja se", "šuti", "raste"
+    ],
+    "verb_trans": [
+      "čuva", "drobi", "nosi", "štiti", "oblikuje", "podiže", "lomi",
+      "hvata", "vuče", "prekriva"
+    ]
+  }
+}

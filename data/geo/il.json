@@ -1,7 +1,7 @@
 {
   "country": {
     "name": "ישראל",
-    "name_en": "Israel",
+    "name_ascii": "Yisrael",
     "iso_code": "IL",
     "phone_prefix": "+972",
     "phone_formats": [
@@ -9,150 +9,158 @@
       "+972-#-###-####"
     ],
     "postcode_format": "#######",
-    "name_order": "given_first",
-    "person": { "name": ["local", "ascii"], "reading": [], "local": ["hebrew"] }
+    "person": {
+      "name": [
+        "local",
+        "ascii"
+      ],
+      "reading": [],
+      "local": [
+        "hebrew"
+      ]
+    }
   },
   "states": [
     {
       "name": "ירושלים",
-      "name_en": "Jerusalem District",
+      "name_ascii": "Jerusalem District",
       "region_tags": [
         "Central Israel"
       ],
       "cities": [
         {
           "name": "ירושלים",
-          "name_en": "Jerusalem",
+          "name_ascii": "Jerusalem",
           "lat": 31.7683,
           "lon": 35.2137,
           "postcodes": [
             {
               "code": "9100101",
               "street": "רחוב יפו",
-              "street_en": "Yafo Street",
-              "pattern": "רחוב יפו n{1,300}"
+              "street_ascii": "Yafo Street",
+              "pattern": "{street} n{1,300}"
             },
             {
               "code": "9100202",
               "street": "רחוב בן יהודה",
-              "street_en": "Ben Yehuda Street",
-              "pattern": "רחוב בן יהודה n{1,200}"
+              "street_ascii": "Ben Yehuda Street",
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "9100303",
               "street": "דרך בית לחם",
-              "street_en": "Bethlehem Road",
-              "pattern": "דרך בית לחם n{1,250}"
+              "street_ascii": "Bethlehem Road",
+              "pattern": "{street} n{1,250}"
             },
             {
               "code": "9100404",
               "street": "רחוב אגריפס",
-              "street_en": "Agrippas Street",
-              "pattern": "רחוב אגריפס n{1,180}"
+              "street_ascii": "Agrippas Street",
+              "pattern": "{street} n{1,180}"
             },
             {
               "code": "9100505",
               "street": "רחוב קינג ג'ורג'",
-              "street_en": "King George Street",
-              "pattern": "רחוב קינג ג'ורג' n{1,120}"
+              "street_ascii": "King George Street",
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "9200101",
               "street": "רחוב עמק רפאים",
-              "street_en": "Emek Refaim Street",
-              "pattern": "רחוב עמק רפאים n{1,150}"
+              "street_ascii": "Emek Refaim Street",
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "9200202",
               "street": "דרך חברון",
-              "street_en": "Hebron Road",
-              "pattern": "דרך חברון n{1,280}"
+              "street_ascii": "Hebron Road",
+              "pattern": "{street} n{1,280}"
             },
             {
               "code": "9200303",
               "street": "רחוב הנביאים",
-              "street_en": "HaNevi'im Street",
-              "pattern": "רחוב הנביאים n{1,100}"
+              "street_ascii": "HaNevi'im Street",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "9300101",
               "street": "רחוב שמאי",
-              "street_en": "Shammai Street",
-              "pattern": "רחוב שמאי n{1,60}"
+              "street_ascii": "Shammai Street",
+              "pattern": "{street} n{1,60}"
             },
             {
               "code": "9300202",
               "street": "רחוב הלל",
-              "street_en": "Hillel Street",
-              "pattern": "רחוב הלל n{1,80}"
+              "street_ascii": "Hillel Street",
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "9400101",
               "street": "רחוב שטראוס",
-              "street_en": "Strauss Street",
-              "pattern": "רחוב שטראוס n{1,90}"
+              "street_ascii": "Strauss Street",
+              "pattern": "{street} n{1,90}"
             },
             {
               "code": "9400202",
               "street": "דרך יריחו",
-              "street_en": "Jericho Road",
-              "pattern": "דרך יריחו n{1,200}"
+              "street_ascii": "Jericho Road",
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "9500101",
               "street": "רחוב הרצל",
-              "street_en": "Herzl Street",
-              "pattern": "רחוב הרצל n{1,150}"
+              "street_ascii": "Herzl Street",
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "9500202",
               "street": "שדרות הרצל",
-              "street_en": "Herzl Boulevard",
-              "pattern": "שדרות הרצל n{1,120}"
+              "street_ascii": "Herzl Boulevard",
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "9500303",
               "street": "רחוב בצלאל",
-              "street_en": "Bezalel Street",
-              "pattern": "רחוב בצלאל n{1,60}"
+              "street_ascii": "Bezalel Street",
+              "pattern": "{street} n{1,60}"
             },
             {
               "code": "9600101",
               "street": "רחוב רבי עקיבא",
-              "street_en": "Rabbi Akiva Street",
-              "pattern": "רחוב רבי עקיבא n{1,100}"
+              "street_ascii": "Rabbi Akiva Street",
+              "pattern": "{street} n{1,100}"
             }
           ]
         },
         {
           "name": "בית שמש",
-          "name_en": "Beit Shemesh",
+          "name_ascii": "Beit Shemesh",
           "lat": 31.751,
           "lon": 34.9876,
           "postcodes": [
             {
               "code": "9910001",
               "street": "רחוב הרצל",
-              "street_en": "Herzl Street",
-              "pattern": "רחוב הרצל n{1,80}"
+              "street_ascii": "Herzl Street",
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "9910102",
               "street": "רחוב נהר הירדן",
-              "street_en": "Jordan River Street",
-              "pattern": "רחוב נהר הירדן n{1,60}"
+              "street_ascii": "Jordan River Street",
+              "pattern": "{street} n{1,60}"
             },
             {
               "code": "9910203",
               "street": "שדרות יצחק רבין",
-              "street_en": "Yitzhak Rabin Boulevard",
-              "pattern": "שדרות יצחק רבין n{1,50}"
+              "street_ascii": "Yitzhak Rabin Boulevard",
+              "pattern": "{street} n{1,50}"
             },
             {
               "code": "9910304",
               "street": "רחוב האורן",
-              "street_en": "HaOren Street",
-              "pattern": "רחוב האורן n{1,40}"
+              "street_ascii": "HaOren Street",
+              "pattern": "{street} n{1,40}"
             }
           ]
         }
@@ -160,7 +168,7 @@
     },
     {
       "name": "תל אביב",
-      "name_en": "Tel Aviv District",
+      "name_ascii": "Tel Aviv District",
       "region_tags": [
         "Central Israel",
         "Gush Dan"
@@ -168,215 +176,215 @@
       "cities": [
         {
           "name": "תל אביב-יפו",
-          "name_en": "Tel Aviv-Yafo",
+          "name_ascii": "Tel Aviv-Yafo",
           "lat": 32.0853,
           "lon": 34.7818,
           "postcodes": [
             {
               "code": "6100101",
               "street": "רחוב דיזנגוף",
-              "street_en": "Dizengoff Street",
-              "pattern": "רחוב דיזנגוף n{1,300}"
+              "street_ascii": "Dizengoff Street",
+              "pattern": "{street} n{1,300}"
             },
             {
               "code": "6100202",
               "street": "שדרות רוטשילד",
-              "street_en": "Rothschild Boulevard",
-              "pattern": "שדרות רוטשילד n{1,150}"
+              "street_ascii": "Rothschild Boulevard",
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "6100303",
               "street": "רחוב אלנבי",
-              "street_en": "Allenby Street",
-              "pattern": "רחוב אלנבי n{1,200}"
+              "street_ascii": "Allenby Street",
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "6100404",
               "street": "רחוב הרצל",
-              "street_en": "Herzl Street",
-              "pattern": "רחוב הרצל n{1,180}"
+              "street_ascii": "Herzl Street",
+              "pattern": "{street} n{1,180}"
             },
             {
               "code": "6200101",
               "street": "רחוב בן גוריון",
-              "street_en": "Ben Gurion Boulevard",
-              "pattern": "רחוב בן גוריון n{1,120}"
+              "street_ascii": "Ben Gurion Boulevard",
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "6200202",
               "street": "שדרות נורדאו",
-              "street_en": "Nordau Boulevard",
-              "pattern": "שדרות נורדאו n{1,100}"
+              "street_ascii": "Nordau Boulevard",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "6200303",
               "street": "רחוב ארלוזורוב",
-              "street_en": "Arlozorov Street",
-              "pattern": "רחוב ארלוזורוב n{1,160}"
+              "street_ascii": "Arlozorov Street",
+              "pattern": "{street} n{1,160}"
             },
             {
               "code": "6300101",
               "street": "רחוב אבן גבירול",
-              "street_en": "Ibn Gabirol Street",
-              "pattern": "רחוב אבן גבירול n{1,200}"
+              "street_ascii": "Ibn Gabirol Street",
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "6300202",
               "street": "רחוב קינג ג'ורג'",
-              "street_en": "King George Street",
-              "pattern": "רחוב קינג ג'ורג' n{1,80}"
+              "street_ascii": "King George Street",
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "6300303",
               "street": "רחוב בוגרשוב",
-              "street_en": "Bugrashov Street",
-              "pattern": "רחוב בוגרשוב n{1,100}"
+              "street_ascii": "Bugrashov Street",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "6400101",
               "street": "שדרות ירושלים",
-              "street_en": "Jerusalem Boulevard",
-              "pattern": "שדרות ירושלים n{1,150}"
+              "street_ascii": "Jerusalem Boulevard",
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "6500101",
               "street": "רחוב פלורנטין",
-              "street_en": "Florentin Street",
-              "pattern": "רחוב פלורנטין n{1,80}"
+              "street_ascii": "Florentin Street",
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "6600101",
               "street": "רחוב לילינבלום",
-              "street_en": "Lilienblum Street",
-              "pattern": "רחוב לילינבלום n{1,60}"
+              "street_ascii": "Lilienblum Street",
+              "pattern": "{street} n{1,60}"
             },
             {
               "code": "6700101",
               "street": "רחוב נחלת בנימין",
-              "street_en": "Nachalat Binyamin Street",
-              "pattern": "רחוב נחלת בנימין n{1,100}"
+              "street_ascii": "Nachalat Binyamin Street",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "6800101",
               "street": "רחוב הירקון",
-              "street_en": "HaYarkon Street",
-              "pattern": "רחוב הירקון n{1,250}"
+              "street_ascii": "HaYarkon Street",
+              "pattern": "{street} n{1,250}"
             },
             {
               "code": "6900101",
               "street": "רחוב שינקין",
-              "street_en": "Shenkin Street",
-              "pattern": "רחוב שינקין n{1,70}"
+              "street_ascii": "Shenkin Street",
+              "pattern": "{street} n{1,70}"
             }
           ]
         },
         {
           "name": "רמת גן",
-          "name_en": "Ramat Gan",
+          "name_ascii": "Ramat Gan",
           "lat": 32.068,
           "lon": 34.8248,
           "postcodes": [
             {
               "code": "5210001",
               "street": "רחוב ביאליק",
-              "street_en": "Bialik Street",
-              "pattern": "רחוב ביאליק n{1,150}"
+              "street_ascii": "Bialik Street",
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "5220002",
               "street": "רחוב ז'בוטינסקי",
-              "street_en": "Jabotinsky Street",
-              "pattern": "רחוב ז'בוטינסקי n{1,200}"
+              "street_ascii": "Jabotinsky Street",
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "5230003",
               "street": "שדרות ירושלים",
-              "street_en": "Jerusalem Boulevard",
-              "pattern": "שדרות ירושלים n{1,120}"
+              "street_ascii": "Jerusalem Boulevard",
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "5240004",
               "street": "רחוב הרצל",
-              "street_en": "Herzl Street",
-              "pattern": "רחוב הרצל n{1,100}"
+              "street_ascii": "Herzl Street",
+              "pattern": "{street} n{1,100}"
             }
           ]
         },
         {
           "name": "חולון",
-          "name_en": "Holon",
+          "name_ascii": "Holon",
           "lat": 32.0115,
           "lon": 34.7748,
           "postcodes": [
             {
               "code": "5810001",
               "street": "רחוב סוקולוב",
-              "street_en": "Sokolov Street",
-              "pattern": "רחוב סוקולוב n{1,180}"
+              "street_ascii": "Sokolov Street",
+              "pattern": "{street} n{1,180}"
             },
             {
               "code": "5820002",
               "street": "רחוב ויצמן",
-              "street_en": "Weizmann Street",
-              "pattern": "רחוב ויצמן n{1,100}"
+              "street_ascii": "Weizmann Street",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "5830003",
               "street": "שדרות ירושלים",
-              "street_en": "Jerusalem Boulevard",
-              "pattern": "שדרות ירושלים n{1,150}"
+              "street_ascii": "Jerusalem Boulevard",
+              "pattern": "{street} n{1,150}"
             }
           ]
         },
         {
           "name": "בת ים",
-          "name_en": "Bat Yam",
+          "name_ascii": "Bat Yam",
           "lat": 32.0171,
           "lon": 34.7502,
           "postcodes": [
             {
               "code": "5910001",
               "street": "רחוב בלפור",
-              "street_en": "Balfour Street",
-              "pattern": "רחוב בלפור n{1,120}"
+              "street_ascii": "Balfour Street",
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "5920002",
               "street": "רחוב הרצל",
-              "street_en": "Herzl Street",
-              "pattern": "רחוב הרצל n{1,100}"
+              "street_ascii": "Herzl Street",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "5930003",
               "street": "רחוב רוטשילד",
-              "street_en": "Rothschild Street",
-              "pattern": "רחוב רוטשילד n{1,80}"
+              "street_ascii": "Rothschild Street",
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "בני ברק",
-          "name_en": "Bnei Brak",
+          "name_ascii": "Bnei Brak",
           "lat": 32.0834,
           "lon": 34.8332,
           "postcodes": [
             {
               "code": "5110001",
               "street": "רחוב רבי עקיבא",
-              "street_en": "Rabbi Akiva Street",
-              "pattern": "רחוב רבי עקיבא n{1,200}"
+              "street_ascii": "Rabbi Akiva Street",
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "5120002",
               "street": "רחוב ז'בוטינסקי",
-              "street_en": "Jabotinsky Street",
-              "pattern": "רחוב ז'בוטינסקי n{1,150}"
+              "street_ascii": "Jabotinsky Street",
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "5130003",
               "street": "רחוב הרב קוק",
-              "street_en": "HaRav Kook Street",
-              "pattern": "רחוב הרב קוק n{1,80}"
+              "street_ascii": "HaRav Kook Street",
+              "pattern": "{street} n{1,80}"
             }
           ]
         }
@@ -384,102 +392,102 @@
     },
     {
       "name": "חיפה",
-      "name_en": "Haifa District",
+      "name_ascii": "Haifa District",
       "region_tags": [
         "Northern Israel"
       ],
       "cities": [
         {
           "name": "חיפה",
-          "name_en": "Haifa",
+          "name_ascii": "Haifa",
           "lat": 32.794,
           "lon": 34.9896,
           "postcodes": [
             {
               "code": "3100101",
               "street": "שדרות הנשיא",
-              "street_en": "HaNassi Boulevard",
-              "pattern": "שדרות הנשיא n{1,200}"
+              "street_ascii": "HaNassi Boulevard",
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "3100202",
               "street": "שדרות בן גוריון",
-              "street_en": "Ben Gurion Boulevard",
-              "pattern": "שדרות בן גוריון n{1,150}"
+              "street_ascii": "Ben Gurion Boulevard",
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "3200101",
               "street": "רחוב הרצל",
-              "street_en": "Herzl Street",
-              "pattern": "רחוב הרצל n{1,180}"
+              "street_ascii": "Herzl Street",
+              "pattern": "{street} n{1,180}"
             },
             {
               "code": "3200202",
               "street": "שדרות המגינים",
-              "street_en": "HaMaginim Boulevard",
-              "pattern": "שדרות המגינים n{1,100}"
+              "street_ascii": "HaMaginim Boulevard",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "3300101",
               "street": "רחוב יפו",
-              "street_en": "Yafo Street",
-              "pattern": "רחוב יפו n{1,120}"
+              "street_ascii": "Yafo Street",
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "3300202",
               "street": "דרך העצמאות",
-              "street_en": "HaAtzmaut Road",
-              "pattern": "דרך העצמאות n{1,200}"
+              "street_ascii": "HaAtzmaut Road",
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "3400101",
               "street": "שדרות מוריה",
-              "street_en": "Moriah Boulevard",
-              "pattern": "שדרות מוריה n{1,250}"
+              "street_ascii": "Moriah Boulevard",
+              "pattern": "{street} n{1,250}"
             },
             {
               "code": "3400202",
               "street": "רחוב אלנבי",
-              "street_en": "Allenby Street",
-              "pattern": "רחוב אלנבי n{1,100}"
+              "street_ascii": "Allenby Street",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "3500101",
               "street": "רחוב שטראוס",
-              "street_en": "Strauss Street",
-              "pattern": "רחוב שטראוס n{1,80}"
+              "street_ascii": "Strauss Street",
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "קריות",
-          "name_en": "Krayot",
+          "name_ascii": "Krayot",
           "lat": 32.834,
           "lon": 35.074,
           "postcodes": [
             {
               "code": "2610001",
               "street": "שדרות ההסתדרות",
-              "street_en": "HaHistadrut Boulevard",
-              "pattern": "שדרות ההסתדרות n{1,100}"
+              "street_ascii": "HaHistadrut Boulevard",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "2620002",
               "street": "רחוב הרצל",
-              "street_en": "Herzl Street",
-              "pattern": "רחוב הרצל n{1,80}"
+              "street_ascii": "Herzl Street",
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "2710001",
               "street": "רחוב ביאליק",
-              "street_en": "Bialik Street",
-              "pattern": "רחוב ביאליק n{1,100}"
+              "street_ascii": "Bialik Street",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "2720002",
               "street": "שדרות משה שרת",
-              "street_en": "Moshe Sharett Boulevard",
-              "pattern": "שדרות משה שרת n{1,80}"
+              "street_ascii": "Moshe Sharett Boulevard",
+              "pattern": "{street} n{1,80}"
             }
           ]
         }
@@ -487,7 +495,7 @@
     },
     {
       "name": "מרכז",
-      "name_en": "Central District",
+      "name_ascii": "Central District",
       "region_tags": [
         "Central Israel",
         "Sharon"
@@ -495,241 +503,241 @@
       "cities": [
         {
           "name": "ראשון לציון",
-          "name_en": "Rishon LeZion",
+          "name_ascii": "Rishon LeZion",
           "lat": 31.973,
           "lon": 34.7925,
           "postcodes": [
             {
               "code": "7510001",
               "street": "רחוב הרצל",
-              "street_en": "Herzl Street",
-              "pattern": "רחוב הרצל n{1,200}"
+              "street_ascii": "Herzl Street",
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "7520002",
               "street": "רחוב רוטשילד",
-              "street_en": "Rothschild Street",
-              "pattern": "רחוב רוטשילד n{1,150}"
+              "street_ascii": "Rothschild Street",
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "7530003",
               "street": "רחוב ז'בוטינסקי",
-              "street_en": "Jabotinsky Street",
-              "pattern": "רחוב ז'בוטינסקי n{1,180}"
+              "street_ascii": "Jabotinsky Street",
+              "pattern": "{street} n{1,180}"
             }
           ]
         },
         {
           "name": "פתח תקווה",
-          "name_en": "Petah Tikva",
+          "name_ascii": "Petah Tikva",
           "lat": 32.0841,
           "lon": 34.8878,
           "postcodes": [
             {
               "code": "4910001",
               "street": "רחוב רוטשילד",
-              "street_en": "Rothschild Street",
-              "pattern": "רחוב רוטשילד n{1,150}"
+              "street_ascii": "Rothschild Street",
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "4920002",
               "street": "רחוב הרצל",
-              "street_en": "Herzl Street",
-              "pattern": "רחוב הרצל n{1,120}"
+              "street_ascii": "Herzl Street",
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "4930003",
               "street": "רחוב ז'בוטינסקי",
-              "street_en": "Jabotinsky Street",
-              "pattern": "רחוב ז'בוטינסקי n{1,160}"
+              "street_ascii": "Jabotinsky Street",
+              "pattern": "{street} n{1,160}"
             },
             {
               "code": "4940004",
               "street": "רחוב שטמפפר",
-              "street_en": "Stampfer Street",
-              "pattern": "רחוב שטמפפר n{1,100}"
+              "street_ascii": "Stampfer Street",
+              "pattern": "{street} n{1,100}"
             }
           ]
         },
         {
           "name": "נתניה",
-          "name_en": "Netanya",
+          "name_ascii": "Netanya",
           "lat": 32.3215,
           "lon": 34.8532,
           "postcodes": [
             {
               "code": "4210001",
               "street": "רחוב הרצל",
-              "street_en": "Herzl Street",
-              "pattern": "רחוב הרצל n{1,150}"
+              "street_ascii": "Herzl Street",
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "4220002",
               "street": "שדרות בנימין",
-              "street_en": "Binyamin Boulevard",
-              "pattern": "שדרות בנימין n{1,120}"
+              "street_ascii": "Binyamin Boulevard",
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "4230003",
               "street": "רחוב ויצמן",
-              "street_en": "Weizmann Street",
-              "pattern": "רחוב ויצמן n{1,100}"
+              "street_ascii": "Weizmann Street",
+              "pattern": "{street} n{1,100}"
             }
           ]
         },
         {
           "name": "אשדוד",
-          "name_en": "Ashdod",
+          "name_ascii": "Ashdod",
           "lat": 31.8044,
           "lon": 34.6553,
           "postcodes": [
             {
               "code": "7710001",
               "street": "שדרות הנשיא",
-              "street_en": "HaNassi Boulevard",
-              "pattern": "שדרות הנשיא n{1,200}"
+              "street_ascii": "HaNassi Boulevard",
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "7720002",
               "street": "רחוב הבנים",
-              "street_en": "HaBanim Street",
-              "pattern": "רחוב הבנים n{1,100}"
+              "street_ascii": "HaBanim Street",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "7730003",
               "street": "שדרות ירושלים",
-              "street_en": "Jerusalem Boulevard",
-              "pattern": "שדרות ירושלים n{1,150}"
+              "street_ascii": "Jerusalem Boulevard",
+              "pattern": "{street} n{1,150}"
             }
           ]
         },
         {
           "name": "רחובות",
-          "name_en": "Rehovot",
+          "name_ascii": "Rehovot",
           "lat": 31.8928,
           "lon": 34.8113,
           "postcodes": [
             {
               "code": "7610001",
               "street": "רחוב הרצל",
-              "street_en": "Herzl Street",
-              "pattern": "רחוב הרצל n{1,180}"
+              "street_ascii": "Herzl Street",
+              "pattern": "{street} n{1,180}"
             },
             {
               "code": "7620002",
               "street": "רחוב ביל\"ו",
-              "street_en": "Bilu Street",
-              "pattern": "רחוב ביל\"ו n{1,100}"
+              "street_ascii": "Bilu Street",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "7630003",
               "street": "רחוב ויצמן",
-              "street_en": "Weizmann Street",
-              "pattern": "רחוב ויצמן n{1,120}"
+              "street_ascii": "Weizmann Street",
+              "pattern": "{street} n{1,120}"
             }
           ]
         },
         {
           "name": "הרצליה",
-          "name_en": "Herzliya",
+          "name_ascii": "Herzliya",
           "lat": 32.1629,
           "lon": 34.8447,
           "postcodes": [
             {
               "code": "4610001",
               "street": "רחוב סוקולוב",
-              "street_en": "Sokolov Street",
-              "pattern": "רחוב סוקולוב n{1,150}"
+              "street_ascii": "Sokolov Street",
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "4620002",
               "street": "רחוב בן גוריון",
-              "street_en": "Ben Gurion Street",
-              "pattern": "רחוב בן גוריון n{1,100}"
+              "street_ascii": "Ben Gurion Street",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "4630003",
               "street": "שדרות אבא אבן",
-              "street_en": "Abba Eban Boulevard",
-              "pattern": "שדרות אבא אבן n{1,80}"
+              "street_ascii": "Abba Eban Boulevard",
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "כפר סבא",
-          "name_en": "Kfar Saba",
+          "name_ascii": "Kfar Saba",
           "lat": 32.175,
           "lon": 34.9072,
           "postcodes": [
             {
               "code": "4410001",
               "street": "רחוב ויצמן",
-              "street_en": "Weizmann Street",
-              "pattern": "רחוב ויצמן n{1,120}"
+              "street_ascii": "Weizmann Street",
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "4420002",
               "street": "רחוב רוטשילד",
-              "street_en": "Rothschild Street",
-              "pattern": "רחוב רוטשילד n{1,100}"
+              "street_ascii": "Rothschild Street",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "4430003",
               "street": "רחוב התחייה",
-              "street_en": "HaTchiya Street",
-              "pattern": "רחוב התחייה n{1,80}"
+              "street_ascii": "HaTchiya Street",
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "רעננה",
-          "name_en": "Ra'anana",
+          "name_ascii": "Ra'anana",
           "lat": 32.1849,
           "lon": 34.8707,
           "postcodes": [
             {
               "code": "4310001",
               "street": "רחוב אחוזה",
-              "street_en": "Achuza Street",
-              "pattern": "רחוב אחוזה n{1,200}"
+              "street_ascii": "Achuza Street",
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "4320002",
               "street": "רחוב הרצל",
-              "street_en": "Herzl Street",
-              "pattern": "רחוב הרצל n{1,100}"
+              "street_ascii": "Herzl Street",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "4330003",
               "street": "רחוב ביאליק",
-              "street_en": "Bialik Street",
-              "pattern": "רחוב ביאליק n{1,80}"
+              "street_ascii": "Bialik Street",
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "מודיעין",
-          "name_en": "Modi'in",
+          "name_ascii": "Modi'in",
           "lat": 31.8969,
           "lon": 35.0104,
           "postcodes": [
             {
               "code": "7170001",
               "street": "רחוב המכבים",
-              "street_en": "HaMaccabim Street",
-              "pattern": "רחוב המכבים n{1,120}"
+              "street_ascii": "HaMaccabim Street",
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "7180002",
               "street": "שדרות יהודה המכבי",
-              "street_en": "Yehuda HaMaccabi Boulevard",
-              "pattern": "שדרות יהודה המכבי n{1,100}"
+              "street_ascii": "Yehuda HaMaccabi Boulevard",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "7190003",
               "street": "רחוב חשמונאים",
-              "street_en": "Hashmonaim Street",
-              "pattern": "רחוב חשמונאים n{1,80}"
+              "street_ascii": "Hashmonaim Street",
+              "pattern": "{street} n{1,80}"
             }
           ]
         }
@@ -737,7 +745,7 @@
     },
     {
       "name": "צפון",
-      "name_en": "Northern District",
+      "name_ascii": "Northern District",
       "region_tags": [
         "Northern Israel",
         "Galilee"
@@ -745,97 +753,97 @@
       "cities": [
         {
           "name": "נצרת",
-          "name_en": "Nazareth",
+          "name_ascii": "Nazareth",
           "lat": 32.6996,
           "lon": 35.3035,
           "postcodes": [
             {
               "code": "1610001",
               "street": "רחוב פאולוס השישי",
-              "street_en": "Paul VI Street",
-              "pattern": "רחוב פאולוס השישי n{1,100}"
+              "street_ascii": "Paul VI Street",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "1620002",
               "street": "רחוב אל-בישארה",
-              "street_en": "Al-Bishara Street",
-              "pattern": "רחוב אל-בישארה n{1,80}"
+              "street_ascii": "Al-Bishara Street",
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "1630003",
               "street": "רחוב הגליל",
-              "street_en": "HaGalil Street",
-              "pattern": "רחוב הגליל n{1,120}"
+              "street_ascii": "HaGalil Street",
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "1640004",
               "street": "דרך נצרת עילית",
-              "street_en": "Nazareth Illit Road",
-              "pattern": "דרך נצרת עילית n{1,150}"
+              "street_ascii": "Nazareth Illit Road",
+              "pattern": "{street} n{1,150}"
             }
           ]
         },
         {
           "name": "טבריה",
-          "name_en": "Tiberias",
+          "name_ascii": "Tiberias",
           "lat": 32.7922,
           "lon": 35.5312,
           "postcodes": [
             {
               "code": "1410001",
               "street": "רחוב הגליל",
-              "street_en": "HaGalil Street",
-              "pattern": "רחוב הגליל n{1,100}"
+              "street_ascii": "HaGalil Street",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "1420002",
               "street": "רחוב הירדן",
-              "street_en": "HaYarden Street",
-              "pattern": "רחוב הירדן n{1,80}"
+              "street_ascii": "HaYarden Street",
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "1430003",
               "street": "טיילת יגאל אלון",
-              "street_en": "Yigal Allon Promenade",
-              "pattern": "טיילת יגאל אלון n{1,60}"
+              "street_ascii": "Yigal Allon Promenade",
+              "pattern": "{street} n{1,60}"
             },
             {
               "code": "1440004",
               "street": "רחוב הבנים",
-              "street_en": "HaBanim Street",
-              "pattern": "רחוב הבנים n{1,100}"
+              "street_ascii": "HaBanim Street",
+              "pattern": "{street} n{1,100}"
             }
           ]
         },
         {
           "name": "עכו",
-          "name_en": "Acre",
+          "name_ascii": "Acre",
           "lat": 32.9276,
           "lon": 35.0764,
           "postcodes": [
             {
               "code": "2410001",
               "street": "רחוב הרצל",
-              "street_en": "Herzl Street",
-              "pattern": "רחוב הרצל n{1,100}"
+              "street_ascii": "Herzl Street",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "2420002",
               "street": "רחוב בן עמי",
-              "street_en": "Ben Ami Street",
-              "pattern": "רחוב בן עמי n{1,120}"
+              "street_ascii": "Ben Ami Street",
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "2430003",
               "street": "דרך שמעון הצדיק",
-              "street_en": "Shimon HaTzadik Road",
-              "pattern": "דרך שמעון הצדיק n{1,80}"
+              "street_ascii": "Shimon HaTzadik Road",
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "2440004",
               "street": "רחוב ויצמן",
-              "street_en": "Weizmann Street",
-              "pattern": "רחוב ויצמן n{1,100}"
+              "street_ascii": "Weizmann Street",
+              "pattern": "{street} n{1,100}"
             }
           ]
         }
@@ -843,7 +851,7 @@
     },
     {
       "name": "דרום",
-      "name_en": "Southern District",
+      "name_ascii": "Southern District",
       "region_tags": [
         "Southern Israel",
         "Negev"
@@ -851,115 +859,115 @@
       "cities": [
         {
           "name": "באר שבע",
-          "name_en": "Beer Sheva",
+          "name_ascii": "Beer Sheva",
           "lat": 31.2518,
           "lon": 34.7913,
           "postcodes": [
             {
               "code": "8410001",
               "street": "שדרות רגר",
-              "street_en": "Rager Boulevard",
-              "pattern": "שדרות רגר n{1,200}"
+              "street_ascii": "Rager Boulevard",
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "8420002",
               "street": "רחוב הרצל",
-              "street_en": "Herzl Street",
-              "pattern": "רחוב הרצל n{1,150}"
+              "street_ascii": "Herzl Street",
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "8430003",
               "street": "שדרות בן גוריון",
-              "street_en": "Ben Gurion Boulevard",
-              "pattern": "שדרות בן גוריון n{1,180}"
+              "street_ascii": "Ben Gurion Boulevard",
+              "pattern": "{street} n{1,180}"
             },
             {
               "code": "8440004",
               "street": "רחוב ההסתדרות",
-              "street_en": "HaHistadrut Street",
-              "pattern": "רחוב ההסתדרות n{1,120}"
+              "street_ascii": "HaHistadrut Street",
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "8450005",
               "street": "רחוב קרן קיימת",
-              "street_en": "Keren Kayemet Street",
-              "pattern": "רחוב קרן קיימת n{1,100}"
+              "street_ascii": "Keren Kayemet Street",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "8460006",
               "street": "רחוב ביאליק",
-              "street_en": "Bialik Street",
-              "pattern": "רחוב ביאליק n{1,80}"
+              "street_ascii": "Bialik Street",
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "8470007",
               "street": "שדרות טוביהו",
-              "street_en": "Tuviahu Boulevard",
-              "pattern": "שדרות טוביהו n{1,100}"
+              "street_ascii": "Tuviahu Boulevard",
+              "pattern": "{street} n{1,100}"
             }
           ]
         },
         {
           "name": "אילת",
-          "name_en": "Eilat",
+          "name_ascii": "Eilat",
           "lat": 29.5577,
           "lon": 34.9519,
           "postcodes": [
             {
               "code": "8810001",
               "street": "שדרות התמרים",
-              "street_en": "HaTmarim Boulevard",
-              "pattern": "שדרות התמרים n{1,120}"
+              "street_ascii": "HaTmarim Boulevard",
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "8820002",
               "street": "שדרות הארבעה",
-              "street_en": "HaArba'a Boulevard",
-              "pattern": "שדרות הארבעה n{1,80}"
+              "street_ascii": "HaArba'a Boulevard",
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "8830003",
               "street": "רחוב אלמוגים",
-              "street_en": "Almogim Street",
-              "pattern": "רחוב אלמוגים n{1,100}"
+              "street_ascii": "Almogim Street",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "8840004",
               "street": "דרך יותם",
-              "street_en": "Yotam Road",
-              "pattern": "דרך יותם n{1,150}"
+              "street_ascii": "Yotam Road",
+              "pattern": "{street} n{1,150}"
             }
           ]
         },
         {
           "name": "אשקלון",
-          "name_en": "Ashkelon",
+          "name_ascii": "Ashkelon",
           "lat": 31.6688,
           "lon": 34.5743,
           "postcodes": [
             {
               "code": "7810001",
               "street": "שדרות בן גוריון",
-              "street_en": "Ben Gurion Boulevard",
-              "pattern": "שדרות בן גוריון n{1,150}"
+              "street_ascii": "Ben Gurion Boulevard",
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "7820002",
               "street": "רחוב הרצל",
-              "street_en": "Herzl Street",
-              "pattern": "רחוב הרצל n{1,120}"
+              "street_ascii": "Herzl Street",
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "7830003",
               "street": "שדרות הנשיא",
-              "street_en": "HaNassi Boulevard",
-              "pattern": "שדרות הנשיא n{1,100}"
+              "street_ascii": "HaNassi Boulevard",
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "7840004",
               "street": "רחוב ז'בוטינסקי",
-              "street_en": "Jabotinsky Street",
-              "pattern": "רחוב ז'בוטינסקי n{1,80}"
+              "street_ascii": "Jabotinsky Street",
+              "pattern": "{street} n{1,80}"
             }
           ]
         }

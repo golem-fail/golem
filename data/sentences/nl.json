@@ -1,0 +1,26 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans} en {verb_intrans}.",
+    "{noun} {verb_trans} {noun} en {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "de golem", "de klei", "de modder", "de baksteen", "de steen",
+      "het standbeeld", "de wachter", "de rabbijn", "het leem", "de kelder",
+      "de schaduw", "de reus", "het stof", "de totem", "het afgodsbeeld",
+      "de berg", "de rivier", "het bos", "de hemel", "de weg",
+      "het kasteel", "het ijzer", "het zand", "de toren", "de muur", "de poort",
+      "de vlam", "de rots", "de aarde", "de smidse"
+    ],
+    "verb_intrans": [
+      "ontwaakt", "stort in", "sluimert", "verrijst", "dwaalt", "wankelt",
+      "beeft", "verzinkt", "draait", "groeit"
+    ],
+    "verb_trans": [
+      "bewaakt", "verplettert", "draagt", "beschermt", "vormt", "tilt",
+      "breekt", "grijpt", "sleept", "bedekt"
+    ]
+  }
+}

@@ -3,11 +3,20 @@ name = "Variables and fake-data generators"
 tags = ["cross-platform", "fake-data", "text-input", "variables"]
 
 # Exercises `${…}` interpolation in step fields (which is wired through the
-# executor): a plain variable, a named `${fake:…}` generator var, and an
-# inline generator with literal text. Generators are seed-deterministic.
+# executor): a plain variable, a named `${fake:…}` generator var, an inline
+# generator with literal text, and the structured `fake:address` generator in
+# both its native script and its ascii romanisation. The "Reset fields" button
+# lets one field be reused across many type→assert cycles. Generators are
+# seed-deterministic, so a value typed from a var matches when asserted via the
+# same var.
 [flow.vars]
 label = "GolemQA"
 gen_email = "${fake:email}"
+# Same country so the native + ascii are both Japanese; declared as vars so the
+# typed value and the asserted value are the identical seed-deterministic string.
+jp_city = "${fake:address(country=JP).city}"
+jp_city_ascii = "${fake:address(country=JP).ascii.city}"
+jp_street_ascii = "${fake:address(country=JP).ascii.street}"
 
 [[flow.apps]]
 name = "app"
@@ -18,15 +27,39 @@ type = "phone"
 [[block]]
 name = "vars_and_generators"
 steps = [
+  # Jump straight to the Text Fields section via the menu — we're testing
+  # generators, not scrolling, and the page is long. (aria-labels disambiguate
+  # the menu link from the section's "Text Fields" heading.) auto_scroll on the
+  # type steps still handles any final fine positioning within the section.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-text-fields" },
+
   # 1. Plain ${var} interpolation.
-  { action = "type", on_text = "Search", input = "${label}" },
+  { action = "type", on_text = "Search", input = "${label}", auto_scroll = true },
   { action = "assert_visible", on_text = "GolemQA" },
 
   # 2. Named generator var → a real email (has '@'; never the literal text).
-  { action = "type", on_text = "Enter email", input = "${gen_email}" },
+  { action = "type", on_text = "Enter email", input = "${gen_email}", auto_scroll = true },
   { action = "assert_visible", on_text = "*@*" },
 
   # 3. Inline generator with surrounding literal text, no var declaration.
   { action = "type", on_text = "Multi-line text", input = "id-${fake:uuid}", auto_scroll = true },
   { action = "assert_visible", on_text = "id-*" },
+
+  # 4. Reuse the single-line Search field (cleared via Reset) to cycle the
+  #    structured fake:address generator. The Search input is used (not the
+  #    multi-line textarea, which is a scroll-absorber that thrashes auto_scroll).
+  #    Native script first — exercises the Unicode IME path — then the romanised
+  #    forms. Asserted via the same var so the match is seed-deterministic.
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "${jp_city}", auto_scroll = true },
+  { action = "assert_visible", on_text = "${jp_city}" },
+
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "${jp_city_ascii}", auto_scroll = true },
+  { action = "assert_visible", on_text = "${jp_city_ascii}" },
+
+  { action = "tap", on_text = "Reset fields" },
+  { action = "type", on_text = "Search", input = "${jp_street_ascii}", auto_scroll = true },
+  { action = "assert_visible", on_text = "${jp_street_ascii}" },
 ]

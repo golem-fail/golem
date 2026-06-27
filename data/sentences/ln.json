@@ -1,0 +1,28 @@
+{
+  "patterns": [
+    "Ezali na {noun}.",
+    "Ezali na {noun} na {noun2}.",
+    "{noun} ezali {adj}.",
+    "Ezali na {noun}, {noun2} mpe {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "ekeko", "potopoto", "mabele", "biliki", "libanga", "ekeko ya potopoto",
+      "mokeli", "elombe", "elili", "putulu", "ndako", "libulu",
+      "totem", "ekeko ya nzambe", "ngomba", "ebale", "zamba", "likolo",
+      "nzela", "ebende", "zelo", "lopango", "efelo", "ekuke", "mɔtɔ",
+      "libanga ya monene", "mayi", "nzete", "mboka", "mosala ya monene"
+    ],
+    "noun2": [
+      "ekeko", "potopoto", "mabele", "biliki", "libanga", "ekeko ya potopoto",
+      "mokeli", "elombe", "elili", "putulu", "ndako", "libulu",
+      "totem", "ekeko ya nzambe", "ngomba", "ebale", "zamba", "likolo",
+      "nzela", "ebende", "zelo", "lopango", "efelo", "ekuke", "mɔtɔ",
+      "libanga ya monene", "mayi", "nzete", "mboka", "mosala ya monene"
+    ],
+    "adj": [
+      "monene", "mokuse", "ya kala", "ya sika", "ya potopoto", "ya mabele",
+      "ya libanga", "ya ebende", "kitoko", "mabe", "makasi", "polele"
+    ]
+  }
+}

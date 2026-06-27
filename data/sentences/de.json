@@ -1,0 +1,34 @@
+{
+  "patterns": [
+    "{subj} {verb_intrans}.",
+    "{subj} {verb_trans} {obj}.",
+    "{subj} {verb_intrans} und {verb_intrans}.",
+    "{subj} {verb_trans} {obj} und {obj}."
+  ],
+  "slots": {
+    "subj": [
+      "der Golem", "der Lehm", "der Schlamm", "der Ziegel", "der Stein",
+      "die Statue", "der Wächter", "der Riese", "der Schatten", "die Asche",
+      "der Staub", "die Erde", "die Schmiede", "das Götzenbild", "der Totempfahl",
+      "der Koloss", "die Tonfigur", "der Berg", "der Fluss", "der Wald",
+      "der Himmel", "der Weg", "das Eisen", "der Sand", "die Mauer",
+      "der Turm", "das Tor", "die Flamme", "der Felsen", "der Lehmkloß"
+    ],
+    "obj": [
+      "den Golem", "den Lehm", "den Schlamm", "den Ziegel", "den Stein",
+      "die Statue", "den Wächter", "den Riesen", "den Schatten", "die Asche",
+      "den Staub", "die Erde", "die Schmiede", "das Götzenbild", "den Totempfahl",
+      "den Koloss", "die Tonfigur", "den Berg", "den Fluss", "den Wald",
+      "den Himmel", "den Weg", "das Eisen", "den Sand", "die Mauer",
+      "den Turm", "das Tor", "die Flamme", "den Felsen", "den Lehmkloß"
+    ],
+    "verb_intrans": [
+      "erwacht", "zerfällt", "schläft", "erhebt sich", "wandert", "wankt",
+      "zittert", "versinkt", "dreht sich", "wächst"
+    ],
+    "verb_trans": [
+      "bewacht", "zermalmt", "trägt", "beschützt", "formt", "hebt",
+      "zerbricht", "ergreift", "schleppt", "bedeckt"
+    ]
+  }
+}

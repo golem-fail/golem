@@ -1,0 +1,31 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {obj} {verb_trans}.",
+    "{noun} oyanır və {verb_intrans}.",
+    "{noun} {obj} və {obj} {verb_trans}."
+  ],
+  "slots": {
+    "noun": [
+      "qolem", "gil", "palçıq", "kərpic", "daş", "torpaq", "toz", "çay",
+      "kürə", "qoruyucu", "nəhəng", "heykəl", "büt", "kölgə", "div",
+      "köz", "kül", "totem", "dağ", "meşə", "göy", "yol", "qala", "dəmir",
+      "qum", "divar", "qüllə", "qapı", "alov", "qaya", "ocaq", "abidə"
+    ],
+    "obj": [
+      "qolemi", "gili", "palçığı", "kərpici", "daşı", "torpağı", "tozu", "çayı",
+      "qoruyucunu", "nəhəngi", "heykəli", "bütü", "kölgəni", "divi",
+      "közü", "külü", "totemi", "dağı", "meşəni", "göyü", "yolu", "qalanı",
+      "dəmiri", "qumu", "divarı", "qülləni", "qapını", "alovu", "qayanı",
+      "ocağı", "abidəni"
+    ],
+    "verb_intrans": [
+      "oyanır", "yıxılır", "yatır", "ucalır", "gəzir", "titrəyir",
+      "parlayır", "dağılır", "qalxır", "böyüyür"
+    ],
+    "verb_trans": [
+      "qoruyur", "əzir", "daşıyır", "saxlayır", "yaradır", "qaldırır",
+      "sındırır", "tutur", "sürüyür", "örtür"
+    ]
+  }
+}

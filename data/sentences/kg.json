@@ -1,0 +1,15 @@
+{
+  "patterns": [
+    "{noun}.",
+    "{noun} ye {noun}.",
+    "{noun} ye {noun} ye {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "ntoto", "ditadi", "poto-poto", "mongo", "nzadi", "mfinda", "zulu",
+      "nzila", "tiya", "kibende", "kiteki", "kivudi", "putulu", "kibaka",
+      "nene", "briki", "zelo", "ntanini", "nti", "lunti", "masa", "maza",
+      "muntu", "bombe", "mwana", "nzo", "mubu", "mpimpa", "toko"
+    ]
+  }
+}

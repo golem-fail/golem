@@ -1,0 +1,32 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun_obj}.",
+    "{noun} {verb_intrans} dhe {verb_intrans}.",
+    "{noun} {verb_trans} {noun_obj} dhe {noun_obj}."
+  ],
+  "slots": {
+    "noun": [
+      "golemi", "balta", "balta e lagësht", "tulla", "guri", "statuja",
+      "rojtari", "argjila", "gjiganti", "hija", "pluhuri", "totemi",
+      "idhulli", "dheu", "mali", "lumi", "pylli", "qielli", "rruga",
+      "kalaja", "hekuri", "rëra", "kulla", "porta", "flaka", "shkëmbi",
+      "muri", "kolosi", "shtatorja", "hiri"
+    ],
+    "noun_obj": [
+      "golemin", "baltën", "tullën", "gurin", "statujën", "rojtarin",
+      "argjilën", "gjigantin", "hijen", "pluhurin", "totemin", "idhullin",
+      "dheun", "malin", "lumin", "pyllin", "qiellin", "rrugën", "kalanë",
+      "hekurin", "rërën", "kullën", "portën", "flakën", "shkëmbin",
+      "murin", "kolosin", "shtatoren"
+    ],
+    "verb_intrans": [
+      "zgjohet", "shembet", "fle", "ngrihet", "endet", "dridhet",
+      "lëkundet", "rritet", "zhduket", "kthehet"
+    ],
+    "verb_trans": [
+      "ruan", "shtyp", "mban", "mbron", "gdhend", "ngre", "thyen",
+      "kap", "tërheq", "mbulon"
+    ]
+  }
+}

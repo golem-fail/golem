@@ -1,5 +1,5 @@
 {
-  "first_names": [
+  "given_names": [
     { "name": "太郎", "ascii": "Taro", "kana": "たろう", "ipa": "taɾoː" },
     { "name": "花子", "ascii": "Hanako", "kana": "はなこ", "ipa": "hanako" },
     { "name": "健太", "ascii": "Kenta", "kana": "けんた", "ipa": "kenta" },
@@ -390,7 +390,7 @@
     { "name": "Anaïs", "kana": "アナイス", "ipa": "anaˈis" },
     { "name": "Hà", "kana": "ハー", "ipa": "haː" }
   ],
-  "last_names": [
+  "family_names": [
     { "name": "田中", "ascii": "Tanaka", "kana": "たなか", "ipa": "tanaka" },
     { "name": "佐藤", "ascii": "Sato", "kana": "さとう", "ipa": "satoː" },
     { "name": "鈴木", "ascii": "Suzuki", "kana": "すずき", "ipa": "sɯzɯki" },

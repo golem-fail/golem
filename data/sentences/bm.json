@@ -1,0 +1,23 @@
+{
+  "patterns": [
+    "{noun} bɛ {verb_intrans}.",
+    "{noun} bɛ {noun} {verb_trans}.",
+    "{noun} bɛ {verb_intrans} ani ka {verb_intrans}.",
+    "{noun} bɛ {noun} ni {noun} {verb_trans}."
+  ],
+  "slots": {
+    "noun": [
+      "bɔgɔ", "kabakuru", "kuru", "bɛlɛ", "gɔngɔrɔ", "dugukolo", "buguri",
+      "cɛncɛn", "nɛgɛ", "kogo", "jiri", "dɔgɔ", "tasuma", "kungo", "sira",
+      "ba", "kɔ", "da", "sankolo", "suma", "ja", "boli", "daga", "fari"
+    ],
+    "verb_intrans": [
+      "wuli", "bin", "sunɔgɔ", "jɔ", "yaala", "yɛrɛyɛrɛ", "girin", "bonya",
+      "jigin", "funu"
+    ],
+    "verb_trans": [
+      "kɔlɔsi", "kari", "ta", "tanga", "dilan", "kɔrɔta", "minɛ", "sama",
+      "datugu", "biri"
+    ]
+  }
+}

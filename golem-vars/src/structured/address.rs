@@ -3,7 +3,11 @@ use std::collections::HashMap;
 use anyhow::Result;
 use rand::Rng;
 
-use crate::geo_loader::{geo_database, GeoData, GeoState};
+use crate::geo::{
+    expand_native_tokens, fill_ascii_tokens, fold_fullwidth_digits, tidy_ascii_spacing,
+};
+use crate::geo_loader::{geo_database, GeoData, GeoPostcode, GeoState, Marker, Pattern};
+use crate::script::ascii_fold;
 use crate::VarValue;
 
 // ---------------------------------------------------------------------------
@@ -14,11 +18,19 @@ pub(crate) fn generate_address(
     params: &HashMap<String, String>,
     rng: &mut impl Rng,
 ) -> Result<VarValue> {
-    let country = params.get("country").map(|s| s.as_str());
     let state_filter = params.get("state").map(|s| s.as_str());
     let region_filter = params.get("region").map(|s| s.as_str());
 
-    let geo = country.and_then(|c| geo_database().get(c));
+    // Unset country → random; a present-but-unknown code → error (a typo
+    // shouldn't silently produce some other country's address).
+    let geo = match params.get("country") {
+        Some(code) => Some(
+            geo_database()
+                .get(code)
+                .ok_or_else(|| anyhow::anyhow!("unknown country code: {code}"))?,
+        ),
+        None => None,
+    };
 
     match geo {
         Some(g) => {
@@ -44,7 +56,9 @@ fn generate_address_filtered(
         .iter()
         .filter(|s| {
             if let Some(sf) = state_filter {
-                if !s.name_en.eq_ignore_ascii_case(sf) {
+                // Accept either the native name (東京) or the ascii romanisation
+                // (Tokyo), case-insensitively, so a user can pass whichever.
+                if !s.name.eq_ignore_ascii_case(sf) && !s.ascii_name().eq_ignore_ascii_case(sf) {
                     return false;
                 }
             }
@@ -77,55 +91,134 @@ fn generate_address_filtered(
 }
 
 pub(crate) fn generate_address_from_geo(geo: &GeoData, rng: &mut impl Rng) -> Result<VarValue> {
-    // Pick a random state.
+    // Pick a random state. Guard the empty pool rather than panicking in
+    // `gen_range` — current data is non-empty (enforced by a geo-data
+    // validation test), but a future country file shouldn't crash the run.
+    if geo.states.is_empty() {
+        anyhow::bail!("no states for country {}", geo.country.iso_code);
+    }
     let state_idx = rng.gen_range(0..geo.states.len());
     let state = &geo.states[state_idx];
     generate_address_from_state(geo, state, rng)
 }
 
-/// Generate an address from a specific state within a country.
+/// Substitute the `{street}` and `{<marker>}` placeholders in a street pattern.
+/// `street` is the value for `{street}` (the native name, or its romanisation,
+/// per the caller); `ascii` selects each marker's romanised form over its native
+/// form. Plain string replacement — placeholders never nest.
+fn fill_placeholders(
+    pattern: &str,
+    street: &str,
+    markers: &HashMap<String, Marker>,
+    ascii: bool,
+) -> String {
+    let mut s = pattern.replace("{street}", street);
+    for (name, m) in markers {
+        let repl = if ascii { &m.ascii } else { &m.native };
+        s = s.replace(&format!("{{{name}}}"), repl);
+    }
+    s
+}
+
+/// Render a postcode's street in both native and ascii form, sharing the same
+/// drawn house number(s). The pattern is a `{street}`/`{marker}`/`n{}` skeleton
+/// (one string, or an array to pick one from): native fills it with the native
+/// street + native markers + native numerals; ascii fills the SAME skeleton with
+/// the romanised street + ascii markers + ASCII digits, then tidies the
+/// letter→digit spacing. With no pattern, a plain `"<num> <street>"` is used.
+/// `markers` is the country's marker map.
+fn street_pair(
+    pc: &GeoPostcode,
+    markers: &HashMap<String, Marker>,
+    rng: &mut impl Rng,
+) -> (String, String) {
+    // Resolve the chosen skeleton (one, or a random pick from the set).
+    let skeleton = match &pc.pattern {
+        Some(Pattern::One(s)) => Some(s.as_str()),
+        Some(Pattern::Many(v)) if !v.is_empty() => Some(v[rng.gen_range(0..v.len())].as_str()),
+        _ => None,
+    };
+
+    match skeleton {
+        Some(pattern) => {
+            let native_skel = fill_placeholders(pattern, &pc.street, markers, false);
+            let (native, nums) = expand_native_tokens(&native_skel, rng);
+
+            let ascii_skel = fill_placeholders(pattern, &pc.ascii_street(), markers, true);
+            // Same drawn numbers, ASCII digits; fold for safety, tidy the spacing.
+            let ascii = tidy_ascii_spacing(&ascii_fold(&fill_ascii_tokens(&ascii_skel, &nums)));
+            (native, ascii)
+        }
+        None => {
+            let num: u32 = rng.gen_range(1..200);
+            (
+                format!("{num} {}", pc.street),
+                format!("{num} {}", pc.ascii_street()),
+            )
+        }
+    }
+}
+
+/// Generate an address from a specific state within a country. The top-level
+/// fields are NATIVE; an `ascii` sub-object carries the romanised text fields.
+/// Script-neutral fields (`country_code`, `lat`, `lon`) appear only top-level.
 fn generate_address_from_state(
     geo: &GeoData,
     state: &GeoState,
     rng: &mut impl Rng,
 ) -> Result<VarValue> {
-    // Pick a random city within the state.
+    // Pick a random city within the state (guard empty pools, don't panic).
+    if state.cities.is_empty() {
+        anyhow::bail!(
+            "no cities for state {} in {}",
+            state.ascii_name(),
+            geo.country.iso_code
+        );
+    }
     let city_idx = rng.gen_range(0..state.cities.len());
     let city = &state.cities[city_idx];
 
     // Pick a random postcode entry.
+    if city.postcodes.is_empty() {
+        anyhow::bail!(
+            "no postcodes for city {} in {}",
+            city.ascii_name(),
+            geo.country.iso_code
+        );
+    }
     let pc_idx = rng.gen_range(0..city.postcodes.len());
     let postcode_entry = &city.postcodes[pc_idx];
 
-    // Generate street address from pattern or fixed list.
-    let street = if let Some(ref pattern) = postcode_entry.pattern {
-        expand_street_pattern(pattern, &postcode_entry.street_en, rng)
-    } else if let Some(ref fixed) = postcode_entry.fixed {
-        if fixed.is_empty() {
-            format!("1 {}", postcode_entry.street_en)
-        } else {
-            let idx = rng.gen_range(0..fixed.len());
-            fixed[idx].clone()
-        }
-    } else {
-        let num: u32 = rng.gen_range(1..200);
-        format!("{num} {}", postcode_entry.street_en)
-    };
+    let (street_native, street_ascii) = street_pair(postcode_entry, &geo.country.markers, rng);
 
+    // ASCII view: only the script-variant text fields (romanised).
+    let ascii = VarValue::object(vec![
+        ("street", VarValue::string(street_ascii)),
+        ("city", VarValue::string(city.ascii_name())),
+        ("state", VarValue::string(state.ascii_name())),
+        ("country", VarValue::string(geo.country.ascii_name())),
+        (
+            "postcode",
+            VarValue::string(fold_fullwidth_digits(&postcode_entry.code)),
+        ),
+    ]);
+
+    // Top-level: native text fields + the script-neutral fields.
     let map: Vec<(&str, VarValue)> = vec![
-        ("street", VarValue::string(&street)),
-        ("city", VarValue::string(&city.name_en)),
-        ("state", VarValue::string(&state.name_en)),
+        ("street", VarValue::string(street_native)),
+        ("city", VarValue::string(&city.name)),
+        ("state", VarValue::string(&state.name)),
         ("postcode", VarValue::string(&postcode_entry.code)),
-        ("country", VarValue::string(&geo.country.name_en)),
+        ("country", VarValue::string(&geo.country.name)),
         ("country_code", VarValue::string(&geo.country.iso_code)),
+        // Approximate coordinates: the city's centre, not the street point.
+        ("lat", VarValue::string(city.lat.to_string())),
+        ("lon", VarValue::string(city.lon.to_string())),
+        ("ascii", ascii),
     ];
 
     Ok(VarValue::object(map))
 }
-
-// Re-export from geo module — single implementation for both simple and structured generators.
-pub(crate) use crate::geo::expand_street_pattern;
 
 /// Generate an address by picking a random country from the geo database.
 pub(crate) fn generate_default_address(rng: &mut impl Rng) -> Result<VarValue> {
@@ -139,20 +232,20 @@ pub(crate) fn generate_default_address(rng: &mut impl Rng) -> Result<VarValue> {
 
 #[cfg(test)]
 mod tests {
+    use crate::seed::FakeRng;
     use crate::structured::generate_structured;
     use crate::{GeneratorDef, VarValue};
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha8Rng;
     use std::collections::HashMap;
 
-    fn seeded_rng() -> ChaCha8Rng {
-        ChaCha8Rng::seed_from_u64(42)
+    fn seeded_rng() -> FakeRng {
+        FakeRng::from_seed(42)
     }
 
     fn def(name: &str) -> GeneratorDef {
         GeneratorDef {
             name: name.to_string(),
             params: HashMap::new(),
+            positional: Vec::new(),
         }
     }
 
@@ -164,6 +257,7 @@ mod tests {
         GeneratorDef {
             name: name.to_string(),
             params,
+            positional: Vec::new(),
         }
     }
 
@@ -190,35 +284,66 @@ mod tests {
         assert!(obj.contains_key("postcode"), "missing 'postcode'");
         assert!(obj.contains_key("country"), "missing 'country'");
         assert!(obj.contains_key("country_code"), "missing 'country_code'");
+        assert!(obj.contains_key("lat"), "missing 'lat'");
+        assert!(obj.contains_key("lon"), "missing 'lon'");
     }
 
-    // 5. Address with country=JP returns Japanese data
+    // 4b. lat/lon are numeric strings in valid coordinate ranges.
+    #[test]
+    fn address_lat_lon_are_valid_coordinates() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("address", &[("country", "JP")]);
+        let result = generate_structured(&d, &mut rng).expect("should generate");
+        let lat: f64 = field(&result, "lat")
+            .parse()
+            .expect("lat SHALL be a number");
+        let lon: f64 = field(&result, "lon")
+            .parse()
+            .expect("lon SHALL be a number");
+        assert!((-90.0..=90.0).contains(&lat), "lat out of range: {lat}");
+        assert!((-180.0..=180.0).contains(&lon), "lon out of range: {lon}");
+    }
+
+    // 5. country=JP: top-level country is the NATIVE name (日本); the ascii
+    //    branch carries the romanisation; country_code stays the ISO code.
     #[test]
     fn address_jp_returns_japanese_data() {
         let mut rng = seeded_rng();
         let d = def_with_params("address", &[("country", "JP")]);
         let result = generate_structured(&d, &mut rng).expect("should generate");
 
-        let country = field(&result, "country");
-        let country_code = field(&result, "country_code");
-        assert_eq!(country, "Japan");
-        assert_eq!(country_code, "JP");
+        assert_eq!(
+            field(&result, "country"),
+            "日本",
+            "top-level SHALL be native"
+        );
+        assert_eq!(field(&result, "country_code"), "JP");
+        // The ascii branch romanises the country (pure ASCII, no native script).
+        let ascii_country = field(result.get_path("ascii").expect("ascii branch"), "country");
+        assert!(
+            ascii_country.is_ascii() && !ascii_country.is_empty(),
+            "ascii.country SHALL be a non-empty romanisation, got: {ascii_country}"
+        );
     }
 
-    // 6. Address with country=GB returns British data
+    // 6. country=GB (Latin): native == ascii for the country name.
     #[test]
     fn address_gb_returns_british_data() {
         let mut rng = seeded_rng();
         let d = def_with_params("address", &[("country", "GB")]);
         let result = generate_structured(&d, &mut rng).expect("should generate");
 
-        let country = field(&result, "country");
-        let country_code = field(&result, "country_code");
-        assert_eq!(country, "United Kingdom");
-        assert_eq!(country_code, "GB");
+        assert_eq!(field(&result, "country"), "United Kingdom");
+        assert_eq!(field(&result, "country_code"), "GB");
+        let ascii = result.get_path("ascii").expect("ascii branch");
+        assert_eq!(
+            field(ascii, "country"),
+            "United Kingdom",
+            "a Latin country folds to itself"
+        );
     }
 
-    // 7. Address fields are internally consistent
+    // 7. Address fields are internally consistent (native top-level).
     #[test]
     fn address_fields_internally_consistent() {
         let mut rng = seeded_rng();
@@ -238,8 +363,8 @@ mod tests {
         assert!(!state.is_empty());
         assert!(!postcode.is_empty());
 
-        // Country and country_code should match.
-        assert_eq!(country, "Japan");
+        // Top-level country is the native name; the code is the ISO code.
+        assert_eq!(country, "日本");
         assert_eq!(country_code, "JP");
 
         // Postcode format for JP: ###-####
@@ -299,13 +424,19 @@ mod tests {
         );
     }
 
-    // 22. Address with state=Tokyo constrains to Tokyo
+    /// Extract a field from the `ascii` sub-object.
+    fn ascii_field(val: &VarValue, key: &str) -> String {
+        field(val.get_path("ascii").expect("ascii branch"), key)
+    }
+
+    // 22. Address with state=Tokyo constrains to Tokyo (checked on the ascii
+    //     branch; top-level state is now native).
     #[test]
     fn address_jp_with_state_tokyo() {
         let mut rng = seeded_rng();
         let d = def_with_params("address", &[("country", "JP"), ("state", "Tokyo")]);
         let result = generate_structured(&d, &mut rng).expect("SHALL generate JP/Tokyo address");
-        let state = field(&result, "state");
+        let state = ascii_field(&result, "state");
         assert!(
             state.to_lowercase().contains("tokyo"),
             "SHALL return Tokyo state, got: {state}"
@@ -346,19 +477,27 @@ mod tests {
         assert!(result.is_err(), "SHALL error for nonexistent region");
     }
 
-    // 26. Unknown country code falls back to a random geo country (None branch
-    //     of geo lookup when a country param IS supplied but not in the DB).
+    // 26. A present-but-unknown country code is an error (a typo shouldn't
+    //     silently yield some other country's address); an absent country is
+    //     fine and picks one at random.
     #[test]
-    fn address_unknown_country_falls_back_to_geo() {
+    fn address_unknown_country_errors_unset_is_random() {
         let mut rng = seeded_rng();
-        let d = def_with_params("address", &[("country", "ZZ")]);
-        let result =
-            generate_structured(&d, &mut rng).expect("SHALL fall back for unknown country");
+        let bad = def_with_params("address", &[("country", "ZZ")]);
+        let err =
+            generate_structured(&bad, &mut rng).expect_err("unknown country code SHALL error");
+        assert!(
+            err.to_string().contains("unknown country code: ZZ"),
+            "got: {err}"
+        );
+
+        // No country param → random country from the database (no error).
+        let result = generate_structured(&def("address"), &mut rng).expect("unset SHALL pick one");
         let country_code = field(&result, "country_code");
         let loaded_codes = crate::geo_loader::geo_database().countries();
         assert!(
             loaded_codes.contains(&country_code.as_str()),
-            "Unknown country SHALL fall back to a geo-database country, got: {country_code}"
+            "unset country SHALL pick a loaded country, got: {country_code}"
         );
     }
 
@@ -369,7 +508,7 @@ mod tests {
         let mut rng = seeded_rng();
         let d = def_with_params("address", &[("country", "JP"), ("state", "tokyo")]);
         let result = generate_structured(&d, &mut rng).expect("SHALL match case-insensitively");
-        let state = field(&result, "state");
+        let state = ascii_field(&result, "state");
         assert_eq!(
             state, "Tokyo",
             "lowercase state filter SHALL match Tokyo, got: {state}"
@@ -393,7 +532,7 @@ mod tests {
         //    from the geo DB, then assert the generated state is one of them. This
         //    proves the lowercase "kanto" filter actually matched the "Kanto" tag,
         //    rather than merely returning some arbitrary JP state.
-        let kanto_states: Vec<&str> = crate::geo_loader::geo_database()
+        let kanto_states: Vec<String> = crate::geo_loader::geo_database()
             .get("JP")
             .expect("JP SHALL be loaded")
             .states
@@ -403,15 +542,15 @@ mod tests {
                     .iter()
                     .any(|t| t.eq_ignore_ascii_case("kanto"))
             })
-            .map(|s| s.name_en.as_str())
+            .map(|s| s.ascii_name())
             .collect();
         assert!(
             !kanto_states.is_empty(),
             "fixture SHALL contain at least one Kanto-tagged state"
         );
-        let state = field(&result, "state");
+        let state = ascii_field(&result, "state");
         assert!(
-            kanto_states.contains(&state.as_str()),
+            kanto_states.contains(&state),
             "lowercase region filter SHALL constrain to a Kanto-tagged state, got: {state} (expected one of {kanto_states:?})"
         );
     }
@@ -427,7 +566,7 @@ mod tests {
         );
         let result = generate_structured(&d, &mut rng)
             .expect("SHALL match when both state and region apply");
-        assert_eq!(field(&result, "state"), "Tokyo");
+        assert_eq!(ascii_field(&result, "state"), "Tokyo");
         assert_eq!(field(&result, "country_code"), "JP");
     }
 
@@ -469,20 +608,14 @@ mod tests {
         assert!(!field(&result, "postcode").is_empty());
     }
 
-    use crate::geo_loader::{GeoCity, GeoCountry, GeoData, GeoPostcode, GeoState};
+    use crate::geo_loader::{GeoCity, GeoCountry, GeoData, GeoPostcode, GeoState, Marker, Pattern};
 
     /// Build a single-state, single-city `GeoData` whose one postcode carries
     /// the supplied street-shaping fields. Lets the street-generation branches
     /// of `generate_address_from_state` be exercised in isolation, with no
     /// dependence on the embedded geo database.
-    fn synthetic_geo(
-        iso: &str,
-        code: &str,
-        street_en: &str,
-        pattern: Option<&str>,
-        fixed: Option<Vec<String>>,
-    ) -> GeoData {
-        let postcode = GeoPostcode::for_test(code, street_en, pattern, fixed);
+    fn synthetic_geo(iso: &str, code: &str, street: &str, pattern: Option<Pattern>) -> GeoData {
+        let postcode = GeoPostcode::for_test(code, street, pattern);
         let city = GeoCity::for_test("Testville", vec![postcode]);
         let state = GeoState::for_test(vec!["r1".to_string()], vec![city]);
         GeoData::for_test(GeoCountry::for_test(iso, vec![]), vec![state])
@@ -494,7 +627,7 @@ mod tests {
     #[test]
     fn from_state_maps_all_geo_fields_onto_output() {
         let mut rng = seeded_rng();
-        let geo = synthetic_geo("ZZ", "12345", "Main St", None, None);
+        let geo = synthetic_geo("ZZ", "12345", "Main St", None);
         let state = &geo.states[0];
         let result = super::generate_address_from_state(&geo, state, &mut rng)
             .expect("SHALL generate from synthetic state");
@@ -524,7 +657,7 @@ mod tests {
     #[test]
     fn from_state_default_street_is_number_plus_street_en() {
         let mut rng = seeded_rng();
-        let geo = synthetic_geo("ZZ", "00000", "Cherry Lane", None, None);
+        let geo = synthetic_geo("ZZ", "00000", "Cherry Lane", None);
         let state = &geo.states[0];
         let result = super::generate_address_from_state(&geo, state, &mut rng)
             .expect("SHALL generate default street");
@@ -547,48 +680,58 @@ mod tests {
         );
     }
 
-    // 34. An empty fixed list SHALL produce exactly "1 <street_en>" (the
-    //     documented empty-fixed fallback), not a random number.
+    // 34. An empty pattern set falls back to the default "<num> <street>" (an
+    //     empty array carries no addresses to pick from).
     #[test]
-    fn from_state_empty_fixed_yields_one_plus_street_en() {
+    fn from_state_empty_pattern_set_uses_default_street() {
         let mut rng = seeded_rng();
-        let geo = synthetic_geo("ZZ", "00000", "Oak Road", None, Some(vec![]));
+        let geo = synthetic_geo("ZZ", "00000", "Oak Road", Some(Pattern::Many(vec![])));
         let state = &geo.states[0];
         let result = super::generate_address_from_state(&geo, state, &mut rng)
-            .expect("SHALL generate from empty fixed list");
-        assert_eq!(
-            field(&result, "street"),
-            "1 Oak Road",
-            "empty fixed list SHALL yield '1 <street_en>'"
+            .expect("SHALL generate from empty pattern set");
+        let street = field(&result, "street");
+        assert!(
+            street.ends_with(" Oak Road"),
+            "empty set SHALL fall back to '<num> Oak Road', got: {street}"
         );
     }
 
-    // 35. A non-empty fixed list SHALL pick one of its verbatim entries as the
-    //     street (no numbering applied).
+    // 35. A pattern array (a set of known addresses) SHALL pick one of its
+    //     entries as the street.
     #[test]
-    fn from_state_nonempty_fixed_picks_a_listed_entry() {
+    fn from_state_pattern_array_picks_a_listed_entry() {
         let mut rng = seeded_rng();
         let entries = vec![
             "10 Downing Street".to_string(),
             "221B Baker Street".to_string(),
         ];
-        let geo = synthetic_geo("ZZ", "00000", "Ignored", None, Some(entries.clone()));
+        let geo = synthetic_geo(
+            "ZZ",
+            "00000",
+            "Ignored",
+            Some(Pattern::Many(entries.clone())),
+        );
         let state = &geo.states[0];
         let result = super::generate_address_from_state(&geo, state, &mut rng)
-            .expect("SHALL generate from fixed list");
+            .expect("SHALL generate from pattern array");
         let street = field(&result, "street");
         assert!(
             entries.contains(&street),
-            "fixed street SHALL be one of the listed entries, got: {street}"
+            "array street SHALL be one of the listed entries, got: {street}"
         );
     }
 
-    // 36. A pattern delegates to expand_street_pattern: an n{min,max} token SHALL
-    //     be replaced by a number in range and the street_en SHALL be present.
+    // 36. A pattern with an n{min,max} token SHALL replace it with a number in
+    //     range, the {street} placeholder filled with the street name.
     #[test]
-    fn from_state_pattern_expands_token_and_includes_street_en() {
+    fn from_state_pattern_expands_token_and_includes_street() {
         let mut rng = seeded_rng();
-        let geo = synthetic_geo("ZZ", "00000", "Elm Avenue", Some("n{1,9} Elm Avenue"), None);
+        let geo = synthetic_geo(
+            "ZZ",
+            "00000",
+            "Elm Avenue",
+            Some(Pattern::One("n{1,9} {street}".to_string())),
+        );
         let state = &geo.states[0];
         let result = super::generate_address_from_state(&geo, state, &mut rng)
             .expect("SHALL generate from pattern");
@@ -620,8 +763,7 @@ mod tests {
             "ZZ",
             "00000",
             "Pine Street",
-            Some("n{1,200} Pine Street"),
-            None,
+            Some(Pattern::One("n{1,200} {street}".to_string())),
         );
         let state = &geo.states[0];
 
@@ -634,6 +776,222 @@ mod tests {
         assert_eq!(
             a, b,
             "same seed + same state SHALL produce identical address"
+        );
+    }
+
+    // 38a. Every real postcode in every country SHALL render an ascii street
+    //      that is pure ASCII — the data test on bare names doesn't cover the
+    //      rendered pattern, so a missed marker or unsubstituted native literal
+    //      in a `pattern` is caught here. Deterministic: visits every postcode.
+    #[test]
+    fn every_postcode_renders_pure_ascii_street() {
+        let mut rng = seeded_rng();
+        for g in crate::geo_loader::geo_database().all() {
+            let markers = &g.country.markers;
+            let cc = &g.country.iso_code;
+            for s in &g.states {
+                for c in &s.cities {
+                    for p in &c.postcodes {
+                        let (_native, ascii) = super::street_pair(p, markers, &mut rng);
+                        assert!(
+                            ascii.is_ascii() && !ascii.is_empty(),
+                            "{cc}/{}: ascii street SHALL be non-empty ASCII, got: {ascii}",
+                            c.name
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- native + ascii model ---------------------------------------------
+
+    /// Parse the integer value out of a string regardless of numeral width
+    /// (ASCII or full-width digits) — for comparing house numbers across scripts.
+    fn number_value(s: &str) -> Option<u32> {
+        let digits: String = s
+            .chars()
+            .filter_map(|c| match c as u32 {
+                0x30..=0x39 => Some(c),
+                0xFF10..=0xFF19 => char::from_u32(c as u32 - 0xFF10 + 0x30),
+                _ => None,
+            })
+            .collect();
+        digits.parse().ok()
+    }
+
+    /// Each maximal run of digits (ASCII or full-width) as its integer value, in
+    /// order — for comparing the SEQUENCE of house numbers across scripts.
+    fn digit_values(s: &str) -> Vec<u32> {
+        let mut out = Vec::new();
+        let mut cur = String::new();
+        for c in s.chars() {
+            match c as u32 {
+                0x30..=0x39 => cur.push(c),
+                0xFF10..=0xFF19 => cur.push(char::from(b'0' + (c as u32 - 0xFF10) as u8)),
+                _ => {
+                    if let Ok(v) = cur.parse() {
+                        out.push(v);
+                    }
+                    cur.clear();
+                }
+            }
+        }
+        if let Ok(v) = cur.parse() {
+            out.push(v);
+        }
+        out
+    }
+
+    // 38. The object is NATIVE at top level with an `ascii` sub-object that
+    //     carries only the script-variant text fields. The script-neutral
+    //     fields live top-level ONLY (not duplicated into `ascii`).
+    #[test]
+    fn address_native_top_level_with_ascii_text_branch() {
+        let mut rng = seeded_rng();
+        let d = def_with_params("address", &[("country", "JP")]);
+        let r = generate_structured(&d, &mut rng).expect("should generate");
+
+        let ascii = r
+            .get_path("ascii")
+            .expect("ascii branch")
+            .as_object()
+            .unwrap();
+        for k in ["street", "city", "state", "country", "postcode"] {
+            assert!(ascii.contains_key(k), "ascii SHALL carry text field {k}");
+        }
+        for k in ["country_code", "lat", "lon"] {
+            assert!(
+                !ascii.contains_key(k),
+                "ascii SHALL NOT duplicate the script-neutral field {k}"
+            );
+            // …which is present at the top level.
+            assert!(!field(&r, k).is_empty(), "top-level SHALL carry {k}");
+        }
+
+        // Top-level JP city is native (non-ASCII); the ascii branch romanises it.
+        let city = field(&r, "city");
+        assert!(
+            !city.is_ascii(),
+            "JP top-level city SHALL be native: {city}"
+        );
+        let acity = ascii_field(&r, "city");
+        assert!(
+            acity.is_ascii() && !acity.is_empty(),
+            "ascii.city SHALL be a non-empty romanisation: {acity}"
+        );
+    }
+
+    // 39. A Latin country (GB) folds to itself: native == ascii for every text
+    //     field (the fold is identity / no stored romanisation needed).
+    #[test]
+    fn address_latin_native_equals_ascii() {
+        let mut rng = seeded_rng();
+        let r = generate_structured(&def_with_params("address", &[("country", "GB")]), &mut rng)
+            .expect("should generate");
+        for k in ["street", "city", "state", "country", "postcode"] {
+            assert_eq!(
+                field(&r, k),
+                ascii_field(&r, k),
+                "GB is Latin: native SHALL equal ascii for {k}"
+            );
+        }
+    }
+
+    /// A two-marker country map (jp-style 丁目/番) for the placeholder tests.
+    fn jp_markers() -> HashMap<String, Marker> {
+        HashMap::from([
+            (
+                "chome".to_string(),
+                Marker {
+                    native: "丁目".to_string(),
+                    ascii: "-chome ".to_string(),
+                },
+            ),
+            (
+                "ban".to_string(),
+                Marker {
+                    native: "番".to_string(),
+                    ascii: "-ban".to_string(),
+                },
+            ),
+        ])
+    }
+
+    // 40. street_pair shares the drawn house number(s) across scripts and
+    //     romanises every marker: a multi-part {street}/{marker} skeleton renders
+    //     full-width native and pure-ASCII ascii from the SAME numbers.
+    #[test]
+    fn street_pair_shares_numbers_and_romanises_markers() {
+        let mut rng = seeded_rng();
+        let markers = jp_markers();
+        // Digit-free romanisation so the only digits are the house numbers.
+        let pc = GeoPostcode {
+            code: "060-0001".to_string(),
+            street: "本町".to_string(),
+            street_ascii: "Honmachi".to_string(),
+            pattern: Some(Pattern::One(
+                "{street}n{１,４}{chome}n{１,１５}{ban}".to_string(),
+            )),
+        };
+        let (native, ascii) = super::street_pair(&pc, &markers, &mut rng);
+
+        // Native keeps script + native markers, full-width digits only.
+        assert!(native.starts_with("本町"), "native keeps script: {native}");
+        assert!(
+            native.contains("丁目") && native.contains("番"),
+            "native markers: {native}"
+        );
+        assert!(
+            !native.chars().any(|c| c.is_ascii_digit()),
+            "native house numbers SHALL be full-width: {native}"
+        );
+        // ASCII romanises both markers, is pure ASCII, tidy spacing.
+        assert!(
+            ascii.is_ascii(),
+            "ascii street SHALL be pure ASCII: {ascii}"
+        );
+        assert!(
+            ascii.contains("Honmachi") && ascii.contains("-chome") && ascii.contains("-ban"),
+            "ascii romanises street + markers: {ascii}"
+        );
+        assert!(
+            !ascii.contains("Honmachi4"),
+            "letter→digit join SHALL be spaced: {ascii}"
+        );
+        // Both drawn numbers match across scripts (full-width vs ASCII).
+        assert_eq!(
+            digit_values(&native),
+            digit_values(&ascii),
+            "native and ascii SHALL share the same numbers ({native} / {ascii})"
+        );
+    }
+
+    // 41. A Latin street with diacritics folds programmatically (no markers, no
+    //     stored romanisation): ascii = the ASCII fold of the native skeleton,
+    //     word order preserved, same house number.
+    #[test]
+    fn street_pair_folds_diacritics_programmatically() {
+        let mut rng = seeded_rng();
+        let markers: HashMap<String, Marker> = HashMap::new();
+        let pc = GeoPostcode {
+            code: "70173".to_string(),
+            street: "Königstraße".to_string(),
+            street_ascii: String::new(), // nothing stored — derive by fold
+            pattern: Some(Pattern::One("{street} n{1,120}".to_string())),
+        };
+        let (native, ascii) = super::street_pair(&pc, &markers, &mut rng);
+
+        assert!(native.starts_with("Königstraße"), "native: {native}");
+        assert!(
+            ascii.starts_with("Konigstrasse"),
+            "diacritics SHALL fold programmatically (ß→ss, ö→o): {ascii}"
+        );
+        assert!(ascii.is_ascii(), "folded street SHALL be ASCII: {ascii}");
+        assert_eq!(
+            number_value(&native),
+            number_value(&ascii),
+            "fold SHALL preserve the same house number"
         );
     }
 }

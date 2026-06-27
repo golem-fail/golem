@@ -1,0 +1,66 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans}, {noun} sì {verb_intrans}.",
+    "{noun} {verb_trans} {noun} àti {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "amọ̀",
+      "ẹrẹ̀",
+      "bíríkì",
+      "òkúta",
+      "ère",
+      "olùṣọ́",
+      "òmìrán",
+      "òjìji",
+      "eérú",
+      "erùpẹ̀",
+      "ilẹ̀",
+      "iná",
+      "irin",
+      "iyanrìn",
+      "odò",
+      "igbó",
+      "òkè",
+      "ọ̀nà",
+      "ẹnu-ọ̀nà",
+      "ògiri",
+      "ilé-ìṣẹ́",
+      "ilé-ìṣọ́",
+      "ọ̀run",
+      "àpáta",
+      "eérún",
+      "ọwọ̀n",
+      "afárá",
+      "kòtò",
+      "etí-odò",
+      "ọmọ-ogun"
+    ],
+    "verb_intrans": [
+      "jí",
+      "dìde",
+      "wó",
+      "sùn",
+      "rìn",
+      "mì",
+      "gbọ̀n",
+      "ṣubú",
+      "dúró",
+      "yí"
+    ],
+    "verb_trans": [
+      "ṣọ́",
+      "fọ́",
+      "gbé",
+      "dáàbò bo",
+      "rọ̀",
+      "gbé sókè",
+      "fún pa",
+      "mú",
+      "wọ́",
+      "bò"
+    ]
+  }
+}

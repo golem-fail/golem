@@ -1,0 +1,25 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans} e {verb_intrans}.",
+    "{noun} {verb_trans} {noun} e {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "o golem", "o barro", "a argila", "a lama", "o tijolo", "a pedra",
+      "a estátua", "o monumento", "a relíquia", "a sombra", "a cinza", "o pó",
+      "a terra", "a forja", "o ídolo", "o totem", "o colosso", "a efígie",
+      "a montanha", "o rio", "a floresta", "o céu", "a estrada", "o ferro",
+      "a areia", "a parede", "a torre", "o portão", "a chama", "o rochedo"
+    ],
+    "verb_intrans": [
+      "desperta", "desmorona", "dorme", "ergue-se", "vagueia", "cambaleia",
+      "treme", "afunda", "gira", "cresce"
+    ],
+    "verb_trans": [
+      "guarda", "esmaga", "carrega", "protege", "molda", "levanta", "quebra",
+      "agarra", "arrasta", "cobre"
+    ]
+  }
+}

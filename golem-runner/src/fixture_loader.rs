@@ -4,8 +4,8 @@ use std::path::Path;
 use anyhow::Result;
 use golem_parser::fixture::{parse_fixture, resolve_fixture_path};
 use golem_vars::evaluate::evaluate_generators;
+use golem_vars::seed::FakeRng;
 use golem_vars::{ScopeLevel, VarValue, VariableStore};
-use rand::Rng;
 
 /// Load a fixture file and merge its variables into the store under the given namespace.
 ///
@@ -21,7 +21,7 @@ pub fn load_fixture_into_store(
     flow_dir: &Path,
     project_root: &Path,
     store: &mut VariableStore,
-    rng: &mut impl Rng,
+    rng: &mut FakeRng,
 ) -> Result<()> {
     // 1. Resolve path
     let path = resolve_fixture_path(fixture_name, flow_dir, project_root)?;
@@ -49,13 +49,11 @@ pub fn load_fixture_into_store(
 mod tests {
     use super::*;
     use golem_vars::Scope;
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha8Rng;
     use std::fs;
     use tempfile::TempDir;
 
-    fn seeded_rng() -> ChaCha8Rng {
-        ChaCha8Rng::seed_from_u64(42)
+    fn seeded_rng() -> FakeRng {
+        FakeRng::from_seed(42)
     }
 
     /// Helper: create a __fixtures__ directory and write a fixture file
@@ -106,7 +104,7 @@ mod tests {
         write_fixture(
             dir,
             "gen_user",
-            "[vars]\nemail = \"${fake:email}\"\nfirst = \"${fake:city}\"\n",
+            "[vars]\nemail = \"${fake:email}\"\nfirst = \"${fake:address.city}\"\n",
         );
 
         let mut store = VariableStore::new();

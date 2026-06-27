@@ -317,7 +317,7 @@ mod tests {
 [vars]
 email = "${fake:email(prefix=test,domain=acme-qa.com)}"
 password = "${fake:password(length=12)}"
-city = "${fake:city}"
+city = "${fake:address.city}"
 "#;
         let fixture = parse_fixture(toml_str).expect("Should parse fixture with vars");
         assert_eq!(fixture.vars.len(), 3);
@@ -331,7 +331,7 @@ city = "${fake:city}"
         );
         assert_eq!(
             fixture.vars.get("city").map(|s| s.as_str()),
-            Some("${fake:city}")
+            Some("${fake:address.city}")
         );
     }
 

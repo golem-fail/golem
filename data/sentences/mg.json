@@ -1,0 +1,70 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans} ary {verb_intrans}.",
+    "{noun} {verb_trans} {noun} sy {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "ny gôlema",
+      "ny tanimanga",
+      "ny fotaka",
+      "ny biriky",
+      "ny vato",
+      "ny sariolona",
+      "ny mpiambina",
+      "ny goavana",
+      "ny aloka",
+      "ny lavenona",
+      "ny vovoka",
+      "ny tany",
+      "ny memy",
+      "ny sampy",
+      "ny totema",
+      "ny tendrombohitra",
+      "ny renirano",
+      "ny ala",
+      "ny lanitra",
+      "ny lalana",
+      "ny vy",
+      "ny fasika",
+      "ny rindrina",
+      "ny tilikambo",
+      "ny vavahady",
+      "ny lelafo",
+      "ny vatolampy",
+      "ny rano",
+      "ny havoana",
+      "ny sary"
+    ],
+    "verb_intrans": [
+      "mifoha",
+      "mandeha",
+      "mianjera",
+      "matory",
+      "mitsangana",
+      "mihetsika",
+      "mitsambikina",
+      "mivadika",
+      "mihamafy",
+      "mirenireny",
+      "miova",
+      "mitombo"
+    ],
+    "verb_trans": [
+      "miambina",
+      "manorotoro",
+      "mitondra",
+      "miaro",
+      "mamorona",
+      "manainga",
+      "mandrava",
+      "misambotra",
+      "mitarika",
+      "manarona",
+      "mandevona",
+      "mitana"
+    ]
+  }
+}

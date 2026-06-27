@@ -1,0 +1,26 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans} e {verb_intrans}.",
+    "{noun} {verb_trans} {noun} e {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "il golem", "l'argilla", "il fango", "il mattone", "la pietra",
+      "la statua", "il guardiano", "il rabbino", "la creta", "la cantina",
+      "l'ombra", "il colosso", "la polvere", "il totem", "l'idolo",
+      "la montagna", "il fiume", "la foresta", "il cielo", "la strada",
+      "il castello", "il ferro", "la sabbia", "la torre", "il muro",
+      "la porta", "la fiamma", "lo scoglio"
+    ],
+    "verb_intrans": [
+      "si sveglia", "crolla", "dorme", "si erge", "vaga", "vacilla",
+      "trema", "sprofonda", "gira", "cresce"
+    ],
+    "verb_trans": [
+      "custodisce", "schiaccia", "porta", "protegge", "plasma", "solleva",
+      "spezza", "afferra", "trascina", "copre"
+    ]
+  }
+}

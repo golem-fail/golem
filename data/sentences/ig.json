@@ -1,0 +1,68 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans}, {noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun} na {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "golem",
+      "ụrọ",
+      "apịtị",
+      "brik",
+      "nkume",
+      "oyiyi",
+      "onye nche",
+      "agwụ",
+      "onyinyo",
+      "ntụ",
+      "uzuzu",
+      "ala",
+      "ọkụ",
+      "ọkpọkọ",
+      "arụsị",
+      "ugwu",
+      "osimiri",
+      "ọhịa",
+      "mbara igwe",
+      "ụzọ",
+      "igwe",
+      "ájá",
+      "mgbidi",
+      "ụlọ elu",
+      "ọnụ ụzọ",
+      "ire ọkụ",
+      "okwute",
+      "mmiri",
+      "osisi",
+      "ụlọ"
+    ],
+    "verb_intrans": [
+      "na-eteta",
+      "na-ada",
+      "na-ebili",
+      "na-arahụ ụra",
+      "na-ama jijiji",
+      "na-akpụ akpụ",
+      "na-emeghari",
+      "na-aga njem",
+      "na-emepe",
+      "na-ada ada",
+      "na-acha",
+      "na-eto eto"
+    ],
+    "verb_trans": [
+      "na-eche",
+      "na-egwepịa",
+      "na-ebu",
+      "na-echebe",
+      "na-akpụ",
+      "na-ebuli",
+      "na-etiwa",
+      "na-ekpuchi",
+      "na-adọkpụ",
+      "na-emebi"
+    ]
+  }
+}

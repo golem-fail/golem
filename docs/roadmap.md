@@ -59,6 +59,28 @@ Also `golem-cli` `install_cache` could take a seam over `installed_state::query`
 orchestration. Sizable, architectural — its own session. (The small standalone Cat-3
 seams — main color, orchestrator socket_path, stream `impl Write` — were done inline.)
 
+## `e2e/cross/fake_data_vars.test.toml` step 0 needs `auto_scroll` (+ webview-readiness)
+
+Pre-existing, **not** a regression (confirmed 2026-06-24 while landing the
+fake-data generator work). On a tall emulator (Pixel 8 Pro API 36,
+1344×2992) the flow's first step `type on_text="Search"` resolves the field
+**off-screen at y≈6111** → `EF405` ("use auto_scroll = true"), yet step 0/1
+don't set `auto_scroll` even though step 3 ("Multi-line text") does. Some
+launches instead hit the known **webview-readiness race** → `EF408` (sparse
+DOM, `on_text` finds nothing within the 10s budget) — see the EF408 entries
+below. The two alternate run-to-run.
+
+Because step 0 blocks, the `${fake:email}`/`${fake:uuid}` steps (indexes 2,
+4) never execute, so the flow currently gives the fake-data generators **zero
+on-device coverage** — unit coverage is comprehensive and the generic
+`e2e/cross/tap.test.toml` control flow passes 6/6 on the same emulator
+(same screen, same `on_text`→driver path), so the integration path is sound.
+
+Fix when picked up: add `auto_scroll = true` to the `Search` / `Enter email`
+type steps (mirror step 3), then re-run on android + a **phone** iOS sim
+(the flow wants `type=phone`; only an iPad was booted this session). Cheap;
+unblocks real on-device validation of `timestamp`/`one_of`/`address` etc.
+
 ## Scroll: `center` + `visibility_percentage` for edge/partial targets (Maestro parity)
 
 `e2e/cross/scroll_search.test.toml` `horizontal_carousel_scroll` fails (EF408)
@@ -509,15 +531,6 @@ work. To wire it: build the builtins map (`_device`/`_os`/`_platform`/`_type`/
 `_udid`/`_app` from `ctx.device` + the app) and pass `device`/`device_stores`/
 `each_vars` into the context the executor constructs in `interp.rs`. Add an e2e
 that types `${_device}` / `${_os}` into a field.
-
-## `fake:uuid` ignores `--seed` (not reproducible)
-
-`generators.rs::generate_uuid` calls `Uuid::new_v4()`, which draws from OS
-entropy rather than the passed seeded RNG — so a flow using `${fake:uuid}` does
-not reproduce under `--seed N` (every other generator does; verified
-`${fake:email}` reproduces). Fix: generate the UUID bytes from the seeded `rng`
-(`rng.fill_bytes` into a 16-byte buffer, set the v4 version/variant bits) so it
-joins the deterministic stream. Pre-existing; surfaced wiring up `${fake:…}`.
 
 ## "Save on failure" for recordings + --trace screenshots
 

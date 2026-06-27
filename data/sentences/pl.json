@@ -1,0 +1,34 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun_acc}.",
+    "{noun} {verb_intrans} i {verb_intrans}.",
+    "{noun} {verb_trans} {noun_acc} i {noun_acc}."
+  ],
+  "slots": {
+    "noun": [
+      "golem", "glina", "błoto", "cegła", "kamień",
+      "posąg", "strażnik", "olbrzym", "cień", "kolos",
+      "pył", "totem", "bożek", "popiół", "ziemia",
+      "góra", "rzeka", "las", "niebo", "droga",
+      "zamek", "żelazo", "piasek", "wieża", "mur", "brama",
+      "płomień", "skała", "kuźnia", "głaz"
+    ],
+    "verb_intrans": [
+      "budzi się", "wali się", "śpi", "wstaje", "błądzi", "chwieje się",
+      "drży", "tonie", "obraca się", "rośnie"
+    ],
+    "verb_trans": [
+      "trzyma", "miażdży", "niesie", "chroni", "kształtuje", "unosi",
+      "łamie", "chwyta", "wlecze", "okrywa"
+    ],
+    "noun_acc": [
+      "golema", "glinę", "błoto", "cegłę", "kamień",
+      "posąg", "strażnika", "olbrzyma", "cień", "kolosa",
+      "pył", "totem", "bożka", "popiół", "ziemię",
+      "górę", "rzekę", "las", "niebo", "drogę",
+      "zamek", "żelazo", "piasek", "wieżę", "mur", "bramę",
+      "płomień", "skałę", "kuźnię", "głaz"
+    ]
+  }
+}

@@ -1,7 +1,6 @@
 {
   "country": {
     "name": "Deutschland",
-    "name_en": "Germany",
     "iso_code": "DE",
     "phone_prefix": "+49",
     "phone_formats": [
@@ -10,13 +9,21 @@
       "+49-###-########"
     ],
     "postcode_format": "#####",
-    "name_order": "given_first",
-    "person": { "name": ["local", "ascii"], "reading": [], "local": ["ascii", "diacritics_de"] }
+    "person": {
+      "name": [
+        "local",
+        "ascii"
+      ],
+      "reading": [],
+      "local": [
+        "ascii",
+        "diacritics_de"
+      ]
+    }
   },
   "states": [
     {
       "name": "Baden-Württemberg",
-      "name_en": "Baden-Wuerttemberg",
       "region_tags": [
         "Southern Germany",
         "Swabia"
@@ -24,181 +31,153 @@
       "cities": [
         {
           "name": "Stuttgart",
-          "name_en": "Stuttgart",
           "lat": 48.7758,
           "lon": 9.1829,
           "postcodes": [
             {
               "code": "70173",
               "street": "Königstraße",
-              "street_en": "Koenigstrasse",
-              "pattern": "Königstraße n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "70174",
               "street": "Friedrichstraße",
-              "street_en": "Friedrichstrasse",
-              "pattern": "Friedrichstraße n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "70176",
               "street": "Rotebühlstraße",
-              "street_en": "Rotebuehlstrasse",
-              "pattern": "Rotebühlstraße n{1,180}"
+              "pattern": "{street} n{1,180}"
             },
             {
               "code": "70178",
               "street": "Tübinger Straße",
-              "street_en": "Tuebinger Strasse",
-              "pattern": "Tübinger Straße n{1,90}"
+              "pattern": "{street} n{1,90}"
             },
             {
               "code": "70180",
               "street": "Filderstraße",
-              "street_en": "Filderstrasse",
-              "pattern": "Filderstraße n{1,75}"
+              "pattern": "{street} n{1,75}"
             },
             {
               "code": "70182",
               "street": "Wagenburgstraße",
-              "street_en": "Wagenburgstrasse",
-              "pattern": "Wagenburgstraße n{1,100}"
+              "pattern": "{street} n{1,100}"
             }
           ]
         },
         {
           "name": "Karlsruhe",
-          "name_en": "Karlsruhe",
           "lat": 49.0069,
           "lon": 8.4037,
           "postcodes": [
             {
               "code": "76131",
               "street": "Kaiserstraße",
-              "street_en": "Kaiserstrasse",
-              "pattern": "Kaiserstraße n{1,240}"
+              "pattern": "{street} n{1,240}"
             },
             {
               "code": "76133",
               "street": "Kriegsstraße",
-              "street_en": "Kriegsstrasse",
-              "pattern": "Kriegsstraße n{1,150}"
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "76135",
               "street": "Yorckstraße",
-              "street_en": "Yorckstrasse",
-              "pattern": "Yorckstraße n{1,50}"
+              "pattern": "{street} n{1,50}"
             },
             {
               "code": "76137",
               "street": "Brauerstraße",
-              "street_en": "Brauerstrasse",
-              "pattern": "Brauerstraße n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "Mannheim",
-          "name_en": "Mannheim",
           "lat": 49.4875,
           "lon": 8.466,
           "postcodes": [
             {
               "code": "68159",
               "street": "Planken",
-              "street_en": "Planken",
-              "pattern": "Planken n{1,90}"
+              "pattern": "{street} n{1,90}"
             },
             {
               "code": "68161",
               "street": "Breite Straße",
-              "street_en": "Breite Strasse",
-              "pattern": "Breite Straße n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "68163",
               "street": "Seckenheimer Straße",
-              "street_en": "Seckenheimer Strasse",
-              "pattern": "Seckenheimer Straße n{1,120}"
+              "pattern": "{street} n{1,120}"
             }
           ]
         },
         {
           "name": "Freiburg",
-          "name_en": "Freiburg",
           "lat": 47.999,
           "lon": 7.8421,
           "postcodes": [
             {
               "code": "79098",
               "street": "Bertoldstraße",
-              "street_en": "Bertoldstrasse",
-              "pattern": "Bertoldstraße n{1,60}"
+              "pattern": "{street} n{1,60}"
             },
             {
               "code": "79100",
               "street": "Basler Straße",
-              "street_en": "Basler Strasse",
-              "pattern": "Basler Straße n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "79102",
               "street": "Günterstalstraße",
-              "street_en": "Guenterstalstrasse",
-              "pattern": "Günterstalstraße n{1,100}"
+              "pattern": "{street} n{1,100}"
             }
           ]
         },
         {
           "name": "Heidelberg",
-          "name_en": "Heidelberg",
           "lat": 49.3988,
           "lon": 8.6724,
           "postcodes": [
             {
               "code": "69115",
               "street": "Hauptstraße",
-              "street_en": "Hauptstrasse",
-              "pattern": "Hauptstraße n{1,250}"
+              "pattern": "{street} n{1,250}"
             },
             {
               "code": "69117",
               "street": "Plöck",
-              "street_en": "Ploeck",
-              "pattern": "Plöck n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "69120",
               "street": "Bergheimer Straße",
-              "street_en": "Bergheimer Strasse",
-              "pattern": "Bergheimer Straße n{1,150}"
+              "pattern": "{street} n{1,150}"
             }
           ]
         },
         {
           "name": "Ulm",
-          "name_en": "Ulm",
           "lat": 48.4011,
           "lon": 9.9876,
           "postcodes": [
             {
               "code": "89073",
               "street": "Hirschstraße",
-              "street_en": "Hirschstrasse",
-              "pattern": "Hirschstraße n{1,50}"
+              "pattern": "{street} n{1,50}"
             },
             {
               "code": "89075",
               "street": "Blaubeurer Straße",
-              "street_en": "Blaubeurer Strasse",
-              "pattern": "Blaubeurer Straße n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "89077",
               "street": "Söflinger Straße",
-              "street_en": "Soeflinger Strasse",
-              "pattern": "Söflinger Straße n{1,100}"
+              "pattern": "{street} n{1,100}"
             }
           ]
         }
@@ -206,7 +185,6 @@
     },
     {
       "name": "Bayern",
-      "name_en": "Bavaria",
       "region_tags": [
         "Southern Germany",
         "Franconia"
@@ -214,211 +192,178 @@
       "cities": [
         {
           "name": "München",
-          "name_en": "Munich",
           "lat": 48.1351,
           "lon": 11.582,
           "postcodes": [
             {
               "code": "80331",
               "street": "Kaufingerstraße",
-              "street_en": "Kaufingerstrasse",
-              "pattern": "Kaufingerstraße n{1,40}"
+              "pattern": "{street} n{1,40}"
             },
             {
               "code": "80333",
               "street": "Ludwigstraße",
-              "street_en": "Ludwigstrasse",
-              "pattern": "Ludwigstraße n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "80335",
               "street": "Bayerstraße",
-              "street_en": "Bayerstrasse",
-              "pattern": "Bayerstraße n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "80337",
               "street": "Lindwurmstraße",
-              "street_en": "Lindwurmstrasse",
-              "pattern": "Lindwurmstraße n{1,175}"
+              "pattern": "{street} n{1,175}"
             },
             {
               "code": "80339",
               "street": "Landsberger Straße",
-              "street_en": "Landsberger Strasse",
-              "pattern": "Landsberger Straße n{1,450}"
+              "pattern": "{street} n{1,450}"
             },
             {
               "code": "80469",
               "street": "Fraunhoferstraße",
-              "street_en": "Fraunhoferstrasse",
-              "pattern": "Fraunhoferstraße n{1,50}"
+              "pattern": "{street} n{1,50}"
             },
             {
               "code": "80538",
               "street": "Prinzregentenstraße",
-              "street_en": "Prinzregentenstrasse",
-              "pattern": "Prinzregentenstraße n{1,130}"
+              "pattern": "{street} n{1,130}"
             },
             {
               "code": "80634",
               "street": "Nymphenburger Straße",
-              "street_en": "Nymphenburger Strasse",
-              "pattern": "Nymphenburger Straße n{1,200}"
+              "pattern": "{street} n{1,200}"
             }
           ]
         },
         {
           "name": "Nürnberg",
-          "name_en": "Nuremberg",
           "lat": 49.4521,
           "lon": 11.0767,
           "postcodes": [
             {
               "code": "90402",
               "street": "Königstraße",
-              "street_en": "Koenigstrasse",
-              "pattern": "Königstraße n{1,90}"
+              "pattern": "{street} n{1,90}"
             },
             {
               "code": "90403",
               "street": "Breite Gasse",
-              "street_en": "Breite Gasse",
-              "pattern": "Breite Gasse n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "90408",
               "street": "Bucher Straße",
-              "street_en": "Bucher Strasse",
-              "pattern": "Bucher Straße n{1,150}"
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "90419",
               "street": "Fürther Straße",
-              "street_en": "Fuerther Strasse",
-              "pattern": "Fürther Straße n{1,320}"
+              "pattern": "{street} n{1,320}"
             },
             {
               "code": "90429",
               "street": "Rothenburger Straße",
-              "street_en": "Rothenburger Strasse",
-              "pattern": "Rothenburger Straße n{1,250}"
+              "pattern": "{street} n{1,250}"
             }
           ]
         },
         {
           "name": "Augsburg",
-          "name_en": "Augsburg",
           "lat": 48.3705,
           "lon": 10.8978,
           "postcodes": [
             {
               "code": "86150",
               "street": "Maximilianstraße",
-              "street_en": "Maximilianstrasse",
-              "pattern": "Maximilianstraße n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "86152",
               "street": "Bürgermeister-Fischer-Straße",
-              "street_en": "Buergermeister-Fischer-Strasse",
-              "pattern": "Bürgermeister-Fischer-Straße n{1,10}"
+              "pattern": "{street} n{1,10}"
             },
             {
               "code": "86153",
               "street": "Augsburger Straße",
-              "street_en": "Augsburger Strasse",
-              "pattern": "Augsburger Straße n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "86159",
               "street": "Haunstetter Straße",
-              "street_en": "Haunstetter Strasse",
-              "pattern": "Haunstetter Straße n{1,300}"
+              "pattern": "{street} n{1,300}"
             }
           ]
         },
         {
           "name": "Regensburg",
-          "name_en": "Regensburg",
           "lat": 49.0134,
           "lon": 12.1016,
           "postcodes": [
             {
               "code": "93047",
               "street": "Maximilianstraße",
-              "street_en": "Maximilianstrasse",
-              "pattern": "Maximilianstraße n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "93049",
               "street": "Prüfeninger Straße",
-              "street_en": "Pruefeninger Strasse",
-              "pattern": "Prüfeninger Straße n{1,140}"
+              "pattern": "{street} n{1,140}"
             },
             {
               "code": "93051",
               "street": "Bajuwarenstraße",
-              "street_en": "Bajuwarenstrasse",
-              "pattern": "Bajuwarenstraße n{1,30}"
+              "pattern": "{street} n{1,30}"
             }
           ]
         },
         {
           "name": "Würzburg",
-          "name_en": "Wuerzburg",
           "lat": 49.7913,
           "lon": 9.9534,
           "postcodes": [
             {
               "code": "97070",
               "street": "Domstraße",
-              "street_en": "Domstrasse",
-              "pattern": "Domstraße n{1,20}"
+              "pattern": "{street} n{1,20}"
             },
             {
               "code": "97072",
               "street": "Sanderstraße",
-              "street_en": "Sanderstrasse",
-              "pattern": "Sanderstraße n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "97074",
               "street": "Zellerauer Hauptstraße",
-              "street_en": "Zellerauer Hauptstrasse",
-              "pattern": "Zellerauer Hauptstraße n{1,60}"
+              "pattern": "{street} n{1,60}"
             },
             {
               "code": "97076",
               "street": "Lengfeldweg",
-              "street_en": "Lengfeldweg",
-              "pattern": "Lengfeldweg n{1,90}"
+              "pattern": "{street} n{1,90}"
             }
           ]
         },
         {
           "name": "Erlangen",
-          "name_en": "Erlangen",
           "lat": 49.5897,
           "lon": 11.012,
           "postcodes": [
             {
               "code": "91052",
               "street": "Hauptstraße",
-              "street_en": "Hauptstrasse",
-              "pattern": "Hauptstraße n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "91054",
               "street": "Henkestraße",
-              "street_en": "Henkestrasse",
-              "pattern": "Henkestraße n{1,60}"
+              "pattern": "{street} n{1,60}"
             },
             {
               "code": "91058",
               "street": "Tennenloher Straße",
-              "street_en": "Tennenloher Strasse",
-              "pattern": "Tennenloher Straße n{1,50}"
+              "pattern": "{street} n{1,50}"
             }
           ]
         }
@@ -426,156 +371,132 @@
     },
     {
       "name": "Niedersachsen",
-      "name_en": "Lower Saxony",
       "region_tags": [
         "Northern Germany"
       ],
       "cities": [
         {
           "name": "Hannover",
-          "name_en": "Hanover",
           "lat": 52.3759,
           "lon": 9.732,
           "postcodes": [
             {
               "code": "30159",
               "street": "Georgstraße",
-              "street_en": "Georgstrasse",
-              "pattern": "Georgstraße n{1,50}"
+              "pattern": "{street} n{1,50}"
             },
             {
               "code": "30161",
               "street": "Lister Meile",
-              "street_en": "Lister Meile",
-              "pattern": "Lister Meile n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "30163",
               "street": "Vahrenwalder Straße",
-              "street_en": "Vahrenwalder Strasse",
-              "pattern": "Vahrenwalder Straße n{1,250}"
+              "pattern": "{street} n{1,250}"
             },
             {
               "code": "30165",
               "street": "Schulenburger Landstraße",
-              "street_en": "Schulenburger Landstrasse",
-              "pattern": "Schulenburger Landstraße n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "30167",
               "street": "Engelbosteler Damm",
-              "street_en": "Engelbosteler Damm",
-              "pattern": "Engelbosteler Damm n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "30169",
               "street": "Hildesheimer Straße",
-              "street_en": "Hildesheimer Strasse",
-              "pattern": "Hildesheimer Straße n{1,400}"
+              "pattern": "{street} n{1,400}"
             }
           ]
         },
         {
           "name": "Braunschweig",
-          "name_en": "Brunswick",
           "lat": 52.2689,
           "lon": 10.5268,
           "postcodes": [
             {
               "code": "38100",
               "street": "Bohlweg",
-              "street_en": "Bohlweg",
-              "pattern": "Bohlweg n{1,50}"
+              "pattern": "{street} n{1,50}"
             },
             {
               "code": "38102",
               "street": "Jasperallee",
-              "street_en": "Jasperallee",
-              "pattern": "Jasperallee n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "38104",
               "street": "Berliner Straße",
-              "street_en": "Berliner Strasse",
-              "pattern": "Berliner Straße n{1,120}"
+              "pattern": "{street} n{1,120}"
             }
           ]
         },
         {
           "name": "Oldenburg",
-          "name_en": "Oldenburg",
           "lat": 53.1435,
           "lon": 8.2146,
           "postcodes": [
             {
               "code": "26121",
               "street": "Lange Straße",
-              "street_en": "Lange Strasse",
-              "pattern": "Lange Straße n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "26122",
               "street": "Achternstraße",
-              "street_en": "Achternstrasse",
-              "pattern": "Achternstraße n{1,40}"
+              "pattern": "{street} n{1,40}"
             },
             {
               "code": "26125",
               "street": "Alexanderstraße",
-              "street_en": "Alexanderstrasse",
-              "pattern": "Alexanderstraße n{1,130}"
+              "pattern": "{street} n{1,130}"
             }
           ]
         },
         {
           "name": "Osnabrück",
-          "name_en": "Osnabrueck",
           "lat": 52.2799,
           "lon": 8.0472,
           "postcodes": [
             {
               "code": "49074",
               "street": "Große Straße",
-              "street_en": "Grosse Strasse",
-              "pattern": "Große Straße n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "49076",
               "street": "Lotter Straße",
-              "street_en": "Lotter Strasse",
-              "pattern": "Lotter Straße n{1,200}"
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "49078",
               "street": "Natruper Straße",
-              "street_en": "Natruper Strasse",
-              "pattern": "Natruper Straße n{1,250}"
+              "pattern": "{street} n{1,250}"
             }
           ]
         },
         {
           "name": "Göttingen",
-          "name_en": "Goettingen",
           "lat": 51.5413,
           "lon": 9.9158,
           "postcodes": [
             {
               "code": "37073",
               "street": "Weender Straße",
-              "street_en": "Weender Strasse",
-              "pattern": "Weender Straße n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "37075",
               "street": "Nikolausberger Weg",
-              "street_en": "Nikolausberger Weg",
-              "pattern": "Nikolausberger Weg n{1,90}"
+              "pattern": "{street} n{1,90}"
             },
             {
               "code": "37077",
               "street": "Groner Landstraße",
-              "street_en": "Groner Landstrasse",
-              "pattern": "Groner Landstraße n{1,60}"
+              "pattern": "{street} n{1,60}"
             }
           ]
         }
@@ -583,92 +504,78 @@
     },
     {
       "name": "Schleswig-Holstein",
-      "name_en": "Schleswig-Holstein",
       "region_tags": [
         "Northern Germany"
       ],
       "cities": [
         {
           "name": "Kiel",
-          "name_en": "Kiel",
           "lat": 54.3233,
           "lon": 10.1228,
           "postcodes": [
             {
               "code": "24103",
               "street": "Holstenstraße",
-              "street_en": "Holstenstrasse",
-              "pattern": "Holstenstraße n{1,60}"
+              "pattern": "{street} n{1,60}"
             },
             {
               "code": "24105",
               "street": "Holtenauer Straße",
-              "street_en": "Holtenauer Strasse",
-              "pattern": "Holtenauer Straße n{1,200}"
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "24107",
               "street": "Hasseldieksdammer Weg",
-              "street_en": "Hasseldieksdammer Weg",
-              "pattern": "Hasseldieksdammer Weg n{1,40}"
+              "pattern": "{street} n{1,40}"
             },
             {
               "code": "24109",
               "street": "Melsdorfer Straße",
-              "street_en": "Melsdorfer Strasse",
-              "pattern": "Melsdorfer Straße n{1,60}"
+              "pattern": "{street} n{1,60}"
             }
           ]
         },
         {
           "name": "Lübeck",
-          "name_en": "Luebeck",
           "lat": 53.8655,
           "lon": 10.6866,
           "postcodes": [
             {
               "code": "23552",
               "street": "Breite Straße",
-              "street_en": "Breite Strasse",
-              "pattern": "Breite Straße n{1,90}"
+              "pattern": "{street} n{1,90}"
             },
             {
               "code": "23554",
               "street": "Moislinger Allee",
-              "street_en": "Moislinger Allee",
-              "pattern": "Moislinger Allee n{1,150}"
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "23556",
               "street": "Fackenburger Allee",
-              "street_en": "Fackenburger Allee",
-              "pattern": "Fackenburger Allee n{1,120}"
+              "pattern": "{street} n{1,120}"
             }
           ]
         },
         {
           "name": "Flensburg",
-          "name_en": "Flensburg",
           "lat": 54.7937,
           "lon": 9.4469,
           "postcodes": [
             {
               "code": "24937",
               "street": "Holm",
-              "street_en": "Holm",
-              "pattern": "Holm n{1,50}"
+              "pattern": "{street} n{1,50}"
             },
             {
               "code": "24939",
               "street": "Apenrader Straße",
-              "street_en": "Apenrader Strasse",
-              "pattern": "Apenrader Straße n{1,90}"
+              "pattern": "{street} n{1,90}"
             },
             {
               "code": "24941",
               "street": "Husumer Straße",
-              "street_en": "Husumer Strasse",
-              "pattern": "Husumer Straße n{1,100}"
+              "pattern": "{street} n{1,100}"
             }
           ]
         }
@@ -676,88 +583,74 @@
     },
     {
       "name": "Hamburg",
-      "name_en": "Hamburg",
       "region_tags": [
         "Northern Germany"
       ],
       "cities": [
         {
           "name": "Hamburg",
-          "name_en": "Hamburg",
           "lat": 53.5511,
           "lon": 9.9937,
           "postcodes": [
             {
               "code": "20095",
               "street": "Mönckebergstraße",
-              "street_en": "Moenckebergstrasse",
-              "pattern": "Mönckebergstraße n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "20097",
               "street": "Spaldingstraße",
-              "street_en": "Spaldingstrasse",
-              "pattern": "Spaldingstraße n{1,220}"
+              "pattern": "{street} n{1,220}"
             },
             {
               "code": "20099",
               "street": "Steindamm",
-              "street_en": "Steindamm",
-              "pattern": "Steindamm n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "20144",
               "street": "Grindelallee",
-              "street_en": "Grindelallee",
-              "pattern": "Grindelallee n{1,150}"
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "20146",
               "street": "Rothenbaumchaussee",
-              "street_en": "Rothenbaumchaussee",
-              "pattern": "Rothenbaumchaussee n{1,200}"
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "20253",
               "street": "Eppendorfer Weg",
-              "street_en": "Eppendorfer Weg",
-              "pattern": "Eppendorfer Weg n{1,280}"
+              "pattern": "{street} n{1,280}"
             },
             {
               "code": "20357",
               "street": "Feldstraße",
-              "street_en": "Feldstrasse",
-              "pattern": "Feldstraße n{1,70}"
+              "pattern": "{street} n{1,70}"
             },
             {
               "code": "20359",
               "street": "Reeperbahn",
-              "street_en": "Reeperbahn",
-              "pattern": "Reeperbahn n{1,170}"
+              "pattern": "{street} n{1,170}"
             },
             {
               "code": "22041",
               "street": "Wandsbeker Marktstraße",
-              "street_en": "Wandsbeker Marktstrasse",
-              "pattern": "Wandsbeker Marktstraße n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "22043",
               "street": "Wandsbeker Chaussee",
-              "street_en": "Wandsbeker Chaussee",
-              "pattern": "Wandsbeker Chaussee n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "22301",
               "street": "Winterhuder Weg",
-              "street_en": "Winterhuder Weg",
-              "pattern": "Winterhuder Weg n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "22765",
               "street": "Ottenser Hauptstraße",
-              "street_en": "Ottenser Hauptstrasse",
-              "pattern": "Ottenser Hauptstraße n{1,60}"
+              "pattern": "{street} n{1,60}"
             }
           ]
         }
@@ -765,78 +658,66 @@
     },
     {
       "name": "Bremen",
-      "name_en": "Bremen",
       "region_tags": [
         "Northern Germany"
       ],
       "cities": [
         {
           "name": "Bremen",
-          "name_en": "Bremen",
           "lat": 53.0793,
           "lon": 8.8017,
           "postcodes": [
             {
               "code": "28195",
               "street": "Obernstraße",
-              "street_en": "Obernstrasse",
-              "pattern": "Obernstraße n{1,40}"
+              "pattern": "{street} n{1,40}"
             },
             {
               "code": "28197",
               "street": "Langemarckstraße",
-              "street_en": "Langemarckstrasse",
-              "pattern": "Langemarckstraße n{1,60}"
+              "pattern": "{street} n{1,60}"
             },
             {
               "code": "28199",
               "street": "Buntentorsteinweg",
-              "street_en": "Buntentorsteinweg",
-              "pattern": "Buntentorsteinweg n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "28201",
               "street": "Neuenlander Straße",
-              "street_en": "Neuenlander Strasse",
-              "pattern": "Neuenlander Straße n{1,150}"
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "28203",
               "street": "Ostertorsteinweg",
-              "street_en": "Ostertorsteinweg",
-              "pattern": "Ostertorsteinweg n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "28205",
               "street": "Vor dem Steintor",
-              "street_en": "Vor dem Steintor",
-              "pattern": "Vor dem Steintor n{1,200}"
+              "pattern": "{street} n{1,200}"
             }
           ]
         },
         {
           "name": "Bremerhaven",
-          "name_en": "Bremerhaven",
           "lat": 53.5396,
           "lon": 8.5809,
           "postcodes": [
             {
               "code": "27568",
               "street": "Bürgermeister-Smidt-Straße",
-              "street_en": "Buergermeister-Smidt-Strasse",
-              "pattern": "Bürgermeister-Smidt-Straße n{1,130}"
+              "pattern": "{street} n{1,130}"
             },
             {
               "code": "27570",
               "street": "Hafenstraße",
-              "street_en": "Hafenstrasse",
-              "pattern": "Hafenstraße n{1,60}"
+              "pattern": "{street} n{1,60}"
             },
             {
               "code": "27572",
               "street": "Georgstraße",
-              "street_en": "Georgstrasse",
-              "pattern": "Georgstraße n{1,40}"
+              "pattern": "{street} n{1,40}"
             }
           ]
         }
@@ -844,7 +725,6 @@
     },
     {
       "name": "Mecklenburg-Vorpommern",
-      "name_en": "Mecklenburg-Western Pomerania",
       "region_tags": [
         "Northern Germany",
         "Eastern Germany"
@@ -852,85 +732,72 @@
       "cities": [
         {
           "name": "Schwerin",
-          "name_en": "Schwerin",
           "lat": 53.6355,
           "lon": 11.4012,
           "postcodes": [
             {
               "code": "19053",
               "street": "Wismarsche Straße",
-              "street_en": "Wismarsche Strasse",
-              "pattern": "Wismarsche Straße n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "19055",
               "street": "Lübecker Straße",
-              "street_en": "Luebecker Strasse",
-              "pattern": "Lübecker Straße n{1,200}"
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "19057",
               "street": "Hamburger Allee",
-              "street_en": "Hamburger Allee",
-              "pattern": "Hamburger Allee n{1,40}"
+              "pattern": "{street} n{1,40}"
             }
           ]
         },
         {
           "name": "Rostock",
-          "name_en": "Rostock",
           "lat": 54.0887,
           "lon": 12.1407,
           "postcodes": [
             {
               "code": "18055",
               "street": "Kröpeliner Straße",
-              "street_en": "Kroepeliner Strasse",
-              "pattern": "Kröpeliner Straße n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "18057",
               "street": "Doberaner Straße",
-              "street_en": "Doberaner Strasse",
-              "pattern": "Doberaner Straße n{1,50}"
+              "pattern": "{street} n{1,50}"
             },
             {
               "code": "18059",
               "street": "Satower Straße",
-              "street_en": "Satower Strasse",
-              "pattern": "Satower Straße n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "18069",
               "street": "Plauer Straße",
-              "street_en": "Plauer Strasse",
-              "pattern": "Plauer Straße n{1,50}"
+              "pattern": "{street} n{1,50}"
             }
           ]
         },
         {
           "name": "Stralsund",
-          "name_en": "Stralsund",
           "lat": 54.3093,
           "lon": 13.0818,
           "postcodes": [
             {
               "code": "18435",
               "street": "Tribseer Straße",
-              "street_en": "Tribseer Strasse",
-              "pattern": "Tribseer Straße n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "18437",
               "street": "Greifswalder Chaussee",
-              "street_en": "Greifswalder Chaussee",
-              "pattern": "Greifswalder Chaussee n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "18439",
               "street": "Frankendamm",
-              "street_en": "Frankendamm",
-              "pattern": "Frankendamm n{1,50}"
+              "pattern": "{street} n{1,50}"
             }
           ]
         }
@@ -938,136 +805,114 @@
     },
     {
       "name": "Berlin",
-      "name_en": "Berlin",
       "region_tags": [
         "Eastern Germany"
       ],
       "cities": [
         {
           "name": "Berlin",
-          "name_en": "Berlin",
           "lat": 52.52,
           "lon": 13.405,
           "postcodes": [
             {
               "code": "10115",
               "street": "Friedrichstraße",
-              "street_en": "Friedrichstrasse",
-              "pattern": "Friedrichstraße n{1,240}"
+              "pattern": "{street} n{1,240}"
             },
             {
               "code": "10117",
               "street": "Unter den Linden",
-              "street_en": "Unter den Linden",
-              "pattern": "Unter den Linden n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "10119",
               "street": "Schönhauser Allee",
-              "street_en": "Schoenhauser Allee",
-              "pattern": "Schönhauser Allee n{1,180}"
+              "pattern": "{street} n{1,180}"
             },
             {
               "code": "10178",
               "street": "Alexanderstraße",
-              "street_en": "Alexanderstrasse",
-              "pattern": "Alexanderstraße n{1,15}"
+              "pattern": "{street} n{1,15}"
             },
             {
               "code": "10179",
               "street": "Heinrich-Heine-Straße",
-              "street_en": "Heinrich-Heine-Strasse",
-              "pattern": "Heinrich-Heine-Straße n{1,40}"
+              "pattern": "{street} n{1,40}"
             },
             {
               "code": "10243",
               "street": "Warschauer Straße",
-              "street_en": "Warschauer Strasse",
-              "pattern": "Warschauer Straße n{1,60}"
+              "pattern": "{street} n{1,60}"
             },
             {
               "code": "10247",
               "street": "Frankfurter Allee",
-              "street_en": "Frankfurter Allee",
-              "pattern": "Frankfurter Allee n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "10585",
               "street": "Bismarckstraße",
-              "street_en": "Bismarckstrasse",
-              "pattern": "Bismarckstraße n{1,110}"
+              "pattern": "{street} n{1,110}"
             },
             {
               "code": "10623",
               "street": "Kantstraße",
-              "street_en": "Kantstrasse",
-              "pattern": "Kantstraße n{1,160}"
+              "pattern": "{street} n{1,160}"
             },
             {
               "code": "10625",
               "street": "Wilmersdorfer Straße",
-              "street_en": "Wilmersdorfer Strasse",
-              "pattern": "Wilmersdorfer Straße n{1,170}"
+              "pattern": "{street} n{1,170}"
             },
             {
               "code": "10707",
               "street": "Kurfürstendamm",
-              "street_en": "Kurfuerstendamm",
-              "pattern": "Kurfürstendamm n{1,240}"
+              "pattern": "{street} n{1,240}"
             },
             {
               "code": "10785",
               "street": "Potsdamer Straße",
-              "street_en": "Potsdamer Strasse",
-              "pattern": "Potsdamer Straße n{1,190}"
+              "pattern": "{street} n{1,190}"
             },
             {
               "code": "10961",
               "street": "Gneisenaustraße",
-              "street_en": "Gneisenaustrasse",
-              "pattern": "Gneisenaustraße n{1,70}"
+              "pattern": "{street} n{1,70}"
             },
             {
               "code": "10963",
               "street": "Mehringdamm",
-              "street_en": "Mehringdamm",
-              "pattern": "Mehringdamm n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "10965",
               "street": "Dudenstraße",
-              "street_en": "Dudenstrasse",
-              "pattern": "Dudenstraße n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "10967",
               "street": "Hermannstraße",
-              "street_en": "Hermannstrasse",
-              "pattern": "Hermannstraße n{1,230}"
+              "pattern": "{street} n{1,230}"
             },
             {
               "code": "10997",
               "street": "Oranienstraße",
-              "street_en": "Oranienstrasse",
-              "pattern": "Oranienstraße n{1,200}"
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "12043",
               "street": "Karl-Marx-Straße",
-              "street_en": "Karl-Marx-Strasse",
-              "pattern": "Karl-Marx-Straße n{1,300}"
+              "pattern": "{street} n{1,300}"
             },
             {
               "code": "12049",
               "street": "Hermannstraße",
-              "street_en": "Hermannstrasse",
-              "pattern": "Hermannstraße n{1,250}"
+              "pattern": "{street} n{1,250}"
             },
             {
               "code": "13353",
               "street": "Müllerstraße",
-              "street_en": "Muellerstrasse",
-              "pattern": "Müllerstraße n{1,180}"
+              "pattern": "{street} n{1,180}"
             }
           ]
         }
@@ -1075,92 +920,78 @@
     },
     {
       "name": "Brandenburg",
-      "name_en": "Brandenburg",
       "region_tags": [
         "Eastern Germany"
       ],
       "cities": [
         {
           "name": "Potsdam",
-          "name_en": "Potsdam",
           "lat": 52.3906,
           "lon": 13.0645,
           "postcodes": [
             {
               "code": "14467",
               "street": "Brandenburger Straße",
-              "street_en": "Brandenburger Strasse",
-              "pattern": "Brandenburger Straße n{1,40}"
+              "pattern": "{street} n{1,40}"
             },
             {
               "code": "14469",
               "street": "Potsdamer Straße",
-              "street_en": "Potsdamer Strasse",
-              "pattern": "Potsdamer Straße n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "14471",
               "street": "Zeppelinstraße",
-              "street_en": "Zeppelinstrasse",
-              "pattern": "Zeppelinstraße n{1,180}"
+              "pattern": "{street} n{1,180}"
             },
             {
               "code": "14473",
               "street": "Babelsberger Straße",
-              "street_en": "Babelsberger Strasse",
-              "pattern": "Babelsberger Straße n{1,30}"
+              "pattern": "{street} n{1,30}"
             }
           ]
         },
         {
           "name": "Cottbus",
-          "name_en": "Cottbus",
           "lat": 51.7563,
           "lon": 14.3329,
           "postcodes": [
             {
               "code": "03042",
               "street": "Spremberger Straße",
-              "street_en": "Spremberger Strasse",
-              "pattern": "Spremberger Straße n{1,40}"
+              "pattern": "{street} n{1,40}"
             },
             {
               "code": "03044",
               "street": "Berliner Straße",
-              "street_en": "Berliner Strasse",
-              "pattern": "Berliner Straße n{1,130}"
+              "pattern": "{street} n{1,130}"
             },
             {
               "code": "03046",
               "street": "Karl-Marx-Straße",
-              "street_en": "Karl-Marx-Strasse",
-              "pattern": "Karl-Marx-Straße n{1,30}"
+              "pattern": "{street} n{1,30}"
             }
           ]
         },
         {
           "name": "Frankfurt (Oder)",
-          "name_en": "Frankfurt (Oder)",
           "lat": 52.3471,
           "lon": 14.5506,
           "postcodes": [
             {
               "code": "15230",
               "street": "Karl-Marx-Straße",
-              "street_en": "Karl-Marx-Strasse",
-              "pattern": "Karl-Marx-Straße n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "15232",
               "street": "Leipziger Straße",
-              "street_en": "Leipziger Strasse",
-              "pattern": "Leipziger Straße n{1,50}"
+              "pattern": "{street} n{1,50}"
             },
             {
               "code": "15234",
               "street": "Frankfurter Straße",
-              "street_en": "Frankfurter Strasse",
-              "pattern": "Frankfurter Straße n{1,120}"
+              "pattern": "{street} n{1,120}"
             }
           ]
         }
@@ -1168,110 +999,93 @@
     },
     {
       "name": "Sachsen",
-      "name_en": "Saxony",
       "region_tags": [
         "Eastern Germany"
       ],
       "cities": [
         {
           "name": "Dresden",
-          "name_en": "Dresden",
           "lat": 51.0504,
           "lon": 13.7373,
           "postcodes": [
             {
               "code": "01067",
               "street": "Wilsdruffer Straße",
-              "street_en": "Wilsdruffer Strasse",
-              "pattern": "Wilsdruffer Straße n{1,20}"
+              "pattern": "{street} n{1,20}"
             },
             {
               "code": "01069",
               "street": "Prager Straße",
-              "street_en": "Prager Strasse",
-              "pattern": "Prager Straße n{1,15}"
+              "pattern": "{street} n{1,15}"
             },
             {
               "code": "01097",
               "street": "Königsbrücker Straße",
-              "street_en": "Koenigsbruecker Strasse",
-              "pattern": "Königsbrücker Straße n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "01099",
               "street": "Bautzner Straße",
-              "street_en": "Bautzner Strasse",
-              "pattern": "Bautzner Straße n{1,200}"
+              "pattern": "{street} n{1,200}"
             },
             {
               "code": "01127",
               "street": "Leipziger Straße",
-              "street_en": "Leipziger Strasse",
-              "pattern": "Leipziger Straße n{1,350}"
+              "pattern": "{street} n{1,350}"
             }
           ]
         },
         {
           "name": "Leipzig",
-          "name_en": "Leipzig",
           "lat": 51.3397,
           "lon": 12.3731,
           "postcodes": [
             {
               "code": "04103",
               "street": "Karl-Liebknecht-Straße",
-              "street_en": "Karl-Liebknecht-Strasse",
-              "pattern": "Karl-Liebknecht-Straße n{1,150}"
+              "pattern": "{street} n{1,150}"
             },
             {
               "code": "04105",
               "street": "Georg-Schumann-Straße",
-              "street_en": "Georg-Schumann-Strasse",
-              "pattern": "Georg-Schumann-Straße n{1,350}"
+              "pattern": "{street} n{1,350}"
             },
             {
               "code": "04107",
               "street": "Karl-Heine-Straße",
-              "street_en": "Karl-Heine-Strasse",
-              "pattern": "Karl-Heine-Straße n{1,90}"
+              "pattern": "{street} n{1,90}"
             },
             {
               "code": "04109",
               "street": "Grimmaische Straße",
-              "street_en": "Grimmaische Strasse",
-              "pattern": "Grimmaische Straße n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "04229",
               "street": "Industriestraße",
-              "street_en": "Industriestrasse",
-              "pattern": "Industriestraße n{1,50}"
+              "pattern": "{street} n{1,50}"
             }
           ]
         },
         {
           "name": "Chemnitz",
-          "name_en": "Chemnitz",
           "lat": 50.8278,
           "lon": 12.9214,
           "postcodes": [
             {
               "code": "09111",
               "street": "Straße der Nationen",
-              "street_en": "Strasse der Nationen",
-              "pattern": "Straße der Nationen n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "09113",
               "street": "Leipziger Straße",
-              "street_en": "Leipziger Strasse",
-              "pattern": "Leipziger Straße n{1,250}"
+              "pattern": "{street} n{1,250}"
             },
             {
               "code": "09116",
               "street": "Zwickauer Straße",
-              "street_en": "Zwickauer Strasse",
-              "pattern": "Zwickauer Straße n{1,450}"
+              "pattern": "{street} n{1,450}"
             }
           ]
         }
@@ -1279,92 +1093,78 @@
     },
     {
       "name": "Sachsen-Anhalt",
-      "name_en": "Saxony-Anhalt",
       "region_tags": [
         "Eastern Germany"
       ],
       "cities": [
         {
           "name": "Magdeburg",
-          "name_en": "Magdeburg",
           "lat": 52.1205,
           "lon": 11.6276,
           "postcodes": [
             {
               "code": "39104",
               "street": "Breiter Weg",
-              "street_en": "Breiter Weg",
-              "pattern": "Breiter Weg n{1,260}"
+              "pattern": "{street} n{1,260}"
             },
             {
               "code": "39106",
               "street": "Leipziger Straße",
-              "street_en": "Leipziger Strasse",
-              "pattern": "Leipziger Straße n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "39108",
               "street": "Große Diesdorfer Straße",
-              "street_en": "Grosse Diesdorfer Strasse",
-              "pattern": "Große Diesdorfer Straße n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "39110",
               "street": "Halberstädter Straße",
-              "street_en": "Halberstaedter Strasse",
-              "pattern": "Halberstädter Straße n{1,170}"
+              "pattern": "{street} n{1,170}"
             }
           ]
         },
         {
           "name": "Halle (Saale)",
-          "name_en": "Halle (Saale)",
           "lat": 51.4969,
           "lon": 11.9688,
           "postcodes": [
             {
               "code": "06108",
               "street": "Leipziger Straße",
-              "street_en": "Leipziger Strasse",
-              "pattern": "Leipziger Straße n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "06110",
               "street": "Merseburger Straße",
-              "street_en": "Merseburger Strasse",
-              "pattern": "Merseburger Straße n{1,130}"
+              "pattern": "{street} n{1,130}"
             },
             {
               "code": "06112",
               "street": "Delitzscher Straße",
-              "street_en": "Delitzscher Strasse",
-              "pattern": "Delitzscher Straße n{1,100}"
+              "pattern": "{street} n{1,100}"
             }
           ]
         },
         {
           "name": "Dessau-Roßlau",
-          "name_en": "Dessau-Rosslau",
           "lat": 51.8356,
           "lon": 12.2464,
           "postcodes": [
             {
               "code": "06842",
               "street": "Kavalierstraße",
-              "street_en": "Kavalierstrasse",
-              "pattern": "Kavalierstraße n{1,40}"
+              "pattern": "{street} n{1,40}"
             },
             {
               "code": "06844",
               "street": "Wolfgangstraße",
-              "street_en": "Wolfgangstrasse",
-              "pattern": "Wolfgangstraße n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "06846",
               "street": "Albrechtstraße",
-              "street_en": "Albrechtstrasse",
-              "pattern": "Albrechtstraße n{1,130}"
+              "pattern": "{street} n{1,130}"
             }
           ]
         }
@@ -1372,118 +1172,100 @@
     },
     {
       "name": "Thüringen",
-      "name_en": "Thuringia",
       "region_tags": [
         "Eastern Germany"
       ],
       "cities": [
         {
           "name": "Erfurt",
-          "name_en": "Erfurt",
           "lat": 50.9848,
           "lon": 11.0299,
           "postcodes": [
             {
               "code": "99084",
               "street": "Anger",
-              "street_en": "Anger",
-              "pattern": "Anger n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "99086",
               "street": "Nordhäuser Straße",
-              "street_en": "Nordhaeuser Strasse",
-              "pattern": "Nordhäuser Straße n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "99089",
               "street": "Leipziger Straße",
-              "street_en": "Leipziger Strasse",
-              "pattern": "Leipziger Straße n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "99091",
               "street": "Mittelhäuser Straße",
-              "street_en": "Mittelhaeuser Strasse",
-              "pattern": "Mittelhäuser Straße n{1,60}"
+              "pattern": "{street} n{1,60}"
             }
           ]
         },
         {
           "name": "Jena",
-          "name_en": "Jena",
           "lat": 50.9271,
           "lon": 11.5892,
           "postcodes": [
             {
               "code": "07743",
               "street": "Löbdergraben",
-              "street_en": "Loebdergraben",
-              "pattern": "Löbdergraben n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "07745",
               "street": "Camburger Straße",
-              "street_en": "Camburger Strasse",
-              "pattern": "Camburger Straße n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "07747",
               "street": "Naumburger Straße",
-              "street_en": "Naumburger Strasse",
-              "pattern": "Naumburger Straße n{1,100}"
+              "pattern": "{street} n{1,100}"
             }
           ]
         },
         {
           "name": "Weimar",
-          "name_en": "Weimar",
           "lat": 50.9795,
           "lon": 11.3235,
           "postcodes": [
             {
               "code": "99423",
               "street": "Schillerstraße",
-              "street_en": "Schillerstrasse",
-              "pattern": "Schillerstraße n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "99425",
               "street": "Berkaer Straße",
-              "street_en": "Berkaer Strasse",
-              "pattern": "Berkaer Straße n{1,140}"
+              "pattern": "{street} n{1,140}"
             },
             {
               "code": "99427",
               "street": "Buttelstedter Straße",
-              "street_en": "Buttelstedter Strasse",
-              "pattern": "Buttelstedter Straße n{1,30}"
+              "pattern": "{street} n{1,30}"
             }
           ]
         },
         {
           "name": "Gera",
-          "name_en": "Gera",
           "lat": 50.881,
           "lon": 12.0796,
           "postcodes": [
             {
               "code": "07545",
               "street": "Heinrichstraße",
-              "street_en": "Heinrichstrasse",
-              "pattern": "Heinrichstraße n{1,50}"
+              "pattern": "{street} n{1,50}"
             },
             {
               "code": "07546",
               "street": "Berliner Straße",
-              "street_en": "Berliner Strasse",
-              "pattern": "Berliner Straße n{1,90}"
+              "pattern": "{street} n{1,90}"
             },
             {
               "code": "07548",
               "street": "Leipziger Straße",
-              "street_en": "Leipziger Strasse",
-              "pattern": "Leipziger Straße n{1,60}"
+              "pattern": "{street} n{1,60}"
             }
           ]
         }
@@ -1491,7 +1273,6 @@
     },
     {
       "name": "Nordrhein-Westfalen",
-      "name_en": "North Rhine-Westphalia",
       "region_tags": [
         "Western Germany",
         "Rhineland",
@@ -1500,269 +1281,227 @@
       "cities": [
         {
           "name": "Köln",
-          "name_en": "Cologne",
           "lat": 50.9375,
           "lon": 6.9603,
           "postcodes": [
             {
               "code": "50667",
               "street": "Hohe Straße",
-              "street_en": "Hohe Strasse",
-              "pattern": "Hohe Straße n{1,170}"
+              "pattern": "{street} n{1,170}"
             },
             {
               "code": "50668",
               "street": "Eigelstein",
-              "street_en": "Eigelstein",
-              "pattern": "Eigelstein n{1,140}"
+              "pattern": "{street} n{1,140}"
             },
             {
               "code": "50670",
               "street": "Neusser Straße",
-              "street_en": "Neusser Strasse",
-              "pattern": "Neusser Straße n{1,500}"
+              "pattern": "{street} n{1,500}"
             },
             {
               "code": "50672",
               "street": "Friesenstraße",
-              "street_en": "Friesenstrasse",
-              "pattern": "Friesenstraße n{1,60}"
+              "pattern": "{street} n{1,60}"
             },
             {
               "code": "50674",
               "street": "Aachener Straße",
-              "street_en": "Aachener Strasse",
-              "pattern": "Aachener Straße n{1,1200}"
+              "pattern": "{street} n{1,1200}"
             },
             {
               "code": "50676",
               "street": "Severinstraße",
-              "street_en": "Severinstrasse",
-              "pattern": "Severinstraße n{1,250}"
+              "pattern": "{street} n{1,250}"
             },
             {
               "code": "50678",
               "street": "Bonner Straße",
-              "street_en": "Bonner Strasse",
-              "pattern": "Bonner Straße n{1,550}"
+              "pattern": "{street} n{1,550}"
             }
           ]
         },
         {
           "name": "Düsseldorf",
-          "name_en": "Duesseldorf",
           "lat": 51.2277,
           "lon": 6.7735,
           "postcodes": [
             {
               "code": "40210",
               "street": "Schadowstraße",
-              "street_en": "Schadowstrasse",
-              "pattern": "Schadowstraße n{1,90}"
+              "pattern": "{street} n{1,90}"
             },
             {
               "code": "40211",
               "street": "Berliner Allee",
-              "street_en": "Berliner Allee",
-              "pattern": "Berliner Allee n{1,70}"
+              "pattern": "{street} n{1,70}"
             },
             {
               "code": "40213",
               "street": "Ratinger Straße",
-              "street_en": "Ratinger Strasse",
-              "pattern": "Ratinger Straße n{1,20}"
+              "pattern": "{street} n{1,20}"
             },
             {
               "code": "40215",
               "street": "Friedrichstraße",
-              "street_en": "Friedrichstrasse",
-              "pattern": "Friedrichstraße n{1,140}"
+              "pattern": "{street} n{1,140}"
             },
             {
               "code": "40217",
               "street": "Bilker Allee",
-              "street_en": "Bilker Allee",
-              "pattern": "Bilker Allee n{1,240}"
+              "pattern": "{street} n{1,240}"
             },
             {
               "code": "40219",
               "street": "Kölner Straße",
-              "street_en": "Koelner Strasse",
-              "pattern": "Kölner Straße n{1,350}"
+              "pattern": "{street} n{1,350}"
             }
           ]
         },
         {
           "name": "Dortmund",
-          "name_en": "Dortmund",
           "lat": 51.5136,
           "lon": 7.4653,
           "postcodes": [
             {
               "code": "44135",
               "street": "Westenhellweg",
-              "street_en": "Westenhellweg",
-              "pattern": "Westenhellweg n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "44137",
               "street": "Märkische Straße",
-              "street_en": "Maerkische Strasse",
-              "pattern": "Märkische Straße n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "44139",
               "street": "Hohe Straße",
-              "street_en": "Hohe Strasse",
-              "pattern": "Hohe Straße n{1,50}"
+              "pattern": "{street} n{1,50}"
             },
             {
               "code": "44141",
               "street": "Heiliger Weg",
-              "street_en": "Heiliger Weg",
-              "pattern": "Heiliger Weg n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "44145",
               "street": "Bornstraße",
-              "street_en": "Bornstrasse",
-              "pattern": "Bornstraße n{1,150}"
+              "pattern": "{street} n{1,150}"
             }
           ]
         },
         {
           "name": "Essen",
-          "name_en": "Essen",
           "lat": 51.4556,
           "lon": 7.0116,
           "postcodes": [
             {
               "code": "45127",
               "street": "Kettwiger Straße",
-              "street_en": "Kettwiger Strasse",
-              "pattern": "Kettwiger Straße n{1,50}"
+              "pattern": "{street} n{1,50}"
             },
             {
               "code": "45128",
               "street": "Bismarckstraße",
-              "street_en": "Bismarckstrasse",
-              "pattern": "Bismarckstraße n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "45130",
               "street": "Rüttenscheider Straße",
-              "street_en": "Ruettenscheider Strasse",
-              "pattern": "Rüttenscheider Straße n{1,300}"
+              "pattern": "{street} n{1,300}"
             },
             {
               "code": "45131",
               "street": "Alfredstraße",
-              "street_en": "Alfredstrasse",
-              "pattern": "Alfredstraße n{1,120}"
+              "pattern": "{street} n{1,120}"
             }
           ]
         },
         {
           "name": "Bonn",
-          "name_en": "Bonn",
           "lat": 50.7374,
           "lon": 7.0982,
           "postcodes": [
             {
               "code": "53111",
               "street": "Sternstraße",
-              "street_en": "Sternstrasse",
-              "pattern": "Sternstraße n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "53113",
               "street": "Adenauerallee",
-              "street_en": "Adenauerallee",
-              "pattern": "Adenauerallee n{1,180}"
+              "pattern": "{street} n{1,180}"
             },
             {
               "code": "53115",
               "street": "Endenicher Straße",
-              "street_en": "Endenicher Strasse",
-              "pattern": "Endenicher Straße n{1,400}"
+              "pattern": "{street} n{1,400}"
             }
           ]
         },
         {
           "name": "Münster",
-          "name_en": "Muenster",
           "lat": 51.9607,
           "lon": 7.6261,
           "postcodes": [
             {
               "code": "48143",
               "street": "Prinzipalmarkt",
-              "street_en": "Prinzipalmarkt",
-              "pattern": "Prinzipalmarkt n{1,50}"
+              "pattern": "{street} n{1,50}"
             },
             {
               "code": "48145",
               "street": "Wolbecker Straße",
-              "street_en": "Wolbecker Strasse",
-              "pattern": "Wolbecker Straße n{1,250}"
+              "pattern": "{street} n{1,250}"
             },
             {
               "code": "48147",
               "street": "Warendorfer Straße",
-              "street_en": "Warendorfer Strasse",
-              "pattern": "Warendorfer Straße n{1,200}"
+              "pattern": "{street} n{1,200}"
             }
           ]
         },
         {
           "name": "Duisburg",
-          "name_en": "Duisburg",
           "lat": 51.4344,
           "lon": 6.7623,
           "postcodes": [
             {
               "code": "47051",
               "street": "Königstraße",
-              "street_en": "Koenigstrasse",
-              "pattern": "Königstraße n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "47053",
               "street": "Düsseldorfer Straße",
-              "street_en": "Duesseldorfer Strasse",
-              "pattern": "Düsseldorfer Straße n{1,350}"
+              "pattern": "{street} n{1,350}"
             },
             {
               "code": "47055",
               "street": "Sternbuschweg",
-              "street_en": "Sternbuschweg",
-              "pattern": "Sternbuschweg n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "Aachen",
-          "name_en": "Aachen",
           "lat": 50.7753,
           "lon": 6.0839,
           "postcodes": [
             {
               "code": "52062",
               "street": "Adalbertsteinweg",
-              "street_en": "Adalbertsteinweg",
-              "pattern": "Adalbertsteinweg n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "52064",
               "street": "Jülicher Straße",
-              "street_en": "Juelicher Strasse",
-              "pattern": "Jülicher Straße n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "52066",
               "street": "Trierer Straße",
-              "street_en": "Trierer Strasse",
-              "pattern": "Trierer Straße n{1,350}"
+              "pattern": "{street} n{1,350}"
             }
           ]
         }
@@ -1770,168 +1509,142 @@
     },
     {
       "name": "Hessen",
-      "name_en": "Hesse",
       "region_tags": [
         "Western Germany"
       ],
       "cities": [
         {
           "name": "Frankfurt am Main",
-          "name_en": "Frankfurt am Main",
           "lat": 50.1109,
           "lon": 8.6821,
           "postcodes": [
             {
               "code": "60311",
               "street": "Zeil",
-              "street_en": "Zeil",
-              "pattern": "Zeil n{1,130}"
+              "pattern": "{street} n{1,130}"
             },
             {
               "code": "60313",
               "street": "Kaiserstraße",
-              "street_en": "Kaiserstrasse",
-              "pattern": "Kaiserstraße n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "60316",
               "street": "Berger Straße",
-              "street_en": "Berger Strasse",
-              "pattern": "Berger Straße n{1,350}"
+              "pattern": "{street} n{1,350}"
             },
             {
               "code": "60318",
               "street": "Eschersheimer Landstraße",
-              "street_en": "Eschersheimer Landstrasse",
-              "pattern": "Eschersheimer Landstraße n{1,600}"
+              "pattern": "{street} n{1,600}"
             },
             {
               "code": "60322",
               "street": "Bockenheimer Landstraße",
-              "street_en": "Bockenheimer Landstrasse",
-              "pattern": "Bockenheimer Landstraße n{1,130}"
+              "pattern": "{street} n{1,130}"
             },
             {
               "code": "60329",
               "street": "Münchener Straße",
-              "street_en": "Muenchener Strasse",
-              "pattern": "Münchener Straße n{1,50}"
+              "pattern": "{street} n{1,50}"
             },
             {
               "code": "60594",
               "street": "Schweizer Straße",
-              "street_en": "Schweizer Strasse",
-              "pattern": "Schweizer Straße n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "Wiesbaden",
-          "name_en": "Wiesbaden",
           "lat": 50.0782,
           "lon": 8.2398,
           "postcodes": [
             {
               "code": "65183",
               "street": "Wilhelmstraße",
-              "street_en": "Wilhelmstrasse",
-              "pattern": "Wilhelmstraße n{1,60}"
+              "pattern": "{street} n{1,60}"
             },
             {
               "code": "65185",
               "street": "Rheinstraße",
-              "street_en": "Rheinstrasse",
-              "pattern": "Rheinstraße n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "65187",
               "street": "Schiersteiner Straße",
-              "street_en": "Schiersteiner Strasse",
-              "pattern": "Schiersteiner Straße n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "65189",
               "street": "Biebricher Allee",
-              "street_en": "Biebricher Allee",
-              "pattern": "Biebricher Allee n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         },
         {
           "name": "Kassel",
-          "name_en": "Kassel",
           "lat": 51.3127,
           "lon": 9.4797,
           "postcodes": [
             {
               "code": "34117",
               "street": "Obere Königsstraße",
-              "street_en": "Obere Koenigsstrasse",
-              "pattern": "Obere Königsstraße n{1,50}"
+              "pattern": "{street} n{1,50}"
             },
             {
               "code": "34119",
               "street": "Wilhelmshöher Allee",
-              "street_en": "Wilhelmshoeher Allee",
-              "pattern": "Wilhelmshöher Allee n{1,340}"
+              "pattern": "{street} n{1,340}"
             },
             {
               "code": "34121",
               "street": "Frankfurter Straße",
-              "street_en": "Frankfurter Strasse",
-              "pattern": "Frankfurter Straße n{1,250}"
+              "pattern": "{street} n{1,250}"
             }
           ]
         },
         {
           "name": "Darmstadt",
-          "name_en": "Darmstadt",
           "lat": 49.8728,
           "lon": 8.6512,
           "postcodes": [
             {
               "code": "64283",
               "street": "Rheinstraße",
-              "street_en": "Rheinstrasse",
-              "pattern": "Rheinstraße n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "64285",
               "street": "Heidelberger Straße",
-              "street_en": "Heidelberger Strasse",
-              "pattern": "Heidelberger Straße n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "64287",
               "street": "Frankfurter Straße",
-              "street_en": "Frankfurter Strasse",
-              "pattern": "Frankfurter Straße n{1,120}"
+              "pattern": "{street} n{1,120}"
             }
           ]
         },
         {
           "name": "Offenbach am Main",
-          "name_en": "Offenbach am Main",
           "lat": 50.0956,
           "lon": 8.7761,
           "postcodes": [
             {
               "code": "63065",
               "street": "Frankfurter Straße",
-              "street_en": "Frankfurter Strasse",
-              "pattern": "Frankfurter Straße n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "63067",
               "street": "Berliner Straße",
-              "street_en": "Berliner Strasse",
-              "pattern": "Berliner Straße n{1,250}"
+              "pattern": "{street} n{1,250}"
             },
             {
               "code": "63069",
               "street": "Bieberer Straße",
-              "street_en": "Bieberer Strasse",
-              "pattern": "Bieberer Straße n{1,80}"
+              "pattern": "{street} n{1,80}"
             }
           ]
         }
@@ -1939,7 +1652,6 @@
     },
     {
       "name": "Rheinland-Pfalz",
-      "name_en": "Rhineland-Palatinate",
       "region_tags": [
         "Western Germany",
         "Rhineland"
@@ -1947,137 +1659,116 @@
       "cities": [
         {
           "name": "Mainz",
-          "name_en": "Mainz",
           "lat": 49.9929,
           "lon": 8.2473,
           "postcodes": [
             {
               "code": "55116",
               "street": "Ludwigstraße",
-              "street_en": "Ludwigstrasse",
-              "pattern": "Ludwigstraße n{1,20}"
+              "pattern": "{street} n{1,20}"
             },
             {
               "code": "55118",
               "street": "Boppstraße",
-              "street_en": "Boppstrasse",
-              "pattern": "Boppstraße n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "55120",
               "street": "Mombacher Straße",
-              "street_en": "Mombacher Strasse",
-              "pattern": "Mombacher Straße n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "55122",
               "street": "Koblenzer Straße",
-              "street_en": "Koblenzer Strasse",
-              "pattern": "Koblenzer Straße n{1,100}"
+              "pattern": "{street} n{1,100}"
             }
           ]
         },
         {
           "name": "Koblenz",
-          "name_en": "Koblenz",
           "lat": 50.3569,
           "lon": 7.589,
           "postcodes": [
             {
               "code": "56068",
               "street": "Löhrstraße",
-              "street_en": "Loehrstrasse",
-              "pattern": "Löhrstraße n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "56070",
               "street": "Mainzer Straße",
-              "street_en": "Mainzer Strasse",
-              "pattern": "Mainzer Straße n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "56072",
               "street": "Koblenzer Straße",
-              "street_en": "Koblenzer Strasse",
-              "pattern": "Koblenzer Straße n{1,100}"
+              "pattern": "{street} n{1,100}"
             }
           ]
         },
         {
           "name": "Trier",
-          "name_en": "Trier",
           "lat": 49.749,
           "lon": 6.6371,
           "postcodes": [
             {
               "code": "54290",
               "street": "Simeonstraße",
-              "street_en": "Simeonstrasse",
-              "pattern": "Simeonstraße n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "54292",
               "street": "Saarstraße",
-              "street_en": "Saarstrasse",
-              "pattern": "Saarstraße n{1,30}"
+              "pattern": "{street} n{1,30}"
             },
             {
               "code": "54294",
               "street": "Bitburger Straße",
-              "street_en": "Bitburger Strasse",
-              "pattern": "Bitburger Straße n{1,50}"
+              "pattern": "{street} n{1,50}"
             }
           ]
         },
         {
           "name": "Kaiserslautern",
-          "name_en": "Kaiserslautern",
           "lat": 49.4432,
           "lon": 7.7689,
           "postcodes": [
             {
               "code": "67655",
               "street": "Fackelstraße",
-              "street_en": "Fackelstrasse",
-              "pattern": "Fackelstraße n{1,40}"
+              "pattern": "{street} n{1,40}"
             },
             {
               "code": "67657",
               "street": "Mainzer Straße",
-              "street_en": "Mainzer Strasse",
-              "pattern": "Mainzer Straße n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "67659",
               "street": "Pariser Straße",
-              "street_en": "Pariser Strasse",
-              "pattern": "Pariser Straße n{1,200}"
+              "pattern": "{street} n{1,200}"
             }
           ]
         },
         {
           "name": "Ludwigshafen am Rhein",
-          "name_en": "Ludwigshafen am Rhein",
           "lat": 49.4774,
           "lon": 8.4452,
           "postcodes": [
             {
               "code": "67059",
               "street": "Bismarckstraße",
-              "street_en": "Bismarckstrasse",
-              "pattern": "Bismarckstraße n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "67061",
               "street": "Mundenheimer Straße",
-              "street_en": "Mundenheimer Strasse",
-              "pattern": "Mundenheimer Straße n{1,280}"
+              "pattern": "{street} n{1,280}"
             },
             {
               "code": "67063",
               "street": "Maudacher Straße",
-              "street_en": "Maudacher Strasse",
-              "pattern": "Maudacher Straße n{1,150}"
+              "pattern": "{street} n{1,150}"
             }
           ]
         }
@@ -2085,66 +1776,56 @@
     },
     {
       "name": "Saarland",
-      "name_en": "Saarland",
       "region_tags": [
         "Western Germany"
       ],
       "cities": [
         {
           "name": "Saarbrücken",
-          "name_en": "Saarbruecken",
           "lat": 49.2402,
           "lon": 6.9969,
           "postcodes": [
             {
               "code": "66111",
               "street": "Bahnhofstraße",
-              "street_en": "Bahnhofstrasse",
-              "pattern": "Bahnhofstraße n{1,80}"
+              "pattern": "{street} n{1,80}"
             },
             {
               "code": "66113",
               "street": "Mainzer Straße",
-              "street_en": "Mainzer Strasse",
-              "pattern": "Mainzer Straße n{1,250}"
+              "pattern": "{street} n{1,250}"
             },
             {
               "code": "66115",
               "street": "Lebacher Straße",
-              "street_en": "Lebacher Strasse",
-              "pattern": "Lebacher Straße n{1,120}"
+              "pattern": "{street} n{1,120}"
             },
             {
               "code": "66117",
               "street": "Dudweilerstraße",
-              "street_en": "Dudweilerstrasse",
-              "pattern": "Dudweilerstraße n{1,60}"
+              "pattern": "{street} n{1,60}"
             }
           ]
         },
         {
           "name": "Neunkirchen",
-          "name_en": "Neunkirchen",
           "lat": 49.3488,
           "lon": 7.1821,
           "postcodes": [
             {
               "code": "66538",
               "street": "Oberer Markt",
-              "street_en": "Oberer Markt",
-              "pattern": "Oberer Markt n{1,50}"
+              "pattern": "{street} n{1,50}"
             },
             {
               "code": "66539",
               "street": "Saarbrücker Straße",
-              "street_en": "Saarbruecker Strasse",
-              "pattern": "Saarbrücker Straße n{1,100}"
+              "pattern": "{street} n{1,100}"
             },
             {
               "code": "66540",
               "street": "Wellesweiler Straße",
-              "street_en": "Wellesweiler Strasse",
-              "pattern": "Wellesweiler Straße n{1,60}"
+              "pattern": "{street} n{1,60}"
             }
           ]
         }

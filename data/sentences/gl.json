@@ -1,0 +1,26 @@
+{
+  "patterns": [
+    "{noun} {verb_intrans}.",
+    "{noun} {verb_trans} {noun}.",
+    "{noun} {verb_intrans} e {verb_intrans}.",
+    "{noun} {verb_trans} {noun} e {noun}."
+  ],
+  "slots": {
+    "noun": [
+      "o golem", "a arxila", "a lama", "o ladrillo", "a pedra",
+      "a estatua", "o gardián", "o rabino", "o barro", "a adega",
+      "a sombra", "o coloso", "o po", "o tótem", "o ídolo",
+      "a montaña", "o río", "o bosque", "o ceo", "a estrada",
+      "o castelo", "o ferro", "a area", "a torre", "o muro", "a porta",
+      "a chama", "o penedo"
+    ],
+    "verb_intrans": [
+      "esperta", "esborralla", "dorme", "érguese", "vaga", "vacila",
+      "treme", "afúndese", "xira", "medra"
+    ],
+    "verb_trans": [
+      "garda", "esmaga", "carrexa", "protexe", "modela", "ergue", "rompe",
+      "agarra", "arrastra", "cobre"
+    ]
+  }
+}

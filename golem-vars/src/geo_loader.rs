@@ -11,6 +11,8 @@ use std::sync::OnceLock;
 use rand::Rng;
 use serde::Deserialize;
 
+use crate::script::ascii_fold;
+
 // ---------------------------------------------------------------------------
 // Compile-time data loading
 // ---------------------------------------------------------------------------
@@ -59,23 +61,41 @@ pub(crate) struct GeoData {
 
 #[derive(Deserialize)]
 pub(crate) struct GeoCountry {
-    #[allow(dead_code)]
-    pub(crate) name_en: String,
+    /// Native-script country name (日本, Deutschland, 대한민국).
+    pub(crate) name: String,
+    /// ASCII romanisation of `name` (Nihon, Deutschland, Daehan-minguk). A
+    /// romanisation, never an English exonym; omitted when `name` is already
+    /// ASCII (then derived by folding `name` — see [`Self::ascii_name`]).
+    #[serde(default)]
+    pub(crate) name_ascii: String,
     pub(crate) iso_code: String,
     #[allow(dead_code)]
     pub(crate) phone_prefix: String,
     pub(crate) phone_formats: Vec<String>,
     #[allow(dead_code)]
     pub(crate) postcode_format: String,
-    /// Personal-name ordering for this country: `"family_first"` or
-    /// `"given_first"`. Consumed by the person generator.
-    pub(crate) name_order: String,
     /// Per-country person-name preset: the `name`/`reading` resolution chains
     /// and the `local` accepted repertoire, as repertoire/representation token
     /// names (see `structured::repertoire` / `structured::person`). Empty when
     /// a country file omits the block.
     #[serde(default)]
     pub(crate) person: PersonPreset,
+    /// Address structural markers, keyed by the placeholder name a street
+    /// `pattern` references (`{chome}`, `{ban}`, `{go}`, …). Each maps to its
+    /// native form (rendered into the native address) and its ascii romanisation
+    /// (rendered into the `ascii` branch). Defined once per country since the
+    /// marker set is small and repeated across that country's postcodes. Empty
+    /// for countries whose addresses carry no such markers.
+    #[serde(default)]
+    pub(crate) markers: HashMap<String, Marker>,
+}
+
+/// One address marker's native form and its ascii romanisation (e.g. the
+/// Japanese 丁目 → `-chome `).
+#[derive(Deserialize)]
+pub(crate) struct Marker {
+    pub(crate) native: String,
+    pub(crate) ascii: String,
 }
 
 /// Token-name lists for a country's person-name preset. Parsed into
@@ -92,22 +112,25 @@ pub(crate) struct PersonPreset {
 
 #[derive(Deserialize)]
 pub(crate) struct GeoState {
-    #[allow(dead_code)]
+    /// Native-script state/province name (北海道, Bayern, …).
     pub(crate) name: String,
-    #[allow(dead_code)]
-    pub(crate) name_en: String,
+    /// ASCII romanisation of `name` (Hokkaido, Bayern, …); a romanisation, not
+    /// an English exonym (Bayern, never "Bavaria"); omitted when already ASCII.
+    #[serde(default)]
+    pub(crate) name_ascii: String,
     pub(crate) region_tags: Vec<String>,
     pub(crate) cities: Vec<GeoCity>,
 }
 
 #[derive(Deserialize)]
 pub(crate) struct GeoCity {
-    #[allow(dead_code)]
+    /// Native-script city name (札幌市, München, …).
     pub(crate) name: String,
-    pub(crate) name_en: String,
-    #[allow(dead_code)]
+    /// ASCII romanisation of `name` (Sapporo, Muenchen, …); a romanisation, not
+    /// an English exonym (Muenchen, never "Munich"); omitted when already ASCII.
+    #[serde(default)]
+    pub(crate) name_ascii: String,
     pub(crate) lat: f64,
-    #[allow(dead_code)]
     pub(crate) lon: f64,
     pub(crate) postcodes: Vec<GeoPostcode>,
 }
@@ -115,11 +138,69 @@ pub(crate) struct GeoCity {
 #[derive(Deserialize)]
 pub(crate) struct GeoPostcode {
     pub(crate) code: String,
-    #[allow(dead_code)]
+    /// Native-script street name (北一条西, Königstraße, …).
     pub(crate) street: String,
-    pub(crate) street_en: String,
-    pub(crate) pattern: Option<String>,
-    pub(crate) fixed: Option<Vec<String>>,
+    /// ASCII romanisation of `street` (Kita 1-jo Nishi, Koenigstrasse, …);
+    /// omitted when `street` is already ASCII (then folded from `street`).
+    #[serde(default)]
+    pub(crate) street_ascii: String,
+    /// Native street pattern — a skeleton of placeholders and `n{min,max}`
+    /// house-number token(s): `{street}` for the street name and `{<marker>}`
+    /// for each country marker (`{chome}`, `{ban}`, …). Number tokens carry the
+    /// native numeral style (full-width for JP, Arabic-Indic for AR). One string,
+    /// OR an array of strings to pick one from at random (a finite set of known
+    /// addresses — what used to be a separate `fixed` list). The ascii street is
+    /// derived from this same skeleton (markers→ascii, `{street}`→the
+    /// romanisation, ASCII digits) — see `address::street_pair`.
+    #[serde(default)]
+    pub(crate) pattern: Option<Pattern>,
+}
+
+/// A street pattern: a single skeleton, or a set to choose one from at random.
+/// Both go through the identical expansion in `address::street_pair`; the only
+/// difference is the array form picks an entry first.
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub(crate) enum Pattern {
+    One(String),
+    Many(Vec<String>),
+}
+
+/// The ASCII form of a node: the ASCII fold of its stored romanisation when
+/// present, else of the native text (Latin nodes omit the stored field and fold
+/// directly). Folding the chosen source guarantees a pure-ASCII result and
+/// tolerates a stored romanisation that still carries diacritics (e.g. pinyin
+/// tone marks: "Méihuá" → "Meihua"). Single source for every geo `ascii_*`.
+fn ascii_or_fold(stored: &str, native: &str) -> String {
+    ascii_fold(if stored.is_empty() { native } else { stored })
+}
+
+impl GeoCountry {
+    /// ASCII country name (stored romanisation, else folded native).
+    pub(crate) fn ascii_name(&self) -> String {
+        ascii_or_fold(&self.name_ascii, &self.name)
+    }
+}
+
+impl GeoState {
+    /// ASCII state name (stored romanisation, else folded native).
+    pub(crate) fn ascii_name(&self) -> String {
+        ascii_or_fold(&self.name_ascii, &self.name)
+    }
+}
+
+impl GeoCity {
+    /// ASCII city name (stored romanisation, else folded native).
+    pub(crate) fn ascii_name(&self) -> String {
+        ascii_or_fold(&self.name_ascii, &self.name)
+    }
+}
+
+impl GeoPostcode {
+    /// ASCII street name (stored romanisation, else folded native street).
+    pub(crate) fn ascii_street(&self) -> String {
+        ascii_or_fold(&self.street_ascii, &self.street)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -144,13 +225,14 @@ impl GeoCountry {
     /// remaining descriptive fields are filled with neutral placeholders.
     pub(crate) fn for_test(iso_code: &str, phone_formats: Vec<String>) -> Self {
         Self {
-            name_en: "Testland".to_string(),
+            name: "Testland".to_string(),
+            name_ascii: String::new(),
             iso_code: iso_code.to_string(),
             phone_prefix: String::new(),
             phone_formats,
             postcode_format: String::new(),
-            name_order: "western".to_string(),
             person: PersonPreset::default(),
+            markers: HashMap::new(),
         }
     }
 }
@@ -161,7 +243,7 @@ impl GeoState {
     pub(crate) fn for_test(region_tags: Vec<String>, cities: Vec<GeoCity>) -> Self {
         Self {
             name: "Region".to_string(),
-            name_en: "Region".to_string(),
+            name_ascii: String::new(),
             region_tags,
             cities,
         }
@@ -170,11 +252,11 @@ impl GeoState {
 
 #[cfg(test)]
 impl GeoCity {
-    /// Build a `GeoCity` with the given English name and postcodes (test fixtures).
-    pub(crate) fn for_test(name_en: &str, postcodes: Vec<GeoPostcode>) -> Self {
+    /// Build a `GeoCity` with the given (native) name and postcodes (test fixtures).
+    pub(crate) fn for_test(name: &str, postcodes: Vec<GeoPostcode>) -> Self {
         Self {
-            name: name_en.to_string(),
-            name_en: name_en.to_string(),
+            name: name.to_string(),
+            name_ascii: String::new(),
             lat: 0.0,
             lon: 0.0,
             postcodes,
@@ -185,18 +267,13 @@ impl GeoCity {
 #[cfg(test)]
 impl GeoPostcode {
     /// Build a `GeoPostcode` from the address-shaping fields (test fixtures).
-    pub(crate) fn for_test(
-        code: &str,
-        street_en: &str,
-        pattern: Option<&str>,
-        fixed: Option<Vec<String>>,
-    ) -> Self {
+    /// `street` is the native street name; the ascii form folds from it.
+    pub(crate) fn for_test(code: &str, street: &str, pattern: Option<Pattern>) -> Self {
         Self {
             code: code.to_string(),
-            street: String::new(),
-            street_en: street_en.to_string(),
-            pattern: pattern.map(|s| s.to_string()),
-            fixed,
+            street: street.to_string(),
+            street_ascii: String::new(),
+            pattern,
         }
     }
 }
@@ -244,7 +321,9 @@ impl GeoDatabase {
         codes
     }
 
-    /// Iterate over all loaded `GeoData` entries.
+    /// Iterate over all loaded `GeoData` entries. Test-only since the scalar
+    /// city/postcode generators (its last non-test callers) were removed.
+    #[cfg(test)]
     pub(crate) fn all(&self) -> impl Iterator<Item = &GeoData> {
         self.map.values()
     }
@@ -288,6 +367,107 @@ mod tests {
         let db = geo_database();
         let jp = db.get("JP").expect("JP should be loaded");
         assert_eq!(jp.country.iso_code, "JP");
+    }
+
+    // 1b. Every loaded country has non-empty generation pools, so the address
+    //     and phone generators never index into an empty slice. Cheap (27
+    //     countries) and the backstop for the runtime `bail!` guards.
+    #[test]
+    fn all_countries_have_non_empty_pools() {
+        for g in geo_database().all() {
+            let cc = &g.country.iso_code;
+            assert!(
+                !g.country.phone_formats.is_empty(),
+                "{cc}: empty phone_formats"
+            );
+            assert!(!g.states.is_empty(), "{cc}: empty states");
+            for s in &g.states {
+                assert!(!s.cities.is_empty(), "{cc}/{}: empty cities", s.name);
+                for c in &s.cities {
+                    assert!(
+                        !c.postcodes.is_empty(),
+                        "{cc}/{}/{}: empty postcodes",
+                        s.name,
+                        c.name
+                    );
+                }
+            }
+        }
+    }
+
+    // 1c. Every node's ASCII form (stored romanisation, else folded native) is
+    //     pure ASCII. This is what guarantees the `address.ascii` branch never
+    //     leaks native script: a non-Latin node that forgets its romanisation
+    //     would fold to non-ASCII and fail here.
+    #[test]
+    fn all_ascii_forms_are_pure_ascii() {
+        for g in geo_database().all() {
+            let cc = &g.country.iso_code;
+            let ca = g.country.ascii_name();
+            assert!(ca.is_ascii(), "{cc}: country ascii_name not ASCII: {ca}");
+            for s in &g.states {
+                let sa = s.ascii_name();
+                assert!(
+                    sa.is_ascii(),
+                    "{cc}/{}: state ascii not ASCII: {sa}",
+                    s.name
+                );
+                for c in &s.cities {
+                    let cia = c.ascii_name();
+                    assert!(
+                        cia.is_ascii(),
+                        "{cc}/{}: city ascii not ASCII: {cia}",
+                        c.name
+                    );
+                    for p in &c.postcodes {
+                        let st = p.ascii_street();
+                        assert!(
+                            st.is_ascii(),
+                            "{cc}/{}/{}: street ascii not ASCII: {st}",
+                            s.name,
+                            c.name
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // 1d. A node whose native folds to pure ASCII (Latin, diacritics included)
+    //     SHALL NOT store a romanisation — the fold derives it. Mirrors the
+    //     person pool's "omit a redundant ascii" rule; keeps Latin-script geo
+    //     data from re-storing what the fold already produces.
+    #[test]
+    fn no_redundant_stored_ascii_on_latin_nodes() {
+        fn check(stored: &str, native: &str, what: &str) {
+            if ascii_fold(native).is_ascii() {
+                assert!(
+                    stored.is_empty(),
+                    "{what}: native '{native}' folds to ASCII — drop the stored '{stored}'"
+                );
+            }
+        }
+        for g in geo_database().all() {
+            let cc = &g.country.iso_code;
+            check(
+                &g.country.name_ascii,
+                &g.country.name,
+                &format!("{cc} country"),
+            );
+            for s in &g.states {
+                check(&s.name_ascii, &s.name, &format!("{cc}/{}", s.name));
+                for c in &s.cities {
+                    check(&c.name_ascii, &c.name, &format!("{cc}/{}", c.name));
+                    for p in &c.postcodes {
+                        check(
+                            &p.street_ascii,
+                            &p.street,
+                            &format!("{cc}/{} street", c.name),
+                        );
+                    }
+                }
+            }
+        }
     }
 
     // 2. GB is present with correct iso_code
@@ -499,30 +679,28 @@ mod tests {
         // Built via concatenation rather than a raw string so the JSON can carry
         // literal '#' placeholders (phone/postcode formats) without colliding
         // with the raw-string hash delimiter.
+        // Only native fields + the required ones are emitted; the optional
+        // `*_ascii` / `pattern_ascii` are omitted to exercise their serde
+        // defaults (an absent romanisation folds from the native text).
         let mut json = String::from("{\n");
         json.push_str("  \"country\": {\n");
-        json.push_str("    \"name_en\": \"Testland\",\n");
+        json.push_str("    \"name\": \"Testland\",\n");
         json.push_str(&format!("    \"iso_code\": \"{iso_code}\",\n"));
         json.push_str("    \"phone_prefix\": \"+99\",\n");
         json.push_str("    \"phone_formats\": [\"+99 ### ####\"],\n");
-        json.push_str("    \"postcode_format\": \"#####\",\n");
-        json.push_str("    \"name_order\": \"western\"\n");
+        json.push_str("    \"postcode_format\": \"#####\"\n");
         json.push_str("  },\n");
         json.push_str("  \"states\": [{\n");
         json.push_str("    \"name\": \"Region\",\n");
-        json.push_str("    \"name_en\": \"Region\",\n");
         json.push_str("    \"region_tags\": [\"r1\"],\n");
         json.push_str("    \"cities\": [{\n");
         json.push_str("      \"name\": \"City\",\n");
-        json.push_str("      \"name_en\": \"City\",\n");
         json.push_str("      \"lat\": 1.0,\n");
         json.push_str("      \"lon\": 2.0,\n");
         json.push_str("      \"postcodes\": [{\n");
         json.push_str("        \"code\": \"00000\",\n");
         json.push_str("        \"street\": \"Street\",\n");
-        json.push_str("        \"street_en\": \"Street\",\n");
-        json.push_str("        \"pattern\": null,\n");
-        json.push_str("        \"fixed\": null\n");
+        json.push_str("        \"pattern\": null\n");
         json.push_str("      }]\n");
         json.push_str("    }]\n");
         json.push_str("  }]\n");
@@ -574,7 +752,9 @@ mod tests {
         // 2. Nested state/city/postcode structure round-trips.
         let postcode = &data.states[0].cities[0].postcodes[0];
         assert_eq!(postcode.code, "00000");
-        assert_eq!(postcode.street_en, "Street");
+        assert_eq!(postcode.street, "Street");
+        // The omitted romanisation folds from the native street.
+        assert_eq!(postcode.ascii_street(), "Street");
         assert!(postcode.pattern.is_none());
     }
 
