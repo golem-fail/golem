@@ -71,28 +71,6 @@ Also `golem-cli` `install_cache` could take a seam over `installed_state::query`
 orchestration. Sizable, architectural — its own session. (The small standalone Cat-3
 seams — main color, orchestrator socket_path, stream `impl Write` — were done inline.)
 
-## `e2e/cross/fake_data_vars.test.toml` step 0 needs `auto_scroll` (+ webview-readiness)
-
-Pre-existing, **not** a regression (confirmed 2026-06-24 while landing the
-fake-data generator work). On a tall emulator (Pixel 8 Pro API 36,
-1344×2992) the flow's first step `type on_text="Search"` resolves the field
-**off-screen at y≈6111** → `EF405` ("use auto_scroll = true"), yet step 0/1
-don't set `auto_scroll` even though step 3 ("Multi-line text") does. Some
-launches instead hit the known **webview-readiness race** → `EF408` (sparse
-DOM, `on_text` finds nothing within the 10s budget) — see the EF408 entries
-below. The two alternate run-to-run.
-
-Because step 0 blocks, the `${fake:email}`/`${fake:uuid}` steps (indexes 2,
-4) never execute, so the flow currently gives the fake-data generators **zero
-on-device coverage** — unit coverage is comprehensive and the generic
-`e2e/cross/tap.test.toml` control flow passes 6/6 on the same emulator
-(same screen, same `on_text`→driver path), so the integration path is sound.
-
-Fix when picked up: add `auto_scroll = true` to the `Search` / `Enter email`
-type steps (mirror step 3), then re-run on android + a **phone** iOS sim
-(the flow wants `type=phone`; only an iPad was booted this session). Cheap;
-unblocks real on-device validation of `timestamp`/`one_of`/`address` etc.
-
 ## Scroll: `center` + `visibility_percentage` for edge/partial targets (Maestro parity)
 
 `e2e/cross/scroll_search.test.toml` `horizontal_carousel_scroll` fails (EF408)
