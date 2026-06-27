@@ -308,6 +308,7 @@ struct SubmitConfigFields {
     project_root: PathBuf,
     vars: Vec<(String, String)>,
     coverage_override: Option<golem_parser::CoverageStrategy>,
+    a11y_override: Option<golem_parser::A11yLevel>,
     rebuild: bool,
     no_build: bool,
     record: bool,
@@ -364,6 +365,13 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
         "full" => Some(golem_parser::CoverageStrategy::Full),
         _ => None,
     });
+    let a11y_override = cfg["a11y"].as_str().and_then(|c| match c {
+        "off" => Some(golem_parser::A11yLevel::Off),
+        "critical" => Some(golem_parser::A11yLevel::Critical),
+        "relaxed" => Some(golem_parser::A11yLevel::Relaxed),
+        "strict" => Some(golem_parser::A11yLevel::Strict),
+        _ => None,
+    });
     let rebuild = cfg["rebuild"].as_bool().unwrap_or(false);
     let no_build = cfg["no_build"].as_bool().unwrap_or(false);
     let record = cfg["record"].as_bool().unwrap_or(false);
@@ -392,6 +400,7 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
         project_root,
         vars,
         coverage_override,
+        a11y_override,
         rebuild,
         no_build,
         record,
@@ -441,6 +450,7 @@ async fn handle_submit(
         project_root,
         vars,
         coverage_override,
+        a11y_override,
         rebuild,
         no_build,
         record,
@@ -504,7 +514,7 @@ async fn handle_submit(
         project_root,
         project_apps: project_config.apps,
         coverage_override,
-        a11y_override: None,
+        a11y_override,
         rebuild,
         no_build,
         device_settings: project_config.device_settings,

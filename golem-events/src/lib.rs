@@ -50,6 +50,10 @@ pub struct A11yIssue {
     pub element_label: Option<String>,
     /// Element bounds for annotated-screenshot drawing (device coords).
     pub element_bounds: Option<Rect>,
+    /// How sure we are this is a real finding (0.0–1.0). Deterministic checks
+    /// (bounds/structure-derived) are 1.0; heuristic pixel checks score lower.
+    /// `a11y_min_confidence` filters findings below a threshold.
+    pub confidence: f32,
 }
 
 /// All accessibility findings from one block-boundary audit.

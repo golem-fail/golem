@@ -36,6 +36,7 @@ pub struct ProjectOptions {
     pub a11y: Option<crate::A11yLevel>,
     pub a11y_max_errors: Option<usize>,
     pub a11y_max_warnings: Option<usize>,
+    pub a11y_min_confidence: Option<f32>,
 }
 
 /// Internal deserialization target for `golem.toml`.
@@ -180,6 +181,7 @@ pub fn merge_config(project: &ProjectConfig, flow: &FlowFile) -> FlowFile {
         a11y: flow_opts.a11y.or(proj_opts.a11y),
         a11y_max_errors: flow_opts.a11y_max_errors.or(proj_opts.a11y_max_errors),
         a11y_max_warnings: flow_opts.a11y_max_warnings.or(proj_opts.a11y_max_warnings),
+        a11y_min_confidence: flow_opts.a11y_min_confidence.or(proj_opts.a11y_min_confidence),
     };
 
     // Only set options if at least one field is Some
@@ -209,7 +211,8 @@ pub fn merge_config(project: &ProjectConfig, flow: &FlowFile) -> FlowFile {
         || merged_opts.perf_fd_error.is_some()
         || merged_opts.a11y.is_some()
         || merged_opts.a11y_max_errors.is_some()
-        || merged_opts.a11y_max_warnings.is_some();
+        || merged_opts.a11y_max_warnings.is_some()
+        || merged_opts.a11y_min_confidence.is_some();
 
     merged.flow.options = if has_any_option {
         Some(merged_opts)

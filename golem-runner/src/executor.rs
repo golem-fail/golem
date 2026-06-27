@@ -782,18 +782,63 @@ pub async fn execute_flow<'a>(
         // didn't settle (e.g. a read/http step). Judges only the visible
         // tree (`audit_hierarchy` gates on the viewport predicate).
         if ctx.a11y_level.is_enabled() {
-            let tree = match ctx.take_settled_tree_at(ctx.global_step_index) {
-                Some(t) => Some(t),
-                None => driver.get_hierarchy().await.ok().map(|(t, _meta)| t),
+            let density = ctx.device.and_then(a11y_density).unwrap_or(1.0);
+            let config = crate::accessibility::A11yConfig::new(ctx.a11y_level, density);
+            // When we need a screenshot (strict), capture it and a FRESH tree
+            // back-to-back so element bounds align with the pixels — the
+            // cached settled tree predates the shot and would drift, throwing
+            // off every crop. Non-screenshot levels reuse the settled tree.
+            let (tree, shot) = if ctx.a11y_level.forces_screenshot() {
+                let shot = crate::resolution::screenshot_bounded(driver).await.ok();
+                let tree = driver.get_hierarchy().await.ok().map(|(t, _meta)| t);
+                (tree, shot)
+            } else {
+                let tree = match ctx.take_settled_tree_at(ctx.global_step_index) {
+                    Some(t) => Some(t),
+                    None => driver.get_hierarchy().await.ok().map(|(t, _meta)| t),
+                };
+                (tree, None)
             };
             if let Some(tree) = tree {
                 let viewport = golem_element::Viewport::from_root(&tree);
-                let density = ctx
-                    .device
-                    .and_then(a11y_density)
-                    .unwrap_or(1.0);
-                let config = crate::accessibility::A11yConfig::new(ctx.a11y_level, density);
-                let issues = crate::accessibility::audit_hierarchy(&tree, &viewport, &config);
+                let mut issues = crate::accessibility::audit_hierarchy(&tree, &viewport, &config);
+
+                // Screenshot-based check (contrast), against the coherent
+                // tree+shot pair captured above.
+                let mut screenshot_path: Option<String> = None;
+                if let Some(shot) = shot {
+                    issues.extend(crate::accessibility::check_contrast(
+                        &shot.data, &tree, &viewport, &config,
+                    ));
+                    // Drop low-confidence findings before annotating so the
+                    // drawn rectangles match the reported issues.
+                    if let Some(min) = flow.flow.options.as_ref().and_then(|o| o.a11y_min_confidence)
+                    {
+                        issues.retain(|i| i.confidence >= min);
+                    }
+                    if !issues.is_empty() {
+                        if let Ok(png) = crate::accessibility::annotate_screenshot(
+                            &shot.data,
+                            &issues,
+                            viewport.width,
+                        ) {
+                            let path = crate::capture::build_a11y_screenshot_path(
+                                ctx.capture_config,
+                                block,
+                                current_idx,
+                                ctx.global_step_index,
+                                block_iter_for_recording,
+                            );
+                            if let Some(parent) = path.parent() {
+                                let _ = std::fs::create_dir_all(parent);
+                            }
+                            if std::fs::write(&path, &png).is_ok() {
+                                screenshot_path = Some(path.to_string_lossy().into_owned());
+                            }
+                        }
+                    }
+                }
+
                 let device_name = ctx.device.map_or("unknown", |d| d.name.as_str());
                 let label = build_snapshot_label(
                     block,
@@ -805,7 +850,7 @@ pub async fn execute_flow<'a>(
                 let audit = golem_report::A11yAudit {
                     label,
                     issues,
-                    screenshot_path: None,
+                    screenshot_path,
                 };
                 if !audit.issues.is_empty() {
                     warnings.push(format!(
@@ -1279,6 +1324,7 @@ mod tests {
                 element_type: "Button".into(),
                 element_label: None,
                 element_bounds: None,
+                confidence: 1.0,
             });
         }
         for _ in 0..warnings {
@@ -1289,6 +1335,7 @@ mod tests {
                 element_type: "Button".into(),
                 element_label: None,
                 element_bounds: None,
+                confidence: 1.0,
             });
         }
         golem_report::A11yAudit {

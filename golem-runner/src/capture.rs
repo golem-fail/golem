@@ -89,6 +89,28 @@ pub fn build_screenshot_path(
     screenshot_dir(config).join(filename)
 }
 
+/// Build the path for an annotated accessibility-audit screenshot:
+/// `{global}_{block}_{iter}_a11y.png` in the screenshots dir.
+pub fn build_a11y_screenshot_path(
+    config: &CaptureConfig,
+    block: &golem_parser::Block,
+    block_index: usize,
+    global_step_index: u64,
+    block_iteration: u32,
+) -> PathBuf {
+    let block_name = block
+        .name
+        .clone()
+        .unwrap_or_else(|| format!("block_{block_index}"));
+    let filename = format!(
+        "{}_{}_{}_a11y.png",
+        global_step_index,
+        sanitize_filename(&block_name),
+        block_iteration,
+    );
+    screenshot_dir(config).join(filename)
+}
+
 /// Capture a screenshot on failure/warning and write it to disk.
 ///
 /// Returns the path the screenshot was saved to, or an error if

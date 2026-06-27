@@ -438,6 +438,10 @@ pub struct FlowOptions {
     pub a11y_max_errors: Option<usize>,
     /// Fail the flow when the cumulative a11y warning count exceeds this.
     pub a11y_max_warnings: Option<usize>,
+    /// Drop a11y findings whose confidence (0.0–1.0) is below this. Lets
+    /// flows tune out noisy heuristic findings (e.g. contrast); deterministic
+    /// checks are confidence 1.0 and always pass. Default: keep all.
+    pub a11y_min_confidence: Option<f32>,
 }
 
 /// Accessibility audit strictness (the TOML `a11y` value). The runner maps

@@ -544,6 +544,7 @@ mod tests {
             element_type: "Button".into(),
             element_label: None,
             element_bounds: None,
+            confidence: 1.0,
         }
     }
 

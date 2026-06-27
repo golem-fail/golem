@@ -177,6 +177,7 @@ async fn main() -> anyhow::Result<()> {
                 &config,
                 args.platform.as_deref(),
                 args.coverage.as_deref(),
+                args.a11y.as_deref(),
                 max_device_wait_ms,
                 include_junit,
             );
@@ -386,6 +387,7 @@ fn build_config_json(
     config: &SuiteConfig,
     platform: Option<&str>,
     coverage: Option<&str>,
+    a11y: Option<&str>,
     max_device_wait_ms: Option<u64>,
     include_junit: bool,
 ) -> serde_json::Value {
@@ -404,6 +406,7 @@ fn build_config_json(
         "output_dir": config.output_dir.display().to_string(),
         "project_root": config.project_root.display().to_string(),
         "coverage": coverage,
+        "a11y": a11y,
         "rebuild": config.rebuild,
         "no_build": config.no_build,
         "record": config.record,
@@ -987,10 +990,12 @@ mod tests {
             project_root: std::path::PathBuf::from("/proj"),
             ..SuiteConfig::default()
         };
-        let json = build_config_json(&config, Some("ios"), Some("smart"), Some(1800000), true);
+        let json =
+            build_config_json(&config, Some("ios"), Some("smart"), Some("strict"), Some(1800000), true);
 
         // 1. Raw flag strings SHALL pass through verbatim.
         assert_eq!(json["platform"], "ios", "platform SHALL be the raw string");
+        assert_eq!(json["a11y"], "strict", "a11y SHALL be the raw string");
         assert_eq!(
             json["coverage"], "smart",
             "coverage SHALL be the raw string"
@@ -1018,7 +1023,7 @@ mod tests {
     #[test]
     fn build_config_json_absent_options_are_null() {
         let config = SuiteConfig::default();
-        let json = build_config_json(&config, None, None, None, false);
+        let json = build_config_json(&config, None, None, None, None, false);
         assert!(
             json["platform"].is_null(),
             "absent --platform SHALL be null"

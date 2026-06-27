@@ -86,6 +86,7 @@ struct JsonA11yIssue {
     element_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     element_label: Option<String>,
+    confidence: f32,
 }
 
 #[derive(Serialize)]
@@ -237,6 +238,7 @@ fn a11y_to_json(audit: &crate::A11yAudit) -> JsonA11yAudit {
                 message: i.message.clone(),
                 element_type: i.element_type.clone(),
                 element_label: i.element_label.clone(),
+                confidence: i.confidence,
             })
             .collect(),
     }

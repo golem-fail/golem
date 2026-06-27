@@ -26,6 +26,9 @@ rand_chacha = "0.3"
 regex = "1"
 sha1 = { workspace = true }
 ignore = { workspace = true }
+# Screenshot-based a11y checks (contrast + text-size) + annotated output.
+image = { version = "0.25", default-features = false, features = ["png"] }
+imageproc = { version = "0.25", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"

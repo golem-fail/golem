@@ -1,5 +1,40 @@
 # Roadmap
 
+## iOS webview element bounds: ~9pt constant vertical offset
+
+iOS **webview** (WebKit-Inspector DOM) element bounds sit a constant **~9pt
+(~27px at scale 3)** too high vs the rendered pixels. Measured via the a11y
+annotation: blue label text-centres land ~27px below the drawn box top at both
+y=222 and y=1047 (constant, so an additive offset, not a scale error). **Native
+(XCUITest) bounds are pixel-perfect** — isolated to the webview path. Root: the
+DOM→screen vertical mapping (`golem-driver/src/ios.rs` `safe_area_top` +
+`golem-driver/src/webkit.rs` `bcr·scale + offset`) — most of the safe-area inset
+is applied, one additive term (likely a `visualViewport.offsetTop`/safe-area
+rounding) is ~9pt short.
+
+Impact (all minor, pre-existing): webview **taps** land ~9pt off-centre (within
+button tolerance — e2e passes), **occlusion** hit-test points shift the same,
+and the **a11y contrast crop + annotation** are offset (crop box is taller than
+the offset so contrast still reads correctly; annotation rect looks ~9pt high).
+Fix = correct the short additive term at the source, then re-validate iOS
+webview e2e (taps/occlusion/annotation tighten together). Localize ~30–60min;
+fix likely a few lines; low risk.
+
+## A11y audit follow-ups (from the audit feature)
+
+- **Pixel text-size for padded boxes.** `text_too_small` is currently the
+  *certain* box-height check (no false positives, misses small text inside a
+  tall padded box). A pixel glyph-height measurement (ink bounding-box /
+  edge-trim of uniform border rows+cols, per the contrast band detector) would
+  catch the padded case — heuristic, needs care on borders.
+- **Per-check confidence split.** `a11y_min_confidence` is one global today;
+  split into per-check thresholds (e.g. separate contrast vs others) only if a
+  real need arises.
+- **Live-stream a11y on the human format.** Findings surface in the live event
+  stream + json/junit/toon; the `format_flow`/`format_suite` human renderer
+  shows them only for `--output human` (parity with perf). Could also stream a
+  per-flow summary.
+
 ## Testability: unified I/O seam abstractions (subprocess + HTTP)
 
 Coverage sweep surfaced ~15 functions that directly construct `tokio::process::Command`
