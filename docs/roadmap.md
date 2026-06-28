@@ -1238,18 +1238,6 @@ No app data cleaning logic exists in the execution path. The flag is accepted bu
 
 Flag is defined but never read. `ResourceManager` uses default concurrency config regardless of this value.
 
-## Ethereal email: on-device e2e for the `create_inbox` → `await_email` loop
-
-The feature itself is **shipped**: `create_inbox` (provision) and live IMAP
-receive (`await_email` over rustls + the `imap` crate) work end-to-end against
-the real Ethereal server, verified by the `live_receive` smoke test. Usage is in
-[`docs/actions-reference.md`](actions-reference.md#create_inbox--provision-a-disposable-email-inbox).
-
-**Remaining:** no on-device `create_inbox` → signup → `await_email` e2e flow yet.
-It needs an app path that triggers a real verification email (the test-app has
-none) plus live network on the e2e runner. Add a sender-driven flow once there's
-an app screen to exercise it.
-
 ## TOON Timestamp Representation
 
 Human, JSON, and JUnit outputs already emit wall-clock timestamps (local `HH:MM:SS.mmm` prefix for human; ISO-8601 UTC on every report level for JSON/JUnit). TOON is intentionally left out — its compactness-first design would bloat meaningfully with full ISO-8601 strings (16+ chars) per entry.
