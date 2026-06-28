@@ -1248,7 +1248,8 @@ Flag is defined but never read. `ResourceManager` uses default concurrency confi
 via the Nodemailer API, injectable `HttpClient` for tests) and an `ImapPoller`.
 `await_email` (golem-runner) is **fully implemented** — poll loop, glob `subject`/
 `to` match, `extract` (regex, capture-group-1 → one piece like an OTP), `save_to`.
-Two gaps remain: provisioning isn't wired, and the real IMAP backend is a stub.
+Provisioning is now wired (Phase 1, `create_inbox`); one gap remains — the real
+IMAP backend is a stub, so mail can't yet be received.
 
 **Design decided (not a `fake:` generator).** Provisioning is an async network
 call, and `${}` generator resolution is intentionally sync + pure (the `--seed`
@@ -1272,11 +1273,16 @@ reads from its `inbox` namespace. **Non-deterministic by design** (network; not
 `--seed`-reproducible — the side-effecting action signals that, unlike a pure
 `${}` value). I/O actions should carry a timeout even if not overridable.
 
-**Phase 1 — `create_inbox` (provision):** dispatch arm (`actions.rs`) + handler
-(`actions/external.rs`, reuse `EtherealClient`) + validation (add to
-KNOWN_ACTIONS, require `provider`/`save_to`) + policy I/O-timeout classification +
-unit tests (injected mock `HttpClient`, no network) + `actions-reference.md` docs.
-Yields a usable `${inbox.address}` (the "send" half); can't receive yet.
+**Phase 1 — `create_inbox` (provision) — ✅ DONE:** dispatch arm (`actions.rs`),
+handler `handle_create_inbox` (`actions/external.rs`, reuses `EtherealClient`;
+`provider`+`save_to` required, `timeout` default 15s, writes the inbox object at
+Flow scope), `create_inbox` in KNOWN_ACTIONS (`validation.rs`), policy I/O class
+(6×, like `http`/`open_link`), unit tests (injected mock `HttpClient`, no
+network: account-map, unknown-provider, missing-provider, missing-save_to,
+await_email-contract), `actions-reference.md` + `fake-data.md` docs. Yields a
+usable `${inbox.address}` (the "send" half); can't receive until Phase 2. No e2e
+yet — provisioning is live network and receive needs Phase 2, so the
+`create_inbox`→`await_email` flow lands with Phase 2.
 
 **Phase 2 — live IMAP receive:** implement `RealImapConnection::fetch_inbox`
 (`golem-email/src/imap_poller.rs:196`, currently a `bail!` stub) via an `imap`

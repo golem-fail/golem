@@ -56,6 +56,7 @@ const KNOWN_ACTIONS: &[&str] = &[
     "http_patch",
     "http_delete",
     "await_email",
+    "create_inbox",
     "assert_alert",
     "dismiss_alert",
 ];

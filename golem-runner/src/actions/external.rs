@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::{bail, Result};
 use golem_driver::PlatformDriver;
 use golem_element::glob::glob_match;
-use golem_email::ImapPoller;
+use golem_email::{EtherealClient, ImapPoller};
 use golem_parser::Step;
 use golem_vars::{ScopeLevel, VarValue, VariableStore};
 use regex::Regex;
@@ -303,6 +303,108 @@ pub(crate) async fn handle_await_email(step: &Step, vars: &mut VariableStore) ->
     }
 
     Ok(())
+}
+
+/// Provision a fresh email inbox from a provider and save its connection
+/// details as an object for later steps.
+///
+/// - `provider` (required): inbox provider. Only `ethereal` is built in;
+///   any other value is an error (pluggable later).
+/// - `save_to` (required): variable to store the inbox object under.
+/// - `timeout` (optional): provisioning deadline in ms (default 15000).
+///
+/// The saved object exposes `address`, `user`, `pass`, `imap_host`,
+/// `imap_port`, `smtp_host`, `smtp_port`. The `imap_*` / `user` / `pass`
+/// fields are exactly what `await_email` reads from its `inbox` namespace,
+/// so `save_to = "inbox"` feeds straight into `await_email { inbox = "inbox" }`.
+///
+/// Network I/O: non-deterministic and NOT replayed by `--seed`.
+pub(crate) async fn handle_create_inbox(step: &Step, vars: &mut VariableStore) -> Result<()> {
+    let provider = step
+        .params
+        .get("provider")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            golem_events::coded(
+                golem_events::FailureCode::ParseMissingParam,
+                anyhow::anyhow!("create_inbox action requires 'provider' param"),
+            )
+        })?;
+
+    let save_to = step.save_to.as_ref().ok_or_else(|| {
+        golem_events::coded(
+            golem_events::FailureCode::ParseMissingParam,
+            anyhow::anyhow!("create_inbox action requires 'save_to'"),
+        )
+    })?;
+
+    let timeout_ms = step.timeout.unwrap_or(15000);
+
+    let account = provision_inbox(provider, timeout_ms, EtherealClient::new()).await?;
+    vars.set_in_scope(ScopeLevel::Flow, save_to, inbox_object(&account));
+
+    Ok(())
+}
+
+/// Provision an account from `provider`, bounded by `timeout_ms`. The
+/// `ethereal` client is injected so tests can supply a mock HTTP backend.
+async fn provision_inbox(
+    provider: &str,
+    timeout_ms: u64,
+    ethereal: EtherealClient,
+) -> Result<golem_email::EtherealAccount> {
+    match provider {
+        "ethereal" => tokio::time::timeout(
+            std::time::Duration::from_millis(timeout_ms),
+            ethereal.create_account(),
+        )
+        .await
+        .map_err(|_| {
+            golem_events::coded(
+                golem_events::FailureCode::FlowExternalFailed,
+                anyhow::anyhow!("create_inbox: provider 'ethereal' timed out after {timeout_ms}ms"),
+            )
+        })?
+        .map_err(|e| {
+            golem_events::coded(
+                golem_events::FailureCode::FlowExternalFailed,
+                anyhow::anyhow!("create_inbox: provider 'ethereal' failed: {e:#}"),
+            )
+        }),
+        other => Err(golem_events::coded(
+            golem_events::FailureCode::ParseUnknownAction,
+            anyhow::anyhow!(
+                "create_inbox: unknown provider '{other}' (only 'ethereal' is supported)"
+            ),
+        )),
+    }
+}
+
+/// Build the inbox variable object from a provisioned account. `address`
+/// mirrors `user` (the account login is the email address); ports are
+/// stringified to match how `await_email` reads `imap_port`.
+fn inbox_object(account: &golem_email::EtherealAccount) -> VarValue {
+    let mut obj = HashMap::new();
+    obj.insert("address".to_string(), VarValue::string(&account.user));
+    obj.insert("user".to_string(), VarValue::string(&account.user));
+    obj.insert("pass".to_string(), VarValue::string(&account.pass));
+    obj.insert(
+        "imap_host".to_string(),
+        VarValue::string(&account.imap_host),
+    );
+    obj.insert(
+        "imap_port".to_string(),
+        VarValue::string(account.imap_port.to_string()),
+    );
+    obj.insert(
+        "smtp_host".to_string(),
+        VarValue::string(&account.smtp_host),
+    );
+    obj.insert(
+        "smtp_port".to_string(),
+        VarValue::string(account.smtp_port.to_string()),
+    );
+    VarValue::Object(obj)
 }
 
 /// Load a fixture file and store its variables under a namespace.
@@ -1541,5 +1643,99 @@ mod tests {
             gh_calls >= 3,
             "SHALL re-poll get_hierarchy until the alert clears, got {gh_calls}"
         );
+    }
+
+    // ── create_inbox ──────────────────────────────────────────────────
+
+    const ETHEREAL_FIXTURE: &str = r#"{
+        "user": "abc123@ethereal.email",
+        "pass": "s3cretP4ss",
+        "smtp": { "host": "smtp.ethereal.email", "port": 587, "secure": false },
+        "imap": { "host": "imap.ethereal.email", "port": 993, "secure": true }
+    }"#;
+
+    struct StubHttp(&'static str);
+
+    #[async_trait::async_trait]
+    impl golem_email::HttpClient for StubHttp {
+        async fn post(&self, _url: &str) -> Result<String> {
+            Ok(self.0.to_string())
+        }
+    }
+
+    fn stub_ethereal() -> EtherealClient {
+        EtherealClient::with_http_client(Box::new(StubHttp(ETHEREAL_FIXTURE)))
+    }
+
+    // provision_inbox with the ethereal provider returns a parsed account.
+    #[tokio::test]
+    async fn provision_inbox_ethereal_maps_account() {
+        let account = provision_inbox("ethereal", 15000, stub_ethereal())
+            .await
+            .expect("ethereal provisioning SHALL succeed with a valid response");
+        assert_eq!(account.user, "abc123@ethereal.email");
+        assert_eq!(account.imap_host, "imap.ethereal.email");
+        assert_eq!(account.imap_port, 993);
+    }
+
+    // An unknown provider SHALL error rather than silently doing nothing.
+    #[tokio::test]
+    async fn provision_inbox_unknown_provider_errors() {
+        let err = provision_inbox("mailhog", 15000, stub_ethereal())
+            .await
+            .expect_err("an unknown provider SHALL error");
+        assert!(
+            format!("{err:#}").contains("unknown provider 'mailhog'"),
+            "error SHALL name the unknown provider: {err:#}"
+        );
+    }
+
+    // The saved object SHALL expose the exact fields await_email reads from
+    // its inbox namespace (imap_host/imap_port/user/pass), plus address==user
+    // and stringified ports.
+    #[test]
+    fn inbox_object_exposes_await_email_contract() {
+        let account =
+            golem_email::EtherealAccount::from_api_response(ETHEREAL_FIXTURE).expect("parse");
+        let obj = inbox_object(&account);
+        let get = |k: &str| {
+            obj.get_path(k)
+                .and_then(|v| v.as_str())
+                .unwrap_or_else(|| panic!("missing field {k}"))
+        };
+        assert_eq!(get("address"), "abc123@ethereal.email");
+        assert_eq!(get("user"), "abc123@ethereal.email");
+        assert_eq!(get("pass"), "s3cretP4ss");
+        assert_eq!(get("imap_host"), "imap.ethereal.email");
+        assert_eq!(get("imap_port"), "993");
+        assert_eq!(get("smtp_host"), "smtp.ethereal.email");
+        assert_eq!(get("smtp_port"), "587");
+    }
+
+    // handle_create_inbox SHALL require a provider param (fails before any I/O).
+    #[tokio::test]
+    async fn create_inbox_missing_provider_errors() {
+        let mut vars = make_vars();
+        let mut step = make_step("create_inbox");
+        step.save_to = Some("inbox".to_string());
+        let err = handle_create_inbox(&step, &mut vars)
+            .await
+            .expect_err("missing provider SHALL error");
+        assert!(format!("{err:#}").contains("requires 'provider'"));
+    }
+
+    // handle_create_inbox SHALL require save_to (the inbox is useless unbound).
+    #[tokio::test]
+    async fn create_inbox_missing_save_to_errors() {
+        let mut vars = make_vars();
+        let mut step = make_step("create_inbox");
+        step.params.insert(
+            "provider".to_string(),
+            toml::Value::String("ethereal".to_string()),
+        );
+        let err = handle_create_inbox(&step, &mut vars)
+            .await
+            .expect_err("missing save_to SHALL error");
+        assert!(format!("{err:#}").contains("requires 'save_to'"));
     }
 }

@@ -6,15 +6,51 @@
 
 ## Contents
 
-- **Interaction** — [`tap`](#tap--tap-an-element), [`double_tap`](#double_tap--double-tap-an-element), [`type`](#type--type-text-into-an-element), [`backspace`](#backspace--delete-characters), [`long_press`](#long_press--long-press-an-element), [`swipe`](#swipe--swipe-gesture), [`scroll`](#scroll--scroll-until-element-found), [`pinch`](#pinch--pinch-zoom-gesture), [`gesture`](#gesture--multi-touch-gesture), [`rotate`](#rotate--rotate-gesture), [`hide_keyboard`](#hide_keyboard--dismiss-keyboard)
-- **Assertions** — [`assert_visible`](#assert_visible--wait-for--assert-element-exists), [`assert_not_visible`](#assert_not_visible--wait-for--assert-element-absent), [`assert_alert`](#assert_alert--assert-alert-is-displayed)
-- **Reading** — [`read`](#read--read-element-text)
-- **App Lifecycle** — [`launch`](#launch--launch-or-foreground-an-app), [`stop`](#stop--terminate-an-app), [`clear_data`](#clear_data--clear-app-data)
-- **Device Controls** — [`dark_mode`](#dark_mode--toggle-dark-mode), [`set_location`](#set_location--set-gps-coordinates), [`press`](#press--press-hardware-button), [`grant_permission` / `revoke_permission`](#grant_permission-revoke_permission--manage-app-permissions)
-- **Capture** — [`screenshot`](#screenshot--take-screenshot), [recording](#screen-recording--per-block-via-record--true), [`add_media`](#add_media--push-media-to-device)
-- **Alerts** — [`accept_alert`](#accept_alert--accept-dialog), [`dismiss_alert`](#dismiss_alert--dismiss-dialog)
-- **External** — [`open_link`](#open_link--open-url-or-deep-link), [`push_notification`](#push_notification--deliver-a-push-to-the-app-under-test), [`bash`](#bash--run-shell-command), [`run`](#run--run-project-script), [`await_email`](#await_email--poll-imap-inbox), [`load_fixture`](#load_fixture--load-fixture-data), [`http_*`](#http_get-http_post-http_put-http_patch-http_delete--http-requests)
-- **Flow Control** — [`fail`](#fail--fail-the-flow-immediately)
+- [Interaction](#interaction)
+  - [tap](#tap--tap-an-element)
+  - [double_tap](#double_tap--double-tap-an-element)
+  - [type](#type--type-text-into-an-element)
+  - [backspace](#backspace--delete-characters)
+  - [long_press](#long_press--long-press-an-element)
+  - [swipe](#swipe--swipe-gesture)
+  - [scroll](#scroll--scroll-until-element-found)
+  - [pinch](#pinch--pinch-zoom-gesture)
+  - [gesture](#gesture--multi-touch-gesture)
+  - [rotate](#rotate--rotate-gesture)
+  - [hide_keyboard](#hide_keyboard--dismiss-keyboard)
+- [Assertions](#assertions)
+  - [assert_visible](#assert_visible--wait-for--assert-element-exists)
+  - [assert_not_visible](#assert_not_visible--wait-for--assert-element-absent)
+  - [assert_alert](#assert_alert--assert-alert-is-displayed)
+- [Reading](#reading)
+  - [read](#read--read-element-text)
+- [App Lifecycle](#app-lifecycle)
+  - [launch](#launch--launch-or-foreground-an-app)
+  - [stop](#stop--terminate-an-app)
+  - [clear_data](#clear_data--clear-app-data)
+- [Device Controls](#device-controls)
+  - [dark_mode](#dark_mode--toggle-dark-mode)
+  - [set_location](#set_location--set-gps-coordinates)
+  - [press](#press--press-hardware-button)
+  - [grant_permission / revoke_permission](#grant_permission-revoke_permission--manage-app-permissions)
+- [Capture](#capture)
+  - [screenshot](#screenshot--take-screenshot)
+  - [recording](#screen-recording--per-block-via-record--true)
+  - [add_media](#add_media--push-media-to-device)
+- [Alerts](#alerts)
+  - [accept_alert](#accept_alert--accept-dialog)
+  - [dismiss_alert](#dismiss_alert--dismiss-dialog)
+- [External](#external)
+  - [open_link](#open_link--open-url-or-deep-link)
+  - [push_notification](#push_notification--deliver-a-push-to-the-app-under-test)
+  - [bash](#bash--run-shell-command)
+  - [run](#run--run-project-script)
+  - [create_inbox](#create_inbox--provision-a-disposable-email-inbox)
+  - [await_email](#await_email--poll-imap-inbox)
+  - [load_fixture](#load_fixture--load-fixture-data)
+  - [http_*](#http_get-http_post-http_put-http_patch-http_delete--http-requests)
+- [Flow Control](#flow-control)
+  - [fail](#fail--fail-the-flow-immediately)
 
 > The canonical list of action keywords is the dispatch match in [`golem-runner/src/actions.rs`](../golem-runner/src/actions.rs). If you add a handler there, document it here.
 
@@ -460,6 +496,34 @@ Execute a script relative to the project root or flow directory. Rejects path tr
 ```
 
 Leading `/` = relative to project root. No leading `/` = relative to flow file directory.
+
+### `create_inbox` — Provision a disposable email inbox
+
+Provision a fresh inbox from a provider and save its connection details as an
+object for later steps. The saved object's `imap_host`/`imap_port`/`user`/`pass`
+fields are exactly what [`await_email`](#await_email--poll-imap-inbox) reads, so
+`save_to = "inbox"` feeds straight into `await_email { inbox = "inbox" }`.
+
+```toml
+{ action = "create_inbox", provider = "ethereal", save_to = "inbox" }
+{ action = "type", on_text = "Email", input = "${inbox.address}" }
+# … app signup …
+{ action = "await_email", inbox = "inbox", subject = "*verify*", extract = { otp = "code: (\\d{6})" }, save_to = "mail" }
+{ action = "type", input = "${mail.otp}" }
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `provider` | — | Inbox provider. Only `ethereal` is built in; any other value errors. |
+| `save_to` | — | Variable to store the inbox object under (required). |
+| `timeout` | `15000` | Provisioning deadline (ms). |
+
+Saved object fields: `address` (= `user`, the email address), `user`, `pass`,
+`imap_host`, `imap_port`, `smtp_host`, `smtp_port`.
+
+> **Non-deterministic.** Provisioning is live network I/O, so the inbox is not
+> replayed by `--seed` — each run gets a fresh address. (Receiving mail needs
+> live IMAP; see the roadmap.)
 
 ### `await_email` — Poll IMAP inbox
 

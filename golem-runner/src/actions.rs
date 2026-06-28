@@ -24,8 +24,9 @@ use device::{
     handle_set_location,
 };
 use external::{
-    handle_accept_alert, handle_await_email, handle_bash, handle_dismiss_alert, handle_fail,
-    handle_http, handle_load_fixture, handle_open_link, handle_push_notification, handle_run,
+    handle_accept_alert, handle_await_email, handle_bash, handle_create_inbox,
+    handle_dismiss_alert, handle_fail, handle_http, handle_load_fixture, handle_open_link,
+    handle_push_notification, handle_run,
 };
 use interaction::{
     handle_backspace, handle_double_tap, handle_gesture, handle_hide_keyboard, handle_long_press,
@@ -81,6 +82,7 @@ pub async fn execute_action(
         "bash" => handle_bash(step, vars).await,
         "run" => handle_run(step, vars, ctx).await,
         "await_email" => handle_await_email(step, vars).await,
+        "create_inbox" => handle_create_inbox(step, vars).await,
         "load_fixture" => handle_load_fixture(step, vars, ctx).await,
         "http_get" => handle_http(step, vars, "GET").await,
         "http_post" => handle_http(step, vars, "POST").await,

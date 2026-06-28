@@ -116,7 +116,8 @@ fn action_multiplier(step: &Step) -> u64 {
         // 8x — scroll (the within_bump above bumps to 12x when a
         // container is set), network I/O.
         "scroll" => 8 + within_bump,
-        "http_get" | "http_post" | "http_put" | "http_patch" | "http_delete" | "open_link" => 6,
+        "http_get" | "http_post" | "http_put" | "http_patch" | "http_delete" | "open_link"
+        | "create_inbox" => 6,
 
         // 48x — email polling (240s at 5s base)
         "await_email" => 48,
