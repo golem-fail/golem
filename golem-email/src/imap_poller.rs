@@ -42,14 +42,15 @@ impl EmailMessage {
 
     fn extract_header(raw: &str, name: &str) -> Option<String> {
         for line in raw.lines() {
-            if let Some(value) = line.strip_prefix(&format!("{name}: ")) {
-                return Some(value.trim().to_string());
-            }
-            // Also try case-insensitive prefix (common in real mail).
-            let lower = line.to_lowercase();
-            let prefix = format!("{}: ", name.to_lowercase());
-            if lower.starts_with(&prefix) {
-                return Some(line[prefix.len()..].trim().to_string());
+            // Split on the first colon: everything before is the field name,
+            // everything after is the value (which may itself contain colons,
+            // e.g. a Date). Matching the name is ASCII-case-insensitive (RFC
+            // 5322 header names are ASCII). No byte-slicing, so multibyte
+            // values can't trip a char-boundary panic.
+            if let Some((key, value)) = line.split_once(':') {
+                if key.trim().eq_ignore_ascii_case(name) {
+                    return Some(value.trim().to_string());
+                }
             }
         }
         None
@@ -449,6 +450,25 @@ mod tests {
         assert_eq!(msg.from, "a@b.com", "From SHALL be trimmed");
         assert_eq!(msg.subject, "spaced", "Subject SHALL be trimmed");
         assert_eq!(msg.body, "Body", "body SHALL be trimmed");
+    }
+
+    // Multibyte header values SHALL parse without panicking. The old
+    // implementation byte-sliced the original line at an offset measured on a
+    // lowercased copy, which could land mid-UTF-8-char; split_once + trim has
+    // no such slice. A value containing colons (the Date) SHALL also survive.
+    #[test]
+    fn parse_email_handles_multibyte_and_colon_values() {
+        let raw = "From: 山田太郎 <a@b.com>\r\n\
+                   To: c@d.com\r\n\
+                   Subject: 日本語の verify code\r\n\
+                   Date: Mon, 23 Mar 2026 10:00:00 +0000\r\n\
+                   \r\n\
+                   コードは 123456 です。";
+        let msg = EmailMessage::from_raw(raw).expect("multibyte headers SHALL parse");
+        assert_eq!(msg.from, "山田太郎 <a@b.com>");
+        assert_eq!(msg.subject, "日本語の verify code");
+        assert_eq!(msg.date, "Mon, 23 Mar 2026 10:00:00 +0000");
+        assert_eq!(msg.body, "コードは 123456 です。");
     }
 
     // -- Tests: subject matching --------------------------------------------

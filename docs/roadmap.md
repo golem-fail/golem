@@ -106,10 +106,6 @@ Two low-impact ambiguities surfaced while adding test coverage; parked pending a
   a fixture where one var references another resolves non-deterministically. Decide:
   support cross-refs (ordered map / iterative resolve) or document vars as
   independent (and maybe reject refs). Other scopes (set/flow/cli) are unaffected.
-- **`imap_poller.rs` `extract_header` multibyte slice.** Case-insensitive branch
-  byte-slices after lowercasing; a multibyte header name could panic. Header names
-  are ASCII in practice, so not currently reachable. Guard only if non-ASCII headers
-  become possible.
 
 ## Remove clippy `allow-*-in-tests` and clean up `.unwrap()`/`.expect()` in tests
 
