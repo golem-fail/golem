@@ -89,8 +89,9 @@ pub fn subject_matches(subject: &str, pattern: &str) -> bool {
 /// Trait abstracting the IMAP connection so we can inject a mock in tests.
 #[async_trait]
 pub trait ImapConnection: Send + Sync {
-    /// Fetch all messages currently in the INBOX and return them as
-    /// a list of [`EmailMessage`] values.
+    /// Fetch the most recent messages in the INBOX, in IMAP sequence order
+    /// (oldest first), as a list of [`EmailMessage`] values. The real backend
+    /// caps this to the latest window rather than the entire mailbox.
     async fn fetch_inbox(&self) -> Result<Vec<EmailMessage>>;
 }
 
@@ -145,6 +146,11 @@ impl ImapPoller {
     /// Poll the inbox until an email whose subject matches `subject_pattern`
     /// arrives, or until `timeout_ms` elapses.
     ///
+    /// When several emails match, the **most recent** one is returned —
+    /// `fetch_inbox` yields messages in IMAP sequence order (oldest first), so
+    /// we scan from the back. This is what verification/OTP flows want: a stale
+    /// code left in the inbox from an earlier run never shadows the fresh one.
+    ///
     /// - `subject_pattern`: glob pattern (e.g. `"*verification*"`).
     /// - `timeout_ms`: maximum time to wait, in milliseconds.
     /// - `poll_interval_ms`: sleep between successive polls, in milliseconds.
@@ -163,7 +169,8 @@ impl ImapPoller {
                 .await
                 .context("failed to fetch IMAP inbox")?;
 
-            for msg in messages {
+            // Newest-first: the last message in sequence order is the most recent.
+            for msg in messages.into_iter().rev() {
                 if subject_matches(&msg.subject, subject_pattern) {
                     return Ok(msg);
                 }
@@ -181,10 +188,9 @@ impl ImapPoller {
 }
 
 // ---------------------------------------------------------------------------
-// Real IMAP connection (placeholder — needs the `imap` crate or similar)
+// Real IMAP connection (rustls TLS + the blocking `imap` crate)
 // ---------------------------------------------------------------------------
 
-#[allow(dead_code)]
 struct RealImapConnection {
     host: String,
     port: u16,
@@ -195,19 +201,81 @@ struct RealImapConnection {
 #[async_trait]
 impl ImapConnection for RealImapConnection {
     async fn fetch_inbox(&self) -> Result<Vec<EmailMessage>> {
-        // In a full implementation this would open a TLS connection to
-        // self.host:self.port, authenticate with self.user/self.pass,
-        // SELECT INBOX, and FETCH all messages.
-        //
-        // For now we return an error indicating that real IMAP is not yet
-        // wired up — tests use the mock connector instead.
-        anyhow::bail!(
-            "real IMAP connection to {}:{} is not yet implemented (user: {})",
-            self.host,
-            self.port,
-            self.user
-        )
+        // The `imap` crate is blocking and `rustls` here is the synchronous
+        // API, so run the whole connect→login→fetch cycle on a blocking
+        // thread to keep the async poll loop responsive.
+        let host = self.host.clone();
+        let port = self.port;
+        let user = self.user.clone();
+        let pass = self.pass.clone();
+        tokio::task::spawn_blocking(move || fetch_inbox_blocking(&host, port, &user, &pass))
+            .await
+            .context("IMAP fetch task failed to join")?
     }
+}
+
+/// Open a TLS IMAP connection, log in, EXAMINE INBOX (read-only, so messages
+/// stay unseen), FETCH every message, and parse each into an [`EmailMessage`].
+///
+/// One full connection per call: poll frequency is low (seconds) and test
+/// inboxes are tiny, so a persistent session isn't worth the added state.
+fn fetch_inbox_blocking(
+    host: &str,
+    port: u16,
+    user: &str,
+    pass: &str,
+) -> Result<Vec<EmailMessage>> {
+    use std::sync::Arc;
+
+    let mut root_store = rustls::RootCertStore::empty();
+    root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    let config = rustls::ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
+    let server_name = rustls::pki_types::ServerName::try_from(host.to_string())
+        .with_context(|| format!("invalid IMAP host name {host:?}"))?;
+    let conn = rustls::ClientConnection::new(Arc::new(config), server_name)
+        .context("failed to initialise TLS client")?;
+    let tcp = std::net::TcpStream::connect((host, port))
+        .with_context(|| format!("failed to connect to IMAP {host}:{port}"))?;
+    let tls = rustls::StreamOwned::new(conn, tcp);
+
+    let mut client = imap::Client::new(tls);
+    client
+        .read_greeting()
+        .context("IMAP server greeting failed")?;
+    let mut session = client
+        .login(user, pass)
+        .map_err(|(e, _)| anyhow::anyhow!("IMAP login failed: {e}"))?;
+
+    let mailbox = session
+        .examine("INBOX")
+        .context("IMAP EXAMINE INBOX failed")?;
+
+    let mut out = Vec::new();
+    if mailbox.exists > 0 {
+        // Only the most-recent window of messages, not the whole mailbox:
+        // `await_email` returns the newest match and re-fetches every poll, so
+        // pulling full RFC822 bodies for the entire inbox each time is wasted
+        // bandwidth. A verification/OTP mail is always among the latest few; a
+        // match older than the window is intentionally out of scope.
+        const WINDOW: u32 = 30;
+        let start = mailbox.exists.saturating_sub(WINDOW - 1).max(1);
+        let seq = format!("{start}:*");
+        let fetches = session.fetch(&seq, "RFC822").context("IMAP FETCH failed")?;
+        for fetch in fetches.iter() {
+            if let Some(body) = fetch.body() {
+                let raw = String::from_utf8_lossy(body);
+                if let Ok(msg) = EmailMessage::from_raw(&raw) {
+                    out.push(msg);
+                }
+            }
+        }
+    }
+
+    // Best-effort logout; the result doesn't change what we fetched.
+    let _ = session.logout();
+    Ok(out)
 }
 
 // ---------------------------------------------------------------------------
@@ -591,10 +659,11 @@ mod tests {
         );
     }
 
-    // 12. When several messages are present the first matching one (in
-    //     inbox order) SHALL be returned.
+    // 12. When several messages match, the MOST RECENT one (last in IMAP
+    //     sequence order) SHALL be returned, so a stale match from an earlier
+    //     run never shadows the fresh email.
     #[tokio::test]
-    async fn await_email_returns_first_matching() {
+    async fn await_email_returns_most_recent_matching() {
         let msgs = vec![
             make_email("Welcome aboard"),
             make_email("verification one"),
@@ -614,35 +683,71 @@ mod tests {
             .await
             .expect("SHALL find a match");
         assert_eq!(
-            result.subject, "verification one",
-            "SHALL return first matching in inbox order"
+            result.subject, "verification two",
+            "SHALL return the most recent matching email"
         );
     }
 
-    // 13. The real IMAP backend is not yet wired up: polling through a
-    //     `new`-constructed poller SHALL surface the "not yet implemented"
-    //     error via the fetch context.
+    // 13. The real IMAP backend is now wired (rustls + the `imap` crate).
+    //     Pointing it at a closed local port proves it actually attempts a
+    //     TCP connection — the fetch error carries the connect context and is
+    //     no longer the old "not yet implemented" stub — without touching the
+    //     network. Port 1 has nothing listening, so connect fails fast.
     #[tokio::test]
-    async fn await_email_real_backend_reports_unimplemented() {
+    async fn await_email_real_backend_attempts_connection() {
         let poller = ImapPoller::new(
-            "imap.example.com".into(),
-            993,
+            "127.0.0.1".into(),
+            1,
             "user@example.com".into(),
             "pass".into(),
         );
 
         let err = poller
-            .await_email("*verification*", 5000, 50)
+            .await_email("*verification*", 3000, 50)
             .await
-            .expect_err("real backend SHALL error");
+            .expect_err("offline connect SHALL error");
         let msg = format!("{err:#}");
         assert!(
-            msg.contains("not yet implemented"),
-            "SHALL report unimplemented real IMAP: {msg}"
+            !msg.contains("not yet implemented"),
+            "real backend SHALL be wired, not a stub: {msg}"
         );
         assert!(
-            msg.contains("imap.example.com"),
-            "SHALL include configured host: {msg}"
+            msg.contains("failed to fetch IMAP inbox"),
+            "SHALL surface via the fetch context: {msg}"
         );
+        assert!(
+            msg.contains("failed to connect to IMAP 127.0.0.1:1"),
+            "SHALL report the connect attempt: {msg}"
+        );
+    }
+
+    // 14. Live smoke against a real IMAP server (Ethereal). Ignored by
+    //     default — it needs the network and real credentials. Run with:
+    //       GOLEM_IMAP_HOST=imap.ethereal.email GOLEM_IMAP_PORT=993 \
+    //       GOLEM_IMAP_USER=… GOLEM_IMAP_PASS=… \
+    //       cargo nextest run -p golem-email --run-ignored all live_receive
+    //     Provision via the Nodemailer API; a fresh Ethereal inbox already
+    //     contains a welcome message, so no SMTP send is needed (leave
+    //     GOLEM_IMAP_SUBJECT unset to match it with "*"). Asserts the real
+    //     rustls+IMAP path connects, authenticates, and fetches a parsed message.
+    #[tokio::test]
+    #[ignore = "live network + real IMAP credentials required"]
+    async fn live_receive() {
+        let host = std::env::var("GOLEM_IMAP_HOST").expect("GOLEM_IMAP_HOST");
+        let port: u16 = std::env::var("GOLEM_IMAP_PORT")
+            .expect("GOLEM_IMAP_PORT")
+            .parse()
+            .expect("port");
+        let user = std::env::var("GOLEM_IMAP_USER").expect("GOLEM_IMAP_USER");
+        let pass = std::env::var("GOLEM_IMAP_PASS").expect("GOLEM_IMAP_PASS");
+        let pattern = std::env::var("GOLEM_IMAP_SUBJECT").unwrap_or_else(|_| "*".into());
+
+        let poller = ImapPoller::new(host, port, user, pass);
+        let msg = poller
+            .await_email(&pattern, 30000, 2000)
+            .await
+            .expect("SHALL receive a live message");
+        println!("LIVE subject={:?}\nLIVE body={:?}", msg.subject, msg.body);
+        assert!(!msg.subject.is_empty(), "subject SHALL be populated");
     }
 }

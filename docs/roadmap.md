@@ -1248,8 +1248,9 @@ Flag is defined but never read. `ResourceManager` uses default concurrency confi
 via the Nodemailer API, injectable `HttpClient` for tests) and an `ImapPoller`.
 `await_email` (golem-runner) is **fully implemented** — poll loop, glob `subject`/
 `to` match, `extract` (regex, capture-group-1 → one piece like an OTP), `save_to`.
-Provisioning is now wired (Phase 1, `create_inbox`); one gap remains — the real
-IMAP backend is a stub, so mail can't yet be received.
+Both halves are now wired: provisioning (Phase 1, `create_inbox`) and the real
+IMAP backend (Phase 2). The full send→receive→extract loop works against the
+live Ethereal server (verified by the `live_receive` smoke test).
 
 **Design decided (not a `fake:` generator).** Provisioning is an async network
 call, and `${}` generator resolution is intentionally sync + pure (the `--seed`
@@ -1284,10 +1285,20 @@ usable `${inbox.address}` (the "send" half); can't receive until Phase 2. No e2e
 yet — provisioning is live network and receive needs Phase 2, so the
 `create_inbox`→`await_email` flow lands with Phase 2.
 
-**Phase 2 — live IMAP receive:** implement `RealImapConnection::fetch_inbox`
-(`golem-email/src/imap_poller.rs:196`, currently a `bail!` stub) via an `imap`
-crate + TLS, so `await_email` polls the real inbox → OTP/URL → `open_link`.
-New deps; real-server testing; bigger lift.
+**Phase 2 — live IMAP receive — ✅ DONE:** `RealImapConnection::fetch_inbox`
+implemented with **rustls** (reusing the `rustls`/`webpki-roots`/`ring` stack
+reqwest already pulls — no `native-tls`/OpenSSL) + the blocking `imap` crate,
+run on `spawn_blocking`. Per poll: TLS connect → `read_greeting` → `LOGIN` →
+`EXAMINE INBOX` (read-only, leaves messages unseen) → `FETCH 1:* RFC822` → parse.
+Offline unit test (`127.0.0.1:1`, connection-refused, fast) proves the path is
+wired without the network; an `#[ignore]` `live_receive` smoke (env-gated)
+verifies the full loop against the real Ethereal server — confirmed: subject +
+body (OTP + URL) round-trip. (Handy: Ethereal seeds a welcome message into every
+new inbox, so receive can be smoke-tested with provisioning alone — no SMTP send.)
+
+**Remaining — on-device e2e:** no `create_inbox`→`await_email` e2e flow yet. It
+needs an app path that triggers a real email (the test-app has none) and live
+network on the e2e runner — deferred until there's a sender to drive it.
 
 Files: `golem-email/src/{ethereal.rs,imap_poller.rs}`,
 `golem-runner/src/{actions.rs,actions/external.rs,policy.rs}`,
