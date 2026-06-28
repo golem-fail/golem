@@ -29,7 +29,7 @@
   - [stop](#stop--terminate-an-app)
   - [clear_data](#clear_data--clear-app-data)
 - [Device Controls](#device-controls)
-  - [dark_mode](#dark_mode--toggle-dark-mode)
+  - [set_dark_mode](#set_dark_mode--set-dark-mode)
   - [set_location](#set_location--set-gps-coordinates)
   - [press](#press--press-hardware-button)
   - [grant_permission / revoke_permission](#grant_permission-revoke_permission--manage-app-permissions)
@@ -315,11 +315,11 @@ Clear the app's storage and cache.
 
 ## Device Controls
 
-### `dark_mode` — Toggle dark mode
+### `set_dark_mode` — Set dark mode
 
 ```toml
-{ action = "dark_mode", enabled = true }
-{ action = "dark_mode", enabled = false }
+{ action = "set_dark_mode", enabled = true }
+{ action = "set_dark_mode", enabled = false }
 ```
 
 ### `set_location` — Set GPS coordinates

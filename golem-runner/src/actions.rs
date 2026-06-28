@@ -20,7 +20,7 @@ use app_lifecycle::{handle_clear_data, handle_launch, handle_stop};
 use assertion::{handle_assert_alert, handle_assert_not_visible, handle_assert_visible};
 use capture::handle_read;
 use device::{
-    handle_dark_mode, handle_grant_permission, handle_press, handle_revoke_permission,
+    handle_set_dark_mode, handle_grant_permission, handle_press, handle_revoke_permission,
     handle_set_location,
 };
 use external::{
@@ -70,7 +70,7 @@ pub async fn execute_action(
         "stop" => handle_stop(step, driver, apps, ctx).await,
         "clear_data" => handle_clear_data(step, driver, apps).await,
         "rotate" => handle_rotate_gesture(step, driver).await,
-        "dark_mode" => handle_dark_mode(step, driver).await,
+        "set_dark_mode" => handle_set_dark_mode(step, driver).await,
         "set_location" => handle_set_location(step, driver).await,
         "press" => handle_press(step, driver).await,
         "grant_permission" => handle_grant_permission(step, driver).await,

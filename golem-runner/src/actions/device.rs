@@ -3,7 +3,7 @@ use golem_driver::PlatformDriver;
 use golem_parser::Step;
 
 /// Toggle dark mode on or off.
-pub(crate) async fn handle_dark_mode(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
+pub(crate) async fn handle_set_dark_mode(step: &Step, driver: &dyn PlatformDriver) -> Result<()> {
     let enabled = step
         .params
         .get("enabled")
@@ -11,7 +11,7 @@ pub(crate) async fn handle_dark_mode(step: &Step, driver: &dyn PlatformDriver) -
         .ok_or_else(|| {
             golem_events::coded(
                 golem_events::FailureCode::ParseMissingParam,
-                anyhow::anyhow!("dark_mode action requires 'enabled' param"),
+                anyhow::anyhow!("set_dark_mode action requires 'enabled' param"),
             )
         })?;
     driver.set_dark_mode(enabled).await
@@ -119,11 +119,11 @@ mod tests {
         let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
-        let mut step = make_step("dark_mode");
+        let mut step = make_step("set_dark_mode");
         step.params
             .insert("enabled".to_string(), toml::Value::Boolean(true));
 
-        handle_dark_mode(&step, &driver)
+        handle_set_dark_mode(&step, &driver)
             .await
             .expect("dark_mode should succeed");
 
@@ -140,11 +140,11 @@ mod tests {
         let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
-        let mut step = make_step("dark_mode");
+        let mut step = make_step("set_dark_mode");
         step.params
             .insert("enabled".to_string(), toml::Value::Boolean(false));
 
-        handle_dark_mode(&step, &driver)
+        handle_set_dark_mode(&step, &driver)
             .await
             .expect("dark_mode should succeed");
 
@@ -258,9 +258,9 @@ mod tests {
         let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
-        let step = make_step("dark_mode");
+        let step = make_step("set_dark_mode");
 
-        let err = handle_dark_mode(&step, &driver)
+        let err = handle_set_dark_mode(&step, &driver)
             .await
             .expect_err("missing enabled param SHALL error");
         assert_eq!(
@@ -285,13 +285,13 @@ mod tests {
         let root = make_element("View", Bounds::new(0, 0, 375, 812));
         let driver = MockPlatformDriver::new(root);
 
-        let mut step = make_step("dark_mode");
+        let mut step = make_step("set_dark_mode");
         step.params.insert(
             "enabled".to_string(),
             toml::Value::String("yes".to_string()),
         );
 
-        let err = handle_dark_mode(&step, &driver)
+        let err = handle_set_dark_mode(&step, &driver)
             .await
             .expect_err("non-bool enabled param SHALL error");
         assert_eq!(
@@ -515,11 +515,11 @@ mod tests {
         let driver = MockPlatformDriver::new(root);
         driver.set_error("set_dark_mode", "ui mode service unavailable");
 
-        let mut step = make_step("dark_mode");
+        let mut step = make_step("set_dark_mode");
         step.params
             .insert("enabled".to_string(), toml::Value::Boolean(true));
 
-        let err = handle_dark_mode(&step, &driver)
+        let err = handle_set_dark_mode(&step, &driver)
             .await
             .expect_err("driver Err SHALL propagate");
         assert!(

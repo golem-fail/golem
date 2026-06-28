@@ -38,7 +38,7 @@ const KNOWN_ACTIONS: &[&str] = &[
     "assert_not_visible",
     "fail",
     "set_location",
-    "dark_mode",
+    "set_dark_mode",
     "rotate",
     "grant_permission",
     "revoke_permission",

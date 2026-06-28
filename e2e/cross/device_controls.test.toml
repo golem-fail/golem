@@ -14,7 +14,7 @@ steps = [
   # iOS / Android system dark-mode is device-level state and persists
   # across app launches. A prior run that toggled it on would leak
   # into the next run's "initial" assertion. Reset before asserting.
-  { action = "dark_mode", enabled = false },
+  { action = "set_dark_mode", enabled = false },
 
   # Jump to Device State via the menu rather than swiping ~3000px
   # past every preceding section — scroll is not what this flow tests.
@@ -66,7 +66,7 @@ steps = [
   { action = "assert_visible", on_text = "Light", on_right_of = "Theme:" },
 
   # Enable dark mode and verify
-  { action = "dark_mode", enabled = true },
+  { action = "set_dark_mode", enabled = true },
   { action = "assert_visible", on_text = "Dark", on_right_of = "Theme:" },
 
   # Take a screenshot in dark mode
@@ -81,7 +81,7 @@ steps = [
   # Back to Device State to verify return to light theme.
   { action = "tap", on_accessibility_label = "menu-toggle" },
   { action = "tap", on_accessibility_label = "goto-device-state" },
-  { action = "dark_mode", enabled = false },
+  { action = "set_dark_mode", enabled = false },
   { action = "assert_visible", on_text = "Light", on_right_of = "Theme:" },
 ]
 

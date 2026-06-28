@@ -89,7 +89,7 @@ fn action_multiplier(step: &Step) -> u64 {
         // 1x — instant actions and capture-only steps that don't go
         // through the element resolver / settle path.
         "screenshot" | "add_media" | "fail" | "load_fixture" | "push_notification"
-        | "set_variable" | "log" | "clear_data" | "press" | "dark_mode" | "set_location"
+        | "set_variable" | "log" | "clear_data" | "press" | "set_dark_mode" | "set_location"
         | "grant_permission" | "revoke_permission" | "hide_keyboard" => 1,
 
         // 2x — interactions that include element resolution + post-action
@@ -226,7 +226,7 @@ fn needs_post_settle(step: &Step) -> bool {
             | "stop"
             | "accept_alert"
             | "dismiss_alert"
-            | "dark_mode"
+            | "set_dark_mode"
             | "set_location"
             | "open_link"
     )
@@ -971,7 +971,7 @@ mod tests {
             "log",
             "clear_data",
             "press",
-            "dark_mode",
+            "set_dark_mode",
             "set_location",
             "grant_permission",
             "revoke_permission",
@@ -1210,7 +1210,7 @@ mod tests {
             "stop",
             "accept_alert",
             "dismiss_alert",
-            "dark_mode",
+            "set_dark_mode",
             "set_location",
             "open_link",
         ] {
