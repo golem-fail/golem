@@ -519,9 +519,13 @@ pub(crate) async fn handle_http(step: &Step, vars: &mut VariableStore, method: &
 
 /// Immediately fail the flow with a message from the step's `text` field.
 pub(crate) fn handle_fail(step: &Step) -> Result<()> {
+    // `message` is the only field `fail` uses; it becomes the failure reason
+    // shown in reports. `${…}` in it is resolved by the per-step interpolation
+    // pass (params are interpolated) before this runs, so inline vars work.
     let message = step
-        .on_text
-        .as_deref()
+        .params
+        .get("message")
+        .and_then(|v| v.as_str())
         .unwrap_or("Flow failed (no message provided)");
     crate::fail_code!(golem_events::FailureCode::FlowExplicitFail, "{}", message)
 }
@@ -873,7 +877,10 @@ mod tests {
     #[tokio::test]
     async fn fail_action_always_returns_error_with_message() {
         let mut step = make_step("fail");
-        step.on_text = Some("Should not reach here".to_string());
+        step.params.insert(
+            "message".to_string(),
+            toml::Value::String("Should not reach here".to_string()),
+        );
 
         let result = handle_fail(&step);
         assert!(result.is_err());
@@ -1394,11 +1401,11 @@ mod tests {
 
     // ── fail action default message ────────────────────────────────────
 
-    // 6. With no on_text, handle_fail SHALL use the default message.
+    // 6. With no message param, handle_fail SHALL use the default message.
     #[tokio::test]
-    async fn fail_action_uses_default_message_when_no_text() {
+    async fn fail_action_uses_default_message_when_no_message() {
         let step = make_step("fail");
-        // No on_text set
+        // No message param set
 
         let result = handle_fail(&step);
         assert!(result.is_err(), "fail SHALL always error");

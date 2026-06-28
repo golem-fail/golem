@@ -181,6 +181,28 @@ mod tests {
     }
 
     #[test]
+    fn interpolates_fail_message_param() {
+        // `fail`'s message is a param, so inline `${…}` resolves like any
+        // other param string before the handler renders it into the report.
+        let store = store_with(&[("reason", "checkout total mismatch")]);
+        let ctx = InterpolationContext::new(&store);
+        let mut step = Step {
+            action: "fail".into(),
+            ..Default::default()
+        };
+        step.params.insert(
+            "message".into(),
+            toml::Value::String("Unexpected state: ${reason}".into()),
+        );
+        let out = interpolate_step(&step, &ctx).expect("ok");
+        assert_eq!(
+            out.params.get("message").and_then(|v| v.as_str()),
+            Some("Unexpected state: checkout total mismatch"),
+            "fail message SHALL support inline vars"
+        );
+    }
+
+    #[test]
     fn interpolates_positional_anchor() {
         let store = store_with(&[("section", "Account")]);
         let ctx = InterpolationContext::new(&store);
