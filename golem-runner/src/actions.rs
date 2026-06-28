@@ -84,11 +84,11 @@ pub async fn execute_action(
         "await_email" => handle_await_email(step, vars).await,
         "create_inbox" => handle_create_inbox(step, vars).await,
         "load_fixture" => handle_load_fixture(step, vars, ctx).await,
-        "http_get" => handle_http(step, vars, "GET").await,
-        "http_post" => handle_http(step, vars, "POST").await,
-        "http_put" => handle_http(step, vars, "PUT").await,
-        "http_patch" => handle_http(step, vars, "PATCH").await,
-        "http_delete" => handle_http(step, vars, "DELETE").await,
+        "get_http" => handle_http(step, vars, "GET").await,
+        "post_http" => handle_http(step, vars, "POST").await,
+        "put_http" => handle_http(step, vars, "PUT").await,
+        "patch_http" => handle_http(step, vars, "PATCH").await,
+        "delete_http" => handle_http(step, vars, "DELETE").await,
         _ => crate::fail_code!(
             golem_events::FailureCode::ParseUnknownAction,
             "Unknown action: {}",
@@ -150,7 +150,7 @@ mod tests {
         }
 
         // 2. Keywords from doc action headers: `### `name` — ...` (every backticked token
-        //    before the em dash; covers grouped headers like the http_* family).
+        //    before the em dash; covers grouped headers like the *_http family).
         let doc = include_str!("../../docs/actions-reference.md");
         let mut in_doc = BTreeSet::new();
         for line in doc.lines() {
@@ -335,11 +335,11 @@ mod tests {
     #[tokio::test]
     async fn http_verb_aliases_each_route_to_handle_http() {
         for action in [
-            "http_get",
-            "http_post",
-            "http_put",
-            "http_patch",
-            "http_delete",
+            "get_http",
+            "post_http",
+            "put_http",
+            "patch_http",
+            "delete_http",
         ] {
             let result = dispatch(&make_step(action)).await;
             let err = result.expect_err("http verb without url SHALL error");

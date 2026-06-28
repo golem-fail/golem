@@ -165,7 +165,7 @@ mod tests {
         let store = store_with(&[("host", "example.com")]);
         let ctx = InterpolationContext::new(&store);
         let mut step = Step {
-            action: "http_get".into(),
+            action: "get_http".into(),
             ..Default::default()
         };
         step.params.insert(

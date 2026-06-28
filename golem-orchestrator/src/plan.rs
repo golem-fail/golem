@@ -264,7 +264,7 @@ fn lint_warnings_for(path: &Path, flow: &FlowFile) -> Vec<String> {
                     "{}:{}::{} `push_notification` (app=`{}`) targets an app \
                      that may run on physical hardware. The action is sim/emu-\
                      only on both platforms and will error at runtime there. \
-                     Branch on `_hardware` and use `http_*` to your APNS/FCM \
+                     Branch on `_hardware` and use `*_http` to your APNS/FCM \
                      backend for phys delivery. See README §push_notification.",
                     path.display(),
                     block,

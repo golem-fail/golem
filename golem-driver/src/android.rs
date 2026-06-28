@@ -769,12 +769,12 @@ impl PlatformDriver for AndroidDriver {
         // Refuse on physical devices for parity with iOS — push delivery
         // on real hardware needs FCM (server keys, device tokens) and is
         // outside this action's scope. See README §push_notification
-        // for the cross-device pattern using `branch` + `http_*` to
+        // for the cross-device pattern using `branch` + `*_http` to
         // your own backend.
         if self.physical {
             bail!(
                 "push_notification is emu-only on Android — `{}` is a \
-                 physical device. Compose phys delivery via http_post \
+                 physical device. Compose phys delivery via post_http \
                  to your FCM backend, gated by a branch on `_hardware`.",
                 self.device_serial,
             );

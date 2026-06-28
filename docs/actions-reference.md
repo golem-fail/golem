@@ -48,7 +48,7 @@
   - [create_inbox](#create_inbox--provision-a-disposable-email-inbox)
   - [await_email](#await_email--poll-imap-inbox)
   - [load_fixture](#load_fixture--load-fixture-data)
-  - [http_*](#http_get-http_post-http_put-http_patch-http_delete--http-requests)
+  - [*_http](#get_http-post_http-put_http-patch_http-delete_http--http-requests)
 - [Flow Control](#flow-control)
   - [fail](#fail--fail-the-flow-immediately)
 
@@ -446,7 +446,7 @@ The action injects a push payload via the platform's developer backdoor — `xcr
 
 **Sim/emu only on both platforms.** Physical-device push delivery needs real APNS / FCM (provisioning keys, device tokens, network) which is outside this action's scope. On a physical device the driver bails with a clear error pointing at this paragraph.
 
-Compose physical-device push tests by branching on `_hardware` and posting to your own backend via `http_*`:
+Compose physical-device push tests by branching on `_hardware` and posting to your own backend via `*_http`:
 
 ```toml
 [[block]]
@@ -469,7 +469,7 @@ steps = [
 [[block]]
 name = "send_via_backend"
 steps = [
-  { action = "http_post", url = "https://your-test-backend/push", body = "{\"device\":\"${device.udid}\",\"body\":\"Hello\"}" },
+  { action = "post_http", url = "https://your-test-backend/push", body = "{\"device\":\"${device.udid}\",\"body\":\"Hello\"}" },
 ]
 ```
 
@@ -567,12 +567,12 @@ Load variables from a TOML file in `__fixtures__/`.
 # Access as ${test_user.email}, ${test_user.name}, etc.
 ```
 
-### `http_get`, `http_post`, `http_put`, `http_patch`, `http_delete` — HTTP requests
+### `get_http`, `post_http`, `put_http`, `patch_http`, `delete_http` — HTTP requests
 
 ```toml
-{ action = "http_get", url = "https://api.example.com/status", save_to = "response" }
-{ action = "http_post", url = "https://api.example.com/reset", body = "{\"force\": true}" }
-{ action = "http_get", url = "https://api.example.com/data", headers = { Authorization = "Bearer ${token}" } }
+{ action = "get_http", url = "https://api.example.com/status", save_to = "response" }
+{ action = "post_http", url = "https://api.example.com/reset", body = "{\"force\": true}" }
+{ action = "get_http", url = "https://api.example.com/data", headers = { Authorization = "Bearer ${token}" } }
 ```
 
 Fails on non-2xx status codes.

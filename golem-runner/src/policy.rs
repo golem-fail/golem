@@ -116,7 +116,7 @@ fn action_multiplier(step: &Step) -> u64 {
         // 8x — scroll (the within_bump above bumps to 12x when a
         // container is set), network I/O.
         "scroll" => 8 + within_bump,
-        "http_get" | "http_post" | "http_put" | "http_patch" | "http_delete" | "open_link"
+        "get_http" | "post_http" | "put_http" | "patch_http" | "delete_http" | "open_link"
         | "create_inbox" => 6,
 
         // 48x — email polling (240s at 5s base)
@@ -932,16 +932,16 @@ mod tests {
     }
 
     // -----------------------------------------------------------------
-    // 20. http_* and open_link actions get 6x
+    // 20. *_http and open_link actions get 6x
     // -----------------------------------------------------------------
     #[test]
     fn http_and_open_link_get_6x() {
         for action in [
-            "http_get",
-            "http_post",
-            "http_put",
-            "http_patch",
-            "http_delete",
+            "get_http",
+            "post_http",
+            "put_http",
+            "patch_http",
+            "delete_http",
             "open_link",
         ] {
             let step = Step {
@@ -1231,7 +1231,7 @@ mod tests {
             "screenshot",
             "log",
             "set_variable",
-            "http_get",
+            "get_http",
             "await_email",
         ] {
             let step = Step {

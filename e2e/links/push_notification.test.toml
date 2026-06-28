@@ -9,7 +9,7 @@
 # Physical-device push delivery requires real APNS / FCM infrastructure
 # (provisioning, server keys, device tokens) which is out of scope for
 # golem's action library. Test authors targeting physical devices
-# compose their own delivery via `branch` + `http_*` to their backend.
+# compose their own delivery via `branch` + `*_http` to their backend.
 name = "Push notification display and verification"
 tags = ["push-notification", "cross-platform"]
 

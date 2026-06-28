@@ -630,11 +630,11 @@ impl PlatformDriver for IosDriver {
         // APNS delivery needs provisioning + Apple's push servers + a
         // device token, which is outside this action's scope. See
         // README §push_notification for the cross-device pattern using
-        // `branch` + `http_*` to your own APNS backend.
+        // `branch` + `*_http` to your own APNS backend.
         if self.physical {
             bail!(
                 "push_notification is sim-only on iOS — `{}` is a \
-                 physical device. Compose phys delivery via http_post \
+                 physical device. Compose phys delivery via post_http \
                  to your APNS backend, gated by a branch on `_hardware`.",
                 self.device_id,
             );

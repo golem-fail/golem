@@ -836,13 +836,13 @@ mod tests {
         );
     }
 
-    // ── http_get dispatches correctly ────────────────────────────────
+    // ── get_http dispatches correctly ────────────────────────────────
 
     #[tokio::test]
-    async fn http_get_requires_url_param() {
+    async fn get_http_requires_url_param() {
         let mut vars = make_vars();
 
-        let step = make_step("http_get");
+        let step = make_step("get_http");
         // No url param
 
         let result = handle_http(&step, &mut vars, "GET").await;
@@ -854,13 +854,13 @@ mod tests {
         );
     }
 
-    // ── http_post dispatches correctly ───────────────────────────────
+    // ── post_http dispatches correctly ───────────────────────────────
 
     #[tokio::test]
-    async fn http_post_requires_url_param() {
+    async fn post_http_requires_url_param() {
         let mut vars = make_vars();
 
-        let step = make_step("http_post");
+        let step = make_step("post_http");
         // No url param
 
         let result = handle_http(&step, &mut vars, "POST").await;
