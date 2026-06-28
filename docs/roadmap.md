@@ -1242,67 +1242,17 @@ No app data cleaning logic exists in the execution path. The flag is accepted bu
 
 Flag is defined but never read. `ResourceManager` uses default concurrency config regardless of this value.
 
-## Ethereal email: `create_inbox` action (provision) + live IMAP receive
+## Ethereal email: on-device e2e for the `create_inbox` → `await_email` loop
 
-`golem-email` has a working **async** `EtherealClient` (provisions temp inboxes
-via the Nodemailer API, injectable `HttpClient` for tests) and an `ImapPoller`.
-`await_email` (golem-runner) is **fully implemented** — poll loop, glob `subject`/
-`to` match, `extract` (regex, capture-group-1 → one piece like an OTP), `save_to`.
-Both halves are now wired: provisioning (Phase 1, `create_inbox`) and the real
-IMAP backend (Phase 2). The full send→receive→extract loop works against the
-live Ethereal server (verified by the `live_receive` smoke test).
+The feature itself is **shipped**: `create_inbox` (provision) and live IMAP
+receive (`await_email` over rustls + the `imap` crate) work end-to-end against
+the real Ethereal server, verified by the `live_receive` smoke test. Usage is in
+[`docs/actions-reference.md`](actions-reference.md#create_inbox--provision-a-disposable-email-inbox).
 
-**Design decided (not a `fake:` generator).** Provisioning is an async network
-call, and `${}` generator resolution is intentionally sync + pure (the `--seed`
-reproducibility contract; the resolver is a non-async `Fn` in the hot
-`interpolate` loop). So this is NOT `fake:email(ethereal=true)` / `${ethereal:email}`.
-It uses the existing **action + `save_to`** pattern (as `http`/`await_email`/`bash`
-already do — async work → `set_in_scope(Flow, save_to, …)` → later `${var}`):
-
-```toml
-{ action = "create_inbox", provider = "ethereal", save_to = "inbox" }
-# app signs up with ${inbox.address}
-{ action = "await_email", inbox = "inbox", subject = "*verify*",
-  extract = { otp = "code: (\\d{6})" }, save_to = "mail" }   # → ${mail.otp}
-```
-
-`create_inbox`: `provider` (built-in `ethereal`; pluggable later) + required
-`save_to`; async with a default + overridable `timeout`. Writes an object
-`{address(=user), user, pass, imap_host, imap_port, smtp_host, smtp_port}` at
-Flow scope — the `imap_*`/`user`/`pass` fields are exactly what `await_email`
-reads from its `inbox` namespace. **Non-deterministic by design** (network; not
-`--seed`-reproducible — the side-effecting action signals that, unlike a pure
-`${}` value). I/O actions should carry a timeout even if not overridable.
-
-**Phase 1 — `create_inbox` (provision) — ✅ DONE:** dispatch arm (`actions.rs`),
-handler `handle_create_inbox` (`actions/external.rs`, reuses `EtherealClient`;
-`provider`+`save_to` required, `timeout` default 15s, writes the inbox object at
-Flow scope), `create_inbox` in KNOWN_ACTIONS (`validation.rs`), policy I/O class
-(6×, like `http`/`open_link`), unit tests (injected mock `HttpClient`, no
-network: account-map, unknown-provider, missing-provider, missing-save_to,
-await_email-contract), `actions-reference.md` + `fake-data.md` docs. Yields a
-usable `${inbox.address}` (the "send" half); can't receive until Phase 2. No e2e
-yet — provisioning is live network and receive needs Phase 2, so the
-`create_inbox`→`await_email` flow lands with Phase 2.
-
-**Phase 2 — live IMAP receive — ✅ DONE:** `RealImapConnection::fetch_inbox`
-implemented with **rustls** (reusing the `rustls`/`webpki-roots`/`ring` stack
-reqwest already pulls — no `native-tls`/OpenSSL) + the blocking `imap` crate,
-run on `spawn_blocking`. Per poll: TLS connect → `read_greeting` → `LOGIN` →
-`EXAMINE INBOX` (read-only, leaves messages unseen) → `FETCH 1:* RFC822` → parse.
-Offline unit test (`127.0.0.1:1`, connection-refused, fast) proves the path is
-wired without the network; an `#[ignore]` `live_receive` smoke (env-gated)
-verifies the full loop against the real Ethereal server — confirmed: subject +
-body (OTP + URL) round-trip. (Handy: Ethereal seeds a welcome message into every
-new inbox, so receive can be smoke-tested with provisioning alone — no SMTP send.)
-
-**Remaining — on-device e2e:** no `create_inbox`→`await_email` e2e flow yet. It
-needs an app path that triggers a real email (the test-app has none) and live
-network on the e2e runner — deferred until there's a sender to drive it.
-
-Files: `golem-email/src/{ethereal.rs,imap_poller.rs}`,
-`golem-runner/src/{actions.rs,actions/external.rs,policy.rs}`,
-`golem-parser/src/validation.rs`, `docs/actions-reference.md`.
+**Remaining:** no on-device `create_inbox` → signup → `await_email` e2e flow yet.
+It needs an app path that triggers a real verification email (the test-app has
+none) plus live network on the e2e runner. Add a sender-driven flow once there's
+an app screen to exercise it.
 
 ## TOON Timestamp Representation
 
