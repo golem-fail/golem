@@ -231,13 +231,13 @@ mod tests {
             .rounded_corners
             .iter()
             .find(|c| c.position == CornerPosition::TopLeft)
-            .unwrap();
+            .expect("value SHALL be present");
         assert_eq!((tl.center_x, tl.center_y), (55, 55));
         let br = d
             .rounded_corners
             .iter()
             .find(|c| c.position == CornerPosition::BottomRight)
-            .unwrap();
+            .expect("value SHALL be present");
         assert_eq!((br.center_x, br.center_y), (393 - 55, 852 - 55));
     }
 

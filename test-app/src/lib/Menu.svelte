@@ -95,8 +95,11 @@ function gotoSection(id) {
   background: var(--menu-bg, #fff);
   border-bottom: 1px solid #ccc;
   /* Padding-top includes the device's safe-area inset so the menu
-     isn't hidden under the iOS notch / Android status bar. */
-  padding: max(8px, env(safe-area-inset-top, 8px)) 8px 4px;
+     isn't hidden under the iOS notch / Android status bar. Floor of
+     24px so the menu-toggle clears the Android status bar on emulators,
+     where env(safe-area-inset-top) reports 0 (real devices report the
+     true inset, which is larger and wins via max()). */
+  padding: max(24px, env(safe-area-inset-top, 8px)) 8px 4px;
 }
 .menu-bar {
   display: flex;

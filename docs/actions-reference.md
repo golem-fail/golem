@@ -69,6 +69,14 @@ Find an element matching the selectors and tap its center.
 
 Supports all selectors, `auto_scroll`, `timeout`, `if_fail`, `retry`.
 
+> **iOS timing note.** A `tap` is synthesised as `press(forDuration: 0.05)`
+> (50 ms), not a bare `tap()`. The bare call emits touch-up immediately after
+> touch-down, which a WebView can race-drop — leaving the click unfired. The
+> 50 ms hold makes XCUITest serialise down → hold → up reliably. The trade-off:
+> a page whose long-press recogniser triggers below ~50 ms may classify a
+> `tap` as a long-press. In that rare case use an explicit `long_press` (or a
+> coordinate tap) to disambiguate.
+
 ### `double_tap` — Double-tap an element
 
 Two rapid taps (40ms apart) at the element center.
@@ -228,6 +236,16 @@ Dismiss the on-screen keyboard. No-op if no keyboard is visible.
 { action = "hide_keyboard" }
 ```
 
+> **Automatic keyboard recovery.** You rarely need an explicit
+> `hide_keyboard` to reach a field the keyboard covers. During element
+> resolution, if a target is absent from the keyboard-aware viewport but
+> present in the unfiltered tree (i.e. the soft keyboard has occluded it),
+> the resolver dismisses the keyboard **once per resolve** and re-polls. On
+> Android the IME hide is animated and asynchronous, so the resolver waits
+> for the reported keyboard height to return to 0 (with a timeout) before
+> retrying, so the retap lands on the now-revealed field rather than the
+> still-sliding panel.
+
 ## Assertions
 
 ### `assert_visible` — Wait for / assert element exists
@@ -335,6 +353,20 @@ Clear the app's storage and cache.
 { action = "press", button = "back" }       # Android only
 { action = "press", button = "volume_up" }
 ```
+
+**Supported buttons (platform-specific):**
+
+| `button`      | Android (`input keyevent`) | iOS (`/press` → `XCUIDevice.press`) |
+|---------------|----------------------------|-------------------------------------|
+| `home`        | ✓ `HOME`                   | ✓ `.home`                           |
+| `back`        | ✓ `BACK`                   | — (no hardware back button)         |
+| `volume_up`   | ✓ `VOLUME_UP`              | —                                   |
+| `volume_down` | ✓ `VOLUME_DOWN`            | —                                   |
+
+An unsupported button errors at action time. On iOS only `home` exists;
+`simctl ui … home` was dropped in Xcode 26, so golem drives it through the
+companion's `/press` endpoint (`XCUIDevice.shared.press(.home)`), the
+version-stable path.
 
 ### `grant_permission`, `revoke_permission` — Manage app permissions
 

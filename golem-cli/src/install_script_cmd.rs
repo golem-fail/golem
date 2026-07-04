@@ -585,22 +585,22 @@ mod tests {
 
     #[test]
     fn pathdiff_basic() {
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = tempfile::tempdir().expect("tempdir() SHALL succeed");
         let root = tmp.path();
         let script = root.join("scripts").join("install.sh");
-        std::fs::create_dir_all(script.parent().unwrap()).unwrap();
-        std::fs::write(&script, "").unwrap();
-        let rel = pathdiff_relative(&script, root).unwrap();
+        std::fs::create_dir_all(script.parent().expect("parent() SHALL succeed")).expect("value SHALL be present");
+        std::fs::write(&script, "").expect("write() SHALL succeed");
+        let rel = pathdiff_relative(&script, root).expect("pathdiff_relative() SHALL succeed");
         assert_eq!(rel, PathBuf::from("scripts/install.sh"));
     }
 
     #[test]
     fn discover_xcode_projects_finds_nested() {
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = tempfile::tempdir().expect("tempdir() SHALL succeed");
         let root = tmp.path();
-        std::fs::create_dir_all(root.join("ios/MyApp.xcodeproj")).unwrap();
-        std::fs::create_dir_all(root.join("other/Sub.xcworkspace")).unwrap();
-        std::fs::create_dir_all(root.join("node_modules/bogus.xcodeproj")).unwrap();
+        std::fs::create_dir_all(root.join("ios/MyApp.xcodeproj")).expect("value SHALL be present");
+        std::fs::create_dir_all(root.join("other/Sub.xcworkspace")).expect("value SHALL be present");
+        std::fs::create_dir_all(root.join("node_modules/bogus.xcodeproj")).expect("value SHALL be present");
         let found = discover_xcode_projects(root, 5);
         assert_eq!(found.len(), 2, "SHALL skip node_modules; got {:?}", found);
         // .xcworkspace preferred first
@@ -611,9 +611,9 @@ mod tests {
     fn discover_xcode_projects_skips_internal_workspace() {
         // Every real .xcodeproj has a `project.xcworkspace` inside it.
         // That's Xcode internals and SHALL NOT be surfaced to the user.
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = tempfile::tempdir().expect("tempdir() SHALL succeed");
         let root = tmp.path();
-        std::fs::create_dir_all(root.join("ios/MyApp.xcodeproj/project.xcworkspace")).unwrap();
+        std::fs::create_dir_all(root.join("ios/MyApp.xcodeproj/project.xcworkspace")).expect("value SHALL be present");
         let found = discover_xcode_projects(root, 5);
         assert_eq!(
             found.len(),
@@ -626,16 +626,16 @@ mod tests {
 
     #[test]
     fn discover_android_roots_finds_settings_gradle_dirs() {
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = tempfile::tempdir().expect("tempdir() SHALL succeed");
         let root = tmp.path();
         // project-a has a settings.gradle → is a root
-        std::fs::create_dir_all(root.join("project-a/app")).unwrap();
-        std::fs::write(root.join("project-a/settings.gradle"), "").unwrap();
-        std::fs::write(root.join("project-a/build.gradle"), "").unwrap();
-        std::fs::write(root.join("project-a/app/build.gradle"), "").unwrap();
+        std::fs::create_dir_all(root.join("project-a/app")).expect("value SHALL be present");
+        std::fs::write(root.join("project-a/settings.gradle"), "").expect("value SHALL be present");
+        std::fs::write(root.join("project-a/build.gradle"), "").expect("value SHALL be present");
+        std::fs::write(root.join("project-a/app/build.gradle"), "").expect("value SHALL be present");
         // project-b uses .kts
-        std::fs::create_dir_all(root.join("project-b")).unwrap();
-        std::fs::write(root.join("project-b/settings.gradle.kts"), "").unwrap();
+        std::fs::create_dir_all(root.join("project-b")).expect("value SHALL be present");
+        std::fs::write(root.join("project-b/settings.gradle.kts"), "").expect("value SHALL be present");
         let found = discover_android_roots(root, 5);
         assert_eq!(
             found,
@@ -645,10 +645,10 @@ mod tests {
 
     #[test]
     fn discover_tauri_dirs_finds_parents_of_src_tauri() {
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = tempfile::tempdir().expect("tempdir() SHALL succeed");
         let root = tmp.path();
-        std::fs::create_dir_all(root.join("app-a/src-tauri")).unwrap();
-        std::fs::create_dir_all(root.join("app-b/src-tauri")).unwrap();
+        std::fs::create_dir_all(root.join("app-a/src-tauri")).expect("value SHALL be present");
+        std::fs::create_dir_all(root.join("app-b/src-tauri")).expect("value SHALL be present");
         let found = discover_tauri_dirs(root, 5);
         assert_eq!(found, vec!["app-a".to_string(), "app-b".to_string()]);
     }
@@ -664,29 +664,29 @@ mod tests {
         ];
 
         // no lockfile → npx default
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = tempfile::tempdir().expect("tempdir() SHALL succeed");
         assert_eq!(detect_tauri_command(tmp.path(), &items), 0);
 
         // yarn.lock → yarn
-        let tmp = tempfile::tempdir().unwrap();
-        std::fs::write(tmp.path().join("yarn.lock"), "").unwrap();
+        let tmp = tempfile::tempdir().expect("tempdir() SHALL succeed");
+        std::fs::write(tmp.path().join("yarn.lock"), "").expect("value SHALL be present");
         assert_eq!(detect_tauri_command(tmp.path(), &items), 1);
 
         // pnpm-lock.yaml → pnpm
-        let tmp = tempfile::tempdir().unwrap();
-        std::fs::write(tmp.path().join("pnpm-lock.yaml"), "").unwrap();
+        let tmp = tempfile::tempdir().expect("tempdir() SHALL succeed");
+        std::fs::write(tmp.path().join("pnpm-lock.yaml"), "").expect("value SHALL be present");
         assert_eq!(detect_tauri_command(tmp.path(), &items), 2);
 
         // bun.lockb → bun
-        let tmp = tempfile::tempdir().unwrap();
-        std::fs::write(tmp.path().join("bun.lockb"), "").unwrap();
+        let tmp = tempfile::tempdir().expect("tempdir() SHALL succeed");
+        std::fs::write(tmp.path().join("bun.lockb"), "").expect("value SHALL be present");
         assert_eq!(detect_tauri_command(tmp.path(), &items), 3);
 
         // parent dir lockfile is checked (tauri subdir case)
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = tempfile::tempdir().expect("tempdir() SHALL succeed");
         let sub = tmp.path().join("app");
-        std::fs::create_dir(&sub).unwrap();
-        std::fs::write(tmp.path().join("pnpm-lock.yaml"), "").unwrap();
+        std::fs::create_dir(&sub).expect("create_dir() SHALL succeed");
+        std::fs::write(tmp.path().join("pnpm-lock.yaml"), "").expect("value SHALL be present");
         assert_eq!(detect_tauri_command(&sub, &items), 2);
     }
 

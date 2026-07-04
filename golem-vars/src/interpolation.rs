@@ -449,7 +449,7 @@ mod tests {
             vec![("email", VarValue::string("alice@example.com"))],
         );
         let ctx = simple_ctx(&store);
-        let result = interpolate("${email}", &ctx).unwrap();
+        let result = interpolate("${email}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "alice@example.com");
     }
 
@@ -464,7 +464,7 @@ mod tests {
             ],
         );
         let ctx = simple_ctx(&store);
-        let result = interpolate("${first} ${last}", &ctx).unwrap();
+        let result = interpolate("${first} ${last}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "Sarah Johnson");
     }
 
@@ -473,7 +473,7 @@ mod tests {
     fn no_variables_passthrough() {
         let store = VariableStore::new();
         let ctx = simple_ctx(&store);
-        let result = interpolate("plain text here", &ctx).unwrap();
+        let result = interpolate("plain text here", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "plain text here");
     }
 
@@ -488,7 +488,7 @@ mod tests {
             )],
         );
         let ctx = simple_ctx(&store);
-        let result = interpolate("${person.first}", &ctx).unwrap();
+        let result = interpolate("${person.first}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "Sarah");
     }
 
@@ -509,7 +509,7 @@ mod tests {
             )],
         );
         let ctx = simple_ctx(&store);
-        let result = interpolate("${config.db.host}:${config.db.port}", &ctx).unwrap();
+        let result = interpolate("${config.db.host}:${config.db.port}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "localhost:5432");
     }
 
@@ -526,7 +526,7 @@ mod tests {
         let ctx = simple_ctx(&store);
         let result = interpolate("${person.missing}", &ctx);
         assert!(result.is_err());
-        let err = result.unwrap_err();
+        let err = result.expect_err("operation SHALL fail");
         assert!(
             matches!(err, VarError::PropertyNotFound { ref object, ref property }
                      if object == "person" && property == "missing"),
@@ -544,7 +544,7 @@ mod tests {
         let ctx = simple_ctx(&store);
         let result = interpolate("${name.first}", &ctx);
         assert!(result.is_err());
-        let err = result.unwrap_err();
+        let err = result.expect_err("operation SHALL fail");
         assert!(
             matches!(err, VarError::NotAnObject(ref s) if s == "name"),
             "expected NotAnObject, got: {err}"
@@ -571,7 +571,7 @@ mod tests {
             builtins: None,
             generator: None,
         };
-        let result = interpolate("${self:email}", &ctx).unwrap();
+        let result = interpolate("${self:email}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "device@example.com");
     }
 
@@ -617,7 +617,7 @@ mod tests {
             builtins: None,
             generator: None,
         };
-        let result = interpolate("${global:email}", &ctx).unwrap();
+        let result = interpolate("${global:email}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "global@example.com");
     }
 
@@ -641,7 +641,7 @@ mod tests {
             builtins: None,
             generator: None,
         };
-        let result = interpolate("${iphone_17:quote_ref}", &ctx).unwrap();
+        let result = interpolate("${iphone_17:quote_ref}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "QR-12345");
     }
 
@@ -682,7 +682,7 @@ mod tests {
             builtins: None,
             generator: None,
         };
-        let result = interpolate("${_each.item}", &ctx).unwrap();
+        let result = interpolate("${_each.item}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "apple");
     }
 
@@ -702,7 +702,7 @@ mod tests {
         };
         let result = interpolate("${_each.item}", &ctx);
         assert!(result.is_err());
-        let err = result.unwrap_err();
+        let err = result.expect_err("operation SHALL fail");
         assert!(
             matches!(err, VarError::Other(ref msg) if msg.contains("for_each")),
             "expected for_each error, got: {err}"
@@ -716,7 +716,7 @@ mod tests {
         let ctx = simple_ctx(&store);
         let result = interpolate("${nonexistent}", &ctx);
         assert!(result.is_err());
-        let err = result.unwrap_err();
+        let err = result.expect_err("operation SHALL fail");
         assert!(
             matches!(err, VarError::Undefined(ref name) if name == "nonexistent"),
             "expected Undefined, got: {err}"
@@ -728,7 +728,7 @@ mod tests {
     fn empty_string_is_valid() {
         let store = store_with(ScopeLevel::Project, vec![("name", VarValue::string(""))]);
         let ctx = simple_ctx(&store);
-        let result = interpolate("${name}", &ctx).unwrap();
+        let result = interpolate("${name}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "");
     }
 
@@ -748,7 +748,7 @@ mod tests {
             builtins: Some(&builtins),
             generator: None,
         };
-        let result = interpolate("${_device}", &ctx).unwrap();
+        let result = interpolate("${_device}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "Pixel 9");
     }
 
@@ -768,7 +768,7 @@ mod tests {
             builtins: Some(&builtins),
             generator: None,
         };
-        let result = interpolate("${_loop}", &ctx).unwrap();
+        let result = interpolate("${_loop}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "3");
     }
 
@@ -786,7 +786,7 @@ mod tests {
         store.push_scope(cli);
 
         let ctx = simple_ctx(&store);
-        let result = interpolate("${env}", &ctx).unwrap();
+        let result = interpolate("${env}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "cli-env");
     }
 
@@ -804,7 +804,7 @@ mod tests {
         store.push_scope(flow);
 
         let ctx = simple_ctx(&store);
-        let result = interpolate("${env}", &ctx).unwrap();
+        let result = interpolate("${env}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "flow-env");
     }
 
@@ -822,7 +822,7 @@ mod tests {
         store.push_scope(fixture);
 
         let ctx = simple_ctx(&store);
-        let result = interpolate("${env}", &ctx).unwrap();
+        let result = interpolate("${env}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "fixture-env");
     }
 
@@ -849,7 +849,7 @@ mod tests {
             builtins: None,
             generator: None,
         };
-        let result = interpolate("${email}", &ctx).unwrap();
+        let result = interpolate("${email}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "device@example.com");
     }
 
@@ -870,7 +870,7 @@ mod tests {
     fn escaped_dollar() {
         let store = VariableStore::new();
         let ctx = simple_ctx(&store);
-        let result = interpolate("$${not_a_var}", &ctx).unwrap();
+        let result = interpolate("$${not_a_var}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "${not_a_var}");
     }
 
@@ -885,7 +885,7 @@ mod tests {
             ],
         );
         let ctx = simple_ctx(&store);
-        let result = interpolate("${a}${b}", &ctx).unwrap();
+        let result = interpolate("${a}${b}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "helloworld");
     }
 
@@ -896,7 +896,7 @@ mod tests {
         let ctx = simple_ctx(&store);
         let result = interpolate("${name", &ctx);
         assert!(result.is_err());
-        let err = result.unwrap_err();
+        let err = result.expect_err("operation SHALL fail");
         assert!(
             matches!(err, VarError::UnclosedReference),
             "expected UnclosedReference, got: {err}"
@@ -917,7 +917,7 @@ mod tests {
         );
         let ctx = simple_ctx(&store);
         // greeting was pre-resolved before being stored
-        let result = interpolate("${greeting}", &ctx).unwrap();
+        let result = interpolate("${greeting}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "Hello, Alice");
     }
 

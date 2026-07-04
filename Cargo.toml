@@ -37,3 +37,4 @@ chrono = "0.4"
 async-trait = "0.1"
 sha1 = "0.10"
 ignore = "0.4"
+indexmap = { version = "2", features = ["serde"] }

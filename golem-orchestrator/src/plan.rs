@@ -1214,8 +1214,8 @@ mod tests {
 
     fn write_flow(dir: &Path, name: &str, contents: &str) -> PathBuf {
         let path = dir.join(name);
-        let mut f = std::fs::File::create(&path).unwrap();
-        f.write_all(contents.as_bytes()).unwrap();
+        let mut f = std::fs::File::create(&path).expect("create() SHALL succeed");
+        f.write_all(contents.as_bytes()).expect("value SHALL be present");
         path
     }
 
@@ -1235,7 +1235,7 @@ mod tests {
     // independent execution for flake comparison).
     #[tokio::test]
     async fn plan_repeat_fans_out_flow_runs() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         let flow = write_flow(
             tmp.path(),
             "f.test.toml",
@@ -1252,7 +1252,7 @@ mod tests {
 
         let single = plan(&[flow.clone()], &apps, tmp.path(), None, None, 1)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
         let base_runs = single.flow_runs.len();
         assert!(
             base_runs > 0,
@@ -1261,7 +1261,7 @@ mod tests {
 
         let repeated = plan(&[flow], &apps, tmp.path(), None, None, 3)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
         assert_eq!(
             repeated.flow_runs.len(),
             base_runs * 3,
@@ -1279,7 +1279,7 @@ mod tests {
 
     #[tokio::test]
     async fn plan_repeat_clones_coverage_groups() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         // `coverage = "smart"` ensures a coverage group is emitted.
         let flow = write_flow(
             tmp.path(),
@@ -1299,7 +1299,7 @@ mod tests {
 
         let single = plan(&[flow.clone()], &apps, tmp.path(), None, None, 1)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
         let base_groups = single.coverage_groups.len();
         if base_groups == 0 {
             // Device snapshot may not have an ios device at plan-time —
@@ -1309,7 +1309,7 @@ mod tests {
 
         let repeated = plan(&[flow], &apps, tmp.path(), None, None, 3)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
         assert_eq!(
             repeated.coverage_groups.len(),
             base_groups * 3,
@@ -1335,7 +1335,7 @@ mod tests {
 
     #[tokio::test]
     async fn plan_single_app_single_ios_run() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         let flow = write_flow(
             tmp.path(),
             "f.test.toml",
@@ -1351,7 +1351,7 @@ mod tests {
         let apps = vec![project_app("app", "com.app", Some("scripts/i.sh"))];
         let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
         assert_eq!(suite.flow_runs.len(), 1);
         assert_eq!(suite.flow_runs[0].slots.len(), 1);
         assert_eq!(suite.flow_runs[0].slots[0].platform, Some(Platform::Ios));
@@ -1364,7 +1364,7 @@ mod tests {
 
     #[tokio::test]
     async fn plan_ios_18_exact_version_captured() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         let flow = write_flow(
             tmp.path(),
             "f.test.toml",
@@ -1380,9 +1380,9 @@ mod tests {
         let apps = vec![project_app("app", "com.app", None)];
         let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
         assert_eq!(suite.flow_runs.len(), 1);
-        let spec = suite.flow_runs[0].slots[0].os_version.as_ref().unwrap();
+        let spec = suite.flow_runs[0].slots[0].os_version.as_ref().expect("as_ref() SHALL succeed");
         assert!(
             matches!(spec, OsVersionSpec::Exact { major: 18, .. }),
             "os = \"ios:18\" SHALL populate os_version with Exact(18)"
@@ -1391,7 +1391,7 @@ mod tests {
 
     #[tokio::test]
     async fn plan_os_list_fans_out_per_version() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         let flow = write_flow(
             tmp.path(),
             "f.test.toml",
@@ -1407,7 +1407,7 @@ mod tests {
         let apps = vec![project_app("app", "com.app", None)];
         let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
         assert_eq!(
             suite.flow_runs.len(),
             2,
@@ -1417,7 +1417,7 @@ mod tests {
 
     #[tokio::test]
     async fn plan_type_list_fans_out() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         let flow = write_flow(
             tmp.path(),
             "f.test.toml",
@@ -1434,12 +1434,12 @@ mod tests {
         let apps = vec![project_app("app", "com.app", None)];
         let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
         assert_eq!(suite.flow_runs.len(), 2);
         let mut types: Vec<_> = suite
             .flow_runs
             .iter()
-            .map(|r| r.slots[0].device_type.unwrap())
+            .map(|r| r.slots[0].device_type.expect("value SHALL be present"))
             .collect();
         types.sort_by_key(|t| t.to_string());
         assert_eq!(types, vec![DeviceType::Phone, DeviceType::Tablet]);
@@ -1447,7 +1447,7 @@ mod tests {
 
     #[tokio::test]
     async fn plan_two_apps_same_constraint_share_slot() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         let flow = write_flow(
             tmp.path(),
             "f.test.toml",
@@ -1470,7 +1470,7 @@ mod tests {
         ];
         let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
         assert_eq!(suite.flow_runs.len(), 1);
         assert_eq!(
             suite.flow_runs[0].slots.len(),
@@ -1484,7 +1484,7 @@ mod tests {
 
     #[tokio::test]
     async fn plan_two_apps_different_platforms_produce_two_slots() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         let flow = write_flow(
             tmp.path(),
             "f.test.toml",
@@ -1507,7 +1507,7 @@ mod tests {
         ];
         let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
         assert_eq!(
             suite.flow_runs.len(),
             1,
@@ -1522,7 +1522,7 @@ mod tests {
 
     #[tokio::test]
     async fn plan_client_multi_version_supplier_single_platform() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         let flow = write_flow(
             tmp.path(),
             "f.test.toml",
@@ -1545,7 +1545,7 @@ mod tests {
         ];
         let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
         assert_eq!(
             suite.flow_runs.len(),
             2,
@@ -1562,7 +1562,7 @@ mod tests {
 
     #[tokio::test]
     async fn plan_platform_override_forces_single_platform() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         let flow = write_flow(
             tmp.path(),
             "f.test.toml",
@@ -1580,7 +1580,7 @@ mod tests {
         let apps = vec![project_app("app", "com.app", None)];
         let suite = plan(&[flow], &apps, tmp.path(), Some(Platform::Android), None, 1)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
         for run in &suite.flow_runs {
             for slot in &run.slots {
                 assert_eq!(
@@ -1594,7 +1594,7 @@ mod tests {
 
     #[tokio::test]
     async fn plan_merges_project_bundle_when_flow_omits() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         let flow = write_flow(
             tmp.path(),
             "f.test.toml",
@@ -1610,14 +1610,14 @@ mod tests {
         let apps = vec![project_app("a", "com.project.a", Some("scripts/a.sh"))];
         let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
         let app = &suite.flows[0].flow.flow.apps[0];
         assert_eq!(app.bundle.as_deref(), Some("com.project.a"));
     }
 
     #[tokio::test]
     async fn plan_drops_unreferenced_project_apps() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         let flow = write_flow(
             tmp.path(),
             "f.test.toml",
@@ -1636,7 +1636,7 @@ mod tests {
         ];
         let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
         let bundles: Vec<_> = suite
             .install_matrix
             .iter()
@@ -1647,7 +1647,7 @@ mod tests {
 
     #[tokio::test]
     async fn plan_bad_flow_moves_to_parse_failures_not_error() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         let good = write_flow(
             tmp.path(),
             "good.test.toml",
@@ -1690,7 +1690,7 @@ mod tests {
 
     #[tokio::test]
     async fn plan_flow_only_install_script_still_in_matrix() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         let flow = write_flow(
             tmp.path(),
             "f.test.toml",
@@ -1705,7 +1705,7 @@ mod tests {
             os = "ios"
         "#,
         );
-        let suite = plan(&[flow], &[], tmp.path(), None, None, 1).await.unwrap();
+        let suite = plan(&[flow], &[], tmp.path(), None, None, 1).await.expect("async operation SHALL succeed");
         assert_eq!(suite.install_matrix.len(), 1);
         assert!(suite.install_matrix[0]
             .script_path
@@ -1799,7 +1799,7 @@ mod tests {
             )],
         );
         let snap: Vec<DeviceInfo> = Vec::new();
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Full).unwrap();
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Full).expect("expand_app_requirements() SHALL succeed");
         assert_eq!(
             reqs.len(),
             4,
@@ -1824,7 +1824,7 @@ mod tests {
             )],
         );
         let snap: Vec<DeviceInfo> = Vec::new();
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).unwrap();
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).expect("expand_app_requirements() SHALL succeed");
         assert_eq!(reqs.len(), 4);
         // 2 os-only boxes (device_type=None) + 2 type-only boxes (os_version=None).
         let os_only = reqs
@@ -1857,7 +1857,7 @@ mod tests {
             DeviceType::Tablet,
             true,
         )];
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).unwrap();
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).expect("expand_app_requirements() SHALL succeed");
         assert_eq!(
             reqs.len(),
             2,
@@ -1891,8 +1891,8 @@ mod tests {
                 true,
             ),
         ];
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).unwrap();
-        let reduced = reduce_app_reqs_via_cover(&reqs, &snap).unwrap();
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).expect("expand_app_requirements() SHALL succeed");
+        let reduced = reduce_app_reqs_via_cover(&reqs, &snap).expect("reduce_app_reqs_via_cover() SHALL succeed");
         assert_eq!(
             reduced.len(),
             2,
@@ -1917,7 +1917,7 @@ mod tests {
             result.is_err(),
             "ios:latest:2 with 1 version SHALL error under Min"
         );
-        let msg = format!("{}", result.unwrap_err());
+        let msg = format!("{}", result.expect_err("operation SHALL fail"));
         assert!(
             msg.contains("requested 2"),
             "error SHALL mention requested count: {msg}"
@@ -1956,7 +1956,7 @@ mod tests {
             DeviceType::Phone,
             true,
         )];
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).unwrap();
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).expect("expand_app_requirements() SHALL succeed");
         assert_eq!(reqs.len(), 1, "one booted platform → one default box");
         assert_eq!(reqs[0].platform, Some(Platform::Ios));
         assert_eq!(
@@ -1981,7 +1981,7 @@ mod tests {
                 true,
             ),
         ];
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).unwrap();
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).expect("expand_app_requirements() SHALL succeed");
         assert_eq!(reqs.len(), 2, "both platforms booted → 2 default boxes");
         let platforms: std::collections::HashSet<_> =
             reqs.iter().filter_map(|r| r.platform).collect();
@@ -2019,7 +2019,7 @@ mod tests {
             ],
         );
         let snap: Vec<DeviceInfo> = Vec::new();
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).unwrap();
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).expect("expand_app_requirements() SHALL succeed");
         assert_eq!(
             reqs.len(),
             1,
@@ -2064,7 +2064,7 @@ mod tests {
             DeviceType::Tablet,
             true,
         )];
-        let reduced = reduce_app_reqs_via_cover(&reqs, &snap).unwrap();
+        let reduced = reduce_app_reqs_via_cover(&reqs, &snap).expect("reduce_app_reqs_via_cover() SHALL succeed");
         assert_eq!(
             reduced.len(),
             1,
@@ -2095,7 +2095,7 @@ mod tests {
             result.is_err(),
             "Unknown type SHALL error, not silently map to any-type"
         );
-        let msg = format!("{}", result.unwrap_err());
+        let msg = format!("{}", result.expect_err("operation SHALL fail"));
         assert!(
             msg.contains("Tablet"),
             "error SHALL include the offending value: {msg}"
@@ -2120,7 +2120,7 @@ mod tests {
     #[test]
     fn expand_hardware_entries_absent_defaults_to_virtual_only() {
         let dc = dc_with_hardware(None);
-        let result = expand_hardware_entries(&dc).unwrap();
+        let result = expand_hardware_entries(&dc).expect("expand_hardware_entries() SHALL succeed");
         assert_eq!(
             result,
             vec![Some(false)],
@@ -2131,14 +2131,14 @@ mod tests {
     #[test]
     fn expand_hardware_entries_single_virtual_pins_false() {
         let dc = dc_with_hardware(Some(golem_parser::StringOrVec::Single("virtual".into())));
-        let result = expand_hardware_entries(&dc).unwrap();
+        let result = expand_hardware_entries(&dc).expect("expand_hardware_entries() SHALL succeed");
         assert_eq!(result, vec![Some(false)]);
     }
 
     #[test]
     fn expand_hardware_entries_single_real_pins_true() {
         let dc = dc_with_hardware(Some(golem_parser::StringOrVec::Single("real".into())));
-        let result = expand_hardware_entries(&dc).unwrap();
+        let result = expand_hardware_entries(&dc).expect("expand_hardware_entries() SHALL succeed");
         assert_eq!(result, vec![Some(true)]);
     }
 
@@ -2148,7 +2148,7 @@ mod tests {
             "virtual".into(),
             "real".into(),
         ])));
-        let result = expand_hardware_entries(&dc).unwrap();
+        let result = expand_hardware_entries(&dc).expect("expand_hardware_entries() SHALL succeed");
         assert_eq!(
             result,
             vec![Some(false), Some(true)],
@@ -2164,7 +2164,7 @@ mod tests {
             result.is_err(),
             "SHALL reject `hardware = []` instead of silently emitting zero boxes"
         );
-        let msg = format!("{}", result.unwrap_err());
+        let msg = format!("{}", result.expect_err("operation SHALL fail"));
         assert!(
             msg.contains("omit"),
             "error SHALL suggest omitting the field: {msg}"
@@ -2179,7 +2179,7 @@ mod tests {
             result.is_err(),
             "SHALL reject unknown values (e.g. \"sim\" instead of \"virtual\")"
         );
-        let msg = format!("{}", result.unwrap_err());
+        let msg = format!("{}", result.expect_err("operation SHALL fail"));
         assert!(
             msg.contains("sim"),
             "error SHALL include offending value: {msg}"
@@ -2212,8 +2212,8 @@ mod tests {
                 true,
             ),
         ];
-        let a_reqs = expand_app_requirements(&app_a, &snap, None, CoverageStrategy::One).unwrap();
-        let b_reqs = expand_app_requirements(&app_b, &snap, None, CoverageStrategy::One).unwrap();
+        let a_reqs = expand_app_requirements(&app_a, &snap, None, CoverageStrategy::One).expect("expand_app_requirements() SHALL succeed");
+        let b_reqs = expand_app_requirements(&app_b, &snap, None, CoverageStrategy::One).expect("expand_app_requirements() SHALL succeed");
         let mut groups: Vec<CoverageGroup> = Vec::new();
         let runs = expand_jit(
             0,
@@ -2223,7 +2223,7 @@ mod tests {
             CoverageStrategy::One,
             Some(1),
         )
-        .unwrap();
+        .expect("value SHALL be present");
         assert_eq!(runs.len(), 1, "one SHALL emit a single FlowRun");
         let slots = &runs[0].slots;
         assert_eq!(
@@ -2272,7 +2272,7 @@ mod tests {
                 true,
             ),
         ];
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::One).unwrap();
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::One).expect("expand_app_requirements() SHALL succeed");
         let mut groups: Vec<CoverageGroup> = Vec::new();
         let runs = expand_jit(
             0,
@@ -2282,7 +2282,7 @@ mod tests {
             CoverageStrategy::One,
             Some(1),
         )
-        .unwrap();
+        .expect("value SHALL be present");
         assert_eq!(runs.len(), 2, "SHALL emit one FlowRun per os fan-out");
         assert!(
             runs.iter().all(|r| r.coverage_group == Some(0)),
@@ -2317,7 +2317,7 @@ mod tests {
                 true,
             ),
         ];
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Smart).unwrap();
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Smart).expect("expand_app_requirements() SHALL succeed");
         let mut groups: Vec<CoverageGroup> = Vec::new();
         let runs = expand_jit(
             0,
@@ -2327,7 +2327,7 @@ mod tests {
             CoverageStrategy::Smart,
             None,
         )
-        .unwrap();
+        .expect("value SHALL be present");
         assert_eq!(
             groups[0].max_runs, None,
             "Smart SHALL have no run-count cap — stop on pool fully ticked"

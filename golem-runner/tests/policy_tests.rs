@@ -1358,7 +1358,7 @@ steps = [
         }
     }
     let png_path = found_png.expect("SHALL write a screenshot .png file");
-    let filename = png_path.file_name().unwrap().to_str().unwrap();
+    let filename = png_path.file_name().expect("file_name() SHALL succeed").to_str().expect("to_str() SHALL succeed");
     assert!(filename.ends_with(".png"), "SHALL have .png extension");
     assert!(filename.contains("disk_block"), "SHALL contain block name");
 

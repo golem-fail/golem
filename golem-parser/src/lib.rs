@@ -894,12 +894,12 @@ steps = [
         let steps = &flow.block[0].steps;
 
         // Bare string → Text, default min_matches 1.
-        let c0 = steps[0].on.as_ref().unwrap().contains.as_ref().unwrap();
+        let c0 = steps[0].on.as_ref().expect("as_ref() SHALL succeed").contains.as_ref().expect("as_ref() SHALL succeed");
         assert!(matches!(c0, ContainsAnchor::Text(s) if s == "Row 0"));
         assert_eq!(c0.min_matches(), 1, "bare text contains SHALL default to 1");
 
         // Group without min_matches → Spec, default min_matches 1, flatten keeps `text`.
-        let c1 = steps[1].on.as_ref().unwrap().contains.as_ref().unwrap();
+        let c1 = steps[1].on.as_ref().expect("as_ref() SHALL succeed").contains.as_ref().expect("as_ref() SHALL succeed");
         match c1 {
             ContainsAnchor::Spec(s) => {
                 assert_eq!(
@@ -917,7 +917,7 @@ steps = [
         }
 
         // Group with min_matches → parsed.
-        let c2 = steps[2].within.as_ref().unwrap().contains.as_ref().unwrap();
+        let c2 = steps[2].within.as_ref().expect("as_ref() SHALL succeed").contains.as_ref().expect("as_ref() SHALL succeed");
         match c2 {
             ContainsAnchor::Spec(s) => {
                 assert_eq!(s.group.text.as_deref(), Some("Row *"));

@@ -219,7 +219,7 @@ mod tests {
         let (t, v) = parse_android_dumpsys(sample);
         assert_eq!(v.as_deref(), Some("0.5.3"));
         assert!(t.is_some(), "lastUpdateTime SHALL parse");
-        let t = t.unwrap();
+        let t = t.expect("value SHALL be present");
         assert_eq!(
             t.format("%Y-%m-%d %H:%M:%S").to_string(),
             "2026-04-27 09:12:45"
@@ -237,7 +237,7 @@ mod tests {
     fn parse_dumpsys_skips_first_install_time() {
         let sample = "lastUpdateTime=2026-04-27 09:12:45\nfirstInstallTime=2026-04-04 16:56:14";
         let (t, _) = parse_android_dumpsys(sample);
-        let t = t.unwrap();
+        let t = t.expect("value SHALL be present");
         assert_eq!(
             t.format("%Y-%m-%d %H:%M:%S").to_string(),
             "2026-04-27 09:12:45",

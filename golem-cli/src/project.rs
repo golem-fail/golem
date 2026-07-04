@@ -111,7 +111,7 @@ install_script = { ios = "scripts/install-b-ios.sh", android = "scripts/install-
 install_timeout_ms = 900000
 "#,
         )
-        .unwrap();
+        .expect("value SHALL be present");
         let (cfg, path) = ProjectConfig::load_from(tmp.path()).expect("load");
         assert!(path.is_some());
         assert_eq!(cfg.apps.len(), 1);
@@ -132,7 +132,7 @@ install_timeout_ms = 900000
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = tmp.path();
         let nested = root.join("flows").join("sub");
-        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::create_dir_all(&nested).expect("create_dir_all() SHALL succeed");
         std::fs::write(
             root.join("golem.toml"),
             r#"[[apps]]
@@ -140,7 +140,7 @@ name = "x"
 bundle = "com.x"
 "#,
         )
-        .unwrap();
+        .expect("value SHALL be present");
         let (cfg, path) = ProjectConfig::load_from(&nested).expect("load");
         assert!(path.is_some(), "SHALL find golem.toml in ancestor");
         assert_eq!(cfg.apps.len(), 1);

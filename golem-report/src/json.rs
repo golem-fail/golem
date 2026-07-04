@@ -117,6 +117,10 @@ struct JsonInstall {
     exit_code: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    skipped: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    skip_reason: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -296,6 +300,8 @@ fn install_to_json(inst: &InstallReport) -> JsonInstall {
         finished_at: inst.finished_at.clone(),
         exit_code: inst.exit_code,
         error: inst.error.clone(),
+        skipped: inst.skipped,
+        skip_reason: inst.skip_reason.clone(),
     }
 }
 
@@ -1221,6 +1227,8 @@ mod tests {
             code: None,
             started_at: None,
             finished_at: None,
+            skipped: false,
+            skip_reason: None,
         }];
 
         let json_str = format_suite_json(&suite).expect("serialization should succeed");
@@ -1237,6 +1245,33 @@ mod tests {
         assert_eq!(inst["duration_ms"], 4200);
         assert_eq!(inst["exit_code"], 1);
         assert_eq!(inst["error"], "provisioning profile missing");
+    }
+
+    #[test]
+    fn suite_json_renders_skipped_install() {
+        let mut suite = sample_suite();
+        suite.installs = vec![InstallReport {
+            app_name: "MyApp".to_string(),
+            bundle_id: "com.example.app".to_string(),
+            device_name: "Pixel".to_string(),
+            os_major: None,
+            success: true,
+            duration_ms: 0,
+            exit_code: None,
+            error: None,
+            code: None,
+            started_at: None,
+            finished_at: None,
+            skipped: true,
+            skip_reason: Some("cache hit (git:abc1234)".to_string()),
+        }];
+
+        let json_str = format_suite_json(&suite).expect("serialization should succeed");
+        let v: Value = serde_json::from_str(&json_str).expect("valid JSON");
+        let inst = &v["installs"][0];
+        assert_eq!(inst["skipped"], true);
+        assert_eq!(inst["skip_reason"], "cache hit (git:abc1234)");
+        assert_eq!(inst["success"], true);
     }
 
     #[test]
@@ -1268,6 +1303,8 @@ mod tests {
             code: None,
             started_at: None,
             finished_at: None,
+            skipped: false,
+            skip_reason: None,
         }];
 
         let json_str = format_suite_json(&suite).expect("serialization should succeed");
@@ -1277,6 +1314,14 @@ mod tests {
         assert!(
             inst.get("os_major").is_none(),
             "None os_major SHALL be omitted"
+        );
+        assert!(
+            inst.get("skipped").is_none(),
+            "skipped=false SHALL be omitted"
+        );
+        assert!(
+            inst.get("skip_reason").is_none(),
+            "None skip_reason SHALL be omitted"
         );
         assert!(
             inst.get("exit_code").is_none(),

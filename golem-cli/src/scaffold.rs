@@ -529,7 +529,7 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mode = fs::metadata(&out).unwrap().permissions().mode();
+            let mode = fs::metadata(&out).expect("metadata() SHALL succeed").permissions().mode();
             assert_eq!(mode & 0o755, 0o755, "SHALL be executable: {:o}", mode);
         }
     }
@@ -538,7 +538,7 @@ mod tests {
     fn update_golem_toml_adds_app_entry_cross_platform() {
         let tmp = TempDir::new().expect("tempdir");
         let path = tmp.path().join("golem.toml");
-        fs::write(&path, "[options]\n").unwrap();
+        fs::write(&path, "[options]\n").expect("write() SHALL succeed");
         update_golem_toml_install_script(
             &path,
             "app-b",
@@ -547,7 +547,7 @@ mod tests {
             None,
         )
         .expect("update");
-        let content = fs::read_to_string(&path).unwrap();
+        let content = fs::read_to_string(&path).expect("read_to_string() SHALL succeed");
         assert!(content.contains("[[apps]]"));
         assert!(content.contains(r#"name = "app-b""#));
         assert!(content.contains(r#"bundle = "com.example.b""#));
@@ -567,10 +567,10 @@ bundle = "com.example.b"
 install_script = "scripts/old.sh"
 "#,
         )
-        .unwrap();
+        .expect("value SHALL be present");
         update_golem_toml_install_script(&path, "app-b", None, "scripts/new.sh", None)
             .expect("update");
-        let content = fs::read_to_string(&path).unwrap();
+        let content = fs::read_to_string(&path).expect("read_to_string() SHALL succeed");
         assert!(content.contains(r#"install_script = "scripts/new.sh""#));
         assert!(!content.contains("scripts/old.sh"));
         // bundle preserved
@@ -591,7 +591,7 @@ name = "app-b"
 install_script = { ios = "scripts/ios.sh" }
 "#,
         )
-        .unwrap();
+        .expect("value SHALL be present");
         update_golem_toml_install_script(
             &path,
             "app-b",
@@ -600,7 +600,7 @@ install_script = { ios = "scripts/ios.sh" }
             Some("android"),
         )
         .expect("update");
-        let content = fs::read_to_string(&path).unwrap();
+        let content = fs::read_to_string(&path).expect("read_to_string() SHALL succeed");
         assert!(
             content.contains(r#"bundle = "com.x""#),
             "SHALL backfill missing bundle, got:\n{content}"
@@ -621,7 +621,7 @@ bundle = "com.kept"
 install_script = { ios = "scripts/ios.sh" }
 "#,
         )
-        .unwrap();
+        .expect("value SHALL be present");
         update_golem_toml_install_script(
             &path,
             "app-b",
@@ -630,7 +630,7 @@ install_script = { ios = "scripts/ios.sh" }
             Some("android"),
         )
         .expect("update");
-        let content = fs::read_to_string(&path).unwrap();
+        let content = fs::read_to_string(&path).expect("read_to_string() SHALL succeed");
         assert!(
             content.contains(r#"bundle = "com.kept""#),
             "SHALL preserve existing bundle, got:\n{content}"
@@ -645,7 +645,7 @@ install_script = { ios = "scripts/ios.sh" }
     fn update_golem_toml_writes_per_platform_merges_keys() {
         let tmp = TempDir::new().expect("tempdir");
         let path = tmp.path().join("golem.toml");
-        fs::write(&path, "[options]\n").unwrap();
+        fs::write(&path, "[options]\n").expect("write() SHALL succeed");
         update_golem_toml_install_script(
             &path,
             "app-b",
@@ -662,7 +662,7 @@ install_script = { ios = "scripts/ios.sh" }
             Some("android"),
         )
         .expect("update android");
-        let content = fs::read_to_string(&path).unwrap();
+        let content = fs::read_to_string(&path).expect("read_to_string() SHALL succeed");
         assert!(content.contains("scripts/ios.sh"));
         assert!(content.contains("scripts/android.sh"));
         // Should have one [[apps]] entry (not two)

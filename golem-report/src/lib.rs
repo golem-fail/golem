@@ -512,6 +512,13 @@ pub struct InstallReport {
     pub started_at: Option<String>,
     /// ISO-8601 UTC wall-clock when the install finished.
     pub finished_at: Option<String>,
+    /// True when no install ran because the persistent cache / `--no-build`
+    /// decided one wasn't needed. Skipped installs are reported (not failures)
+    /// so CI artifacts can confirm nothing was rebuilt.
+    pub skipped: bool,
+    /// Human-readable skip reason (e.g. `cache hit (git:abc1234)`). `None`
+    /// unless `skipped`.
+    pub skip_reason: Option<String>,
 }
 
 /// Result of an entire test suite (multiple flows).

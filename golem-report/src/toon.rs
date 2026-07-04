@@ -377,7 +377,13 @@ pub fn format_suite_toon(report: &SuiteReport) -> String {
 
     // Install results (one line per (device, bundle) attempted)
     for inst in &report.installs {
-        let r = if inst.success { "ok" } else { "fail" };
+        let r = if inst.skipped {
+            "skip"
+        } else if inst.success {
+            "ok"
+        } else {
+            "fail"
+        };
         let t0_offset = format_t0_offset(inst.started_at.as_deref(), suite_t0_ms);
         let os_suffix = match inst.os_major {
             Some(os) => format!(" os:{os}"),
@@ -388,8 +394,13 @@ pub fn format_suite_toon(report: &SuiteReport) -> String {
             "I {}:{}:{} R:{} d:{}{os_suffix}{t0_offset}",
             inst.app_name, inst.bundle_id, inst.device_name, r, inst.duration_ms
         );
+        // Indent reason/error lines under the install entry.
+        if let Some(ref reason) = inst.skip_reason {
+            for line in reason.lines() {
+                let _ = writeln!(out, "  {line}");
+            }
+        }
         if let Some(ref err) = inst.error {
-            // Indent error lines under the install entry.
             for line in err.lines() {
                 let _ = writeln!(out, "  {line}");
             }
@@ -1387,6 +1398,8 @@ mod tests {
             code: None,
             started_at: None,
             finished_at: None,
+            skipped: false,
+            skip_reason: None,
         }];
         let out = format_suite_toon(&suite);
         assert!(
@@ -1419,6 +1432,8 @@ mod tests {
             code: None,
             started_at: None,
             finished_at: None,
+            skipped: false,
+            skip_reason: None,
         }];
         let out = format_suite_toon(&suite);
         let line = out
@@ -1428,6 +1443,36 @@ mod tests {
         assert_eq!(
             line, "I app:b:ios/sim R:ok d:900",
             "ok install SHALL omit os: when absent"
+        );
+    }
+
+    // 22b. Skipped install renders R:skip with an indented reason line.
+    #[test]
+    fn suite_install_skip_renders_reason() {
+        let mut suite = empty_suite();
+        suite.installs = vec![crate::InstallReport {
+            app_name: "app".into(),
+            bundle_id: "b".into(),
+            device_name: "ios/sim".into(),
+            os_major: None,
+            success: true,
+            duration_ms: 0,
+            exit_code: None,
+            error: None,
+            code: None,
+            started_at: None,
+            finished_at: None,
+            skipped: true,
+            skip_reason: Some("cache hit (git:abc1234)".into()),
+        }];
+        let out = format_suite_toon(&suite);
+        assert!(
+            out.contains("I app:b:ios/sim R:skip d:0\n"),
+            "skipped install SHALL render R:skip; got: {out}"
+        );
+        assert!(
+            out.contains("  cache hit (git:abc1234)\n"),
+            "SHALL indent the skip reason; got: {out}"
         );
     }
 

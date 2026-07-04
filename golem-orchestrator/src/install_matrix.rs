@@ -107,14 +107,14 @@ mod tests {
 
     fn write_flow(dir: &std::path::Path, name: &str, contents: &str) -> PathBuf {
         let path = dir.join(name);
-        let mut f = std::fs::File::create(&path).unwrap();
-        f.write_all(contents.as_bytes()).unwrap();
+        let mut f = std::fs::File::create(&path).expect("create() SHALL succeed");
+        f.write_all(contents.as_bytes()).expect("value SHALL be present");
         path
     }
 
     #[tokio::test]
     async fn matrix_dedupes_same_platform_app_across_flows() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         let a = write_flow(
             tmp.path(),
             "a.test.toml",
@@ -148,7 +148,7 @@ mod tests {
         }];
         let suite = plan(&[a, b], &apps, tmp.path(), None, None, 1)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
         assert_eq!(
             suite.install_matrix.len(),
             1,
@@ -158,7 +158,7 @@ mod tests {
 
     #[tokio::test]
     async fn matrix_separates_per_platform() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         let f = write_flow(
             tmp.path(),
             "f.test.toml",
@@ -191,7 +191,7 @@ mod tests {
                 install_timeout_ms: None,
             },
         ];
-        let suite = plan(&[f], &apps, tmp.path(), None, None, 1).await.unwrap();
+        let suite = plan(&[f], &apps, tmp.path(), None, None, 1).await.expect("async operation SHALL succeed");
         assert_eq!(
             suite.install_matrix.len(),
             2,
@@ -201,7 +201,7 @@ mod tests {
 
     #[tokio::test]
     async fn matrix_skips_app_without_install_script() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         let f = write_flow(
             tmp.path(),
             "f.test.toml",
@@ -215,7 +215,7 @@ mod tests {
             os = "ios"
         "#,
         );
-        let suite = plan(&[f], &[], tmp.path(), None, None, 1).await.unwrap();
+        let suite = plan(&[f], &[], tmp.path(), None, None, 1).await.expect("async operation SHALL succeed");
         assert!(
             suite.install_matrix.is_empty(),
             "apps without install_script SHALL NOT appear in install_matrix"
@@ -224,7 +224,7 @@ mod tests {
 
     #[tokio::test]
     async fn matrix_carries_device_constraints() {
-        let tmp = TempDir::new().unwrap();
+        let tmp = TempDir::new().expect("new() SHALL succeed");
         let f = write_flow(
             tmp.path(),
             "f.test.toml",
@@ -240,11 +240,11 @@ mod tests {
             type = "tablet"
         "#,
         );
-        let suite = plan(&[f], &[], tmp.path(), None, None, 1).await.unwrap();
+        let suite = plan(&[f], &[], tmp.path(), None, None, 1).await.expect("async operation SHALL succeed");
         assert_eq!(suite.install_matrix.len(), 1);
         let entry = &suite.install_matrix[0];
         assert_eq!(entry.device_constraints.len(), 1);
-        let dt = entry.device_constraints[0].device_type.as_ref().unwrap();
+        let dt = entry.device_constraints[0].device_type.as_ref().expect("as_ref() SHALL succeed");
         assert_eq!(dt.to_vec(), vec!["tablet".to_string()]);
     }
 

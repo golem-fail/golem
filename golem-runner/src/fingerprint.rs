@@ -252,9 +252,9 @@ mod tests {
 
     #[test]
     fn content_fingerprint_stable_across_calls() {
-        let dir = tempdir().unwrap();
-        std::fs::write(dir.path().join("a.txt"), "hello").unwrap();
-        std::fs::write(dir.path().join("b.txt"), "world").unwrap();
+        let dir = tempdir().expect("tempdir() SHALL succeed");
+        std::fs::write(dir.path().join("a.txt"), "hello").expect("value SHALL be present");
+        std::fs::write(dir.path().join("b.txt"), "world").expect("value SHALL be present");
         let a = Fingerprint::compute(dir.path());
         let b = Fingerprint::compute(dir.path());
         assert_eq!(a, b, "fingerprint SHALL be stable for unchanged tree");
@@ -263,42 +263,42 @@ mod tests {
 
     #[test]
     fn content_fingerprint_changes_when_file_edited() {
-        let dir = tempdir().unwrap();
-        std::fs::write(dir.path().join("a.txt"), "hello").unwrap();
+        let dir = tempdir().expect("tempdir() SHALL succeed");
+        std::fs::write(dir.path().join("a.txt"), "hello").expect("value SHALL be present");
         let a = Fingerprint::compute(dir.path());
-        std::fs::write(dir.path().join("a.txt"), "hello!").unwrap();
+        std::fs::write(dir.path().join("a.txt"), "hello!").expect("value SHALL be present");
         let b = Fingerprint::compute(dir.path());
         assert_ne!(a, b, "edit SHALL change fingerprint");
     }
 
     #[test]
     fn content_fingerprint_changes_when_file_added() {
-        let dir = tempdir().unwrap();
-        std::fs::write(dir.path().join("a.txt"), "hello").unwrap();
+        let dir = tempdir().expect("tempdir() SHALL succeed");
+        std::fs::write(dir.path().join("a.txt"), "hello").expect("value SHALL be present");
         let a = Fingerprint::compute(dir.path());
-        std::fs::write(dir.path().join("b.txt"), "world").unwrap();
+        std::fs::write(dir.path().join("b.txt"), "world").expect("value SHALL be present");
         let b = Fingerprint::compute(dir.path());
         assert_ne!(a, b, "new file SHALL change fingerprint");
     }
 
     #[test]
     fn content_fingerprint_skips_target_dir() {
-        let dir = tempdir().unwrap();
-        std::fs::write(dir.path().join("a.txt"), "hello").unwrap();
+        let dir = tempdir().expect("tempdir() SHALL succeed");
+        std::fs::write(dir.path().join("a.txt"), "hello").expect("value SHALL be present");
         let a = Fingerprint::compute(dir.path());
-        std::fs::create_dir(dir.path().join("target")).unwrap();
-        std::fs::write(dir.path().join("target/blob.bin"), vec![0u8; 1024]).unwrap();
+        std::fs::create_dir(dir.path().join("target")).expect("value SHALL be present");
+        std::fs::write(dir.path().join("target/blob.bin"), vec![0u8; 1024]).expect("value SHALL be present");
         let b = Fingerprint::compute(dir.path());
         assert_eq!(a, b, "target/ SHALL NOT contribute to fingerprint");
     }
 
     #[test]
     fn content_fingerprint_honours_gitignore() {
-        let dir = tempdir().unwrap();
-        std::fs::write(dir.path().join("a.txt"), "hello").unwrap();
-        std::fs::write(dir.path().join(".gitignore"), "ignored.bin\n").unwrap();
+        let dir = tempdir().expect("tempdir() SHALL succeed");
+        std::fs::write(dir.path().join("a.txt"), "hello").expect("value SHALL be present");
+        std::fs::write(dir.path().join(".gitignore"), "ignored.bin\n").expect("value SHALL be present");
         let a = Fingerprint::compute(dir.path());
-        std::fs::write(dir.path().join("ignored.bin"), vec![0u8; 1024]).unwrap();
+        std::fs::write(dir.path().join("ignored.bin"), vec![0u8; 1024]).expect("value SHALL be present");
         let b = Fingerprint::compute(dir.path());
         assert_eq!(a, b, "gitignored file SHALL NOT contribute to fingerprint");
     }
@@ -309,11 +309,11 @@ mod tests {
             rev: "abc123".into(),
             porcelain: "deadbeef".into(),
         };
-        let s = serde_json::to_string(&g).unwrap();
-        let back: Fingerprint = serde_json::from_str(&s).unwrap();
+        let s = serde_json::to_string(&g).expect("to_string() SHALL succeed");
+        let back: Fingerprint = serde_json::from_str(&s).expect("from_str() SHALL succeed");
         assert_eq!(g, back);
         let n: Fingerprint =
-            serde_json::from_str(&serde_json::to_string(&Fingerprint::None).unwrap()).unwrap();
+            serde_json::from_str(&serde_json::to_string(&Fingerprint::None).expect("to_string() SHALL succeed")).expect("value SHALL be present");
         assert_eq!(n, Fingerprint::None);
     }
 

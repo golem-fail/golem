@@ -1103,7 +1103,7 @@ mod tests {
         let high = above_threshold();
         let driver = SequencedMock::new(vec![0, below_threshold(), high, high, high]);
         let start = tokio::time::Instant::now();
-        driver.await_first_frame().await.unwrap();
+        driver.await_first_frame().await.expect("async operation SHALL succeed");
         // Each poll is 200ms; we need at least 4 polls (0 → below →
         // high → high stable).
         assert!(
@@ -1121,7 +1121,7 @@ mod tests {
         let high = above_threshold();
         let driver = SequencedMock::new(vec![low, low, low, low, high, high]);
         let start = tokio::time::Instant::now();
-        driver.await_first_frame().await.unwrap();
+        driver.await_first_frame().await.expect("async operation SHALL succeed");
         // 5 transitions before stability means 5 polls minimum.
         assert!(start.elapsed() >= AWAIT_FIRST_FRAME_POLL_INTERVAL * 4);
     }
@@ -1133,7 +1133,7 @@ mod tests {
         let high = above_threshold();
         let driver = SequencedMock::new(vec![high, high + 1, high + 2, high + 3, high + 4]);
         let start = tokio::time::Instant::now();
-        driver.await_first_frame().await.unwrap();
+        driver.await_first_frame().await.expect("async operation SHALL succeed");
         assert!(start.elapsed() <= AWAIT_FIRST_FRAME_DEADLINE + AWAIT_FIRST_FRAME_POLL_INTERVAL);
     }
 
@@ -1143,7 +1143,7 @@ mod tests {
         // the deadline (and then return Ok anyway).
         let driver = SequencedMock::new(vec![below_threshold()]);
         let start = tokio::time::Instant::now();
-        driver.await_first_frame().await.unwrap();
+        driver.await_first_frame().await.expect("async operation SHALL succeed");
         assert!(
             start.elapsed() >= AWAIT_FIRST_FRAME_DEADLINE,
             "below-threshold tree SHALL wait until deadline: {:?}",
@@ -1163,7 +1163,7 @@ mod tests {
         // DOM: empty for several polls, then hydrates and holds.
         let driver = WebviewSequencedMock::new(vec![0, 0, 0, ready, ready, ready]);
         let start = tokio::time::Instant::now();
-        let warning = driver.await_first_frame().await.unwrap();
+        let warning = driver.await_first_frame().await.expect("async operation SHALL succeed");
         assert!(
             warning.is_none(),
             "a hydrated webview SHALL not warn: {warning:?}"
@@ -1188,7 +1188,7 @@ mod tests {
         // DOM stays empty (below the webview threshold) forever.
         let driver = WebviewSequencedMock::new(vec![0]);
         let start = tokio::time::Instant::now();
-        let warning = driver.await_first_frame().await.unwrap();
+        let warning = driver.await_first_frame().await.expect("async operation SHALL succeed");
         assert!(
             start.elapsed() >= AWAIT_FIRST_FRAME_WEBVIEW_DEADLINE,
             "a sparse webview SHALL wait the extended deadline, not the 10s native one: {:?}",

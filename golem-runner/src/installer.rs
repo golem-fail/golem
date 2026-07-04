@@ -516,13 +516,13 @@ mod tests {
 
     fn write_script(dir: &Path, body: &str) -> std::path::PathBuf {
         let path = dir.join("install.sh");
-        std::fs::write(&path, body).unwrap();
+        std::fs::write(&path, body).expect("write() SHALL succeed");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&path).unwrap().permissions();
+            let mut perms = std::fs::metadata(&path).expect("metadata() SHALL succeed").permissions();
             perms.set_mode(0o755);
-            std::fs::set_permissions(&path, perms).unwrap();
+            std::fs::set_permissions(&path, perms).expect("set_permissions() SHALL succeed");
         }
         path
     }
@@ -551,7 +551,7 @@ mod tests {
             }));
         }
         for h in handles {
-            h.await.unwrap();
+            h.await.expect("async operation SHALL succeed");
         }
         assert_eq!(
             max_seen.load(Ordering::SeqCst),
@@ -592,19 +592,19 @@ mod tests {
 
     #[tokio::test]
     async fn persistent_load_missing_file_is_empty_ok() {
-        let tmp = tempdir().unwrap();
+        let tmp = tempdir().expect("tempdir() SHALL succeed");
         let path = tmp.path().join("install-cache.json");
         let cache = InstallCache::new();
-        cache.load_persistent(path).await.unwrap();
+        cache.load_persistent(path).await.expect("async operation SHALL succeed");
         assert!(cache.get_persistent("u-1", "com.x").await.is_none());
     }
 
     #[tokio::test]
     async fn persistent_set_then_get_in_same_session() {
-        let tmp = tempdir().unwrap();
+        let tmp = tempdir().expect("tempdir() SHALL succeed");
         let path = tmp.path().join("install-cache.json");
         let cache = InstallCache::new();
-        cache.load_persistent(path.clone()).await.unwrap();
+        cache.load_persistent(path.clone()).await.expect("async operation SHALL succeed");
         let entry = PersistedInstall {
             fingerprint: Fingerprint::Git {
                 rev: "abc".into(),
@@ -617,8 +617,8 @@ mod tests {
         cache
             .set_persistent("u-1", "com.x", entry.clone())
             .await
-            .unwrap();
-        let got = cache.get_persistent("u-1", "com.x").await.unwrap();
+            .expect("async operation SHALL succeed");
+        let got = cache.get_persistent("u-1", "com.x").await.expect("async operation SHALL succeed");
         assert_eq!(got, entry);
         // The file SHALL exist after a set.
         assert!(path.exists(), "set_persistent SHALL write the file");
@@ -626,7 +626,7 @@ mod tests {
 
     #[tokio::test]
     async fn persistent_round_trip_across_caches() {
-        let tmp = tempdir().unwrap();
+        let tmp = tempdir().expect("tempdir() SHALL succeed");
         let path = tmp.path().join("install-cache.json");
 
         let entry = PersistedInstall {
@@ -637,15 +637,15 @@ mod tests {
         };
 
         let cache_a = InstallCache::new();
-        cache_a.load_persistent(path.clone()).await.unwrap();
+        cache_a.load_persistent(path.clone()).await.expect("async operation SHALL succeed");
         cache_a
             .set_persistent("u-9", "com.y", entry.clone())
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
 
         let cache_b = InstallCache::new();
-        cache_b.load_persistent(path).await.unwrap();
-        let got = cache_b.get_persistent("u-9", "com.y").await.unwrap();
+        cache_b.load_persistent(path).await.expect("async operation SHALL succeed");
+        let got = cache_b.get_persistent("u-9", "com.y").await.expect("async operation SHALL succeed");
         assert_eq!(
             got, entry,
             "fresh cache SHALL load entries written by another"
@@ -654,11 +654,11 @@ mod tests {
 
     #[tokio::test]
     async fn persistent_corrupt_file_treated_as_empty() {
-        let tmp = tempdir().unwrap();
+        let tmp = tempdir().expect("tempdir() SHALL succeed");
         let path = tmp.path().join("install-cache.json");
-        std::fs::write(&path, "{not json").unwrap();
+        std::fs::write(&path, "{not json").expect("write() SHALL succeed");
         let cache = InstallCache::new();
-        cache.load_persistent(path).await.unwrap();
+        cache.load_persistent(path).await.expect("async operation SHALL succeed");
         assert!(
             cache.get_persistent("u-1", "com.x").await.is_none(),
             "corrupt cache SHALL not block startup"
@@ -667,11 +667,11 @@ mod tests {
 
     #[tokio::test]
     async fn persistent_unknown_version_treated_as_empty() {
-        let tmp = tempdir().unwrap();
+        let tmp = tempdir().expect("tempdir() SHALL succeed");
         let path = tmp.path().join("install-cache.json");
-        std::fs::write(&path, r#"{"version": 99, "entries": {}}"#).unwrap();
+        std::fs::write(&path, r#"{"version": 99, "entries": {}}"#).expect("write() SHALL succeed");
         let cache = InstallCache::new();
-        cache.load_persistent(path).await.unwrap();
+        cache.load_persistent(path).await.expect("async operation SHALL succeed");
         assert!(cache.get_persistent("u-1", "com.x").await.is_none());
     }
 
@@ -685,25 +685,25 @@ mod tests {
             installed_at: chrono::Utc::now(),
         };
         // Should not error, just nothing happens.
-        cache.set_persistent("u-1", "com.x", entry).await.unwrap();
+        cache.set_persistent("u-1", "com.x", entry).await.expect("async operation SHALL succeed");
         // get returns None because the in-memory map remains empty.
         assert!(cache.get_persistent("u-1", "com.x").await.is_none());
     }
 
     #[tokio::test]
     async fn persistent_forget_removes_entry() {
-        let tmp = tempdir().unwrap();
+        let tmp = tempdir().expect("tempdir() SHALL succeed");
         let path = tmp.path().join("install-cache.json");
         let cache = InstallCache::new();
-        cache.load_persistent(path).await.unwrap();
+        cache.load_persistent(path).await.expect("async operation SHALL succeed");
         let entry = PersistedInstall {
             fingerprint: Fingerprint::None,
             device_install_time: None,
             installed_version: None,
             installed_at: chrono::Utc::now(),
         };
-        cache.set_persistent("u-1", "com.x", entry).await.unwrap();
-        cache.forget_persistent("u-1", "com.x").await.unwrap();
+        cache.set_persistent("u-1", "com.x", entry).await.expect("async operation SHALL succeed");
+        cache.forget_persistent("u-1", "com.x").await.expect("async operation SHALL succeed");
         assert!(cache.get_persistent("u-1", "com.x").await.is_none());
     }
 
@@ -721,7 +721,7 @@ mod tests {
 
     #[tokio::test]
     async fn script_exit_0_succeeds() {
-        let tmp = tempdir().unwrap();
+        let tmp = tempdir().expect("tempdir() SHALL succeed");
         let script = write_script(tmp.path(), "#!/bin/sh\necho running >&2\nexit 0\n");
         let result = run_install_script(
             &script,
@@ -742,7 +742,7 @@ mod tests {
 
     #[tokio::test]
     async fn script_exit_nonzero_fails_with_stderr() {
-        let tmp = tempdir().unwrap();
+        let tmp = tempdir().expect("tempdir() SHALL succeed");
         let script = write_script(
             tmp.path(),
             "#!/bin/sh\necho 'build failed: missing signing' >&2\nexit 1\n",
@@ -762,7 +762,7 @@ mod tests {
         )
         .await;
         assert!(result.is_err());
-        let err = format!("{}", result.unwrap_err());
+        let err = format!("{}", result.expect_err("operation SHALL fail"));
         assert!(
             err.contains("exited 1"),
             "error SHALL include exit code: {err}"
@@ -775,7 +775,7 @@ mod tests {
 
     #[tokio::test]
     async fn script_timeout_kills_process() {
-        let tmp = tempdir().unwrap();
+        let tmp = tempdir().expect("tempdir() SHALL succeed");
         let script = write_script(tmp.path(), "#!/bin/sh\nsleep 10\n");
         let result = run_install_script(
             &script,
@@ -792,12 +792,12 @@ mod tests {
         )
         .await;
         assert!(result.is_err());
-        assert!(format!("{}", result.unwrap_err()).contains("timed out"));
+        assert!(format!("{}", result.expect_err("operation SHALL fail")).contains("timed out"));
     }
 
     #[tokio::test]
     async fn script_receives_args_in_correct_order() {
-        let tmp = tempdir().unwrap();
+        let tmp = tempdir().expect("tempdir() SHALL succeed");
         let out_file = tmp.path().join("args.txt");
         let script_body = format!(
             "#!/bin/sh\necho \"$1 $2 $3 $4\" > {}\nexit 0\n",
@@ -819,16 +819,16 @@ mod tests {
         )
         .await;
         assert!(result.is_ok());
-        let args = std::fs::read_to_string(&out_file).unwrap();
+        let args = std::fs::read_to_string(&out_file).expect("read_to_string() SHALL succeed");
         // $4 unset (install_only=false) SHALL produce empty trailing slot.
         assert_eq!(args.trim(), "android emulator-5554 com.example.app");
     }
 
     #[tokio::test]
     async fn script_runs_in_working_dir() {
-        let tmp = tempdir().unwrap();
+        let tmp = tempdir().expect("tempdir() SHALL succeed");
         let marker = tmp.path().join("marker.txt");
-        std::fs::write(&marker, "hello").unwrap();
+        std::fs::write(&marker, "hello").expect("write() SHALL succeed");
         let script = write_script(
             tmp.path(),
             "#!/bin/sh\ntest -f ./marker.txt || { echo missing >&2; exit 1; }\n",
@@ -856,7 +856,7 @@ mod tests {
 
     #[tokio::test]
     async fn script_install_only_passes_fourth_arg() {
-        let tmp = tempdir().unwrap();
+        let tmp = tempdir().expect("tempdir() SHALL succeed");
         let out_file = tmp.path().join("args.txt");
         let script_body = format!(
             "#!/bin/sh\necho \"$1|$2|$3|$4\" > {}\nexit 0\n",
@@ -878,7 +878,7 @@ mod tests {
         )
         .await;
         assert!(result.is_ok());
-        let args = std::fs::read_to_string(&out_file).unwrap();
+        let args = std::fs::read_to_string(&out_file).expect("read_to_string() SHALL succeed");
         assert_eq!(
             args.trim(),
             "ios|udid-1|com.x|install-only",
@@ -888,7 +888,7 @@ mod tests {
 
     #[tokio::test]
     async fn script_full_build_omits_fourth_arg() {
-        let tmp = tempdir().unwrap();
+        let tmp = tempdir().expect("tempdir() SHALL succeed");
         let out_file = tmp.path().join("args.txt");
         // Use -z to check $4 is empty/unset.
         let script_body = format!(
@@ -911,7 +911,7 @@ mod tests {
         )
         .await;
         assert!(result.is_ok());
-        let marker = std::fs::read_to_string(&out_file).unwrap();
+        let marker = std::fs::read_to_string(&out_file).expect("read_to_string() SHALL succeed");
         assert_eq!(
             marker.trim(),
             "NO4",
@@ -946,7 +946,7 @@ mod tests {
             }));
         }
         for h in handles {
-            h.await.unwrap();
+            h.await.expect("async operation SHALL succeed");
         }
 
         assert_eq!(

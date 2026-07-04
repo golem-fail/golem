@@ -411,7 +411,7 @@ mod tests {
             "SHALL contain street name, got: {result}"
         );
         assert_eq!(nums.len(), 1, "SHALL record one drawn number");
-        let num: u32 = result.split_whitespace().next().unwrap().parse().unwrap();
+        let num: u32 = result.split_whitespace().next().expect("next() SHALL succeed").parse().expect("parse() SHALL succeed");
         assert!(
             (1..=100).contains(&num),
             "number SHALL be in range, got: {num}"
@@ -429,7 +429,7 @@ mod tests {
             result.ends_with("Baker Street"),
             "SHALL contain street name, got: {result}"
         );
-        let num: u32 = result.split_whitespace().next().unwrap().parse().unwrap();
+        let num: u32 = result.split_whitespace().next().expect("next() SHALL succeed").parse().expect("parse() SHALL succeed");
         assert!(
             (1..=100).contains(&num),
             "swapped range SHALL yield a number in [1,100], got: {num}"

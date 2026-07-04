@@ -303,6 +303,33 @@ impl ReportAccumulator {
                     code: *code,
                     started_at,
                     finished_at: Some(iso8601_utc(event.wall_time)),
+                    skipped: false,
+                    skip_reason: None,
+                });
+            }
+            EventKind::InstallSkipped {
+                app_name,
+                bundle_id,
+                reason,
+                target: _,
+            } => {
+                // No install ran — the cache / --no-build decided it wasn't
+                // needed. Record it (success, zero duration) so persistent
+                // reports show the skip instead of silently omitting it.
+                self.installs.push(InstallReport {
+                    app_name: app_name.clone(),
+                    bundle_id: bundle_id.clone(),
+                    device_name: event.device_id.0.clone(),
+                    os_major: None,
+                    success: true,
+                    duration_ms: 0,
+                    exit_code: None,
+                    error: None,
+                    code: None,
+                    started_at: None,
+                    finished_at: Some(iso8601_utc(event.wall_time)),
+                    skipped: true,
+                    skip_reason: Some(reason.clone()),
                 });
             }
             EventKind::SuiteFinished { duration_ms, .. } => {

@@ -298,7 +298,7 @@ mod tests {
     #[test]
     fn status_exact_match() {
         let db = card_database();
-        let stripe = db.get("stripe").unwrap();
+        let stripe = db.get("stripe").expect("get() SHALL succeed");
         let cards = find_cards(stripe, "declined:insufficient_funds", None);
         assert!(!cards.is_empty());
         let numbers: Vec<&str> = cards.iter().filter_map(|c| c.number.as_deref()).collect();
@@ -308,7 +308,7 @@ mod tests {
     #[test]
     fn status_parent_fallback() {
         let db = card_database();
-        let stripe = db.get("stripe").unwrap();
+        let stripe = db.get("stripe").expect("get() SHALL succeed");
         // "declined:some_nonexistent" should fall back to "declined"
         let cards = find_cards(stripe, "declined:some_nonexistent", None);
         assert!(!cards.is_empty(), "SHALL fall back to parent 'declined'");
@@ -317,7 +317,7 @@ mod tests {
     #[test]
     fn status_prefix_match() {
         let db = card_database();
-        let stripe = db.get("stripe").unwrap();
+        let stripe = db.get("stripe").expect("get() SHALL succeed");
         // Bare "declined" should match all "declined:*" plus "declined"
         let cards = find_cards(stripe, "declined", None);
         assert!(cards.len() > 1, "SHALL match multiple declined statuses");
@@ -326,7 +326,7 @@ mod tests {
     #[test]
     fn brand_filter() {
         let db = card_database();
-        let stripe = db.get("stripe").unwrap();
+        let stripe = db.get("stripe").expect("get() SHALL succeed");
         let cards = find_cards(stripe, "approved", Some("amex"));
         assert_eq!(cards.len(), 1, "SHALL filter to one amex card");
         assert_eq!(cards[0].number.as_deref(), Some("378282246310005"));
@@ -341,7 +341,7 @@ mod tests {
     #[test]
     fn praxis_cvv_controlled() {
         let db = card_database();
-        let praxis = db.get("praxis").unwrap();
+        let praxis = db.get("praxis").expect("get() SHALL succeed");
         let cards = find_cards(praxis, "approved", None);
         assert!(!cards.is_empty());
         // Praxis cards have CVV set, number is None (resolved from defaults)
@@ -356,7 +356,7 @@ mod tests {
     #[test]
     fn mollie_amount_controlled() {
         let db = card_database();
-        let mollie = db.get("mollie").unwrap();
+        let mollie = db.get("mollie").expect("get() SHALL succeed");
         let cards = find_cards(mollie, "declined:insufficient_funds", None);
         assert!(!cards.is_empty());
         let card = &cards[0];
@@ -367,7 +367,7 @@ mod tests {
     #[test]
     fn klarna_email_controlled() {
         let db = card_database();
-        let klarna = db.get("klarna").unwrap();
+        let klarna = db.get("klarna").expect("get() SHALL succeed");
         let cards = find_cards(klarna, "declined", None);
         assert!(!cards.is_empty());
         let card = &cards[0];
@@ -377,7 +377,7 @@ mod tests {
     #[test]
     fn mercado_pago_name_controlled() {
         let db = card_database();
-        let mp = db.get("mercado_pago").unwrap();
+        let mp = db.get("mercado_pago").expect("get() SHALL succeed");
         let cards = find_cards(mp, "approved", None);
         assert!(!cards.is_empty());
         assert!(

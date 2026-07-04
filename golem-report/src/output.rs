@@ -205,10 +205,10 @@ mod tests {
     // 1. parse_output_format valid formats
     #[test]
     fn parse_valid_formats() {
-        assert_eq!(parse_output_format("human").unwrap(), OutputFormat::Human);
-        assert_eq!(parse_output_format("json").unwrap(), OutputFormat::Json);
-        assert_eq!(parse_output_format("junit").unwrap(), OutputFormat::Junit);
-        assert_eq!(parse_output_format("toon").unwrap(), OutputFormat::Toon);
+        assert_eq!(parse_output_format("human").expect("parse_output_format() SHALL succeed"), OutputFormat::Human);
+        assert_eq!(parse_output_format("json").expect("parse_output_format() SHALL succeed"), OutputFormat::Json);
+        assert_eq!(parse_output_format("junit").expect("parse_output_format() SHALL succeed"), OutputFormat::Junit);
+        assert_eq!(parse_output_format("toon").expect("parse_output_format() SHALL succeed"), OutputFormat::Toon);
     }
 
     // 2. parse_output_format rejects unknown
@@ -217,7 +217,7 @@ mod tests {
         let result = parse_output_format("csv");
         assert!(result.is_err());
         assert!(result
-            .unwrap_err()
+            .expect_err("operation SHALL fail")
             .to_string()
             .contains("Unknown output format"));
     }

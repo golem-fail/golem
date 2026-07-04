@@ -81,28 +81,6 @@ match. Both default off (current behavior preserved). Also consider insetting th
 swipe band away from the system-gesture zone for edge-adjacent containers. Add
 unit tests for the centering/visibility math and an e2e once implemented.
 
-## Parked behavior questions (from coverage sweep)
-
-Two low-impact ambiguities surfaced while adding test coverage; parked pending a decision:
-
-- **fixture var cross-references are order-nondeterministic.** `fixture_loader.rs`
-  builds vars from `fixture.vars.into_iter()` (a `HashMap`, random order), then
-  `evaluate_generators` resolves `${var}` refs against already-evaluated vars. So
-  a fixture where one var references another resolves non-deterministically. Decide:
-  support cross-refs (ordered map / iterative resolve) or document vars as
-  independent (and maybe reject refs). Other scopes (set/flow/cli) are unaffected.
-
-## Remove clippy `allow-*-in-tests` and clean up `.unwrap()`/`.expect()` in tests
-
-`clippy.toml` sets `allow-unwrap-in-tests = true` + `allow-expect-in-tests = true`
-so the workspace `unwrap_used` deny doesn't fire on test code. This unblocked the
-clippy gate (it was already red at HEAD from ~217 pre-existing test `.unwrap()`s).
-No runtime/coverage risk — test code is `#[cfg(test)]`, a panic is just a test
-failure. **Low priority, purely for better failure messages:** at some point drop
-both clippy.toml lines and migrate test `.unwrap()` → `.expect("… SHALL …")` so a
-failing test prints *why* rather than "called unwrap on None". Mechanical, fannable
-one-agent-per-file. Not critical.
-
 ## Android Unicode IME: restore on SIGINT/Ctrl-C
 
 The bundled Unicode IME (`GolemImeService`) is restored two ways: the
@@ -480,16 +458,6 @@ when there's spare cycles. Not blocking.
 **Files:** `golem-report/src/stream.rs` (suite-summary block), maybe
 `golem-report/src/human.rs`.
 
-## `set_variable` action is listed but not dispatched
-
-`set_variable` appears in `policy.rs` (timeout/settle classification) but has
-no arm in the `actions.rs` dispatch `match`, so a flow using it fails with
-`EP400 Unknown action: set_variable`. Either wire it (needs parser fields for
-the target var name + a literal/expression value, plus the var-store write and
-scope choice) or drop it from `policy.rs` if general-purpose mutable vars
-aren't wanted. Bounded branch loops no longer need it — the `_loop` counter
-covers loop termination; this is only for manual counters/accumulators.
-
 ## Step interpolation: wire device/builtin prefixes (`${_device}`, `${self:…}`, cross-device)
 
 `${…}` interpolation is now wired into step execution (`golem-runner/src/interp.rs`,
@@ -706,30 +674,6 @@ Android ANR detection + reboot recovery is shipped. Outstanding:
   with the duration + reason so renderers can surface it (currently
   piggybacked on `FlowSkipped`).
 
-## Install cache: don't persist `FailedScript` on transient errors
-
-`InstallCache::record_failure((udid, bundle), FailedScript)` is a
-one-shot — once set, every subsequent flow targeting that pair
-SKIPs with "install_script failed earlier" until cache is wiped
-(`--rebuild` or `rm .golem/install-cache.json`). Designed to avoid
-wasting hundreds of install attempts on a permanently broken script.
-
-**Gap:** when the transient classifier matches (Mach -308, adb
-device-offline, package-service race) and the retry ALSO fails,
-the cache still persists `FailedScript` as if the script were
-permanently broken. Next flow on the same `(udid, bundle)` SKIPs
-forever. For a flake-investigation sweep that's a suite-killer —
-two transients in a row poison the cache.
-
-**Fix:** when classification says transient and the retry fails,
-DON'T set the cache entry. Leave it empty so the next flow gets a
-fresh preinstall (which may succeed now that whatever was transient
-has cleared). Only persist `FailedScript` when the failure is
-*not* classified transient — i.e. real script breakage.
-
-**Files:** `golem-cli/src/suite.rs::run_install_with_build_coord`
-(gate `install_cache.set(..., FailedScript)` on
-`!is_transient_install_error(err)`).
 
 ## Stub-device end-to-end tests
 
@@ -1074,10 +1018,8 @@ wherever the lint lives once added).
 Captured during the post-merge audit; none are blocking but each removes a sharp edge.
 
 - **`cssSafeAreaInset` invisible to callers.** Today the WebKit Inspector enrichment subtracts the inset locally and discards it. Adding `css_safe_area_top: i32` to `HierarchyMeta` (default 0) keeps the diagnostic record. Sets up Android once an equivalent surfaces.
-- **`tap()` → `press(forDuration: 0.05)`.** Pages with a long-press distinguisher above ~50ms threshold may classify these as long-presses. Document the boundary or add an explicit `tap-fast` shorthand.
-- **Resolver auto-hide-keyboard fires unconditionally.** Tests that intentionally exercise keyboard-up state will be perturbed. Consider an opt-out flag on the step or scope to specific actions.
+- **Resolver auto-hide-keyboard fires unconditionally.** Tests that intentionally exercise keyboard-up state will be perturbed. Consider an opt-out flag on the step or scope to specific actions. (Behaviour is now documented in `actions-reference.md`; this entry is only the opt-out feature.)
 - **Tests gap.** `find_webview_socket` PID filter, safe-area subtraction, BUTTON/A textContent fallback, `EventLog`, `find_or_allocate_port` Android-only fallback, `ensure_companion_with_reg` UDID cross-check — none have unit coverage.
-- **Docs gap.** `/press` companion endpoint, resolver auto-hide-keyboard — neither externally documented.
 
 ## Stale-bundle defense (Tauri iOS build pipeline)
 
@@ -1166,7 +1108,6 @@ If pre-install fails for app `X` on device `D`, today's per-flow install check m
 
 The persistent install cache is shipped (`.golem/install-cache.json`, three integrity gates, `--rebuild`, `--no-build`). Remaining polish:
 
-- **Surface skipped installs in JSON / JUnit / TOON reports.** Today the live stream prints `[install] ... — skipped (cache hit ...)` but the persistent reports list cached installs as silent — they don't appear in `installs[]`. Add `skipped: bool` + `skip_reason: Option<String>` to `InstallReport` and wire it through the four serialisers. Useful for CI artifacts where reviewers want to confirm nothing was rebuilt.
 - **`golem cache clear` subcommand** — only if shared-CI long-running orchestrator surfaces a real workflow. Today `rm .golem/install-cache.json` is enough.
 
 ## Migrate SuiteRunner + IPC into `golem-orchestrator`
@@ -1311,12 +1252,4 @@ Tauri 2.x has no first-class config for Android `<uses-permission>`. Options:
 - Wait for upstream Tauri to expose `tauri.conf.json` → `bundle.android.permissions`
 
 **Files:** `.gitignore`, `test-app/src-tauri/gen/android/app/src/main/AndroidManifest.xml`.
-
-## Android: sticky menu tap target only half-clickable
-
-On Android phone with the sticky `Menu.svelte` at `scrollTop = 0`, roughly the top half of the menu-toggle button overlaps the system status bar / notification area and is not tappable by a human (the OS intercepts touches). Tests work because the companion's `tap` syntheses go through to the WebView regardless. Pure UX issue for manual testing.
-
-The `padding: max(8px, env(safe-area-inset-top, 8px))` already shifts the button down some — but Android's `env(safe-area-inset-top)` reports 0 on most emulators, so the padding doesn't compensate.
-
-**Files:** `test-app/src/lib/Menu.svelte`.
 

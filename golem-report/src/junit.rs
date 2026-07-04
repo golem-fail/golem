@@ -480,6 +480,7 @@ pub fn format_suite_junit(report: &SuiteReport) -> String {
     // A failed install is an environment/app problem, not a test-logic
     // failure — count it as a JUnit error.
     let install_failures: usize = report.installs.iter().filter(|i| !i.success).count();
+    let install_skipped: usize = report.installs.iter().filter(|i| i.skipped).count();
     let total_failures = flow_failures;
     let total_errors = flow_errors + install_failures;
     let time = ms_to_secs(report.total_duration_ms);
@@ -505,8 +506,8 @@ pub fn format_suite_junit(report: &SuiteReport) -> String {
             .unwrap_or_default();
         let _ = writeln!(
             out,
-            "  <testsuite name=\"install\" tests=\"{}\" failures=\"0\" errors=\"{}\" time=\"{}\"{install_suite_ts}>",
-            install_tests, install_failures, ms_to_secs(install_time)
+            "  <testsuite name=\"install\" tests=\"{}\" failures=\"0\" errors=\"{}\" skipped=\"{}\" time=\"{}\"{install_suite_ts}>",
+            install_tests, install_failures, install_skipped, ms_to_secs(install_time)
         );
         for inst in &report.installs {
             let classname = xml_escape(&inst.device_name);
@@ -525,7 +526,14 @@ pub fn format_suite_junit(report: &SuiteReport) -> String {
                 out,
                 "    <testcase classname=\"{classname}\" name=\"{name}\" time=\"{time}\"{inst_ts}{inst_os}>"
             );
-            if !inst.success {
+            if inst.skipped {
+                let reason = inst.skip_reason.as_deref().unwrap_or("install skipped");
+                let _ = writeln!(
+                    out,
+                    "      <skipped message=\"{}\"/>",
+                    xml_escape(reason)
+                );
+            } else if !inst.success {
                 let msg = inst.error.as_deref().unwrap_or("install failed");
                 let type_attr = inst
                     .code
@@ -1714,6 +1722,22 @@ mod tests {
             },
             started_at: Some("2026-06-15T09:00:00Z".to_string()),
             finished_at: None,
+            skipped: false,
+            skip_reason: None,
+        }
+    }
+
+    fn install_skipped() -> crate::InstallReport {
+        crate::InstallReport {
+            skipped: true,
+            skip_reason: Some("cache hit (git:abc1234)".to_string()),
+            success: true,
+            duration_ms: 0,
+            exit_code: None,
+            error: None,
+            code: None,
+            started_at: None,
+            ..install(true)
         }
     }
 
@@ -1750,6 +1774,30 @@ mod tests {
         assert!(
             !xml.contains("<error message=\"install script failed\""),
             "successful install SHALL NOT emit an error"
+        );
+    }
+
+    // 25b. Skipped install renders <skipped> and counts ---------------
+
+    #[test]
+    fn install_skipped_renders_skipped_testcase() {
+        let suite = SuiteReport {
+            installs: vec![install_skipped()],
+            ..sample_suite()
+        };
+        let xml = format_suite_junit(&suite);
+        assert!(
+            xml.contains("<skipped message=\"cache hit (git:abc1234)\"/>"),
+            "skipped install SHALL emit a <skipped> with the reason, got: {xml}"
+        );
+        assert!(
+            xml.contains("skipped=\"1\""),
+            "install suite SHALL count the skip, got: {xml}"
+        );
+        // A skip is not an error.
+        assert!(
+            !xml.contains("<error message=\"install script failed\""),
+            "skipped install SHALL NOT emit an error"
         );
     }
 

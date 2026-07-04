@@ -3496,7 +3496,7 @@ action = "screenshot"
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
 
         assert!(result.success, "flow SHALL succeed when block is skipped");
         assert!(
@@ -3565,7 +3565,7 @@ action = "screenshot"
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
 
         assert!(result.success, "flow SHALL succeed when block matches");
         assert!(
@@ -3643,7 +3643,7 @@ action = "screenshot"
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
             .await
-            .unwrap();
+            .expect("async operation SHALL succeed");
 
         assert!(result.success);
         // iOS block + shared block = 2 screenshot calls; android block skipped

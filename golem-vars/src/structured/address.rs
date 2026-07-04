@@ -856,7 +856,7 @@ mod tests {
             .get_path("ascii")
             .expect("ascii branch")
             .as_object()
-            .unwrap();
+            .expect("value SHALL be present");
         for k in ["street", "city", "state", "country", "postcode"] {
             assert!(ascii.contains_key(k), "ascii SHALL carry text field {k}");
         }

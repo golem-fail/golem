@@ -975,10 +975,10 @@ mod tests {
 
     /// Determine scroll intent from recorded swipe_coords call args.
     fn scroll_intent(args: &[String]) -> &'static str {
-        let from_y: i32 = args[1].parse().unwrap();
-        let to_y: i32 = args[3].parse().unwrap();
-        let from_x: i32 = args[0].parse().unwrap();
-        let to_x: i32 = args[2].parse().unwrap();
+        let from_y: i32 = args[1].parse().expect("parse() SHALL succeed");
+        let to_y: i32 = args[3].parse().expect("parse() SHALL succeed");
+        let from_x: i32 = args[0].parse().expect("parse() SHALL succeed");
+        let to_x: i32 = args[2].parse().expect("parse() SHALL succeed");
         let dy = to_y - from_y;
         let dx = to_x - from_x;
         if dy.abs() > dx.abs() {
@@ -1347,7 +1347,7 @@ mod tests {
             directions.contains(&"Up"),
             "direction should reverse after stall, got: {directions:?}"
         );
-        let first_up = directions.iter().position(|&d| d == "Up").unwrap();
+        let first_up = directions.iter().position(|&d| d == "Up").expect("position() SHALL succeed");
         assert!(
             directions[..first_up].iter().all(|&d| d == "Down"),
             "all swipes before reversal should be Down"

@@ -89,7 +89,7 @@ fn action_multiplier(step: &Step) -> u64 {
         // 1x — instant actions and capture-only steps that don't go
         // through the element resolver / settle path.
         "screenshot" | "add_media" | "fail" | "load_fixture" | "push_notification"
-        | "set_variable" | "log" | "clear_data" | "press" | "set_dark_mode" | "set_location"
+        | "log" | "clear_data" | "press" | "set_dark_mode" | "set_location"
         | "grant_permission" | "revoke_permission" | "hide_keyboard" => 1,
 
         // 2x — interactions that include element resolution + post-action
@@ -983,7 +983,6 @@ mod tests {
             "fail",
             "load_fixture",
             "push_notification",
-            "set_variable",
             "log",
             "clear_data",
             "press",
@@ -1246,7 +1245,6 @@ mod tests {
             "read",
             "screenshot",
             "log",
-            "set_variable",
             "get_http",
             "await_email",
         ] {

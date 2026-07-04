@@ -631,7 +631,7 @@ mod tests {
             "SHALL route to the first clear sample"
         );
         assert_eq!(e.center_hittable(), Some(false));
-        assert!((e.hittable_fraction().unwrap() - 1.0 / 3.0).abs() < 1e-6);
+        assert!((e.hittable_fraction().expect("hittable_fraction() SHALL succeed") - 1.0 / 3.0).abs() < 1e-6);
     }
 
     #[test]

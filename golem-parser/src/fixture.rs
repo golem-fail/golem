@@ -1,17 +1,23 @@
-use std::collections::HashMap;
+use indexmap::IndexMap;
 use std::path::{Path, PathBuf};
 
-/// A parsed fixture file — contains only [vars], no blocks or steps
+/// A parsed fixture file — contains only [vars], no blocks or steps.
+///
+/// `vars` is an [`IndexMap`] so declaration order from the TOML `[vars]`
+/// table is preserved. The generator-evaluation pass resolves `${var}`
+/// cross-references against already-evaluated vars in iteration order, so
+/// order must be deterministic (a `HashMap` made cross-refs resolve
+/// non-deterministically).
 #[derive(Debug, Clone)]
 pub struct Fixture {
-    pub vars: HashMap<String, String>,
+    pub vars: IndexMap<String, String>,
 }
 
 /// Internal representation for deserializing a fixture TOML file
 #[derive(serde::Deserialize)]
 struct FixtureFile {
     #[serde(default)]
-    vars: HashMap<String, String>,
+    vars: IndexMap<String, String>,
 }
 
 /// Parse a fixture TOML file. Fixture files contain only [vars].
@@ -332,6 +338,29 @@ city = "${fake:address.city}"
         assert_eq!(
             fixture.vars.get("city").map(|s| s.as_str()),
             Some("${fake:address.city}")
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 11b. Vars preserve declaration order (deterministic cross-refs).
+    // Keys are deliberately NOT in alphabetical order so a sorted map
+    // (BTreeMap) or a randomised one (HashMap) would fail this.
+    // ---------------------------------------------------------------
+    #[test]
+    fn parse_fixture_preserves_var_declaration_order() {
+        let toml_str = r#"
+[vars]
+zebra = "1"
+apple = "2"
+mango = "3"
+banana = "4"
+"#;
+        let fixture = parse_fixture(toml_str).expect("Should parse fixture with vars");
+        let order: Vec<&str> = fixture.vars.keys().map(|s| s.as_str()).collect();
+        assert_eq!(
+            order,
+            vec!["zebra", "apple", "mango", "banana"],
+            "fixture vars SHALL iterate in TOML declaration order so ${{var}} cross-references resolve deterministically"
         );
     }
 
