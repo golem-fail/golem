@@ -289,20 +289,33 @@ pub async fn execute_step_with_policy(
                 // user-budgeted timeouts on later steps unreachable.
                 if needs_post_settle(step) {
                     let started = std::time::Instant::now();
+                    // One-shot: a preceding /type or /backspace whose
+                    // mutation the companion couldn't confirm (slow IME)
+                    // sets this so we settle on an extended budget, giving
+                    // the field time to update before the next assert. Swap
+                    // it back so only this settle is stretched.
+                    let extended = ctx
+                        .extend_next_settle
+                        .swap(false, std::sync::atomic::Ordering::Relaxed);
                     // Cache the settled tree for the block-end a11y audit to
                     // reuse — a move, not a clone (it's otherwise dropped).
                     // Tagged with this step's global index so the audit only
                     // reuses it when this was the block's last step.
-                    if let Ok((root, _meta, _stats)) =
+                    let settled = if extended {
+                        crate::resolution::wait_for_settle_extended(driver).await
+                    } else {
                         crate::resolution::wait_for_settle(driver).await
-                    {
+                    };
+                    if let Ok((root, _meta, _stats)) = settled {
                         ctx.cache_settled_tree(root, ctx.global_step_index);
                     }
                     let elapsed = started.elapsed();
-                    // `wait_for_settle`'s internal SETTLE_TIMEOUT is
-                    // 1500ms — anything close to that means it gave up
+                    // The settle's internal timeout is 1500ms (3000ms when
+                    // extended) — an elapsed close to that means it gave up
                     // waiting for the UI to stop animating.
-                    let stable = elapsed < std::time::Duration::from_millis(1300);
+                    let settle_budget_ms: u64 = if extended { 3000 } else { 1500 };
+                    let stable =
+                        elapsed < std::time::Duration::from_millis(settle_budget_ms - 200);
                     ctx.substep(golem_events::SubstepEvent::PostSettle {
                         action: step.action.clone(),
                         duration_ms: elapsed.as_millis() as u64,

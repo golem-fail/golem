@@ -53,6 +53,19 @@ public class CompanionServer {
      *  request stuck with it. 10s is far above any legitimate call. */
     private static final long SHELL_CALL_TIMEOUT_MS = 10_000L;
 
+    /** Total deadline for the /hide-keyboard dismiss sequence. Pixel-class
+     *  devices under multi-flow load occasionally wedge on the
+     *  `dumpsys input_method` walk; capping the whole sequence lets the
+     *  handler return a `wedged` flag before the host's HTTP request
+     *  timeout, keeping the UiAutomation channel free for the next request
+     *  instead of propagating the wedge. This MUST stay comfortably below
+     *  the host request timeout for `hide_keyboard`, else the transport
+     *  times out first and the clean `wedged` response never arrives:
+     *  hide_keyboard is a 1x action (golem-runner policy) → default step
+     *  timeout 5000ms → request timeout = 5000 - 500 = 4500ms. 3500ms
+     *  leaves ~1s for the wedged response to travel back. */
+    private static final long HIDE_KEYBOARD_DEADLINE_MS = 3_500L;
+
     /** Single-thread executor for UiAutomation calls with timeout.
      *  Daemon so it doesn't keep the JVM alive at shutdown. */
     private static final ExecutorService UI_EXECUTOR =
@@ -208,7 +221,7 @@ public class CompanionServer {
                     JSONObject respBody = new JSONObject()
                         .put("status", uiReady ? "ok" : "warming_up")
                         .put("platform", "android")
-                        .put("version", "0.6.36")
+                        .put("version", "0.6.37")
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
@@ -255,6 +268,9 @@ public class CompanionServer {
                     break;
                 case "/stop":
                     handleStop(out, body);
+                    break;
+                case "/shutdown":
+                    handleShutdown(out);
                     break;
                 case "/perf":
                     handlePerf(out, queryParams);
@@ -681,6 +697,39 @@ public class CompanionServer {
         upEvent.recycle();
     }
 
+    /** Read the text of the currently input-focused field, or null if it
+     *  can't be read (no active window, no input focus). The
+     *  wedge-sensitive `getRootInActiveWindow` goes through
+     *  {@link #callBounded} so a stuck handle still feeds the staleness
+     *  detector; a null *focus* (no editable field) is not a wedge and is
+     *  returned as null without touching the counter. Used to verify that
+     *  a /type or /backspace mutation actually landed. */
+    private String readFocusedInputText() {
+        AccessibilityNodeInfo root =
+            callBounded(uiAutomation::getRootInActiveWindow, "getRootInActiveWindow");
+        if (root == null) {
+            return null;
+        }
+        // Recycle both nodes on every path — this is called twice per
+        // /type and /backspace, so a leaked `root` would accumulate fast
+        // and exhaust the shared AccessibilityNodeInfo pool (matches the
+        // recycle discipline in handleHierarchy / probeUiReady).
+        try {
+            AccessibilityNodeInfo focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+            if (focused == null) {
+                return null;
+            }
+            try {
+                CharSequence t = focused.getText();
+                return t != null ? t.toString() : "";
+            } finally {
+                focused.recycle();
+            }
+        } finally {
+            root.recycle();
+        }
+    }
+
     private void handleType(OutputStream out, String body) throws Exception {
         JSONObject req = new JSONObject(body);
         String text = req.getString("text");
@@ -697,6 +746,14 @@ public class CompanionServer {
                 return;
             }
         }
+        // Snapshot the focused field before dispatching so we can verify
+        // the keystrokes actually landed. Slow IMEs (some devices under
+        // multi-flow load) return from `input text` before the EditText
+        // has updated; the host's post-step settle then sees a stable
+        // hierarchy and races the next assert against a not-yet-updated
+        // field. `null` = couldn't read (no input focus) → skip the check.
+        String baselineText = readFocusedInputText();
+
         // Split on newlines — type each line separately with Enter between them.
         // Android's `input text` doesn't support newline characters.
         String[] lines = text.split("\n", -1);
@@ -714,16 +771,40 @@ public class CompanionServer {
                 executeShell("input keyevent KEYCODE_ENTER");
             }
         }
-        sendJson(out, 200, new JSONObject().put("status", "ok"));
+        sendJson(out, 200, verifyMutation(baselineText));
     }
 
     private void handleBackspace(OutputStream out, String body) throws Exception {
         JSONObject req = body.isEmpty() ? new JSONObject() : new JSONObject(body);
         int count = req.optInt("count", 1);
+        String baselineText = readFocusedInputText();
         for (int i = 0; i < count; i++) {
             executeShell("input keyevent DEL");
         }
-        sendJson(out, 200, new JSONObject().put("status", "ok"));
+        sendJson(out, 200, verifyMutation(baselineText));
+    }
+
+    /** Build the /type or /backspace response, checking that the field
+     *  text changed. Sleeps ~150ms (long enough for most IMEs to land the
+     *  keystroke) then reads the focused field ONCE. If the text matches
+     *  the pre-dispatch baseline, the mutation hasn't propagated yet, so
+     *  flag `text_unchanged` — the host extends its next settle to give
+     *  the IME more time without burning further a11y calls. When the
+     *  baseline couldn't be read (no input focus) the check is skipped. */
+    private JSONObject verifyMutation(String baselineText) throws Exception {
+        JSONObject resp = new JSONObject().put("status", "ok");
+        if (baselineText != null) {
+            try {
+                Thread.sleep(150);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            String after = readFocusedInputText();
+            if (after != null && after.equals(baselineText)) {
+                resp.put("text_unchanged", true);
+            }
+        }
+        return resp;
     }
 
     private void handleScreenshot(OutputStream out) throws Exception {
@@ -770,11 +851,37 @@ public class CompanionServer {
         // to the activity and finishes it — exiting the app under test.
         // Probe `dumpsys input_method` for `mInputShown=true` and only
         // press BACK when there's actually a keyboard to dismiss.
-        String dump = executeShellAndRead("dumpsys input_method");
-        if (dump != null && dump.contains("mInputShown=true")) {
-            executeShell("input keyevent KEYCODE_BACK");
+        //
+        // Run the whole sequence under a single deadline. On a wedged
+        // device the `dumpsys input_method` walk can hang past the host's
+        // HTTP timeout and leave the request thread stuck. When the
+        // deadline fires, return `{"status":"ok","wedged":true}` instead
+        // of hanging: the request thread is freed, the driver treats the
+        // flag as transient and retries once, and any still-running shell
+        // poll is left to finish (and time out) in the background without
+        // blocking the next request. (SHELL_EXECUTOR is a cached pool, so
+        // this outer task and the inner shell drain never contend.)
+        Future<Void> f = SHELL_EXECUTOR.submit(() -> {
+            String dump = executeShellAndRead("dumpsys input_method");
+            if (dump != null && dump.contains("mInputShown=true")) {
+                executeShell("input keyevent KEYCODE_BACK");
+            }
+            return null;
+        });
+        try {
+            f.get(HIDE_KEYBOARD_DEADLINE_MS, TimeUnit.MILLISECONDS);
+            sendJson(out, 200, new JSONObject().put("status", "ok"));
+        } catch (java.util.concurrent.TimeoutException e) {
+            // Deliberately do NOT cancel(true): interrupting the drain
+            // would surface as a generic exception that skips pfd cleanup.
+            // Let the abandoned task hit runShellBounded's own inner
+            // timeout, which closes the pfd on its TimeoutException path.
+            // It runs on the cached SHELL_EXECUTOR, so it won't block the
+            // next request.
+            sendJson(out, 200, new JSONObject()
+                .put("status", "ok")
+                .put("wedged", true));
         }
-        sendJson(out, 200, new JSONObject().put("status", "ok"));
     }
 
     private JSONObject buildNodeJson(AccessibilityNodeInfo node) throws Exception {
@@ -1020,6 +1127,11 @@ public class CompanionServer {
             throw new IOException(
                 "shell command timed out after " + timeoutMs + "ms: " + command);
         } catch (Exception e) {
+            // Any other failure (incl. an InterruptedException if this
+            // task was cancelled by an outer deadline) must still close
+            // the pfd — otherwise the native fd / shell subprocess leaks.
+            drain.cancel(true);
+            try { pfd.close(); } catch (IOException ignored) {}
             throw new IOException("shell command failed: " + command, e);
         }
     }
@@ -1069,6 +1181,30 @@ public class CompanionServer {
             return;
         }
         executeShell("am force-stop " + packageName);
+        sendJson(out, 200, new JSONObject().put("status", "ok"));
+    }
+
+    /** Cleanly end the companion process on host request. The host POSTs
+     *  this when `golem run` exits so the `am instrument` parent tears
+     *  down with us, instead of orphaning a companion whose UiAutomation
+     *  handle goes stale (host-side driver killed → getRootInActiveWindow
+     *  returns null forever). Reply 200 first, then exit on a short delay
+     *  so the caller can flush + close the socket and the host sees a
+     *  clean response rather than a dropped connection. The next
+     *  `golem run` re-spawns instrumentation and a fresh companion. */
+    private void handleShutdown(OutputStream out) throws Exception {
+        // Schedule the exit FIRST so the companion still exits even if the
+        // response send throws (e.g. the host already dropped the socket
+        // while racing its own teardown) — a dropped /shutdown that failed
+        // to exit would leave exactly the orphaned companion this endpoint
+        // exists to prevent. The 150ms delay lets the response below flush
+        // and reach the host before the process halts.
+        new Thread(() -> {
+            try { Thread.sleep(150); } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            System.exit(0);
+        }).start();
         sendJson(out, 200, new JSONObject().put("status", "ok"));
     }
 

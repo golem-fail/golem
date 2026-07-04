@@ -419,6 +419,25 @@ pub(crate) fn build_backspace_body(count: u32) -> Result<String> {
         .context("failed to serialize backspace request")
 }
 
+/// Interpret a /type or /backspace companion response as the
+/// post-mutation check. The companion sets `"text_unchanged": true` when
+/// its single post-dispatch read saw no change (slow IME). Returns
+/// `Some(true)` in that case, `Some(false)` when the companion responded
+/// without the flag (change observed / field unreadable). Always
+/// `Some(_)` — a companion that ran the check answered one way or the
+/// other; malformed/absent JSON degrades to `Some(false)` (no extend).
+pub(crate) fn parse_text_unchanged(resp: &str) -> Option<bool> {
+    Some(
+        serde_json::from_str::<serde_json::Value>(resp)
+            .ok()
+            .and_then(|v| {
+                v.get("text_unchanged")
+                    .and_then(serde_json::Value::as_bool)
+            })
+            .unwrap_or(false),
+    )
+}
+
 /// Build the JSON body for a long-press request.
 pub(crate) fn build_long_press_body(x: i32, y: i32, duration_ms: u64) -> Result<String> {
     serde_json::to_string(&LongPressRequest { x, y, duration_ms })
@@ -1341,6 +1360,34 @@ mod tests {
         let body = build_backspace_body(5).expect("backspace body SHALL serialize");
         let v: serde_json::Value = serde_json::from_str(&body).expect("valid json");
         assert_eq!(v["count"], 5, "count SHALL serialize");
+    }
+
+    // 28b. parse_text_unchanged reads the companion's post-mutation flag:
+    //      Some(true) only when the flag is explicitly true; Some(false)
+    //      for a plain ok, an explicit false, or malformed/absent JSON
+    //      (never None — a companion that ran the check answered).
+    #[test]
+    fn parse_text_unchanged_reads_flag() {
+        assert_eq!(
+            parse_text_unchanged(r#"{"status":"ok","text_unchanged":true}"#),
+            Some(true),
+            "explicit true flag SHALL be Some(true) (extend settle)"
+        );
+        assert_eq!(
+            parse_text_unchanged(r#"{"status":"ok"}"#),
+            Some(false),
+            "absent flag (change observed) SHALL be Some(false)"
+        );
+        assert_eq!(
+            parse_text_unchanged(r#"{"status":"ok","text_unchanged":false}"#),
+            Some(false),
+            "explicit false flag SHALL be Some(false)"
+        );
+        assert_eq!(
+            parse_text_unchanged("not json"),
+            Some(false),
+            "malformed response SHALL degrade to Some(false), not extend"
+        );
     }
 
     // 29. Long-press body serializes coords and duration.

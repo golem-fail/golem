@@ -467,16 +467,18 @@ impl PlatformDriver for IosDriver {
         Ok(())
     }
 
-    async fn type_text(&self, text: &str) -> Result<()> {
+    async fn type_text(&self, text: &str) -> Result<Option<bool>> {
         let body = build_type_body(text)?;
         self.client.post_json("/type", &body).await?;
-        Ok(())
+        // XCUITest reads the field's `value` synchronously, so the
+        // Android slow-IME race doesn't manifest here — no verify signal.
+        Ok(None)
     }
 
-    async fn backspace(&self, count: u32) -> Result<()> {
+    async fn backspace(&self, count: u32) -> Result<Option<bool>> {
         let body = build_backspace_body(count)?;
         self.client.post_json("/backspace", &body).await?;
-        Ok(())
+        Ok(None)
     }
 
     async fn swipe_coords(&self, from_x: i32, from_y: i32, to_x: i32, to_y: i32) -> Result<()> {

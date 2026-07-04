@@ -1,6 +1,6 @@
 use crate::common::{
     build_backspace_body, build_gesture_body, build_long_press_body, build_swipe_body,
-    build_tap_body, build_type_body, parse_hierarchy, CompanionClient,
+    build_tap_body, build_type_body, parse_hierarchy, parse_text_unchanged, CompanionClient,
 };
 use crate::{PlatformDriver, ScreenshotResult};
 use anyhow::{bail, Context, Result};
@@ -642,7 +642,7 @@ impl PlatformDriver for AndroidDriver {
         Ok(())
     }
 
-    async fn type_text(&self, text: &str) -> Result<()> {
+    async fn type_text(&self, text: &str) -> Result<Option<bool>> {
         // Non-ASCII text routes through the golem IME (activated in
         // `prepare_type`); the IME commits any text, so once active it
         // handles ASCII lines too. ASCII-only text keeps the faster
@@ -653,17 +653,19 @@ impl PlatformDriver for AndroidDriver {
                 // caller types non-ASCII without the prepare hook.
                 crate::ime::ensure_active(&self.device_serial, &self.ime_active).await?;
             }
-            return crate::ime::commit_text(&self.device_serial, text).await;
+            crate::ime::commit_text(&self.device_serial, text).await?;
+            // The IME commit path bypasses the /type verify — no signal.
+            return Ok(None);
         }
         let body = build_type_body(text)?;
-        self.client.post_json("/type", &body).await?;
-        Ok(())
+        let resp = self.client.post_json("/type", &body).await?;
+        Ok(parse_text_unchanged(&resp))
     }
 
-    async fn backspace(&self, count: u32) -> Result<()> {
+    async fn backspace(&self, count: u32) -> Result<Option<bool>> {
         let body = build_backspace_body(count)?;
-        self.client.post_json("/backspace", &body).await?;
-        Ok(())
+        let resp = self.client.post_json("/backspace", &body).await?;
+        Ok(parse_text_unchanged(&resp))
     }
 
     async fn swipe_coords(&self, from_x: i32, from_y: i32, to_x: i32, to_y: i32) -> Result<()> {
@@ -695,8 +697,37 @@ impl PlatformDriver for AndroidDriver {
     }
 
     async fn hide_keyboard(&self) -> Result<()> {
-        self.client.post_json("/hide-keyboard", "{}").await?;
-        Ok(())
+        // A Pixel-class companion under multi-flow load can wedge on the
+        // `dumpsys input_method` walk. The companion now caps that with an
+        // internal deadline and replies `{"status":"ok","wedged":true}`
+        // instead of hanging; the request may also just time out at the
+        // transport. Treat both as transient and retry once with a short
+        // backoff. After the retry a persistent transport error
+        // propagates, but a persistent `wedged` flag is a soft success —
+        // hiding the keyboard is best-effort, and a genuinely wedged
+        // companion is caught by the next hierarchy fetch's wedge path.
+        let mut last_err = None;
+        for attempt in 0..2 {
+            if attempt > 0 {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            }
+            match self.client.post_json("/hide-keyboard", "{}").await {
+                Ok(resp) => {
+                    let wedged = serde_json::from_str::<serde_json::Value>(&resp)
+                        .ok()
+                        .and_then(|v| v.get("wedged").and_then(|w| w.as_bool()))
+                        .unwrap_or(false);
+                    if !wedged {
+                        return Ok(());
+                    }
+                }
+                Err(e) => last_err = Some(e),
+            }
+        }
+        match last_err {
+            Some(e) => Err(e),
+            None => Ok(()),
+        }
     }
 
     async fn launch_app(&self, bundle_id: &str) -> Result<Option<String>> {

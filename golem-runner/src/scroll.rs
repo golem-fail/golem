@@ -1063,14 +1063,14 @@ mod tests {
             Ok(())
         }
 
-        async fn type_text(&self, text: &str) -> anyhow::Result<()> {
+        async fn type_text(&self, text: &str) -> anyhow::Result<Option<bool>> {
             self.record_call("type_text", vec![text.to_string()]);
-            Ok(())
+            Ok(None)
         }
 
-        async fn backspace(&self, count: u32) -> anyhow::Result<()> {
+        async fn backspace(&self, count: u32) -> anyhow::Result<Option<bool>> {
             self.record_call("backspace", vec![count.to_string()]);
-            Ok(())
+            Ok(None)
         }
 
         async fn swipe_coords(

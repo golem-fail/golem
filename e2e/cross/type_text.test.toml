@@ -22,7 +22,7 @@ steps = [
   { action = "type", on_text = "Search", input = "hello world" },
 
   # Backspace to correct a typo in search
-  { action = "backspace", on_text = "hello world", count = 5 },
+  { action = "backspace", count = 5 },
   { action = "type", on_text = "hello ", input = "earth" },
 
   # Multi-line text area, mixed ASCII + Unicode (Enter between lines).

@@ -34,7 +34,7 @@ steps = [
   { action = "assert_visible", on_text = "golem testt" },
 
   # Use backspace to correct the typo (field now shows "golem testt")
-  { action = "backspace", on_text = "golem testt", count = 1 },
+  { action = "backspace", count = 1 },
   { action = "assert_visible", on_text = "golem test" },
 
   # Type the correct ending (field now shows "golem test")

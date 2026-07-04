@@ -19,6 +19,15 @@ const SETTLE_TIMEOUT: Duration = Duration::from_millis(1500);
 /// Interval between settle comparison checks (250ms).
 const SETTLE_INTERVAL: Duration = Duration::from_millis(250);
 
+/// Extended settle budget, used for the one settle immediately after a
+/// `/type`/`/backspace` whose mutation the companion couldn't confirm
+/// (slow IME). Gives the field up to 3s to update without burning extra
+/// a11y calls on the happy path. See `ExecutionContext::extend_next_settle`.
+const SETTLE_TIMEOUT_EXTENDED: Duration = Duration::from_millis(3000);
+
+/// Poll interval paired with [`SETTLE_TIMEOUT_EXTENDED`] (500ms).
+const SETTLE_INTERVAL_EXTENDED: Duration = Duration::from_millis(500);
+
 /// Per-call deadline for `driver.get_hierarchy()`. Normal fetches
 /// return in 100-300ms; under sweep load with large hierarchies a
 /// slow-tail fetch can reach 2-4s. A true wedge (e.g. UiAutomation
@@ -388,6 +397,7 @@ fn has_empty_webview(element: &Element) -> bool {
     element.children.iter().any(has_empty_webview)
 }
 
+/// Wait for the UI hierarchy to stabilize using the normal budget.
 pub(crate) async fn wait_for_settle(
     driver: &dyn PlatformDriver,
 ) -> Result<(
@@ -395,7 +405,31 @@ pub(crate) async fn wait_for_settle(
     golem_driver::common::HierarchyMeta,
     golem_events::TreeStats,
 )> {
-    let deadline = Instant::now() + SETTLE_TIMEOUT;
+    wait_for_settle_with(driver, SETTLE_TIMEOUT, SETTLE_INTERVAL).await
+}
+
+/// Extended-budget settle for the one step following an un-verified
+/// `/type`/`/backspace` mutation (see `ExecutionContext::extend_next_settle`).
+pub(crate) async fn wait_for_settle_extended(
+    driver: &dyn PlatformDriver,
+) -> Result<(
+    Element,
+    golem_driver::common::HierarchyMeta,
+    golem_events::TreeStats,
+)> {
+    wait_for_settle_with(driver, SETTLE_TIMEOUT_EXTENDED, SETTLE_INTERVAL_EXTENDED).await
+}
+
+async fn wait_for_settle_with(
+    driver: &dyn PlatformDriver,
+    settle_timeout: Duration,
+    settle_interval: Duration,
+) -> Result<(
+    Element,
+    golem_driver::common::HierarchyMeta,
+    golem_events::TreeStats,
+)> {
+    let deadline = Instant::now() + settle_timeout;
     let mut stats = golem_events::TreeStats::default();
 
     let (root, meta) = get_hierarchy_bounded(driver).await?;
@@ -412,7 +446,7 @@ pub(crate) async fn wait_for_settle(
             if has_empty_webview(&prev_root) {
                 let enrich_deadline = Instant::now() + ENRICHMENT_TIMEOUT;
                 while Instant::now() < enrich_deadline {
-                    tokio::time::sleep(SETTLE_INTERVAL).await;
+                    tokio::time::sleep(settle_interval).await;
                     let (root, meta) = match get_hierarchy_bounded(driver).await {
                         Ok(r) => r,
                         Err(_) => break,
@@ -424,7 +458,7 @@ pub(crate) async fn wait_for_settle(
                         prev_root = root;
                         prev_meta = meta;
                         // Quick settle check on enriched tree
-                        tokio::time::sleep(SETTLE_INTERVAL).await;
+                        tokio::time::sleep(settle_interval).await;
                         if let Ok((r2, m2)) = get_hierarchy_bounded(driver).await {
                             stats.record(m2.node_count);
                             crate::record_tree_fetch(m2.node_count);
@@ -437,7 +471,7 @@ pub(crate) async fn wait_for_settle(
             return Ok((prev_root, prev_meta, stats));
         }
 
-        tokio::time::sleep(SETTLE_INTERVAL).await;
+        tokio::time::sleep(settle_interval).await;
 
         let (root, meta) = match get_hierarchy_bounded(driver).await {
             Ok(r) => r,

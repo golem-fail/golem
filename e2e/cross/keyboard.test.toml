@@ -8,44 +8,37 @@ name = "app"
 os = ["ios:latest", "android:latest"]
 type = "phone"
 
+# The text fields live on the dedicated "text fields" screen, reached via
+# the menu — navigate there first (the app's home screen has no inputs).
 [[block]]
 name = "keyboard_management"
 steps = [
-  { action = "assert_visible", on_text = "Submit" },
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-text-fields" },
 
-  # Tap a text field to bring up the keyboard
-  { action = "tap", on_text = "Enter email" },
-
-  # Type some text (keyboard should be visible)
-  { action = "type", on_text = "Enter email", input = "test@example.com" },
-
-  # Dismiss the keyboard
-  { action = "hide_keyboard" },
-
-  # Tap another text field to bring the keyboard back
-  { action = "tap", on_text = "Search" },
-  { action = "type", on_text = "Search", input = "search query" },
-]
-
-# Dismiss keyboard: Android can use back button, iOS uses hide_keyboard
-[[block]]
-name = "dismiss_keyboard_android"
-where = { os = "android" }
-steps = [
-  { action = "press", button = "back" },
-]
-
-[[block]]
-name = "dismiss_keyboard_ios"
-where = { os = "ios" }
-steps = [
-  { action = "hide_keyboard" },
-]
-
-[[block]]
-name = "verify_text_persisted"
-steps = [
-  # Verify the typed text persisted after keyboard dismissal
+  # Type into a field to bring up the keyboard, then verify it landed.
+  { action = "type", on_text = "Enter email", input = "test@example.com", auto_scroll = true },
   { action = "assert_visible", on_text = "test@example.com" },
-  { action = "assert_visible", on_text = "search query" },
+
+  # Dismiss the keyboard — the typed text must persist after it hides.
+  { action = "hide_keyboard" },
+  { action = "assert_visible", on_text = "test@example.com" },
+
+  # Type into another field, then backspace one char. `backspace` is
+  # focus-only (no selector) — it erases from the field just typed into,
+  # whose caret the OS left at the end.
+  { action = "type", on_text = "Search", input = "golem testt", auto_scroll = true },
+  { action = "assert_visible", on_text = "golem testt" },
+  { action = "backspace", count = 1 },
+  { action = "assert_visible", on_text = "golem test" },
+
+  # Append to the still-focused field with a selector-less `type` — no
+  # re-tap, so the caret stays at the end and the text appends cleanly.
+  { action = "type", input = " query" },
+  { action = "assert_visible", on_text = "golem test query" },
+
+  # Dismiss again — both fields' values persist.
+  { action = "hide_keyboard" },
+  { action = "assert_visible", on_text = "test@example.com" },
+  { action = "assert_visible", on_text = "golem test query" },
 ]

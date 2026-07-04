@@ -378,6 +378,26 @@ pub struct Step {
     pub params: HashMap<String, toml::Value>,
 }
 
+impl Step {
+    /// Whether the step carries any element-selector criterion — the `on_*`
+    /// fields or the grouped `on`/`to`. Used to reject a selector on actions
+    /// that operate on the currently-focused element (e.g. `backspace`), so a
+    /// misplaced selector fails loudly instead of silently mis-targeting.
+    pub fn has_element_selector(&self) -> bool {
+        self.on_text.is_some()
+            || self.on_accessibility_label.is_some()
+            || self.on_index.is_some()
+            || self.on_enabled.is_some()
+            || self.on_checked.is_some()
+            || self.on_clickable.is_some()
+            || self.on_below.is_some()
+            || self.on_above.is_some()
+            || self.on_right_of.is_some()
+            || self.on_left_of.is_some()
+            || self.on.is_some()
+    }
+}
+
 /// A single finger path in a multi-touch gesture.
 #[derive(Deserialize, Debug, Clone)]
 pub struct Finger {

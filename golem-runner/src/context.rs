@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Instant;
 
@@ -65,6 +65,13 @@ pub struct ExecutionContext<'a> {
     /// then combined per block with `capture_config.cli_force_record`
     /// (overrides) and `block.record` (explicit per-block).
     pub inherited_record_default: bool,
+    /// One-shot hint: when a `/type` or `/backspace` companion couldn't
+    /// confirm the field text changed (slow IME may not have propagated
+    /// yet), the action handler sets this so the *next* post-step settle
+    /// runs on an extended budget. Consumed (swapped back to false) by
+    /// that settle, so it only stretches the one settle immediately
+    /// following the un-verified mutation.
+    pub extend_next_settle: AtomicBool,
 }
 
 impl ExecutionContext<'_> {
@@ -196,6 +203,7 @@ pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
         trace_pair: Mutex::new(None),
         rng: Mutex::new(FakeRng::from_optional_seed(None)),
         inherited_record_default: false,
+        extend_next_settle: AtomicBool::new(false),
     }
 }
 
@@ -265,6 +273,7 @@ impl TestHarness {
         trace_pair: Mutex::new(None),
             rng: Mutex::new(FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
+            extend_next_settle: AtomicBool::new(false),
         }
     }
 

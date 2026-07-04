@@ -153,12 +153,12 @@ mod tests {
             Ok(())
         }
 
-        async fn type_text(&self, _text: &str) -> anyhow::Result<()> {
-            Ok(())
+        async fn type_text(&self, _text: &str) -> anyhow::Result<Option<bool>> {
+            Ok(None)
         }
 
-        async fn backspace(&self, _count: u32) -> anyhow::Result<()> {
-            Ok(())
+        async fn backspace(&self, _count: u32) -> anyhow::Result<Option<bool>> {
+            Ok(None)
         }
 
         async fn swipe_coords(
@@ -581,12 +581,12 @@ mod tests {
             Ok(())
         }
 
-        async fn type_text(&self, _text: &str) -> anyhow::Result<()> {
-            Ok(())
+        async fn type_text(&self, _text: &str) -> anyhow::Result<Option<bool>> {
+            Ok(None)
         }
 
-        async fn backspace(&self, _count: u32) -> anyhow::Result<()> {
-            Ok(())
+        async fn backspace(&self, _count: u32) -> anyhow::Result<Option<bool>> {
+            Ok(None)
         }
 
         async fn swipe_coords(

@@ -51,11 +51,19 @@ pub trait PlatformDriver: Send + Sync {
     /// Long press at coordinates for a duration
     async fn long_press(&self, x: i32, y: i32, duration_ms: u64) -> anyhow::Result<()>;
 
-    /// Type text into the currently focused field
-    async fn type_text(&self, text: &str) -> anyhow::Result<()>;
+    /// Type text into the currently focused field.
+    ///
+    /// The returned `Option<bool>` is the companion's post-mutation
+    /// check: `Some(true)` means the field text did NOT change after the
+    /// keystrokes (a slow IME may not have propagated the edit yet — the
+    /// runner extends its next settle); `Some(false)` means the change
+    /// was observed; `None` means no signal (iOS, an older companion, or
+    /// the field couldn't be read).
+    async fn type_text(&self, text: &str) -> anyhow::Result<Option<bool>>;
 
-    /// Delete characters (backspace)
-    async fn backspace(&self, count: u32) -> anyhow::Result<()>;
+    /// Delete characters (backspace). Returns the same post-mutation
+    /// check as [`type_text`](Self::type_text).
+    async fn backspace(&self, count: u32) -> anyhow::Result<Option<bool>>;
 
     /// Perform a swipe between specific coordinates
     async fn swipe_coords(
@@ -345,6 +353,11 @@ pub struct MockPlatformDriver {
     /// Path `stop_recording` returns. Defaults to the historical
     /// `"mock_recording.mp4"` so existing tests are unchanged.
     recording_path: Mutex<String>,
+    /// Value `type_text`/`backspace` return as their post-mutation check.
+    /// `None` by default (no verify signal, matching a driver that didn't
+    /// run the check); set to `Some(true)` to simulate an un-verified
+    /// mutation (slow IME) or `Some(false)` a verified one.
+    type_verify: Mutex<Option<bool>>,
 }
 
 /// Map a caller-supplied method name to the canonical trait method name
@@ -368,6 +381,7 @@ impl MockPlatformDriver {
             hierarchy_queue: Mutex::new(VecDeque::new()),
             launch_warning: Mutex::new(None),
             recording_path: Mutex::new("mock_recording.mp4".to_string()),
+            type_verify: Mutex::new(None),
         }
     }
 
@@ -449,6 +463,11 @@ impl MockPlatformDriver {
     pub fn set_recording_path(&self, path: &str) {
         *self.recording_path.lock().expect("lock poisoned") = path.to_string();
     }
+
+    /// Set the post-mutation check `type_text`/`backspace` return.
+    pub fn set_type_verify(&self, verify: Option<bool>) {
+        *self.type_verify.lock().expect("lock poisoned") = verify;
+    }
 }
 
 #[async_trait]
@@ -484,14 +503,14 @@ impl PlatformDriver for MockPlatformDriver {
         Ok(())
     }
 
-    async fn type_text(&self, text: &str) -> anyhow::Result<()> {
+    async fn type_text(&self, text: &str) -> anyhow::Result<Option<bool>> {
         self.record_call("type_text", vec![text.to_string()]);
-        Ok(())
+        Ok(*self.type_verify.lock().expect("lock poisoned"))
     }
 
-    async fn backspace(&self, count: u32) -> anyhow::Result<()> {
+    async fn backspace(&self, count: u32) -> anyhow::Result<Option<bool>> {
         self.record_call("backspace", vec![count.to_string()]);
-        Ok(())
+        Ok(*self.type_verify.lock().expect("lock poisoned"))
     }
 
     async fn swipe_coords(
@@ -902,10 +921,10 @@ mod tests {
         async fn long_press(&self, _x: i32, _y: i32, _d: u64) -> anyhow::Result<()> {
             unimplemented!()
         }
-        async fn type_text(&self, _t: &str) -> anyhow::Result<()> {
+        async fn type_text(&self, _t: &str) -> anyhow::Result<Option<bool>> {
             unimplemented!()
         }
-        async fn backspace(&self, _c: u32) -> anyhow::Result<()> {
+        async fn backspace(&self, _c: u32) -> anyhow::Result<Option<bool>> {
             unimplemented!()
         }
         async fn swipe_coords(&self, _: i32, _: i32, _: i32, _: i32) -> anyhow::Result<()> {
@@ -1031,10 +1050,10 @@ mod tests {
         async fn long_press(&self, _x: i32, _y: i32, _d: u64) -> anyhow::Result<()> {
             unimplemented!()
         }
-        async fn type_text(&self, _t: &str) -> anyhow::Result<()> {
+        async fn type_text(&self, _t: &str) -> anyhow::Result<Option<bool>> {
             unimplemented!()
         }
-        async fn backspace(&self, _c: u32) -> anyhow::Result<()> {
+        async fn backspace(&self, _c: u32) -> anyhow::Result<Option<bool>> {
             unimplemented!()
         }
         async fn swipe_coords(&self, _: i32, _: i32, _: i32, _: i32) -> anyhow::Result<()> {
@@ -1220,10 +1239,10 @@ mod tests {
         async fn long_press(&self, _x: i32, _y: i32, _d: u64) -> anyhow::Result<()> {
             unimplemented!()
         }
-        async fn type_text(&self, _t: &str) -> anyhow::Result<()> {
+        async fn type_text(&self, _t: &str) -> anyhow::Result<Option<bool>> {
             unimplemented!()
         }
-        async fn backspace(&self, _c: u32) -> anyhow::Result<()> {
+        async fn backspace(&self, _c: u32) -> anyhow::Result<Option<bool>> {
             unimplemented!()
         }
         async fn swipe_coords(&self, _: i32, _: i32, _: i32, _: i32) -> anyhow::Result<()> {

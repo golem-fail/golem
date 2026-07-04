@@ -337,6 +337,7 @@ pub async fn execute_flow<'a>(
                 // starting point — `execute_flow` will refine it from
                 // the child's own `[flow.options].record` if set.
                 inherited_record_default: ctx.inherited_record_default,
+                extend_next_settle: std::sync::atomic::AtomicBool::new(false),
             };
 
             let child_result = Box::pin(execute_flow(
@@ -3492,6 +3493,7 @@ action = "screenshot"
             trace_pair: std::sync::Mutex::new(None),
             rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
+            extend_next_settle: std::sync::atomic::AtomicBool::new(false),
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -3561,6 +3563,7 @@ action = "screenshot"
             trace_pair: std::sync::Mutex::new(None),
             rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
+            extend_next_settle: std::sync::atomic::AtomicBool::new(false),
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)
@@ -3639,6 +3642,7 @@ action = "screenshot"
             trace_pair: std::sync::Mutex::new(None),
             rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
+            extend_next_settle: std::sync::atomic::AtomicBool::new(false),
         };
 
         let result = execute_flow(&flow, &driver, &mut vars, None, 10_000, &mut ctx, None)

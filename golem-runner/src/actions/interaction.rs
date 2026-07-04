@@ -185,47 +185,72 @@ pub(crate) async fn handle_type(
     // field's input connection binds (i.e. before the tap below).
     driver.prepare_type(value).await?;
 
-    // Tap to focus, then verify focus before typing. Under heavy load
-    // or mid-animation (keyboard opening from a prior step), the tap
-    // can land on the keyboard's top edge → field loses focus → the
-    // keystrokes drop into nothing. Re-resolve + retry once if the
-    // element isn't focused after the tap.
-    let selector = build_selector(step);
-    let mut attempts = 0;
-    loop {
-        let (_elem, (x, y)) = resolve_element(step, driver, ctx.emitter).await?;
-        driver.tap(x, y).await?;
+    // With a selector, tap to focus that field first; then verify focus
+    // before typing. Under heavy load or mid-animation (keyboard opening
+    // from a prior step), the tap can land on the keyboard's top edge →
+    // field loses focus → the keystrokes drop into nothing. Re-resolve +
+    // retry once if the element isn't focused after the tap.
+    //
+    // With NO selector, type into whatever is currently focused (append to
+    // the field the previous step left focused, or send keystrokes the app
+    // handles globally) — no tap, so the caret stays where it was (e.g. at
+    // the end after a prior `type`).
+    if step.has_element_selector() {
+        let selector = build_selector(step);
+        let mut attempts = 0;
+        loop {
+            let (_elem, (x, y)) = resolve_element(step, driver, ctx.emitter).await?;
+            driver.tap(x, y).await?;
 
-        // Give the keyboard a moment to finish opening before checking
-        // focus. Keyboard animations on Android are typically 200-400ms.
-        sleep(Duration::from_millis(400)).await;
+            // Give the keyboard a moment to finish opening before checking
+            // focus. Keyboard animations on Android are typically 200-400ms.
+            sleep(Duration::from_millis(400)).await;
 
-        let (root, _meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
-        let matches = golem_element::selector::find_elements(&root, &selector);
-        let now_focused = matches.iter().any(|r| r.element.focused);
-        if now_focused || attempts >= 1 {
-            break;
+            let (root, _meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
+            let matches = golem_element::selector::find_elements(&root, &selector);
+            let now_focused = matches.iter().any(|r| r.element.focused);
+            if now_focused || attempts >= 1 {
+                break;
+            }
+            attempts += 1;
         }
-        attempts += 1;
     }
 
     ctx.substep(golem_events::SubstepEvent::TextInput {
         text: value.to_string(),
         field_bounds: None,
     });
-    driver.type_text(value).await?;
+    // Some(true) = the companion's post-type check saw no change yet
+    // (slow IME). Stretch the next settle so the follow-up assert doesn't
+    // race the not-yet-updated field.
+    if driver.type_text(value).await? == Some(true) {
+        ctx.extend_next_settle
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
     Ok(())
 }
 
-/// Find the target element, tap it to focus, then send backspace key presses.
-/// `count` defaults to 1 if not specified in `step.params`.
+/// Delete `count` characters from the currently focused text field
+/// (`count` defaults to 1).
+///
+/// Focus-only by design — it does NOT take a selector. A selector-driven
+/// tap-to-focus re-places the caret at the tap point, which lands
+/// mid-text on a filled field (deleting the wrong char), and there is no
+/// reliable cross-platform "move caret to end" to correct it (iOS has no
+/// such primitive). The field is instead expected to be focused by the
+/// preceding step (`type` leaves the caret at the end); a stray selector
+/// is rejected rather than silently mis-targeted.
 pub(crate) async fn handle_backspace(
     step: &Step,
     driver: &dyn PlatformDriver,
     ctx: &ExecutionContext<'_>,
 ) -> Result<()> {
-    let (_elem, (x, y)) = resolve_element(step, driver, ctx.emitter).await?;
-    driver.tap(x, y).await?;
+    if step.has_element_selector() {
+        anyhow::bail!(
+            "backspace operates on the currently focused field and does not take \
+             a selector — `type` or `tap` the field first, then `backspace`"
+        );
+    }
 
     let count = step
         .params
@@ -234,7 +259,10 @@ pub(crate) async fn handle_backspace(
         .map(|n| n as u32)
         .unwrap_or(1);
 
-    driver.backspace(count).await?;
+    if driver.backspace(count).await? == Some(true) {
+        ctx.extend_next_settle
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
     Ok(())
 }
 
@@ -866,6 +894,65 @@ mod tests {
         assert_eq!(type_calls[0].1, vec!["user@example.com"]);
     }
 
+    // ── 3b. type sets extend_next_settle iff the companion couldn't
+    //        verify the mutation (Some(true)); a verified or absent
+    //        signal leaves the one-shot flag clear ────────────────────
+    #[tokio::test]
+    async fn type_sets_extend_next_settle_on_unverified_mutation() {
+        use std::sync::atomic::Ordering;
+
+        // Some(true) = field text unchanged after typing → extend.
+        let driver = MockPlatformDriver::new(root_with_input("email"));
+        driver.set_type_verify(Some(true));
+        let mut step = make_step("type");
+        step.on_accessibility_label = Some("email".to_string());
+        step.input = Some("hello".to_string());
+        let ctx = test_ctx(Path::new("."));
+        handle_type(&step, &driver, &ctx)
+            .await
+            .expect("type SHALL succeed");
+        assert!(
+            ctx.extend_next_settle.load(Ordering::Relaxed),
+            "un-verified mutation (Some(true)) SHALL arm the extended settle"
+        );
+
+        // None (no signal, e.g. iOS / old companion) → do NOT extend.
+        let driver2 = MockPlatformDriver::new(root_with_input("email"));
+        driver2.set_type_verify(None);
+        let ctx2 = test_ctx(Path::new("."));
+        handle_type(&step, &driver2, &ctx2)
+            .await
+            .expect("type SHALL succeed");
+        assert!(
+            !ctx2.extend_next_settle.load(Ordering::Relaxed),
+            "absent verify signal (None) SHALL NOT arm the extended settle"
+        );
+    }
+
+    // ── 3c. type with no selector sends keystrokes to the focused field
+    //        without tapping (append / global keypresses) ───────────────
+    #[tokio::test]
+    async fn type_without_selector_types_into_focus_without_tapping() {
+        let driver = MockPlatformDriver::new(root_with_input("email"));
+        let mut step = make_step("type");
+        step.input = Some(" more".to_string());
+        // No selector — should not resolve/tap, just type into current focus.
+
+        let ctx = test_ctx(Path::new("."));
+        handle_type(&step, &driver, &ctx)
+            .await
+            .expect("no-selector type SHALL succeed");
+
+        let calls = driver.get_calls();
+        assert!(
+            calls.iter().all(|c| c.0 != "tap"),
+            "no-selector type SHALL NOT tap"
+        );
+        let type_calls: Vec<_> = calls.iter().filter(|c| c.0 == "type_text").collect();
+        assert_eq!(type_calls.len(), 1);
+        assert_eq!(type_calls[0].1, vec![" more"]);
+    }
+
     // ── 4. backspace action with count ───────────────────────────────
 
     #[tokio::test]
@@ -873,8 +960,8 @@ mod tests {
         let root = root_with_input("search");
         let driver = MockPlatformDriver::new(root);
 
+        // Focus-only: no selector. count comes from params.
         let mut step = make_step("backspace");
-        step.on_accessibility_label = Some("search".to_string());
         step.params
             .insert("count".to_string(), toml::Value::Integer(5));
 
@@ -884,9 +971,34 @@ mod tests {
             .expect("backspace should succeed");
 
         let calls = driver.get_calls();
+        // No tap — backspace acts on the already-focused field.
+        assert!(
+            calls.iter().all(|c| c.0 != "tap"),
+            "focus-only backspace SHALL NOT tap"
+        );
         let bs_calls: Vec<_> = calls.iter().filter(|c| c.0 == "backspace").collect();
         assert_eq!(bs_calls.len(), 1);
         assert_eq!(bs_calls[0].1, vec!["5"]);
+    }
+
+    // ── 4b. backspace rejects a selector (focus-only) ──
+    #[tokio::test]
+    async fn backspace_with_selector_is_rejected() {
+        let driver = MockPlatformDriver::new(root_with_input("search"));
+        let mut step = make_step("backspace");
+        step.on_text = Some("golem testt".to_string());
+        let ctx = test_ctx(Path::new("."));
+        let err = handle_backspace(&step, &driver, &ctx)
+            .await
+            .expect_err("backspace with a selector SHALL be rejected");
+        assert!(
+            err.to_string().contains("does not take a selector"),
+            "error SHALL explain backspace is focus-only, got: {err}"
+        );
+        assert!(
+            driver.get_calls().iter().all(|c| c.0 != "backspace"),
+            "rejected backspace SHALL NOT reach the driver"
+        );
     }
 
     // ── 5. long_press action at element coordinates ──────────────────
@@ -962,9 +1074,8 @@ mod tests {
         let root = root_with_input("field");
         let driver = MockPlatformDriver::new(root);
 
-        let mut step = make_step("backspace");
-        step.on_accessibility_label = Some("field".to_string());
-        // No count param set
+        let step = make_step("backspace");
+        // No selector, no count param — defaults to 1 on the focused field.
 
         let ctx = test_ctx(Path::new("."));
         handle_backspace(&step, &driver, &ctx)

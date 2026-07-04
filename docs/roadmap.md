@@ -56,7 +56,7 @@ Also `golem-cli` `install_cache` could take a seam over `installed_state::query`
 orchestration. Sizable, architectural — its own session. (The small standalone Cat-3
 seams — main color, orchestrator socket_path, stream `impl Write` — were done inline.)
 
-## Scroll: `center` + `visibility_percentage` for edge/partial targets (Maestro parity)
+## Scroll: `center` + `visibility_percentage` for edge/partial targets
 
 `e2e/cross/scroll_search.test.toml` `horizontal_carousel_scroll` fails (EF408)
 **on HEAD** (pre-existing, not a regression): the carousel sits at the bottom edge
@@ -67,11 +67,11 @@ screen edge, and/or the target card is only partially visible so scroll either
 can't engage the carousel or prematurely treats a partially-visible match as the
 stop condition.
 
-Maestro's `scrollUntilVisible` has two knobs we lack:
-- **`centerElement`** — keep scrolling until the target is centered, not merely
+Two scroll-until-visible refinements we lack:
+- **center-on-target** — keep scrolling until the target is centered, not merely
   edge-visible. Fixes "found but unusably at the screen edge" and gives the swipe
   a safe interaction band away from system-gesture insets.
-- **`visibilityPercentage`** — require N% of the target visible before declaring
+- **visibility threshold** — require N% of the target visible before declaring
   it found, so a sliver peeking at the edge doesn't count as success.
 
 Proposed: add optional `center = true` and `visibility_percentage = N` to the
@@ -81,90 +81,39 @@ match. Both default off (current behavior preserved). Also consider insetting th
 swipe band away from the system-gesture zone for edge-adjacent containers. Add
 unit tests for the centering/visibility math and an e2e once implemented.
 
-## Input-mutation verify for `/type` and `/backspace`
+## `clear_text` action — erase a whole field, cross-platform
 
-Slow IMEs (some Android devices under multi-flow load) return ok from
-`input text` / `input keyevent DEL` before the keystroke has actually
-propagated to the focused EditText. Step's `post_settle` then sees the
-hierarchy fingerprint is stable (no animation in flight) and returns
-fast, so the next `assert_visible` runs against a not-yet-updated field
-and times out (EF408). Pattern observed on form_fill, type_text — see
-e.g. sweep prior to revert of 0.6.28.
+`backspace` is focus-only and deletes N chars from the caret (which sits at
+the end after a `type`). Clearing an entire field of unknown length has no
+clean primitive today — you'd `backspace` a guessed-large count. Add a
+`clear_text` action that empties the focused field in one step, hiding the
+per-platform mechanics:
 
-A first attempt added per-50ms polling on `getRootInActiveWindow` inside
-the companion's `/type` and `/backspace` handlers, which catastrophically
-contended on the companion's single-threaded UI_EXECUTOR and produced
-null-bursts that tripped the staleness counter → `System.exit(0)` →
-reboot cascade. See `[[feedback_companion_a11y_contention.md]]`.
+- **iOS:** select-all then delete — long-press the field → tap "Select All"
+  in the edit menu → one delete. (XCUITest has no direct "clear".)
+- **Android:** cheaper — the companion can `performAction(ACTION_SET_SELECTION,
+  {start:0, end:len})` on the focused node then delete, or send select-all +
+  DEL. No coordinate work.
 
-**Correct shape (sleep + single poll + hint to engine):**
+One action, focus-only (same contract as `backspace`), that just works on
+both. Companion grows a `/clear-text` (or the driver composes existing
+primitives); the runner exposes `{ action = "clear_text" }`.
 
-1. **Companion:** in `handleType` / `handleBackspace`, after dispatching
-   keystrokes, sleep ~150ms (mimics a human pause; long enough for most
-   IMEs to land the change). Then **one** `getRootInActiveWindow` →
-   `findFocus(FOCUS_INPUT)` → text compare against pre-recorded value.
-   Respond with `{"status":"ok"}` on verified mutation, or
-   `{"status":"ok", "text_unchanged": true}` when the single check
-   didn't see a change. One a11y call max per handler — won't accumulate
-   nulls.
+## Companion `/hide-keyboard` reboot escalation on recurrence
 
-2. **Driver:** parse the optional `text_unchanged` flag from the
-   response; surface as `Option<String>` or similar from `type_text` /
-   `backspace`.
+The `/hide-keyboard` wedge is already handled softly (companion caps the
+`dumpsys input_method` sequence at a deadline and returns `wedged:true`;
+the driver retries once, then treats a persistent wedge as a soft
+success). Not yet done: escalate to `adb reboot` when the retry *also*
+wedges. `DeviceCompanionWedged` is attached runner-side via `fail_code!`
+in `resolution.rs`, not by the driver, so a `hide_keyboard` error doesn't
+map to a Device-domain code today — and a persistently-wedged companion
+is already caught by the next `/hierarchy` fetch's wedge path (which does
+reboot). Wire the explicit escalation only if that backstop proves
+insufficient.
 
-3. **Runner:** when the hint is set, route the next `wait_for_settle`
-   through an extended-budget variant: `SETTLE_TIMEOUT 1500 → 3000ms`,
-   `SETTLE_INTERVAL 250 → 500ms`. One-shot: only the immediately
-   following settle is extended.
-
-**Why this works:** the IME latency is real and small (typically
-50-300ms on healthy devices, occasionally up to 1.5s on slow ones).
-A fixed 150ms sleep + 1-call check is enough on the happy path and
-under 200ms of wasted wall-clock; the extended settle on the hint
-path gives the IME another up-to-3s without burning more a11y calls.
-
-**Files:** `companions/android/app/src/androidTest/java/fail/golem/companion/CompanionServer.java`
-(`handleType`, `handleBackspace`); `golem-driver/src/lib.rs`, `android.rs`,
-`ios.rs` (trait + impls); `golem-runner/src/actions/interaction.rs`
-(handlers surface the hint), `golem-runner/src/resolution.rs`
-(`wait_for_settle` variants).
-
-iOS analogue worth considering: XCUITest's `value` property on the
-focused element is synchronous against the field, so the race we see
-on Android doesn't manifest the same way — iOS impl can stay as-is.
-
-## Companion `/hide-keyboard` resilience + Pixel-class reboot escalation
-
-Pixel 7a-class devices under multi-flow load occasionally wedge on
-`/hide-keyboard` — the companion's `dumpsys input_method` shell call
-hangs past the driver's HTTP timeout (~11-12s), returning EX000 and
-sometimes propagating the wedge to the next flow (the underlying
-UiAutomation handle stays stuck even after the HTTP request times out).
-
-**Shape:**
-
-1. **Companion:** wrap the `dumpsys input_method` shell call (and the
-   subsequent `input keyevent KEYCODE_BACK`) in a bounded executor with
-   a ~5s internal deadline. Return `{"status":"ok", "wedged": true}`
-   instead of hanging the HTTP handler when the internal deadline
-   fires. Frees the request thread so the response returns; underlying
-   IME poll may still be queued in a background thread but doesn't
-   block the next request.
-
-2. **Driver:** treat HTTP timeout OR `wedged: true` as a transient
-   error; retry once with a short backoff (e.g. 1s).
-
-3. **Driver/runner recovery layer:** on second timeout, escalate to
-   `adb reboot` recovery per existing wedge-recovery path
-   (see `[[project_pixel_7a_wedge.md]]`).
-
-Combined effect: `/hide-keyboard` EX000s become a single-flow soft
-failure rather than a multi-flow cascade. Reboot becomes the rare
-escalation, not the routine fix.
-
-**Files:** `companions/android/app/src/androidTest/java/fail/golem/companion/CompanionServer.java`
-(`handleHideKeyboard`); `golem-driver/src/android.rs::hide_keyboard`;
-recovery glue in `golem-runner` if not already in place.
+**Files:** `golem-driver/src/android.rs::hide_keyboard`; the wedge→reboot
+glue lives in `golem-cli/src/suite.rs` (see `[[project_pixel_7a_wedge.md]]`).
 
 ## Inner-container scroll: status after 2026-06-17 investigation
 
@@ -234,8 +183,8 @@ containment-beats-proximity). E2e `e2e/cross/selectors.test.toml` covers every
 selector facet (text, accessibility_label, index, 7 traits, all 4 directionals,
 contains, inside, nested anchor) — green on Android + iOS. `scroll.test`
 re-verified on iOS (no regression to `within={below}`). Design rationale (why
-geometric not Maestro's DOM `childOf`; scrollability is a hint not a filter) is
-preserved below for context.
+geometric containment not DOM-structure matching; scrollability is a hint not a
+filter) is preserved below for context.
 
 **Done since (this session):** `input`/`toggle` traits removed (f2da21d, unused +
 webview-incompatible); `docs/selectors.md` added; test-app made responsive
@@ -314,9 +263,9 @@ only ever be an internal *hint/tiebreak*, never a filter (consistent with the
 metadata).
 
 **Decision (aligned 2026-06-17): geometric predicates, not DOM structure.**
-Maestro's `childOf`/`containsChild` ([relational selectors](https://docs.maestro.dev/reference/selectors/relational-selectors))
-were rejected — they make the test reason about a DOM tree the human can't
-perceive, the opposite of golem's "test like a human" thesis. Geometric
+DOM-structure relational matching (selecting by parent/child tree
+relationships) was rejected — it makes the test reason about a DOM tree the
+human can't perceive, the opposite of golem's "test like a human" thesis. Geometric
 containment (`contains`/`inside`) is pure coords/dims = how a human localizes
 things spatially ("the thing inside that box"), independent of DOM. Honest
 caveat to document: a border-less, same-background container isn't visually
@@ -601,45 +550,25 @@ semaphore + ordering rework), `golem-cli/src/suite.rs` (plug into
 semaphore), `golem-parser/src/{config,lib}.rs`
 (`[options].max_device_wait` + parsing).
 
-## Companion: detect + recover wedged UiAutomation handle
+## Companion: driver-side restart of a wedged UiAutomation handle
 
-**Observed 2026-06-03**: when the host-side `am instrument` driver
-process (the one that keeps the companion's `UiAutomation` instance
-alive) is killed but the companion process keeps running, the
-companion enters a permanent zombie state — `getRootInActiveWindow()`
-returns null forever, even though the device and target app are
-fine. Every subsequent `/hierarchy` returns 500 "no active window".
-Sweep diagnosis showed Pixel 7a's `uiautomator dump` shell command
-worked (different IPC path) but the companion's Java call did not.
+When the host-side `am instrument` process is killed but the companion
+survives, `getRootInActiveWindow()` returns null forever and every
+`/hierarchy` returns 500 "no active window". Two recovery paths already
+exist: the host POSTs `/shutdown` to companions at teardown (clean exit,
+no orphan), and the companion self-exits when consecutive nulls cross the
+staleness threshold — both trigger a fresh instrumentation + companion on
+the next run.
 
-**Causes that trigger this:**
-- User kills the host-side golem with SIGKILL (instrumentation
-  child process orphaned without proper teardown).
-- `adb` server restart mid-suite (instrumentation channel torn down,
-  companion process survives).
-- Crash + auto-restart of the companion's parent instrumentation.
+Not yet done — a driver-side hammer for a wedge that survives both: when
+the Android driver gets 500 "no active window" with `attempts: 3` (our
+retry payload), restart the companion via `adb shell am force-stop
+fail.golem.companion` + re-`am instrument`. Defer until a wedge is
+actually observed surviving the shutdown + self-exit paths.
 
-**Mitigations:**
-1. **Host-side cleanup signal.** When `golem run` exits, send a
-   shutdown POST to every active companion (`/shutdown`) so the
-   companion process exits cleanly rather than orphaning. Next
-   `golem run` re-spawns instrumentation + a fresh companion.
-2. **Companion-side staleness detection.** When
-   `getRootInActiveWindow()` returns null for >N consecutive calls
-   over >M seconds despite the app being foregrounded
-   (`activityManager.getRunningTasks` or similar), the companion
-   should `System.exit(0)` to trigger instrumentation auto-restart.
-   Host re-registers, fresh handle, sweep continues.
-3. **Driver-side detection.** When the Android driver gets 500
-   "no active window" with `attempts: 3` (our retry payload),
-   it could trigger a companion restart via `adb shell am
-   force-stop fail.golem.companion` followed by re-`am instrument`
-   spawn. Heavier hammer; only useful if (2) can't be relied on.
-
-**Files:** `companions/android/app/src/androidTest/java/fail/golem/companion/CompanionServer.java`
-(staleness detector + suicide), `golem-driver/src/android.rs`
-(detect persistent "no active window", trigger restart),
-`golem-cli/src/registration.rs` (re-register on companion restart).
+**Files:** `golem-driver/src/android.rs` (detect persistent "no active
+window", trigger restart), `golem-cli/src/registration.rs` (re-register
+on companion restart).
 
 ## ANR recovery: iOS + post-recovery validation
 
@@ -1185,6 +1114,31 @@ Also roadmap-adjacent: consider whether `golem_events::StepOutcome::Skipped` sho
 **What's left:**
 - Add an iOS-side grace probe after `bootstatus -b` (e.g. `xcrun simctl getenv <udid> HOME` until fast) to potentially eliminate the Mach -308 case at source rather than retrying after.
 - Expand the classifier as new transient patterns surface in CI logs. Conservative — adding patterns that aren't actually recoverable just masks real errors behind a 3s delay.
+
+## iOS webview: tap on a field's value mis-aims under keyboard scroll
+
+Surfaced while diagnosing backspace on iOS (now sidestepped by making
+`backspace`/`type` focus-only). Resolving a **webview** element by its
+current text *value* and tapping it lands on the wrong element when the
+keyboard is up. Concrete trace (`--verbose`, iPhone 17, Tauri text field):
+
+- With the keyboard down, the empty field resolves at `bounds=(32,263,338,38)`.
+- After typing, with the keyboard up, that same field's *value* resolves at
+  `bounds=(32,170,338,38)` — a ~93px upward shift — and a tap at its centre
+  `(201,189)` lands ~93px too high, on the field above.
+
+The 93px matches the keyboard pushing the focused field up, so the open
+question is whether the resolved bounds are a stale snapshot (view moved
+between hierarchy fetch and tap) or a webview-DOM→screen coordinate
+translation that double-counts an inset under scroll (related to the iOS
+webview safe-area entries above). Native taps (menu/buttons) are unaffected.
+
+Low frequency — you rarely target an element by its dynamic value; labels /
+placeholders / accessibility labels are the norm, and text mutation is now
+focus-only. Next diagnostic: capture a screenshot at tap-time (keyboard up)
+plus the hierarchy the tap resolved against, to separate stale-snapshot from
+mis-translation. **Files:** `golem-driver/src/webkit.rs` / `ios.rs`
+(webview element bounds translation), `golem-runner/src/resolution.rs`.
 
 ## iOS concurrent flows: cross-flow focus / state corruption
 

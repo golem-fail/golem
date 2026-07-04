@@ -19,6 +19,9 @@ pub enum ValidationErrorKind {
     ConflictingBranchCondition,
     MissingComparison,
     InvalidConcurrency,
+    /// A selector was given to an action that operates on the currently
+    /// focused element (e.g. `backspace`), where it can't be honored reliably.
+    SelectorNotAllowed,
 }
 
 const KNOWN_ACTIONS: &[&str] = &[
@@ -240,6 +243,19 @@ pub fn validate_flow(flow: &FlowFile) -> Vec<ValidationError> {
                         kind: ValidationErrorKind::InvalidOnFail,
                     });
                 }
+            }
+
+            // 11. `backspace` operates on the focused field — a selector
+            //     can't be honored reliably (a tap-to-focus mis-places the
+            //     caret; there's no cross-platform move-to-end), so reject it.
+            if step.action == "backspace" && step.has_element_selector() {
+                errors.push(ValidationError {
+                    message:
+                        "backspace does not take a selector — it deletes from the \
+                         currently focused field; type or tap the field first"
+                            .to_string(),
+                    kind: ValidationErrorKind::SelectorNotAllowed,
+                });
             }
         }
 

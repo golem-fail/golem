@@ -806,6 +806,23 @@ impl SuiteRunner {
         // restore; self-heal at next init is the crash fallback).
         golem_driver::ime::restore_all().await;
 
+        // Ask each Android companion to exit cleanly so its `am instrument`
+        // parent tears down with it. A companion left running after golem
+        // exits keeps a UiAutomation handle that goes stale once the
+        // host-side driver is gone (getRootInActiveWindow → null forever),
+        // wedging the next run until instrumentation self-restarts. The
+        // `/shutdown` endpoint is Android-only (iOS is XCUITest-hosted, no
+        // such handler); best-effort with a short timeout so a
+        // already-wedged companion can't stall teardown.
+        for comp in reg_state.all() {
+            if comp.platform != "android" {
+                continue;
+            }
+            let client = golem_driver::common::CompanionClient::new(comp.port);
+            client.set_request_timeout(std::time::Duration::from_secs(2));
+            let _ = client.post_json("/shutdown", "{}").await;
+        }
+
         // Merge step data from suite-level accumulator into flow reports.
         let acc_report = {
             let taken = std::mem::replace(
@@ -2773,6 +2790,7 @@ async fn run_flow_on_device(
         // the top-level flow's own `[flow.options].record`. Subflows
         // refine again from their own options.
         inherited_record_default: project_record.unwrap_or(false),
+        extend_next_settle: std::sync::atomic::AtomicBool::new(false),
     };
 
     // Run install scripts for all apps in this flow on this device (unless
