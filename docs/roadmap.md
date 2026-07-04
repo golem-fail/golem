@@ -32,21 +32,6 @@ reverted; re-add when tackling this).
 CSS env 62 → −8pt on every Tauri/full-screen webview — is already fixed:
 `webkit.rs` cancels the native inset `ios.rs` added, not the CSS env.)
 
-## A11y audit follow-ups (from the audit feature)
-
-- **Pixel text-size for padded boxes.** `text_too_small` is currently the
-  *certain* box-height check (no false positives, misses small text inside a
-  tall padded box). A pixel glyph-height measurement (ink bounding-box /
-  edge-trim of uniform border rows+cols, per the contrast band detector) would
-  catch the padded case — heuristic, needs care on borders.
-- **Per-check confidence split.** `a11y_min_confidence` is one global today;
-  split into per-check thresholds (e.g. separate contrast vs others) only if a
-  real need arises.
-- **Live-stream a11y on the human format.** Findings surface in the live event
-  stream + json/junit/toon; the `format_flow`/`format_suite` human renderer
-  shows them only for `--output human` (parity with perf). Could also stream a
-  per-flow summary.
-
 ## Testability: unified I/O seam abstractions (subprocess + HTTP)
 
 Coverage sweep surfaced ~15 functions that directly construct `tokio::process::Command`
@@ -312,18 +297,23 @@ tablet cross-column proof are both covered by the grid now.
   host-side geometric hit-test against the tree's paint order (Android `getDrawingOrder`
   for elevation, iOS tree order), with an `encloses`-exclusion so Compose's coincident
   label/clickable nodes aren't treated as occluders. Heuristic → "may be occluded", never
-  blocks. Live-validated on Android (centre overlay → tap routes to a clear edge);
-  iOS uses the same code path (tree order) — an iOS SwiftUI overlay fixture is a small
-  follow-up (today only test-app-b *Android* has the overlay). **Finding:** Android's a11y
+  blocks. Live-validated on **both** platforms via test-app-b's centre-overlay fixture
+  (`occ-button`/`occ-overlay`, in the Compose `MainActivity` and the SwiftUI `ContentView`)
+  and `e2e/cross/native_occlusion.test.toml` (ios + android) — a naive centre tap hits the
+  overlay, the occlusion-aware tap routes to a clear edge. **Finding:** Android's a11y
   already prunes nodes whose bounds are fully occluded (covered text disappears) and may
   trim an interactive's reachable region — so the host hit-test mostly earns its keep
   where the platform keeps a covered element at full bounds (and on iOS, whose snapshots
   retain occluded elements).
-  - **Remaining — severity (warn/error).** Surfacing occlusion as a warning/error belongs on the
-    *step* (substeps are neutral info), and the natural home is the planned a11y audit
-    (`findings/plan_a11y.md`): its `overlapping_interactive`/`occluded_element` checks
-    should consume `hit_points` ground truth instead of bounds-intersection, governed by
-    its level + `a11y_max_errors/warnings` model.
+  - **Severity (warn/error) — DONE.** The shipped a11y audit surfaces occlusion as
+    `occluded_element` (Warning): it consumes the `hit_points` reachable-fraction ground
+    truth (level-dependent floor — strict flags >25% covered, relaxed/critical >50%),
+    governed by the level + `a11y_max_errors/warnings` model. Its sibling
+    `overlapping_interactive` stays bounds-based; refining it with `hit_points` was
+    considered and **dropped** — `occluded_element` already covers the "is it actually
+    covered" signal, and a bounds overlap-area threshold is the cheaper lever if it ever
+    proves noisy (`HitPoint` carries no occluder identity, so attributing the overlap is
+    fuzzy anyway).
   (System-status-bar occlusion of the menu button is a *separate* layer — see "Android:
   sticky menu tap target only half-clickable" below; the hit-test can't see the OS bar.)
 - **Install-cache may miss a test-app component edit.** Adding the DIS button +

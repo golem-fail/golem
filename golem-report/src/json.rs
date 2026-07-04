@@ -80,6 +80,8 @@ struct JsonA11yAudit {
 
 #[derive(Serialize)]
 struct JsonA11yIssue {
+    /// 1-based index matching the rectangle marker on the annotated screenshot.
+    marker: usize,
     check: String,
     severity: golem_events::Severity,
     message: String,
@@ -87,6 +89,8 @@ struct JsonA11yIssue {
     #[serde(skip_serializing_if = "Option::is_none")]
     element_label: Option<String>,
     confidence: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -232,13 +236,16 @@ fn a11y_to_json(audit: &crate::A11yAudit) -> JsonA11yAudit {
         issues: audit
             .issues
             .iter()
-            .map(|i| JsonA11yIssue {
+            .enumerate()
+            .map(|(n, i)| JsonA11yIssue {
+                marker: n + 1,
                 check: i.check_id.clone(),
                 severity: i.severity,
                 message: i.message.clone(),
                 element_type: i.element_type.clone(),
                 element_label: i.element_label.clone(),
                 confidence: i.confidence,
+                detail: i.detail.clone(),
             })
             .collect(),
     }

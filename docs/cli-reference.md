@@ -40,6 +40,7 @@ golem run [FILES...] [OPTIONS]
 | `--keep-devices` | Keep devices running after completion (not yet wired) |
 | `--no-perf` | Disable performance capture |
 | `--a11y <off\|critical\|relaxed\|strict>` | Override every flow's accessibility audit level (default `relaxed`). `off` disables; `critical` runs tree checks only; `relaxed` adds opportunistic contrast; `strict` forces a per-block screenshot + AAA bands |
+| `--a11y-min-confidence <0.0–1.0>` | Override every flow's `a11y_min_confidence`: drop a11y findings below this confidence. `0` surfaces every heuristic finding, higher keeps only confident ones. Wins over `[flow.options]` and the level default. |
 | `--rebuild` | Bypass the persistent install cache for this run (rebuild + reinstall every app on every device). Cache is still written after a successful build, so the next run benefits. |
 | `--no-build` | Skip build+install entirely. If the device already has the bundle, golem trusts it and runs flows; if not, the flow fails loudly. The cache is left untouched. Use when iterating on flow files against a known-good binary. |
 | `--verbose` | Show substeps (scroll coordinates, strategies, tree stats) + plan summary (flow runs, install matrix, device availability) + cache hits/misses |
@@ -99,3 +100,21 @@ Create a new flow template at `flows/<name>.test.toml`.
 Interactively scaffold an install script for an app in your project. Prompts for framework (native-ios, native-android, tauri), the relevant build config (xcode project/scheme, gradle root/module, tauri CLI runner), discovers candidates automatically where possible, and writes a bash script under `scripts/`. Optionally updates `golem.toml` with a matching `[[apps]]` entry so flows inherit the script by name.
 
 See [App Install](app-install.md) for the full resolution and execution model.
+
+## `golem a11y-extract <png>`
+
+Read the audit embedded in an annotated a11y screenshot (`strict` runs write
+`*_a11y.png` with the findings + context baked in as PNG metadata — see
+[accessibility.md](accessibility.md#embedded-metadata)). Prints every finding in
+human form (marker, severity, message, detail, confidence, pixel bounds) and the
+`golem run …` command to **replay that exact run** — `--seed`, `--a11y`, and
+`--platform` reconstructed from the metadata, with the flow file located by
+matching its name against the project's `*.test.toml` files (run it from inside
+the project).
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Print the raw embedded `Golem-Audit` JSON instead of the human report (for tooling). |
+
+Errors (non-zero exit) if the PNG wasn't produced by golem — it requires the
+`Software = Golem` metadata stamp and refuses to interpret a foreign image.

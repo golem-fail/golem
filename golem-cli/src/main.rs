@@ -1,3 +1,4 @@
+pub mod a11y_extract;
 pub mod cache;
 pub mod cli;
 pub mod companion_paths;
@@ -81,6 +82,16 @@ async fn main() -> anyhow::Result<()> {
                 }
             };
 
+            let a11y_min_confidence_override = match validate_a11y_min_confidence(
+                args.a11y_min_confidence,
+            ) {
+                Ok(c) => c,
+                Err(msg) => {
+                    eprintln!("{msg}");
+                    std::process::exit(1);
+                }
+            };
+
             // Stream human output unless user explicitly chose non-human format.
             // Default (no --output) = human, so stream is on.
             let has_human_output = detect_human_output(&args.outputs);
@@ -142,6 +153,7 @@ async fn main() -> anyhow::Result<()> {
                 project_apps: project_config.apps,
                 coverage_override,
                 a11y_override,
+                a11y_min_confidence_override,
                 rebuild,
                 no_build,
                 device_settings: project_config.device_settings,
@@ -291,6 +303,10 @@ async fn main() -> anyhow::Result<()> {
         Commands::Cache(args) => match args.command {
             cli::CacheCommands::Info => cache::info()?,
         },
+
+        Commands::A11yExtract(args) => {
+            a11y_extract::run(&args)?;
+        }
     }
 
     Ok(())
@@ -340,6 +356,17 @@ fn parse_a11y_override(a11y: Option<&str>) -> Result<Option<golem_parser::A11yLe
         Some(other) => Err(format!(
             "Unknown a11y level: {other}. Use 'off', 'critical', 'relaxed', or 'strict'."
         )),
+    }
+}
+
+/// Validate the `--a11y-min-confidence` flag: must be in `0.0..=1.0` (a
+/// confidence is a probability). `None` (absent flag) passes through.
+fn validate_a11y_min_confidence(c: Option<f32>) -> Result<Option<f32>, String> {
+    match c {
+        Some(v) if !(0.0..=1.0).contains(&v) => Err(format!(
+            "--a11y-min-confidence must be between 0.0 and 1.0 (got {v})"
+        )),
+        other => Ok(other),
     }
 }
 
@@ -407,6 +434,7 @@ fn build_config_json(
         "project_root": config.project_root.display().to_string(),
         "coverage": coverage,
         "a11y": a11y,
+        "a11y_min_confidence": config.a11y_min_confidence_override,
         "rebuild": config.rebuild,
         "no_build": config.no_build,
         "record": config.record,
@@ -903,6 +931,31 @@ mod tests {
         );
     }
 
+    // 8b. validate_a11y_min_confidence: absent → None; in-range passes;
+    //     out-of-range (below 0 or above 1) SHALL be a descriptive error.
+    #[test]
+    fn validate_a11y_min_confidence_range() {
+        assert_eq!(
+            validate_a11y_min_confidence(None).expect("absent SHALL be Ok"),
+            None
+        );
+        for v in [0.0_f32, 0.5, 1.0] {
+            assert_eq!(
+                validate_a11y_min_confidence(Some(v)).expect("in-range SHALL be Ok"),
+                Some(v),
+                "{v} SHALL pass through",
+            );
+        }
+        for bad in [-0.1_f32, 1.1] {
+            let err = validate_a11y_min_confidence(Some(bad))
+                .expect_err("out-of-range SHALL be rejected");
+            assert!(
+                err.contains("between 0.0 and 1.0"),
+                "error SHALL name the valid range, got: {err}",
+            );
+        }
+    }
+
     // 9. detect_human_output: empty list defaults to human; explicit list
     //    streams only when a human (or human:-prefixed) format is present.
     #[test]
@@ -986,6 +1039,7 @@ mod tests {
             no_record: true,
             trace: true,
             repeat: 3,
+            a11y_min_confidence_override: Some(0.7),
             output_dir: std::path::PathBuf::from(".golem/results"),
             project_root: std::path::PathBuf::from("/proj"),
             ..SuiteConfig::default()
@@ -996,6 +1050,13 @@ mod tests {
         // 1. Raw flag strings SHALL pass through verbatim.
         assert_eq!(json["platform"], "ios", "platform SHALL be the raw string");
         assert_eq!(json["a11y"], "strict", "a11y SHALL be the raw string");
+        assert!(
+            json["a11y_min_confidence"]
+                .as_f64()
+                .is_some_and(|v| (v - 0.7).abs() < 1e-6),
+            "a11y_min_confidence SHALL be mirrored onto the wire, got {}",
+            json["a11y_min_confidence"],
+        );
         assert_eq!(
             json["coverage"], "smart",
             "coverage SHALL be the raw string"

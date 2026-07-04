@@ -287,8 +287,9 @@ pub(crate) fn format_flow_toon_anchored(report: &FlowReport, suite_t0_ms: Option
         out.push('\n');
     }
 
-    // A11y lines: `A label e:N w:M` then one issue line per finding
-    // (`!check Type` for errors, `~check Type` for warnings).
+    // A11y lines: `A label e:N w:M` then one issue line per finding. Each line
+    // leads with the 1-based marker matching the annotated-screenshot rectangle
+    // (`N!check Type` for errors, `N~check Type` for warnings).
     for audit in &report.a11y_audits {
         let _ = writeln!(
             out,
@@ -297,12 +298,24 @@ pub(crate) fn format_flow_toon_anchored(report: &FlowReport, suite_t0_ms: Option
             audit.error_count(),
             audit.warning_count()
         );
-        for issue in &audit.issues {
-            let marker = match issue.severity {
+        for (n, issue) in audit.issues.iter().enumerate() {
+            let sev = match issue.severity {
                 golem_events::Severity::Error => '!',
                 golem_events::Severity::Warning => '~',
             };
-            let _ = writeln!(out, " {marker}{} {}", issue.check_id, issue.element_type);
+            // `cN.NN` confidence suffix for heuristic findings (< 1.0).
+            let conf = if issue.is_heuristic() {
+                format!(" c{:.2}", issue.confidence)
+            } else {
+                String::new()
+            };
+            let _ = writeln!(
+                out,
+                " {}{sev}{} {}{conf}",
+                n + 1,
+                issue.check_id,
+                issue.element_type
+            );
         }
     }
 

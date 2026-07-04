@@ -57,6 +57,7 @@ pub mod executor;
 pub mod fingerprint;
 pub mod fixture_loader;
 pub mod for_each;
+pub mod glyph;
 pub mod installed_state;
 pub mod installer;
 pub mod interp;

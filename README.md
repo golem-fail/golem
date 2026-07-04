@@ -97,6 +97,7 @@ golem tree
 - **Data-driven tests** — run a flow once per data row.
 - **Device control** — dark mode, GPS location, permissions, hardware buttons, push notifications (sim/emu).
 - **WebView support** — drive web content inside native apps via the Chrome DevTools Protocol.
+- **Built-in accessibility audit** — every run automatically checks the visible UI for tiny tap targets, unlabeled controls, low-contrast text, and small text; findings surface in every report, with an annotated screenshot at the `strict` level. On by default, zero config.
 - **CI-ready output** — human, JSON, JUnit XML, and a token-optimised `toon` format; every failure carries a [grep-able error code](docs/error-codes.md).
 
 ## Documentation
@@ -107,6 +108,7 @@ golem tree
 | [Test Structure](docs/test-structure.md) | Flow anatomy: blocks, steps, selectors, coverage strategies, subflows, data-driven tests, variables, fake-data generators, multi-app flows. |
 | [Selectors](docs/selectors.md) | The full selector reference: text/label/index/state, traits, relational + geometric `contains`/`inside`, nesting, and resolution order. |
 | [Actions Reference](docs/actions-reference.md) | The complete action vocabulary, grouped by category. |
+| [Accessibility](docs/accessibility.md) | The automatic a11y audit: levels, checks, thresholds, confidence, and how to read the annotated screenshot. |
 | [App Install](docs/app-install.md) | Install scripts, the install cache, `--rebuild` / `--no-build`, supported frameworks. |
 | [Output Formats](docs/output-formats.md) | `human`, `json`, `junit`, `toon`. |
 | [Error Codes](docs/error-codes.md) | The `EF408`-style code system and full registry. |

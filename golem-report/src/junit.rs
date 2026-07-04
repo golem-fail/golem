@@ -439,12 +439,22 @@ pub fn format_flow_junit(report: &FlowReport) -> String {
                 audit.error_count(),
                 audit.warning_count()
             ));
-            for issue in &audit.issues {
+            for (n, issue) in audit.issues.iter().enumerate() {
                 let tag = match issue.severity {
                     golem_events::Severity::Error => "ERR",
                     golem_events::Severity::Warning => "WRN",
                 };
-                text.push_str(&format!("    [{tag}] {}: {}\n", issue.check_id, issue.message));
+                let conf = if issue.is_heuristic() {
+                    format!(" (confidence {:.2})", issue.confidence)
+                } else {
+                    String::new()
+                };
+                text.push_str(&format!(
+                    "    {} [{tag}] {}: {}{conf}\n",
+                    n + 1,
+                    issue.check_id,
+                    issue.message
+                ));
             }
         }
         let _ = writeln!(out, "    <system-out>{}</system-out>", xml_escape(&text));

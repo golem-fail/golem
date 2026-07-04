@@ -81,28 +81,14 @@ a11y_min_confidence = 0.8           # Optional: drop findings below this confide
 ### Accessibility Audit
 
 After each block, Golem audits the **visible** UI tree for accessibility issues
-(zero config, on by default at `relaxed`). Findings appear inline in the live
-run (a per-block `a11y: N error(s), M warning(s)` line; `--verbose` lists each)
-and in every report format (`json`/`junit`/`toon`/`human`). They are warnings by
-default; set `a11y_max_errors`/`a11y_max_warnings` to fail a flow. Levels: `off`,
-`critical` (tree checks only), `relaxed` (default), `strict` (forces a per-block
-screenshot for the contrast check + WCAG-AAA warn bands).
+(zero config, on by default at `relaxed`). Findings appear inline in the live run
+and in every report format; they're warnings by default — set `a11y_max_errors` /
+`a11y_max_warnings` to fail a flow, and `a11y_min_confidence` to filter heuristic
+noise. Levels: `off`, `critical` (tree checks only), `relaxed` (default), `strict`
+(adds the screenshot contrast check + an annotated screenshot).
 
-Tree checks judge only the innermost actionable control (the real tap target),
-and size thresholds are dp-normalised (so verdicts match across Android px and
-iOS points). Each finding carries a **confidence** (0–1): deterministic checks
-are `1.0`; the heuristic pixel check (contrast) scores lower when the region is
-busy or the ratio is borderline. `a11y_min_confidence` filters out findings
-below a threshold so flows can tune heuristic noise.
-
-| Check | Severity | Screenshot? | Rule |
-|-------|----------|-------------|------|
-| `missing_label` | Error | no | Actionable control with no text/accessibility label anywhere in its subtree |
-| `touch_target_too_small` | Error/Warning | no | Min dimension below the dp threshold (error `<24dp`, warn `<44dp`; `strict` errors `<44dp`) |
-| `text_too_small` | Warning | no | Text element whose **box** is shorter than the min dp height (10dp; `strict` 12dp) — certain, since glyphs can't exceed their box |
-| `duplicate_labels` | Warning | no | Sibling controls sharing identical visible text |
-| `overlapping_interactive` | Warning | no | Sibling controls with overlapping bounds (coincident/enclosed wrappers excluded) |
-| `low_contrast` | Error/Warning | **strict** | Text/background WCAG contrast below AA (4.5:1, or 3:1 large); `strict` also warns below AAA. Heuristic — carries a confidence score |
+Full guide — the checks, per-level thresholds, the confidence model, and how to
+read the annotated screenshot — in **[accessibility.md](accessibility.md)**.
 
 ### Coverage strategies
 

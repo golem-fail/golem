@@ -68,6 +68,9 @@ pub struct IosDriver {
     /// `AndroidDriver.recording` — `start_recording` spawns detached,
     /// `stop_recording` signals + waits for flush.
     recording: tokio::sync::Mutex<Option<IosRecordingState>>,
+    /// Host instant of the last recording's SIGINT (≈ true video end), stamped
+    /// in `stop_recording` before simctl's flush. Read via `last_recording_end`.
+    last_rec_end: std::sync::Mutex<Option<std::time::Instant>>,
 }
 
 struct IosRecordingState {
@@ -106,6 +109,7 @@ impl IosDriver {
             physical,
             webkit: std::sync::Mutex::new(WebKitLifecycle::Idle),
             recording: tokio::sync::Mutex::new(None),
+            last_rec_end: std::sync::Mutex::new(None),
         }
     }
 
@@ -753,6 +757,11 @@ impl PlatformDriver for IosDriver {
                 .status()
                 .await;
         }
+        // The video ends ≈ here (SIGINT sent) — stamp before the wait + flush
+        // below so frame extraction can anchor on the true end.
+        if let Ok(mut g) = self.last_rec_end.lock() {
+            *g = Some(std::time::Instant::now());
+        }
         // Wait for simctl to finish writing. `wait` reaps the child.
         let _ = state.child.wait().await;
         // simctl can take a moment to flush the moov atom after exit.
@@ -764,6 +773,10 @@ impl PlatformDriver for IosDriver {
             );
         }
         Ok(state.host_path)
+    }
+
+    fn last_recording_end(&self) -> Option<std::time::Instant> {
+        self.last_rec_end.lock().ok().and_then(|g| *g)
     }
 
     async fn remove_port_forwards(&self) -> Result<()> {

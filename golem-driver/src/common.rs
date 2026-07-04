@@ -742,6 +742,11 @@ pub struct CompanionHealth {
     pub device_name: String,
     pub os_version: String,
     pub device_id: String,
+    /// AVC-encoder max width/height the device reports (Android only, via
+    /// MediaCodec `VideoCapabilities`). `None` when unknown/unreported (older
+    /// companion, iOS, or query failed) — callers fall back to a heuristic cap.
+    pub max_recording_width: Option<u32>,
+    pub max_recording_height: Option<u32>,
 }
 
 impl CompanionClient {
@@ -818,6 +823,15 @@ impl CompanionClient {
                 .to_string(),
             os_version: json["os_version"].as_str().unwrap_or("unknown").to_string(),
             device_id: json["device_id"].as_str().unwrap_or("unknown").to_string(),
+            // 0 / missing → None (unknown); positive → the reported ceiling.
+            max_recording_width: json["max_recording_width"]
+                .as_u64()
+                .filter(|&v| v > 0)
+                .map(|v| v as u32),
+            max_recording_height: json["max_recording_height"]
+                .as_u64()
+                .filter(|&v| v > 0)
+                .map(|v| v as u32),
         })
     }
 

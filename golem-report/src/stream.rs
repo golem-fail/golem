@@ -102,6 +102,20 @@ fn fmt_dur(ms: u64, use_color: bool) -> String {
     }
 }
 
+/// A trailing ` · a11y: N error(s), M warning(s)` rollup, appended to the flow
+/// and suite summary lines. Empty when the flow/suite had no a11y findings.
+fn a11y_rollup(errors: usize, warnings: usize, use_color: bool) -> String {
+    if errors == 0 && warnings == 0 {
+        return String::new();
+    }
+    let s = format!(" · a11y: {errors} error(s), {warnings} warning(s)");
+    if use_color {
+        format!("{DIM}{s}{RESET}")
+    } else {
+        s
+    }
+}
+
 /// 4-char left-aligned bold status keyword. Sized to fit the widest
 /// labels (`PASS`/`FAIL`/`WARN`/`SKIP`); step-level `ok`/`NG` pad to
 /// the same column so the eye can scan the left margin for failures.
@@ -237,6 +251,12 @@ pub async fn stream_human(
     // First failed/warned step's code per device, surfaced on the FlowFinished
     // FAIL line. Set once per flow; cleared when the flow finishes.
     let mut first_fail_code: HashMap<String, golem_events::FailureCode> = HashMap::new();
+
+    // Running a11y tallies: per-device (errors, warnings) accumulated across a
+    // flow's blocks and rolled up on its FlowFinished line, plus a suite-wide
+    // grand total appended to the final Summary line.
+    let mut a11y_by_device: HashMap<String, (usize, usize)> = HashMap::new();
+    let mut a11y_suite_total: (usize, usize) = (0, 0);
 
     while let Ok(event) = rx.recv().await {
         let ts = format_timestamp(event.wall_time, use_color);
@@ -380,10 +400,10 @@ pub async fn stream_human(
                         .unwrap_or_else(|_| path.clone());
                     let uri = format!("file://{abs}");
                     eprintln!(
-                        "{ts}     {dp}{DIM}\u{2570}\u{2500} rec: \x1b]8;;{uri}\x1b\\{path}\x1b]8;;\x1b\\{RESET}"
+                        "{ts}  {dp}   {DIM}\u{2570}\u{2500} rec: \x1b]8;;{uri}\x1b\\{path}\x1b]8;;\x1b\\{RESET}"
                     );
                 } else {
-                    eprintln!("{ts}     {dp}\u{2570}\u{2500} rec: {path}");
+                    eprintln!("{ts}  {dp}   \u{2570}\u{2500} rec: {path}");
                 }
             }
             EventKind::BlockFinished { .. } => {}
@@ -392,26 +412,71 @@ pub async fn stream_human(
                 if !audit.issues.is_empty() {
                     let errors = audit.error_count();
                     let warnings = audit.warning_count();
+                    // Roll into the per-flow (per-device) and suite-wide totals.
+                    let tally = a11y_by_device
+                        .entry(event.device_id.0.clone())
+                        .or_insert((0, 0));
+                    tally.0 += errors;
+                    tally.1 += warnings;
+                    a11y_suite_total.0 += errors;
+                    a11y_suite_total.1 += warnings;
                     let summary = format!("{errors} error(s), {warnings} warning(s)");
+                    // The annotated PNG (if captured) carries numbered markers
+                    // matching the issue order below — hyperlink the summary
+                    // line to it (OSC 8) so it's one click from the terminal.
+                    // Mirrors the BlockFinished `rec:` line.
                     if use_color {
-                        eprintln!("{ts}     {dp}{DIM}\u{2570}\u{2500} a11y: {summary}{RESET}");
+                        if let Some(path) = &audit.screenshot_path {
+                            let abs = std::fs::canonicalize(path)
+                                .map(|p| p.display().to_string())
+                                .unwrap_or_else(|_| path.clone());
+                            let uri = format!("file://{abs}");
+                            eprintln!(
+                                "{ts}  {dp}   {DIM}\u{2570}\u{2500} a11y: {summary} \u{2192} \x1b]8;;{uri}\x1b\\{path}\x1b]8;;\x1b\\{RESET}"
+                            );
+                        } else {
+                            eprintln!("{ts}  {dp}   {DIM}\u{2570}\u{2500} a11y: {summary}{RESET}");
+                        }
+                    } else if let Some(path) = &audit.screenshot_path {
+                        eprintln!("{ts}  {dp}   \u{2570}\u{2500} a11y: {summary} \u{2192} {path}");
                     } else {
-                        eprintln!("{ts}     {dp}\u{2570}\u{2500} a11y: {summary}");
+                        eprintln!("{ts}  {dp}   \u{2570}\u{2500} a11y: {summary}");
                     }
                     if verbose {
-                        for issue in &audit.issues {
+                        // 1-based marker matching the rectangle drawn on the PNG
+                        // (issue order is canonical across all surfaces).
+                        for (i, issue) in audit.issues.iter().enumerate() {
+                            let n = i + 1;
                             let (tag, color) = match issue.severity {
                                 golem_events::Severity::Error => ("ERR", BOLD_RED),
                                 golem_events::Severity::Warning => ("WRN", YELLOW),
                             };
+                            // Confidence suffix for heuristic findings (< 1.0).
+                            let conf = if issue.is_heuristic() {
+                                format!(" (confidence {:.2})", issue.confidence)
+                            } else {
+                                String::new()
+                            };
                             if use_color {
+                                // Colour the parts so a finding scans at a glance:
+                                // severity tag (red/yellow), check id (cyan), and
+                                // the measured value (magenta, highlighted where
+                                // it appears in the message).
+                                let msg = match &issue.detail {
+                                    Some(d) if !d.is_empty() => issue.message.replacen(
+                                        d.as_str(),
+                                        &format!("{BOLD_MAGENTA}{d}{RESET}"),
+                                        1,
+                                    ),
+                                    _ => issue.message.clone(),
+                                };
                                 eprintln!(
-                                    "{ts}        {dp}{color}[{tag}]{RESET} {DIM}{}{RESET} {}",
-                                    issue.check_id, issue.message
+                                    "{ts}  {dp}      {DIM}{n:>2}{RESET} {color}[{tag}]{RESET} {CYAN}{}{RESET} {msg}{DIM}{conf}{RESET}",
+                                    issue.check_id
                                 );
                             } else {
                                 eprintln!(
-                                    "{ts}        {dp}[{tag}] {} {}",
+                                    "{ts}  {dp}      {n:>2} [{tag}] {} {}{conf}",
                                     issue.check_id, issue.message
                                 );
                             }
@@ -614,10 +679,16 @@ pub async fn stream_human(
                     }
                     _ => String::new(),
                 };
+                // Per-flow a11y rollup (consume this device's tally so the next
+                // flow on it starts fresh).
+                let (ae, aw) = a11y_by_device
+                    .remove(&event.device_id.0)
+                    .unwrap_or((0, 0));
+                let a11y = a11y_rollup(ae, aw, use_color);
                 if use_color {
-                    eprintln!("{ts}  {dp}{kw} {dur}  {name}  {code_str}{DIM}seed:{seed}{RESET}");
+                    eprintln!("{ts}  {dp}{kw} {dur}  {name}  {code_str}{DIM}seed:{seed}{RESET}{a11y}");
                 } else {
-                    eprintln!("{ts}  {dp}{kw} {dur}  {name}  {code_str}seed:{seed}");
+                    eprintln!("{ts}  {dp}{kw} {dur}  {name}  {code_str}seed:{seed}{a11y}");
                 }
             }
             EventKind::SuiteFinished {
@@ -639,7 +710,8 @@ pub async fn stream_human(
                 };
                 let kw = keyword("Summary", BOLD_GREEN, use_color);
                 let dur = fmt_dur(*duration_ms, use_color);
-                eprintln!("{ts}{kw} {dur}  {passed} passed, {failed} failed{skip_suffix}");
+                let a11y = a11y_rollup(a11y_suite_total.0, a11y_suite_total.1, use_color);
+                eprintln!("{ts}{kw} {dur}  {passed} passed, {failed} failed{skip_suffix}{a11y}");
             }
             EventKind::InstallStarted {
                 app_name,
@@ -1423,6 +1495,24 @@ mod tests {
             out,
             format!("{BOLD_BLUE}tap{RESET}"),
             "a slashless name SHALL be entirely bold-blue"
+        );
+    }
+
+    // a11y_rollup: empty when no findings; formatted (and dim under color) when
+    // there are. Drives the per-flow + suite a11y totals on the summary lines.
+    #[test]
+    fn a11y_rollup_empty_and_formatted() {
+        assert_eq!(a11y_rollup(0, 0, false), "", "no findings SHALL be empty");
+        assert_eq!(a11y_rollup(0, 0, true), "", "no findings SHALL be empty (color)");
+        assert_eq!(
+            a11y_rollup(6, 47, false),
+            " · a11y: 6 error(s), 47 warning(s)",
+            "plain rollup formatting"
+        );
+        let colored = a11y_rollup(1, 2, true);
+        assert!(
+            colored.starts_with(DIM) && colored.ends_with(RESET) && colored.contains("a11y: 1 error(s), 2 warning(s)"),
+            "colored rollup SHALL be dim-wrapped: {colored:?}"
         );
     }
 

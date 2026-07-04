@@ -226,6 +226,13 @@ pub async fn execute_flow<'a>(
     // Reset to None when the block recording stops (sidecar flushed).
     let mut block_trace: Option<BlockTrace> = None;
 
+    // When `--trace` and ffmpeg are both present, the per-step boundary
+    // screenshots are deferred: each step fetches only the tree, and the PNGs
+    // are pulled from the block recording post-block (one ffmpeg extraction per
+    // boundary, no per-step device screenshot). Without ffmpeg, each boundary is
+    // captured live as before.
+    let defer_frames = ctx.capture_config.trace && crate::capture::ffmpeg_available();
+
     // Pre-first-step capture (boundary 0). Only fire at the topmost
     // entry into a flow — subflows pick up an already-incremented
     // global_step_index from the parent, so checking == 0 distinguishes
@@ -243,6 +250,7 @@ pub async fn execute_flow<'a>(
                 action: None,
                 wall_clock: &iso8601_now(),
             },
+            false, // boundary 0 is before any recording starts — capture live
         )
         .await
         {
@@ -321,7 +329,9 @@ pub async fn execute_flow<'a>(
                 last_launch_ms: std::sync::atomic::AtomicU64::new(0),
                 emitter: ctx.emitter,
                 a11y_level: crate::accessibility::A11yLevel::Off,
+                a11y_min_confidence: ctx.a11y_min_confidence,
                 step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),            last_settled_tree: std::sync::Mutex::new(None),
+            trace_pair: std::sync::Mutex::new(None),
                 rng: std::sync::Mutex::new(child_rng),
                 // Carry parent's effective default in as the child's
                 // starting point — `execute_flow` will refine it from
@@ -449,6 +459,12 @@ pub async fn execute_flow<'a>(
                 });
             }
         }
+        // Fresh slate for this block's settled-tree cache so the block-end audit
+        // reuses only this block's trees, never a previous block's.
+        ctx.clear_settled_tree();
+        // Deferred `--trace` boundary frames for this block: (png target, capture
+        // instant). Extracted from the recording at each recording-stop site.
+        let mut deferred_frames: Vec<(std::path::PathBuf, std::time::Instant)> = Vec::new();
         for (step_idx, step) in block.steps.iter().enumerate() {
             ctx.step_index = step_idx;
             ctx.block_iteration = iteration.saturating_sub(1);
@@ -493,6 +509,13 @@ pub async fn execute_flow<'a>(
                     } else {
                         None
                     };
+                    extract_deferred_trace_frames(
+                        recording_path.as_deref(),
+                        &mut deferred_frames,
+                        a11y_device_dims(ctx.device),
+                        record_block.then(|| driver.last_recording_end()).flatten(),
+                    )
+                    .await;
                     flush_trace_sidecar(&mut block_trace, ctx.capture_config, &mut warnings);
                     ctx.emit(golem_events::EventKind::BlockFinished {
                         block_name: block_label.clone(),
@@ -575,10 +598,17 @@ pub async fn execute_flow<'a>(
                         action: Some(&step.action),
                         wall_clock: &iso8601_now(),
                     },
+                    defer_frames,
                 )
                 .await
                 {
-                    Ok(_) => {
+                    Ok(cap) => {
+                        // When deferred, remember this boundary's PNG target +
+                        // capture time so the frame is pulled from the recording
+                        // post-block (end-anchored on the recording's stop).
+                        if defer_frames {
+                            deferred_frames.push((cap.png_path, std::time::Instant::now()));
+                        }
                         if let Some(ref mut bt) = block_trace {
                             bt.boundaries.push(crate::capture::TraceBoundary {
                                 boundary: step_count,
@@ -670,7 +700,40 @@ pub async fn execute_flow<'a>(
                     } else {
                         None
                     };
+                    extract_deferred_trace_frames(
+                        recording_path.as_deref(),
+                        &mut deferred_frames,
+                        a11y_device_dims(ctx.device),
+                        record_block.then(|| driver.last_recording_end()).flatten(),
+                    )
+                    .await;
                     flush_trace_sidecar(&mut block_trace, ctx.capture_config, &mut warnings);
+
+                    // Failure-pair a11y audit: the failure capture (policy) just
+                    // stashed a coherent (tree, shot) pair for this step — reuse
+                    // it to surface a11y findings on the failing screen. No extra
+                    // capture; runs only when a11y is enabled and a pair exists
+                    // (i.e. failure screenshots are on for this step).
+                    if ctx.a11y_level.is_enabled() {
+                        if let Some((tree, shot)) = ctx.take_trace_pair_at(ctx.global_step_index) {
+                            let density = ctx.device.and_then(a11y_density).unwrap_or(1.0);
+                            let config =
+                                crate::accessibility::A11yConfig::new(ctx.a11y_level, density);
+                            let audit = compute_a11y_audit(
+                                ctx,
+                                flow,
+                                block,
+                                current_idx,
+                                block_iter_for_recording,
+                                &config,
+                                &tree,
+                                Some(&shot),
+                                1.0, // failure shot is a real live screenshot
+                            );
+                            record_a11y_audit(ctx, &mut warnings, &mut a11y_audits, audit);
+                        }
+                    }
+
                     // Emit BlockFinished even on failure so the
                     // recording-path event reaches stream/accumulator
                     // before the FlowFinished sweep.
@@ -691,7 +754,7 @@ pub async fn execute_flow<'a>(
                         barrier_aborted: false,
                         perf_snapshots: vec![],
                         recordings: recordings.clone(),
-                        a11y_audits: vec![],
+                        a11y_audits,
                     });
                 }
             }
@@ -726,8 +789,20 @@ pub async fn execute_flow<'a>(
         } else {
             None
         };
-
+        // The driver stamped the true video end (SIGINT instant) inside
+        // stop_recording, before its flush+pull latency — anchor frame
+        // extraction on that, not on a post-stop `Instant::now()`.
+        let recording_stopped_at = record_block.then(|| driver.last_recording_end()).flatten();
+        extract_deferred_trace_frames(
+            recording_path.as_deref(),
+            &mut deferred_frames,
+            a11y_device_dims(ctx.device),
+            recording_stopped_at,
+        )
+        .await;
         flush_trace_sidecar(&mut block_trace, ctx.capture_config, &mut warnings);
+        // Keep the recording path for the a11y audit below (the event moves it).
+        let rec_path_for_a11y = recording_path.clone();
         ctx.emit(golem_events::EventKind::BlockFinished {
             block_name: block_label.clone(),
             block_index: current_idx,
@@ -784,88 +859,122 @@ pub async fn execute_flow<'a>(
         if ctx.a11y_level.is_enabled() {
             let density = ctx.device.and_then(a11y_density).unwrap_or(1.0);
             let config = crate::accessibility::A11yConfig::new(ctx.a11y_level, density);
-            // When we need a screenshot (strict), capture it and a FRESH tree
-            // back-to-back so element bounds align with the pixels — the
-            // cached settled tree predates the shot and would drift, throwing
-            // off every crop. Non-screenshot levels reuse the settled tree.
-            let (tree, shot) = if ctx.a11y_level.forces_screenshot() {
-                let shot = crate::resolution::screenshot_bounded(driver).await.ok();
-                let tree = driver.get_hierarchy().await.ok().map(|(t, _meta)| t);
-                (tree, shot)
-            } else {
-                let tree = match ctx.take_settled_tree_at(ctx.global_step_index) {
-                    Some(t) => Some(t),
-                    None => driver.get_hierarchy().await.ok().map(|(t, _meta)| t),
+            // Pick the (tree, shot, derate) for the audit. When recording is on
+            // (and ffmpeg is present) the shot comes from the recording —
+            // anchored on this block's latest settled tree, with the frame
+            // pulled at that tree's capture time (end-anchored: `stop −
+            // captured`, since the recording's start has warmup latency) and
+            // aspect-cropped to strip any encoder letterbox. The frame's
+            // resolution (vs native) then decides per-level: a frame is
+            // indistinguishable from a live shot at full res but coarse when the
+            // encoder downscaled it. Without a recording/ffmpeg, strict captures
+            // a fresh clean shot+tree and other levels stay tree-only.
+            let device_dims = a11y_device_dims(ctx.device);
+            let native_w = ctx.device.and_then(|d| d.screen_width);
+            let recording_frame =
+                record_block && rec_path_for_a11y.is_some() && crate::capture::ffmpeg_available();
+            let (tree, shot, derate): (Option<golem_element::Element>, Option<Vec<u8>>, f32) =
+                if recording_frame {
+                    let mp4 = rec_path_for_a11y.clone().unwrap_or_default();
+                    let mp4 = std::path::Path::new(&mp4);
+                    // Coherent (tree, frame) pair, else fresh block-end tree +
+                    // the recording's final frame.
+                    let (tree_opt, frame_opt) =
+                        match (ctx.take_latest_settled_tree(), recording_stopped_at) {
+                            (Some((tree, captured_at)), Some(stopped)) => {
+                                let before =
+                                    stopped.saturating_duration_since(captured_at).as_secs_f64();
+                                let frame =
+                                    crate::capture::extract_recording_frame(mp4, before, device_dims)
+                                        .await;
+                                (Some(tree), frame)
+                            }
+                            _ => {
+                                let tree =
+                                    driver.get_hierarchy().await.ok().map(|(t, _meta)| t);
+                                let frame = if tree.is_some() {
+                                    crate::capture::extract_recording_frame(mp4, 0.3, device_dims)
+                                        .await
+                                } else {
+                                    None
+                                };
+                                (tree, frame)
+                            }
+                        };
+                    match tree_opt {
+                        None => (None, None, 1.0),
+                        Some(tree) => match frame_opt {
+                            // No frame extracted: strict still wants a shot → live.
+                            None => {
+                                if ctx.a11y_level.forces_screenshot() {
+                                    let shot = crate::resolution::screenshot_bounded(driver)
+                                        .await
+                                        .ok()
+                                        .map(|s| s.data);
+                                    (Some(tree), shot, 1.0)
+                                } else {
+                                    (Some(tree), None, 1.0)
+                                }
+                            }
+                            Some(frame) => {
+                                // Resolution ratio of the (cropped) frame vs the
+                                // device's native width; unknown reference →
+                                // assume full (FN-biased).
+                                let r = match (native_w, crate::capture::png_dimensions(&frame)) {
+                                    (Some(nw), Some((fw, _))) if nw > 0 => {
+                                        f64::from(fw) / f64::from(nw)
+                                    }
+                                    _ => 1.0,
+                                };
+                                let strict = ctx.a11y_level.forces_screenshot();
+                                if strict && r < A11Y_STRICT_MIN_RES {
+                                    // strict wants native res for the annotated
+                                    // artifact + glyph-pixel pass — re-shoot live.
+                                    let shot = crate::resolution::screenshot_bounded(driver)
+                                        .await
+                                        .ok()
+                                        .map(|s| s.data);
+                                    let live_tree =
+                                        driver.get_hierarchy().await.ok().map(|(t, _meta)| t);
+                                    (live_tree.or(Some(tree)), shot, 1.0)
+                                } else if !strict && r < A11Y_FRAME_MIN_RES {
+                                    // relaxed/critical: too coarse to trust the
+                                    // pixel checks — tree-only (never force a
+                                    // capture solely for a11y).
+                                    (Some(tree), None, 1.0)
+                                } else {
+                                    (Some(tree), Some(frame), video_confidence_factor(r))
+                                }
+                            }
+                        },
+                    }
+                } else if ctx.a11y_level.forces_screenshot() {
+                    let shot = crate::resolution::screenshot_bounded(driver)
+                        .await
+                        .ok()
+                        .map(|s| s.data);
+                    let tree = driver.get_hierarchy().await.ok().map(|(t, _meta)| t);
+                    (tree, shot, 1.0)
+                } else {
+                    let tree = match ctx.take_latest_settled_tree() {
+                        Some((t, _at)) => Some(t),
+                        None => driver.get_hierarchy().await.ok().map(|(t, _meta)| t),
+                    };
+                    (tree, None, 1.0)
                 };
-                (tree, None)
-            };
             if let Some(tree) = tree {
-                let viewport = golem_element::Viewport::from_root(&tree);
-                let mut issues = crate::accessibility::audit_hierarchy(&tree, &viewport, &config);
-
-                // Screenshot-based check (contrast), against the coherent
-                // tree+shot pair captured above.
-                let mut screenshot_path: Option<String> = None;
-                if let Some(shot) = shot {
-                    issues.extend(crate::accessibility::check_contrast(
-                        &shot.data, &tree, &viewport, &config,
-                    ));
-                    // Drop low-confidence findings before annotating so the
-                    // drawn rectangles match the reported issues.
-                    if let Some(min) = flow.flow.options.as_ref().and_then(|o| o.a11y_min_confidence)
-                    {
-                        issues.retain(|i| i.confidence >= min);
-                    }
-                    if !issues.is_empty() {
-                        if let Ok(png) = crate::accessibility::annotate_screenshot(
-                            &shot.data,
-                            &issues,
-                            viewport.width,
-                        ) {
-                            let path = crate::capture::build_a11y_screenshot_path(
-                                ctx.capture_config,
-                                block,
-                                current_idx,
-                                ctx.global_step_index,
-                                block_iter_for_recording,
-                            );
-                            if let Some(parent) = path.parent() {
-                                let _ = std::fs::create_dir_all(parent);
-                            }
-                            if std::fs::write(&path, &png).is_ok() {
-                                screenshot_path = Some(path.to_string_lossy().into_owned());
-                            }
-                        }
-                    }
-                }
-
-                let device_name = ctx.device.map_or("unknown", |d| d.name.as_str());
-                let label = build_snapshot_label(
+                let audit = compute_a11y_audit(
+                    ctx,
+                    flow,
                     block,
                     current_idx,
-                    None,
-                    device_name,
                     block_iter_for_recording,
+                    &config,
+                    &tree,
+                    shot.as_deref(),
+                    derate,
                 );
-                let audit = golem_report::A11yAudit {
-                    label,
-                    issues,
-                    screenshot_path,
-                };
-                if !audit.issues.is_empty() {
-                    warnings.push(format!(
-                        "a11y[{}]: {} error(s), {} warning(s)",
-                        audit.label,
-                        audit.error_count(),
-                        audit.warning_count()
-                    ));
-                }
-                // Surface findings on the live event stream (the renderer
-                // decides verbose detail vs a one-line summary).
-                ctx.emit(golem_events::EventKind::A11yAudit {
-                    audit: audit.clone(),
-                });
-                a11y_audits.push(audit);
+                record_a11y_audit(ctx, &mut warnings, &mut a11y_audits, audit);
 
                 // Threshold gate: fail the flow when cumulative errors/warnings
                 // exceed the configured maxima.
@@ -960,6 +1069,159 @@ fn a11y_density(device: &golem_devices::DeviceInfo) -> Option<f64> {
     match device.platform {
         golem_devices::Platform::Android => device.screen_scale,
         _ => Some(1.0),
+    }
+}
+
+/// Native pixel dimensions of the device — used to aspect-crop recording
+/// frames (strip letterbox) and to gauge a frame's resolution against native.
+fn a11y_device_dims(device: Option<&golem_devices::DeviceInfo>) -> Option<(u32, u32)> {
+    let d = device?;
+    Some((d.screen_width?, d.screen_height?))
+}
+
+/// strict uses a recording frame only at/above this resolution ratio (cropped
+/// frame width ÷ native width); below it the frame is too coarse for the
+/// annotated artifact + glyph-pixel pass, so strict re-shoots live.
+const A11Y_STRICT_MIN_RES: f64 = 0.9;
+/// relaxed/critical use a recording frame down to this ratio; below it they
+/// fall back to tree-only (never force a capture solely for a11y).
+const A11Y_FRAME_MIN_RES: f64 = 0.5;
+
+/// Heuristic-confidence multiplier for a recording-sourced frame at resolution
+/// ratio `r` (1.0 = full res). Convex in the resolution loss — a drop near low
+/// res is penalised more than the same drop near full res — times a flat codec
+/// term (h264 loss is mild: android ≈ iOS at equal res). Clamped to `[0, 1]`.
+/// At r=1.0 → ~0.97; r=0.9 → ~0.95; r=0.5 → ~0.49.
+fn video_confidence_factor(r: f64) -> f32 {
+    const CODEC: f64 = 0.97;
+    let res_f = (1.0 - 2.0 * (1.0 - r).powi(2)).clamp(0.0, 1.0);
+    (CODEC * res_f) as f32
+}
+
+/// Run the a11y checks for one snapshot and build its `A11yAudit` (findings +,
+/// when a screenshot is present, the annotated PNG). Shared by the block-end
+/// audit and the failure-pair audit. `shot` is `Some` only when a screenshot is
+/// available (strict capture, a reused `--trace`/failure pair) — that's the gate
+/// for the contrast + pixel-text checks and the annotated image. The caller
+/// emits the audit, accumulates it, and (block-end only) applies the threshold.
+/// De-rate heuristic (confidence < 1.0) findings by `factor` (1.0 = no change,
+/// for a clean live screenshot). Deterministic (1.0) findings are
+/// size/structure-based — left untouched at any factor.
+fn derate_confidence(issues: &mut [golem_events::A11yIssue], factor: f32) {
+    if factor >= 1.0 {
+        return;
+    }
+    for issue in issues {
+        if issue.confidence < 1.0 {
+            issue.confidence *= factor;
+        }
+    }
+}
+
+/// Emit an audit on the event stream, add its one-line summary to `warnings`
+/// (when it has findings), and accumulate it. Shared by the block-end and
+/// failure-pair audit paths so their surfacing stays identical.
+fn record_a11y_audit(
+    ctx: &ExecutionContext,
+    warnings: &mut Vec<String>,
+    a11y_audits: &mut Vec<golem_report::A11yAudit>,
+    audit: golem_report::A11yAudit,
+) {
+    if !audit.issues.is_empty() {
+        warnings.push(format!(
+            "a11y[{}]: {} error(s), {} warning(s)",
+            audit.label,
+            audit.error_count(),
+            audit.warning_count()
+        ));
+    }
+    ctx.emit(golem_events::EventKind::A11yAudit { audit: audit.clone() });
+    a11y_audits.push(audit);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compute_a11y_audit(
+    ctx: &ExecutionContext,
+    flow: &FlowFile,
+    block: &Block,
+    block_index: usize,
+    block_iteration: u32,
+    config: &crate::accessibility::A11yConfig,
+    tree: &golem_element::Element,
+    shot: Option<&[u8]>,
+    confidence_derate: f32,
+) -> golem_report::A11yAudit {
+    let viewport = golem_element::Viewport::from_root(tree);
+    let mut issues = crate::accessibility::audit_hierarchy(tree, &viewport, config);
+
+    let mut screenshot_path: Option<String> = None;
+    if let Some(shot) = shot {
+        // Decode the screenshot once — shared by the contrast check and the
+        // annotator below (avoids decoding the same PNG twice per audit).
+        let decoded = image::load_from_memory(shot).ok();
+        if let Some(img) = &decoded {
+            issues.extend(crate::accessibility::check_contrast_img(img, tree, &viewport, config));
+        }
+        // A frame pulled from the (lossy, possibly downscaled) recording is
+        // less trustworthy than a clean live screenshot — de-rate the
+        // heuristic findings (1.0 = clean live shot, no change). Applied
+        // before the confidence floor so it can filter.
+        derate_confidence(&mut issues, confidence_derate);
+        // Drop low-confidence findings before annotating so the drawn rectangles
+        // match the reported issues. Precedence: CLI `--a11y-min-confidence` >
+        // `[flow.options]` > the level default.
+        let min_conf = ctx
+            .a11y_min_confidence
+            .or_else(|| flow.flow.options.as_ref().and_then(|o| o.a11y_min_confidence))
+            .unwrap_or(config.min_confidence);
+        issues.retain(|i| i.confidence >= min_conf);
+        if !issues.is_empty() {
+            let meta = crate::accessibility::A11yMeta {
+                app: flow
+                    .flow
+                    .apps
+                    .first()
+                    .and_then(|a| a.bundle.clone())
+                    .unwrap_or_default(),
+                device: ctx
+                    .device
+                    .map_or_else(|| "unknown".to_string(), |d| d.name.clone()),
+                platform: ctx
+                    .device
+                    .map_or_else(|| "unknown".to_string(), |d| d.platform.to_string()),
+                flow: flow.flow.name.clone(),
+                block: block.name.clone().unwrap_or_default(),
+                iteration: block_iteration,
+                seed: ctx.rng.lock().map(|r| r.seed()).unwrap_or(0),
+                level: ctx.a11y_level.as_str().to_string(),
+            };
+            if let Some(png) = decoded
+                .as_ref()
+                .and_then(|img| crate::accessibility::annotate_image(img, &issues, &viewport, &meta).ok())
+            {
+                let path = crate::capture::build_a11y_screenshot_path(
+                    ctx.capture_config,
+                    block,
+                    block_index,
+                    ctx.global_step_index,
+                    block_iteration,
+                );
+                if let Some(parent) = path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                if std::fs::write(&path, &png).is_ok() {
+                    screenshot_path = Some(path.to_string_lossy().into_owned());
+                }
+            }
+        }
+    }
+
+    let device_name = ctx.device.map_or("unknown", |d| d.name.as_str());
+    let label = build_snapshot_label(block, block_index, None, device_name, block_iteration);
+    golem_report::A11yAudit {
+        label,
+        issues,
+        screenshot_path,
     }
 }
 
@@ -1099,6 +1361,37 @@ fn now_unix_ms() -> u64 {
 fn iso8601_now() -> String {
     let dt: chrono::DateTime<chrono::Utc> = std::time::SystemTime::now().into();
     dt.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+}
+
+/// Write the deferred `--trace` boundary PNGs by pulling each from the block
+/// recording (which just stopped, so "now" ≈ its end — frames are end-anchored
+/// on that). Drains `deferred`. No-op (just clears) without a recording path.
+/// Failures are best-effort — a missing forensic frame must not fail a flow.
+async fn extract_deferred_trace_frames(
+    recording_path: Option<&str>,
+    deferred: &mut Vec<(std::path::PathBuf, std::time::Instant)>,
+    device_dims: Option<(u32, u32)>,
+    recording_end: Option<std::time::Instant>,
+) {
+    let Some(mp4) = recording_path else {
+        deferred.clear();
+        return;
+    };
+    // `recording_end` is captured just before `stop_recording` (≈ the on-device
+    // SIGINT, the true video end) — NOT after it returns, which would include
+    // our own ~800ms moov flush + adb pull and rewind every frame into the
+    // prior motion. Fall back to now only if it wasn't supplied.
+    let stop = recording_end.unwrap_or_else(std::time::Instant::now);
+    for (png_path, captured) in deferred.drain(..) {
+        let before = stop.saturating_duration_since(captured).as_secs_f64();
+        let _ = crate::capture::write_recording_frame_png(
+            std::path::Path::new(mp4),
+            &png_path,
+            before,
+            device_dims,
+        )
+        .await;
+    }
 }
 
 /// Take the active `BlockTrace`, write its sidecar JSON next to the
@@ -1308,6 +1601,52 @@ mod tests {
     use crate::context::test_ctx;
     use golem_driver::MockPlatformDriver;
     use golem_element::{Bounds, Element};
+
+    // De-rate by factor: heuristic (<1.0) findings scale; deterministic (1.0)
+    // findings are untouched; factor 1.0 is a no-op (clean live shot).
+    #[test]
+    fn derate_confidence_only_heuristic() {
+        let mk = |conf: f32| golem_events::A11yIssue {
+            check_id: "x".into(),
+            severity: golem_events::Severity::Warning,
+            message: String::new(),
+            element_type: String::new(),
+            element_label: None,
+            element_bounds: None,
+            measure_bounds: None,
+            related_bounds: vec![],
+            occlusion: vec![],
+            confidence: conf,
+            detail: None,
+        };
+        let mut issues = vec![mk(1.0), mk(0.8), mk(0.5)];
+        derate_confidence(&mut issues, 0.9);
+        assert_eq!(issues[0].confidence, 1.0, "deterministic 1.0 SHALL be untouched");
+        assert!((issues[1].confidence - 0.72).abs() < 1e-6, "0.8 → 0.72");
+        assert!((issues[2].confidence - 0.45).abs() < 1e-6, "0.5 → 0.45");
+        // factor 1.0 (clean live shot) leaves everything alone.
+        let mut clean = vec![mk(0.8)];
+        derate_confidence(&mut clean, 1.0);
+        assert_eq!(clean[0].confidence, 0.8);
+    }
+
+    // Resolution derate is convex: full res barely dips, low res falls hard,
+    // and a fixed Δr penalises more at low res than near full res.
+    #[test]
+    fn video_confidence_factor_convex() {
+        let f = video_confidence_factor;
+        assert!((f(1.0) - 0.97).abs() < 1e-3, "full res ≈ codec only");
+        assert!((f(0.9) - 0.95).abs() < 0.01, "0.9 ≈ 0.95");
+        assert!((f(0.5) - 0.485).abs() < 0.01, "0.5 ≈ 0.485");
+        // Monotonic increasing in r.
+        assert!(f(0.5) < f(0.7) && f(0.7) < f(0.9) && f(0.9) < f(1.0));
+        // Convex: dropping 0.6→0.5 costs more than 1.0→0.9 (same Δr).
+        let low = f(0.6) - f(0.5);
+        let high = f(1.0) - f(0.9);
+        assert!(low > high, "low-res Δ ({low}) SHALL exceed near-full Δ ({high})");
+        // Clamped at the bottom.
+        assert!(f(0.0) >= 0.0);
+    }
     use golem_parser::{BranchCondition, FlowMeta, FlowOptions, Step};
     use std::collections::HashMap;
     use std::path::Path;
@@ -1324,7 +1663,11 @@ mod tests {
                 element_type: "Button".into(),
                 element_label: None,
                 element_bounds: None,
+                measure_bounds: None,
                 confidence: 1.0,
+                related_bounds: Vec::new(),
+                occlusion: Vec::new(),
+                detail: None,
             });
         }
         for _ in 0..warnings {
@@ -1335,7 +1678,11 @@ mod tests {
                 element_type: "Button".into(),
                 element_label: None,
                 element_bounds: None,
+                measure_bounds: None,
                 confidence: 1.0,
+                related_bounds: Vec::new(),
+                occlusion: Vec::new(),
+                detail: None,
             });
         }
         golem_report::A11yAudit {
@@ -3140,7 +3487,9 @@ action = "screenshot"
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),
             emitter: None,
             a11y_level: crate::accessibility::A11yLevel::Off,
+            a11y_min_confidence: None,
             step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),            last_settled_tree: std::sync::Mutex::new(None),
+            trace_pair: std::sync::Mutex::new(None),
             rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
         };
@@ -3207,7 +3556,9 @@ action = "screenshot"
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),
             emitter: None,
             a11y_level: crate::accessibility::A11yLevel::Off,
+            a11y_min_confidence: None,
             step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),            last_settled_tree: std::sync::Mutex::new(None),
+            trace_pair: std::sync::Mutex::new(None),
             rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
         };
@@ -3283,7 +3634,9 @@ action = "screenshot"
             last_launch_ms: std::sync::atomic::AtomicU64::new(0),
             emitter: None,
             a11y_level: crate::accessibility::A11yLevel::Off,
+            a11y_min_confidence: None,
             step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),            last_settled_tree: std::sync::Mutex::new(None),
+            trace_pair: std::sync::Mutex::new(None),
             rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
         };

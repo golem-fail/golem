@@ -113,8 +113,9 @@ pub fn build_a11y_screenshot_path(
 
 /// Capture a screenshot on failure/warning and write it to disk.
 ///
-/// Returns the path the screenshot was saved to, or an error if
-/// capture is disabled.
+/// Returns the saved path plus the raw PNG bytes (so a caller — e.g. the
+/// failure-pair a11y audit — can reuse the shot without re-capturing), or an
+/// error if capture is disabled.
 pub async fn capture_failure_screenshot(
     driver: &dyn PlatformDriver,
     config: &CaptureConfig,
@@ -123,7 +124,7 @@ pub async fn capture_failure_screenshot(
     block_iteration: u32,
     step_index: usize,
     failure_type: &str,
-) -> Result<PathBuf> {
+) -> Result<(PathBuf, Vec<u8>)> {
     if !config.screenshot_on_failure || !config.write_to_disk {
         anyhow::bail!("Screenshot capture is disabled");
     }
@@ -144,7 +145,7 @@ pub async fn capture_failure_screenshot(
     }
 
     std::fs::write(&path, &screenshot.data)?;
-    Ok(path)
+    Ok((path, screenshot.data))
 }
 
 /// Build the path for the hierarchy-tree dump that accompanies a
@@ -185,7 +186,7 @@ pub async fn capture_failure_tree(
     block_iteration: u32,
     step_index: usize,
     failure_type: &str,
-) -> Result<PathBuf> {
+) -> Result<(PathBuf, golem_element::Element)> {
     if !config.screenshot_on_failure || !config.write_to_disk {
         anyhow::bail!("Tree dump is disabled");
     }
@@ -207,7 +208,7 @@ pub async fn capture_failure_tree(
     }
 
     std::fs::write(&path, json)?;
-    Ok(path)
+    Ok((path, root))
 }
 
 /// Trace directory for `--trace` boundary snapshots.
@@ -288,7 +289,17 @@ fn write_png_chunk(out: &mut Vec<u8>, chunk_type: &[u8; 4], data: &[u8]) {
     out.extend_from_slice(&(!crc).to_be_bytes());
 }
 
-/// Capture one boundary snapshot — PNG + tree JSON pair.
+/// A captured trace boundary: the written PNG/JSON paths plus the in-memory
+/// `(screenshot, tree)` so a caller can reuse the coherent pair (e.g. the
+/// block-end a11y audit) instead of re-capturing.
+#[derive(Debug)]
+pub struct TraceCapture {
+    pub png_path: PathBuf,
+    pub json_path: PathBuf,
+}
+
+/// Capture one boundary snapshot — PNG + tree JSON pair, also returned in
+/// memory as a [`TraceCapture`] for reuse.
 ///
 /// Best-effort: errors are returned but the caller typically logs and
 /// continues, since trace failures must not abort the flow. Runs
@@ -300,7 +311,8 @@ pub async fn capture_trace_boundary(
     boundary_idx: u64,
     suffix: &str,
     meta: TraceMeta<'_>,
-) -> Result<(PathBuf, PathBuf)> {
+    defer_screenshot: bool,
+) -> Result<TraceCapture> {
     if !config.trace || !config.write_to_disk {
         anyhow::bail!("trace capture disabled");
     }
@@ -310,31 +322,56 @@ pub async fn capture_trace_boundary(
         std::fs::create_dir_all(parent)?;
     }
 
-    // Screenshot + hierarchy fetched in series. They aren't perfectly
-    // co-temporal but the gap is sub-100ms — small enough that they
-    // describe "the same UI state" for forensic purposes.
-    let shot = crate::resolution::screenshot_bounded(driver).await?;
-    let boundary_str = boundary_idx.to_string();
-    let after_step_str = meta.after_step.map(|n| n.to_string());
-    let mut entries: Vec<(&str, &str)> = vec![
-        ("golem-flow", &config.flow_name),
-        ("golem-device", &config.device_name),
-        ("golem-boundary", &boundary_str),
-        ("golem-wall-clock", meta.wall_clock),
-        ("golem-version", env!("CARGO_PKG_VERSION")),
-    ];
-    if let Some(ref s) = after_step_str {
-        entries.push(("golem-after-step", s));
+    // The boundary screenshot. Skipped when `defer_screenshot` — a recording is
+    // available, so the per-step PNG is pulled from it post-block (one ffmpeg
+    // extraction, no per-step device round-trip). The tree is always fetched
+    // live (it can't come from the video).
+    if !defer_screenshot {
+        // Screenshot + hierarchy in series — sub-100ms apart, "same UI state"
+        // for forensic purposes.
+        let shot = crate::resolution::screenshot_bounded(driver).await?;
+        let boundary_str = boundary_idx.to_string();
+        let after_step_str = meta.after_step.map(|n| n.to_string());
+        let mut entries: Vec<(&str, &str)> = vec![
+            ("golem-flow", &config.flow_name),
+            ("golem-device", &config.device_name),
+            ("golem-boundary", &boundary_str),
+            ("golem-wall-clock", meta.wall_clock),
+            ("golem-version", env!("CARGO_PKG_VERSION")),
+        ];
+        if let Some(ref s) = after_step_str {
+            entries.push(("golem-after-step", s));
+        }
+        if let Some(action) = meta.action {
+            entries.push(("golem-action", action));
+        }
+        let png_with_meta = embed_png_metadata(&shot.data, &entries);
+        std::fs::write(&png_path, &png_with_meta)?;
     }
-    if let Some(action) = meta.action {
-        entries.push(("golem-action", action));
-    }
-    let png_with_meta = embed_png_metadata(&shot.data, &entries);
-    std::fs::write(&png_path, &png_with_meta)?;
     let (root, _meta) = crate::resolution::get_hierarchy_bounded(driver).await?;
     let json = serde_json::to_string_pretty(&root)?;
     std::fs::write(&json_path, json)?;
-    Ok((png_path, json_path))
+    Ok(TraceCapture {
+        png_path,
+        json_path,
+    })
+}
+
+/// Write a deferred `--trace` boundary PNG by pulling the frame `secs_before_end`
+/// before the recording's end (see [`extract_recording_frame`] for why it's
+/// end-anchored). Used post-block when `--trace` sources its per-step
+/// screenshots from the recording instead of capturing each one live.
+pub async fn write_recording_frame_png(
+    mp4: &Path,
+    png_path: &Path,
+    secs_before_end: f64,
+    device_dims: Option<(u32, u32)>,
+) -> Result<()> {
+    let frame = extract_recording_frame(mp4, secs_before_end, device_dims)
+        .await
+        .ok_or_else(|| anyhow::anyhow!("recording frame extraction failed"))?;
+    std::fs::write(png_path, frame)?;
+    Ok(())
 }
 
 /// Snapshot-level metadata embedded into the PNG `tEXt` chunks.
@@ -465,11 +502,194 @@ pub async fn stop_recording(
     Ok(dest)
 }
 
+/// Whether `ffmpeg` is on `PATH` (probed once, cached). Gates the opportunistic
+/// a11y path that pulls a frame from a recording instead of forcing a screenshot.
+pub fn ffmpeg_available() -> bool {
+    use std::sync::OnceLock;
+    static AVAIL: OnceLock<bool> = OnceLock::new();
+    *AVAIL.get_or_init(|| {
+        std::process::Command::new("ffmpeg")
+            .arg("-version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    })
+}
+
+/// Extract the PNG frame `secs_before_end` seconds before the recording's end
+/// via ffmpeg, returned as raw PNG bytes. `None` ⇒ ffmpeg absent or extraction
+/// failed — callers fall back to tree-only.
+///
+/// **End-anchored on purpose.** The recording's *start* has variable
+/// capture-warmup latency (seconds on iOS's simctl — the video begins well
+/// after the host "start recording" call), so a start-relative `-ss` offset
+/// lands far past the intended moment. The *end* aligns with `stop_recording`,
+/// so callers pass "how long before stop the tree was captured"
+/// (`stop_instant − captured_at`) and we seek from EOF.
+///
+/// Fast-seek lands on the nearest keyframe; the a11y audit only uses this for a
+/// *settled* moment, where the frame is stable, so keyframe granularity is fine.
+pub async fn extract_recording_frame(
+    mp4: &Path,
+    secs_before_end: f64,
+    device_dims: Option<(u32, u32)>,
+) -> Option<Vec<u8>> {
+    if !ffmpeg_available() {
+        return None;
+    }
+    let before = secs_before_end.max(0.0);
+    let output = tokio::process::Command::new("ffmpeg")
+        .args(["-nostdin", "-loglevel", "error", "-sseof", &format!("-{before:.3}")])
+        .arg("-i")
+        .arg(mp4)
+        .args(["-frames:v", "1", "-f", "image2pipe", "-c:v", "png", "-"])
+        .output()
+        .await
+        .ok()?;
+    if output.status.success() && !output.stdout.is_empty() {
+        // Strip any letterbox/pillarbox the encoder added (it scales the
+        // display into a fixed box when it can't encode native — see
+        // `aspect_crop_frame`) so the content fills the frame and the a11y
+        // geometry mapping (screenshot px ÷ viewport width) stays correct.
+        Some(match device_dims {
+            Some((w, h)) => aspect_crop_frame(output.stdout, w, h),
+            None => output.stdout,
+        })
+    } else {
+        None
+    }
+}
+
+/// Width and height of an encoded PNG, read straight from its IHDR header
+/// (bytes 16..24, big-endian) — no full decode. `None` if the bytes aren't a
+/// PNG with a readable header. Used to gauge a recording frame's resolution
+/// (against the device's native width) and to no-op the aspect crop cheaply.
+pub fn png_dimensions(png: &[u8]) -> Option<(u32, u32)> {
+    // 8-byte signature + 4 length + 4 "IHDR" + 4 width + 4 height = 24 bytes.
+    if png.len() < 24 || &png[12..16] != b"IHDR" {
+        return None;
+    }
+    let w = u32::from_be_bytes([png[16], png[17], png[18], png[19]]);
+    let h = u32::from_be_bytes([png[20], png[21], png[22], png[23]]);
+    Some((w, h))
+}
+
+/// Crop letterbox/pillarbox bars from a frame so its content fills the image.
+///
+/// `screenrecord` scales the display into a fixed box when its encoder can't
+/// encode the native resolution (e.g. the emulator falls back to 720×1280),
+/// adding black bars on a device whose aspect differs from the box. The bar
+/// geometry is deterministic from the two aspect ratios — no pixel inspection.
+/// We compare the frame aspect to the device aspect (in whichever orientation
+/// is closer, so a rotated recording is handled from the natural dims alone)
+/// and crop the centered content rect. No-op (returns the bytes unchanged)
+/// when the frame already matches within 1%, or on any decode/encode failure.
+pub fn aspect_crop_frame(png: Vec<u8>, device_w: u32, device_h: u32) -> Vec<u8> {
+    if device_w == 0 || device_h == 0 {
+        return png;
+    }
+    let Some((fw, fh)) = png_dimensions(&png) else {
+        return png;
+    };
+    if fw == 0 || fh == 0 {
+        return png;
+    }
+    let frame_ar = f64::from(fw) / f64::from(fh);
+    let natural = f64::from(device_w) / f64::from(device_h);
+    // Recording may be portrait or landscape; match whichever is closer.
+    let target_ar = if (frame_ar - natural).abs() <= (frame_ar - 1.0 / natural).abs() {
+        natural
+    } else {
+        1.0 / natural
+    };
+    // Already fills (within 1%) → no crop, skip the decode/re-encode.
+    if (frame_ar - target_ar).abs() / target_ar < 0.01 {
+        return png;
+    }
+    let (cw, ch, x, y) = if frame_ar > target_ar {
+        // Frame wider than content → pillarbox (bars left/right).
+        let cw = ((f64::from(fh) * target_ar).round() as u32).min(fw);
+        (cw, fh, (fw - cw) / 2, 0)
+    } else {
+        // Frame taller than content → letterbox (bars top/bottom).
+        let ch = ((f64::from(fw) / target_ar).round() as u32).min(fh);
+        (fw, ch, 0, (fh - ch) / 2)
+    };
+    let Ok(img) = image::load_from_memory(&png) else {
+        return png;
+    };
+    let cropped = img.crop_imm(x, y, cw, ch);
+    let mut out = Vec::new();
+    match cropped.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png) {
+        Ok(()) => out,
+        Err(_) => png,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use golem_driver::MockPlatformDriver;
     use golem_element::{Bounds, Element};
+
+    fn solid_png(w: u32, h: u32) -> Vec<u8> {
+        let img = image::RgbImage::from_pixel(w, h, image::Rgb([200, 200, 200]));
+        let mut out = Vec::new();
+        image::DynamicImage::ImageRgb8(img)
+            .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+            .expect("encode png");
+        out
+    }
+
+    #[test]
+    fn png_dimensions_reads_ihdr() {
+        let png = solid_png(720, 1280);
+        assert_eq!(png_dimensions(&png), Some((720, 1280)));
+        assert_eq!(png_dimensions(b"not a png"), None);
+        assert_eq!(png_dimensions(&[]), None);
+    }
+
+    #[test]
+    fn aspect_crop_frame_strips_pillarbox() {
+        // 720×1280 frame (ar 0.5625) on a 1344×2992 device (ar 0.449) →
+        // pillarbox: crop the width down to the content aspect, height intact.
+        let png = solid_png(720, 1280);
+        let cropped = aspect_crop_frame(png, 1344, 2992);
+        let (w, h) = png_dimensions(&cropped).expect("cropped png");
+        assert_eq!(h, 1280, "height preserved");
+        assert!(w < 720, "width cropped from 720, got {w}");
+        let want = 1344.0 / 2992.0;
+        assert!(
+            (f64::from(w) / f64::from(h) - want).abs() < 0.01,
+            "cropped aspect ≈ device aspect"
+        );
+    }
+
+    #[test]
+    fn aspect_crop_frame_noop_when_filled() {
+        // Frame already matches device aspect → returned unchanged (same bytes).
+        let png = solid_png(1080, 2404); // ar ≈ 0.449, same as 1344×2992
+        let before = png.clone();
+        let after = aspect_crop_frame(png, 1344, 2992);
+        assert_eq!(after, before, "matching aspect SHALL be a no-op");
+        // Degenerate device dims → no-op.
+        let png2 = solid_png(720, 1280);
+        let b2 = png2.clone();
+        assert_eq!(aspect_crop_frame(png2, 0, 0), b2);
+    }
+
+    #[test]
+    fn aspect_crop_frame_handles_landscape() {
+        // Landscape frame 1280×720 on a portrait-natural 1344×2992 device →
+        // matches the inverted (landscape) aspect, so crop the height.
+        let png = solid_png(1280, 720);
+        let cropped = aspect_crop_frame(png, 1344, 2992);
+        let (w, h) = png_dimensions(&cropped).expect("cropped png");
+        assert_eq!(w, 1280, "width preserved in landscape");
+        assert!(h < 720, "height cropped, got {h}");
+    }
 
     fn default_hierarchy() -> Element {
         Element {
@@ -683,11 +903,13 @@ mod tests {
             ..CaptureConfig::default()
         };
 
-        let path = capture_failure_screenshot(&driver, &config, "auth", 2, 0, 1, "error")
+        let (path, bytes) = capture_failure_screenshot(&driver, &config, "auth", 2, 0, 1, "error")
             .await
             .expect("capture should succeed");
 
         assert!(path.exists(), "screenshot file SHALL exist on disk");
+        // The returned bytes match what was written (reused by the a11y audit).
+        assert_eq!(&bytes[..4], &[0x89, 0x50, 0x4E, 0x47], "returned PNG magic bytes");
         let data = std::fs::read(&path).expect("should read file");
         // MockPlatformDriver returns PNG magic bytes
         assert_eq!(&data[..4], &[0x89, 0x50, 0x4E, 0x47]);
@@ -894,11 +1116,12 @@ mod tests {
             ..CaptureConfig::default()
         };
 
-        let path = capture_failure_tree(&driver, &config, "auth", 2, 0, 1, "error")
+        let (path, tree) = capture_failure_tree(&driver, &config, "auth", 2, 0, 1, "error")
             .await
             .expect("tree dump should succeed");
 
         assert!(path.exists(), "tree json file SHALL exist on disk");
+        assert_eq!(tree.element_type, "View", "returned tree SHALL be the hierarchy");
         assert_eq!(
             path.extension().and_then(|e| e.to_str()),
             Some("json"),
@@ -962,7 +1185,7 @@ mod tests {
             wall_clock: "2026-06-15T00:00:00Z",
         };
 
-        let result = capture_trace_boundary(&driver, &config, 0, "preflow", meta).await;
+        let result = capture_trace_boundary(&driver, &config, 0, "preflow", meta, false).await;
         assert!(result.is_err());
         let err_msg = format!("{}", result.expect_err("should be an error"));
         assert!(err_msg.contains("disabled"), "got: {err_msg}");
@@ -986,7 +1209,7 @@ mod tests {
             wall_clock: "2026-06-15T00:00:00Z",
         };
 
-        let result = capture_trace_boundary(&driver, &config, 1, "after", meta).await;
+        let result = capture_trace_boundary(&driver, &config, 1, "after", meta, false).await;
         assert!(result.is_err());
         assert!(driver.get_calls().is_empty());
     }
@@ -1012,9 +1235,10 @@ mod tests {
             wall_clock: "2026-06-15T12:00:00Z",
         };
 
-        let (png_path, json_path) = capture_trace_boundary(&driver, &config, 5, "after", meta)
+        let cap = capture_trace_boundary(&driver, &config, 5, "after", meta, false)
             .await
             .expect("trace boundary capture should succeed");
+        let (png_path, json_path) = (cap.png_path, cap.json_path);
 
         assert!(png_path.exists(), "trace PNG SHALL exist");
         assert!(json_path.exists(), "trace JSON SHALL exist");
@@ -1031,6 +1255,34 @@ mod tests {
         assert_eq!(calls.len(), 2);
         assert_eq!(calls[0].0, "screenshot");
         assert_eq!(calls[1].0, "get_hierarchy");
+    }
+
+    // 23b. With `defer_screenshot`, only the tree is fetched (the screenshot is
+    //      pulled from the recording post-block) — JSON written, PNG skipped.
+    #[tokio::test]
+    async fn capture_trace_boundary_deferred_skips_screenshot() {
+        let driver = MockPlatformDriver::new(default_hierarchy());
+        let tmp = tempfile::tempdir().expect("failed to create tempdir");
+        let config = CaptureConfig {
+            trace: true,
+            output_dir: tmp.path().to_path_buf(),
+            flow_name: "login".to_string(),
+            device_name: "test_device".to_string(),
+            ..CaptureConfig::default()
+        };
+        let meta = TraceMeta {
+            after_step: Some(2),
+            action: Some("tap"),
+            wall_clock: "2026-06-15T12:00:00Z",
+        };
+        let cap = capture_trace_boundary(&driver, &config, 2, "after", meta, true)
+            .await
+            .expect("deferred trace boundary SHALL succeed");
+        assert!(!cap.png_path.exists(), "deferred PNG SHALL NOT be written live");
+        assert!(cap.json_path.exists(), "tree JSON SHALL still be written");
+        let calls = driver.get_calls();
+        assert_eq!(calls.len(), 1, "only the hierarchy is fetched when deferred");
+        assert_eq!(calls[0].0, "get_hierarchy");
     }
 
     // ---------------------------------------------------------------
@@ -1054,12 +1306,12 @@ mod tests {
             wall_clock: "2026-06-15T00:00:00Z",
         };
 
-        let (png_path, json_path) = capture_trace_boundary(&driver, &config, 0, "preflow", meta)
+        let cap = capture_trace_boundary(&driver, &config, 0, "preflow", meta, false)
             .await
             .expect("preflow boundary capture should succeed");
 
-        assert!(png_path.exists());
-        assert!(json_path.exists());
+        assert!(cap.png_path.exists());
+        assert!(cap.json_path.exists());
     }
 
     // ---------------------------------------------------------------

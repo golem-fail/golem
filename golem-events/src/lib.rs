@@ -33,6 +33,18 @@ pub struct Rect {
 
 // ── Accessibility ──
 
+/// One hit-test sample cell for `occluded_element`: a 3×3-lattice sub-region of
+/// the control and whether a tap there is reachable (vs covered by an overlay).
+/// The annotator draws only these cells (covered = solid, reachable = faint
+/// outline), so untested zones make no claim.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OcclusionCell {
+    /// The cell's bounds in device coordinates.
+    pub bounds: Rect,
+    /// `true` = a tap here reaches the control; `false` = covered.
+    pub reachable: bool,
+}
+
 /// A single accessibility finding from a block-boundary audit. Defined here
 /// (the shared vocabulary crate) so it can travel both on the event stream
 /// (`EventKind::A11yAudit`, for the live renderer) and on `FlowReport`.
@@ -50,10 +62,46 @@ pub struct A11yIssue {
     pub element_label: Option<String>,
     /// Element bounds for annotated-screenshot drawing (device coords).
     pub element_bounds: Option<Rect>,
+    /// A sub-region of the element to anchor the measurement annotation to,
+    /// when it differs from the whole box — e.g. the pixel text-size check
+    /// puts the dimension line on the actual (padded / multi-line) text line,
+    /// while the rectangle still marks the whole element. `None` ⇒ measure
+    /// against `element_bounds`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub measure_bounds: Option<Rect>,
+    /// Additional related elements for findings that span more than one node
+    /// (e.g. every other member of a `duplicate_labels` group, or the second
+    /// element of an `overlapping_interactive` pair). The annotator draws a
+    /// rectangle on each and connects the group; empty for single-element
+    /// findings.
+    #[serde(default)]
+    pub related_bounds: Vec<Rect>,
+    /// For `occluded_element`: the hit-test sample cells with their
+    /// reachability — the annotator draws only these (covered = solid,
+    /// reachable = faint outline), so untested zones make no claim. Empty for
+    /// every other check.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub occlusion: Vec<OcclusionCell>,
     /// How sure we are this is a real finding (0.0–1.0). Deterministic checks
     /// (bounds/structure-derived) are 1.0; heuristic pixel checks score lower.
     /// `a11y_min_confidence` filters findings below a threshold.
     pub confidence: f32,
+    /// Compact, self-documenting measurement for on-image annotation, e.g.
+    /// `32dp` (touch target) or `3.5:1` (contrast). `None` for checks with no
+    /// single scalar (missing_label, duplicate, overlap). Drawn semi-
+    /// translucent in a corner of the finding's rectangle so the PNG reads
+    /// standalone.
+    pub detail: Option<String>,
+}
+
+impl A11yIssue {
+    /// Whether this is a heuristic finding (confidence `< 1.0`). Deterministic
+    /// checks (bounds/structure/hit-test) are exactly `1.0`. The single source
+    /// of the threshold every report surface uses to decide whether to show a
+    /// confidence annotation — keep them in agreement.
+    pub fn is_heuristic(&self) -> bool {
+        self.confidence < 1.0
+    }
 }
 
 /// All accessibility findings from one block-boundary audit.

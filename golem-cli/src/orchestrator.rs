@@ -309,6 +309,7 @@ struct SubmitConfigFields {
     vars: Vec<(String, String)>,
     coverage_override: Option<golem_parser::CoverageStrategy>,
     a11y_override: Option<golem_parser::A11yLevel>,
+    a11y_min_confidence_override: Option<f32>,
     rebuild: bool,
     no_build: bool,
     record: bool,
@@ -372,6 +373,9 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
         "strict" => Some(golem_parser::A11yLevel::Strict),
         _ => None,
     });
+    let a11y_min_confidence_override = cfg["a11y_min_confidence"]
+        .as_f64()
+        .map(|v| v as f32);
     let rebuild = cfg["rebuild"].as_bool().unwrap_or(false);
     let no_build = cfg["no_build"].as_bool().unwrap_or(false);
     let record = cfg["record"].as_bool().unwrap_or(false);
@@ -401,6 +405,7 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
         vars,
         coverage_override,
         a11y_override,
+        a11y_min_confidence_override,
         rebuild,
         no_build,
         record,
@@ -451,6 +456,7 @@ async fn handle_submit(
         vars,
         coverage_override,
         a11y_override,
+        a11y_min_confidence_override,
         rebuild,
         no_build,
         record,
@@ -515,6 +521,7 @@ async fn handle_submit(
         project_apps: project_config.apps,
         coverage_override,
         a11y_override,
+        a11y_min_confidence_override,
         rebuild,
         no_build,
         device_settings: project_config.device_settings,
@@ -870,6 +877,10 @@ mod tests {
             f.coverage_override.is_none(),
             "absent coverage SHALL be None"
         );
+        assert!(
+            f.a11y_min_confidence_override.is_none(),
+            "absent a11y_min_confidence SHALL be None"
+        );
         assert!(!f.rebuild && !f.no_build && !f.record && !f.no_record && !f.trace);
         assert_eq!(f.repeat, 1, "absent repeat SHALL default to 1");
         assert!(
@@ -922,6 +933,22 @@ mod tests {
         assert!(
             bogus.coverage_override.is_none(),
             "an unknown coverage string SHALL map to None"
+        );
+    }
+
+    // 9b. a11y_min_confidence round-trips off the wire as an f32; absent → None.
+    #[test]
+    fn parse_submit_config_a11y_min_confidence() {
+        let set = parse_submit_config(&serde_json::json!({"a11y_min_confidence": 0.7}));
+        assert_eq!(
+            set.a11y_min_confidence_override,
+            Some(0.7_f32),
+            "a11y_min_confidence SHALL round-trip as an f32"
+        );
+        let absent = parse_submit_config(&serde_json::json!({}));
+        assert!(
+            absent.a11y_min_confidence_override.is_none(),
+            "absent a11y_min_confidence SHALL be None"
         );
     }
 

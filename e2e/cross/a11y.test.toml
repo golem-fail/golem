@@ -1,0 +1,33 @@
+[flow]
+name = "A11y audit"
+tags = ["cross-platform", "accessibility"]
+
+[flow.options]
+coverage = "one"
+# Strict forces the per-block screenshot so the contrast check + the full
+# annotated screenshot (markers, dimension lines, dashed duplicate connector)
+# are exercised end to end.
+a11y = "strict"
+
+[[flow.apps]]
+name = "app"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+# Navigate via the menu (the A11y Demo section is last on a long page; the menu
+# jumps straight to it, no long scroll), reveal the deliberately-bad fixtures
+# (App.svelte A11yDemo), then let the block-end audit annotate them. Asserts the
+# section opened so the audit runs against the bad widgets, not an empty toggle.
+[[block]]
+name = "a11y_demo"
+steps = [
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-a11y-demo" },
+  { action = "tap", on_accessibility_label = "a11y-demo-toggle" },
+  # Revealing the fixtures grows the page below the fold. auto_scroll brings
+  # the last one into view; the section is short, so the whole thing then sits
+  # in the viewport and the block-end audit screenshot captures every
+  # annotation channel at once.
+  { action = "assert_visible", on_text = "contrast warn line", auto_scroll = true },
+]

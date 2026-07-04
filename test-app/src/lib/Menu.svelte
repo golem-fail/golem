@@ -24,6 +24,7 @@ const links = [
   { id: "dialog-overlay",  label: "Dialog Overlay" },
   { id: "position-test",   label: "Position Test" },
   { id: "device-state",    label: "Device State" },
+  { id: "a11y-demo",       label: "A11y Demo" },
 ];
 
 function gotoSection(id) {

@@ -28,6 +28,10 @@ pub struct AndroidDriver {
     /// + child handle; `stop_recording` signals the child, waits for
     /// flush, and pulls the .mp4 to host tmp.
     recording: tokio::sync::Mutex<Option<RecordingState>>,
+    /// Host instant of the last recording's SIGINT (≈ true video end), stamped
+    /// in `stop_recording` before the flush+pull latency. Read via
+    /// `last_recording_end` to anchor frame extraction.
+    last_rec_end: std::sync::Mutex<Option<std::time::Instant>>,
     /// Set once the golem Unicode IME has been activated on this device
     /// (lazily, the first time a flow types non-ASCII). Fast-path guard
     /// so later types in the same flow skip the `ime enable`/`ime set`
@@ -39,6 +43,49 @@ pub struct AndroidDriver {
 struct RecordingState {
     device_path: String,
     child: tokio::process::Child,
+}
+
+/// Fallback per-axis pixel cap for `screenrecord`, used only when the device
+/// doesn't report its real encoder ceiling (see `recording_size`). Many AVC
+/// encoders (the emulator's in particular) reject frames larger than this and
+/// silently fall back to a letterboxed 720p — half-resolution and
+/// geometrically wrong. 2560 is the emulator's observed ceiling and a safe
+/// floor for real hardware (which usually encodes native).
+const MAX_REC_AXIS: u32 = 2560;
+
+/// Parse `wm size` output into `(width, height)`. Prefers an `Override size`
+/// line (a forced display size) over the `Physical size` line. `None` when no
+/// `WxH` is parseable.
+fn parse_wm_size(out: &str) -> Option<(u32, u32)> {
+    let line = out
+        .lines()
+        .find(|l| l.contains("Override size"))
+        .or_else(|| out.lines().find(|l| l.contains("Physical size")))?;
+    let dims = line.rsplit(':').next()?.trim();
+    let (w, h) = dims.split_once('x')?;
+    Some((w.trim().parse().ok()?, h.trim().parse().ok()?))
+}
+
+/// Scale `(w, h)` so the longest axis is `<= max_axis`, preserving aspect, with
+/// even dimensions (h264 4:2:0 needs even width/height). `None` when the display
+/// already fits (record native — let `screenrecord` choose) or the dims are
+/// degenerate.
+fn fit_recording_size(w: u32, h: u32, max_axis: u32) -> Option<(u32, u32)> {
+    if w == 0 || h == 0 || max_axis < 2 {
+        return None;
+    }
+    let longest = w.max(h);
+    if longest <= max_axis {
+        return None;
+    }
+    let scale = f64::from(max_axis) / f64::from(longest);
+    // Floor to even so the result never exceeds the cap.
+    let ew = ((w as f64 * scale) as u32) & !1;
+    let eh = ((h as f64 * scale) as u32) & !1;
+    if ew < 2 || eh < 2 {
+        return None;
+    }
+    Some((ew, eh))
 }
 
 enum CdpLifecycle {
@@ -193,6 +240,7 @@ impl AndroidDriver {
             physical,
             cdp: std::sync::Mutex::new(CdpLifecycle::Idle),
             recording: tokio::sync::Mutex::new(None),
+            last_rec_end: std::sync::Mutex::new(None),
             ime_active: std::sync::atomic::AtomicBool::new(false),
         }
     }
@@ -336,6 +384,42 @@ impl AndroidDriver {
         out.trim()
             .parse::<u32>()
             .with_context(|| format!("parsing ro.build.version.sdk={out:?}"))
+    }
+
+    /// Best-effort aspect-preserving `screenrecord --size` for this device.
+    /// `None` → record at native (the display fits the encoder, or we couldn't
+    /// read the display size — in which case `screenrecord` picks its own).
+    /// Reads `wm size` (rotation-agnostic physical dims) and `user_rotation`,
+    /// swapping the axes for landscape so the requested aspect matches what
+    /// `screenrecord` will actually capture.
+    async fn recording_size(&self) -> Option<(u32, u32)> {
+        // Three independent device reads — run them concurrently.
+        let (wm, rotation_raw, health) = tokio::join!(
+            self.adb(&["shell", "wm", "size"]),
+            self.adb(&["shell", "settings", "get", "system", "user_rotation"]),
+            self.client.check_health(),
+        );
+        let (mut w, mut h) = parse_wm_size(&wm.ok()?)?;
+        let rotation = rotation_raw
+            .ok()
+            .and_then(|s| s.trim().parse::<u32>().ok())
+            .unwrap_or(0);
+        // 90°/270° (rotation 1/3) → recorded surface is landscape.
+        if rotation == 1 || rotation == 3 {
+            std::mem::swap(&mut w, &mut h);
+        }
+        // The encoder's real ceiling, reported by the companion via MediaCodec
+        // VideoCapabilities (min of the two axes → one safe cap); fall back to
+        // the conservative heuristic when the device doesn't report it.
+        let cap = health
+            .ok()
+            .and_then(|h| {
+                h.max_recording_width
+                    .zip(h.max_recording_height)
+                    .map(|(mw, mh)| mw.min(mh))
+            })
+            .unwrap_or(MAX_REC_AXIS);
+        fit_recording_size(w, h, cap)
     }
 }
 
@@ -856,16 +940,26 @@ impl PlatformDriver for AndroidDriver {
         // still truncate at 3 min — golem targets modern devices, so
         // we accept that as a known edge case rather than implementing
         // file rotation + ffmpeg stitching.
+        //
+        // `--size` is requested only when the native display exceeds the
+        // encoder's practical cap (see `recording_size`); otherwise we omit
+        // it and let screenrecord record native.
+        let size = self.recording_size().await.map(|(w, h)| format!("{w}x{h}"));
+        let mut args: Vec<&str> = vec![
+            "-s",
+            &self.device_serial,
+            "shell",
+            "screenrecord",
+            "--time-limit",
+            "0",
+        ];
+        if let Some(ref s) = size {
+            args.push("--size");
+            args.push(s);
+        }
+        args.push(&device_path);
         let child = tokio::process::Command::new("adb")
-            .args([
-                "-s",
-                &self.device_serial,
-                "shell",
-                "screenrecord",
-                "--time-limit",
-                "0",
-                &device_path,
-            ])
+            .args(&args)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::piped())
             .spawn()
@@ -885,6 +979,11 @@ impl PlatformDriver for AndroidDriver {
         // Killing the local `adb shell` child does NOT propagate to
         // the remote screenrecord — we have to signal it server-side.
         let _ = self.adb(&["shell", "pkill", "-INT", "screenrecord"]).await;
+        // The video ends ≈ here (SIGINT delivered) — stamp before the flush
+        // sleep + pull below so frame extraction can anchor on the true end.
+        if let Ok(mut g) = self.last_rec_end.lock() {
+            *g = Some(std::time::Instant::now());
+        }
         // Give the device a moment to finalise the file (mp4 moov
         // atom is written on SIGINT receipt).
         tokio::time::sleep(std::time::Duration::from_millis(800)).await;
@@ -921,6 +1020,10 @@ impl PlatformDriver for AndroidDriver {
         Ok(tmp_str)
     }
 
+    fn last_recording_end(&self) -> Option<std::time::Instant> {
+        self.last_rec_end.lock().ok().and_then(|g| *g)
+    }
+
     async fn remove_port_forwards(&self) -> Result<()> {
         let output = tokio::process::Command::new("adb")
             .args(["-s", &self.device_serial, "forward", "--remove-all"])
@@ -945,6 +1048,40 @@ impl PlatformDriver for AndroidDriver {
 mod tests {
     use super::*;
     use golem_element::Bounds;
+
+    #[test]
+    fn parse_wm_size_physical_and_override() {
+        assert_eq!(parse_wm_size("Physical size: 1344x2992"), Some((1344, 2992)));
+        // Override line takes precedence over Physical.
+        let out = "Physical size: 1344x2992\nOverride size: 1080x2400";
+        assert_eq!(parse_wm_size(out), Some((1080, 2400)));
+        assert_eq!(parse_wm_size("garbage"), None);
+    }
+
+    #[test]
+    fn fit_recording_size_caps_and_evens() {
+        // Native exceeds the cap → scaled aspect-correct, even, longest = cap.
+        let (w, h) = fit_recording_size(1344, 2992, MAX_REC_AXIS).expect("should scale");
+        assert_eq!(h, MAX_REC_AXIS, "longest axis pinned to the cap");
+        assert_eq!(w % 2, 0, "width even (h264 4:2:0)");
+        assert_eq!(h % 2, 0, "height even");
+        // Aspect preserved within rounding.
+        let want = 1344.0 / 2992.0;
+        assert!((f64::from(w) / f64::from(h) - want).abs() < 0.01);
+        // Already within the cap → record native (None).
+        assert_eq!(fit_recording_size(1080, 2400, MAX_REC_AXIS), None);
+        assert_eq!(fit_recording_size(0, 2992, MAX_REC_AXIS), None);
+        assert_eq!(fit_recording_size(1344, 2992, 0), None, "degenerate cap");
+        // Landscape (longest = width) is capped on width.
+        let (w, h) = fit_recording_size(2992, 1344, MAX_REC_AXIS).expect("should scale");
+        assert_eq!(w, MAX_REC_AXIS);
+        assert!(w <= MAX_REC_AXIS && h <= MAX_REC_AXIS);
+        // A device that reports a larger ceiling records native (fits → None);
+        // a smaller reported cap scales further down.
+        assert_eq!(fit_recording_size(1344, 2992, 4096), None, "fits a bigger cap");
+        let (_, h) = fit_recording_size(1344, 2992, 2000).expect("scale to smaller cap");
+        assert_eq!(h, 2000, "honours a smaller reported cap");
+    }
 
     // -----------------------------------------------------------------------
     // 1. Parse hierarchy JSON into Element tree

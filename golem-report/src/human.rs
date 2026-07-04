@@ -165,9 +165,16 @@ pub fn format_flow(report: &FlowReport) -> String {
                     golem_events::Severity::Error => "ERR",
                     golem_events::Severity::Warning => "WRN",
                 };
+                // Surface confidence for heuristic findings (< 1.0); deterministic
+                // checks are certain and need no annotation.
+                let conf = if issue.is_heuristic() {
+                    format!("  (confidence {:.2})", issue.confidence)
+                } else {
+                    String::new()
+                };
                 let _ = writeln!(
                     out,
-                    "      [{}] [{tag}] {:<24} {}",
+                    "      [{:>2}] [{tag}] {:<24} {}{conf}",
                     i + 1,
                     issue.check_id,
                     issue.message

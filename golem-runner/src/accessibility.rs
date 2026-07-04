@@ -58,6 +58,16 @@ impl A11yLevel {
     pub fn forces_screenshot(self) -> bool {
         self == Self::Strict
     }
+
+    /// Canonical lowercase name (round-trips with [`parse`](Self::parse)).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Critical => "critical",
+            Self::Relaxed => "relaxed",
+            Self::Strict => "strict",
+        }
+    }
 }
 
 /// Resolved thresholds for one audit, derived from [`A11yLevel`] plus the
@@ -76,6 +86,23 @@ pub struct A11yConfig {
     pub min_text_size_dp: f64,
     /// When set, contrast between AA and AAA is a Warning (strict only).
     pub contrast_warn_aaa: bool,
+    /// A clickable element whose area is at least this fraction of the viewport
+    /// is treated as a structural container (root tap handler, backdrop, scroll
+    /// surface), not a perceived control — exempt from the interactive checks.
+    /// A real tappable control is virtually never this large.
+    pub max_control_area_fraction: f64,
+    /// `occluded_element` fires when a control's reachable fraction of tap
+    /// points is below this. `strict` is stricter (flags a quarter-covered
+    /// control); `relaxed`/`critical` only flag a majority-covered one. Fully
+    /// occluded (0) is already pruned from the visible tree.
+    pub occluded_max_hittable: f32,
+    /// Default confidence floor for *this level* — findings below it are
+    /// dropped. `relaxed`/`critical` only ever produce deterministic (1.0)
+    /// findings, so their default is `1.0` (no heuristic noise out of the box);
+    /// `strict` runs the heuristic pixel checks, so it defaults lower to keep
+    /// the credible ones while hiding borderline guesses. An explicit
+    /// `a11y_min_confidence` always overrides this.
+    pub min_confidence: f32,
 }
 
 impl A11yConfig {
@@ -96,8 +123,24 @@ impl A11yConfig {
             touch_target_error_dp,
             touch_target_warn_dp,
             density,
-            min_text_size_dp: if level == A11yLevel::Strict { 12.0 } else { 10.0 },
+            // Critical is the lean "worst-offenders" gate → a lower floor so
+            // it flags only egregiously small text; relaxed 10, strict 12.
+            min_text_size_dp: match level {
+                A11yLevel::Strict => 12.0,
+                A11yLevel::Critical => 8.0,
+                _ => 10.0,
+            },
             contrast_warn_aaa: level == A11yLevel::Strict,
+            max_control_area_fraction: 0.5,
+            // strict flags a control >25% covered; relaxed/critical only when
+            // the majority is covered (fewer, higher-signal warnings).
+            occluded_max_hittable: match level {
+                A11yLevel::Strict => 0.75,
+                _ => 0.5,
+            },
+            // Heuristic findings only exist at strict (the screenshot pass);
+            // the others are all deterministic (1.0), so default 1.0 there.
+            min_confidence: if level == A11yLevel::Strict { 0.5 } else { 1.0 },
         }
     }
 
@@ -109,6 +152,16 @@ impl A11yConfig {
 /// Maximum sibling count before the O(n²) overlap check is skipped (a list
 /// with hundreds of siblings is not a meaningful overlap candidate).
 const MAX_OVERLAP_SIBLINGS: usize = 200;
+
+/// Pixel text-size floor (dp): a measured glyph height below this isn't
+/// readable text — it's a thin rule / divider / border or a stray sub-pixel
+/// band. The pixel pass skips it (FN-safe) rather than emit confident noise.
+const MIN_PLAUSIBLE_TEXT_DP: f64 = 5.0;
+
+/// WCAG "large-scale text" — judged at the laxer contrast ratios (3:1 AA,
+/// 4.5:1 AAA) — is ≥18pt, which at 1pt≈1.333px is ≈24dp at normal weight.
+/// (The 14pt-bold alternative needs weight detection we don't have.)
+const WCAG_LARGE_TEXT_DP: f64 = 24.0;
 
 /// Run all tree-based accessibility checks on the visible portion of
 /// `root`, within `viewport`. Returns findings in deterministic
@@ -140,9 +193,10 @@ fn walk(
     // missing-label apply to the actionable control; text-size to any visible
     // text element.
     if !disabled && is_visible(node, viewport) {
-        if is_actionable(node) {
+        if is_actionable(node, viewport, config) {
             check_touch_target(node, config, out);
             check_missing_label(node, out);
+            check_occluded(node, config, out);
         }
         check_text_size_box(node, config, out);
     }
@@ -153,7 +207,11 @@ fn walk(
         let actionable_siblings: Vec<&Element> = node
             .children
             .iter()
-            .filter(|c| is_visible(c, viewport) && is_actionable(c) && !is_disabled_control(c))
+            .filter(|c| {
+                is_visible(c, viewport)
+                    && is_actionable(c, viewport, config)
+                    && !is_disabled_control(c)
+            })
             .collect();
         check_duplicate_labels(&actionable_siblings, out);
         check_overlapping(&actionable_siblings, out);
@@ -165,9 +223,22 @@ fn walk(
 }
 
 /// A node is a check subject iff its effective (visible-clipped) bounds
-/// intersect the viewport — the visible-tree predicate.
+/// intersect the viewport AND it isn't fully occluded — the visible-tree
+/// predicate. IntersectionObserver (webview) / clip bounds catch ancestor
+/// clipping, but an element painted *under* an opaque overlay (e.g. text
+/// behind a sticky header) still intersects the viewport; the occlusion
+/// hit-test catches that.
 fn is_visible(node: &Element, viewport: &Viewport) -> bool {
-    viewport.contains(node.effective_bounds())
+    viewport.contains(node.effective_bounds()) && !is_fully_occluded(node)
+}
+
+/// Whether a hit-test ran and found *no* clear sample point — the element is
+/// entirely covered by something painted on top. Authoritative in webviews
+/// (`elementFromPoint`); for native it's best-effort, but a zero clear-fraction
+/// is strong enough evidence to not judge a control the user can't see. Nodes
+/// with no hit-test (`hit_points` empty) are treated as visible.
+fn is_fully_occluded(node: &Element) -> bool {
+    node.hittable_fraction() == Some(0.0)
 }
 
 /// The element a tap actually lands on: a clickable element with no clickable
@@ -175,8 +246,26 @@ fn is_visible(node: &Element, viewport: &Viewport) -> bool {
 /// `other` / `web_view`, Android layout groups) as clickable/hittable; the
 /// real control is the innermost clickable node, so we audit only that and
 /// skip the wrapping containers (which would otherwise flood `missing_label`).
-fn is_actionable(node: &Element) -> bool {
-    node.clickable && !has_clickable_descendant(node)
+/// An oversized clickable (≥ `max_control_area_fraction` of the viewport) is
+/// also skipped — a control covering most of the screen is a backdrop/root tap
+/// surface, not a perceived control, and judging it as one (missing_label,
+/// touch target, overlap) is a false positive.
+fn is_actionable(node: &Element, viewport: &Viewport, config: &A11yConfig) -> bool {
+    node.clickable
+        && !has_clickable_descendant(node)
+        && !is_oversized_container(node, viewport, config)
+}
+
+/// Whether the element's visible area is at least `max_control_area_fraction`
+/// of the viewport area — too large to be a discrete interactive control.
+fn is_oversized_container(node: &Element, viewport: &Viewport, config: &A11yConfig) -> bool {
+    let vp_area = viewport.width as f64 * viewport.height as f64;
+    if vp_area <= 0.0 {
+        return false;
+    }
+    let b = node.effective_bounds();
+    let area = (b.width.max(0) as f64) * (b.height.max(0) as f64);
+    area >= config.max_control_area_fraction * vp_area
 }
 
 fn has_clickable_descendant(node: &Element) -> bool {
@@ -192,11 +281,36 @@ fn subtree_has_name(node: &Element) -> bool {
     label_of(node).is_some() || node.children.iter().any(subtree_has_name)
 }
 
+/// Short human identifier for an element: `button "Save"` when it has a label,
+/// else just its type. Used in finding messages that reference more than one
+/// element (e.g. overlap pairs) so the reader can tell them apart.
+fn describe(node: &Element) -> String {
+    match label_of(node) {
+        Some(l) => format!("{} \"{}\"", node.element_type, l),
+        None => node.element_type.clone(),
+    }
+}
+
 fn label_of(node: &Element) -> Option<String> {
     node.text
         .clone()
         .filter(|s| !s.is_empty())
         .or_else(|| node.accessibility_label.clone().filter(|s| !s.is_empty()))
+}
+
+/// Whether the element is partially off-screen / clipped — its visible bounds
+/// are smaller than its full bounds (beyond a 1px rounding tolerance). Size and
+/// contrast checks are unreliable on a clipped element (a sliver reads as tiny,
+/// the wrong colours get sampled), so those checks skip it; only the
+/// size-independent checks (`missing_label`, `duplicate_labels`) stay reliable.
+fn is_clipped(node: &Element) -> bool {
+    match &node.visible_bounds {
+        Some(vb) => {
+            vb.width.saturating_add(1) < node.bounds.width
+                || vb.height.saturating_add(1) < node.bounds.height
+        }
+        None => false,
+    }
 }
 
 fn rect_of(b: &Bounds) -> Rect {
@@ -208,14 +322,17 @@ fn rect_of(b: &Bounds) -> Rect {
     }
 }
 
-/// Build a deterministic (confidence 1.0) finding. Heuristic checks
-/// (contrast) construct `A11yIssue` directly with a scored confidence.
+/// Build a deterministic (confidence 1.0) finding. `detail` is the compact
+/// on-image token (e.g. `32dp`) or `None` for checks with no single scalar.
+/// Heuristic checks (contrast) construct `A11yIssue` directly with a scored
+/// confidence.
 fn issue(
     check_id: &str,
     severity: Severity,
     message: String,
     node: &Element,
     bounds: &Bounds,
+    detail: Option<String>,
 ) -> A11yIssue {
     A11yIssue {
         check_id: check_id.into(),
@@ -224,15 +341,25 @@ fn issue(
         element_type: node.element_type.clone(),
         element_label: label_of(node),
         element_bounds: Some(rect_of(bounds)),
+        related_bounds: Vec::new(),
+        measure_bounds: None,
+        occlusion: Vec::new(),
         confidence: 1.0,
+        detail,
     }
 }
 
 /// `touch_target_too_small` — clickable with a min dimension below the dp
-/// threshold. Zero-size targets are left to `check_zero_size` (avoids a
-/// duplicate finding on the same node).
+/// threshold. Zero-size / non-positive-dimension targets are skipped — they
+/// aren't visible tap targets (the visible-tree filter already drops them), so
+/// there's nothing to threshold.
 fn check_touch_target(node: &Element, config: &A11yConfig, out: &mut Vec<A11yIssue>) {
     if !node.clickable {
+        return;
+    }
+    // A clipped element's visible bounds are a sliver — its real tap target is
+    // bigger, so the measured size would be a misleading false "too small".
+    if is_clipped(node) {
         return;
     }
     let b = node.effective_bounds();
@@ -254,6 +381,7 @@ fn check_touch_target(node: &Element, config: &A11yConfig, out: &mut Vec<A11yIss
             ),
             node,
             b,
+            Some(format!("{min_dp:.0}dp")),
         ));
     } else if let Some(warn_dp) = config.touch_target_warn_dp {
         if min_dp < warn_dp {
@@ -266,6 +394,7 @@ fn check_touch_target(node: &Element, config: &A11yConfig, out: &mut Vec<A11yIss
                 ),
                 node,
                 b,
+                Some(format!("{min_dp:.0}dp")),
             ));
         }
     }
@@ -276,25 +405,37 @@ fn check_touch_target(node: &Element, config: &A11yConfig, out: &mut Vec<A11yIss
 /// screenshot, no false positives); padding only makes it conservative, so it
 /// misses small text inside a tall padded box (an acceptable false negative —
 /// the pixel-based glyph-height refinement for that case is a follow-up).
+///
+/// Measures the element's **full** box height, not its clipped visible height:
+/// a normal-size row half-scrolled past a scroll container's edge has a tiny
+/// *visible* sliver but normal text — measuring the clip would be a false
+/// positive. Visibility is still gated upstream (the element must intersect the
+/// viewport to be a subject at all).
 fn check_text_size_box(node: &Element, config: &A11yConfig, out: &mut Vec<A11yIssue>) {
     if node.text.as_deref().is_none_or(|t| t.is_empty()) {
         return;
     }
-    let b = node.effective_bounds();
-    if b.height <= 0 {
+    if node.bounds.height <= 0 {
         return;
     }
-    let height_dp = b.height as f64 / config.density;
+    // Round the measured height UP to a whole dp — give borderline text the
+    // benefit of the doubt (anything over 11.0 reads as 12, not flagged at a 12
+    // floor). Conservative, matching how imprecise on-device measurement is;
+    // ceil only ever removes a flag, never adds one, so this stays FP-free.
+    let height_dp = (node.bounds.height as f64 / config.density).ceil();
     if height_dp < config.min_text_size_dp {
         out.push(issue(
             "text_too_small",
             Severity::Warning,
+            // "text" rather than the raw element type — webview text nodes are
+            // DOM tags (p/span/div) that leak implementation detail.
             format!(
-                "{} is {:.0}dp tall — text below {:.0}dp minimum",
-                node.element_type, height_dp, config.min_text_size_dp
+                "text is {:.0}dp tall — below {:.0}dp minimum",
+                height_dp, config.min_text_size_dp
             ),
             node,
-            b,
+            node.effective_bounds(),
+            Some(format!("{height_dp:.0}dp")),
         ));
     }
 }
@@ -309,32 +450,109 @@ fn check_missing_label(node: &Element, out: &mut Vec<A11yIssue>) {
             format!("{} has no text or accessibility label", node.element_type),
             node,
             node.effective_bounds(),
+            None,
         ));
+    }
+}
+
+/// `occluded_element` — an actionable control whose tap target is partly
+/// painted over by something on top (from the occlusion hit-test's `hit_points`
+/// ground truth). Fully-covered controls are already dropped from the visible
+/// tree, so this catches the *partial* case a bounds-only check can't see: the
+/// control looks tappable but a chunk of it is unreachable. Deterministic
+/// (confidence 1.0). Skips elements with no hit-test data, and clipped elements
+/// (a scroll-clipped control's off-clip points read as unreachable — that's
+/// clipping, not occlusion, and is handled elsewhere).
+fn check_occluded(node: &Element, config: &A11yConfig, out: &mut Vec<A11yIssue>) {
+    if is_clipped(node) {
+        return;
+    }
+    let Some(frac) = node.hittable_fraction() else {
+        return;
+    };
+    if frac > 0.0 && frac < config.occluded_max_hittable {
+        let b = node.effective_bounds();
+        let pct = (frac * 100.0).round() as i32;
+        let mut iss = issue(
+            "occluded_element",
+            Severity::Warning,
+            format!("{} is only {pct}% reachable — tap target partly covered", describe(node)),
+            node,
+            b,
+            Some(format!("{pct}%")),
+        );
+        // Carry every sampled cell with its reachability (each hit point → its
+        // 3×3 zone). The annotator draws only these — covered solid, reachable a
+        // faint outline — so untested zones make no claim; JSON gets the map too.
+        iss.occlusion = node
+            .hit_points
+            .iter()
+            .map(|p| golem_events::OcclusionCell {
+                bounds: occlusion_cell_rect(b, p.x, p.y),
+                reachable: p.hit,
+            })
+            .collect();
+        out.push(iss);
+    }
+}
+
+/// The 3×3 sub-cell of `b` containing point `(px, py)`. Hit points sample at the
+/// ¼/½/¾ lines, so each maps to a distinct col/row (0/1/2) — the returned rect
+/// marks which zone of the control that covered point falls in.
+fn occlusion_cell_rect(b: &Bounds, px: i32, py: i32) -> Rect {
+    let w = b.width.max(1);
+    let h = b.height.max(1);
+    let col = (((px - b.x) * 3) / w).clamp(0, 2);
+    let row = (((py - b.y) * 3) / h).clamp(0, 2);
+    Rect {
+        x: b.x + col * (w / 3),
+        y: b.y + row * (h / 3),
+        width: (w / 3).max(1),
+        height: (h / 3).max(1),
     }
 }
 
 /// `duplicate_labels` — sibling clickables sharing identical non-empty visible
 /// text. A screen reader reads them identically; users can't tell them apart.
+/// One finding per group: the first occurrence is the primary, every other
+/// member rides in `related_bounds` so the annotator can rect+connect them all.
 fn check_duplicate_labels(siblings: &[&Element], out: &mut Vec<A11yIssue>) {
-    let mut seen: Vec<(&str, bool)> = Vec::new(); // (text, already-reported)
+    // Preserve first-seen order of distinct labels, accumulating each label's
+    // member elements.
+    let mut groups: Vec<(&str, Vec<&Element>)> = Vec::new();
     for s in siblings {
         let Some(text) = s.text.as_deref().filter(|t| !t.is_empty()) else {
             continue;
         };
-        if let Some(entry) = seen.iter_mut().find(|(t, _)| *t == text) {
-            if !entry.1 {
-                entry.1 = true;
-                out.push(issue(
-                    "duplicate_labels",
-                    Severity::Warning,
-                    format!("multiple sibling {}s labelled \"{}\"", s.element_type, text),
-                    s,
-                    s.effective_bounds(),
-                ));
-            }
+        if let Some(entry) = groups.iter_mut().find(|(t, _)| *t == text) {
+            entry.1.push(s);
         } else {
-            seen.push((text, false));
+            groups.push((text, vec![s]));
         }
+    }
+    for (text, members) in groups {
+        if members.len() < 2 {
+            continue;
+        }
+        let primary = members[0];
+        let mut iss = issue(
+            "duplicate_labels",
+            Severity::Warning,
+            format!(
+                "{} sibling {}s labelled \"{}\"",
+                members.len(),
+                primary.element_type,
+                text
+            ),
+            primary,
+            primary.effective_bounds(),
+            None,
+        );
+        iss.related_bounds = members[1..]
+            .iter()
+            .map(|m| rect_of(m.effective_bounds()))
+            .collect();
+        out.push(iss);
     }
 }
 
@@ -351,16 +569,18 @@ fn check_overlapping(siblings: &[&Element], out: &mut Vec<A11yIssue>) {
             let a = siblings[i].effective_bounds();
             let b = siblings[j].effective_bounds();
             if a.intersects(b) && !coincident(a, b) && !encloses(a, b) && !encloses(b, a) {
-                out.push(issue(
+                let mut iss = issue(
                     "overlapping_interactive",
                     Severity::Warning,
-                    format!(
-                        "{} overlaps sibling {}",
-                        siblings[i].element_type, siblings[j].element_type
-                    ),
+                    // Name both elements (label where present) so it's clear
+                    // *which* controls overlap, not just "button overlaps button".
+                    format!("{} overlaps {}", describe(siblings[i]), describe(siblings[j])),
                     siblings[i],
                     a,
-                ));
+                    None,
+                );
+                iss.related_bounds = vec![rect_of(b)];
+                out.push(iss);
             }
         }
     }
@@ -612,20 +832,106 @@ fn visible_text_elements<'a>(
     }
 }
 
-/// `low_contrast` over the screenshot, with a per-finding confidence. The
-/// points→pixels factor is derived from the screenshot vs the viewport (no
-/// reliance on a device-reported backing scale). Text-size is handled by the
-/// certain box-height check, not here.
+/// Estimate the rendered font size (em) of a text region, in screenshot
+/// pixels, from the tallest text line's ink-row profile. Returns `None` when
+/// there's no readable text line.
+///
+/// The ink band alone is an unreliable proxy — a word with no ascenders or
+/// descenders ("save") inks only its x-height (~0.5em), so the band
+/// *under*-states the em and would over-flag normal text. We instead take the
+/// **maximum** of three interpretations of the same line, which biases the
+/// estimate *upward* (toward not flagging — the deliberate false-negative-over-
+/// false-positive stance):
+/// - the full ink extent (top of caps/ascenders → bottom of descenders) ≈ em
+///   when the line has both;
+/// - the dense (x-height) band ÷ 0.5 — recovers em for x-height-only words;
+/// - the ascent (ink top → baseline) ÷ 0.75 — recovers em from cap/ascender
+///   height.
+/// Only text that's small under *every* interpretation reads as small.
+///
+/// Returns `(em_px, line_top_row, line_bot_row, runs)` — the size estimate, the
+/// measured line's row range (relative to the crop) so the annotation can put
+/// its dimension on the actual line rather than the whole (padded/multi-line)
+/// box, and `runs` = the number of horizontal ink runs in the line's peak row.
+/// A single run is a solid line (divider/underline) or one glyph; multiple runs
+/// are characteristic of real multi-stroke text — the caller uses it to temper
+/// confidence.
+fn estimate_text_em_px(pixels: &[Rgb], width: usize, bg: Rgb) -> Option<(f64, usize, usize, usize)> {
+    let (r0, r1) = text_band(pixels, width, bg)?;
+    let is_ink = |row: usize, x: usize| color_distance(pixels[row * width + x], bg) > CLUSTER_DIST_SQ;
+    let row_ink = |row: usize| (0..width).filter(|&x| is_ink(row, x)).count();
+    let max_ink = (r0..=r1).map(row_ink).max().unwrap_or(0);
+    if max_ink == 0 {
+        return None;
+    }
+    // Dense rows (≥50% of the line's peak ink) are the x-height body; sparse
+    // rows above/below are caps/ascenders/descenders.
+    let dense: Vec<usize> = (r0..=r1).filter(|&row| row_ink(row) * 2 >= max_ink).collect();
+    let dtop = *dense.first()?;
+    let dbot = *dense.last()?;
+    let dense_band = (dbot - dtop + 1) as f64;
+    let full = (r1 - r0 + 1) as f64;
+    let ascent = (dbot - r0 + 1) as f64; // ink top (cap/ascender) → baseline
+
+    // Count ink runs across the peak-ink row: a horizontal line is one run;
+    // multi-stroke text has several (letters/strokes with gaps).
+    let peak = (dtop..=dbot).max_by_key(|&r| row_ink(r)).unwrap_or(dtop);
+    let mut runs = 0usize;
+    let mut prev = false;
+    for x in 0..width {
+        let ink = is_ink(peak, x);
+        if ink && !prev {
+            runs += 1;
+        }
+        prev = ink;
+    }
+
+    Some((full.max(dense_band / 0.5).max(ascent / 0.75), r0, r1, runs))
+}
+
+/// Screenshot checks: `low_contrast`, plus a pixel `text_too_small` refinement
+/// that catches small glyphs inside a *tall* box (padding / multi-line) the
+/// certain box-height check can't see. Each carries a per-finding confidence.
+/// The points→pixels factor is derived from the screenshot vs the viewport (no
+/// reliance on a device-reported backing scale).
+/// The WCAG verdict for a measured contrast `ratio` at the given text-size
+/// class. Large text is judged at 3:1 (AA) / 4.5:1 (AAA), normal at 4.5:1 /
+/// 7:1. Returns `(severity, failed threshold, standard label)`, or `None` when
+/// the ratio meets the applicable bar. Pure, so the caller can also ask "what
+/// would the verdict be if the size class flipped?" for confidence scoring.
+fn contrast_verdict(ratio: f64, large: bool, warn_aaa: bool) -> Option<(Severity, f64, &'static str)> {
+    let (aa, aaa) = if large { (3.0, 4.5) } else { (4.5, 7.0) };
+    if ratio < aa {
+        Some((Severity::Error, aa, "AA"))
+    } else if warn_aaa && ratio < aaa {
+        Some((Severity::Warning, aaa, "AAA"))
+    } else {
+        None
+    }
+}
+
 pub fn check_contrast(
     screenshot_png: &[u8],
     root: &Element,
     viewport: &Viewport,
     config: &A11yConfig,
 ) -> Vec<A11yIssue> {
+    match image::load_from_memory(screenshot_png) {
+        Ok(img) => check_contrast_img(&img, root, viewport, config),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Contrast + pixel text-size checks on an already-decoded image — lets the
+/// block-end audit decode the screenshot once and share it with the annotator
+/// instead of decoding twice.
+pub(crate) fn check_contrast_img(
+    img: &image::DynamicImage,
+    root: &Element,
+    viewport: &Viewport,
+    config: &A11yConfig,
+) -> Vec<A11yIssue> {
     let mut issues = Vec::new();
-    let Ok(img) = image::load_from_memory(screenshot_png) else {
-        return issues;
-    };
     let img = img.to_rgb8();
     // Derive points→pixels from the screenshot itself (width ÷ viewport
     // width): 3.0 on iOS Retina, 1.0 on Android — robust without relying on
@@ -636,22 +942,44 @@ pub fn check_contrast(
     visible_text_elements(root, viewport, false, &mut texts);
 
     for el in texts {
+        // A clipped element shows only a sliver — we'd sample the wrong colours
+        // and a fraction of the glyphs, so both contrast and the pixel text-size
+        // read would be unreliable. Skip (the size-independent tree checks —
+        // missing_label / duplicate_labels — still cover it).
+        if is_clipped(el) {
+            continue;
+        }
         let b = el.effective_bounds();
-        let (pixels, w) = crop_pixels(
-            &img,
-            (b.x as f64 * sf).round() as i32,
-            (b.y as f64 * sf).round() as i32,
-            (b.width as f64 * sf).round() as i32,
-            (b.height as f64 * sf).round() as i32,
-        );
+        let x0 = (b.x as f64 * sf).round() as i32;
+        let y0 = (b.y as f64 * sf).round() as i32;
+        let w_px = (b.width as f64 * sf).round() as i32;
+        let h_px = (b.height as f64 * sf).round() as i32;
+        // Analyse only the centre horizontal strip. Rounded corners (and any
+        // border/edge bleed) expose the surrounding background at the left/right
+        // extremes, which would pollute the bg/ink detection — on a small pill
+        // it can flip the contrast to fill-vs-page. We only measure text
+        // *height*, so trimming width is free. Bound the trim — at most height/2
+        // (enough for a full pill radius) and never more than a quarter per side
+        // (keeps the centre half) — so we don't crop the text off a narrow box.
+        let side = (h_px / 2).min(w_px / 4).max(0);
+        let (pixels, w) = crop_pixels(&img, x0 + side, y0, (w_px - 2 * side).max(1), h_px);
         let Some((bg, fg, band_px)) = extract_text_colors(&pixels, w) else {
             continue; // no readable text / too complex — undetermined
         };
         let ratio = wcag_contrast_ratio(bg, fg);
-        // Glyph-band height in dp drives the large-text threshold (≥16dp →
-        // 3:1). band_px is the contrast check's own measurement, used only
-        // here — NOT for text_too_small (that's the certain box-height check).
-        let large = (band_px as f64 / sf) >= 16.0;
+        // Estimate the font em once (cap-line/x-height of the tallest line,
+        // biased large) and reuse it for BOTH the large-text contrast split and
+        // the small-text check below — one sound size read, not two proxies.
+        let em = estimate_text_em_px(&pixels, w, bg);
+        let em_dp = em.map(|(em_px, ..)| em_px / sf / config.density);
+        // Large text is judged at the laxer 3:1. The em is biased large, so
+        // comparing it to the WCAG 18pt size leans toward "large" → the laxer
+        // threshold → FN-over-FP on contrast. Fall back to the cruder cap/
+        // x-height band only when the em read fails.
+        let large = match em_dp {
+            Some(d) => d >= WCAG_LARGE_TEXT_DP,
+            None => (band_px as f64 / sf) / config.density >= 16.0,
+        };
         // Cleaner region (text + bg = 2 clusters) → higher measurement
         // confidence than a busy 3-cluster region.
         let cleanliness = if significant_cluster_count(&pixels) <= 2 {
@@ -660,76 +988,744 @@ pub fn check_contrast(
             0.6
         };
 
-        let (severity, threshold, standard) = if ratio < if large { 3.0 } else { 4.5 } {
-            (Severity::Error, if large { 3.0 } else { 4.5 }, "AA")
-        } else if config.contrast_warn_aaa && ratio < if large { 4.5 } else { 7.0 } {
-            (Severity::Warning, if large { 4.5 } else { 7.0 }, "AAA")
-        } else {
+        // Pixel text-size: catches small glyphs in a tall box (padding /
+        // multi-line) the certain box-height check missed. Only where box-height
+        // was blind (box ≥ floor) — it owns the short-box case at full
+        // confidence, so this never double-flags. The em estimate is biased
+        // large, so normal text stays clear. Heuristic ⇒ confidence < 1.
+        let box_dp = el.bounds.height as f64 / config.density;
+        if box_dp >= config.min_text_size_dp {
+            if let Some((em_px, line_r0, line_r1, runs)) = em {
+                let em_raw = em_px / sf / config.density;
+                // Round UP for the verdict + display (benefit of the doubt at the
+                // boundary); the raw value gates the sub-5dp artifact floor so a
+                // thin 4.2dp line can't ceil its way past it.
+                let em_dp = em_raw.ceil();
+                // Floor: below ~5dp it's a thin rule/border/sub-pixel band, not
+                // readable text → skip (FN-safe). Above the floor and below the
+                // level's minimum → a genuine small-text candidate.
+                if em_raw >= MIN_PLAUSIBLE_TEXT_DP && em_dp < config.min_text_size_dp {
+                    let margin = ((config.min_text_size_dp - em_dp) / config.min_text_size_dp)
+                        .clamp(0.0, 1.0) as f32;
+                    // Temper confidence by how trustworthy the size read is:
+                    // - few characters ⇒ less chance of a full-height glyph to
+                    //   anchor the estimate (a lone "+"/"-" reads short);
+                    // - a single ink run ⇒ a solid line or one glyph, not the
+                    //   multi-stroke pattern of real text.
+                    let chars = el.text.as_deref().map(|t| t.chars().count()).unwrap_or(0);
+                    let char_factor = (chars as f32 / 4.0).clamp(0.35, 1.0);
+                    let run_factor = if runs >= 2 { 1.0 } else { 0.5 };
+                    let confidence = (cleanliness * (0.55 + 0.35 * margin) * char_factor * run_factor)
+                        .clamp(0.0, 0.95);
+                    // Rect marks the whole element (full height); the dimension
+                    // anchors to the measured text line via `measure_bounds`, so
+                    // a padded / multi-line box shows the measurement on the
+                    // actual glyphs, not the whole box. `b` is the crop origin;
+                    // the rows are relative to it.
+                    let line = Rect {
+                        x: b.x,
+                        y: b.y + (line_r0 as f64 / sf).round() as i32,
+                        width: b.width,
+                        height: (((line_r1 - line_r0 + 1) as f64) / sf).round().max(1.0) as i32,
+                    };
+                    issues.push(A11yIssue {
+                        check_id: "text_too_small".into(),
+                        severity: Severity::Warning,
+                        message: format!(
+                            "text glyphs ~{:.0}dp — below {:.0}dp minimum",
+                            em_dp, config.min_text_size_dp
+                        ),
+                        element_type: el.element_type.clone(),
+                        element_label: label_of(el),
+                        element_bounds: Some(rect_of(b)),
+                        related_bounds: Vec::new(),
+                        measure_bounds: Some(line),
+                        occlusion: Vec::new(),
+                        confidence,
+                        detail: Some(format!("{em_dp:.0}dp")),
+                    });
+                }
+            }
+        }
+
+        let Some((severity, threshold, standard)) =
+            contrast_verdict(ratio, large, config.contrast_warn_aaa)
+        else {
             continue; // meets the applicable threshold
         };
         // Confidence: how far below threshold (a clear fail is more certain
         // than a borderline one), scaled by region cleanliness.
         let margin = ((threshold - ratio) / threshold).clamp(0.0, 1.0) as f32;
-        let confidence = (cleanliness * (0.6 + 0.4 * margin)).clamp(0.0, 1.0);
+        // Size-classification confidence: only matters when flipping the
+        // large/normal call would actually change the verdict (the ratio sits in
+        // the size-sensitive band). When it does, temper by how near the em is to
+        // the large/normal boundary — at the boundary the threshold itself is a
+        // coin-flip; ≥6dp away the classification is effectively certain.
+        let size_factor = if contrast_verdict(ratio, !large, config.contrast_warn_aaa)
+            .map(|(s, ..)| s)
+            == Some(severity)
+        {
+            1.0 // verdict is the same either way — size doesn't decide it
+        } else {
+            match em_dp {
+                Some(d) => {
+                    (0.6 + 0.4 * ((d - WCAG_LARGE_TEXT_DP).abs() / 6.0)).clamp(0.6, 1.0) as f32
+                }
+                None => 0.75, // size unknown but the verdict hinges on it
+            }
+        };
+        // Placeholder de-rating: low-contrast placeholder text is an
+        // intentional, industry-standard pattern — measured-ratio confidence is
+        // unchanged, but our confidence that it's an actionable defect drops.
+        // Only when the element is *showing* its placeholder (text == placeholder),
+        // not when a real value has been typed in. `placeholder` is populated for
+        // native inputs; webview doesn't expose it yet (so webview placeholders
+        // aren't de-rated — see roadmap).
+        let showing_placeholder =
+            el.placeholder.as_deref().is_some_and(|ph| el.text.as_deref() == Some(ph));
+        let placeholder_factor = if showing_placeholder { 0.6 } else { 1.0 };
+        let confidence = (cleanliness * (0.6 + 0.4 * margin) * placeholder_factor * size_factor)
+            .clamp(0.0, 1.0);
         issues.push(A11yIssue {
             check_id: "low_contrast".into(),
             severity,
             message: format!(
-                "{} text contrast {:.1}:1 below {:.1}:1 (WCAG {standard})",
-                el.element_type, ratio, threshold
+                "text contrast {:.1}:1 below {:.1}:1 (WCAG {standard})",
+                ratio, threshold
             ),
             element_type: el.element_type.clone(),
             element_label: label_of(el),
             element_bounds: Some(rect_of(b)),
+            related_bounds: Vec::new(),
+            measure_bounds: None,
+            occlusion: Vec::new(),
             confidence,
+            detail: Some(format!("{ratio:.1}:1")),
         });
     }
     issues
 }
 
-/// Draw numbered-by-order rectangles for each issue onto the screenshot
-/// (orange for warnings first, red for errors on top so red stays visible
-/// where they overlap) and re-encode as PNG. `scale_factor` maps bounds to
-/// screenshot pixels.
+/// Run + device context embedded in the annotated PNG's metadata so the image
+/// is a self-describing artifact (shareable standalone — extractable by any PNG
+/// tool, and enough to replay via `seed`).
+pub struct A11yMeta {
+    pub app: String,
+    pub device: String,
+    /// Platform string (`ios`/`android`) — lets `a11y-extract` emit an exact
+    /// `--platform` in the replay command.
+    pub platform: String,
+    pub flow: String,
+    pub block: String,
+    pub iteration: u32,
+    pub seed: u64,
+    pub level: String,
+}
+
+/// Annotate the screenshot with one numbered finding per issue and re-encode
+/// as PNG. `viewport` maps element bounds (points/dp) to screenshot px; `meta`
+/// is embedded as iTXt metadata.
+///
+/// Visual channels keep findings legible when several land on one element:
+/// - **rect** per element (orange=warning drawn first, red=error on top).
+/// - **marker** = the issue's 1-based index (canonical order shared with every
+///   report surface). Single-element findings put it at the top-left corner
+///   (colliding corners cascade right); grouped findings put one marker at the
+///   group centroid.
+/// - **size checks** (`touch_target_too_small`, `text_too_small`) draw an
+///   industrial dimension line on the limiting axis with the measurement —
+///   off the corner, so it never collides with the contrast token.
+/// - **`low_contrast`** draws its ratio token semi-translucent bottom-left.
+/// - **grouped findings** (`duplicate_labels`, `overlapping_interactive`) draw
+///   a rect on every member; duplicates also connect members with dashed lines.
+///
+/// The PNG carries three iTXt chunks: `Software` (`Golem`), a human
+/// `Golem-Summary` one-liner, and `Golem-Audit` — a JSON record of the context
+/// plus every finding (with screenshot-pixel `bounds` for hover tooling).
 pub fn annotate_screenshot(
     screenshot_png: &[u8],
     issues: &[A11yIssue],
-    viewport_width: i32,
+    viewport: &Viewport,
+    meta: &A11yMeta,
+) -> anyhow::Result<Vec<u8>> {
+    let img = image::load_from_memory(screenshot_png)?;
+    annotate_image(&img, issues, viewport, meta)
+}
+
+/// Annotate an already-decoded image — lets the block-end audit decode the
+/// screenshot once and share it between the contrast check and the annotator.
+pub(crate) fn annotate_image(
+    img: &image::DynamicImage,
+    issues: &[A11yIssue],
+    viewport: &Viewport,
+    meta: &A11yMeta,
 ) -> anyhow::Result<Vec<u8>> {
     use image::Rgba;
-    use imageproc::drawing::draw_hollow_rect_mut;
-    use imageproc::rect::Rect as IpRect;
 
-    let mut img = image::load_from_memory(screenshot_png)?.to_rgba8();
-    let sf = screenshot_scale(img.width(), viewport_width);
+    let mut img = img.to_rgba8();
+    let sf = screenshot_scale(img.width(), viewport.width);
     let red = Rgba([220u8, 40, 40, 255]);
     let orange = Rgba([240u8, 150, 30, 255]);
+    let white = Rgba([255u8, 255, 255, 255]);
+    // Marker glyph scale, sized off the screenshot so numbers stay legible on
+    // both phone (~1170px) and tablet (~2048px) captures.
+    let gscale = (img.width() / 350).clamp(2, 5);
+    let img_w = img.width() as i32;
+    let img_h = img.height() as i32;
+
+    let scale_rect = |r: &Rect| -> (i32, i32, i32, i32) {
+        (
+            (r.x as f64 * sf).round() as i32,
+            (r.y as f64 * sf).round() as i32,
+            (r.width as f64 * sf).round().max(1.0) as i32,
+            (r.height as f64 * sf).round().max(1.0) as i32,
+        )
+    };
+
+    // Top-left corner markers cascade right when they collide; shared across
+    // both passes so numbering layout is stable regardless of severity order.
+    let mut corner_shift: std::collections::HashMap<(i32, i32), i32> =
+        std::collections::HashMap::new();
 
     // Warnings first, errors last → red drawn on top.
     for pass in [Severity::Warning, Severity::Error] {
         let color = if pass == Severity::Error { red } else { orange };
-        for issue in issues.iter().filter(|i| i.severity == pass) {
-            let Some(b) = issue.element_bounds else {
+        for (idx, issue) in issues.iter().enumerate() {
+            if issue.severity != pass {
+                continue;
+            }
+            let Some(pb) = issue.element_bounds else {
                 continue;
             };
-            let x = (b.x as f64 * sf).round() as i32;
-            let y = (b.y as f64 * sf).round() as i32;
-            let w = (b.width as f64 * sf).round().max(1.0) as u32;
-            let h = (b.height as f64 * sf).round().max(1.0) as u32;
-            // 2px stroke for visibility.
-            for inset in 0..2 {
-                let rx = x + inset;
-                let ry = y + inset;
-                let rw = w.saturating_sub((inset * 2) as u32).max(1);
-                let rh = h.saturating_sub((inset * 2) as u32).max(1);
-                draw_hollow_rect_mut(&mut img, IpRect::at(rx, ry).of_size(rw, rh), color);
+            let n = idx + 1;
+            let primary = scale_rect(&pb);
+            let members: Vec<(i32, i32, i32, i32)> = std::iter::once(primary)
+                .chain(issue.related_bounds.iter().map(scale_rect))
+                .collect();
+
+            for m in &members {
+                draw_rect(&mut img, *m, color);
+            }
+
+            let chip_h = (crate::glyph::text_height(gscale) + 2 * gscale) as i32;
+            let chip_w = marker_chip_width(n, gscale) as i32;
+            if members.len() > 1 && issue.check_id == "duplicate_labels" {
+                // Connect group members with dashed lines (nearest corners) and
+                // stamp the marker on EACH segment — for a triplicate that's the
+                // same number on both links, making the grouping unmistakable.
+                for w in members.windows(2) {
+                    let (p, q) = nearest_corners(w[0], w[1]);
+                    draw_dashed_line(&mut img, p, q, color, gscale);
+                    let mx = ((p.0 + q.0) / 2.0) as i32;
+                    let my = ((p.1 + q.1) / 2.0) as i32;
+                    draw_marker(&mut img, mx - chip_w / 2, my - chip_h / 2, gscale, color, white, n);
+                }
+            } else if members.len() > 1 {
+                // Other grouped findings (overlapping): both rects already
+                // intersect, so a connector would be degenerate — one centred
+                // marker over the group.
+                let (cx, cy) = centroid(&members);
+                draw_marker(&mut img, cx - chip_w / 2, cy - chip_h / 2, gscale, color, white, n);
+            } else {
+                let (x, y, _, _) = primary;
+                let shift = corner_shift.entry((x, y)).or_insert(0);
+                let chip_x = (x + *shift).min((img_w - chip_w).max(0));
+                *shift += chip_w + gscale as i32;
+                draw_marker(&mut img, chip_x, y, gscale, color, white, n);
+            }
+
+            // Measurement channel.
+            let label = issue.detail.clone().unwrap_or_default();
+            match issue.check_id.as_str() {
+                "text_too_small" => {
+                    // Dimension anchors to the measured text line when the pixel
+                    // pass set one (padded / multi-line); the box-height pass
+                    // leaves it None → spans the whole box. Left side — text is
+                    // usually left-aligned (touch-target uses the right).
+                    let (x, y, w, h) = issue
+                        .measure_bounds
+                        .as_ref()
+                        .map(|r| scale_rect(r))
+                        .unwrap_or(primary);
+                    draw_v_dimension(&mut img, x, y, w, h, color, &label, gscale, img_w, false);
+                }
+                "touch_target_too_small" => {
+                    let (x, y, w, h) = primary;
+                    // Dimension the limiting (smaller) axis — that's what failed.
+                    // Height-limited → vertical on the RIGHT; width-limited → below.
+                    if h <= w {
+                        draw_v_dimension(&mut img, x, y, w, h, color, &label, gscale, img_w, true);
+                    } else {
+                        draw_h_dimension(&mut img, x, y, w, h, color, &label, gscale, img_h);
+                    }
+                }
+                "low_contrast" => {
+                    if let Some(d) = &issue.detail {
+                        let (x, y, _, h) = primary;
+                        let ds = gscale.saturating_sub(1).max(2);
+                        let dh = crate::glyph::text_height(ds) as i32;
+                        let faint = Rgba([color.0[0], color.0[1], color.0[2], 180]);
+                        // +2px clears the rect's 2px border so the token isn't
+                        // flush against it.
+                        crate::glyph::draw_str(
+                            &mut img,
+                            x + gscale as i32 + 2,
+                            y + h - dh - gscale as i32,
+                            ds,
+                            faint,
+                            d,
+                        );
+                    }
+                }
+                "occluded_element" => {
+                    // A 3×3 mini-map at the bottom-right showing the *pattern* of
+                    // occlusion — which sampled zones are covered (solid) vs
+                    // reachable (faint outline); untested zones stay blank.
+                    let cells: Vec<((i32, i32, i32, i32), bool)> = issue
+                        .occlusion
+                        .iter()
+                        .map(|c| (scale_rect(&c.bounds), c.reachable))
+                        .collect();
+                    draw_occlusion_minimap(&mut img, primary, &cells, gscale, color);
+                }
+                "missing_label" => {
+                    // No measurement to show — mark it with a "?" in the
+                    // bottom-right (its "what is this control?" indicator), so a
+                    // label-less control reads as deliberately flagged, not bare.
+                    let (x, y, w, h) = primary;
+                    let q = "?";
+                    let qw = crate::glyph::text_width(q, gscale) as i32;
+                    let qh = crate::glyph::text_height(gscale) as i32;
+                    let m = gscale as i32 + 2;
+                    crate::glyph::draw_str(
+                        &mut img,
+                        x + w - qw - m,
+                        y + h - qh - m,
+                        gscale,
+                        color,
+                        q,
+                    );
+                }
+                _ => {}
             }
         }
     }
 
-    let mut out = std::io::Cursor::new(Vec::new());
-    image::DynamicImage::ImageRgba8(img).write_to(&mut out, image::ImageFormat::Png)?;
-    Ok(out.into_inner())
+    // Encode via the `png` crate (not `image`) so we can attach iTXt metadata.
+    let (iw, ih) = (img.width(), img.height());
+    let errors = issues.iter().filter(|i| i.severity == Severity::Error).count();
+    let warnings = issues.len() - errors;
+    let (summary, audit_json) =
+        build_metadata(issues, meta, sf, iw, ih, viewport, errors, warnings);
+
+    let mut out = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut out, iw, ih);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        // iTXt (UTF-8) — element text may be non-Latin. Keyword failures are
+        // non-fatal (the image still encodes), so ignore them.
+        let _ = enc.add_itxt_chunk("Software".to_string(), "Golem".to_string());
+        let _ = enc.add_itxt_chunk("Golem-Summary".to_string(), summary);
+        let _ = enc.add_itxt_chunk("Golem-Audit".to_string(), audit_json);
+        let mut writer = enc.write_header()?;
+        writer.write_image_data(img.as_raw())?;
+    }
+    Ok(out)
+}
+
+/// Why an annotated PNG can't be read as a Golem a11y audit.
+#[derive(Debug)]
+pub enum AuditReadError {
+    /// The bytes aren't a decodable PNG.
+    NotPng(String),
+    /// No `Software = Golem` chunk — not produced by golem (or stripped by a
+    /// re-encode). We refuse to interpret a foreign image's metadata.
+    NotGolem,
+    /// A golem PNG with no `Golem-Audit` chunk (e.g. an older build, or the
+    /// chunk was stripped).
+    MissingAudit,
+}
+
+impl std::fmt::Display for AuditReadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotPng(e) => write!(f, "not a readable PNG: {e}"),
+            Self::NotGolem => write!(
+                f,
+                "no Golem metadata (Software != \"Golem\") — not a golem annotated screenshot"
+            ),
+            Self::MissingAudit => write!(f, "Golem PNG has no Golem-Audit chunk"),
+        }
+    }
+}
+
+impl std::error::Error for AuditReadError {}
+
+/// Read the embedded `Golem-Audit` JSON out of an annotated PNG. Validates the
+/// `Software = Golem` iTXt chunk first, so a non-golem image is rejected rather
+/// than mis-parsed. Returns the raw JSON string (the caller deserializes it).
+pub fn read_embedded_audit(png_bytes: &[u8]) -> Result<String, AuditReadError> {
+    let decoder = png::Decoder::new(std::io::Cursor::new(png_bytes));
+    let reader = decoder
+        .read_info()
+        .map_err(|e| AuditReadError::NotPng(e.to_string()))?;
+    let info = reader.info();
+
+    let text_of = |keyword: &str| {
+        info.utf8_text
+            .iter()
+            .find(|c| c.keyword == keyword)
+            .and_then(|c| {
+                let mut c = c.clone();
+                c.decompress_text().ok()?;
+                c.get_text().ok()
+            })
+    };
+
+    if text_of("Software").as_deref() != Some("Golem") {
+        return Err(AuditReadError::NotGolem);
+    }
+    text_of("Golem-Audit").ok_or(AuditReadError::MissingAudit)
+}
+
+/// Build the `(Golem-Summary, Golem-Audit)` metadata for the annotated PNG: a
+/// human one-liner and a JSON record (context + every finding, with bounds in
+/// screenshot pixels so hover tooling can overlay directly on the image).
+#[allow(clippy::too_many_arguments)]
+fn build_metadata(
+    issues: &[A11yIssue],
+    meta: &A11yMeta,
+    sf: f64,
+    img_w: u32,
+    img_h: u32,
+    viewport: &Viewport,
+    errors: usize,
+    warnings: usize,
+) -> (String, String) {
+    let px = |r: &Rect| {
+        serde_json::json!({
+            "x": (r.x as f64 * sf).round() as i32,
+            "y": (r.y as f64 * sf).round() as i32,
+            "w": (r.width as f64 * sf).round() as i32,
+            "h": (r.height as f64 * sf).round() as i32,
+        })
+    };
+    let issues_json: Vec<serde_json::Value> = issues
+        .iter()
+        .enumerate()
+        .map(|(i, iss)| {
+            serde_json::json!({
+                "marker": i + 1,
+                "check": iss.check_id,
+                "severity": if iss.severity == Severity::Error { "error" } else { "warning" },
+                "message": iss.message,
+                "detail": iss.detail,
+                "confidence": iss.confidence,
+                "bounds": iss.element_bounds.as_ref().map(&px),
+                "related": iss.related_bounds.iter().map(&px).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+
+    let summary = format!(
+        "golem a11y · flow \"{}\" block \"{}\" · {} · {} error(s), {} warning(s) · seed {} · level {}",
+        meta.flow, meta.block, meta.device, errors, warnings, meta.seed, meta.level
+    );
+    let audit = serde_json::json!({
+        "software": "Golem",
+        "app": meta.app,
+        "device": meta.device,
+        "platform": meta.platform,
+        "flow": meta.flow,
+        "block": meta.block,
+        "iteration": meta.iteration,
+        "seed": meta.seed,
+        "a11y_level": meta.level,
+        "image": { "w": img_w, "h": img_h },
+        "viewport": { "w": viewport.width, "h": viewport.height },
+        "errors": errors,
+        "warnings": warnings,
+        "issues": issues_json,
+    });
+    (summary, audit.to_string())
+}
+
+/// Pixel width of the marker chip for finding number `n` at glyph `scale` —
+/// the rendered digits plus `scale` padding on each side. Mirrors the chip
+/// geometry in [`draw_marker`] so cascade layout and drawing agree.
+fn marker_chip_width(n: usize, scale: u32) -> u32 {
+    crate::glyph::text_width(&n.to_string(), scale) + 2 * scale.max(1)
+}
+
+/// Draw a numbered marker chip at the top-left corner of a finding rectangle:
+/// a solid `chip` background (severity colour) with the number rendered in
+/// `text` colour on top, so it stays readable over any screenshot content.
+fn draw_marker(
+    img: &mut image::RgbaImage,
+    x: i32,
+    y: i32,
+    scale: u32,
+    chip: image::Rgba<u8>,
+    text: image::Rgba<u8>,
+    n: usize,
+) {
+    use imageproc::drawing::draw_filled_rect_mut;
+    use imageproc::rect::Rect as IpRect;
+
+    let s = n.to_string();
+    let pad = scale.max(1) as i32;
+    let tw = crate::glyph::text_width(&s, scale);
+    let th = crate::glyph::text_height(scale);
+    let chip_w = tw + 2 * pad as u32;
+    let chip_h = th + 2 * pad as u32;
+    draw_filled_rect_mut(img, IpRect::at(x, y).of_size(chip_w, chip_h), chip);
+    crate::glyph::draw_str(img, x + pad, y + pad, scale, text, &s);
+}
+
+/// 2px hollow rectangle in `color` for a scaled `(x, y, w, h)`.
+fn draw_rect(img: &mut image::RgbaImage, rect: (i32, i32, i32, i32), color: image::Rgba<u8>) {
+    use imageproc::drawing::draw_hollow_rect_mut;
+    use imageproc::rect::Rect as IpRect;
+    let (x, y, w, h) = rect;
+    for inset in 0..2 {
+        let rw = (w - inset * 2).max(1) as u32;
+        let rh = (h - inset * 2).max(1) as u32;
+        draw_hollow_rect_mut(img, IpRect::at(x + inset, y + inset).of_size(rw, rh), color);
+    }
+}
+
+/// Centre of a scaled rect.
+fn rect_center((x, y, w, h): (i32, i32, i32, i32)) -> (f32, f32) {
+    (x as f32 + w as f32 / 2.0, y as f32 + h as f32 / 2.0)
+}
+
+/// Draw a small 3×3 occupancy map at the bottom-right of `elem`, filling the
+/// tested cells: **covered** ones solid, **reachable** ones a faint (opaque,
+/// pre-blended pale) outline; untested zones are left blank so the map makes no
+/// claim about them. `cells` are `((x,y,w,h), reachable)` sub-rects already
+/// scaled to image px, positioned on the control's 3×3 lattice by their centre.
+/// No-op when the element is too small to place the grid.
+fn draw_occlusion_minimap(
+    img: &mut image::RgbaImage,
+    elem: (i32, i32, i32, i32),
+    cells: &[((i32, i32, i32, i32), bool)],
+    gscale: u32,
+    color: image::Rgba<u8>,
+) {
+    use imageproc::drawing::{draw_filled_rect_mut, draw_hollow_rect_mut};
+    use imageproc::rect::Rect as IpRect;
+    let (ex, ey, ew, eh) = elem;
+    if ew <= 0 || eh <= 0 {
+        return;
+    }
+    let cell = (gscale as i32 * 2).max(4);
+    let grid = cell * 3;
+    let m = gscale as i32 + 2;
+    let gx = ex + ew - grid - m;
+    let gy = ey + eh - grid - m;
+    // Needs room inside the control; skip if it would spill past the top-left.
+    if gx < ex || gy < ey {
+        return;
+    }
+    // Reachable outline: the finding colour blended 50% toward white → an
+    // *opaque* pale stroke. (A real alpha here would leave semi-transparent
+    // pixels that composite dark over a dark viewer backdrop.)
+    let pale = image::Rgba([
+        ((color.0[0] as u16 + 255) / 2) as u8,
+        ((color.0[1] as u16 + 255) / 2) as u8,
+        ((color.0[2] as u16 + 255) / 2) as u8,
+        255,
+    ]);
+    for &((cx, cy, cw, ch), reachable) in cells {
+        let col = (((cx + cw / 2 - ex) * 3) / ew).clamp(0, 2);
+        let row = (((cy + ch / 2 - ey) * 3) / eh).clamp(0, 2);
+        let r = IpRect::at(gx + col * cell, gy + row * cell).of_size(cell as u32, cell as u32);
+        if reachable {
+            draw_hollow_rect_mut(img, r, pale);
+        } else {
+            draw_filled_rect_mut(img, r, color);
+        }
+    }
+}
+
+/// Centroid of all member-rect centres (marker anchor for grouped findings).
+fn centroid(members: &[(i32, i32, i32, i32)]) -> (i32, i32) {
+    let n = members.len().max(1) as f32;
+    let (sx, sy) = members
+        .iter()
+        .map(|m| rect_center(*m))
+        .fold((0.0, 0.0), |(ax, ay), (cx, cy)| (ax + cx, ay + cy));
+    ((sx / n).round() as i32, (sy / n).round() as i32)
+}
+
+/// The closest pair of corners between two scaled rects — endpoints for a
+/// connector that visually links the two without crossing them.
+fn nearest_corners(a: (i32, i32, i32, i32), b: (i32, i32, i32, i32)) -> ((f32, f32), (f32, f32)) {
+    let corners = |(x, y, w, h): (i32, i32, i32, i32)| {
+        [
+            (x as f32, y as f32),
+            ((x + w) as f32, y as f32),
+            (x as f32, (y + h) as f32),
+            ((x + w) as f32, (y + h) as f32),
+        ]
+    };
+    let (ca, cb) = (corners(a), corners(b));
+    let mut best = (ca[0], cb[0]);
+    let mut best_d = f32::MAX;
+    for &p in &ca {
+        for &q in &cb {
+            let d = (p.0 - q.0).powi(2) + (p.1 - q.1).powi(2);
+            if d < best_d {
+                best_d = d;
+                best = (p, q);
+            }
+        }
+    }
+    best
+}
+
+/// A 2px solid line (drawn twice, offset 1px perpendicular for weight).
+fn draw_solid_line(img: &mut image::RgbaImage, p0: (f32, f32), p1: (f32, f32), color: image::Rgba<u8>) {
+    use imageproc::drawing::draw_line_segment_mut;
+    draw_line_segment_mut(img, p0, p1, color);
+    let (dx, dy) = (p1.0 - p0.0, p1.1 - p0.1);
+    let len = (dx * dx + dy * dy).sqrt().max(1.0);
+    let (px, py) = (-dy / len, dx / len); // unit perpendicular
+    draw_line_segment_mut(img, (p0.0 + px, p0.1 + py), (p1.0 + px, p1.1 + py), color);
+}
+
+/// A dashed line in `color`; dash/gap scale with the glyph size.
+fn draw_dashed_line(
+    img: &mut image::RgbaImage,
+    p0: (f32, f32),
+    p1: (f32, f32),
+    color: image::Rgba<u8>,
+    scale: u32,
+) {
+    let (dx, dy) = (p1.0 - p0.0, p1.1 - p0.1);
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < 1.0 {
+        return;
+    }
+    let (ux, uy) = (dx / len, dy / len);
+    let dash = (3 * scale) as f32;
+    let period = dash + (2 * scale) as f32;
+    let mut t = 0.0;
+    while t < len {
+        let e = (t + dash).min(len);
+        draw_solid_line(
+            img,
+            (p0.0 + ux * t, p0.1 + uy * t),
+            (p0.0 + ux * e, p0.1 + uy * e),
+            color,
+        );
+        t += period;
+    }
+}
+
+/// A small inward-pointing arrowhead at `tip`, opening along unit `dir`.
+fn draw_arrowhead(
+    img: &mut image::RgbaImage,
+    tip: (f32, f32),
+    dir: (f32, f32),
+    color: image::Rgba<u8>,
+    size: f32,
+) {
+    let (dx, dy) = dir;
+    let (px, py) = (-dy, dx); // perpendicular
+    let back = (tip.0 + dx * size, tip.1 + dy * size);
+    draw_solid_line(img, tip, (back.0 + px * size * 0.6, back.1 + py * size * 0.6), color);
+    draw_solid_line(img, tip, (back.0 - px * size * 0.6, back.1 - py * size * 0.6), color);
+}
+
+/// Vertical (height) dimension annotation in industrial style: extension lines
+/// at top+bottom, an arrowed dimension line spanning the height, and the
+/// measurement beside it. `right` chooses the side — `touch_target` uses the
+/// left edge, `text_too_small` the right, so the two are distinguishable and
+/// never overlap when both apply to one element. Falls back to the inner side
+/// when there's no room (element flush to a screen edge).
+#[allow(clippy::too_many_arguments)]
+fn draw_v_dimension(
+    img: &mut image::RgbaImage,
+    rect_x: i32,
+    rect_y: i32,
+    rect_w: i32,
+    rect_h: i32,
+    color: image::Rgba<u8>,
+    label: &str,
+    scale: u32,
+    img_w: i32,
+    right: bool,
+) {
+    let ds = scale.saturating_sub(1).max(2);
+    let label_w = crate::glyph::text_width(label, ds) as i32;
+    let lh = crate::glyph::text_height(ds) as i32;
+    let off = (4 * scale) as i32;
+    let gap = (2 * scale) as i32;
+    let (top, bot) = (rect_y as f32, (rect_y + rect_h) as f32);
+    let asz = (2 * scale) as f32;
+
+    // Edge the dimension hangs off, and whether the preferred (outward) side
+    // has room for the line + label.
+    let (edge, outward) = if right {
+        let e = rect_x + rect_w;
+        (e, e + off + gap + label_w <= img_w)
+    } else {
+        (rect_x, rect_x - off - gap - label_w >= 0)
+    };
+    // Dimension-line x: outward from the edge, or inward on overflow.
+    let lx = match (right, outward) {
+        (true, true) => edge + off,
+        (true, false) => edge - off,
+        (false, true) => edge - off,
+        (false, false) => edge + off,
+    };
+    let lxf = lx as f32;
+    draw_solid_line(img, (edge as f32, top), (lxf, top), color);
+    draw_solid_line(img, (edge as f32, bot), (lxf, bot), color);
+    draw_solid_line(img, (lxf, top), (lxf, bot), color);
+    draw_arrowhead(img, (lxf, top), (0.0, 1.0), color, asz);
+    draw_arrowhead(img, (lxf, bot), (0.0, -1.0), color, asz);
+    // Label vertically centred, on the far side of the dimension line.
+    let ly = rect_y + rect_h / 2 - lh / 2;
+    let label_left = (right && !outward) || (!right && outward);
+    let label_x = if label_left { lx - gap - label_w } else { lx + gap };
+    crate::glyph::draw_str(img, label_x, ly, ds, color, label);
+}
+
+/// Horizontal (width) dimension annotation, below the rect (inside on
+/// overflow). Mirrors [`draw_v_dimension`] for the width axis.
+fn draw_h_dimension(
+    img: &mut image::RgbaImage,
+    rect_x: i32,
+    rect_y: i32,
+    rect_w: i32,
+    rect_h: i32,
+    color: image::Rgba<u8>,
+    label: &str,
+    scale: u32,
+    img_h: i32,
+) {
+    let ds = scale.saturating_sub(1).max(2);
+    let lh = crate::glyph::text_height(ds) as i32;
+    let off = (4 * scale) as i32;
+    let gap = (2 * scale) as i32;
+    let bottom = rect_y + rect_h;
+    let outside = bottom + off + lh + gap <= img_h;
+    let by = if outside { bottom + off } else { bottom - off };
+    let byf = by as f32;
+    let (left, right) = (rect_x as f32, (rect_x + rect_w) as f32);
+    draw_solid_line(img, (left, bottom as f32), (left, byf), color);
+    draw_solid_line(img, (right, bottom as f32), (right, byf), color);
+    draw_solid_line(img, (left, byf), (right, byf), color);
+    let asz = (2 * scale) as f32;
+    draw_arrowhead(img, (left, byf), (1.0, 0.0), color, asz);
+    draw_arrowhead(img, (right, byf), (-1.0, 0.0), color, asz);
+    let label_w = crate::glyph::text_width(label, ds) as i32;
+    let label_x = rect_x + rect_w / 2 - label_w / 2;
+    let ly = if outside { by + gap } else { by - gap - lh };
+    crate::glyph::draw_str(img, label_x, ly, ds, color, label);
 }
 
 #[cfg(test)]
@@ -895,6 +1891,124 @@ mod tests {
         assert_eq!(ids(&issues), ["missing_label"]);
     }
 
+    #[test]
+    fn touch_target_skips_clipped_element() {
+        // A 20dp-wide button (would be a touch-target error) clipped to a 10dp
+        // sliver: its real target is bigger, so the sliver size is a misleading
+        // "too small" → skip touch_target. (missing_label still applies — it's
+        // size-independent and reliable when clipped.)
+        let mut clipped = el("button", 0, 0, 20, 60);
+        clipped.visible_bounds = Some(Bounds::new(0, 0, 20, 10));
+        let issues = audit_hierarchy(&root_with(vec![clipped]), &vp(), &relaxed());
+        assert!(
+            issues.iter().all(|i| i.check_id != "touch_target_too_small"),
+            "clipped element skipped for touch_target: {issues:?}"
+        );
+        // Same size, not clipped → flagged (20dp < 24dp error).
+        let issues = audit_hierarchy(&root_with(vec![el("button", 0, 0, 20, 60)]), &vp(), &relaxed());
+        assert!(
+            issues.iter().any(|i| i.check_id == "touch_target_too_small"),
+            "unclipped small target flagged: {issues:?}"
+        );
+    }
+
+    #[test]
+    fn fully_occluded_element_is_skipped() {
+        // Clickable, unlabeled, but its only hit-test point is covered → behind
+        // an overlay → not judged (no missing_label).
+        let mut covered = el("button", 0, 0, 100, 50);
+        covered.hit_points = vec![golem_element::HitPoint { x: 50, y: 25, hit: false }];
+        let issues = audit_hierarchy(&root_with(vec![covered]), &vp(), &relaxed());
+        assert!(
+            issues.iter().all(|i| i.check_id != "missing_label"),
+            "occluded control must not be judged: {issues:?}"
+        );
+        // Identical element, hit-test clear → flagged as normal.
+        let mut clear = el("button", 0, 0, 100, 50);
+        clear.hit_points = vec![golem_element::HitPoint { x: 50, y: 25, hit: true }];
+        let issues = audit_hierarchy(&root_with(vec![clear]), &vp(), &relaxed());
+        assert!(
+            issues.iter().any(|i| i.check_id == "missing_label"),
+            "visible unlabeled control should flag: {issues:?}"
+        );
+    }
+
+    #[test]
+    fn occluded_element_flags_partial_coverage() {
+        let pts = |hits: &[bool]| -> Vec<golem_element::HitPoint> {
+            hits.iter()
+                .enumerate()
+                .map(|(i, &h)| golem_element::HitPoint { x: i as i32 * 10, y: 25, hit: h })
+                .collect()
+        };
+        // 1 of 4 reachable (25%) → below the 0.5 floor → flagged (label present
+        // so missing_label doesn't muddy it).
+        let mut covered = with_text(el("button", 0, 0, 100, 50), "Save");
+        covered.hit_points = pts(&[true, false, false, false]);
+        let issues = audit_hierarchy(&root_with(vec![covered]), &vp(), &relaxed());
+        assert!(
+            issues.iter().any(|i| i.check_id == "occluded_element"),
+            "partly-covered control flagged: {issues:?}"
+        );
+
+        // 3 of 4 reachable (75%) → at/above the floor → not flagged.
+        let mut mostly = with_text(el("button", 0, 0, 100, 50), "Save");
+        mostly.hit_points = pts(&[true, true, true, false]);
+        let issues = audit_hierarchy(&root_with(vec![mostly]), &vp(), &relaxed());
+        assert!(
+            issues.iter().all(|i| i.check_id != "occluded_element"),
+            "mostly-reachable control not flagged: {issues:?}"
+        );
+
+        // No hit-test data → not flagged (unknown, FN-safe).
+        let plain = with_text(el("button", 0, 0, 100, 50), "Save");
+        let issues = audit_hierarchy(&root_with(vec![plain]), &vp(), &relaxed());
+        assert!(
+            issues.iter().all(|i| i.check_id != "occluded_element"),
+            "no hit_points → not flagged: {issues:?}"
+        );
+
+        // Level-dependent floor: exactly half reachable (2 of 4) is below
+        // strict's 0.75 but not relaxed's 0.5 — strict flags, relaxed doesn't.
+        let half = || {
+            let mut e = with_text(el("button", 0, 0, 100, 50), "Save");
+            e.hit_points = pts(&[true, true, false, false]);
+            root_with(vec![e])
+        };
+        assert!(
+            audit_hierarchy(&half(), &vp(), &strict())
+                .iter()
+                .any(|i| i.check_id == "occluded_element"),
+            "50%-covered control flagged at strict"
+        );
+        assert!(
+            audit_hierarchy(&half(), &vp(), &relaxed())
+                .iter()
+                .all(|i| i.check_id != "occluded_element"),
+            "50%-covered control NOT flagged at relaxed"
+        );
+    }
+
+    #[test]
+    fn oversized_clickable_exempt_but_small_one_flagged() {
+        // A clickable spanning the whole viewport with no label is a backdrop/
+        // root container, not a control → exempt from missing_label.
+        let big = el("other", 0, 0, 1000, 2000); // == full vp() ⇒ oversized
+        let issues = audit_hierarchy(&root_with(vec![big]), &vp(), &relaxed());
+        assert!(
+            issues.iter().all(|i| i.check_id != "missing_label"),
+            "full-viewport container must be exempt: {issues:?}"
+        );
+        // A normal-sized unlabeled clickable is still flagged — the exemption
+        // is size-gated, not a blanket pass.
+        let small = el("button", 0, 0, 100, 50);
+        let issues = audit_hierarchy(&root_with(vec![small]), &vp(), &relaxed());
+        assert!(
+            issues.iter().any(|i| i.check_id == "missing_label"),
+            "small unlabeled control should still flag: {issues:?}"
+        );
+    }
+
     // ── duplicate labels ─────────────────────────────────────────────
     #[test]
     fn duplicate_labels_same_parent_one_warning() {
@@ -910,6 +2024,9 @@ mod tests {
         let dups: Vec<_> = issues.iter().filter(|i| i.check_id == "duplicate_labels").collect();
         assert_eq!(dups.len(), 1, "three-way dup → one warning");
         assert_eq!(dups[0].severity, Severity::Warning);
+        // One marker for the group; the other two members ride in related_bounds
+        // so the annotator can rect + connect all three.
+        assert_eq!(dups[0].related_bounds.len(), 2, "triplicate → primary + 2 related");
     }
 
     #[test]
@@ -1128,6 +2245,41 @@ mod tests {
         assert!(issues.iter().all(|i| i.check_id != "text_too_small"));
     }
 
+    #[test]
+    fn critical_text_threshold_is_lower_than_relaxed() {
+        // A 9dp text box: flagged at relaxed (10dp floor) but clean at critical
+        // (8dp floor) — critical catches only egregiously small text.
+        let tree = || {
+            let mut t = with_text(el("StaticText", 0, 0, 100, 9), "hi");
+            t.clickable = false;
+            root_with(vec![t])
+        };
+        let relaxed = audit_hierarchy(&tree(), &vp(), &A11yConfig::new(A11yLevel::Relaxed, 1.0));
+        assert!(
+            relaxed.iter().any(|i| i.check_id == "text_too_small"),
+            "9dp flagged at relaxed"
+        );
+        let critical = audit_hierarchy(&tree(), &vp(), &A11yConfig::new(A11yLevel::Critical, 1.0));
+        assert!(
+            critical.iter().all(|i| i.check_id != "text_too_small"),
+            "9dp clean at critical's 8dp floor"
+        );
+    }
+
+    #[test]
+    fn text_too_small_ignores_scroll_clip() {
+        // A normal 40dp row clipped to a 5dp sliver by a scroll viewport must
+        // NOT flag — the glyph size is the full box, not the visible clip.
+        let mut t = with_text(el("div", 0, 0, 200, 40), "Row");
+        t.clickable = false;
+        t.visible_bounds = Some(Bounds::new(0, 0, 200, 5));
+        let issues = audit_hierarchy(&root_with(vec![t]), &vp(), &relaxed());
+        assert!(
+            issues.iter().all(|i| i.check_id != "text_too_small"),
+            "clipped row should be measured by full height: {issues:?}"
+        );
+    }
+
     // ── screenshot checks: WCAG contrast ────────────────────────────
     #[test]
     fn contrast_black_on_white_is_21() {
@@ -1224,11 +2376,31 @@ mod tests {
     }
 
     #[test]
+    fn contrast_verdict_large_vs_normal_split() {
+        use Severity::{Error, Warning};
+        // Normal text: <4.5 AA error, [4.5,7) AAA warn, ≥7 passes.
+        assert!(matches!(contrast_verdict(3.0, false, true), Some((Error, _, "AA"))));
+        assert!(matches!(contrast_verdict(5.0, false, true), Some((Warning, _, "AAA"))));
+        assert!(contrast_verdict(7.5, false, true).is_none());
+        // Large text is laxer: 3:1 AA, 4.5:1 AAA.
+        assert!(matches!(contrast_verdict(2.5, true, true), Some((Error, _, "AA"))));
+        assert!(matches!(contrast_verdict(4.0, true, true), Some((Warning, _, "AAA"))));
+        assert!(contrast_verdict(5.0, true, true).is_none());
+        // 3.5:1 is size-sensitive — AA error if normal, only AAA warn if large.
+        assert_eq!(contrast_verdict(3.5, false, true).map(|(s, ..)| s), Some(Error));
+        assert_eq!(contrast_verdict(3.5, true, true).map(|(s, ..)| s), Some(Warning));
+        // With AAA warnings off, only AA failures flag.
+        assert!(contrast_verdict(5.0, false, false).is_none());
+    }
+
+    #[test]
     fn check_contrast_flags_low_contrast_text() {
-        // White canvas, a light-grey text band (rows 45..55) → low ratio.
+        // White canvas, a light-grey text band (rows 45..55). Kept centred (cols
+        // 35..65) so it survives the centre-strip crop the way real text does —
+        // a full-width solid band would read as a border, not text.
         let mut img = image::RgbImage::from_pixel(100, 100, image::Rgb([255, 255, 255]));
         for y in 45..55u32 {
-            for x in 10..90u32 {
+            for x in 35..65u32 {
                 img.put_pixel(x, y, image::Rgb([200, 200, 200]));
             }
         }
@@ -1259,6 +2431,124 @@ mod tests {
         assert!(issues.iter().all(|i| i.check_id != "low_contrast"));
     }
 
+    fn strict() -> A11yConfig {
+        A11yConfig::new(A11yLevel::Strict, 1.0)
+    }
+
+    #[test]
+    fn low_contrast_placeholder_is_derated() {
+        // Grey low-contrast text band (centred so it survives the side crop).
+        let mut img = image::RgbImage::from_pixel(100, 100, image::Rgb([255, 255, 255]));
+        for y in 45..55u32 {
+            for x in 35..65u32 {
+                img.put_pixel(x, y, image::Rgb([170, 170, 170]));
+            }
+        }
+        let png = png_of(img);
+        let conf_for = |text: &str, placeholder: &str| {
+            let mut e = with_text(el("input", 0, 0, 100, 100), text);
+            e.clickable = false;
+            e.placeholder = Some(placeholder.into());
+            check_contrast(&png, &root_with(vec![e]), &Viewport::new(100, 100), &strict())
+                .iter()
+                .find(|i| i.check_id == "low_contrast")
+                .map(|i| i.confidence)
+        };
+        // Showing the placeholder (text == placeholder) → de-rated.
+        let ph = conf_for("Search", "Search").expect("placeholder contrast finding");
+        // A typed value (text != placeholder) → full confidence (caveat honored).
+        let val = conf_for("Search", "Find…").expect("value contrast finding");
+        assert!(ph < val, "placeholder de-rated: {ph} should be < value {val}");
+    }
+
+    fn text_in_tall_box(ink_rows: std::ops::Range<u32>) -> Vec<u8> {
+        // 100×100 white with a black glyph band over `ink_rows` (moderate-width
+        // ink so it reads as a text row, not a border). The element box is the
+        // full 100dp → box-height is blind, exercising the pixel pass.
+        let mut img = image::RgbImage::from_pixel(100, 100, image::Rgb([255, 255, 255]));
+        for y in ink_rows {
+            for x in 20..60u32 {
+                img.put_pixel(x, y, image::Rgb([0, 0, 0]));
+            }
+        }
+        png_of(img)
+    }
+
+    fn tall_text_el() -> Element {
+        let mut t = with_text(el("p", 0, 0, 100, 100), "x");
+        t.clickable = false;
+        t
+    }
+
+    #[test]
+    fn pixel_text_size_flags_small_glyphs_in_tall_box() {
+        // ~3px glyph band in a 100dp box → the pixel pass flags it (box-height
+        // is blind). Black-on-white ⇒ no contrast finding, so it's isolated.
+        let png = text_in_tall_box(48..51);
+        let issues = check_contrast(
+            &png,
+            &root_with(vec![tall_text_el()]),
+            &Viewport::new(100, 100),
+            &strict(),
+        );
+        let f = issues
+            .iter()
+            .find(|i| i.check_id == "text_too_small")
+            .expect("small glyphs in a tall box flagged");
+        assert_eq!(f.severity, Severity::Warning);
+        // Heuristic ⇒ < 1; and a single-char ("x") single-run band is tempered
+        // hard by the char-count and run-count factors.
+        assert!(f.confidence < 0.4, "single char/run ⇒ low confidence, got {}", f.confidence);
+    }
+
+    #[test]
+    fn pixel_text_size_floor_skips_thin_band() {
+        // A 2px ink band estimates ~4dp — below the 5dp plausibility floor, so
+        // it's treated as a thin rule / sub-pixel artifact, not text → no flag.
+        let png = text_in_tall_box(48..50);
+        let issues = check_contrast(
+            &png,
+            &root_with(vec![tall_text_el()]),
+            &Viewport::new(100, 100),
+            &strict(),
+        );
+        assert!(
+            issues.iter().all(|i| i.check_id != "text_too_small"),
+            "sub-{MIN_PLAUSIBLE_TEXT_DP}dp band skipped by the floor: {issues:?}"
+        );
+    }
+
+    #[test]
+    fn pixel_text_size_passes_normal_glyphs_in_tall_box() {
+        // A ~16px band → em estimate stays ≥ floor (biased large), no flag.
+        let png = text_in_tall_box(40..56);
+        let issues = check_contrast(
+            &png,
+            &root_with(vec![tall_text_el()]),
+            &Viewport::new(100, 100),
+            &strict(),
+        );
+        assert!(
+            issues.iter().all(|i| i.check_id != "text_too_small"),
+            "normal-size glyphs must not flag: {issues:?}"
+        );
+    }
+
+    #[test]
+    fn pixel_text_size_skips_short_box() {
+        // A short box is the box-height check's job (full confidence) — the
+        // pixel pass must not also fire and double-flag.
+        let png = text_in_tall_box(48..51);
+        let mut t = with_text(el("p", 0, 0, 100, 8), "x");
+        t.clickable = false;
+        let issues =
+            check_contrast(&png, &root_with(vec![t]), &Viewport::new(100, 100), &strict());
+        assert!(
+            issues.iter().all(|i| i.check_id != "text_too_small"),
+            "short box left to the box-height check: {issues:?}"
+        );
+    }
+
     #[test]
     fn annotate_produces_valid_png_same_size() {
         let png = png_of(image::RgbImage::from_pixel(60, 40, image::Rgb([255, 255, 255])));
@@ -1269,10 +2559,206 @@ mod tests {
             element_type: "button".into(),
             element_label: None,
             element_bounds: Some(Rect { x: 5, y: 5, width: 20, height: 20 }),
+            related_bounds: Vec::new(),
+            measure_bounds: None,
+            occlusion: Vec::new(),
             confidence: 1.0,
+            detail: None,
         };
-        let out = annotate_screenshot(&png, &[issue], 60).expect("annotate ok");
+        let out =
+            annotate_screenshot(&png, &[issue], &Viewport::new(60, 40), &test_meta()).expect("ok");
         let decoded = image::load_from_memory(&out).expect("valid png");
         assert_eq!((decoded.width(), decoded.height()), (60, 40));
+        // Self-describing metadata travels in the PNG (uncompressed iTXt → the
+        // keyword + JSON appear verbatim in the bytes).
+        let has = |k: &[u8]| out.windows(k.len()).any(|w| w == k);
+        assert!(has(b"Golem-Audit"), "audit chunk present");
+        assert!(has(b"\"seed\":42"), "seed embedded for replay");
+        assert!(has(b"touch_target_too_small"), "finding embedded");
+    }
+
+    fn test_meta() -> A11yMeta {
+        A11yMeta {
+            app: "com.example".into(),
+            device: "Test Device".into(),
+            platform: "ios".into(),
+            flow: "f".into(),
+            block: "b".into(),
+            iteration: 0,
+            seed: 42,
+            level: "strict".into(),
+        }
+    }
+
+    fn encode_png_with_chunks(chunks: &[(&str, &str)]) -> Vec<u8> {
+        let mut out = Vec::new();
+        {
+            let mut enc = png::Encoder::new(&mut out, 1, 1);
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            for (k, v) in chunks {
+                let _ = enc.add_itxt_chunk(k.to_string(), v.to_string());
+            }
+            let mut w = enc.write_header().expect("header");
+            w.write_image_data(&[0, 0, 0, 0]).expect("data");
+        }
+        out
+    }
+
+    #[test]
+    fn read_embedded_audit_roundtrips_and_rejects_foreign() {
+        // A golem PNG yields its Golem-Audit JSON verbatim.
+        let golem = encode_png_with_chunks(&[
+            ("Software", "Golem"),
+            ("Golem-Audit", r#"{"seed":42}"#),
+        ]);
+        assert_eq!(
+            read_embedded_audit(&golem).expect("golem audit reads"),
+            r#"{"seed":42}"#
+        );
+        // A foreign image (Software != Golem) is refused, not mis-parsed.
+        let foreign = encode_png_with_chunks(&[("Software", "Acme Snipper")]);
+        assert!(
+            matches!(read_embedded_audit(&foreign), Err(AuditReadError::NotGolem)),
+            "non-golem Software SHALL be rejected"
+        );
+        // A PNG with no metadata at all is also not-golem.
+        let bare = encode_png_with_chunks(&[]);
+        assert!(matches!(
+            read_embedded_audit(&bare),
+            Err(AuditReadError::NotGolem)
+        ));
+        // A golem PNG missing the audit chunk is a distinct error.
+        let no_audit = encode_png_with_chunks(&[("Software", "Golem")]);
+        assert!(matches!(
+            read_embedded_audit(&no_audit),
+            Err(AuditReadError::MissingAudit)
+        ));
+        // Non-PNG bytes fail cleanly.
+        assert!(matches!(
+            read_embedded_audit(b"not a png"),
+            Err(AuditReadError::NotPng(_))
+        ));
+    }
+
+    #[test]
+    fn marker_chip_width_matches_glyph_geometry() {
+        // "1" at scale 2: glyph 5*2 wide + 2*2 padding = 14.
+        assert_eq!(marker_chip_width(1, 2), crate::glyph::text_width("1", 2) + 4);
+        // Two-digit marker is wider.
+        assert!(marker_chip_width(11, 2) > marker_chip_width(1, 2));
+    }
+
+    fn issue_at(bounds: Rect, sev: Severity) -> A11yIssue {
+        A11yIssue {
+            check_id: "touch_target_too_small".into(),
+            severity: sev,
+            message: "m".into(),
+            element_type: "button".into(),
+            element_label: None,
+            element_bounds: Some(bounds),
+            related_bounds: Vec::new(),
+            measure_bounds: None,
+            occlusion: Vec::new(),
+            confidence: 1.0,
+            detail: None,
+        }
+    }
+
+    #[test]
+    fn annotate_cascades_colliding_markers() {
+        // Two findings on the SAME bounds must not stack: the second chip
+        // cascades right, painting NEW pixels. Stacking would overdraw the
+        // same pixels and leave the coloured-pixel count ~unchanged.
+        let bounds = Rect { x: 10, y: 10, width: 30, height: 30 };
+        let png = png_of(image::RgbImage::from_pixel(400, 80, image::Rgb([255, 255, 255])));
+
+        let count_colored = |bytes: &[u8]| -> usize {
+            let img = image::load_from_memory(bytes).expect("decode png").to_rgba8();
+            img.pixels().filter(|p| p.0 != [255, 255, 255, 255]).count()
+        };
+
+        let vp = Viewport::new(400, 80);
+        let one = annotate_screenshot(&png, &[issue_at(bounds, Severity::Error)], &vp, &test_meta())
+            .expect("annotate one");
+        let two = annotate_screenshot(
+            &png,
+            &[
+                issue_at(bounds, Severity::Error),
+                issue_at(bounds, Severity::Error),
+            ],
+            &vp,
+            &test_meta(),
+        )
+        .expect("annotate two");
+        assert!(
+            count_colored(&two) > count_colored(&one),
+            "second colliding marker should cascade into new pixels"
+        );
+    }
+
+    #[test]
+    fn occlusion_cell_rect_maps_points_to_3x3() {
+        // Points sample the ¼/½/¾ lines → distinct col/row (0/1/2). Cell width
+        // is a third of the element; origin at the cell's top-left.
+        let b = Bounds::new(0, 0, 90, 90);
+        let tuple = |r: Rect| (r.x, r.y, r.width, r.height);
+        assert_eq!(tuple(occlusion_cell_rect(&b, 15, 15)), (0, 0, 30, 30), "¼,¼ → top-left");
+        assert_eq!(tuple(occlusion_cell_rect(&b, 45, 45)), (30, 30, 30, 30), "½,½ → centre");
+        assert_eq!(tuple(occlusion_cell_rect(&b, 75, 15)), (60, 0, 30, 30), "¾,¼ → top-right");
+    }
+
+    fn colored_count(bytes: &[u8]) -> usize {
+        let img = image::load_from_memory(bytes).expect("decode png").to_rgba8();
+        img.pixels().filter(|p| p.0 != [255, 255, 255, 255]).count()
+    }
+
+    #[test]
+    fn annotate_draws_occlusion_minimap() {
+        // occluded_element with a mix of covered + reachable sample cells must
+        // render a valid same-size PNG with a drawn mini-map (colored pixels),
+        // exercising draw_occlusion_minimap without panicking.
+        let png = png_of(image::RgbImage::from_pixel(400, 400, image::Rgb([255, 255, 255])));
+        let b = Rect { x: 40, y: 40, width: 240, height: 240 };
+        let cell = |cx: i32, cy: i32, reachable: bool| golem_events::OcclusionCell {
+            bounds: occlusion_cell_rect(&Bounds::new(b.x, b.y, b.width, b.height), cx, cy),
+            reachable,
+        };
+        let mut iss = issue_at(b, Severity::Warning);
+        iss.check_id = "occluded_element".into();
+        iss.occlusion = vec![
+            cell(b.x + 30, b.y + 30, false), // top-left covered
+            cell(b.x + 120, b.y + 120, false), // centre covered
+            cell(b.x + 120, b.y + 210, true), // bottom reachable
+        ];
+        let out = annotate_screenshot(&png, &[iss], &Viewport::new(400, 400), &test_meta())
+            .expect("annotate occluded");
+        let decoded = image::load_from_memory(&out).expect("valid png");
+        assert_eq!((decoded.width(), decoded.height()), (400, 400));
+        assert!(colored_count(&out) > 0, "mini-map should draw colored pixels");
+    }
+
+    #[test]
+    fn annotate_draws_dimension_line_and_connector() {
+        // text_too_small with a measure_bounds line exercises the dimension-line
+        // + arrowhead helpers; a duplicate_labels finding with related_bounds
+        // exercises the dashed connector. Both must render a valid PNG.
+        let png = png_of(image::RgbImage::from_pixel(400, 200, image::Rgb([255, 255, 255])));
+        let vp = Viewport::new(400, 200);
+
+        let mut txt = issue_at(Rect { x: 20, y: 20, width: 80, height: 40 }, Severity::Warning);
+        txt.check_id = "text_too_small".into();
+        txt.measure_bounds = Some(Rect { x: 20, y: 30, width: 80, height: 12 });
+        txt.detail = Some("11dp".into());
+        let out = annotate_screenshot(&png, &[txt], &vp, &test_meta()).expect("annotate dim");
+        assert!(colored_count(&out) > 0, "dimension line should draw");
+
+        let mut dup = issue_at(Rect { x: 20, y: 20, width: 60, height: 40 }, Severity::Warning);
+        dup.check_id = "duplicate_labels".into();
+        dup.related_bounds = vec![Rect { x: 200, y: 120, width: 60, height: 40 }];
+        let out = annotate_screenshot(&png, &[dup], &vp, &test_meta()).expect("annotate dup");
+        let decoded = image::load_from_memory(&out).expect("valid png");
+        assert_eq!((decoded.width(), decoded.height()), (400, 200));
+        assert!(colored_count(&out) > 0, "connector + rects should draw");
     }
 }

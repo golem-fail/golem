@@ -111,11 +111,91 @@ A load-bearing invariant that is easy to forget when touching scrolling, selecto
 
 When in doubt: **resolve and assert on the visible tree; reach for the full tree only to speed up or steer, never to judge.**
 
+## Accessibility audit — frame sourcing and the check pipeline
+
+### Frame sourcing — recording vs live screenshot vs tree-only
+
+The a11y audit at each block boundary needs a `(tree, image)` pair for the pixel checks (contrast, the `strict` glyph-size pass) and the annotated PNG. Capturing a fresh screenshot every block is expensive, so the audit prefers a frame already on disk — the **block recording** — and only falls back to a live capture when it must. The decision tree (`compute_a11y_audit` selection in `golem-runner/src/executor.rs`):
+
+```mermaid
+flowchart TD
+    A([Block-end a11y audit]) --> B{level == off?}
+    B -->|yes| Z([no audit])
+    B -->|no| REC{recording on?}
+    REC -->|no| D{strict?}
+    REC -->|yes| FFM{ffmpeg present?}
+    FFM -->|no| D
+    D -->|yes| LIVE[Live screenshot + fresh tree]
+    D -->|no| TREE[Tree-only]
+    FFM -->|yes| F[Extract frame from recording<br/>· end-anchored on the SIGINT instant<br/>· aspect-crop any letterbox]
+    F --> G["r = frame_width ÷ native_width"]
+    G --> H{strict?}
+    H -->|yes| I{"r ≥ 0.9?"}
+    I -->|yes| FR["Use frame<br/>· derate heuristics by resolution"]
+    I -->|no| LIVE
+    H -->|no| J{"r ≥ 0.5?"}
+    J -->|yes| FR
+    J -->|no| TREE
+```
+
+Three subtleties make the recording frame trustworthy enough to judge pixels on (all are easy to regress):
+
+- **The end is anchored on the *SIGINT instant*, not on `stop_recording` returning.** `stop_recording` sends the on-device stop signal, then sleeps for the moov-atom flush and pulls the file (~1s on Android). If we timestamped the end *after* that, the offset would rewind the extracted frame ~1s back — straight into the previous step's motion (a mid-scroll frame paired with a settled tree → wrong pixel crops). So each driver stamps the true end inside `stop_recording` right after the signal (`PlatformDriver::last_recording_end`), and `executor.rs` anchors frame extraction on that. Robust to variable adb roundtrip on real devices.
+- **Frames are aspect-cropped.** When an encoder can't record native resolution it scales the display into a fixed box (e.g. Android's fallback to 720×1280), letterboxing a device of a different aspect. Bars would break the geometry mapping (`screenshot_px ÷ viewport_width`), so `capture.rs::aspect_crop_frame` removes them deterministically from the device-vs-frame aspect ratio (no pixel inspection; a no-op when the frame already fills). Android also requests an aspect-correct, capped `--size` up front (`AndroidDriver::recording_size`) to avoid the letterbox entirely and lift resolution; iOS `simctl` records native.
+- **Confidence is de-rated by `r`, the resolution ratio.** A full-resolution frame (`r ≈ 1`) is indistinguishable from a live shot and gains the no-timing-drift bonus, so it's barely de-rated; lower `r` de-rates the heuristic findings convexly (`golem-runner/src/executor.rs::video_confidence_factor`). Deterministic findings (bounds/structure) are never de-rated.
+
+The **failure** path is separate: a failing step already captured a real live `(screenshot, tree)`, which the audit reuses directly at full confidence — no recording involved.
+
+### The check pipeline — a tree pass and an image pass
+
+Once the audit has a tree (and maybe an image), the checks run in two passes. The **tree pass** (`audit_hierarchy`) runs at every level from bounds + structure alone, so its findings are deterministic (confidence `1.0`). The **image pass** (`check_contrast`) runs only when an image is present and is heuristic (confidence `< 1.0`). `text_too_small` deliberately spans both: a *certain* box-height check in the tree pass, plus a *pixel* refinement in the image pass for small glyphs inside a tall/padded box the box check can't see.
+
+```mermaid
+flowchart TD
+    subgraph TREE["Tree pass · audit_hierarchy · every level · confidence 1.0"]
+        direction TB
+        L([For each visible node<br/>not inside a disabled control])
+        L --> TBQ{"box height below the<br/>text min for the level?"}
+        TBQ -->|yes| TB>text_too_small — box pass]
+        subgraph ACTG["actionable? · clickable and not oversized"]
+            direction TB
+            CLK{clickable?} -->|yes| OVS{"oversized?<br/>area ≥ max_control_area_fraction"}
+        end
+        L --> CLK
+        OVS -->|"no · no text/label in subtree"| ML>missing_label]
+        OVS -->|"no · not clipped"| TTQ{"min side below the<br/>touch-target min for the level?"}
+        TTQ -->|yes| TT>touch_target_too_small]
+        OVS -->|"no · not clipped"| OCCQ{"too much of the tap target<br/>covered for the level?"}
+        OCCQ -->|yes| OCC>occluded_element]
+        L --> SIB["over the node's actionable siblings"]
+        SIB -->|share identical text| DUP>duplicate_labels]
+        SIB --> CAP{"more than<br/>MAX_OVERLAP_SIBLINGS?"}
+        CAP -->|"no · bounds overlap"| OV>overlapping_interactive]
+    end
+    TREE --> GATE{"image present?<br/>strict shot, or a reused frame / failure pair"}
+    GATE -->|no| DONE([tree findings only])
+    GATE -->|yes| SHOT
+    subgraph SHOT["Image pass · check_contrast · heuristic · confidence below 1.0"]
+        direction TB
+        T2([For each visible, unclipped text element]) --> CR["crop centre strip → bg / ink colours"]
+        CR --> EM[["estimate glyph em ONCE<br/>cap-line / x-height · biased large"]]
+        EM --> LCQ{"ratio below the WCAG bar<br/>for its size class?<br/>large if em ≥ WCAG_LARGE_TEXT_DP"}
+        LCQ -->|yes| LC>low_contrast]
+        EM --> BLIND{"box-height pass was blind here?<br/>box ≥ the level min"}
+        BLIND -->|yes| PLAUS{"em ≥ MIN_PLAUSIBLE_TEXT_DP?<br/>else a sub-pixel rule, not text"}
+        PLAUS -->|yes| PXQ{"em below the<br/>text min for the level?"}
+        PXQ -->|yes| PX>text_too_small — pixel pass]
+    end
+```
+
+The single `em` estimate is the load-bearing reuse: it picks the contrast size-class (large text is judged at the laxer AA/AAA bars) **and** drives the pixel `text_too_small` pass — one sound glyph-height read rather than two competing proxies. Both the contrast crop and the pixel pass skip **clipped** elements (a sliver would sample the wrong colours and a fraction of the glyphs); the size-independent tree checks still cover them. See [accessibility.md](accessibility.md) for the user-facing levels, thresholds, and confidence model.
+
 ## Where things live
 
 | To change… | Look in |
 |---|---|
 | An action's behaviour | `golem-runner/src/actions.rs` (dispatch match) + `golem-runner/src/actions/*.rs` (handlers) |
+| A11y checks / frame sourcing | `golem-runner/src/accessibility.rs` (the checks) + `executor.rs` (level→source decision, derate) + `capture.rs` (recording-frame extract, aspect-crop) |
 | Selectors / traits | `golem-element/src/selector.rs` |
 | Platform device control / companion protocol | `golem-driver/src/` — `android.rs`, `ios*`, `ime.rs`, `cdp.rs`, `webkit.rs`, `common.rs` |
 | Device discovery / boot | `golem-devices/src/` |

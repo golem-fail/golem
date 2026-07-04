@@ -47,7 +47,10 @@
 
 <style>
 .fixed-btn {
-  background: #4CAF50;
+  /* position:fixed ⇒ always on screen, so it lands in every flow's a11y audit.
+     Dark green keeps white text ≥7:1 (AAA), clean at every level — the bad
+     a11y fixtures live only in the A11yDemo section. */
+  background: #1B5E20;
   color: white;
   border: none;
   padding: 8px 16px;

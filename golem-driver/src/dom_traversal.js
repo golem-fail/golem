@@ -80,9 +80,21 @@
     const r = el.getBoundingClientRect();
     const ariaLabel = el.getAttribute('aria-label') || '';
 
+    // Expose the placeholder ONLY when an empty input is showing it (so
+    // `text === placeholder`). The a11y audit uses this to de-rate the
+    // low-contrast finding on placeholder text (grey-by-design, industry
+    // standard). Emitting it only-when-empty keeps text resolution unchanged
+    // (a filled input keeps its value and reports no placeholder → not
+    // de-rated) and avoids touching the native-oriented normaliser.
+    const showingPlaceholder =
+      (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && !el.value
+        ? el.placeholder || null
+        : null;
+
     const node = {
       class: el.tagName.toLowerCase(),
       text: extractText(el),
+      placeholder: showingPlaceholder,
       contentDescription: ariaLabel || el.id || '',
       bounds: {
         left: Math.round(r.left),

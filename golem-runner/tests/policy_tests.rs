@@ -44,7 +44,9 @@ fn test_ctx() -> ExecutionContext<'static> {
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
         a11y_level: golem_runner::accessibility::A11yLevel::Off,
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
+        a11y_min_confidence: None,
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),
+            trace_pair: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
         inherited_record_default: false,
     }
 }
@@ -939,7 +941,7 @@ async fn capture_failure_screenshot_writes_to_disk() {
         ..CaptureConfig::default()
     };
 
-    let path = capture_failure_screenshot(&driver, &config, "my_block", 3, 0, 2, "error")
+    let (path, _bytes) = capture_failure_screenshot(&driver, &config, "my_block", 3, 0, 2, "error")
         .await
         .expect("capture should succeed");
 
@@ -1042,7 +1044,9 @@ steps = [
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
         a11y_level: golem_runner::accessibility::A11yLevel::Off,
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
+        a11y_min_confidence: None,
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),
+            trace_pair: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
         inherited_record_default: false,
     };
 
@@ -1111,7 +1115,9 @@ steps = [
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
         a11y_level: golem_runner::accessibility::A11yLevel::Off,
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
+        a11y_min_confidence: None,
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),
+            trace_pair: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
         inherited_record_default: false,
     };
 
@@ -1180,7 +1186,9 @@ steps = [
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
         a11y_level: golem_runner::accessibility::A11yLevel::Off,
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
+        a11y_min_confidence: None,
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),
+            trace_pair: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
         inherited_record_default: false,
     };
 
@@ -1247,7 +1255,9 @@ steps = [
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
         a11y_level: golem_runner::accessibility::A11yLevel::Off,
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
+        a11y_min_confidence: None,
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),
+            trace_pair: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
         inherited_record_default: false,
     };
 
@@ -1320,7 +1330,9 @@ steps = [
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
         a11y_level: golem_runner::accessibility::A11yLevel::Off,
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
+        a11y_min_confidence: None,
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),
+            trace_pair: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
         inherited_record_default: false,
     };
 
@@ -1396,7 +1408,9 @@ steps = [
         last_launch_ms: std::sync::atomic::AtomicU64::new(0),
         emitter: None,
         a11y_level: golem_runner::accessibility::A11yLevel::Off,
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
+        a11y_min_confidence: None,
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),
+            trace_pair: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
         inherited_record_default: false,
     };
 

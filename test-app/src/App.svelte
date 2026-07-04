@@ -17,6 +17,7 @@ import GestureTarget from "./lib/GestureTarget.svelte";
 import TouchVisualizer from "./lib/TouchVisualizer.svelte";
 import Menu from "./lib/Menu.svelte";
 import SelectorGrid from "./lib/SelectorGrid.svelte";
+import A11yDemo from "./lib/A11yDemo.svelte";
 </script>
 
 <TouchVisualizer />
@@ -42,4 +43,5 @@ import SelectorGrid from "./lib/SelectorGrid.svelte";
   <div id="section-dialog-overlay"><DialogOverlay /></div>
   <div id="section-position-test"><PositionTest /></div>
   <div id="section-device-state"><DeviceState /></div>
+  <div id="section-a11y-demo"><A11yDemo /></div>
 </main>

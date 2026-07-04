@@ -18,17 +18,22 @@ type = "phone"
 
 [[block]]
 name = "webview_element_interaction"
+# The test-app is one long single-column page on a phone (it only goes
+# multi-column on a tablet), so the form, counter and buttons each live in
+# their own section below the fold — they never share a viewport. We navigate
+# via the menu (it jumps straight to a section) before asserting/interacting,
+# rather than assuming everything is on screen at once.
 steps = [
-  # Verify core UI elements are visible (proxy for webview context loaded)
+  # Text Fields section — verify the inputs render (proxy for the webview
+  # context having loaded) and exercise typing inside the web view.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-text-fields" },
   { action = "assert_visible", on_text = "Enter email" },
   { action = "assert_visible", on_text = "Password" },
   { action = "assert_visible", on_text = "Search" },
-  { action = "assert_visible", on_text = "Submit" },
-  { action = "assert_visible", on_text = "Counter" },
 
-  # Interact with text input elements inside the web view. The resolver
-  # auto-dismisses the keyboard once if the target field is keyboard-
-  # occluded — no manual `hide_keyboard` boilerplate needed between
+  # The resolver auto-dismisses the keyboard once if the target field is
+  # keyboard-occluded — no manual `hide_keyboard` boilerplate needed between
   # consecutive type/assert actions.
   { action = "type", on_text = "Enter email", input = "webview@test.com" },
   { action = "assert_visible", on_text = "webview@test.com" },
@@ -36,21 +41,20 @@ steps = [
   { action = "type", on_text = "Search", input = "webview search query" },
   { action = "assert_visible", on_text = "webview search query" },
 
-  # Interact with buttons inside the web view (may need scrolling after typing)
-  { action = "tap", on_accessibility_label = "Increment", auto_scroll = true },
+  # Counter section — increment twice and read the value back.
+  { action = "tap", on_accessibility_label = "menu-toggle" },
+  { action = "tap", on_accessibility_label = "goto-counter" },
+  { action = "assert_visible", on_text = "Counter" },
+  { action = "tap", on_accessibility_label = "Increment" },
   { action = "tap", on_accessibility_label = "Increment" },
   { action = "assert_visible", on_text = "2", on_below = "Counter" },
-
-  # Read values from web view elements
   { action = "read", on_below = "Counter", on_index = 0, save_to = "counter_value" },
 
-  # Jump to Device State via the menu — its rows live below the fold
-  # and the resolver's viewport filter excludes off-screen elements.
+  # Jump to Device State via the menu and verify its labels render in the web
+  # view.
   { action = "tap", on_accessibility_label = "menu-toggle" },
   { action = "tap", on_accessibility_label = "goto-device-state" },
   { action = "read", on_right_of = "Theme:", save_to = "theme" },
-
-  # Verify device state labels are rendered in the web view
   { action = "assert_visible", on_text = "Light", on_right_of = "Theme:" },
 
   # Jump to Scroll List for Item 0.
@@ -58,7 +62,7 @@ steps = [
   { action = "tap", on_accessibility_label = "goto-scroll-list" },
   { action = "assert_visible", on_text = "Item 0" },
 
-  # Back to Buttons for Submit (sanity that the menu can return us up).
+  # Buttons section for Submit (also confirms the menu can navigate back up).
   { action = "tap", on_accessibility_label = "menu-toggle" },
   { action = "tap", on_accessibility_label = "goto-buttons" },
   { action = "assert_visible", on_text = "Submit" },

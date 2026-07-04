@@ -215,6 +215,10 @@ pub struct SuiteConfig {
     /// CLI `--a11y` override. When Some, every flow's accessibility audit
     /// level is forced to this regardless of `[flow.options].a11y`.
     pub a11y_override: Option<golem_parser::A11yLevel>,
+    /// CLI `--a11y-min-confidence` override. When Some, it wins over every
+    /// flow's `[flow.options].a11y_min_confidence` and the level default —
+    /// surface (`0.0`) or suppress heuristic findings for a whole run.
+    pub a11y_min_confidence_override: Option<f32>,
     /// `--rebuild`: bypass the persistent install cache for this run
     /// (rebuild + reinstall every (device, bundle)). The cache is still
     /// written after a successful install.
@@ -270,6 +274,7 @@ impl Default for SuiteConfig {
             project_apps: Vec::new(),
             coverage_override: None,
             a11y_override: None,
+            a11y_min_confidence_override: None,
             rebuild: false,
             no_build: false,
             device_settings: crate::project::DeviceSettings::default(),
@@ -627,6 +632,7 @@ impl SuiteRunner {
             let no_results = self.config.no_results;
             let no_perf = self.config.no_perf;
             let a11y_override = self.config.a11y_override;
+            let a11y_min_confidence_override = self.config.a11y_min_confidence_override;
             let debug = self.config.debug;
             let project_root = self.config.project_root.clone();
             let fingerprint = fingerprint.clone();
@@ -675,6 +681,7 @@ impl SuiteRunner {
                         no_results,
                         no_perf,
                         a11y_override,
+                        a11y_min_confidence_override,
                         debug,
                         project_root,
                         fingerprint,
@@ -890,6 +897,8 @@ struct FlowRunConfig {
     no_perf: bool,
     /// CLI `--a11y` override forwarded to every flow.
     a11y_override: Option<golem_parser::A11yLevel>,
+    /// CLI `--a11y-min-confidence` override forwarded to every flow.
+    a11y_min_confidence_override: Option<f32>,
     debug: bool,
     project_root: PathBuf,
     /// Source-tree fingerprint computed once at suite start. Used by the
@@ -1244,6 +1253,7 @@ async fn execute_flow_run(
         let trace = cfg.trace;
         let repeat_ctx = cfg.repeat_ctx;
         let a11y_override = cfg.a11y_override;
+        let a11y_min_confidence_override = cfg.a11y_min_confidence_override;
         handles.push(tokio::spawn(async move {
             run_flow_on_device(
                 flow_c,
@@ -1268,6 +1278,7 @@ async fn execute_flow_run(
                 trace,
                 repeat_ctx,
                 a11y_override,
+                a11y_min_confidence_override,
             )
             .await
         }));
@@ -2602,6 +2613,7 @@ async fn run_flow_on_device(
     trace: bool,
     repeat_ctx: Option<golem_events::RepeatContext>,
     a11y_override: Option<golem_parser::A11yLevel>,
+    a11y_min_confidence_override: Option<f32>,
 ) -> FlowReport {
     let start = Instant::now();
     let device_name = device.name.clone();
@@ -2751,7 +2763,9 @@ async fn run_flow_on_device(
         emitter: device_emitter.as_ref(),
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
         last_settled_tree: std::sync::Mutex::new(None),
+            trace_pair: std::sync::Mutex::new(None),
         a11y_level,
+        a11y_min_confidence: a11y_min_confidence_override,
         rng: std::sync::Mutex::new(rng),
         // Seed from project-level default; `execute_flow` refines from
         // the top-level flow's own `[flow.options].record`. Subflows

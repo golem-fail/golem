@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::time::Instant;
 
 use golem_devices::DeviceInfo;
 use golem_element::Element;
@@ -35,6 +36,10 @@ pub struct ExecutionContext<'a> {
     /// block-end audit (the default in non-suite contexts, e.g. unit tests);
     /// the suite resolves it from CLI `--a11y` / `[flow.options].a11y`.
     pub a11y_level: crate::accessibility::A11yLevel,
+    /// CLI `--a11y-min-confidence` override. When set it wins over
+    /// `[flow.options].a11y_min_confidence` and the level default, so a run can
+    /// surface or suppress heuristic findings without editing the flow.
+    pub a11y_min_confidence: Option<f32>,
     /// Tree fetch statistics for the current step (reset between steps).
     pub step_tree_stats: Mutex<TreeStats>,
     /// The last settled UI tree captured by the post-step settle, tagged with
@@ -43,7 +48,14 @@ pub struct ExecutionContext<'a> {
     /// settled. Per-`ctx`, so safe across concurrent flows — unlike the global
     /// `TreeStats` statics. The settle's tree is otherwise dropped, so storing
     /// it is a move, not a clone.
-    pub last_settled_tree: Mutex<Option<(Element, u64)>>,
+    pub last_settled_tree: Mutex<Option<(Element, u64, Instant)>>,
+    /// A coherent `(tree, screenshot PNG)` pair already captured this step —
+    /// from a `--trace` boundary, or the failure capture — tagged with the
+    /// step's `global_step_index`. The a11y audit reuses it (any level — even
+    /// strict skips its own capture) instead of re-shooting: the block-end audit
+    /// consumes the last step's pair, the failure handler the failing step's.
+    /// `None` when nothing was captured this step.
+    pub trace_pair: Mutex<Option<(Element, Vec<u8>, u64)>>,
     /// Seeded RNG for deterministic fake data generation, carrying the run's
     /// date anchor (see [`golem_vars::seed::FakeRng`]).
     pub rng: Mutex<FakeRng>,
@@ -106,19 +118,50 @@ impl ExecutionContext<'_> {
     /// drop it), overwriting any prior step's cached tree.
     pub fn cache_settled_tree(&self, tree: Element, step_index: u64) {
         if let Ok(mut slot) = self.last_settled_tree.lock() {
-            *slot = Some((tree, step_index));
+            // Stamp the capture instant so the recording-frame a11y path can pull
+            // the video frame at the exact moment this tree was read.
+            *slot = Some((tree, step_index, Instant::now()));
         }
     }
 
-    /// Take the cached settled tree iff it was captured at `expect_step_index`
-    /// — i.e. the block's last-executed step settled and the tree reflects the
-    /// final UI. Returns `None` otherwise (last step didn't settle / cache is
-    /// from an earlier step), signalling the caller to fetch a fresh
-    /// hierarchy. Always clears the slot.
-    pub fn take_settled_tree_at(&self, expect_step_index: u64) -> Option<Element> {
+    /// Take the most recent settled tree cached this block (paired with its
+    /// capture instant), or `None` if no step settled. Non-strict on which step
+    /// it came from — for a11y, auditing a near-end settled state is fine and
+    /// exact block-end timing isn't the goal; `clear_settled_tree` at block
+    /// start guarantees it's never a previous block's. Always clears the slot.
+    pub fn take_latest_settled_tree(&self) -> Option<(Element, Instant)> {
         if let Ok(mut slot) = self.last_settled_tree.lock() {
+            slot.take().map(|(tree, _idx, at)| (tree, at))
+        } else {
+            None
+        }
+    }
+
+    /// Clear any cached settled tree. Called at block start so the block-end
+    /// audit's [`take_latest_settled_tree`] never returns a *previous* block's
+    /// tree (the cache is per-`ctx` and persists across blocks otherwise).
+    pub fn clear_settled_tree(&self) {
+        if let Ok(mut slot) = self.last_settled_tree.lock() {
+            *slot = None;
+        }
+    }
+
+    /// Cache the coherent `(tree, screenshot PNG)` pair from a `--trace`
+    /// boundary capture, tagged with the step's `global_step_index`. Overwrites
+    /// any prior step's pair (only the latest — the block end — is reused).
+    pub fn cache_trace_pair(&self, tree: Element, shot_png: Vec<u8>, step_index: u64) {
+        if let Ok(mut slot) = self.trace_pair.lock() {
+            *slot = Some((tree, shot_png, step_index));
+        }
+    }
+
+    /// Take the cached trace pair iff it was captured at `expect_step_index`
+    /// (the block's last-executed step), so the audit reuses an aligned
+    /// `(tree, shot)` rather than re-capturing. `None` otherwise. Clears the slot.
+    pub fn take_trace_pair_at(&self, expect_step_index: u64) -> Option<(Element, Vec<u8>)> {
+        if let Ok(mut slot) = self.trace_pair.lock() {
             match slot.take() {
-                Some((tree, idx)) if idx == expect_step_index => Some(tree),
+                Some((tree, shot, idx)) if idx == expect_step_index => Some((tree, shot)),
                 _ => None,
             }
         } else {
@@ -148,7 +191,9 @@ pub fn test_ctx(tmp: &std::path::Path) -> ExecutionContext<'_> {
         last_launch_ms: AtomicU64::new(0),
         emitter: None,
         a11y_level: crate::accessibility::A11yLevel::Off,
+        a11y_min_confidence: None,
         step_tree_stats: Mutex::new(TreeStats::default()),        last_settled_tree: Mutex::new(None),
+        trace_pair: Mutex::new(None),
         rng: Mutex::new(FakeRng::from_optional_seed(None)),
         inherited_record_default: false,
     }
@@ -215,7 +260,9 @@ impl TestHarness {
             last_launch_ms: AtomicU64::new(0),
             emitter: Some(&self.emitter),
             a11y_level: crate::accessibility::A11yLevel::Off,
+            a11y_min_confidence: None,
             step_tree_stats: Mutex::new(TreeStats::default()),            last_settled_tree: Mutex::new(None),
+        trace_pair: Mutex::new(None),
             rng: Mutex::new(FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
         }
@@ -354,39 +401,71 @@ mod tests {
         }
     }
 
-    // 7b. Settled-tree cache: reused only when the requested step index matches
-    //     the captured one (the block's last step settled).
+    // 7b. Settled-tree cache: the latest settled tree (any step) is returned,
+    //     cleared once on take, and cleared at block start.
     #[test]
-    fn settled_tree_reused_on_matching_index() {
+    fn latest_settled_tree_returned_and_taken_once() {
         let tmp = tempfile::tempdir().expect("SHALL create temp dir");
         let ctx = test_ctx(tmp.path());
-        ctx.cache_settled_tree(tiny_tree(), 5);
-        assert!(
-            ctx.take_settled_tree_at(5).is_some(),
-            "matching step index SHALL reuse the cached tree"
-        );
-    }
-
-    #[test]
-    fn settled_tree_skipped_on_stale_index() {
-        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
-        let ctx = test_ctx(tmp.path());
-        // Cached during step 3, but the block's last step is 7 → stale → None.
         ctx.cache_settled_tree(tiny_tree(), 3);
+        ctx.cache_settled_tree(tiny_tree(), 5); // later step overwrites
         assert!(
-            ctx.take_settled_tree_at(7).is_none(),
-            "stale cache (different step) SHALL signal a fresh fetch"
+            ctx.take_latest_settled_tree().is_some(),
+            "the latest cached settled tree SHALL be returned"
+        );
+        assert!(
+            ctx.take_latest_settled_tree().is_none(),
+            "the slot SHALL be cleared after taking"
         );
     }
 
     #[test]
-    fn settled_tree_taken_once() {
+    fn clear_settled_tree_drops_cache() {
         let tmp = tempfile::tempdir().expect("SHALL create temp dir");
         let ctx = test_ctx(tmp.path());
         ctx.cache_settled_tree(tiny_tree(), 1);
-        assert!(ctx.take_settled_tree_at(1).is_some());
+        ctx.clear_settled_tree();
         assert!(
-            ctx.take_settled_tree_at(1).is_none(),
+            ctx.take_latest_settled_tree().is_none(),
+            "clear SHALL drop a prior block's cached tree"
+        );
+    }
+
+    // 7c. Trace-pair cache: same matching/stale/take-once contract as the
+    //     settled tree — the block-end audit reuses the last step's pair only.
+    #[test]
+    fn trace_pair_reused_on_matching_index_with_shot() {
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let ctx = test_ctx(tmp.path());
+        ctx.cache_trace_pair(tiny_tree(), vec![1, 2, 3], 5);
+        let pair = ctx.take_trace_pair_at(5);
+        assert!(pair.is_some(), "matching index SHALL reuse the pair");
+        assert_eq!(
+            pair.expect("pair").1,
+            vec![1, 2, 3],
+            "the cached screenshot bytes SHALL come back intact"
+        );
+    }
+
+    #[test]
+    fn trace_pair_skipped_on_stale_index() {
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let ctx = test_ctx(tmp.path());
+        ctx.cache_trace_pair(tiny_tree(), vec![0], 3);
+        assert!(
+            ctx.take_trace_pair_at(7).is_none(),
+            "stale pair (earlier step) SHALL NOT be reused"
+        );
+    }
+
+    #[test]
+    fn trace_pair_taken_once() {
+        let tmp = tempfile::tempdir().expect("SHALL create temp dir");
+        let ctx = test_ctx(tmp.path());
+        ctx.cache_trace_pair(tiny_tree(), vec![9], 1);
+        assert!(ctx.take_trace_pair_at(1).is_some());
+        assert!(
+            ctx.take_trace_pair_at(1).is_none(),
             "the slot SHALL be cleared after taking"
         );
     }

@@ -544,7 +544,11 @@ mod tests {
             element_type: "Button".into(),
             element_label: None,
             element_bounds: None,
+            related_bounds: Vec::new(),
+            measure_bounds: None,
+            occlusion: Vec::new(),
             confidence: 1.0,
+            detail: None,
         }
     }
 
@@ -582,7 +586,12 @@ mod tests {
                 label: "login:dev:0".into(),
                 issues: vec![
                     a11y_issue("missing_label", golem_events::Severity::Error),
-                    a11y_issue("nested_clickable", golem_events::Severity::Warning),
+                    A11yIssue {
+                        // A heuristic finding (< 1.0) so we can assert the
+                        // confidence is surfaced across formats.
+                        confidence: 0.70,
+                        ..a11y_issue("low_contrast", golem_events::Severity::Warning)
+                    },
                 ],
                 screenshot_path: None,
             },
@@ -597,6 +606,9 @@ mod tests {
         assert!(human.contains("Accessibility:"), "human header");
         assert!(human.contains("[ERR]") && human.contains("[WRN]"), "human tags");
         assert!(human.contains("clean"), "human clean line");
+        // Markers are 1-based by issue order, right-padded to 2 cols.
+        assert!(human.contains("[ 1] [ERR]"), "human marker 1");
+        assert!(human.contains("[ 2] [WRN]"), "human marker 2");
 
         let json = crate::json::format_flow_json(&report).expect("json");
         let json_compact: String = json.chars().filter(|c| !c.is_whitespace()).collect();
@@ -606,15 +618,37 @@ mod tests {
             json_compact.contains("\"check\":\"missing_label\""),
             "json issue check"
         );
+        assert!(json_compact.contains("\"marker\":1"), "json marker 1");
+        assert!(json_compact.contains("\"marker\":2"), "json marker 2");
 
         let junit = crate::junit::format_flow_junit(&report);
         assert!(junit.contains("Accessibility:"), "junit system-out");
-        assert!(junit.contains("[ERR] missing_label"), "junit issue");
+        assert!(junit.contains("1 [ERR] missing_label"), "junit numbered issue");
 
         let toon = crate::toon::format_flow_toon(&report);
         assert!(toon.contains("A login:dev:0 e:1 w:1"), "toon audit line");
-        assert!(toon.contains("!missing_label"), "toon error marker");
-        assert!(toon.contains("~nested_clickable"), "toon warn marker");
+        assert!(toon.contains("1!missing_label"), "toon numbered error marker");
+        assert!(toon.contains("2~low_contrast"), "toon numbered warn marker");
+
+        // Confidence is surfaced for the heuristic finding (0.70) across formats,
+        // and omitted for the deterministic one (1.0).
+        assert!(human.contains("(confidence 0.70)"), "human confidence");
+        assert!(junit.contains("(confidence 0.70)"), "junit confidence");
+        assert!(toon.contains("c0.70"), "toon confidence");
+        // Compare the JSON confidence numerically (not as a substring): serde_json
+        // renders f32 via shortest-round-trip, which could emit 0.70000006 on a
+        // serializer change and break a string match.
+        let jv: serde_json::Value = serde_json::from_str(&json).expect("parse json");
+        let conf = jv["a11y_audits"][0]["issues"]
+            .as_array()
+            .expect("issues array")
+            .iter()
+            .find(|i| i["check"] == "low_contrast")
+            .and_then(|i| i["confidence"].as_f64())
+            .expect("low_contrast confidence");
+        assert!((conf - 0.70).abs() < 1e-4, "json confidence ~0.70, got {conf}");
+        // The 1.0 missing_label line carries no confidence annotation.
+        assert!(!human.contains("[ 1] [ERR] missing_label            m  (confidence"), "no conf on certain");
     }
 
     fn flow_with(success: bool, skipped_reason: Option<String>) -> FlowReport {

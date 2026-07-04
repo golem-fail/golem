@@ -204,14 +204,19 @@ public class CompanionServer {
                     // the warm-up race matters; once warm, /health is
                     // a hot-path liveness check.
                     boolean uiReady = UI_READY.get() || probeUiReady();
+                    int[] enc = encoderMaxSize();
                     JSONObject respBody = new JSONObject()
                         .put("status", uiReady ? "ok" : "warming_up")
                         .put("platform", "android")
-                        .put("version", "0.6.35")
+                        .put("version", "0.6.36")
                         .put("device_name", android.os.Build.MODEL)
                         .put("device_model", android.os.Build.DEVICE)
                         .put("os_version", String.valueOf(android.os.Build.VERSION.SDK_INT))
-                        .put("device_id", deviceSerial);
+                        .put("device_id", deviceSerial)
+                        // AVC encoder ceiling (0 = unknown) so the host can size
+                        // screenrecord to the real max instead of a guess.
+                        .put("max_recording_width", enc[0])
+                        .put("max_recording_height", enc[1]);
                     sendJson(out, uiReady ? 200 : 503, respBody);
                     break;
                 }
@@ -276,6 +281,38 @@ public class CompanionServer {
             return true;
         }
         return false;
+    }
+
+    /** AVC (H.264) encoder's max supported [width, height] from MediaCodec,
+     *  queried once and cached (static per device). {@code {0, 0}} when
+     *  unavailable — the host then falls back to its conservative cap. Lets the
+     *  host request an aspect-correct {@code screenrecord --size} up to the real
+     *  encoder ceiling instead of guessing it. */
+    private static volatile int[] ENCODER_MAX;
+    private static int[] encoderMaxSize() {
+        int[] cached = ENCODER_MAX;
+        if (cached != null) return cached;
+        int w = 0, h = 0;
+        try {
+            android.media.MediaCodecList list =
+                new android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS);
+            for (android.media.MediaCodecInfo info : list.getCodecInfos()) {
+                if (!info.isEncoder()) continue;
+                for (String type : info.getSupportedTypes()) {
+                    if (!type.equalsIgnoreCase("video/avc")) continue;
+                    android.media.MediaCodecInfo.VideoCapabilities vc =
+                        info.getCapabilitiesForType(type).getVideoCapabilities();
+                    if (vc == null) continue;
+                    w = Math.max(w, vc.getSupportedWidths().getUpper());
+                    h = Math.max(h, vc.getSupportedHeights().getUpper());
+                }
+            }
+        } catch (Exception e) {
+            // Leave {0, 0} → host uses its fallback cap.
+        }
+        cached = new int[]{w, h};
+        ENCODER_MAX = cached;
+        return cached;
     }
 
     /** Call a UiAutomation operation with a hard per-call deadline and

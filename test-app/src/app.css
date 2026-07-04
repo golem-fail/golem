@@ -58,6 +58,13 @@ button {
   border: 1px solid #ccc;
   border-radius: 4px;
   background: #fff;
+  /* Explicit dark text: the WebKit/Chromium UA default button colour is the
+     system blue (~3.5:1 on white), which fails WCAG AA — so without this the
+     a11y audit flags every button in the app. #333 is ~12:1. */
+  color: #333;
+  /* WCAG 2.5.5 minimum touch target. Keeps the whole app a11y-clean by
+     default; the A11yDemo section opts back out for its bad fixtures. */
+  min-height: 44px;
   font-size: 14px;
   cursor: pointer;
   /* Prevent Android's text-selection menu from triggering when a

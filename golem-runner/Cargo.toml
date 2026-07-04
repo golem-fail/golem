@@ -29,6 +29,9 @@ ignore = { workspace = true }
 # Screenshot-based a11y checks (contrast + text-size) + annotated output.
 image = { version = "0.25", default-features = false, features = ["png"] }
 imageproc = { version = "0.25", default-features = false }
+# Direct PNG encoder for the annotated screenshot — `image` doesn't expose
+# text-chunk writing, so we encode via `png` to embed the iTXt issue metadata.
+png = "0.18"
 
 [dev-dependencies]
 tempfile = "3"

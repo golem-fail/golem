@@ -27,6 +27,19 @@ pub enum Commands {
     InstallScript,
     /// Inspect the persistent install cache
     Cache(CacheArgs),
+    /// Read the embedded audit out of an annotated a11y screenshot: list the
+    /// findings and print the command to replay that run.
+    A11yExtract(A11yExtractArgs),
+}
+
+#[derive(clap::Args, Debug)]
+pub struct A11yExtractArgs {
+    /// Path to an annotated a11y screenshot PNG (`*_a11y.png`).
+    pub png: PathBuf,
+
+    /// Print the raw embedded `Golem-Audit` JSON instead of the human report.
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -162,6 +175,12 @@ pub struct RunArgs {
     /// (off | critical | relaxed | strict). Default: relaxed.
     #[arg(long)]
     pub a11y: Option<String>,
+
+    /// Override every flow's `a11y_min_confidence` (0.0–1.0): drop a11y
+    /// findings below this confidence. 0.0 surfaces every heuristic finding;
+    /// higher keeps only confident ones. Wins over `[flow.options]`.
+    #[arg(long = "a11y-min-confidence")]
+    pub a11y_min_confidence: Option<f32>,
 
     /// Verbose output: show swipe coordinates, scroll strategy, fingerprints
     #[arg(long)]

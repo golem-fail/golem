@@ -208,6 +208,14 @@ fn intrinsic_duration_ms(step: &Step) -> u64 {
 /// reflects "find this within 5s" rather than "find this within
 /// 5s minus whatever the previous tap's UI is still doing."
 fn needs_post_settle(step: &Step) -> bool {
+    // `auto_scroll` may have scrolled the UI to bring the target on screen —
+    // that's an interaction, so settle and cache the tree at the final scroll
+    // position (otherwise a later read / the block-end a11y audit reuses a tree
+    // from before the scroll). Cheap no-op when nothing scrolled (the target was
+    // already visible) — `wait_for_settle` returns fast on a stable UI.
+    if step.auto_scroll == Some(true) {
+        return true;
+    }
     matches!(
         step.action.as_str(),
         "tap"
@@ -322,7 +330,7 @@ pub async fn execute_step_with_policy(
     // policies, not "ignore". Both fail-tolerantly: one missing
     // doesn't suppress the other.
     if if_fail != "ignore" {
-        let _ = capture_failure_screenshot(
+        let shot = capture_failure_screenshot(
             driver,
             ctx.capture_config,
             ctx.block_name.unwrap_or("unnamed"),
@@ -331,8 +339,9 @@ pub async fn execute_step_with_policy(
             ctx.step_index,
             if_fail,
         )
-        .await;
-        let _ = crate::capture::capture_failure_tree(
+        .await
+        .ok();
+        let tree = crate::capture::capture_failure_tree(
             driver,
             ctx.capture_config,
             ctx.block_name.unwrap_or("unnamed"),
@@ -341,7 +350,14 @@ pub async fn execute_step_with_policy(
             ctx.step_index,
             if_fail,
         )
-        .await;
+        .await
+        .ok();
+        // Stash the coherent (tree, shot) pair the failure capture just took so
+        // the executor's failure handler can run the a11y audit on the failing
+        // screen without re-capturing. Keyed to this step, like the trace pair.
+        if let (Some((_, shot_png)), Some((_, root))) = (shot, tree) {
+            ctx.cache_trace_pair(root, shot_png, ctx.global_step_index);
+        }
     }
 
     let error = last_error.unwrap_or_else(|| anyhow::anyhow!("step failed with no error details"));
@@ -1243,6 +1259,18 @@ mod tests {
                 "{action} SHALL NOT require post-action settle",
             );
         }
+
+        // But a read-only action with auto_scroll MAY have scrolled the UI, so
+        // it SHALL settle (cache the post-scroll tree).
+        let scrolling_assert = Step {
+            action: "assert_visible".into(),
+            auto_scroll: Some(true),
+            ..Default::default()
+        };
+        assert!(
+            needs_post_settle(&scrolling_assert),
+            "an auto_scroll assert SHALL settle (it may have scrolled)",
+        );
     }
 
     // -----------------------------------------------------------------

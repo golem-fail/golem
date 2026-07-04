@@ -128,6 +128,16 @@ pub trait PlatformDriver: Send + Sync {
     /// Stop screen recording
     async fn stop_recording(&self) -> anyhow::Result<String>;
 
+    /// Host monotonic instant of the most recent recording's true end — the
+    /// on-device stop signal (SIGINT), stamped inside `stop_recording` *before*
+    /// the driver's own moov-flush + file-pull latency (which can be ~1s and
+    /// would rewind any extracted frame into prior motion). `None` if
+    /// unsupported or no recording has run. Anchors a11y/trace frame extraction
+    /// to the real video end, robust to variable adb roundtrip on real devices.
+    fn last_recording_end(&self) -> Option<std::time::Instant> {
+        None
+    }
+
     /// Remove adb port forwards (Android-only; no-op on iOS)
     async fn remove_port_forwards(&self) -> anyhow::Result<()>;
 
