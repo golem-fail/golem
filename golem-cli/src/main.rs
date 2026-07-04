@@ -269,6 +269,14 @@ async fn main() -> anyhow::Result<()> {
                 if !flake_summary.is_empty() {
                     eprint!("{}", render_flake_summary(&flake_summary));
                 }
+
+                // Host-queue congestion: only surfaces when two same-class
+                // heavy ops actually contended (multi-device). Silent at zero
+                // so single-device runs stay uncluttered.
+                let queue_wait = golem_common::host_queue::queue_wait_stats();
+                if !queue_wait.is_zero() {
+                    eprint!("{}", render_queue_wait(&queue_wait));
+                }
             }
 
             // Exit with appropriate code. Skipped flows (coverage-group
@@ -552,11 +560,75 @@ fn render_flake_summary_with_color(entries: &[FlakeEntry], use_color: bool) -> S
     out
 }
 
+fn render_queue_wait(stats: &golem_common::host_queue::QueueWaitStats) -> String {
+    let use_color = std::io::IsTerminal::is_terminal(&std::io::stderr());
+    render_queue_wait_with_color(stats, use_color)
+}
+
+/// One-line host-queue congestion summary, aligned under the `Summary` block.
+/// Callers only invoke this when `stats` is non-zero.
+fn render_queue_wait_with_color(
+    stats: &golem_common::host_queue::QueueWaitStats,
+    use_color: bool,
+) -> String {
+    use std::fmt::Write;
+    const INDENT: &str = "             ";
+    const DIM: &str = "\x1b[2m";
+    const RESET: &str = "\x1b[0m";
+
+    let secs = |d: std::time::Duration| format!("{:.1}s", d.as_secs_f64());
+    let breakdown = stats
+        .per_class
+        .iter()
+        .map(|c| format!("{} {} ×{}", c.class.label(), secs(c.waited), c.count))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let body = format!("queue wait: {} total  ({breakdown})", secs(stats.total));
+
+    let mut out = String::new();
+    if use_color {
+        let _ = writeln!(out, "{INDENT}{DIM}{body}{RESET}");
+    } else {
+        let _ = writeln!(out, "{INDENT}{body}");
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use golem_common::host_queue::{ClassWait, OpClass, QueueWaitStats};
     use golem_events::RepeatContext;
     use golem_report::FlowReport;
+
+    #[test]
+    fn queue_wait_line_lists_classes_worst_first() {
+        let stats = QueueWaitStats {
+            total: std::time::Duration::from_millis(3900),
+            per_class: vec![
+                ClassWait {
+                    class: OpClass::Screenshot,
+                    waited: std::time::Duration::from_millis(2800),
+                    count: 63,
+                },
+                ClassWait {
+                    class: OpClass::Dumpsys,
+                    waited: std::time::Duration::from_millis(1100),
+                    count: 40,
+                },
+            ],
+        };
+        let line = render_queue_wait_with_color(&stats, false);
+        assert!(line.contains("queue wait: 3.9s total"), "got: {line}");
+        assert!(line.contains("screenshot 2.8s ×63"), "got: {line}");
+        assert!(line.contains("dumpsys 1.1s ×40"), "got: {line}");
+        // Worst-first ordering: screenshot precedes dumpsys.
+        let (s, d) = (
+            line.find("screenshot").expect("screenshot listed"),
+            line.find("dumpsys").expect("dumpsys listed"),
+        );
+        assert!(s < d, "classes SHALL be listed worst-first: {line}");
+    }
 
     fn flow(name: &str, success: bool, repeat: Option<RepeatContext>, skipped: bool) -> FlowReport {
         // `is_skipped` requires success=true + skipped_reason=Some

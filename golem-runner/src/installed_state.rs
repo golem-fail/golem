@@ -148,10 +148,15 @@ async fn query_android(serial: &str, bundle_id: &str) -> Result<DeviceInstallInf
         return Ok(DeviceInstallInfo::not_installed());
     }
 
-    // `dumpsys package <bundle>` exposes lastUpdateTime + versionName.
-    let dump = golem_common::command::output_argv(
-        "adb",
-        &["-s", serial, "shell", "dumpsys", "package", bundle_id],
+    // `dumpsys package <bundle>` exposes lastUpdateTime + versionName. The
+    // dumpsys walk is heavy on the shared adb server; serialize host-wide so
+    // parallel per-device queries don't pile onto it.
+    let dump = golem_common::host_queue::acquire_then_run(
+        golem_common::host_queue::OpClass::Dumpsys,
+        golem_common::command::output_argv(
+            "adb",
+            &["-s", serial, "shell", "dumpsys", "package", bundle_id],
+        ),
     )
     .await;
     let (install_time, version) = match dump {

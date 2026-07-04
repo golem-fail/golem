@@ -689,7 +689,13 @@ impl PlatformDriver for AndroidDriver {
     }
 
     async fn screenshot(&self) -> Result<ScreenshotResult> {
-        let data = self.client.get_bytes("/screenshot").await?;
+        // Framebuffer bytes stream over the shared adb transport; serialize
+        // host-wide so concurrent captures don't saturate it.
+        let data = golem_common::host_queue::acquire_then_run(
+            golem_common::host_queue::OpClass::Screenshot,
+            self.client.get_bytes("/screenshot"),
+        )
+        .await?;
         Ok(ScreenshotResult {
             path: String::new(),
             data,
@@ -1028,9 +1034,14 @@ impl PlatformDriver for AndroidDriver {
             std::process::id(),
         ));
         let tmp_str = tmp.to_string_lossy().to_string();
-        let output = golem_common::command::output_argv(
-            "adb",
-            &["-s", &self.device_serial, "pull", &state.device_path, &tmp_str],
+        // The recording pull is a bulk transfer over the one host adb server;
+        // serialize it host-wide so parallel devices don't thrash it.
+        let output = golem_common::host_queue::acquire_then_run(
+            golem_common::host_queue::OpClass::AdbHostIo,
+            golem_common::command::output_argv(
+                "adb",
+                &["-s", &self.device_serial, "pull", &state.device_path, &tmp_str],
+            ),
         )
         .await
         .with_context(|| format!("adb pull {}", state.device_path))?;

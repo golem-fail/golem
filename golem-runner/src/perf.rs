@@ -75,16 +75,25 @@ impl PerfCollector {
     async fn capture_android(&self) -> RawPerfData {
         let mut data = RawPerfData::default();
 
-        // Memory: dumpsys meminfo (host-side, works without permissions)
-        if let Ok(output) = self
-            .adb(&["shell", "dumpsys", "meminfo", &self.bundle_id])
-            .await
+        // Memory: dumpsys meminfo (host-side, works without permissions).
+        // dumpsys is heavy on the shared adb server — serialize host-wide so
+        // periodic perf sampling doesn't burst against parallel devices.
+        if let Ok(output) = golem_common::host_queue::acquire_then_run(
+            golem_common::host_queue::OpClass::Dumpsys,
+            self.adb(&["shell", "dumpsys", "meminfo", &self.bundle_id]),
+        )
+        .await
         {
             data.memory_mb = parse_android_memory(&output);
         }
 
         // CPU: dumpsys cpuinfo (host-side, works without permissions)
-        if let Ok(output) = self.adb(&["shell", "dumpsys", "cpuinfo"]).await {
+        if let Ok(output) = golem_common::host_queue::acquire_then_run(
+            golem_common::host_queue::OpClass::Dumpsys,
+            self.adb(&["shell", "dumpsys", "cpuinfo"]),
+        )
+        .await
+        {
             data.cpu_percent = parse_android_cpu(&output, &self.bundle_id);
         }
 

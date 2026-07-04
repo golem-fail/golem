@@ -397,6 +397,10 @@ impl SuiteRunner {
     pub async fn run_suite(&mut self, flow_paths: &[PathBuf]) -> Result<SuiteReport> {
         let start = Instant::now();
 
+        // Zero host-queue congestion counters so the end-of-run summary
+        // reflects only this suite (the counters are process-global).
+        golem_common::host_queue::reset_queue_wait_stats();
+
         // Plan phase: parse + merge + expand coverage + build install matrix.
         // Only apps referenced by some flow end up in the matrix — apps declared
         // in `golem.toml [[apps]]` that no flow uses are dropped entirely.

@@ -177,13 +177,23 @@ impl IosDriver {
     }
 
     /// Run an `xcrun simctl` subcommand.
+    ///
+    /// Every `simctl` call funnels through the single host `CoreSimulatorService`
+    /// daemon, which is shared across all booted sims. Serialize host-wide so
+    /// parallel iOS flows don't thrash it. Per-sim companion ops (tap/type/
+    /// hierarchy/screenshot via XCUITest) are left parallel — each runs on its
+    /// own sim's main thread.
     async fn simctl(&self, args: &[&str]) -> Result<String> {
-        let output = tokio::process::Command::new("xcrun")
+        let run = tokio::process::Command::new("xcrun")
             .arg("simctl")
             .args(args)
-            .output()
-            .await
-            .context("failed to spawn xcrun simctl")?;
+            .output();
+        let output = golem_common::host_queue::acquire_then_run(
+            golem_common::host_queue::OpClass::Simctl,
+            run,
+        )
+        .await
+        .context("failed to spawn xcrun simctl")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);

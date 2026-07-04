@@ -455,51 +455,30 @@ discard-on-pass), `golem-runner/src/capture.rs` (ring buffer
 implementation), `golem-driver/src/{android,ios}.rs` (`discard_recording`
 verb that just `rm`s the device-side file).
 
-## Selective host-wide queue for heavy device ops
+## Confirm host-queue benefit on a load-saturated host
 
-Two-emu --trace sweep is ~30pp worse than 1-emu --trace (48% vs 85%
-pass). Per-emu wedge rate is identical between configs (~9.3
-reboots/hr), so the regression isn't per-emu cost — it's bursts at
-block boundaries when both emus simultaneously do heavy I/O ops
-(`adb pull` video, screenshot encode/transfer, `dumpsys cpuinfo`).
-These bursts push otherwise-fast hierarchy calls past the 5s
-wedge-detection ceiling → false-positive recovery → cascade.
+The selective host-wide queue is built and wired
+(`golem-common::host_queue`: `OpClass::{AdbHostIo,Screenshot,Dumpsys,Simctl}`,
+`acquire_then_run`, congestion metering, and a `[host-queue] slow permit wait`
+tripwire). Same-class heavy ops serialize host-wide; light per-step verbs
+(tap/type/swipe/hierarchy) stay parallel. Validated locally for *safety* —
+no-harm + correct engagement at 2 and 4 emus (queue engaged, 1.5s dumpsys
+wait at 4 emus, no false-timeouts, no deadlock on Android or iOS).
 
-The cheap fix: a **per-operation-class semaphore**, host-wide. Only
-heavy ops queue; light ops stay parallel.
+Unconfirmed: the *benefit*. The original 48% (2-emu --trace) regression is
+load-driven (adb-server / GPU-encode saturation) and does not reproduce on
+local Apple-Silicon hardware even at 4 emus — both queue and no-queue arms
+pass 100%, so the same-session A/B can't isolate the fix.
 
-**Queued (Semaphore(1) per host):**
-- `adb pull` (video at block end — biggest I/O burst)
-- `/screenshot` companion call (large PNG payload)
-- Possibly `dumpsys cpuinfo` / `dumpsys meminfo` (slow device walks)
+Remaining: run the 2-emu (or 4-emu) --trace sweep with and without the queue
+on a load-saturated host (the environment where 48% was seen). If no-queue
+reproduces the regression and the queue lifts it, delete this entry. If the
+regression can't be reproduced anywhere, the queue stands on no-harm +
+sound-mechanism grounds — delete this entry.
 
-**Not queued (parallelism preserved):**
-- `/tap`, `/swipe`, `/type` — light, must stay concurrent for
-  throughput
-- `/hierarchy` — small payload, single-emu cost dominates
-- `/perf` companion endpoint — already small
-
-**Semantics:**
-- Acquire-permit time is excluded from step timeout (separate
-  `acquire_then_run(timeout, op)` helper) so a flow waiting its turn
-  doesn't burn its budget.
-- Optional `reuse_recent` hint: if N flows want the same data
-  within X ms, the queue can cache + share (rarely useful today —
-  one-flow-per-device — but enables future shared-data patterns).
-
-**Why not host-wide queue for ALL ops:** would defeat per-device
-parallelism. Cross-device taps are independent and should run
-concurrently; only the I/O-burst class actually contends.
-
-**Validation criteria for keep-or-delete:**
-- Re-run the 2-emu --trace sweep with this queue active. If pass rate
-  recovers from 48% to ≥80%, queue is justified.
-- If it doesn't help meaningfully, the regression has a different
-  source — delete this entry and look elsewhere.
-
-**Files:** new `golem-driver/src/host_queue.rs` (per-op semaphores +
-acquire_then_run); call-site wrapping in `golem-driver/src/android.rs`
-for the queued ops; `golem-runner/src/capture.rs` for screenshot path.
+Deliberately unbuilt: the step-timeout permit-wait exclusion. Measured wait is
+~94ms avg at 4 emus (orders under a step budget) and the tripwire flags a
+single wait ≥2s. Build the exclusion only if the tripwire fires in the wild.
 
 **Becomes load-bearing when**: CI needs 10+ concurrent emus. At that
 point uncontended bursts would saturate the host fork/IO budget and

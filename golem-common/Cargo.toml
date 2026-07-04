@@ -7,5 +7,10 @@ edition = "2021"
 tokio = { workspace = true }
 async-trait = { workspace = true }
 
+[dev-dependencies]
+# `test-util` enables `tokio::test(start_paused = true)` so host_queue's
+# congestion-wait tests advance the clock deterministically.
+tokio = { workspace = true, features = ["test-util"] }
+
 [lints]
 workspace = true

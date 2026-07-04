@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub mod command;
+pub mod host_queue;
 
 static DEBUG: AtomicBool = AtomicBool::new(false);
 
