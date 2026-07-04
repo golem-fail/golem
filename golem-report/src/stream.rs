@@ -927,6 +927,33 @@ pub async fn stream_human(
                     eprintln!("{ts}  {dp}{t} ready — {dn} {platform} v{version} ({os_version})");
                 }
             }
+            EventKind::DeviceRecovering { device_id, reason } => {
+                let t = tag("[device]", BOLD_YELLOW, use_color);
+                if use_color {
+                    eprintln!("{ts}  {dp}{t} {DIM}recovering{RESET} {device_id} {DIM}— {reason}{RESET}");
+                } else {
+                    eprintln!("{ts}  {dp}{t} recovering {device_id} — {reason}");
+                }
+            }
+            EventKind::DeviceRecovered {
+                device_id,
+                duration_ms,
+                success,
+                detail,
+            } => {
+                let (word, color) = if *success {
+                    ("recovered", BOLD_GREEN)
+                } else {
+                    ("recovery failed", BOLD_RED)
+                };
+                let t = tag("[device]", color, use_color);
+                let dur = fmt_dur(*duration_ms, use_color);
+                if use_color {
+                    eprintln!("{ts}  {dp}{t} {word} {dur} {device_id} {DIM}— {detail}{RESET}");
+                } else {
+                    eprintln!("{ts}  {dp}{t} {word} {dur} {device_id} — {detail}");
+                }
+            }
             _ => {}
         }
     }

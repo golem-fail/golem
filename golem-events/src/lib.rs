@@ -428,6 +428,33 @@ pub enum EventKind {
         flow_name: String,
         reason: String,
     },
+    /// A background device recovery (ANR / wedge) has begun — the
+    /// triggering flow's own failure is reported separately on its own
+    /// flow. This is purely the informational "reboot starting" notice;
+    /// it is not a flow result and never affects the exit code. Pairs
+    /// with `DeviceRecovered` once the reboot completes.
+    DeviceRecovering {
+        /// UDID/serial of the device being recovered.
+        device_id: String,
+        /// Why recovery triggered, e.g. `ANR detected`.
+        reason: String,
+    },
+    /// A background device recovery finished. `success` reflects whether
+    /// the reboot itself succeeded; `detail` carries the outcome message
+    /// (`rebooted in {ms}ms` or the failure text) followed by the disk
+    /// summary the reboot path already captures. Informational — the
+    /// triggering failure is reported separately, so this never affects
+    /// the exit code.
+    DeviceRecovered {
+        /// UDID/serial of the recovered device.
+        device_id: String,
+        /// Reboot duration in milliseconds.
+        duration_ms: u64,
+        /// Whether the reboot succeeded.
+        success: bool,
+        /// Outcome message + resource summary.
+        detail: String,
+    },
     /// A flow could not run because a precondition failed (missing bundle id,
     /// failed or absent install script). The flow never executed a step, so
     /// it counts as a failure (exit 1) and carries the responsible code.
@@ -1051,6 +1078,40 @@ mod tests {
                 ));
             }
             other => panic!("expected ScrollAttempt, got {other:?}"),
+        }
+    }
+
+    // 20. Device-recovery events serialize to the externally-tagged wire
+    //     schema and round-trip. Guards the field set (device_id / duration_ms
+    //     / success / detail) against drift, since these replaced the old
+    //     FlowSkipped piggyback and consumers key on the variant name.
+    #[test]
+    fn device_recovered_serde_roundtrip() {
+        let kind = EventKind::DeviceRecovered {
+            device_id: "emulator-5554".into(),
+            duration_ms: 17003,
+            success: true,
+            detail: "rebooted in 17003ms disk[host=42.0GiB device=12.3GiB]".into(),
+        };
+        let json = serde_json::to_string(&kind).expect("serialize SHALL succeed");
+        assert_eq!(
+            json,
+            r#"{"DeviceRecovered":{"device_id":"emulator-5554","duration_ms":17003,"success":true,"detail":"rebooted in 17003ms disk[host=42.0GiB device=12.3GiB]"}}"#,
+            "DeviceRecovered SHALL be externally tagged with its full field set"
+        );
+        let back: EventKind = serde_json::from_str(&json).expect("deserialize SHALL succeed");
+        match back {
+            EventKind::DeviceRecovered {
+                device_id,
+                duration_ms,
+                success,
+                ..
+            } => {
+                assert_eq!(device_id, "emulator-5554");
+                assert_eq!(duration_ms, 17003);
+                assert!(success);
+            }
+            other => panic!("expected DeviceRecovered, got {other:?}"),
         }
     }
 }

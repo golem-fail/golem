@@ -1409,12 +1409,13 @@ async fn execute_flow_run(
         rm.mark_unhealthy(&udid);
         let event_tx = event_tx.clone();
         let reg_state = reg_state.clone();
+        let recovery_reason = recovery_reason.to_string();
         tokio::spawn(async move {
             event_tx.emit(
                 golem_events::DeviceId("suite".into()),
-                golem_events::EventKind::FlowSkipped {
-                    flow_name: format!("reboot:{udid}"),
-                    reason: "ANR recovery: rebooting device".to_string(),
+                golem_events::EventKind::DeviceRecovering {
+                    device_id: udid.clone(),
+                    reason: recovery_reason.clone(),
                 },
             );
             // Capture host + device resource state up front: low disk
@@ -1439,19 +1440,20 @@ async fn execute_flow_run(
 
             let elapsed_ms = reboot_started.elapsed().as_millis();
             let disk_tail = format_disk_summary(&resources);
+            let reboot_success = reboot_ok.is_ok();
             let outcome_msg = match reboot_ok {
                 Ok(()) => format!("rebooted in {elapsed_ms}ms"),
                 Err(e) => format!("reboot failed after {elapsed_ms}ms: {e}"),
             };
             // Surface through the event channel rather than eprintln so
             // clients running against an external daemon see it too.
-            // Use a distinct flow_name from the start-of-recovery event
-            // so the stream renders both as separate SKIP lines.
             event_tx.emit(
                 golem_events::DeviceId("suite".into()),
-                golem_events::EventKind::FlowSkipped {
-                    flow_name: format!("recovery-done:{udid}"),
-                    reason: format!("{outcome_msg}{disk_tail}"),
+                golem_events::EventKind::DeviceRecovered {
+                    device_id: udid.clone(),
+                    duration_ms: elapsed_ms as u64,
+                    success: reboot_success,
+                    detail: format!("{outcome_msg}{disk_tail}"),
                 },
             );
         });

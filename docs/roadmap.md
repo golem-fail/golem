@@ -81,22 +81,6 @@ match. Both default off (current behavior preserved). Also consider insetting th
 swipe band away from the system-gesture zone for edge-adjacent containers. Add
 unit tests for the centering/visibility math and an e2e once implemented.
 
-## Android Unicode IME: restore on SIGINT/Ctrl-C
-
-The bundled Unicode IME (`GolemImeService`) is restored two ways: the
-in-session primary (`ime::restore_all` at suite teardown) and next-run
-self-heal (`ime::self_heal` at device init, backed by the `.golem/`
-original-IME record, with `ime reset` as the backstop when the record is
-gone). The gap: a Ctrl-C **mid-run** skips `restore_all`, so golem's
-(invisible) IME stays the default until the next golem run self-heals it.
-Functionally safe — the device is never permanently stuck, ASCII typing
-still works, and self-heal + `ime reset` recover it — but the keyboard is
-wrong in the meantime.
-
-Fix: a SIGINT handler that calls `ime::restore_all` before exit (pairs
-with any other teardown the handler should own). Lower priority than the
-self-heal path, which already guarantees eventual recovery.
-
 ## Input-mutation verify for `/type` and `/backspace`
 
 Slow IMEs (some Android devices under multi-flow load) return ok from
@@ -670,9 +654,6 @@ Android ANR detection + reboot recovery is shipped. Outstanding:
   unhealthy, the first flow assigned to the device may hit an
   uninitialised state. Add a sanity probe (single hierarchy fetch,
   expect non-trivial node count, retry once) before marking healthy.
-- **Recovery telemetry.** Emit a dedicated `EventKind::DeviceRecovered`
-  with the duration + reason so renderers can surface it (currently
-  piggybacked on `FlowSkipped`).
 
 
 ## Stub-device end-to-end tests

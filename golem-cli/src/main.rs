@@ -30,6 +30,21 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Commands::Run(args) => {
+            // Restore any device keyboards golem swapped for its invisible
+            // Unicode IME if the user interrupts mid-run. Normal completion
+            // restores them via suite teardown; a Ctrl-C skips that, leaving
+            // golem's IME active until the next run self-heals. In the default
+            // in-process topology the driver's activation registry lives in
+            // this process, so we can restore it directly. (A daemon owns its
+            // own teardown — interrupting the client doesn't stop the daemon.)
+            tokio::spawn(async {
+                if tokio::signal::ctrl_c().await.is_ok() {
+                    eprintln!("\n  [ime] interrupted — restoring device keyboards...");
+                    golem_driver::ime::restore_all().await;
+                    std::process::exit(130);
+                }
+            });
+
             // Resolve flow paths
             let tag_filters: Vec<TagFilter> =
                 args.tags.iter().map(|t| TagFilter::parse(t)).collect();

@@ -513,6 +513,39 @@ mod tests {
         assert_eq!(flow.first_failure_code, None);
     }
 
+    // Device-recovery notices are device-lifecycle events, not flow results.
+    // They previously piggybacked on FlowSkipped, which the accumulator turned
+    // into synthetic skipped flows polluting the report. The dedicated events
+    // SHALL be ignored here — no flow entry, no effect on pass/fail counts.
+    #[test]
+    fn device_recovery_events_do_not_create_flows() {
+        let mut acc = ReportAccumulator::new();
+        acc.process(&make_event(
+            0,
+            "emulator-5554",
+            EventKind::DeviceRecovering {
+                device_id: "emulator-5554".into(),
+                reason: "ANR detected".into(),
+            },
+        ));
+        acc.process(&make_event(
+            0,
+            "emulator-5554",
+            EventKind::DeviceRecovered {
+                device_id: "emulator-5554".into(),
+                duration_ms: 17003,
+                success: true,
+                detail: "rebooted in 17003ms".into(),
+            },
+        ));
+        let report = acc.into_suite_report();
+        assert!(
+            report.flows.is_empty(),
+            "device-recovery events SHALL NOT create flow entries, got {} flow(s)",
+            report.flows.len(),
+        );
+    }
+
     #[test]
     fn flow_could_not_run_is_a_failure_with_code() {
         let mut acc = ReportAccumulator::new();
