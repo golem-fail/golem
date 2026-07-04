@@ -4,6 +4,8 @@ version.workspace = true
 edition = "2021"
 
 [dependencies]
+tokio = { workspace = true }
+async-trait = { workspace = true }
 
 [lints]
 workspace = true

@@ -466,52 +466,43 @@ pub(crate) async fn handle_http(step: &Step, vars: &mut VariableStore, method: &
             )
         })?;
 
-    let client = reqwest::Client::new();
-
-    let mut request = match method {
-        "GET" => client.get(url),
-        "POST" => client.post(url),
-        "PUT" => client.put(url),
-        "PATCH" => client.patch(url),
-        "DELETE" => client.delete(url),
-        _ => bail!("Unsupported HTTP method: {}", method),
-    };
-
-    // Add body for methods that support it
-    if let Some(body) = step.params.get("body").and_then(|v| v.as_str()) {
-        request = request
-            .header("Content-Type", "application/json")
-            .body(body.to_string());
+    // Reject unsupported methods before building the request (mirrors the
+    // transport's own guard, but fails with a clear message up front).
+    if !matches!(method, "GET" | "POST" | "PUT" | "PATCH" | "DELETE") {
+        bail!("Unsupported HTTP method: {}", method);
     }
 
-    // Add custom headers from params
-    if let Some(headers) = step.params.get("headers") {
-        if let Some(table) = headers.as_table() {
-            for (key, value) in table {
-                if let Some(val_str) = value.as_str() {
-                    request = request.header(key.as_str(), val_str);
-                }
+    let body = step
+        .params
+        .get("body")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    // Collect custom headers from params.
+    let mut headers: Vec<(String, String)> = Vec::new();
+    if let Some(table) = step.params.get("headers").and_then(|h| h.as_table()) {
+        for (key, value) in table {
+            if let Some(val_str) = value.as_str() {
+                headers.push((key.clone(), val_str.to_string()));
             }
         }
     }
 
-    let response = request.send().await?;
-    let status = response.status();
-    let body = response.text().await?;
+    let response = crate::http_transport::request(method, url, &headers, body.as_deref()).await?;
 
-    if !status.is_success() {
+    if !response.is_success() {
         crate::fail_code!(
             golem_events::FailureCode::FlowExternalFailed,
             "HTTP {} {} returned status {}: {}",
             method,
             url,
-            status.as_u16(),
-            body
+            response.status,
+            response.body
         );
     }
 
     if let Some(ref var_name) = step.save_to {
-        vars.set_in_scope(ScopeLevel::Flow, var_name, VarValue::string(&body));
+        vars.set_in_scope(ScopeLevel::Flow, var_name, VarValue::string(&response.body));
     }
 
     Ok(())
@@ -795,6 +786,128 @@ mod tests {
 
         let saved = vars.get("output").expect("output variable should exist");
         assert_eq!(saved, &VarValue::string("hello"));
+    }
+
+    // ── http action (hermetic via the transport seam) ─────────────────
+    mod http {
+        use super::*;
+        use crate::http_transport::{set_test_transport, CannedHttp, FakeHttpTransport};
+        use std::sync::Arc;
+
+        #[tokio::test]
+        async fn get_success_stores_body_in_save_to() {
+            let fake = Arc::new(FakeHttpTransport::new());
+            fake.expect("GET", "https://api/x", CannedHttp::ok("{\"ok\":true}"));
+            let _g = set_test_transport(fake);
+
+            let mut vars = make_vars();
+            let mut step = make_step("http");
+            step.params.insert(
+                "url".to_string(),
+                toml::Value::String("https://api/x".to_string()),
+            );
+            step.save_to = Some("resp".to_string());
+
+            handle_http(&step, &mut vars, "GET")
+                .await
+                .expect("2xx GET SHALL succeed");
+            assert_eq!(
+                vars.get("resp").expect("resp SHALL be set"),
+                &VarValue::string("{\"ok\":true}")
+            );
+        }
+
+        #[tokio::test]
+        async fn non_2xx_status_fails_the_step() {
+            let fake = Arc::new(FakeHttpTransport::new());
+            fake.expect("GET", "https://api/x", CannedHttp::status(503, "unavailable"));
+            let _g = set_test_transport(fake);
+
+            let mut vars = make_vars();
+            let mut step = make_step("http");
+            step.params.insert(
+                "url".to_string(),
+                toml::Value::String("https://api/x".to_string()),
+            );
+
+            let err = handle_http(&step, &mut vars, "GET")
+                .await
+                .expect_err("a 5xx status SHALL fail the step");
+            let msg = format!("{err:#}");
+            assert!(msg.contains("503") && msg.contains("unavailable"), "got: {msg}");
+        }
+
+        #[tokio::test]
+        async fn post_sends_body_and_custom_headers() {
+            let fake = Arc::new(FakeHttpTransport::new());
+            fake.expect("POST", "https://api/x", CannedHttp::status(201, "created"));
+            let _g = set_test_transport(fake.clone());
+
+            let mut vars = make_vars();
+            let mut step = make_step("http");
+            step.params.insert(
+                "url".to_string(),
+                toml::Value::String("https://api/x".to_string()),
+            );
+            step.params.insert(
+                "body".to_string(),
+                toml::Value::String("{\"n\":1}".to_string()),
+            );
+            let mut headers = toml::value::Table::new();
+            headers.insert(
+                "X-Token".to_string(),
+                toml::Value::String("secret".to_string()),
+            );
+            step.params
+                .insert("headers".to_string(), toml::Value::Table(headers));
+
+            handle_http(&step, &mut vars, "POST")
+                .await
+                .expect("201 SHALL be treated as success");
+
+            let rec = fake.recorded();
+            assert_eq!(rec.len(), 1);
+            assert_eq!(rec[0].method, "POST");
+            assert_eq!(rec[0].body.as_deref(), Some("{\"n\":1}"));
+            assert!(
+                rec[0]
+                    .headers
+                    .contains(&("X-Token".to_string(), "secret".to_string())),
+                "custom header SHALL be forwarded: {:?}",
+                rec[0].headers
+            );
+        }
+
+        #[tokio::test]
+        async fn missing_url_param_errors() {
+            let mut vars = make_vars();
+            let step = make_step("http");
+            let err = handle_http(&step, &mut vars, "GET")
+                .await
+                .expect_err("missing url SHALL error");
+            assert!(format!("{err:#}").contains("requires 'url'"));
+        }
+
+        #[tokio::test]
+        async fn unsupported_method_errors_before_transport() {
+            let fake = Arc::new(FakeHttpTransport::new());
+            let _g = set_test_transport(fake.clone());
+
+            let mut vars = make_vars();
+            let mut step = make_step("http");
+            step.params.insert(
+                "url".to_string(),
+                toml::Value::String("https://api/x".to_string()),
+            );
+            let err = handle_http(&step, &mut vars, "TRACE")
+                .await
+                .expect_err("an unsupported method SHALL error");
+            assert!(format!("{err:#}").contains("Unsupported HTTP method"));
+            assert!(
+                fake.recorded().is_empty(),
+                "no request SHALL be issued for an unsupported method"
+            );
+        }
     }
 
     // ── run action executes a project-scoped script file ──────────────

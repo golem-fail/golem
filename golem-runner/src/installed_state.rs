@@ -14,7 +14,6 @@ use std::time::SystemTime;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use golem_devices::{DeviceInfo, Platform};
-use tokio::process::Command;
 
 /// Result of querying a device for a particular bundle's install state.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,11 +67,12 @@ pub async fn query(device: &DeviceInfo, bundle_id: &str) -> DeviceInstallInfo {
 async fn query_ios_sim(udid: &str, bundle_id: &str) -> Result<DeviceInstallInfo> {
     // `get_app_container app <udid> <bundle>` prints the bundle path or
     // exits nonzero when the bundle isn't installed. Fast — ~50ms.
-    let out = Command::new("xcrun")
-        .args(["simctl", "get_app_container", udid, bundle_id, "app"])
-        .output()
-        .await
-        .context("invoke simctl get_app_container")?;
+    let out = golem_common::command::output_argv(
+        "xcrun",
+        &["simctl", "get_app_container", udid, bundle_id, "app"],
+    )
+    .await
+    .context("invoke simctl get_app_container")?;
     if !out.status.success() {
         return Ok(DeviceInstallInfo::not_installed());
     }
@@ -118,9 +118,7 @@ async fn read_ios_bundle_version(bundle_path: &Path) -> Option<String> {
 /// Read a single string-valued plist key via `defaults read`. Returns
 /// `None` for missing keys, command failures, or empty values.
 async fn read_plist_key(plist_arg: &str, key: &str) -> Option<String> {
-    let out = Command::new("defaults")
-        .args(["read", plist_arg, key])
-        .output()
+    let out = golem_common::command::output_argv("defaults", &["read", plist_arg, key])
         .await
         .ok()?;
     if !out.status.success() {
@@ -136,11 +134,12 @@ async fn read_plist_key(plist_arg: &str, key: &str) -> Option<String> {
 
 async fn query_android(serial: &str, bundle_id: &str) -> Result<DeviceInstallInfo> {
     // `pm path` exits 1 when the package isn't installed. Fast presence check.
-    let out = Command::new("adb")
-        .args(["-s", serial, "shell", "pm", "path", bundle_id])
-        .output()
-        .await
-        .context("invoke adb pm path")?;
+    let out = golem_common::command::output_argv(
+        "adb",
+        &["-s", serial, "shell", "pm", "path", bundle_id],
+    )
+    .await
+    .context("invoke adb pm path")?;
     if !out.status.success() {
         return Ok(DeviceInstallInfo::not_installed());
     }
@@ -150,10 +149,11 @@ async fn query_android(serial: &str, bundle_id: &str) -> Result<DeviceInstallInf
     }
 
     // `dumpsys package <bundle>` exposes lastUpdateTime + versionName.
-    let dump = Command::new("adb")
-        .args(["-s", serial, "shell", "dumpsys", "package", bundle_id])
-        .output()
-        .await;
+    let dump = golem_common::command::output_argv(
+        "adb",
+        &["-s", serial, "shell", "dumpsys", "package", bundle_id],
+    )
+    .await;
     let (install_time, version) = match dump {
         Ok(o) if o.status.success() => parse_android_dumpsys(&String::from_utf8_lossy(&o.stdout)),
         _ => (None, None),
@@ -393,5 +393,152 @@ mod tests {
             0,
             "pre-epoch SHALL saturate to epoch, not panic"
         );
+    }
+
+    // --- query() orchestration (hermetic via the command seam) ------------
+
+    use golem_common::command::{set_test_runner, Canned, FakeCommandRunner};
+    use golem_devices::{DeviceState, DeviceType};
+    use std::sync::Arc;
+
+    fn android_device(udid: &str) -> DeviceInfo {
+        DeviceInfo {
+            name: "Pixel".into(),
+            udid: udid.into(),
+            platform: Platform::Android,
+            device_type: DeviceType::Phone,
+            os_major: 14,
+            os_version: "14".into(),
+            state: DeviceState::Booted,
+            physical: false,
+            playstore: false,
+            screen_width: None,
+            screen_height: None,
+            screen_scale: None,
+            last_booted: None,
+            runtime_id: None,
+            device_type_id: None,
+        }
+    }
+
+    fn ios_sim_device(udid: &str) -> DeviceInfo {
+        DeviceInfo {
+            platform: Platform::Ios,
+            ..android_device(udid)
+        }
+    }
+
+    // 17. Android: `pm path` exiting non-zero => not installed (no dumpsys).
+    #[tokio::test]
+    async fn query_android_pm_path_failure_is_not_installed() {
+        let fake = Arc::new(FakeCommandRunner::new());
+        fake.expect(
+            &["adb", "-s", "emulator-5554", "shell", "pm", "path", "com.x"],
+            Canned::exit(1, "", ""),
+        );
+        let _g = set_test_runner(fake.clone());
+
+        let info = query(&android_device("emulator-5554"), "com.x").await;
+        assert_eq!(info, DeviceInstallInfo::not_installed());
+        assert_eq!(fake.call_count(), 1, "dumpsys SHALL NOT run when pm path fails");
+    }
+
+    // 18. Android: `pm path` succeeds but prints no `package:` => not installed.
+    #[tokio::test]
+    async fn query_android_pm_path_without_package_is_not_installed() {
+        let fake = Arc::new(FakeCommandRunner::new());
+        fake.expect(
+            &["adb", "-s", "emulator-5554", "shell", "pm", "path", "com.x"],
+            Canned::ok_stdout("\n"),
+        );
+        let _g = set_test_runner(fake);
+        let info = query(&android_device("emulator-5554"), "com.x").await;
+        assert!(!info.installed);
+    }
+
+    // 19. Android happy path: pm path present + dumpsys parsed into version +
+    //     install_time.
+    #[tokio::test]
+    async fn query_android_installed_parses_dumpsys() {
+        let fake = Arc::new(FakeCommandRunner::new());
+        fake.expect(
+            &["adb", "-s", "emulator-5554", "shell", "pm", "path", "com.x"],
+            Canned::ok_stdout("package:/data/app/com.x-1/base.apk\n"),
+        );
+        fake.expect(
+            &["adb", "-s", "emulator-5554", "shell", "dumpsys", "package", "com.x"],
+            Canned::ok_stdout("    versionName=1.2.3\n    lastUpdateTime=2026-04-27 09:12:45\n"),
+        );
+        let _g = set_test_runner(fake);
+
+        let info = query(&android_device("emulator-5554"), "com.x").await;
+        assert!(info.installed);
+        assert_eq!(info.version.as_deref(), Some("1.2.3"));
+        assert_eq!(
+            info.install_time
+                .expect("install_time SHALL parse")
+                .format("%Y-%m-%d %H:%M:%S")
+                .to_string(),
+            "2026-04-27 09:12:45"
+        );
+    }
+
+    // 20. Android: installed but dumpsys fails => still installed, with no
+    //     time/version (best-effort fields degrade, presence stands).
+    #[tokio::test]
+    async fn query_android_installed_dumpsys_failure_keeps_presence() {
+        let fake = Arc::new(FakeCommandRunner::new());
+        fake.expect(
+            &["adb", "-s", "emulator-5554", "shell", "pm", "path", "com.x"],
+            Canned::ok_stdout("package:/data/app/com.x/base.apk\n"),
+        );
+        fake.expect(
+            &["adb", "-s", "emulator-5554", "shell", "dumpsys", "package", "com.x"],
+            Canned::exit(1, "", "dumpsys busy"),
+        );
+        let _g = set_test_runner(fake);
+
+        let info = query(&android_device("emulator-5554"), "com.x").await;
+        assert!(info.installed, "presence SHALL stand even if dumpsys fails");
+        assert!(info.install_time.is_none());
+        assert!(info.version.is_none());
+    }
+
+    // 21. query() never errors: an adb spawn failure degrades to not-installed.
+    #[tokio::test]
+    async fn query_android_spawn_error_degrades_to_not_installed() {
+        let fake = Arc::new(FakeCommandRunner::new());
+        fake.expect(
+            &["adb", "-s", "emulator-5554", "shell", "pm", "path", "com.x"],
+            Canned::io_error(std::io::ErrorKind::NotFound, "adb not found"),
+        );
+        let _g = set_test_runner(fake);
+        let info = query(&android_device("emulator-5554"), "com.x").await;
+        assert_eq!(info, DeviceInstallInfo::not_installed());
+    }
+
+    // 22. iOS sim: get_app_container non-zero (bundle absent) => not installed.
+    #[tokio::test]
+    async fn query_ios_sim_container_missing_is_not_installed() {
+        let fake = Arc::new(FakeCommandRunner::new());
+        fake.expect(
+            &["xcrun", "simctl", "get_app_container", "SIM-UDID", "com.x", "app"],
+            Canned::exit(2, "", "No such app"),
+        );
+        let _g = set_test_runner(fake);
+        let info = query(&ios_sim_device("SIM-UDID"), "com.x").await;
+        assert_eq!(info, DeviceInstallInfo::not_installed());
+    }
+
+    // 23. iOS physical is unsupported today => always not installed, no probe.
+    #[tokio::test]
+    async fn query_ios_physical_is_not_installed() {
+        let fake = Arc::new(FakeCommandRunner::new());
+        let _g = set_test_runner(fake.clone());
+        let mut device = ios_sim_device("PHYS");
+        device.physical = true;
+        let info = query(&device, "com.x").await;
+        assert_eq!(info, DeviceInstallInfo::not_installed());
+        assert_eq!(fake.call_count(), 0, "physical iOS SHALL not probe");
     }
 }

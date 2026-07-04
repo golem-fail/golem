@@ -767,4 +767,113 @@ mod tests {
             "a single-candidate pool SHALL return that candidate",
         );
     }
+
+    // ---------------------------------------------------------------
+    // evaluate_cache_gates — end-to-end over a real InstallCache and the
+    // command seam (fakes the device `query`). Proves the I/O wrapper wires
+    // get_persistent + installed_state::query + gate_decision correctly.
+    // ---------------------------------------------------------------
+    use golem_common::command::{set_test_runner, Canned, FakeCommandRunner};
+    use std::sync::Arc;
+
+    fn android_device(udid: &str) -> DeviceInfo {
+        DeviceInfo {
+            platform: Platform::Android,
+            ..test_device("Pixel", udid)
+        }
+    }
+
+    /// A cache with one persisted `(udid, bundle)` entry at fingerprint `fp`.
+    async fn cache_with_entry(
+        udid: &str,
+        bundle: &str,
+        fp: golem_runner::fingerprint::Fingerprint,
+        install_time: Option<chrono::DateTime<chrono::Utc>>,
+        tmp: &std::path::Path,
+    ) -> golem_runner::installer::InstallCache {
+        let cache = golem_runner::installer::InstallCache::new();
+        cache
+            .load_persistent(tmp.join("cache.json"))
+            .await
+            .expect("load_persistent");
+        cache
+            .set_persistent(udid, bundle, make_entry(fp, install_time))
+            .await
+            .expect("set_persistent");
+        cache
+    }
+
+    #[tokio::test]
+    async fn evaluate_cache_gates_hit_end_to_end() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let cache = cache_with_entry("emulator-5554", "com.x", fp_git("a"), None, tmp.path()).await;
+
+        let fake = Arc::new(FakeCommandRunner::new());
+        fake.expect(
+            &["adb", "-s", "emulator-5554", "shell", "pm", "path", "com.x"],
+            Canned::ok_stdout("package:/data/app/com.x/base.apk\n"),
+        );
+        fake.expect(
+            &["adb", "-s", "emulator-5554", "shell", "dumpsys", "package", "com.x"],
+            Canned::ok_stdout("versionName=1.0\n"),
+        );
+        let _g = set_test_runner(fake);
+
+        let v = evaluate_cache_gates(&cache, &android_device("emulator-5554"), "com.x", &fp_git("a"))
+            .await;
+        assert!(
+            matches!(v, CacheVerdict::Hit { .. }),
+            "entry present + fingerprint match + device installed SHALL hit: {v:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn evaluate_cache_gates_miss_when_fingerprint_changed() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let cache = cache_with_entry("emulator-5554", "com.x", fp_git("old"), None, tmp.path()).await;
+
+        let fake = Arc::new(FakeCommandRunner::new());
+        fake.expect(
+            &["adb", "-s", "emulator-5554", "shell", "pm", "path", "com.x"],
+            Canned::ok_stdout("package:/data/app/com.x/base.apk\n"),
+        );
+        fake.expect(
+            &["adb", "-s", "emulator-5554", "shell", "dumpsys", "package", "com.x"],
+            Canned::ok_stdout("versionName=1.0\n"),
+        );
+        let _g = set_test_runner(fake);
+
+        let v = evaluate_cache_gates(
+            &cache,
+            &android_device("emulator-5554"),
+            "com.x",
+            &fp_git("new"),
+        )
+        .await;
+        assert!(
+            miss_reason(v).contains("fingerprint changed"),
+            "a changed source fingerprint SHALL miss even when installed"
+        );
+    }
+
+    #[tokio::test]
+    async fn evaluate_cache_gates_miss_when_device_lost_bundle() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let cache = cache_with_entry("emulator-5554", "com.x", fp_git("a"), None, tmp.path()).await;
+
+        // Device no longer has the bundle: pm path exits non-zero.
+        let fake = Arc::new(FakeCommandRunner::new());
+        fake.expect(
+            &["adb", "-s", "emulator-5554", "shell", "pm", "path", "com.x"],
+            Canned::exit(1, "", ""),
+        );
+        let _g = set_test_runner(fake);
+
+        let v = evaluate_cache_gates(&cache, &android_device("emulator-5554"), "com.x", &fp_git("a"))
+            .await;
+        assert!(
+            miss_reason(v).contains("no longer installed"),
+            "a device that lost the bundle SHALL miss on the presence gate"
+        );
+    }
 }

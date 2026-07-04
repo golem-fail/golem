@@ -347,10 +347,9 @@ async fn run_command(args: &[String], context: &str) -> Result<String> {
         bail!("{context}: empty command");
     };
 
-    let output = tokio::process::Command::new(program)
-        .args(arguments)
-        .output()
-        .await?;
+    let output = golem_common::command::output(program, arguments)
+        .await
+        .with_context(|| format!("{context}: failed to run {program}"))?;
 
     if !output.status.success() {
         bail!("{context}: {}", String::from_utf8_lossy(&output.stderr));
@@ -436,11 +435,8 @@ async fn boot_android_and_wait(device: &DeviceInfo) -> Result<DeviceInfo> {
     let Some((program, arguments)) = args.split_first() else {
         bail!("boot {}: empty command", device.name);
     };
-    tokio::process::Command::new(program)
-        .args(arguments)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
+    golem_common::command::spawn_detached(program, arguments)
+        .await
         .with_context(|| format!("spawn emulator for {}", device.name))?;
 
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(180);
@@ -512,11 +508,7 @@ async fn boot_android_and_wait(device: &DeviceInfo) -> Result<DeviceInfo> {
 /// Snapshot every emulator serial currently visible to adb. Physical
 /// devices are excluded — they don't show as `emulator-NNNN`.
 async fn list_running_emulator_serials() -> Vec<String> {
-    let out = match tokio::process::Command::new("adb")
-        .args(["devices"])
-        .output()
-        .await
-    {
+    let out = match golem_common::command::output("adb", &["devices".to_string()]).await {
         Ok(o) if o.status.success() => o,
         _ => return Vec::new(),
     };
@@ -595,22 +587,25 @@ pub async fn spawn_companion_with_reg(
     let Some((program, arguments)) = args.split_first() else {
         bail!("empty companion start command");
     };
-    let mut cmd = tokio::process::Command::new(program);
-    cmd.args(arguments)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
 
-    // iOS source-based: pass via env var
+    // iOS source-based: pass the port via env var (the .xcodeproj launcher
+    // reads it rather than taking it as an argument).
+    let mut env: Vec<(String, String)> = Vec::new();
     if device.platform == Platform::Ios && companion_path.ends_with(".xcodeproj") {
         if let Some(rp) = reg_port {
-            cmd.env("GOLEM_REG_PORT", rp.to_string());
+            env.push(("GOLEM_REG_PORT".to_string(), rp.to_string()));
         } else {
-            cmd.env("GOLEM_PORT", port.to_string());
+            env.push(("GOLEM_PORT".to_string(), port.to_string()));
         }
     }
 
-    cmd.spawn()
-        .with_context(|| format!("failed to spawn companion on {} (port {port})", device.name))?;
+    golem_common::command::spawn_detached_with(
+        program,
+        arguments,
+        &golem_common::command::CommandOpts::with_env(env),
+    )
+    .await
+    .with_context(|| format!("failed to spawn companion on {} (port {port})", device.name))?;
     Ok(())
 }
 
@@ -937,6 +932,7 @@ async fn auto_create_android(
 mod tests {
     use super::*;
     use crate::{DeviceState, DeviceType};
+    use golem_common::command::{set_test_runner, Canned, FakeCommandRunner};
 
     fn ios_device() -> DeviceInfo {
         DeviceInfo {
@@ -1453,26 +1449,174 @@ mod tests {
     }
 
     // 27. run_command surfaces a non-zero exit as an error carrying the
-    //     context prefix.
+    //     context prefix and the child's stderr (hermetic via the fake).
     #[tokio::test]
     async fn run_command_nonzero_exit_errors() {
-        let err = run_command(&["false".into()], "deliberate failure")
+        let fake = std::sync::Arc::new(FakeCommandRunner::new());
+        fake.expect(&["some-tool", "--bad"], Canned::exit(1, "", "boom"));
+        let _g = set_test_runner(fake);
+
+        let err = run_command(&["some-tool".into(), "--bad".into()], "deliberate failure")
             .await
             .expect_err("a non-zero exit SHALL error");
         let msg = format!("{err:#}");
         assert!(
-            msg.contains("deliberate failure"),
-            "error SHALL carry the context, got: {msg}"
+            msg.contains("deliberate failure") && msg.contains("boom"),
+            "error SHALL carry the context and stderr, got: {msg}"
         );
     }
 
-    // 28. run_command returns captured stdout on success.
+    // 28. run_command returns captured stdout on success (hermetic).
     #[tokio::test]
     async fn run_command_success_returns_stdout() {
+        let fake = std::sync::Arc::new(FakeCommandRunner::new());
+        fake.expect(&["echo", "hello"], Canned::ok_stdout("hello\n"));
+        let _g = set_test_runner(fake);
+
         let out = run_command(&["echo".into(), "hello".into()], "echo")
             .await
             .expect("echo SHALL succeed");
         assert_eq!(out.trim(), "hello", "stdout SHALL be captured verbatim");
+    }
+
+    // 28a. boot_device on iOS runs `simctl boot` then blocks on
+    //      `bootstatus -b`, returning a Booted DeviceInfo with the udid intact.
+    #[tokio::test]
+    async fn boot_ios_waits_for_bootstatus() {
+        let device = ios_device();
+        let fake = std::sync::Arc::new(FakeCommandRunner::new());
+        fake.expect(&["xcrun", "simctl", "boot", "AAAA-BBBB-CCCC"], Canned::ok_stdout(""));
+        fake.expect(
+            &["xcrun", "simctl", "bootstatus", "AAAA-BBBB-CCCC", "-b"],
+            Canned::ok_stdout(""),
+        );
+        let _g = set_test_runner(fake.clone());
+
+        let booted = boot_device(&device).await.expect("boot SHALL succeed");
+        assert_eq!(booted.state, DeviceState::Booted);
+        assert_eq!(booted.udid, device.udid, "iOS keeps its static udid");
+        assert_eq!(
+            fake.recorded(),
+            vec![
+                vec![
+                    "xcrun".to_string(),
+                    "simctl".into(),
+                    "boot".into(),
+                    "AAAA-BBBB-CCCC".into()
+                ],
+                vec![
+                    "xcrun".to_string(),
+                    "simctl".into(),
+                    "bootstatus".into(),
+                    "AAAA-BBBB-CCCC".into(),
+                    "-b".into()
+                ],
+            ],
+            "boot then bootstatus, in order"
+        );
+    }
+
+    // 28b. The "already Booted" (code=405) race — two slots booting the same
+    //      shared sim — is treated as success; bootstatus still confirms ready.
+    #[tokio::test]
+    async fn boot_ios_treats_already_booted_race_as_success() {
+        let device = ios_device();
+        let fake = std::sync::Arc::new(FakeCommandRunner::new());
+        fake.expect(
+            &["xcrun", "simctl", "boot", "AAAA-BBBB-CCCC"],
+            Canned::exit(
+                149,
+                "",
+                "An error was encountered processing the command (domain=com.apple.CoreSimulator.SimError, code=405): Unable to boot device in current state: Booted",
+            ),
+        );
+        fake.expect(
+            &["xcrun", "simctl", "bootstatus", "AAAA-BBBB-CCCC", "-b"],
+            Canned::ok_stdout(""),
+        );
+        let _g = set_test_runner(fake);
+
+        let booted = boot_device(&device)
+            .await
+            .expect("the already-booted race SHALL be treated as success");
+        assert_eq!(booted.state, DeviceState::Booted);
+    }
+
+    // 28c. A genuine boot error (not the 405 race) fails fast, before
+    //      bootstatus is attempted.
+    #[tokio::test]
+    async fn boot_ios_propagates_real_boot_error_without_bootstatus() {
+        let device = ios_device();
+        let fake = std::sync::Arc::new(FakeCommandRunner::new());
+        fake.expect(
+            &["xcrun", "simctl", "boot", "AAAA-BBBB-CCCC"],
+            Canned::exit(1, "", "Invalid device: AAAA-BBBB-CCCC"),
+        );
+        let _g = set_test_runner(fake.clone());
+
+        let err = boot_device(&device)
+            .await
+            .expect_err("a real boot error SHALL propagate");
+        assert!(format!("{err:#}").contains("Invalid device"));
+        assert_eq!(
+            fake.call_count(),
+            1,
+            "bootstatus SHALL NOT run after a fatal boot error"
+        );
+    }
+
+    // 28d. A bootstatus failure after a successful boot propagates.
+    #[tokio::test]
+    async fn boot_ios_propagates_bootstatus_failure() {
+        let device = ios_device();
+        let fake = std::sync::Arc::new(FakeCommandRunner::new());
+        fake.expect(&["xcrun", "simctl", "boot", "AAAA-BBBB-CCCC"], Canned::ok_stdout(""));
+        fake.expect(
+            &["xcrun", "simctl", "bootstatus", "AAAA-BBBB-CCCC", "-b"],
+            Canned::exit(1, "", "bootstatus failed"),
+        );
+        let _g = set_test_runner(fake);
+
+        let err = boot_device(&device)
+            .await
+            .expect_err("bootstatus failure SHALL propagate");
+        assert!(format!("{err:#}").contains("bootstatus"));
+    }
+
+    // 28e. boot_device on Android spawns the emulator, resolves the new serial
+    //      by matching AVD name, polls sys.boot_completed until "1", and
+    //      rewrites udid from the AVD id to the dynamic emulator serial.
+    //      start_paused advances the poll sleeps instantly.
+    #[tokio::test(start_paused = true)]
+    async fn boot_android_resolves_serial_and_waits_for_boot_completed() {
+        let mut device = android_device();
+        device.udid = "Pixel_8_API_34".into(); // AVD identifier for a shutdown device
+        device.state = DeviceState::Shutdown;
+
+        let fake = std::sync::Arc::new(FakeCommandRunner::new());
+        // `adb devices`: empty before spawn, then the new serial appears.
+        fake.expect(&["adb", "devices"], Canned::ok_stdout("List of devices attached\n"));
+        fake.expect(
+            &["adb", "devices"],
+            Canned::ok_stdout("List of devices attached\nemulator-5554\tdevice\n"),
+        );
+        // The new serial reports our AVD name.
+        fake.expect(
+            &["adb", "-s", "emulator-5554", "emu", "avd", "name"],
+            Canned::ok_stdout("Pixel_8_API_34\n"),
+        );
+        // Readiness poll flips 0 → 1.
+        let getprop = ["adb", "-s", "emulator-5554", "shell", "getprop", "sys.boot_completed"];
+        fake.expect(&getprop, Canned::ok_stdout("0\n"));
+        fake.expect(&getprop, Canned::ok_stdout("1\n"));
+        let _g = set_test_runner(fake);
+
+        let booted = boot_device(&device).await.expect("android boot SHALL succeed");
+        assert_eq!(booted.state, DeviceState::Booted);
+        assert_eq!(
+            booted.udid, "emulator-5554",
+            "udid SHALL be rewritten from AVD id to the dynamic serial"
+        );
     }
 
     // 29. parse_emulator_serials extracts only emulator serials in the

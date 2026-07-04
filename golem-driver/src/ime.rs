@@ -44,11 +44,11 @@ fn activations() -> &'static Mutex<HashMap<String, String>> {
 /// `AndroidDriver::adb` but standalone so the restore paths (which have
 /// only a serial, not a driver) can use it.
 async fn adb(serial: &str, args: &[&str]) -> Result<String> {
-    let output = tokio::process::Command::new("adb")
-        .arg("-s")
-        .arg(serial)
-        .args(args)
-        .output()
+    let mut argv: Vec<&str> = Vec::with_capacity(args.len() + 2);
+    argv.push("-s");
+    argv.push(serial);
+    argv.extend_from_slice(args);
+    let output = golem_common::command::output_argv("adb", &argv)
         .await
         .context("failed to spawn adb")?;
     if !output.status.success() {

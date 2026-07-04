@@ -32,29 +32,28 @@ reverted; re-add when tackling this).
 CSS env 62 → −8pt on every Tauri/full-screen webview — is already fixed:
 `webkit.rs` cancels the native inset `ios.rs` added, not the CSS env.)
 
-## Testability: unified I/O seam abstractions (subprocess + HTTP)
+## Testability: I/O seam abstractions — remaining sites
 
-Coverage sweep surfaced ~15 functions that directly construct `tokio::process::Command`
-or issue HTTP, making their orchestration logic untestable without real devices/network.
-Rather than 15 piecemeal injections, do two shared seams:
+The shared seams exist (`golem-common::command` `CommandRunner` +
+`golem-runner::http_transport` `HttpTransport`, each with a fake + restoring
+test guard) and cover device boot/wait, `installed_state::query`, the adb
+driver funnel, device reboot/recovery, and the `http` action. Sites still on
+raw `tokio::process`/`reqwest`, to wire when hermetic tests are wanted:
 
-- **`CommandRunner` trait** (real impl spawns; test fake returns canned `Output`/errors),
-  injected where subprocess calls happen: `golem-runner` `installed_state::query`
-  (xcrun/adb/defaults), `installer::run_install_script`, `cleanup` shutdown;
-  `golem-devices` `lifecycle` (boot/run/spawn), `settings` appliers, `concurrency`
-  (adb free-disk), `resource_manager` shutdown; `golem-driver` `android` adb runner;
-  `golem-cli` `suite` reboot/wait. A clock/sleep seam pairs with this for the
-  reboot/wait timeouts.
-- **HTTP/transport seam** for `golem-runner` `actions/external` `handle_http` (inject a
-  `reqwest::Client`/transport) and `handle_await_email` (an `ImapPoller` trait),
-  `golem-runner` `perf` companion fetch, and `golem-driver` `webkit`/`android` companion
-  transport (in-memory duplex for tests).
+- `installer::run_install_script` — holds a *live child*, streams stderr line-by-line as
+  `InstallOutput` events, and applies caller-side timeout+kill. The capture-all `output()`
+  seam can't model it without regressing live build-progress streaming; needs a dedicated
+  *streaming* trait method (live child + kill handle). Its 3 tests still spawn real trivial
+  scripts (nextest SLOW).
+- The `screenrecord` spawn in `golem-driver` `android` `start_recording` — same live-child
+  shape.
+- Lower-value auxiliary sites: `golem-driver` `cdp`/`webkit` (lsof/ps/adb + CDP
+  `reqwest::get`), `golem-runner` `perf` (adb + companion fetch), `golem-devices`
+  `settings`/`concurrency`/`resource_manager` appliers, `capture` ffmpeg, `fingerprint`.
+  Wire opportunistically when a bug there needs a regression test.
 
-Also `golem-cli` `install_cache` could take a seam over `installed_state::query` to drive
-`evaluate_cache_gates` with fake `DeviceInstallInfo`. Each seam is behavior-preserving
-(real impl is the default); the payoff is hermetic unit tests for retry/timeout/error
-orchestration. Sizable, architectural — its own session. (The small standalone Cat-3
-seams — main color, orchestrator socket_path, stream `impl Write` — were done inline.)
+(A clock/sleep seam proved unnecessary — `tokio` `start_paused` advances the reboot/wait
+timeouts deterministically.)
 
 ## Scroll: `center` + `visibility_percentage` for edge/partial targets
 

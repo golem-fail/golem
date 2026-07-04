@@ -678,12 +678,17 @@ dependencies = [
 [[package]]
 name = "golem-common"
 version = "0.6.37"
+dependencies = [
+ "async-trait",
+ "tokio",
+]
 
 [[package]]
 name = "golem-devices"
 version = "0.6.37"
 dependencies = [
  "anyhow",
+ "golem-common",
  "golem-events",
  "libc",
  "serde",

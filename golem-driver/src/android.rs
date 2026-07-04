@@ -352,11 +352,11 @@ impl AndroidDriver {
 
     /// Run an `adb` subcommand targeting this device.
     async fn adb(&self, args: &[&str]) -> Result<String> {
-        let output = tokio::process::Command::new("adb")
-            .arg("-s")
-            .arg(&self.device_serial)
-            .args(args)
-            .output()
+        let mut argv: Vec<&str> = Vec::with_capacity(args.len() + 2);
+        argv.push("-s");
+        argv.push(&self.device_serial);
+        argv.extend_from_slice(args);
+        let output = golem_common::command::output_argv("adb", &argv)
             .await
             .context("failed to spawn adb")?;
 
@@ -1028,17 +1028,12 @@ impl PlatformDriver for AndroidDriver {
             std::process::id(),
         ));
         let tmp_str = tmp.to_string_lossy().to_string();
-        let output = tokio::process::Command::new("adb")
-            .args([
-                "-s",
-                &self.device_serial,
-                "pull",
-                &state.device_path,
-                &tmp_str,
-            ])
-            .output()
-            .await
-            .with_context(|| format!("adb pull {}", state.device_path))?;
+        let output = golem_common::command::output_argv(
+            "adb",
+            &["-s", &self.device_serial, "pull", &state.device_path, &tmp_str],
+        )
+        .await
+        .with_context(|| format!("adb pull {}", state.device_path))?;
         if !output.status.success() {
             bail!(
                 "adb pull {} failed: {}",
@@ -1056,10 +1051,11 @@ impl PlatformDriver for AndroidDriver {
     }
 
     async fn remove_port_forwards(&self) -> Result<()> {
-        let output = tokio::process::Command::new("adb")
-            .args(["-s", &self.device_serial, "forward", "--remove-all"])
-            .output()
-            .await?;
+        let output = golem_common::command::output_argv(
+            "adb",
+            &["-s", &self.device_serial, "forward", "--remove-all"],
+        )
+        .await?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(golem_events::coded(

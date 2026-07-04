@@ -1,5 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
+pub mod command;
+
 static DEBUG: AtomicBool = AtomicBool::new(false);
 
 pub fn set_debug(enabled: bool) {

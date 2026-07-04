@@ -237,9 +237,7 @@ async fn discover_running_android_devices() -> Vec<(String, Option<String>)> {
 /// Returns `None` while the emulator is still early-booting (`adb`
 /// reachable but emulator console not yet responsive).
 pub async fn get_emulator_avd_name(serial: &str) -> Option<String> {
-    let output = tokio::process::Command::new("adb")
-        .args(["-s", serial, "emu", "avd", "name"])
-        .output()
+    let output = golem_common::command::output_argv("adb", &["-s", serial, "emu", "avd", "name"])
         .await
         .ok()?;
 

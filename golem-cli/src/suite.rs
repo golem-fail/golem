@@ -71,22 +71,22 @@ fn is_transient_install_error(err: &str) -> bool {
 async fn wait_for_android_package_service(udid: &str) -> anyhow::Result<()> {
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
     loop {
-        let boot = tokio::process::Command::new("adb")
-            .args(["-s", udid, "shell", "getprop", "sys.boot_completed"])
-            .output()
-            .await;
+        let boot = golem_common::command::output_argv(
+            "adb",
+            &["-s", udid, "shell", "getprop", "sys.boot_completed"],
+        )
+        .await;
         let booted = matches!(&boot, Ok(o) if String::from_utf8_lossy(&o.stdout).trim() == "1");
         if booted {
             // `pm list packages -f android` is a tiny query that hits
             // the package service. Success means `package` service is
             // bound; failure surfaces the same `Can't find service`
             // string that would otherwise poison install_script.
-            let pm = tokio::process::Command::new("adb")
-                .args([
-                    "-s", udid, "shell", "pm", "list", "packages", "-f", "android",
-                ])
-                .output()
-                .await;
+            let pm = golem_common::command::output_argv(
+                "adb",
+                &["-s", udid, "shell", "pm", "list", "packages", "-f", "android"],
+            )
+            .await;
             if let Ok(o) = pm {
                 let stderr = String::from_utf8_lossy(&o.stderr);
                 if o.status.success() && !stderr.contains("Can't find service") {
@@ -2106,10 +2106,7 @@ fn format_disk_summary(snap: &golem_devices::concurrency::ResourceSnapshot) -> S
 }
 
 async fn reboot_android_device(udid: &str) -> anyhow::Result<()> {
-    let _ = tokio::process::Command::new("adb")
-        .args(["-s", udid, "reboot"])
-        .output()
-        .await?;
+    let _ = golem_common::command::output_argv("adb", &["-s", udid, "reboot"]).await?;
     // Wait for sys.boot_completed=1 (cap ~3 min to avoid hanging the
     // background task forever if the emulator is fully wedged).
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(180);
@@ -2117,10 +2114,9 @@ async fn reboot_android_device(udid: &str) -> anyhow::Result<()> {
         if tokio::time::Instant::now() > deadline {
             anyhow::bail!("reboot timeout: {udid} did not finish booting in 180s");
         }
-        let out = tokio::process::Command::new("adb")
-            .args(["-s", udid, "shell", "getprop", "sys.boot_completed"])
-            .output()
-            .await;
+        let out =
+            golem_common::command::output_argv("adb", &["-s", udid, "shell", "getprop", "sys.boot_completed"])
+                .await;
         if let Ok(o) = out {
             if String::from_utf8_lossy(&o.stdout).trim() == "1" {
                 // Extra grace period for the package manager + companion
@@ -2140,22 +2136,14 @@ async fn reboot_android_device(udid: &str) -> anyhow::Result<()> {
 /// out its full deadline.
 async fn reboot_ios_device(udid: &str) -> anyhow::Result<()> {
     // Shutdown (tolerate already-shutdown — exit code ignored).
-    let _ = tokio::process::Command::new("xcrun")
-        .args(["simctl", "shutdown", udid])
-        .output()
-        .await?;
+    let _ = golem_common::command::output_argv("xcrun", &["simctl", "shutdown", udid]).await?;
     // Boot (tolerate already-booted races — bootstatus below confirms ready).
-    let _ = tokio::process::Command::new("xcrun")
-        .args(["simctl", "boot", udid])
-        .output()
-        .await?;
+    let _ = golem_common::command::output_argv("xcrun", &["simctl", "boot", udid]).await?;
     // `bootstatus -b` blocks until the sim is fully booted; cap at 120s so a
     // wedged sim surfaces as an error rather than hanging the task.
     let status = tokio::time::timeout(
         std::time::Duration::from_secs(120),
-        tokio::process::Command::new("xcrun")
-            .args(["simctl", "bootstatus", udid, "-b"])
-            .output(),
+        golem_common::command::output_argv("xcrun", &["simctl", "bootstatus", udid, "-b"]),
     )
     .await
     .map_err(|_| anyhow::anyhow!("reboot timeout: {udid} bootstatus did not complete in 120s"))??;
@@ -3417,6 +3405,121 @@ pub fn suite_stats(report: &SuiteReport) -> SuiteStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- Device recovery orchestration (hermetic via the command seam) ----
+    // start_paused advances the reboot/wait timeouts instantly.
+    mod recovery {
+        use super::super::{
+            reboot_android_device, reboot_ios_device, wait_for_android_package_service,
+        };
+        use golem_common::command::{set_test_runner, Canned, FakeCommandRunner};
+        use std::sync::Arc;
+
+        #[tokio::test(start_paused = true)]
+        async fn reboot_android_succeeds_once_boot_completed() {
+            let fake = Arc::new(FakeCommandRunner::new());
+            fake.expect(&["adb", "-s", "emulator-5554", "reboot"], Canned::ok_stdout(""));
+            let getprop = ["adb", "-s", "emulator-5554", "shell", "getprop", "sys.boot_completed"];
+            fake.expect(&getprop, Canned::ok_stdout("0\n"));
+            fake.expect(&getprop, Canned::ok_stdout("1\n"));
+            let _g = set_test_runner(fake);
+
+            reboot_android_device("emulator-5554")
+                .await
+                .expect("reboot SHALL succeed once sys.boot_completed=1");
+        }
+
+        #[tokio::test(start_paused = true)]
+        async fn reboot_android_times_out_if_never_boots() {
+            let fake = Arc::new(FakeCommandRunner::new());
+            fake.expect(&["adb", "-s", "emulator-5554", "reboot"], Canned::ok_stdout(""));
+            // getprop never flips to "1" — the last response repeats forever.
+            fake.expect(
+                &["adb", "-s", "emulator-5554", "shell", "getprop", "sys.boot_completed"],
+                Canned::ok_stdout("0\n"),
+            );
+            let _g = set_test_runner(fake);
+
+            let err = reboot_android_device("emulator-5554")
+                .await
+                .expect_err("a device that never boots SHALL time out");
+            assert!(
+                format!("{err:#}").contains("reboot timeout"),
+                "got: {err:#}"
+            );
+        }
+
+        #[tokio::test(start_paused = true)]
+        async fn reboot_ios_shuts_down_boots_and_confirms_bootstatus() {
+            let fake = Arc::new(FakeCommandRunner::new());
+            fake.expect(&["xcrun", "simctl", "shutdown", "SIM"], Canned::ok_stdout(""));
+            fake.expect(&["xcrun", "simctl", "boot", "SIM"], Canned::ok_stdout(""));
+            fake.expect(&["xcrun", "simctl", "bootstatus", "SIM", "-b"], Canned::ok_stdout(""));
+            let _g = set_test_runner(fake.clone());
+
+            reboot_ios_device("SIM").await.expect("ios reboot SHALL succeed");
+            assert_eq!(
+                fake.recorded().len(),
+                3,
+                "SHALL run shutdown, boot, bootstatus in sequence"
+            );
+        }
+
+        #[tokio::test(start_paused = true)]
+        async fn reboot_ios_bootstatus_failure_errors() {
+            let fake = Arc::new(FakeCommandRunner::new());
+            fake.expect(&["xcrun", "simctl", "shutdown", "SIM"], Canned::ok_stdout(""));
+            fake.expect(&["xcrun", "simctl", "boot", "SIM"], Canned::ok_stdout(""));
+            fake.expect(
+                &["xcrun", "simctl", "bootstatus", "SIM", "-b"],
+                Canned::exit(1, "", "bootstatus failed"),
+            );
+            let _g = set_test_runner(fake);
+
+            let err = reboot_ios_device("SIM")
+                .await
+                .expect_err("a failing bootstatus SHALL surface as an error");
+            assert!(format!("{err:#}").contains("bootstatus failed"), "got: {err:#}");
+        }
+
+        #[tokio::test(start_paused = true)]
+        async fn package_service_ready_when_booted_and_pm_responds() {
+            let fake = Arc::new(FakeCommandRunner::new());
+            fake.expect(
+                &["adb", "-s", "emulator-5554", "shell", "getprop", "sys.boot_completed"],
+                Canned::ok_stdout("1\n"),
+            );
+            fake.expect(
+                &["adb", "-s", "emulator-5554", "shell", "pm", "list", "packages", "-f", "android"],
+                Canned::ok_stdout("package:/system/framework/framework-res.apk=android\n"),
+            );
+            let _g = set_test_runner(fake);
+
+            wait_for_android_package_service("emulator-5554")
+                .await
+                .expect("package service SHALL be ready when pm responds cleanly");
+        }
+
+        #[tokio::test(start_paused = true)]
+        async fn package_service_times_out_when_service_unbound() {
+            let fake = Arc::new(FakeCommandRunner::new());
+            fake.expect(
+                &["adb", "-s", "emulator-5554", "shell", "getprop", "sys.boot_completed"],
+                Canned::ok_stdout("1\n"),
+            );
+            // pm reports the service isn't bound yet — the poisoning string.
+            fake.expect(
+                &["adb", "-s", "emulator-5554", "shell", "pm", "list", "packages", "-f", "android"],
+                Canned::exit(1, "", "Can't find service: package"),
+            );
+            let _g = set_test_runner(fake);
+
+            let err = wait_for_android_package_service("emulator-5554")
+                .await
+                .expect_err("an unbound package service SHALL time out rather than poison the cache");
+            assert!(format!("{err:#}").contains("not ready"), "got: {err:#}");
+        }
+    }
 
     /// Helper to create a passing FlowReport with the given name.
     fn passing_flow(name: &str) -> FlowReport {

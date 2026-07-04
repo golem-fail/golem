@@ -5,12 +5,17 @@ edition = "2021"
 
 [dependencies]
 golem-events = { path = "../golem-events" }
+golem-common = { path = "../golem-common" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 libc = "0.2"
+
+[dev-dependencies]
+# `test-util` enables `start_paused` so boot/poll timeouts advance instantly in tests.
+tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true
