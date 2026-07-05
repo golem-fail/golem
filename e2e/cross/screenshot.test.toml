@@ -20,7 +20,8 @@ steps = [
   { action = "tap", on_text = "+" },
   { action = "tap", on_text = "+" },
   { action = "tap", on_text = "+" },
-  { action = "type", on_text = "Enter email", input = "screenshot@test.com" },
+  # auto_scroll: the email field is below the fold on short/phone viewports.
+  { action = "type", on_text = "Enter email", input = "screenshot@test.com", auto_scroll = true },
   { action = "hide_keyboard" },
 
   # Take a screenshot after changes

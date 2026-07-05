@@ -1742,28 +1742,74 @@ async fn setup_slot(
     // emulator can drop the forward without killing the device, so even
     // a freshly resolved port may be unreachable when the cleanup of a
     // prior flow ran while this one was waiting for resources.
-    if platform == Platform::Android {
-        let fwd = golem_devices::lifecycle::port_forward_command(&device, port);
-        let _ =
-            golem_devices::lifecycle::run_command_public(&fwd, "re-establish port forward").await;
-    }
-    let client = golem_driver::common::CompanionClient::new(port);
-    match client.check_health().await {
-        Ok(health) => {
-            event_tx.emit(
-                golem_events::DeviceId(device_label.clone()),
-                golem_events::EventKind::CompanionReady {
-                    platform: health.platform.clone(),
-                    version: health.version.clone(),
-                    device_name: health.device_name.clone(),
-                    os_version: health.os_version.clone(),
-                },
-            );
-            Ok((device, port))
+    // A companion that registered earlier can die mid-suite — on iOS the
+    // XCUITest host has been observed to exit under sustained load, leaving
+    // its port refusing connections; every subsequent flow routed to that
+    // device then failed ED404 in a cascade. Rather than fail, restart it:
+    // on a health-check failure evict the stale registration + port cache,
+    // relaunch the companion (self-guarded per-UDID; iOS serializes host-wide
+    // via `CompanionLaunch`), and re-probe. Bounded — only bail after
+    // `MAX_COMPANION_RESTARTS` attempts so a genuinely broken device still
+    // fails fast instead of looping.
+    const MAX_COMPANION_RESTARTS: u32 = 2;
+    let mut current_port = port;
+    let mut restarts = 0u32;
+    loop {
+        // Android: re-establish adb forward idempotently — per-flow cleanup
+        // can drop the forward without killing the device, so even a freshly
+        // resolved port may be unreachable until re-forwarded.
+        if platform == Platform::Android {
+            let fwd = golem_devices::lifecycle::port_forward_command(&device, current_port);
+            let _ = golem_devices::lifecycle::run_command_public(&fwd, "re-establish port forward")
+                .await;
         }
-        Err(e) => {
-            resource_mgr.release(&device.udid);
-            anyhow::bail!("companion health check failed: {e:#}")
+        let client = golem_driver::common::CompanionClient::new(current_port);
+        match client.check_health().await {
+            Ok(health) => {
+                event_tx.emit(
+                    golem_events::DeviceId(device_label.clone()),
+                    golem_events::EventKind::CompanionReady {
+                        platform: health.platform.clone(),
+                        version: health.version.clone(),
+                        device_name: health.device_name.clone(),
+                        os_version: health.os_version.clone(),
+                    },
+                );
+                return Ok((device, current_port));
+            }
+            Err(e) => {
+                if restarts >= MAX_COMPANION_RESTARTS {
+                    resource_mgr.release(&device.udid);
+                    anyhow::bail!(
+                        "companion health check failed after {restarts} restart(s): {e:#}"
+                    );
+                }
+                restarts += 1;
+                eprintln!(
+                    "  [companion] {device_label} unreachable (health check failed) — \
+                     restarting ({restarts}/{MAX_COMPANION_RESTARTS})"
+                );
+                // Evict the dead companion so the relaunch spawns fresh rather
+                // than routing back to the same dead port (both the port cache
+                // and the registration must be cleared).
+                reg_state.invalidate_companion(&device.udid);
+                reg_state.remove(&device.udid);
+                match ensure_companion_with_reg(
+                    &device,
+                    platform,
+                    reg_port,
+                    &reg_state,
+                    &event_tx,
+                )
+                .await
+                {
+                    Ok(p) => current_port = p,
+                    Err(re) => {
+                        resource_mgr.release(&device.udid);
+                        anyhow::bail!("companion restart failed: {re:#}");
+                    }
+                }
+            }
         }
     }
 }
@@ -2011,7 +2057,13 @@ async fn run_install_with_build_coord(
         }
     }
 
-    let mut result = golem_runner::installer::run_install_script(
+    // Serialize the per-device install fan-out host-wide via `OpClass::Install`:
+    // install-only invocations all shell out to `simctl install` / `adb install`,
+    // which funnel through the one shared device daemon and thrash it when many
+    // devices install at once. The builder (`install_only == false`) is excluded
+    // — it's the sole builder under `project_lock`, and its multi-minute build
+    // must not hold the install permit.
+    let install_fut = golem_runner::installer::run_install_script(
         script_path,
         project_root,
         platform_str,
@@ -2023,8 +2075,16 @@ async fn run_install_with_build_coord(
         device.os_major,
         install_only,
         emitter,
-    )
-    .await;
+    );
+    let mut result = if install_only {
+        golem_common::host_queue::acquire_then_run(
+            golem_common::host_queue::OpClass::Install,
+            install_fut,
+        )
+        .await
+    } else {
+        install_fut.await
+    };
 
     // Transient-error retry: CoreSimulator's IPC pipe occasionally crashes
     // mid-install on freshly-booted iOS sims (`Mach error -308 (ipc/mig)
@@ -2041,18 +2101,21 @@ async fn run_install_with_build_coord(
                 });
             }
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-            let retry = golem_runner::installer::run_install_script(
-                script_path,
-                project_root,
-                platform_str,
-                &device.udid,
-                bundle_id,
-                app_name,
-                timeout_ms,
-                &target,
-                device.os_major,
-                true, // install_only — reuse the already-built artifact
-                emitter,
+            let retry = golem_common::host_queue::acquire_then_run(
+                golem_common::host_queue::OpClass::Install,
+                golem_runner::installer::run_install_script(
+                    script_path,
+                    project_root,
+                    platform_str,
+                    &device.udid,
+                    bundle_id,
+                    app_name,
+                    timeout_ms,
+                    &target,
+                    device.os_major,
+                    true, // install_only — reuse the already-built artifact
+                    emitter,
+                ),
             )
             .await;
             if retry.is_ok() {
@@ -2514,6 +2577,14 @@ async fn scan_companions() -> Vec<(u16, golem_driver::CompanionHealth)> {
     found
 }
 
+/// Hard ceiling on iOS companion bring-up while it holds the host-wide
+/// `CompanionLaunch` permit. Set above the inner 90s registration wait so that
+/// path fails first in the normal case; this backstops the sub-steps that lack
+/// their own deadline (companion build / detached spawn) and guarantees the
+/// permit is released even if a launch wedges — so the next iOS device can
+/// proceed instead of the whole run hanging.
+const IOS_COMPANION_STARTUP_DEADLINE: std::time::Duration = std::time::Duration::from_secs(120);
+
 /// Launch a companion using the registration server.
 /// Returns the port the companion registered on.
 async fn ensure_companion_with_reg(
@@ -2542,6 +2613,49 @@ async fn ensure_companion_with_reg(
     );
     let companion_path = find_companion_path(platform)?;
 
+    // iOS XCUITest bring-up is process-global on the host: serialize it
+    // host-wide via the `CompanionLaunch` permit and bound it with a hard
+    // deadline, so a wedged launch can neither hold the permit nor hang
+    // forever (observed: a concurrent launch wedged with no forward progress).
+    // Android `am instrument` bring-up is per-device over adb and runs
+    // directly, unserialized (measured stable under concurrency).
+    if platform == Platform::Ios {
+        let out = golem_common::host_queue::acquire_then_run(
+            golem_common::host_queue::OpClass::CompanionLaunch,
+            tokio::time::timeout(
+                IOS_COMPANION_STARTUP_DEADLINE,
+                bring_up_companion(device, platform, reg_port, reg_state, &companion_path),
+            ),
+        )
+        .await;
+        return match out {
+            Ok(res) => res,
+            Err(_elapsed) => Err(golem_events::coded(
+                golem_events::FailureCode::DeviceRegistrationTimeout,
+                anyhow::anyhow!(
+                    "iOS companion bring-up for {} exceeded {}s (serialized launch deadline)",
+                    device.name,
+                    IOS_COMPANION_STARTUP_DEADLINE.as_secs()
+                ),
+            )),
+        };
+    }
+    bring_up_companion(device, platform, reg_port, reg_state, &companion_path).await
+}
+
+/// Install/build the companion for `device`, launch it, and wait until it
+/// registers and reports healthy on its assigned port. Returns the port.
+///
+/// Split out of [`ensure_companion_with_reg`] so iOS can run it under the
+/// host-wide `CompanionLaunch` permit with a deadline while Android runs it
+/// directly. Assumes the per-UDID launch guard is already held by the caller.
+async fn bring_up_companion(
+    device: &DeviceInfo,
+    platform: Platform,
+    reg_port: u16,
+    reg_state: &crate::registration::RegistrationState,
+    companion_path: &str,
+) -> Result<u16> {
     // Install/build companion
     if platform == Platform::Android {
         let apk_path = find_android_apk()?;
@@ -2557,11 +2671,11 @@ async fn ensure_companion_with_reg(
                 .await;
         }
     } else {
-        golem_devices::lifecycle::build_companion(device, &companion_path).await?;
+        golem_devices::lifecycle::build_companion(device, companion_path).await?;
     }
 
     // Launch companion with registration port
-    golem_devices::lifecycle::spawn_companion_with_reg(device, &companion_path, 0, Some(reg_port))
+    golem_devices::lifecycle::spawn_companion_with_reg(device, companion_path, 0, Some(reg_port))
         .await?;
 
     // Wait for the companion we just spawned to register (up to 60s).

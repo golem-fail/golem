@@ -28,8 +28,9 @@ steps = [
   { action = "tap", on_text = "+" },
   { action = "assert_visible", on_text = "5", on_below = "Counter" },
 
-  # Type into a form field to set additional state
-  { action = "type", on_text = "Enter email", input = "cross-test@example.com" },
+  # Type into a form field to set additional state (auto_scroll: below the
+  # fold on short/phone viewports).
+  { action = "type", on_text = "Enter email", input = "cross-test@example.com", auto_scroll = true },
   { action = "hide_keyboard" },
 
   # Read the counter value into a variable for later verification

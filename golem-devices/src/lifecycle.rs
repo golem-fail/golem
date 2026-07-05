@@ -545,9 +545,19 @@ pub async fn shutdown_device(device: &DeviceInfo) -> Result<()> {
 }
 
 /// Install an application on a device.
+///
+/// Serialized host-wide via [`OpClass::Install`]: `simctl install` /
+/// `adb install` funnel through the one per-host device daemon
+/// (`CoreSimulatorService` / `adb server`), which concurrent installs across
+/// devices thrash. The permit wraps only the install command, not any settle
+/// loop, so it drains as fast as the install completes.
 pub async fn install_app(device: &DeviceInfo, app_path: &str) -> Result<()> {
     let args = install_app_command(device, app_path);
-    run_command(&args, &format!("install app on {}", device.name)).await?;
+    golem_common::host_queue::acquire_then_run(
+        golem_common::host_queue::OpClass::Install,
+        run_command(&args, &format!("install app on {}", device.name)),
+    )
+    .await?;
     Ok(())
 }
 

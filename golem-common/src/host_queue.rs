@@ -73,6 +73,24 @@ pub enum OpClass {
     /// not route `boot` through this class without adding a separate long-op
     /// class first.
     Simctl,
+    /// App / companion **install** (`simctl install` on iOS, `adb install` on
+    /// Android). A long op (seconds) on the same shared daemons the leaf
+    /// classes protect: iOS routes through `CoreSimulatorService`, Android
+    /// through the one `adb server`. Concurrent installs across devices thrash
+    /// that daemon, so they serialize host-wide here. Kept off [`Simctl`] /
+    /// [`AdbHostIo`] because those are short-op leaf classes — a multi-second
+    /// install holding one would false-timeout another device's step action
+    /// (the "separate long-op class" the `Simctl` invariant calls for).
+    Install,
+    /// iOS **companion bring-up** — one `xcodebuild test-without-building`
+    /// (XCUITest) launch plus its registration/readiness wait. XCUITest's
+    /// startup path is process-global on the host (`CoreSimulatorService` +
+    /// shared instruments plumbing), so two sims launching a companion at once
+    /// interleave and can wedge the launch (observed: a launch hung with no
+    /// forward progress). Serializing host-wide means iPhone and iPad bring up
+    /// one at a time. Android `am instrument` bring-up is per-device over adb
+    /// and stays parallel (measured stable), so it does not use this class.
+    CompanionLaunch,
 }
 
 impl OpClass {
@@ -83,6 +101,8 @@ impl OpClass {
             OpClass::Screenshot => 1,
             OpClass::Dumpsys => 2,
             OpClass::Simctl => 3,
+            OpClass::Install => 4,
+            OpClass::CompanionLaunch => 5,
         }
     }
 
@@ -93,6 +113,8 @@ impl OpClass {
             OpClass::Screenshot => "screenshot",
             OpClass::Dumpsys => "dumpsys",
             OpClass::Simctl => "simctl",
+            OpClass::Install => "install",
+            OpClass::CompanionLaunch => "companion-launch",
         }
     }
 
@@ -102,10 +124,12 @@ impl OpClass {
         OpClass::Screenshot,
         OpClass::Dumpsys,
         OpClass::Simctl,
+        OpClass::Install,
+        OpClass::CompanionLaunch,
     ];
 }
 
-const N_CLASSES: usize = 4;
+const N_CLASSES: usize = 6;
 
 // Cumulative permit-wait per class. `WAIT_MICROS` sums every acquire's wait
 // (≈0 when uncontended); `WAIT_COUNT` counts only acquires that actually
@@ -390,6 +414,44 @@ mod tests {
         assert!(
             should_warn_slow_wait(Duration::from_secs(5)),
             "a long wait SHALL warn"
+        );
+    }
+
+    // 9. The bring-up long-op classes serialize host-wide like the leaf
+    //    classes: two installs (or two companion launches) never overlap.
+    #[tokio::test]
+    async fn bringup_classes_serialize() {
+        for class in [OpClass::Install, OpClass::CompanionLaunch] {
+            let cur = AtomicUsize::new(0);
+            let peak = AtomicUsize::new(0);
+            tokio::join!(
+                acquire_then_run(class, record_overlap(&cur, &peak)),
+                acquire_then_run(class, record_overlap(&cur, &peak)),
+            );
+            assert_eq!(
+                peak.load(SeqCst),
+                1,
+                "{} ops SHALL NOT run concurrently",
+                class.label()
+            );
+        }
+    }
+
+    // 10. Install and CompanionLaunch are distinct classes: an install on one
+    //     device and a companion launch on another run concurrently (they hold
+    //     different permits), so a slow launch never blocks an unrelated install.
+    #[tokio::test]
+    async fn install_and_launch_are_independent() {
+        let cur = AtomicUsize::new(0);
+        let peak = AtomicUsize::new(0);
+        tokio::join!(
+            acquire_then_run(OpClass::Install, record_overlap(&cur, &peak)),
+            acquire_then_run(OpClass::CompanionLaunch, record_overlap(&cur, &peak)),
+        );
+        assert_eq!(
+            peak.load(SeqCst),
+            2,
+            "Install and CompanionLaunch SHALL run concurrently"
         );
     }
 }

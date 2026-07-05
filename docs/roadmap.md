@@ -800,10 +800,20 @@ selection, `assert_alert` not polling. Phase 3 isn't formally
 "done at 5/5 per test" but the suite-context infrastructure is
 proven stable enough to keep using.
 
-**Phase 2 — multi-device** (iPhone+iPad, iOS+Android
-simultaneous): not yet run. Surfaces XCUITest cross-flow
-corruption (already roadmapped under "iOS concurrent flows") and
-Android emulator resource-contention.
+**Phase 2 — multi-device** (iPhone+iPad + iOS+Android
+simultaneous): run 2026-07 across 13 cross flows. Surfaced and
+FIXED a concurrent-startup wedge and a companion-death ED404
+cascade (infra under "iOS concurrent flows"): the 28-run
+cross-platform sweep went 7/28 (pre-fix, cascade) → 21/28.
+Remaining tail = cold-start EX000 drops + companion slowness
+(EF408) under 4–5 device host saturation, tracked there too. Also
+fixed several flow-authoring gaps (fields below the fold on phone
+viewports needed `auto_scroll`: `form_fill`, `type_text`,
+`multi_app_switching`, `screenshot`).
+
+Note: `android:tablet` coverage needs a tablet AVD provisioned
+(none by default) — create e.g. `Pixel_Tablet_API_36` before a
+phone+tablet Android sweep.
 
 Tracking files (`/tmp/golem_robust.{json,log}`) and the `robust.sh`
 driver script were transient — re-derivable from the sweep plan.
@@ -1049,22 +1059,20 @@ mis-translation. **Files:** `golem-driver/src/webkit.rs` / `ios.rs`
 
 ## iOS concurrent flows: cross-flow focus / state corruption
 
-When iPhone + iPad run flows in parallel, occasional state leaks between sims:
+Single-device runs are stable; iPhone + iPad in parallel is where the tail lives. The two worst failure modes are now fixed; the remainder is the hard saturation/corruption tail.
 
-- **Wrong-field type:** observed once on iPhone 17 — typing for `Password` landed in the `Search` input. The next field's focus snapshot apparently lagged by one step, so `typeText` delivered keystrokes to the previously-focused field instead.
-- **Step-6 backspace flake:** one of the two flows occasionally times out at `backspace on_text="golem testt"` — element resolves but the action stalls past the step deadline. Solo runs never trigger.
-- **Step-19 auto_scroll for Submit:** scroll loop enters strategy 2 stalls under concurrent load even after our scroll-strategy fix.
-- **Startup-readiness EX000 — FIXED (57b0c97), re-verified.** The companion reported `ready` then its first request dropped (`EX000`) or its first `/hierarchy` timed out (`EF408`) because iOS `/health` returned `ok` the instant the socket bound, with no XCUITest readiness probe (Android already gated on a UiAutomation warm-up; iOS didn't). Fixed by a one-time XCUITest warm-up (screenshot) gating `/health` to `503` until warm. Solo: 50% → **0/10**. Concurrent two-sim re-verify (2026-06-18): once both sims are booted, **0/8** concurrent cold companion starts. **Residual (still open here):** 1/12 device-starts dropped EX000 — but on a freshly **cold-booted** sim, *during launch-settle* (`await_first_frame` `/hierarchy` polling), not at the readiness handshake. That's a transport drop on a settling sim under the boot+launch burst — the deeper process-global / cold-boot contention this entry is about, not the (now-fixed) readiness gap.
+**Fixed — infra exists, don't rebuild:**
+- **Concurrent-startup wedge** → `OpClass::CompanionLaunch` serializes iOS XCUITest bring-up host-wide + a 120s startup deadline (`golem-common/src/host_queue.rs`, `golem-cli/src/suite.rs`). Two sims launching `xcodebuild test-without-building` at once no longer collide and hang.
+- **Companion-death ED404 cascade** → bounded companion-restart recovery in slot setup: a companion that goes unreachable mid-suite is relaunched (2 attempts) instead of failing every queued flow ED404. 2026-07 cross-platform sweep: ED404 10→0, suite 7/28→21/28.
 
-The companion-side off-main fix (commit on this entry's removal) prevents one wedge from cascading into all later requests, but doesn't address the underlying issue: XCUITest's HID injection and accessibility-snapshot paths are process-global. When two sims drive XCUITest concurrently from the same host, they interleave on shared `simctl` / `usbmuxd` / `IOHIDEvent` plumbing. Apple's official guidance is one XCUITest run per host process — we're stretching that.
+**Still open (the genuine tail):**
+- **Cold-start EX000 transport drop.** A freshly-launched / cold-booted companion still occasionally drops its first request during launch-settle (~1/12 device-starts; ~3/28 in the 2026-07 sweep). Transport-level, not the (already-fixed) readiness gate.
+- **Companion slowness under host saturation → EF408.** Under 4–5 concurrent sims/emus the companion stays alive but serves slowly; heavy flows (`form_fill`, `type_text`) time out. Host RAM/CPU/GPU saturation, not a structural collision — restart doesn't help (companion isn't dead). Mitigation is capping concurrency to headroom (see device-queue semaphore), not serializing ops.
+- **Cross-flow state corruption (structural).** Wrong-field type (keystrokes for `Password` landed in `Search` — focus snapshot lagged a step) and a step-6 backspace stall, seen only under concurrent load. Root: XCUITest HID + accessibility-snapshot paths are process-global on the host. Real fix would be a new host-wide `OpClass` serializing the tap-synthesis / window-snapshot ops, OR one XCUITest process per sim. NOT attempted — no fresh evidence it is the active failure mode (recent sweeps were dominated by startup + saturation, now addressed). Gate any HID/snapshot serialization on actually reproducing wrong-field corruption first, since it taxes the per-step hot path.
 
-Likely shape of the real fix: serialise the host-side simctl-touching operations (mainly tap synthesis + window-snapshot probes) behind a host-wide mutex, or run each sim's companion in a separate XCUITest process so OS-level state is per-process. The **[[Selective host-wide queue for heavy device ops]]** entry is the natural vehicle — extend it to gate the contended iOS startup/HID/snapshot ops, not just the Android I/O-heavy ones.
+Android multi-emu contention is the same *character* (host saturation → stochastic drops), mitigated by capping concurrency, not op serialization.
 
-Determinism contrast (observed): the iOS-concurrent wedge is **structural** (process-global XCUITest HID + snapshot plumbing). The *startup-EX000* that used to make it recur every run is now fixed (readiness gate, see above) — post-fix it's down to an occasional cold-boot transport drop (1/12). The remaining cross-flow corruption (wrong-field type, backspace stall) is the genuinely structural residue. Android multi-emu failures are **stochastic / load-driven** — `adb` is per-device so there's no structural collision; the trigger is host RAM/CPU/GPU saturation (plus the shared `adb` server) during heavy bursts, hence probabilistic and worse with more emus. Different root *character*, but a host-wide queue/serialisation mitigates both: iOS by serialising the colliding process-global ops, Android by capping the concurrent resource burst.
-
-Not blocking — single-device runs are stable, multi-device retry-flaky. **This is the talk's "multi-device is still flaky" caveat, reproduced.**
-
-**Files:** `companions/ios/GolemRunnerUITests/RequestRouter.swift`, `golem-driver/src/ios.rs` (a host-wide mutex would live here).
+**Files:** `companions/ios/GolemRunnerUITests/RequestRouter.swift`, `golem-driver/src/ios.rs`, `golem-cli/src/suite.rs` (companion restart + launch serialization).
 
 ## Test App: Menu nav migration — remaining flows
 

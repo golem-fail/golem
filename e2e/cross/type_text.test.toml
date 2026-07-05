@@ -12,7 +12,8 @@ type = "phone"
 name = "type_into_fields"
 steps = [
   # Type a generated email into the email field (a real address; has '@').
-  { action = "type", on_text = "Enter email", input = "${fake:email}" },
+  # auto_scroll: the field sits below the fold on short (phone) viewports.
+  { action = "type", on_text = "Enter email", input = "${fake:email}", auto_scroll = true },
   { action = "assert_visible", on_text = "*@*" },
 
   # Type into the password field
