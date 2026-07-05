@@ -146,6 +146,13 @@ pub enum FailureCode {
     DeviceCompanionWedged,
     /// D504: companion registration timeout.
     DeviceRegistrationTimeout,
+    /// D505: companion unreachable on a request — the HTTP connect failed
+    /// (connection refused), i.e. the companion process is gone or not
+    /// accepting connections. Distinct from D503 (wedged: alive but a
+    /// main-thread call is stuck) — death vs. stall. Covers both a mid-flow
+    /// companion exit and a cold-start drop before the socket is up; the two
+    /// are indistinguishable at the transport layer, so they share this code.
+    DeviceCompanionUnreachable,
     /// D520: misc driver op failed (adb forward, unsupported button).
     DeviceDriverOpFailed,
 
@@ -192,6 +199,7 @@ impl FailureCode {
             | DeviceWebviewComms
             | DeviceCompanionWedged
             | DeviceRegistrationTimeout
+            | DeviceCompanionUnreachable
             | DeviceDriverOpFailed => Domain::Device,
             HostToolchainMissing | HostPortsExhausted | HostOrchestratorIpc => Domain::Host,
         }
@@ -230,6 +238,7 @@ impl FailureCode {
             DeviceWebviewComms => 502,
             DeviceCompanionWedged => 503,
             DeviceRegistrationTimeout => 504,
+            DeviceCompanionUnreachable => 505,
             DeviceDriverOpFailed => 520,
             HostToolchainMissing => 404,
             HostPortsExhausted => 429,
@@ -331,6 +340,10 @@ mod tests {
         assert_eq!(
             FailureCode::DeviceCompanionWedged.render(Severity::Error),
             "ED503"
+        );
+        assert_eq!(
+            FailureCode::DeviceCompanionUnreachable.render(Severity::Error),
+            "ED505"
         );
         assert_eq!(
             FailureCode::HostToolchainMissing.render(Severity::Error),

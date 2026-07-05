@@ -1802,7 +1802,7 @@ async fn setup_slot(
                     &device,
                     platform,
                     reg_port,
-                    &reg_state,
+                    reg_state,
                     &event_tx,
                     RELAUNCH_REG_DEADLINE,
                 )

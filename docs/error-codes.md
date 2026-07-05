@@ -63,8 +63,9 @@ Codes appear in every output format:
 | `D409` | Device busy / `--max-wait` exceeded |
 | `D500` | Device / simulator creation failed |
 | `D502` | Webview driver comms failed (CDP / WebKit) |
-| `D503` | Companion wedged / hierarchy fetch timeout |
+| `D503` | Companion wedged — alive but a main-thread call is stuck (incl. a `504` from the companion's own watchdog, or a client-side request timeout) |
 | `D504` | Companion registration timeout |
+| `D505` | Companion unreachable — connection refused mid-request (process gone / not yet accepting); death or cold-start drop |
 | `D520` | Driver op failed (adb forward, unsupported button) |
 | `H404` | Toolchain / artifact missing (avdmanager, iOS runtime, companion binary) |
 | `H429` | Port allocation exhausted |

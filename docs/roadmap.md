@@ -80,6 +80,26 @@ match. Both default off (current behavior preserved). Also consider insetting th
 swipe band away from the system-gesture zone for edge-adjacent containers. Add
 unit tests for the centering/visibility math and an e2e once implemented.
 
+**2026-07 — a second, high-value repro (part of the EF408 tail).** In the
+multi-device sweeps, `assert_visible on_text="Dark Mode" auto_scroll`
+(`assertions.test`) failed EF408 at a **40s** budget (generous — not a
+timeout-tightness issue) by never converging. Trace: `scroll_started
+direction=Down` → `inner scrollable consumed gesture` → `scroll_reversed →Up
+overshoot: target at bounds=(32,32,71,21)` (target is near the TOP, ~already
+visible) → `preset landed inside absorber bounds=(16,321,370,172)` → preset
+cycling 2→5 → `boundary hit again, cycling`. Two failure modes this item
+directly addresses: (1) the target at y=32 is edge/near-visible but auto_scroll
+fires anyway and thrashes — `visibility_percentage` (accept an adequately-visible
+match) would stop it firing at all; (2) when it must scroll, `center` avoids the
+oscillation around an inner-scrollable/absorber boundary. The remaining piece —
+the gesture being *absorbed by an inner scrollable* — is the inner-container
+convergence tracked in "Inner-container scroll". **Leverage note:** this is
+independent of host load; fixing convergence cuts the scroll-loop iteration
+count, which also shrinks the load-amplified EF408 tail (each iteration is a
+scroll+hierarchy round-trip that slows under saturation). Aggregate churn across
+the sweeps: 56 `scroll_preset_switch`, 15 `scroll_reversed`, 7 `boundary hit
+again, cycling` — non-convergence is common, not a one-off.
+
 ## `clear_text` action — erase a whole field, cross-platform
 
 `backspace` is focus-only and deletes N chars from the caret (which sits at
@@ -164,6 +184,18 @@ warm-up) found:
 1. **Relational-selector fragility** — `within` picks `.first()` of *everything*
    below the anchor; works here only by pre-order luck + geometric overlap. See
    "Relational selector overhaul".
+2. **Inner-scrollable "absorber" non-convergence — reopened 2026-07.** The
+   2026-06 conclusion ("thrash doesn't reproduce on a loaded DOM") held for the
+   `within`-scoped case. But a *loaded-tree* thrash DID reproduce via plain
+   `auto_scroll` (not `within`) in the multi-device sweeps: `assert_visible
+   on_text="Dark Mode" auto_scroll` on iOS, 351-node tree, cycled presets 2→5
+   with `inner scrollable consumed gesture` + `preset landed inside absorber
+   bounds` and never converged (EF408 at 40s). So the gesture-aiming still lands
+   inside an inner scrollable that absorbs it instead of scrolling the intended
+   container. Distinct from the (fixed) webview-readiness race — this is the
+   absorber gesture-routing itself. Pairs with the `center` /
+   `visibility_percentage` work (see "Scroll: `center` + `visibility_percentage`")
+   which would avoid firing at all when the target is already adequately visible.
 
 **Files:** `golem-runner/src/scroll.rs`, `golem-runner/src/actions/interaction.rs`
 (`handle_scroll` `within` resolution), `golem-runner/src/resolution.rs`
@@ -458,7 +490,7 @@ verb that just `rm`s the device-side file).
 ## Confirm host-queue benefit on a load-saturated host
 
 The selective host-wide queue is built and wired
-(`golem-common::host_queue`: `OpClass::{AdbHostIo,Screenshot,Dumpsys,Simctl}`,
+(`golem-common::host_queue`: `OpClass::{AdbHostIo,Screenshot,Dumpsys,Simctl,Install,CompanionLaunch}`,
 `acquire_then_run`, congestion metering, and a `[host-queue] slow permit wait`
 tripwire). Same-class heavy ops serialize host-wide; light per-step verbs
 (tap/type/swipe/hierarchy) stay parallel. Validated locally for *safety* —
@@ -484,18 +516,16 @@ single wait ≥2s. Build the exclusion only if the tripwire fires in the wild.
 point uncontended bursts would saturate the host fork/IO budget and
 this queue becomes necessary, not just optimisation.
 
-**Cross-platform extension (iOS):** the same mechanism is the natural fix for
-the iOS concurrent-flow wedges in **[[iOS concurrent flows: cross-flow focus /
-state corruption]]**. There the contended class isn't I/O bursts but the
-process-global XCUITest plumbing (`simctl` / HID synthesis / window-snapshot).
-Adding those to the queued op-classes (a host-wide `Semaphore(1)` around
-tap-synthesis + snapshot probes) would serialise exactly the operations that
-corrupt when two sims drive XCUITest at once — the EX000 companion drop observed
-running `ios:latest:2`. The failure *character* differs (iOS-concurrent is
-deterministic/structural — process-global XCUITest; Android multi-emu is
-stochastic/load-driven — host RAM/CPU/GPU + shared adb server), but one host-wide
-queue abstraction mitigates both: serialise the colliding iOS ops; cap the
-concurrent Android burst.
+**Cross-platform extension (iOS) — partly landed:** the queue's iOS *startup*
+side shipped — `OpClass::CompanionLaunch` serializes XCUITest bring-up
+host-wide (see "iOS concurrent flows"), which fixed the concurrent-startup
+wedge. What remains of this idea is serializing the *per-step* process-global
+ops (tap-synthesis + window-snapshot) behind a host-wide `Semaphore(1)` — the
+proposed fix for the residual cross-flow corruption. That's deferred and gated
+on reproducing the corruption first (it taxes the hot path); tracked in the
+"iOS concurrent flows" entry. Note the failure *character* differs: iOS is
+structural (process-global XCUITest), Android is stochastic/load-driven (host
+RAM/CPU/GPU + shared adb server) — mitigated by capping the concurrent burst.
 
 ## Device-queue scheduling: semaphore + concurrency-cap-follows-device-count
 
@@ -1067,12 +1097,16 @@ Single-device runs are stable; iPhone + iPad in parallel is where the tail lives
 - **Cold-start `/hierarchy` warm-up** → `handleLaunch` does one throwaway `HierarchySerializer.serialize` after activate, behind the launch gate, so the first real `/hierarchy` hits a warm accessibility-snapshot path (the `/health` screenshot warm-up only attaches the screenshot subsystem). App-scoped, no SpringBoard query.
 
 **Still open (the genuine tail):**
-- **EX000 is `FailureCode::Uncoded` — a catch-all, NOT one bug.** Three distinct sub-modes render as EX000, and under 4-device host saturation the last two dominate (the first is comparatively rare and now warmed):
-  - *(a) cold-start `/hierarchy` transport drop* on a launch-settling sim — the `handleLaunch` warm-up above targets this one. Its isolated benefit is unproven (confounded: freshly-**booted** sims sit in the settle window and show MORE EX000 than long-warm sims, independent of the warm-up).
-  - *(b) mid-flow companion death* — `GET /hierarchy … Connection refused`: the XCUITest host process exited mid-flow under load. Restart-recovery catches this at *setup* time, but a death *during* a flow still fails that flow. Needs mid-flow death detection + retry.
-  - *(c) main-thread wedge* — `POST /tap returned 504 … timed out on main thread`: companion alive but a main-thread call stuck. The `runOnMain` watchdog surfaces it as 504; the underlying wedge (HID/snapshot on a saturated host) is unaddressed.
-  Real levers for (b)/(c): **cap concurrency to host headroom** (stop over-subscribing — the dominant driver) and mid-flow companion-death retry. Not the warm-up.
-- **Companion slowness under host saturation → EF408.** Under 4–5 concurrent sims/emus the companion stays alive but serves slowly; heavy flows (`form_fill`, `type_text`) time out. Host RAM/CPU/GPU saturation, not a structural collision — restart doesn't help (companion isn't dead). Mitigation is capping concurrency to headroom (see device-queue semaphore), not serializing ops.
+- **EX000 was a catch-all — now split into coded errors** (`golem-driver/src/common.rs` classifies companion request failures). Connection-refused → `D505` (companion unreachable: death or cold-start drop); a `504` / client-timeout → `D503` (companion wedged, alive but stuck). Only genuinely-unattributable transport errors stay `EX000`. This makes the sub-modes *measurable* — a prerequisite for the fixes below. The failure modes themselves remain:
+  - *cold-start `/hierarchy` drop* (now renders `D505`) — the `handleLaunch` warm-up targets it; isolated benefit unproven (confounded: freshly-**booted** sims sit in the settle window and drop MORE than long-warm sims, independent of the warm-up).
+  - *mid-flow companion death* (`D505`) — the XCUITest host exits mid-flow under load. Restart-recovery catches it at *setup* time, but a death *during* a flow still fails that flow. Needs mid-flow death detection + retry.
+  - *main-thread wedge* (`D503`, via the companion's `504`) — companion alive but a main-thread call stuck (HID/snapshot on a saturated host).
+  Real levers: **cap concurrency to host headroom** (stop over-subscribing — the dominant driver) and mid-flow companion-death retry. Not the warm-up.
+- **EF408 under host saturation — two distinct causes, don't conflate.** Cross-platform (iOS *and* Android), and the sweep breakdown shows it's **not action-specific** (assert_visible 11 / type 7 / scroll 5 / tap 4 of 25 failing steps; SLOW steps split ~50/50 auto_scroll vs not) — so a per-action timeout bump is the wrong fix. Within a failing flow the cheap steps stay at baseline (~0.5s) right up to the failure — **no gradual per-flow ramp**, so the pressure is *cross-flow* (other flows saturating the host), not this flow degrading. The two causes:
+  1. *Scroll non-convergence* — `auto_scroll` loops (each iteration = scroll+hierarchy round-trip) thrash on inner-scrollable/edge targets and blow even a 40s budget. This is a real engine gap, **independent of load** (load only multiplies the iteration cost). Fix under "Scroll: `center` + `visibility_percentage`" + "Inner-container scroll". Highest-leverage for this half.
+  2. *Genuine host slowness* — companion alive but serving slowly under 4–5 concurrent sims/emus; ordinary steps time out. Restart doesn't help (not dead).
+  Levers for (2): **cap concurrency to host headroom** (the dominant driver; note `--max-concurrency` is currently a no-op, roadmap:"CLI Flags"). golem only adapts to load at **device allocation** (`ResourceManager` RAM gate, coarse/upfront) — there is **no runtime throttle**. A principled runtime signal that isolates *host* slowness (not app-slow or http-endpoint-slow): **companion round-trip latency** (e.g. `/hierarchy` fetch time) rising across flows → grant a **bounded** adaptive grace on step deadlines and/or backpressure dispatch. Never open-ended.
+  Note: **ED505 (companion death) is the severe end of the same saturation** — a companion pushed past slow into OOM/kill. So headroom capping shrinks the whole EX000/EF408/ED505 tail, not just EF408. (Cheap future refinement: split ED505 into death-after-serving vs cold-start-before-serving by tracking whether the companion ever answered, to *measure* the load share.)
 - **Cross-flow state corruption (structural).** Wrong-field type (keystrokes for `Password` landed in `Search` — focus snapshot lagged a step) and a step-6 backspace stall, seen only under concurrent load. Root: XCUITest HID + accessibility-snapshot paths are process-global on the host. Real fix would be a new host-wide `OpClass` serializing the tap-synthesis / window-snapshot ops, OR one XCUITest process per sim. NOT attempted — no fresh evidence it is the active failure mode (recent sweeps were dominated by startup + saturation, now addressed). Gate any HID/snapshot serialization on actually reproducing wrong-field corruption first, since it taxes the per-step hot path.
 
 Android multi-emu contention is the same *character* (host saturation → stochastic drops), mitigated by capping concurrency, not op serialization.

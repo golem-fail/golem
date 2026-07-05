@@ -750,6 +750,47 @@ pub(crate) fn replace_webview_children(
 // HTTP client wrapper shared by both platform drivers
 // ---------------------------------------------------------------------------
 
+/// Tag a companion request transport error with a failure code where the kind
+/// is unambiguous, so it stops rendering as an opaque `EX000` (`Uncoded`).
+/// `ctx` is preserved as the human message. Only cleanly-attributable kinds
+/// are coded; anything else stays uncoded on purpose.
+///
+/// - connect failure (connection refused) → `DeviceCompanionUnreachable`
+///   (D505): the companion process is gone / not accepting — death, or a
+///   cold-start drop before the socket is up.
+/// - client-side timeout (request exceeded its per-request budget) →
+///   `DeviceCompanionWedged` (D503): the companion is up but didn't answer in
+///   time — a stall.
+fn coded_transport_err(e: reqwest::Error, ctx: String) -> anyhow::Error {
+    let code = if e.is_connect() {
+        Some(golem_events::FailureCode::DeviceCompanionUnreachable)
+    } else if e.is_timeout() {
+        Some(golem_events::FailureCode::DeviceCompanionWedged)
+    } else {
+        None
+    };
+    let err = anyhow::Error::new(e).context(ctx);
+    match code {
+        Some(c) => golem_events::coded(c, err),
+        None => err,
+    }
+}
+
+/// Tag a non-success companion HTTP status where the meaning is unambiguous.
+/// A `504` is the companion's own main-thread watchdog (`runOnMain` deadline)
+/// firing — alive but wedged → `DeviceCompanionWedged` (D503). Other statuses
+/// stay uncoded.
+fn coded_status_err(status: reqwest::StatusCode, msg: String) -> anyhow::Error {
+    if status.as_u16() == 504 {
+        golem_events::coded(
+            golem_events::FailureCode::DeviceCompanionWedged,
+            anyhow::anyhow!(msg),
+        )
+    } else {
+        anyhow::anyhow!(msg)
+    }
+}
+
 /// Thin HTTP client wrapper used by both `AndroidDriver` and `IosDriver`.
 pub struct CompanionClient {
     pub base_url: String,
@@ -910,7 +951,7 @@ impl CompanionClient {
         let resp = req
             .send()
             .await
-            .with_context(|| format!("POST {url} failed"))?;
+            .map_err(|e| coded_transport_err(e, format!("POST {url} failed")))?;
 
         let status = resp.status();
         let text = resp
@@ -919,7 +960,10 @@ impl CompanionClient {
             .with_context(|| format!("reading response body from POST {url}"))?;
 
         if !status.is_success() {
-            anyhow::bail!("POST {url} returned {status}: {text}");
+            return Err(coded_status_err(
+                status,
+                format!("POST {url} returned {status}: {text}"),
+            ));
         }
 
         Ok(text)
@@ -934,7 +978,7 @@ impl CompanionClient {
         let resp = req
             .send()
             .await
-            .with_context(|| format!("GET {url} failed"))?;
+            .map_err(|e| coded_transport_err(e, format!("GET {url} failed")))?;
 
         let status = resp.status();
         let text = resp
@@ -943,7 +987,10 @@ impl CompanionClient {
             .with_context(|| format!("reading response body from GET {url}"))?;
 
         if !status.is_success() {
-            anyhow::bail!("GET {url} returned {status}: {text}");
+            return Err(coded_status_err(
+                status,
+                format!("GET {url} returned {status}: {text}"),
+            ));
         }
 
         Ok(text)
@@ -958,7 +1005,7 @@ impl CompanionClient {
         let resp = req
             .send()
             .await
-            .with_context(|| format!("GET {url} failed"))?;
+            .map_err(|e| coded_transport_err(e, format!("GET {url} failed")))?;
 
         let status = resp.status();
         if !status.is_success() {
@@ -966,7 +1013,10 @@ impl CompanionClient {
                 .text()
                 .await
                 .unwrap_or_else(|_| "<unreadable>".to_string());
-            anyhow::bail!("GET {url} returned {status}: {text}");
+            return Err(coded_status_err(
+                status,
+                format!("GET {url} returned {status}: {text}"),
+            ));
         }
 
         resp.bytes()
@@ -980,6 +1030,33 @@ impl CompanionClient {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    // ---- companion error classification ----
+
+    // A 504 from the companion is its main-thread watchdog firing — code it as
+    // wedged (D503) so it stops rendering as an opaque EX000.
+    #[test]
+    fn status_504_codes_as_companion_wedged() {
+        let e = coded_status_err(
+            reqwest::StatusCode::GATEWAY_TIMEOUT,
+            "POST /tap returned 504: timed out on main thread".to_string(),
+        );
+        assert_eq!(
+            golem_events::extract_code(&e),
+            Some(golem_events::FailureCode::DeviceCompanionWedged),
+        );
+    }
+
+    // Other non-success statuses (e.g. a companion 500) aren't cleanly
+    // attributable — leave them uncoded rather than guess.
+    #[test]
+    fn status_500_stays_uncoded() {
+        let e = coded_status_err(
+            reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+            "POST /tap returned 500: handler raised".to_string(),
+        );
+        assert_eq!(golem_events::extract_code(&e), None);
+    }
 
     // ---- parse_hierarchy ----
 
