@@ -1341,6 +1341,13 @@ async fn execute_flow_run(
     // no further FlowRuns get allocated to it, and fire-and-forget a
     // background reboot task that clears the flag once the device is
     // back. Cheap on success: never probes.
+    //
+    // Graceful loss (device gone, not wedged: user shut it down, adb
+    // dropped, sim crashed) is handled by the reboot functions themselves
+    // — `reboot_{android,ios}_device` fast-fail on a device that isn't
+    // there rather than polling out their full boot deadline — and,
+    // proactively, by the wait-loop discover snapshot below marking a
+    // vanished allocated device unhealthy.
     for (idx, report) in reports.iter_mut().enumerate() {
         if report.success {
             continue;
@@ -2110,7 +2117,19 @@ fn format_disk_summary(snap: &golem_devices::concurrency::ResourceSnapshot) -> S
 }
 
 async fn reboot_android_device(udid: &str) -> anyhow::Result<()> {
-    let _ = golem_common::command::output_argv("adb", &["-s", udid, "reboot"]).await?;
+    // Graceful loss: a device that's gone (user shut it down, adb dropped
+    // the connection) makes `adb reboot` exit non-zero right away
+    // ("error: device '<udid>' not found"). Bail fast rather than polling
+    // getprop against a device that isn't there for the full 180s deadline
+    // — that's the wasted-reboot the graceful-loss path exists to avoid.
+    // A healthy device's `adb reboot` returns 0.
+    let reboot = golem_common::command::output_argv("adb", &["-s", udid, "reboot"]).await?;
+    if !reboot.status.success() {
+        anyhow::bail!(
+            "reboot: adb reboot failed for {udid} (device disconnected?): {}",
+            String::from_utf8_lossy(&reboot.stderr).trim()
+        );
+    }
     // Wait for sys.boot_completed=1 (cap ~3 min to avoid hanging the
     // background task forever if the emulator is fully wedged).
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(180);
@@ -2123,10 +2142,20 @@ async fn reboot_android_device(udid: &str) -> anyhow::Result<()> {
                 .await;
         if let Ok(o) = out {
             if String::from_utf8_lossy(&o.stdout).trim() == "1" {
-                // Extra grace period for the package manager + companion
-                // services to come up cleanly before any new flow lands.
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                return Ok(());
+                // Post-reboot validation: don't declare the device healthy
+                // on a blind grace-sleep — the package service registers a
+                // few seconds after `boot_completed` flips, so the first
+                // post-reboot flow's install/launch can still hit "Can't
+                // find service: package". Gate on the real probe instead.
+                //
+                // Companion/UiAutomation readiness is a separate layer and
+                // is already gated: the recovery task drops this device's
+                // registration (`invalidate_companion` + `remove`), so the
+                // first post-reboot flow always takes the fresh-spawn path
+                // in `ensure_companion_with_reg`, which blocks on
+                // `wait_for_health` until `/health`'s `getRootInActiveWindow`
+                // warm-up probe passes. No extra hierarchy probe needed here.
+                return wait_for_android_package_service(udid).await;
             }
         }
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
@@ -3420,17 +3449,25 @@ mod tests {
         use std::sync::Arc;
 
         #[tokio::test(start_paused = true)]
-        async fn reboot_android_succeeds_once_boot_completed() {
+        async fn reboot_android_succeeds_once_boot_completed_and_package_ready() {
             let fake = Arc::new(FakeCommandRunner::new());
             fake.expect(&["adb", "-s", "emulator-5554", "reboot"], Canned::ok_stdout(""));
             let getprop = ["adb", "-s", "emulator-5554", "shell", "getprop", "sys.boot_completed"];
             fake.expect(&getprop, Canned::ok_stdout("0\n"));
             fake.expect(&getprop, Canned::ok_stdout("1\n"));
+            // Post-reboot validation: reboot now gates on the package
+            // service being bound (not a blind sleep) before returning.
+            // getprop's last response repeats, so the probe's boot check
+            // sees "1"; the pm query must answer cleanly.
+            fake.expect(
+                &["adb", "-s", "emulator-5554", "shell", "pm", "list", "packages", "-f", "android"],
+                Canned::ok_stdout("package:/system/framework/framework-res.apk=android\n"),
+            );
             let _g = set_test_runner(fake);
 
             reboot_android_device("emulator-5554")
                 .await
-                .expect("reboot SHALL succeed once sys.boot_completed=1");
+                .expect("reboot SHALL succeed once boot_completed=1 and package service is bound");
         }
 
         #[tokio::test(start_paused = true)]
@@ -3450,6 +3487,33 @@ mod tests {
             assert!(
                 format!("{err:#}").contains("reboot timeout"),
                 "got: {err:#}"
+            );
+        }
+
+        #[tokio::test(start_paused = true)]
+        async fn reboot_android_fast_fails_on_disconnected_device() {
+            // Graceful loss: a gone device makes `adb reboot` exit non-zero
+            // immediately. reboot SHALL bail without ever polling getprop
+            // (no getprop expectation is registered — a poll would panic on
+            // the unexpected command in the fake runner).
+            let fake = Arc::new(FakeCommandRunner::new());
+            fake.expect(
+                &["adb", "-s", "emulator-5554", "reboot"],
+                Canned::exit(1, "", "error: device 'emulator-5554' not found"),
+            );
+            let _g = set_test_runner(fake.clone());
+
+            let err = reboot_android_device("emulator-5554")
+                .await
+                .expect_err("a disconnected device SHALL fast-fail, not poll");
+            assert!(
+                format!("{err:#}").contains("device disconnected"),
+                "got: {err:#}"
+            );
+            assert_eq!(
+                fake.recorded().len(),
+                1,
+                "SHALL bail after the reboot command, never reaching getprop"
             );
         }
 

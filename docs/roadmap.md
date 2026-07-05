@@ -548,21 +548,6 @@ actually observed surviving the shutdown + self-exit paths.
 window", trigger restart), `golem-cli/src/registration.rs` (re-register
 on companion restart).
 
-## ANR recovery: iOS + post-recovery validation
-
-Android ANR detection + reboot recovery is shipped. Outstanding:
-
-- **iOS ANR-dialog detection.** `detect_anr` matches Android's "isn't
-  responding" text; iOS system dialogs have different shapes (Touch ID,
-  location prompts, etc). Wire an iOS-side detection path. (The iOS reboot
-  *mechanism* is done — `reboot_ios_device` does `simctl shutdown && boot`
-  + `bootstatus`, verified ~17s live.)
-- **Post-reboot validation.** After the reboot task clears
-  unhealthy, the first flow assigned to the device may hit an
-  uninitialised state. Add a sanity probe (single hierarchy fetch,
-  expect non-trivial node count, retry once) before marking healthy.
-
-
 ## Stub-device end-to-end tests
 
 **The problem.** Unit tests cover individual modules well, but the
@@ -774,27 +759,17 @@ on-release handoff), `golem-cli/src/suite.rs::find_available_device`
 (step-4 wait loop reads adaptive Tpoll, blocks on a per-shape
 signal instead of fixed sleep).
 
-## Device lifecycle: graceful loss
+## Idle device reaper (mid-suite) + auto-shutdown race
 
-When `discover_all_devices` no longer returns a device we have
-allocated (user shut it down mid-sweep, adb dropped the
-connection, etc), the FlowRun holding it currently has no
-graceful recovery — its driver calls just start failing. Should:
-mark the device unhealthy in `ResourceManager`, abort the active
-FlowRun with a clean "device disconnected, retry" error, free the
-allocation so other queued FlowRuns can shift to alternative
-devices.
+Not built. If we add an "idle device reaper" (shut down
+golem-booted devices unused for N minutes mid-suite, to free RAM
+during long sweeps), it MUST coordinate with the allocator: refuse
+to shut down a device that is allocated or has queued FlowRuns
+targeting its shape. Devices golem booted itself are tracked for
+shutdown at suite end (per `--keep-devices`); a reaper would be the
+first mid-suite shutdown path and could race the allocator.
 
-**Auto-shutdown race.** Devices golem booted itself are tracked
-for shutdown at suite end (per `--keep-devices`). If we ever add
-an "idle device reaper" (shut down golem-booted devices not used
-in N minutes mid-suite), it must coordinate with the allocator
-(refuse to shut down a device with queued FlowRuns targeting its
-shape).
-
-**Files:** `golem-devices/src/resource_manager.rs` (unhealthy
-state + graceful-loss handler triggered by next discover snapshot
-showing a previously-allocated device gone).
+**Files:** `golem-devices/src/resource_manager.rs`.
 
 ## Boot-on-demand for `--repeat` identical device pools
 

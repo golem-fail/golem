@@ -550,6 +550,16 @@ fn parse_corners_json(val: Option<&serde_json::Value>) -> Vec<RoundedCorner> {
 /// recover in that case). False positives would auto-reboot a healthy
 /// device unnecessarily, which is more expensive than missing a real
 /// ANR, so the matcher is conservative.
+///
+/// Android-only by design. iOS has no equivalent "isn't responding"
+/// system dialog — the watchdog kills a hung app silently — so there is
+/// nothing analogous to match, and iOS device recovery instead rides the
+/// platform-agnostic wedge paths (companion unresponsive at recovery time
+/// / `DeviceCompanionWedged`). We deliberately do NOT treat iOS system
+/// prompts (Touch ID, Face ID, location, notifications) as ANRs: those
+/// are dismissable interrupts, not device wedges, so rebooting on them
+/// would be wrong (spurious reboot + lost state). This matcher only keys
+/// on the Android title text, so those prompts never trip it.
 pub fn detect_anr(el: &Element) -> bool {
     fn has_anr_text(el: &Element) -> bool {
         if let Some(ref t) = el.text {
@@ -1579,6 +1589,36 @@ mod tests {
     fn detect_anr_false_for_normal_ui() {
         let tree = el(leaf("TextView", Some("Welcome")));
         assert!(!detect_anr(&tree), "non-ANR text SHALL NOT match");
+    }
+
+    // 41b. detect_anr does NOT match iOS system prompts. These are
+    //      dismissable interrupts (Touch ID / location / notifications),
+    //      not device wedges — matching them would trigger a spurious
+    //      reboot. iOS recovery rides the wedge paths instead.
+    #[test]
+    fn detect_anr_false_for_ios_system_prompts() {
+        for prompt in [
+            "Allow \u{201c}App\u{201d} to use your location?",
+            "Do You Want to Allow \u{201c}App\u{201d} to Send You Notifications?",
+            "Touch ID for \u{201c}App\u{201d}",
+            "Face ID",
+            "Sign in with your Apple Account",
+        ] {
+            let tree = el(json!({
+                "element_type": "alert", "text": prompt,
+                "accessibility_label": null, "placeholder": null,
+                "bounds": { "x": 0, "y": 100, "width": 300, "height": 200 },
+                "children": [
+                    leaf("StaticText", Some(prompt)),
+                    leaf("Button", Some("Allow")),
+                    leaf("Button", Some("Don\u{2019}t Allow")),
+                ]
+            }));
+            assert!(
+                !detect_anr(&tree),
+                "iOS system prompt {prompt:?} SHALL NOT be treated as an ANR"
+            );
+        }
     }
 
     // 42. find_alert returns an iOS native alert and extracts message as text.
