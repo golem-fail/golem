@@ -1,5 +1,8 @@
 [flow]
 name = "Increment counter subflow"
+# Runs only as a run_flow child (or when named/tagged explicitly), never in the
+# bare `golem run` sweep — a standalone run would be redundant with subflow.test.toml.
+explicit_only = true
 
 [flow.options]
 app_lifecycle = "manual"

@@ -38,6 +38,13 @@ pub struct FlowMeta {
     pub seed: Option<u64>,
     #[serde(default)]
     pub tags: Vec<String>,
+    /// When `true`, this flow is skipped by the tag-less discovery sweep
+    /// (bare `golem run` / `golem run <dir>`). It still runs when its path is
+    /// given directly or when a `--tag` filter matches. Used for subflows —
+    /// flows meant to run as a `run_flow` child, where a standalone run in the
+    /// bulk sweep would be redundant.
+    #[serde(default)]
+    pub explicit_only: bool,
     #[serde(default)]
     pub vars: HashMap<String, String>,
     #[serde(default)]
@@ -1262,6 +1269,27 @@ name = "no teardown"
 "#;
         let flow = parse_flow(toml_str).expect("no teardown should parse");
         assert!(flow.teardown.is_empty());
+    }
+
+    #[test]
+    fn explicit_only_parses() {
+        let toml_str = r#"
+[flow]
+name = "subflow"
+explicit_only = true
+"#;
+        let flow = parse_flow(toml_str).expect("explicit_only should parse");
+        assert!(flow.flow.explicit_only);
+    }
+
+    #[test]
+    fn explicit_only_defaults_false() {
+        let toml_str = r#"
+[flow]
+name = "normal"
+"#;
+        let flow = parse_flow(toml_str).expect("should parse");
+        assert!(!flow.flow.explicit_only, "absent explicit_only SHALL default to false");
     }
 
     // ---------------------------------------------------------------

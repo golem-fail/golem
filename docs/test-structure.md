@@ -12,6 +12,8 @@ Tests are written in TOML. A `.test.toml` file defines a **flow** — the top-le
 - [Block](#block) — [Platform-specific](#platform-specific-blocks), [Branching](#branching), [`next`](#block-next)
 - [Step](#step) — [Selectors](#selectors), [Grouped syntax](#grouped-selector-syntax), [Options](#step-options), [Timeout multipliers](#timeout-multipliers)
 - [Subflow](#subflow)
+- [Reuse: subflow vs mixin vs fixture](#reuse-subflow-vs-mixin-vs-fixture)
+- [Lifecycle: setup & teardown](#lifecycle-setup--teardown)
 - [Teardown](#teardown)
 - [Data-Driven Tests](#data-driven-tests)
 - [Variables](#variables)
@@ -371,6 +373,7 @@ counter_value = "result_after_increment"
 # subflows/increment_counter.test.toml
 [flow]
 name = "Increment counter"
+explicit_only = true        # Skip in the bulk sweep (see below)
 
 [flow.options]
 app_lifecycle = "manual"    # Don't restart the app
@@ -384,11 +387,54 @@ steps = [
 
 Variables listed in `[block.save_to]` propagate back to the parent. Override child variables with `[block.vars]`.
 
+A subflow is a normal flow, so `golem run` (no path) would otherwise discover and run it standalone — redundant with the flows that embed it. Mark it `explicit_only = true` in `[flow]` to keep it out of the **bulk sweep** while still running it when you target it:
+
+| Invocation | `explicit_only` flow |
+|---|---|
+| `golem run` (no path) | **skipped** — the bulk sweep |
+| `golem run <dir>` (no `--tag`) | **skipped** |
+| `golem run --tag login` (tag matches) | **runs** — a matching tag opts it in |
+| `golem run --tag other` (no matching tag) | skipped |
+| `golem run path/to/sub.test.toml` | **runs** — path given directly |
+| `golem run 'e2e/**/*.test.toml'` (shell glob) | **runs** — the shell expands the glob to file paths before golem sees it, so a globbed path is indistinguishable from a typed one |
+
+In short: `explicit_only` suppresses only the tag-less discovery sweep. Tag it to include it in specific `--tag` runs; name its path to run it directly. Set `app_lifecycle = "manual"` so the child inherits the parent's already-launched app (see [Lifecycle](#lifecycle-setup--teardown)).
+
+## Reuse: subflow vs mixin vs fixture
+
+Three ways to share pieces across flows, by what they contain:
+
+| Concept | File / location | Contains | Reused via | Use when |
+|---|---|---|---|---|
+| **flow** | `x.test.toml` | `[flow]` + `[[block]]` | — (top-level unit) | a complete scenario |
+| **subflow** | `x.test.toml`, usually `explicit_only = true` | a full `[flow]` | `run_flow` on a `[[block]]`; `[block.save_to]` propagates results back | reusing a whole scenario as a child (e.g. `login`) |
+| **mixin** | `__mixins__/x.toml` | `[[step]]` only (no flow/block/vars) | [`load_mixin`](actions-reference.md#load_mixin) action; steps inline into the block, per-call `vars` | reusing a step fragment that runs inside the caller's block state |
+| **fixture** | `__fixtures__/x.toml` | `[vars]` only | [`load_fixture`](actions-reference.md#load_fixture) action; access as `${alias.key}` | reusing test **data** |
+
+`__mixins__/` and `__fixtures__/` are excluded from flow discovery, so their files never run as tests on their own.
+
+## Lifecycle: setup & teardown
+
+**There is no `[[setup]]` block.** A flow's setup is implicit and happens automatically before the first block:
+
+1. **build** — once per `(platform, bundle)` across the suite (see [App Install](app-install.md)).
+2. **install** — once per `(device, bundle)` across the suite, cache-gated.
+3. **app_lifecycle** — per flow, at flow start:
+   - `reset` (default) — stop every app in `[[flow.apps]]`, then launch the first. Guarantees fresh state.
+   - `launch` — launch the first app only if not already running. Preserves state.
+   - `manual` — do nothing; the flow (or its parent) owns the app. `--start <block>` forces this.
+
+Any additional setup you need (e.g. creating a user) is just normal steps, or a [mixin](#reuse-subflow-vs-mixin-vs-fixture) if shared.
+
+**Subflows** never re-build or re-install (that layer isn't re-entered for a `run_flow` child), but the child **does** re-run `app_lifecycle` with *its own* setting — which is why reusable subflows set `app_lifecycle = "manual"` to inherit the parent's running app.
+
+**Teardown** (see below) is intended to run after every flow, including on failure, for cleanup (e.g. deleting test data). Note it is not yet wired.
+
 ## Teardown
 
-> **Not yet wired.** Teardown blocks are parsed but not executed. This section describes the intended behavior.
+> **Not yet wired.** Teardown blocks are parsed but not executed. This section describes the intended behavior. Today, only device state is reset after each flow (dark mode, mocked location, screen recording) via automatic cleanup — external data cleanup awaits teardown wiring.
 
-Teardown blocks run after the flow completes, regardless of pass/fail. Failures in teardown don't affect the test result.
+Teardown blocks run after the flow completes, regardless of pass/fail — running **even when the flow fails** is the point: it cleans up external state (test data, created users) that a failed run would otherwise leak. Failures in teardown don't affect the test result.
 
 ```toml
 [[teardown]]

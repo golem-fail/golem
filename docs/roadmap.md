@@ -885,7 +885,14 @@ Several CLI flags are defined but not yet wired through to execution.
 
 ### `--no-teardown` — Skip teardown blocks
 
-Teardown blocks are parsed but never executed. The executor ignores the `teardown` field — no teardown logic runs after flows. The `no_teardown` config field is stored but there is nothing to skip.
+Teardown blocks are parsed but never executed. The executor ignores the `teardown` field — no teardown logic runs after flows. The `no_teardown` config field is stored but there is nothing to skip. Today only device state is reset after a flow via `golem-runner::cleanup::auto_cleanup` (dark mode, mocked location, screen recording); user teardown steps and external-data cleanup do not run.
+
+Wiring plan — call `execute_teardown` from `execute_flow` (gated by `no_teardown`), with these decisions to make:
+- **Runs on failure.** Teardown MUST run even when the flow fails — its primary purpose is external-data cleanup (deleting test data / created users a failed run would leak) — and stays isolated from the test result.
+- **Subflows:** decide whether a `run_flow` child runs its own teardown (the recursive `execute_flow` design implies yes).
+- **Data-driven:** decide whether teardown runs per `[[data]]` row or once for the set.
+- **Install-failure path:** decide whether the early-return in `suite.rs` (install/`--no-build` failures) also runs teardown.
+- No `[[setup]]` block is planned — implicit lifecycle (build → install → `app_lifecycle`) plus normal steps/mixins cover setup.
 
 ### `--no-clean` — Skip app data clear
 

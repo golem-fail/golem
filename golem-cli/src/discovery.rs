@@ -7,6 +7,9 @@ pub struct DiscoveredFlow {
     pub path: PathBuf,
     pub name: String,
     pub tags: Vec<String>,
+    /// Skip this flow in the tag-less discovery sweep (subflows). See
+    /// `FlowMeta::explicit_only`.
+    pub explicit_only: bool,
 }
 
 /// A single tag filter clause (e.g., "smoke|regression" parsed into alternatives).
@@ -45,6 +48,10 @@ pub fn discover_flows(root: &Path, tag_filters: &[TagFilter]) -> Result<Vec<Disc
     // Apply tag filters: untagged flows are excluded by any filter
     if !tag_filters.is_empty() {
         flows.retain(|flow| tag_filters.iter().all(|filter| filter.matches(&flow.tags)));
+    } else {
+        // No tag filter: this is the bulk sweep. Skip explicit-only flows
+        // (subflows) — they run only via a matching --tag or a direct path.
+        flows.retain(|flow| !flow.explicit_only);
     }
 
     // Sort by path for deterministic ordering
@@ -97,6 +104,7 @@ fn parse_flow_file(path: &Path) -> Result<DiscoveredFlow> {
         path: path.to_path_buf(),
         name: flow_file.flow.name,
         tags: flow_file.flow.tags,
+        explicit_only: flow_file.flow.explicit_only,
     })
 }
 
@@ -487,6 +495,79 @@ mod tests {
             vec!["smoke".to_string(), "auth".to_string()],
             "discovered flow SHALL carry parsed tags"
         );
+    }
+
+    /// Helper: a flow marked `explicit_only`, optionally tagged.
+    fn explicit_only_toml(name: &str, tags: &[&str]) -> String {
+        let mut toml = flow_toml(name, tags);
+        toml.push_str("explicit_only = true\n");
+        toml
+    }
+
+    // ---------------------------------------------------------------
+    // 18. explicit_only flows are skipped by the tag-less sweep
+    // ---------------------------------------------------------------
+    #[test]
+    fn explicit_only_excluded_from_untagged_scan() {
+        let tmp = TempDir::new().expect("tempdir");
+        write_flow(tmp.path(), "real.test.toml", &flow_toml("real", &[]));
+        write_flow(
+            tmp.path(),
+            "subflows/login.test.toml",
+            &explicit_only_toml("login subflow", &[]),
+        );
+
+        let flows = discover_flows(tmp.path(), &[]).expect("discover");
+        assert_eq!(flows.len(), 1, "explicit_only flow SHALL be skipped by the bare sweep");
+        assert_eq!(flows[0].name, "real");
+    }
+
+    // ---------------------------------------------------------------
+    // 19. A matching --tag opts an explicit_only flow back in
+    // ---------------------------------------------------------------
+    #[test]
+    fn explicit_only_included_when_tag_matches() {
+        let tmp = TempDir::new().expect("tempdir");
+        write_flow(
+            tmp.path(),
+            "subflows/login.test.toml",
+            &explicit_only_toml("login subflow", &["login"]),
+        );
+
+        let filters = [TagFilter::parse("login")];
+        let flows = discover_flows(tmp.path(), &filters).expect("discover");
+        assert_eq!(flows.len(), 1, "matching --tag SHALL include an explicit_only flow");
+        assert_eq!(flows[0].name, "login subflow");
+    }
+
+    // ---------------------------------------------------------------
+    // 20. A non-matching --tag still excludes an explicit_only flow
+    // ---------------------------------------------------------------
+    #[test]
+    fn explicit_only_excluded_when_tag_absent() {
+        let tmp = TempDir::new().expect("tempdir");
+        write_flow(
+            tmp.path(),
+            "subflows/login.test.toml",
+            &explicit_only_toml("login subflow", &["login"]),
+        );
+
+        let filters = [TagFilter::parse("smoke")];
+        let flows = discover_flows(tmp.path(), &filters).expect("discover");
+        assert!(flows.is_empty(), "non-matching --tag SHALL NOT include the flow");
+    }
+
+    // ---------------------------------------------------------------
+    // 21. Flows without the field default to discoverable (backward compat)
+    // ---------------------------------------------------------------
+    #[test]
+    fn explicit_only_defaults_false() {
+        let tmp = TempDir::new().expect("tempdir");
+        write_flow(tmp.path(), "plain.test.toml", &flow_toml("plain", &[]));
+
+        let flows = discover_flows(tmp.path(), &[]).expect("discover");
+        assert_eq!(flows.len(), 1);
+        assert!(!flows[0].explicit_only, "absent field SHALL default to false");
     }
 
     // ---------------------------------------------------------------
