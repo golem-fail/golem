@@ -5,6 +5,12 @@ pub mod common;
 pub mod ime;
 pub mod ios;
 
+/// Device-free stub driver for in-process integration tests. Only built in
+/// dev/test binaries — never shipped in a release build — so the hidden
+/// `--stub` path and this driver cannot be reached by end users.
+#[cfg(debug_assertions)]
+pub mod stub;
+
 pub mod ios_display;
 pub mod webkit;
 

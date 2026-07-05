@@ -252,6 +252,15 @@ pub struct SuiteConfig {
     /// unbounded — the per-flow `max_runtime` circuit breaker
     /// guarantees forward progress by freeing wedged devices.
     pub max_device_wait: Option<std::time::Duration>,
+    /// `--stub <path>`: drive the suite against the device-free
+    /// [`golem_driver::stub::StubDriver`] instead of a real device, for
+    /// in-process integration tests. `Some(runs)` activates stub mode and
+    /// carries the 1-based run indices scripted to fail (empty = every run
+    /// passes); `None` = real devices. The flag is hidden and the stub
+    /// driver is compiled out of release builds, so this is `None` in any
+    /// shipped binary. A plain `Vec<u32>` (not the driver's `StubScript`)
+    /// so this always-compiled struct stays free of the debug-only type.
+    pub stub_fail_on_runs: Option<Vec<u32>>,
 }
 
 impl Default for SuiteConfig {
@@ -284,6 +293,7 @@ impl Default for SuiteConfig {
             trace: false,
             repeat: 1,
             max_device_wait: None,
+            stub_fail_on_runs: None,
         }
     }
 }
@@ -648,6 +658,7 @@ impl SuiteRunner {
             let project_record = self.config.project_record;
             let trace = self.config.trace;
             let max_device_wait = self.config.max_device_wait;
+            let stub_fail_on_runs = self.config.stub_fail_on_runs.clone();
             // RepeatContext only attached when --repeat > 1 so default
             // event payloads are unchanged for single-run suites.
             let repeat_ctx = if total_repeats > 1 {
@@ -698,6 +709,7 @@ impl SuiteRunner {
                         trace,
                         repeat_ctx,
                         max_device_wait,
+                        stub_fail_on_runs,
                     },
                     CoverageCtx {
                         groups: coverage_groups_c,
@@ -943,6 +955,9 @@ struct FlowRunConfig {
     repeat_ctx: Option<golem_events::RepeatContext>,
     /// `--max-wait` cap on queue-wait. `None` = unbounded.
     max_device_wait: Option<std::time::Duration>,
+    /// Stub mode: `Some(fail_on_runs)` drives this FlowRun against the
+    /// device-free `StubDriver` (see [`SuiteConfig::stub_fail_on_runs`]).
+    stub_fail_on_runs: Option<Vec<u32>>,
 }
 
 /// Build a synthetic `FlowReport` for a FlowRun short-circuited by the
@@ -1173,6 +1188,8 @@ async fn execute_flow_run(
             cfg.no_build,
             &cfg.device_settings,
             cfg.max_device_wait,
+            cfg.stub_fail_on_runs.is_some(),
+            cfg.repeat_ctx.map(|r| r.index).unwrap_or(0),
         )
         .await
         {
@@ -1275,6 +1292,7 @@ async fn execute_flow_run(
         let repeat_ctx = cfg.repeat_ctx;
         let a11y_override = cfg.a11y_override;
         let a11y_min_confidence_override = cfg.a11y_min_confidence_override;
+        let stub_fail_on_runs_c = cfg.stub_fail_on_runs.clone();
         handles.push(tokio::spawn(async move {
             run_flow_on_device(
                 flow_c,
@@ -1300,6 +1318,7 @@ async fn execute_flow_run(
                 repeat_ctx,
                 a11y_override,
                 a11y_min_confidence_override,
+                stub_fail_on_runs_c,
             )
             .await
         }));
@@ -1348,8 +1367,12 @@ async fn execute_flow_run(
     // there rather than polling out their full boot deadline — and,
     // proactively, by the wait-loop discover snapshot below marking a
     // vanished allocated device unhealthy.
+    // Stub runs never touch a real device: a stub failure is an assertion
+    // failure by construction, so device recovery is meaningless — and the
+    // probe/reboot below would build a real driver against a fake udid.
+    let recover = cfg.stub_fail_on_runs.is_none();
     for (idx, report) in reports.iter_mut().enumerate() {
-        if report.success {
+        if report.success || !recover {
             continue;
         }
         // Only flow failures that plausibly indicate an unhealthy device
@@ -1558,7 +1581,22 @@ async fn setup_slot(
     no_build: bool,
     device_settings: &crate::project::DeviceSettings,
     max_device_wait: Option<std::time::Duration>,
+    stub: bool,
+    stub_suffix: u32,
 ) -> Result<(DeviceInfo, u16)> {
+    // Stub mode: no real device exists. Return a synthetic device and a
+    // placeholder port, skipping discovery, allocation, boot, install, and
+    // companion registration entirely — the StubDriver answers everything
+    // in-process. This is the single upstream seam that keeps the rest of
+    // the run pipeline (plan → execute → assert → report) intact.
+    if stub {
+        // A slot with no platform constraint defaults to Android; the stub
+        // driver is platform-agnostic, so the choice only affects labelling.
+        return Ok((
+            stub_device(slot.platform.unwrap_or(Platform::Android), stub_suffix),
+            0,
+        ));
+    }
     // Atomic pick-and-allocate: re-find on race so two FlowRuns can't
     // both pick the same device. Each iteration calls find_available_device
     // (which filters out devices already allocated via `port_for`) and
@@ -2630,6 +2668,64 @@ fn map_a11y_level(level: golem_parser::A11yLevel) -> golem_runner::accessibility
     }
 }
 
+/// Synthetic device for stub runs. No real UDID/boot — the StubDriver
+/// ignores the udid/port. A generic phone shape so slot matching and
+/// report labelling behave normally.
+fn stub_device(platform: Platform, suffix: u32) -> DeviceInfo {
+    DeviceInfo {
+        // Unique name + udid per FlowRun. The report accumulator tracks at
+        // most one active flow per device id at a time — an invariant real
+        // devices uphold via exclusive allocation. Concurrent stub runs have
+        // no allocator gating them, so each must present as a distinct
+        // device (as real `--repeat` runs do when they spread across the
+        // pool) or their flow-start/finish events collide and races drop
+        // outcomes from the client report.
+        name: format!("Stub Device {suffix}"),
+        udid: format!("stub-device-{suffix}"),
+        platform,
+        device_type: golem_devices::DeviceType::Phone,
+        os_major: 0,
+        os_version: "stub".to_string(),
+        state: golem_devices::DeviceState::Booted,
+        physical: false,
+        playstore: false,
+        screen_width: Some(375),
+        screen_height: Some(812),
+        screen_scale: Some(1.0),
+        last_booted: None,
+        runtime_id: None,
+        device_type_id: None,
+    }
+}
+
+/// Construct the driver for a FlowRun. Normally a real
+/// `IosDriver`/`AndroidDriver`; when `stub_fail_on_runs` is `Some`, the
+/// device-free [`StubDriver`](golem_driver::stub::StubDriver) instead
+/// (in-process integration tests only — compiled out of release builds).
+fn make_driver(
+    platform: Platform,
+    udid: String,
+    bundle_id: String,
+    port: u16,
+    physical: bool,
+    stub_fail_on_runs: Option<Vec<u32>>,
+    run_index: u32,
+) -> Box<dyn PlatformDriver> {
+    #[cfg(debug_assertions)]
+    if let Some(fail_on_runs) = stub_fail_on_runs {
+        return Box::new(golem_driver::stub::StubDriver::new(
+            run_index,
+            golem_driver::stub::StubScript { fail_on_runs },
+        ));
+    }
+    #[cfg(not(debug_assertions))]
+    let _ = (&stub_fail_on_runs, run_index);
+    match platform {
+        Platform::Ios => Box::new(IosDriver::new(udid, bundle_id, port, physical)),
+        Platform::Android => Box::new(AndroidDriver::new(udid, bundle_id, port, physical)),
+    }
+}
+
 async fn run_flow_on_device(
     flow: FlowFile,
     flow_name: String,
@@ -2654,6 +2750,7 @@ async fn run_flow_on_device(
     repeat_ctx: Option<golem_events::RepeatContext>,
     a11y_override: Option<golem_parser::A11yLevel>,
     a11y_min_confidence_override: Option<f32>,
+    stub_fail_on_runs: Option<Vec<u32>>,
 ) -> FlowReport {
     let start = Instant::now();
     let device_name = device.name.clone();
@@ -2666,20 +2763,18 @@ async fn run_flow_on_device(
         .and_then(|a| a.bundle.clone())
         .unwrap_or_else(|| "fail.golem.test".to_string());
 
-    let driver: Box<dyn PlatformDriver> = match platform {
-        Platform::Ios => Box::new(IosDriver::new(
-            device.udid.clone(),
-            bundle_id.clone(),
-            port,
-            device.physical,
-        )),
-        Platform::Android => Box::new(AndroidDriver::new(
-            device.udid.clone(),
-            bundle_id.clone(),
-            port,
-            device.physical,
-        )),
-    };
+    // 1-based run index for the stub script: repeat_index+1 (run 1 when
+    // not repeating). Only consumed in stub mode.
+    let stub_run_index = repeat_ctx.map(|r| r.index + 1).unwrap_or(1);
+    let driver: Box<dyn PlatformDriver> = make_driver(
+        platform,
+        device.udid.clone(),
+        bundle_id.clone(),
+        port,
+        device.physical,
+        stub_fail_on_runs,
+        stub_run_index,
+    );
 
     // Resolve perf setting:
     // - Explicit CLI `--no-perf` always wins. The user opted out;

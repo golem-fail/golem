@@ -209,6 +209,13 @@ pub struct RunArgs {
     /// CI usage with a wall-clock budget.
     #[arg(long = "max-wait")]
     pub max_wait: Option<String>,
+
+    /// Hidden: drive the suite against the device-free StubDriver using the
+    /// TOML stub script at this path (in-process integration tests only).
+    /// The stub driver is compiled out of release builds, so this flag is a
+    /// no-op there. See `golem-cli/tests/`.
+    #[arg(long, hide = true)]
+    pub stub: Option<PathBuf>,
 }
 
 #[derive(clap::Args, Debug)]

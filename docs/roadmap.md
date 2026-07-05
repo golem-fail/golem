@@ -548,76 +548,30 @@ actually observed surviving the shutdown + self-exit paths.
 window", trigger restart), `golem-cli/src/registration.rs` (re-register
 on companion restart).
 
-## Stub-device end-to-end tests
+## Stub-device integration tests — remaining cases
 
-**The problem.** Unit tests cover individual modules well, but the
-end-to-end composition (CLI args → SuiteConfig → in-process server
-spawn → client `submit_and_wait` → event stream → renderer → result
-files → exit code) has no automated coverage. Real bugs slipping
-through:
+In-process integration coverage of the CLI→server→renderer→file→exit
+composition exists: `golem_driver::stub::StubDriver` (device-free,
+`cfg(debug_assertions)`), the hidden `--stub <script.toml>` flag, the
+`golem_cli::run_cli` lib entrypoint, and the fd-capture harness in
+`golem-cli/tests/` (output_formats, repeat fan-out, exit codes). Extend
+that harness with the still-uncovered composition surfaces:
 
-- `--output toon` silently produced human output (shipped, fixed)
-  because `submit_and_wait` always spawned the stream renderer
-  regardless of the requested format. Pure composition bug —
-  every individual unit was fine.
-- Daemon-mode silently skipped writing top-level `results.json` /
-  `results.toon` for months (shipped, fixed by routing through the
-  same write path). Composition gap: server- vs daemon-mode had
-  diverged handlers.
+- **`--trace` boundary capture + sidecar JSON shape** — assert a traced
+  stub run writes the per-step screenshot/tree sidecars in the expected
+  layout under the run's `output_dir`.
+- **daemon vs in-process parity** — same input via an explicit daemon and
+  via the in-process orchestrator produce identical `results.json`.
+- **coverage strategy fan-out + adaptive stop** — a multi-axis stub flow
+  under `--coverage smart|one` fans/stops as expected (needs the stub to
+  present multiple device shapes per slot).
+- **flake-summary grouping across `--repeat` on one device** — exercises
+  the per-(flow, device) FLAKE grouping, which the current fan-out test
+  can't (its parallel runs present as distinct devices). Needs the stub
+  runs to serialise on a single device id.
 
-**What stub-device E2E catches that unit tests don't.** Anything that
-spans multiple modules:
-- CLI flag → wire format → server reconstruction → execution path.
-- Per-run output_dir layout under `--repeat`.
-- Plan→execute pipeline.
-- Coverage strategy fan-out + adaptive stop logic.
-- Flake-summary aggregation across `--repeat` boundaries.
-- Renderer selection based on `--output`.
-- Exit codes for various flow outcomes.
-- IPC client↔server contract (config_json field threading, done
-  message shape).
-- `--trace` boundary capture + sidecar JSON shape.
-
-**Approach.**
-
-1. **Stub driver.** `golem-driver/src/stub.rs` (new) implements
-   `PlatformDriver` with deterministic, scripted responses. Extend
-   the existing `MockPlatformDriver` (used in unit tests) into a
-   fixture that can be driven by a YAML/TOML script:
-   ```toml
-   [responses]
-   "tap on_text=\"Submit\"" = "success"
-   "type on_text=\"email\"" = "fail: simulated timeout"
-   ```
-2. **`--stub` CLI flag.** Hidden behind `#[cfg(any(test, debug_assertions))]`
-   or a `stub` feature flag. When set, `SuiteRunner` uses the stub
-   driver instead of `IosDriver` / `AndroidDriver`. Bypasses the
-   ResourceManager device-boot logic too — stub flows don't need
-   real devices.
-3. **Test harness** at `golem-cli/tests/e2e/`. Each test:
-   - Spawns `golem run` as a subprocess with `--stub`.
-   - Captures stdout + stderr separately.
-   - Asserts output shape (TOON schema header, JSON structure,
-     "Results:" line, flake summary block, exit code).
-4. **First test suite to write:**
-   - `output_formats.rs` — `--output toon` produces TOON on stdout,
-     `--output json` produces JSON, etc. (would have caught today's
-     bug).
-   - `repeat_flake_detection.rs` — `--repeat 3` with deterministic
-     flake script (one pass + one fail + one pass) produces
-     "FLAKE 2/3" in summary.
-   - `daemon_vs_inproc_parity.rs` — same input via in-process
-     orchestrator vs explicit daemon produces identical stdout +
-     identical results.json content.
-
-**Out of scope:** anything that needs real device behaviour (HID
-injection latency, hierarchy snapshot timing, OS overlays). Those
-stay on the real-device sweep path.
-
-**Files:** `golem-driver/src/stub.rs` (new), `golem-driver/src/lib.rs`
-(re-export + feature gate), `golem-cli/src/cli.rs` (hidden `--stub`),
-`golem-cli/src/suite.rs` (route to stub driver when flag set),
-`golem-cli/tests/e2e/*.rs` (new test suite).
+Scripted-outcome fidelity only; anything needing real device behaviour
+(HID latency, snapshot timing, OS overlays) stays on the real-device sweep.
 
 ## Event-ify remaining server-side eprintlns
 

@@ -665,6 +665,7 @@ dependencies = [
  "golem-report",
  "golem-runner",
  "golem-vars",
+ "libc",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "serde",

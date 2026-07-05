@@ -34,6 +34,10 @@ dirs = "6"
 
 [dev-dependencies]
 tempfile = "3"
+# fd-level stdout/stderr capture in the in-process integration harness
+# (tests/common) — the streamed renderer writes from spawned tasks, so a
+# process-fd redirect captures it without threading writers through.
+libc = "0.2"
 # `test-util` enables `start_paused` so reboot/wait timeouts advance instantly
 # in tests (also relied on by the orchestrator tests via feature unification).
 tokio = { workspace = true, features = ["test-util"] }
