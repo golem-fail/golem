@@ -647,7 +647,7 @@ dependencies = [
 
 [[package]]
 name = "golem-cli"
-version = "0.6.37"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -678,7 +678,7 @@ dependencies = [
 
 [[package]]
 name = "golem-common"
-version = "0.6.37"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "tokio",
@@ -686,7 +686,7 @@ dependencies = [
 
 [[package]]
 name = "golem-devices"
-version = "0.6.37"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "golem-common",
@@ -700,7 +700,7 @@ dependencies = [
 
 [[package]]
 name = "golem-driver"
-version = "0.6.37"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -722,7 +722,7 @@ dependencies = [
 
 [[package]]
 name = "golem-element"
-version = "0.6.37"
+version = "0.7.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -731,7 +731,7 @@ dependencies = [
 
 [[package]]
 name = "golem-email"
-version = "0.6.37"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -748,7 +748,7 @@ dependencies = [
 
 [[package]]
 name = "golem-events"
-version = "0.6.37"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "serde",
@@ -758,7 +758,7 @@ dependencies = [
 
 [[package]]
 name = "golem-orchestrator"
-version = "0.6.37"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "golem-devices",
@@ -772,7 +772,7 @@ dependencies = [
 
 [[package]]
 name = "golem-parser"
-version = "0.6.37"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "indexmap",
@@ -784,7 +784,7 @@ dependencies = [
 
 [[package]]
 name = "golem-report"
-version = "0.6.37"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -797,7 +797,7 @@ dependencies = [
 
 [[package]]
 name = "golem-runner"
-version = "0.6.37"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -829,7 +829,7 @@ dependencies = [
 
 [[package]]
 name = "golem-vars"
-version = "0.6.37"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "chrono",

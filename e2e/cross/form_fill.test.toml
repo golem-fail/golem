@@ -62,9 +62,11 @@ steps = [
   # Hide the keyboard
   { action = "hide_keyboard" },
 
-  # Read back form values to verify (fields show typed content)
-  { action = "read", on_text = "${email}", save_to = "filled_email" },
-  { action = "read", on_text = "golem test query", save_to = "filled_search" },
+  # Read back form values to verify (fields show typed content). auto_scroll:
+  # after the multiline field is filled, the email/search fields are scrolled
+  # far above the fold on phone/tablet viewports.
+  { action = "read", on_text = "${email}", save_to = "filled_email", auto_scroll = true },
+  { action = "read", on_text = "golem test query", save_to = "filled_search", auto_scroll = true },
 
   # Take a screenshot before submitting
   { action = "screenshot", path = "/tmp/golem-cross-form-filled.png" },

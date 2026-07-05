@@ -252,7 +252,7 @@ final class RequestRouter {
         return .json([
             "status": ready ? "ok" : "warming_up",
             "platform": "ios",
-            "version": "0.6.37",
+            "version": "0.7.0",
             "device_name": device.name,
             "device_model": device.model,
             "os_version": device.systemVersion,
@@ -676,6 +676,22 @@ final class RequestRouter {
             return gatewayTimeout("launch")
         }
         lastLaunchedBundle = bundleId
+        // Warm the /hierarchy path before returning. The screenshot-based
+        // /health warm-up (`ensureXcuiReady`) attaches the XCUITest framework
+        // but NOT the accessibility-tree snapshot subsystem — a distinct,
+        // expensive first-time engagement. The `staticTexts` probe above only
+        // resolves one element; the full `HierarchySerializer.serialize` walk
+        // still fires cold on the flow's first /hierarchy, which is what drops
+        // that request (EX000) or times out its first snapshot (EF408). Do one
+        // throwaway serialize here, behind the launch gate (which tolerates a
+        // slow response), so the flow's first real /hierarchy hits a warm path.
+        // App-scoped only — NO SpringBoard query (that terminates the harness
+        // on iOS 26). Best-effort: a timeout/failure here doesn't fail launch;
+        // the real /hierarchy has its own retry budget.
+        _ = runOnMain(timeout: Self.kTimeoutLaunch) { () -> Bool in
+            _ = HierarchySerializer.serialize(app: application)
+            return true
+        }
         // Probe C is a hint, not a guarantee — a canvas-only app or one
         // whose first paint has no static-text accessibility node will
         // time out here legitimately. Return ok so flows can proceed,

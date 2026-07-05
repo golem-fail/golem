@@ -1716,13 +1716,14 @@ async fn setup_slot(
                         }
                     }
                 }
-                // No cache hit: spawn fresh.
+                // No cache hit: spawn fresh (cold — full install budget).
                 ensure_companion_with_reg(
                     &device_for_init,
                     platform,
                     reg_port,
                     &reg_state_for_init,
                     &event_tx_for_init,
+                    COLD_REG_DEADLINE,
                 )
                 .await
             })
@@ -1794,12 +1795,16 @@ async fn setup_slot(
                 // and the registration must be cleared).
                 reg_state.invalidate_companion(&device.udid);
                 reg_state.remove(&device.udid);
+                // Relaunch of an already-installed companion — tight budget so
+                // a companion that won't stay up fails fast instead of burning
+                // ~a minute per attempt (bounds the restart recovery tail).
                 match ensure_companion_with_reg(
                     &device,
                     platform,
                     reg_port,
                     &reg_state,
                     &event_tx,
+                    RELAUNCH_REG_DEADLINE,
                 )
                 .await
                 {
@@ -2583,16 +2588,31 @@ async fn scan_companions() -> Vec<(u16, golem_driver::CompanionHealth)> {
 /// their own deadline (companion build / detached spawn) and guarantees the
 /// permit is released even if a launch wedges — so the next iOS device can
 /// proceed instead of the whole run hanging.
-const IOS_COMPANION_STARTUP_DEADLINE: std::time::Duration = std::time::Duration::from_secs(120);
+/// Registration-wait budget for a *cold* companion bring-up (fresh install +
+/// first XCUITest launch). Generous: a cold `xcodebuild test-without-building`
+/// + install can legitimately take most of a minute.
+const COLD_REG_DEADLINE: std::time::Duration = std::time::Duration::from_secs(90);
+/// Registration-wait budget for a *relaunch* (companion-restart recovery). The
+/// companion is already installed, so a healthy relaunch re-registers in
+/// seconds; a tight budget stops a chronically-dying companion from burning
+/// ~a minute per restart attempt and dragging the recovery tail into minutes.
+const RELAUNCH_REG_DEADLINE: std::time::Duration = std::time::Duration::from_secs(25);
+/// Margin added to the registration budget for the iOS host-wide
+/// `CompanionLaunch` deadline, covering the pre-registration steps (companion
+/// build / detached spawn) not included in the inner registration wait.
+const IOS_LAUNCH_DEADLINE_MARGIN: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// Launch a companion using the registration server.
-/// Returns the port the companion registered on.
+/// Returns the port the companion registered on. `reg_deadline` bounds the
+/// wait for the companion to register — [`COLD_REG_DEADLINE`] for a first
+/// bring-up, [`RELAUNCH_REG_DEADLINE`] for a restart of an installed companion.
 async fn ensure_companion_with_reg(
     device: &DeviceInfo,
     platform: Platform,
     reg_port: u16,
     reg_state: &crate::registration::RegistrationState,
     event_tx: &golem_events::channel::EventSender,
+    reg_deadline: std::time::Duration,
 ) -> Result<u16> {
     // Serialize concurrent launches per UDID. When N flows want the
     // same sim, only one runs `xcodebuild test-without-building` (or
@@ -2620,11 +2640,12 @@ async fn ensure_companion_with_reg(
     // Android `am instrument` bring-up is per-device over adb and runs
     // directly, unserialized (measured stable under concurrency).
     if platform == Platform::Ios {
+        let launch_deadline = reg_deadline + IOS_LAUNCH_DEADLINE_MARGIN;
         let out = golem_common::host_queue::acquire_then_run(
             golem_common::host_queue::OpClass::CompanionLaunch,
             tokio::time::timeout(
-                IOS_COMPANION_STARTUP_DEADLINE,
-                bring_up_companion(device, platform, reg_port, reg_state, &companion_path),
+                launch_deadline,
+                bring_up_companion(device, platform, reg_port, reg_state, &companion_path, reg_deadline),
             ),
         )
         .await;
@@ -2635,12 +2656,12 @@ async fn ensure_companion_with_reg(
                 anyhow::anyhow!(
                     "iOS companion bring-up for {} exceeded {}s (serialized launch deadline)",
                     device.name,
-                    IOS_COMPANION_STARTUP_DEADLINE.as_secs()
+                    launch_deadline.as_secs()
                 ),
             )),
         };
     }
-    bring_up_companion(device, platform, reg_port, reg_state, &companion_path).await
+    bring_up_companion(device, platform, reg_port, reg_state, &companion_path, reg_deadline).await
 }
 
 /// Install/build the companion for `device`, launch it, and wait until it
@@ -2655,6 +2676,7 @@ async fn bring_up_companion(
     reg_port: u16,
     reg_state: &crate::registration::RegistrationState,
     companion_path: &str,
+    reg_deadline: std::time::Duration,
 ) -> Result<u16> {
     // Install/build companion
     if platform == Platform::Android {
@@ -2693,7 +2715,7 @@ async fn bring_up_companion(
     // the explicit `device_serial` env var, iOS via `UIDevice.current
     // .identifierForVendor`.)
     let mut rx = reg_state.subscribe();
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(90);
+    let deadline = tokio::time::Instant::now() + reg_deadline;
     // Concurrent flows all hit this path simultaneously when launching a
     // fresh companion — only one XCUITest harness can run per UDID, so
     // only one registration fires. Without this pre-check, every flow
@@ -2759,7 +2781,10 @@ async fn bring_up_companion(
                 let disk_tail = format_disk_summary(&resources);
                 return Err(golem_events::coded(
                     golem_events::FailureCode::DeviceRegistrationTimeout,
-                    anyhow::anyhow!("Companion did not register within 90 seconds{disk_tail}"),
+                    anyhow::anyhow!(
+                        "Companion did not register within {}s{disk_tail}",
+                        reg_deadline.as_secs()
+                    ),
                 ));
             }
         }
