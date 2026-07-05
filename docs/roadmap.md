@@ -201,63 +201,19 @@ warm-up) found:
 (`handle_scroll` `within` resolution), `golem-runner/src/resolution.rs`
 (`scroll_swipe_bounded`), `golem-element/src/selector.rs` (relational filters).
 
-## Relational selector overhaul — core DONE 2026-06-17; follow-ups below
+## Relational selectors: remaining follow-ups
 
-**Shipped** (`golem-element/src/selector.rs`, `golem-parser/src/lib.rs` +
-`mixin.rs`, `golem-runner/src/resolution.rs`): added `contains`/`inside`
-geometric predicates; directional filters (`below`/`above`/`left_of`/
-`right_of`) now require **cross-axis overlap** (≥1px) with the anchor; survivors
-are **sorted** containment-tightest → proximity-nearest (primary-axis gap) →
-tree-pre-order tie-break, then `.first()`. Unit tests in `selector.rs` (overlap
-exclusion, nearest-first, contains smallest-enclosing w/ self-exclusion, inside,
-containment-beats-proximity). E2e `e2e/cross/selectors.test.toml` covers every
-selector facet (text, accessibility_label, index, 7 traits, all 4 directionals,
-contains, inside, nested anchor) — green on Android + iOS. `scroll.test`
-re-verified on iOS (no regression to `within={below}`). Design rationale (why
-geometric containment not DOM-structure matching; scrollability is a hint not a
-filter) is preserved below for context.
+Core shipped (`contains`/`inside` geometric predicates; directional filters
+require cross-axis overlap; survivors sorted containment-tightest →
+proximity-nearest → tree-pre-order; occlusion detection + tap-routing +
+`occluded_element` a11y severity). Rationale in `docs/selectors.md`; full
+coverage in `e2e/cross/selectors.test.toml` (green Android + iOS phone/tablet).
+Remaining:
 
-**Done since (this session):** `input`/`toggle` traits removed (f2da21d, unused +
-webview-incompatible); `docs/selectors.md` added; test-app made responsive
-(two-column on tablet) and a **Selector Grid** section added (`SelectorGrid.svelte`
-— A1..D4 cells + WIDE/TALL/DUP/DIS/checkbox + a `tapped:<label>` readout) driving
-a comprehensive `e2e/cross/selectors.test.toml` (text, accessibility_label, index,
-glob, traits, all 4 directionals + overlap-exclusion + nearest-first, nested AND
-**chained** relational anchors, contains/inside, enabled/checked/clickable,
-no_text). Green Android + iOS phone/tablet. The deliberately-fragile case and the
-tablet cross-column proof are both covered by the grid now.
-
-**Follow-ups still open:**
-- **A2 (tap/swipe centroid) — decided NOT to do.** Tapping the resolved element's
-  centre is the correct, predictable contract; if the centre is dead space, the
-  author should select the actual child (`contains`/`inside`/relational) or use
-  the `x`/`y` offsets. Auto-redirecting to a child centroid is surprising magic.
-- **Occlusion by sticky/overlapping elements — DETECTION+ROUTING DONE (webview + native); severity is the follow-up.**
-  Taps hit-test sample points (stored as `Element.hit_points`) and route around occluders
-  to a clear point; routed coord shows neutrally in `--verbose` `element_resolved` (no
-  warning tag — routing isn't a warning). Webview uses `elementFromPoint`; native uses a
-  host-side geometric hit-test against the tree's paint order (Android `getDrawingOrder`
-  for elevation, iOS tree order), with an `encloses`-exclusion so Compose's coincident
-  label/clickable nodes aren't treated as occluders. Heuristic → "may be occluded", never
-  blocks. Live-validated on **both** platforms via test-app-b's centre-overlay fixture
-  (`occ-button`/`occ-overlay`, in the Compose `MainActivity` and the SwiftUI `ContentView`)
-  and `e2e/cross/native_occlusion.test.toml` (ios + android) — a naive centre tap hits the
-  overlay, the occlusion-aware tap routes to a clear edge. **Finding:** Android's a11y
-  already prunes nodes whose bounds are fully occluded (covered text disappears) and may
-  trim an interactive's reachable region — so the host hit-test mostly earns its keep
-  where the platform keeps a covered element at full bounds (and on iOS, whose snapshots
-  retain occluded elements).
-  - **Severity (warn/error) — DONE.** The shipped a11y audit surfaces occlusion as
-    `occluded_element` (Warning): it consumes the `hit_points` reachable-fraction ground
-    truth (level-dependent floor — strict flags >25% covered, relaxed/critical >50%),
-    governed by the level + `a11y_max_errors/warnings` model. Its sibling
-    `overlapping_interactive` stays bounds-based; refining it with `hit_points` was
-    considered and **dropped** — `occluded_element` already covers the "is it actually
-    covered" signal, and a bounds overlap-area threshold is the cheaper lever if it ever
-    proves noisy (`HitPoint` carries no occluder identity, so attributing the overlap is
-    fuzzy anyway).
-  (System-status-bar occlusion of the menu button is a *separate* layer — see "Android:
-  sticky menu tap target only half-clickable" below; the hit-test can't see the OS bar.)
+- **A2 (tap/swipe centroid redirect) — decided NOT to do.** Tapping the resolved
+  element's centre is the correct, predictable contract; a dead-space centre is
+  the author's cue to select the actual child (`contains`/`inside`/relational) or
+  use `x`/`y` offsets. Kept only to stop it being re-proposed.
 - **Install-cache may miss a test-app component edit.** Adding the DIS button +
   checkbox to `SelectorGrid.svelte` didn't reinstall until `--rebuild` (a non-
   rebuild run served the stale app — `on_text="DIS"` EF404, then `--rebuild`
@@ -270,97 +226,10 @@ tablet cross-column proof are both covered by the grid now.
   step quietly does the wrong thing. Adding `#[serde(deny_unknown_fields)]` to
   `SelectorGroup` (and peers) in `golem-parser` would turn typos into clear
   parse errors. Surfaced while adding `contains.min_matches` (which sidesteps
-  the issue via a dedicated type). Not urgent — no current breakage — but a real
-  authoring footgun worth closing some session.
-
----
-
-### Original design notes (rationale, retained)
-
-**Motivation.** `within = { below = "Scroll List" }` (and relational selectors
-generally) resolve via `find_elements`: a selector with no own-criteria
-(text/label/trait all `None`) matches **every** element, then `below` retains
-those with `y > anchor.bottom`, and the caller takes **`.first()`** in tree
-pre-order. It lands on the right scrollable today only because pre-order happens
-to place the container first and it geometrically overlaps. **Latent bug:** wrap
-the scrollable in one more non-scrollable `<div>` (extra siblings / uneven
-padding) and `.first()` picks the wrapper; a `tap`/swipe at its geometric centre
-can then hit dead space. Selectors are deliberately uniform across
-tap/assert/swipe, and "is this scrollable?" is **not** a usable signal — a
-`<canvas>` scrolls without the flag, an empty `overflow:auto` has it but isn't
-scrollable, and the human can't *see* scrollability anyway. So scrollability may
-only ever be an internal *hint/tiebreak*, never a filter (consistent with the
-[Visibility model](architecture.md): coords/visible-bounds judge, not DOM/CSS
-metadata).
-
-**Decision (aligned 2026-06-17): geometric predicates, not DOM structure.**
-DOM-structure relational matching (selecting by parent/child tree
-relationships) was rejected — it makes the test reason about a DOM tree the
-human can't perceive, the opposite of golem's "test like a human" thesis. Geometric
-containment (`contains`/`inside`) is pure coords/dims = how a human localizes
-things spatially ("the thing inside that box"), independent of DOM. Honest
-caveat to document: a border-less, same-background container isn't visually
-perceptible — `contains` is "what a human infers from where the content sits,"
-fine for scrolling, shakier for an exact-bounds assertion.
-
-**New selection model** (`golem-element/src/selector.rs`
-`apply_relational_filters` + a new sort step; `Selector` gains `contains`/
-`inside`; `golem-parser` `SelectorGroup` + `build_selector_from_group` in
-`golem-runner/src/resolution.rs` gain the fields):
-
-1. **Filter (set intersection over pre-order matches):**
-   - Directional (`below`/`above`/`left_of`/`right_of`): keep half-plane match
-     **AND require cross-axis overlap** with the anchor — `below`/`above` need
-     horizontal (x) overlap; `left_of`/`right_of` need vertical (y) overlap.
-     Threshold = **any positive overlap (≥1px)**. Transparent for the common
-     full-width anchor (overlaps everything → no change); only bites for narrow
-     anchors (e.g. a left-column heading on a tablet correctly ignores a
-     right-column element). A wide element spanning both columns still matches a
-     narrow anchor — accepted; author scopes with `contains`/`index` if unwanted
-     (no overlap-percentage knob). Anchors still resolved via
-     `resolve_visible_anchor` (must be on-screen).
-   - Containment (`contains = <selector>` / `inside = <selector>`): keep
-     candidates whose bounds fully enclose (`contains`) / are fully enclosed by
-     (`inside`) the referenced target's effective bounds.
-2. **Sort survivors** by fixed, documented priority (lexicographic, one natural
-   key per predicate — keys never cross-contaminate, so a pure `below` never
-   cares about size and a pure `contains` never cares about ordinal position):
-   - **a. Containment** (if `contains`/`inside` active): tightest first (smallest
-     area) — strongest spatial signal.
-   - **b. Proximity** (if directional active): nearest first by **primary-axis
-     gap only** (not Euclidean) — `below` ranks by vertical gap, etc.
-   - **c. Tie-break: tree pre-order** (today's behavior) — keeps `--seed` replay
-     deterministic. Genuine ties (e.g. a horizontal row of equal-y icons under a
-     full-width heading) fall here intentionally; we do NOT guess "smart" — the
-     author disambiguates with `index` or a second predicate.
-3. `.first()`.
-
-**`within` then becomes robust:** `within = { contains = { text = "Item 0" } }`
-= "scroll inside the box that holds Item 0" → smallest enclosing element = the
-list (skips the page wrapper *and* a single item), no pre-order luck.
-
-**Behavior changes to validate (greenfield, allowed, but re-run e2e):**
-- `above`/`left_of`/`right_of` change from pre-order to nearest-first (this
-  *fixes* them — pre-order gave farthest-first). `below` ≈ unchanged in practice
-  (DOM order is top-to-bottom).
-- Directional filters now require cross-axis overlap → can return empty where the
-  old half-plane matched a far-column element (correct). Empty `within` locate →
-  existing "scroll page to bring anchor into view" fallback still applies.
-- Re-run `e2e/cross/accessibility_label.test.toml`, any positional flows, and
-  `scroll.test`. Add a **deliberately-fragile test-app case** (wrap `ScrollList`
-  in a padded wrapper with sibling content) to prove `contains` beats `.first()`.
-
-**Swipe-/tap-centroid tweak (pairs with this):** even with the right region,
-aiming a gesture at the raw bounds *centre* can hit padding/dead space. Aim
-through the **centroid of the visible child content** (matched item bounds we
-already have), not the container centre. Pure geometry, no DOM. Applies to
-`tap` on a container and to container-scroll start points
-(`container_swipe_start` in `golem-runner/src/scroll.rs`).
-
-**Docs to update in tandem:** `docs/actions-reference.md` (selectors section),
-the [Visibility model](architecture.md) cross-reference, and any selector
-reference. A new feature SHALL add Rust unit tests (filter overlap math, sort
-priority, containment) + e2e.
+  the issue via a dedicated type). **Caveat:** `#[serde(deny_unknown_fields)]` is
+  incompatible with the `#[serde(flatten)]` on `SelectorGroup` — closing this
+  needs a manual deserializer or a restructure, not a one-line attribute. Not
+  urgent — no current breakage — but a real authoring footgun.
 
 ## set_location: drop WebView JS hook, grant permission + real geolocation
 
