@@ -29,6 +29,10 @@ pub fn run() -> Result<()> {
             InstallFramework::NativeAndroid,
         ),
         ("tauri          (Tauri 2.x mobile)", InstallFramework::Tauri),
+        (
+            "expo           (Expo — managed React Native w/ prebuild)",
+            InstallFramework::Expo,
+        ),
     ];
     let idx = Select::with_theme(&theme)
         .with_prompt("Framework")
@@ -207,6 +211,61 @@ pub fn run() -> Result<()> {
             placeholders.push(("TAURI_DIR", tauri_dir));
             placeholders.push(("IOS_SCHEME", ios_scheme));
             placeholders.push(("TAURI_CMD", tauri_cmd));
+        }
+        InstallFramework::Expo => {
+            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let found = discover_expo_dirs(&cwd, 5);
+            let expo_dir = if found.is_empty() {
+                Input::with_theme(&theme)
+                    .with_prompt("Expo project directory (contains app.json / app.config.*)")
+                    .default(".".into())
+                    .interact_text()?
+            } else {
+                let mut items = found.clone();
+                items.push(OTHER_LABEL.into());
+                let idx = Select::with_theme(&theme)
+                    .with_prompt("Expo project directory")
+                    .items(&items)
+                    .default(0)
+                    .interact()?;
+                if idx == items.len() - 1 {
+                    Input::with_theme(&theme)
+                        .with_prompt("Enter path")
+                        .interact_text()?
+                } else {
+                    items[idx].clone()
+                }
+            };
+
+            // Package-manager runner + install command, detected from lockfiles.
+            // (runner, install, label). detect_tauri_command matches on the
+            // runner prefix (npx/yarn/pnpm/bun), so it works for Expo too.
+            let pm_items = [
+                ("npx expo", "npm install", "npm (npx)"),
+                ("yarn expo", "yarn", "yarn"),
+                ("pnpm expo", "pnpm install", "pnpm"),
+                ("bunx expo", "bun install", "bun"),
+            ];
+            let detect_items: Vec<(&str, &str)> =
+                pm_items.iter().map(|(r, _, l)| (*r, *l)).collect();
+            let default_idx = detect_tauri_command(&cwd.join(&expo_dir), &detect_items);
+            let pm_idx = Select::with_theme(&theme)
+                .with_prompt("Package manager")
+                .items(&pm_items.iter().map(|(_, _, l)| *l).collect::<Vec<_>>())
+                .default(default_idx)
+                .interact()?;
+            let (pm_runner, pm_install, _) = pm_items[pm_idx];
+
+            // Expo names the iOS scheme after the app (its `name` in app.json).
+            let ios_scheme: String = Input::with_theme(&theme)
+                .with_prompt("iOS scheme name (Expo names it after the app)")
+                .default(app_name.clone())
+                .interact_text()?;
+
+            placeholders.push(("EXPO_DIR", expo_dir));
+            placeholders.push(("PM_RUNNER", pm_runner.to_string()));
+            placeholders.push(("PM_INSTALL", pm_install.to_string()));
+            placeholders.push(("IOS_SCHEME", ios_scheme));
         }
     }
 
@@ -411,6 +470,38 @@ fn discover_tauri_dirs(root: &Path, max_depth: usize) -> Vec<String> {
     out
 }
 
+/// Discover Expo project directories under `root` — dirs containing an
+/// `app.json` or `app.config.{js,ts}`. Paths are returned relative to `root`.
+fn discover_expo_dirs(root: &Path, max_depth: usize) -> Vec<String> {
+    let mut hits = Vec::<PathBuf>::new();
+    walk_for(
+        root,
+        max_depth,
+        &mut |p| {
+            p.is_file()
+                && matches!(
+                    p.file_name().and_then(|n| n.to_str()),
+                    Some("app.json") | Some("app.config.js") | Some("app.config.ts")
+                )
+        },
+        &mut hits,
+    );
+    let mut out: Vec<String> = hits
+        .iter()
+        .filter_map(|p| p.parent())
+        .map(|p| {
+            p.strip_prefix(root)
+                .unwrap_or(p)
+                .to_string_lossy()
+                .to_string()
+        })
+        .map(|s| if s.is_empty() { ".".to_string() } else { s })
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
 /// Invoke `xcodebuild -list` on a project/workspace and parse scheme names.
 /// Returns empty Vec if xcodebuild fails or produces no schemes.
 fn discover_xcode_schemes(project_path: &str) -> Vec<String> {
@@ -555,7 +646,7 @@ fn default_output_path(framework: InstallFramework, app_name: &str) -> String {
     match framework {
         InstallFramework::NativeIos => format!("scripts/install-{slug}-ios.sh"),
         InstallFramework::NativeAndroid => format!("scripts/install-{slug}-android.sh"),
-        InstallFramework::Tauri => format!("scripts/install-{slug}.sh"),
+        InstallFramework::Tauri | InstallFramework::Expo => format!("scripts/install-{slug}.sh"),
     }
 }
 
@@ -565,7 +656,7 @@ fn platform_key_for(framework: InstallFramework) -> Option<&'static str> {
     match framework {
         InstallFramework::NativeIos => Some("ios"),
         InstallFramework::NativeAndroid => Some("android"),
-        InstallFramework::Tauri => None,
+        InstallFramework::Tauri | InstallFramework::Expo => None,
     }
 }
 
@@ -657,6 +748,20 @@ mod tests {
         std::fs::create_dir_all(root.join("app-b/src-tauri")).expect("value SHALL be present");
         let found = discover_tauri_dirs(root, 5);
         assert_eq!(found, vec!["app-a".to_string(), "app-b".to_string()]);
+    }
+
+    #[test]
+    fn discover_expo_dirs_finds_app_config_dirs() {
+        let tmp = tempfile::tempdir().expect("tempdir() SHALL succeed");
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("mobile")).expect("value SHALL be present");
+        std::fs::write(root.join("mobile/app.json"), "{}").expect("value SHALL be present");
+        std::fs::create_dir_all(root.join("other")).expect("value SHALL be present");
+        std::fs::write(root.join("other/app.config.ts"), "").expect("value SHALL be present");
+        std::fs::create_dir_all(root.join("nope")).expect("value SHALL be present");
+        std::fs::write(root.join("nope/readme.md"), "").expect("value SHALL be present");
+        let found = discover_expo_dirs(root, 5);
+        assert_eq!(found, vec!["mobile".to_string(), "other".to_string()]);
     }
 
     #[test]
@@ -1045,6 +1150,11 @@ mod tests {
             "scripts/install-My-App.sh",
             "Tauri default SHALL omit a platform suffix"
         );
+        assert_eq!(
+            default_output_path(InstallFramework::Expo, "My App"),
+            "scripts/install-My-App.sh",
+            "Expo default SHALL omit a platform suffix (cross-platform script)"
+        );
     }
 
     // 22. platform_key_for maps native frameworks to their platform and Tauri
@@ -1060,6 +1170,11 @@ mod tests {
             platform_key_for(InstallFramework::Tauri),
             None,
             "Tauri SHALL have no platform key"
+        );
+        assert_eq!(
+            platform_key_for(InstallFramework::Expo),
+            None,
+            "Expo SHALL have no platform key (one cross-platform script)"
         );
     }
 
@@ -1081,6 +1196,11 @@ mod tests {
             install_script_snippet(InstallFramework::Tauri, "scripts/install-app.sh"),
             "install_script = \"scripts/install-app.sh\"",
             "Tauri SHALL emit a bare install_script string"
+        );
+        assert_eq!(
+            install_script_snippet(InstallFramework::Expo, "scripts/install-app.sh"),
+            "install_script = \"scripts/install-app.sh\"",
+            "Expo SHALL emit a bare install_script string"
         );
     }
 }

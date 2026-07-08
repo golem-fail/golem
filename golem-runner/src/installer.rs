@@ -350,6 +350,16 @@ pub struct InstallScriptSpec<'a> {
     pub script_path: &'a Path,
     pub working_dir: &'a Path,
     pub install_only: bool,
+    /// Extra environment variables injected into the script's process (on top
+    /// of the inherited parent env). Resolved from the app's `install_env`
+    /// (with `${var}` already interpolated) at the call site. Empty = none.
+    pub env: &'a [(String, String)],
+    /// Whether this run is a `--rebuild` (golem's install cache was bypassed).
+    /// Surfaced to the script as `GOLEM_REBUILD=0|1` so a script that manages
+    /// its own remote/build cache (e.g. the Expo/EAS template) can force a
+    /// fresh build instead of reusing a prior artifact. Scripts that ignore
+    /// it are unaffected.
+    pub rebuild: bool,
 }
 
 /// The device + app identity the script installs onto, plus event-labelling
@@ -381,6 +391,8 @@ pub async fn run_install_script(
         script_path,
         working_dir,
         install_only,
+        env,
+        rebuild,
     } = *script;
     let InstallDeviceTarget {
         platform,
@@ -403,6 +415,15 @@ pub async fn run_install_script(
 
     let mut cmd = Command::new(script_path);
     cmd.arg(platform).arg(device_udid).arg(bundle_id);
+    // App-declared `install_env` (already `${var}`-interpolated). Layered on
+    // top of the inherited parent env — scripts that ignore unknown vars are
+    // unaffected.
+    if !env.is_empty() {
+        cmd.envs(env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+    }
+    // golem-provided builtin: lets a script that owns a remote/build cache
+    // (e.g. Expo/EAS) force a fresh build under `--rebuild`.
+    cmd.env("GOLEM_REBUILD", if rebuild { "1" } else { "0" });
     if install_only {
         // Scripts that know the protocol SHALL skip their build step when
         // `$4 == "install-only"` and install the already-built artifact.
@@ -801,6 +822,8 @@ mod tests {
                 script_path: &script,
                 working_dir: tmp.path(),
                 install_only: false,
+                env: &[],
+                rebuild: false,
             },
             &InstallDeviceTarget {
                 platform: "ios",
@@ -829,6 +852,8 @@ mod tests {
                 script_path: &script,
                 working_dir: tmp.path(),
                 install_only: false,
+                env: &[],
+                rebuild: false,
             },
             &InstallDeviceTarget {
                 platform: "ios",
@@ -863,6 +888,8 @@ mod tests {
                 script_path: &script,
                 working_dir: tmp.path(),
                 install_only: false,
+                env: &[],
+                rebuild: false,
             },
             &InstallDeviceTarget {
                 platform: "ios",
@@ -894,6 +921,8 @@ mod tests {
                 script_path: &script,
                 working_dir: tmp.path(),
                 install_only: false,
+                env: &[],
+                rebuild: false,
             },
             &InstallDeviceTarget {
                 platform: "android",
@@ -914,6 +943,86 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn script_receives_install_env() {
+        let tmp = tempdir().expect("tempdir() SHALL succeed");
+        let out_file = tmp.path().join("env.txt");
+        let script_body = format!(
+            "#!/bin/sh\necho \"$APP_ENV|$SANDBOX_ID\" > {}\nexit 0\n",
+            out_file.display()
+        );
+        let script = write_script(tmp.path(), &script_body);
+        let env = vec![
+            ("APP_ENV".to_string(), "staging".to_string()),
+            ("SANDBOX_ID".to_string(), "12345".to_string()),
+        ];
+        let result = run_install_script(
+            &InstallScriptSpec {
+                script_path: &script,
+                working_dir: tmp.path(),
+                install_only: false,
+                env: &env,
+                rebuild: false,
+            },
+            &InstallDeviceTarget {
+                platform: "android",
+                device_udid: "emulator-5554",
+                bundle_id: "com.example.app",
+                app_name: "app",
+                target: "test target",
+                os_major: 0,
+            },
+            5_000,
+            None,
+        )
+        .await;
+        assert!(result.is_ok());
+        let got = std::fs::read_to_string(&out_file).expect("read_to_string() SHALL succeed");
+        assert_eq!(
+            got.trim(),
+            "staging|12345",
+            "install_env SHALL reach the spawned script's environment"
+        );
+    }
+
+    #[tokio::test]
+    async fn script_receives_golem_rebuild_flag() {
+        let tmp = tempdir().expect("tempdir() SHALL succeed");
+        let out_file = tmp.path().join("rebuild.txt");
+        let script = write_script(
+            tmp.path(),
+            &format!(
+                "#!/bin/sh\necho \"$GOLEM_REBUILD\" > {}\nexit 0\n",
+                out_file.display()
+            ),
+        );
+        for (rebuild, want) in [(true, "1"), (false, "0")] {
+            let result = run_install_script(
+                &InstallScriptSpec {
+                    script_path: &script,
+                    working_dir: tmp.path(),
+                    install_only: false,
+                    env: &[],
+                    rebuild,
+                },
+                &InstallDeviceTarget {
+                    platform: "ios",
+                    device_udid: "udid-1",
+                    bundle_id: "com.x",
+                    app_name: "app",
+                    target: "t",
+                    os_major: 0,
+                },
+                5_000,
+                None,
+            )
+            .await;
+            assert!(result.is_ok());
+            let got = std::fs::read_to_string(&out_file).expect("read");
+            assert_eq!(got.trim(), want, "GOLEM_REBUILD SHALL be {want} when rebuild={rebuild}");
+        }
+    }
+
+    #[tokio::test]
     async fn script_runs_in_working_dir() {
         let tmp = tempdir().expect("tempdir() SHALL succeed");
         let marker = tmp.path().join("marker.txt");
@@ -927,6 +1036,8 @@ mod tests {
                 script_path: &script,
                 working_dir: tmp.path(),
                 install_only: false,
+                env: &[],
+                rebuild: false,
             },
             &InstallDeviceTarget {
                 platform: "ios",
@@ -961,6 +1072,8 @@ mod tests {
                 script_path: &script,
                 working_dir: tmp.path(),
                 install_only: true,
+                env: &[],
+                rebuild: false,
             },
             &InstallDeviceTarget {
                 platform: "ios",
@@ -998,6 +1111,8 @@ mod tests {
                 script_path: &script,
                 working_dir: tmp.path(),
                 install_only: false,
+                env: &[],
+                rebuild: false,
             },
             &InstallDeviceTarget {
                 platform: "ios",
@@ -1118,6 +1233,8 @@ mod tests {
                 script_path: &missing,
                 working_dir: tmp.path(),
                 install_only: false,
+                env: &[],
+                rebuild: false,
             },
             &InstallDeviceTarget {
                 platform: "ios",
@@ -1153,6 +1270,8 @@ mod tests {
                 script_path: &script,
                 working_dir: tmp.path(),
                 install_only: false,
+                env: &[],
+                rebuild: false,
             },
             &InstallDeviceTarget {
                 platform: "ios",
@@ -1185,6 +1304,8 @@ mod tests {
                 script_path: &script,
                 working_dir: tmp.path(),
                 install_only: false,
+                env: &[],
+                rebuild: false,
             },
             &InstallDeviceTarget {
                 platform: "ios",
@@ -1224,6 +1345,8 @@ mod tests {
                 script_path: &script,
                 working_dir: tmp.path(),
                 install_only: false,
+                env: &[],
+                rebuild: false,
             },
             &InstallDeviceTarget {
                 platform: "ios",
@@ -1301,6 +1424,8 @@ mod tests {
                 script_path: &script,
                 working_dir: tmp.path(),
                 install_only: false,
+                env: &[],
+                rebuild: false,
             },
             &InstallDeviceTarget {
                 platform: "ios",
@@ -1349,6 +1474,8 @@ mod tests {
                 script_path: &script,
                 working_dir: tmp.path(),
                 install_only: false,
+                env: &[],
+                rebuild: false,
             },
             &InstallDeviceTarget {
                 platform: "ios",

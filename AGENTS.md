@@ -16,7 +16,7 @@
 | Docs / non-code only | skip | skip | — |
 | Rust tests only (no non-test code touched) | ✓ | skip | — |
 | `*.test.toml` only | skip | that flow, both platforms | — |
-| Test app (`test-app`/`test-app-b`) | only if app has own tests (none yet) | ✓ | — |
+| Test app (`test-app`/`test-app-b`/`test-app-e`) | only if app has own tests (none yet) | ✓ | — |
 | Rendering only (`golem-report`, not run logic) | ✓ | any 1 platform | — |
 | Core / functional (runner, driver, element, cli…) | ✓ | 1 android + 1 ios | — |
 | One companion only | ✓ | that 1 platform | ✓ |

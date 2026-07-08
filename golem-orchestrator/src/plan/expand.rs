@@ -1150,6 +1150,8 @@ mod tests {
             bundle: Some("com.a".into()),
             install_script: None,
             install_timeout_ms: None,
+            install_env: None,
+            profile: None,
             devices: vec![dc(
                 Some(vec!["ios:26"]),
                 Some(vec!["phone", "tablet"]),
@@ -1190,6 +1192,8 @@ mod tests {
             bundle: Some("com.a".into()),
             install_script: None,
             install_timeout_ms: None,
+            install_env: None,
+            profile: None,
             devices: vec![dc(
                 Some(vec!["ios:18", "ios:26"]),
                 None,

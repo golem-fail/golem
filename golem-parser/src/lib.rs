@@ -100,6 +100,20 @@ pub struct AppConfig {
     /// Timeout in ms for the install script. Override default when this
     /// app's build is known to take longer than the default.
     pub install_timeout_ms: Option<u64>,
+    /// Environment variables injected into the install script's process.
+    /// Values interpolate `${var}` through the var engine at install time
+    /// (Cli/`--var` + Project + Flow scopes only — install runs before any
+    /// flow step, so device/`each`-scoped vars are unavailable and error).
+    /// The install script inherits the parent env, so these are additive;
+    /// scripts that ignore unknown vars stay backward-compatible.
+    #[serde(default)]
+    pub install_env: Option<HashMap<String, String>>,
+    /// Profile tag. The same app `name` may appear in multiple entries
+    /// disambiguated by `profile`; a `profile`-less entry is the catch-all
+    /// default. `golem run --profile <name>` selects the matching entry per
+    /// app, falling back to the catch-all. See `resolve_app_profiles`.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// An install script path, either a single cross-platform script or a
@@ -162,6 +176,13 @@ pub struct ProjectAppConfig {
     pub devices: Vec<DeviceConstraint>,
     pub install_script: Option<InstallScriptValue>,
     pub install_timeout_ms: Option<u64>,
+    /// See [`AppConfig::install_env`]. Project-level default, gap-filled into
+    /// a flow app when the flow doesn't set its own.
+    #[serde(default)]
+    pub install_env: Option<HashMap<String, String>>,
+    /// See [`AppConfig::profile`].
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -1646,6 +1667,45 @@ install_timeout_ms = 900000
             "string form SHALL deserialize to Single"
         );
         assert_eq!(app.install_timeout_ms, Some(900_000));
+    }
+
+    #[test]
+    fn install_env_deserializes_table() {
+        let toml_str = r#"
+[flow]
+name = "install env"
+
+[[flow.apps]]
+name = "app1"
+bundle = "com.example"
+install_script = "scripts/install.sh"
+install_env = { APP_ENV = "staging", SANDBOX_ID = "${sandbox_id}" }
+"#;
+        let flow = parse_flow(toml_str).expect("install_env SHALL parse");
+        let env = flow.flow.apps[0]
+            .install_env
+            .as_ref()
+            .expect("install_env present");
+        assert_eq!(env.get("APP_ENV").map(String::as_str), Some("staging"));
+        assert_eq!(
+            env.get("SANDBOX_ID").map(String::as_str),
+            Some("${sandbox_id}"),
+            "raw `${{...}}` SHALL survive parsing (interpolated later, at install time)"
+        );
+    }
+
+    #[test]
+    fn install_env_absent_is_none() {
+        let toml_str = r#"
+[flow]
+name = "no install env"
+
+[[flow.apps]]
+name = "app1"
+bundle = "com.example"
+"#;
+        let flow = parse_flow(toml_str).expect("SHALL parse");
+        assert!(flow.flow.apps[0].install_env.is_none());
     }
 
     // ---------------------------------------------------------------

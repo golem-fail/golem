@@ -215,6 +215,8 @@ mod tests {
             devices: Vec::new(),
             install_script: None,
             install_timeout_ms: None,
+            install_env: None,
+            profile: None,
         }
     }
 

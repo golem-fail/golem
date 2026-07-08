@@ -14,9 +14,7 @@ use anyhow::{Context, Result};
 use golem_devices::DeviceState;
 use golem_devices::{DeviceInfo, DeviceType, OsVersionSpec, Platform};
 use golem_parser::mixin::expand_mixins;
-#[cfg(test)]
-use golem_parser::AppConfig;
-use golem_parser::{parse_flow, CoverageStrategy, FlowFile, ProjectAppConfig};
+use golem_parser::{parse_flow, AppConfig, CoverageStrategy, FlowFile, ProjectAppConfig};
 
 use crate::install_matrix::{build_install_matrix, InstallEntry};
 
@@ -142,13 +140,15 @@ pub async fn plan(
     platform_override: Option<Platform>,
     coverage_override: Option<CoverageStrategy>,
     repeat: u32,
+    active_profile: Option<&str>,
 ) -> Result<ParsedSuite> {
     let mut flows: Vec<ParsedFlow> = Vec::with_capacity(flow_paths.len());
     let mut parse_failures: Vec<ParseFailure> = Vec::new();
     let mut lint_warnings: Vec<String> = Vec::new();
     for path in flow_paths {
-        match parse_one(path, project_apps, project_root) {
-            Ok(flow) => {
+        match parse_one(path, project_apps, project_root, active_profile) {
+            Ok((flow, profile_notes)) => {
+                lint_warnings.extend(profile_notes);
                 lint_warnings.extend(lint_warnings_for(path, &flow));
                 flows.push(ParsedFlow {
                     path: path.clone(),
@@ -222,12 +222,14 @@ fn parse_one(
     path: &Path,
     project_apps: &[ProjectAppConfig],
     project_root: &Path,
-) -> Result<FlowFile> {
+    active_profile: Option<&str>,
+) -> Result<(FlowFile, Vec<String>)> {
     let text = std::fs::read_to_string(path)
         .with_context(|| format!("reading flow file {}", path.display()))?;
     let mut flow =
         parse_flow(&text).with_context(|| format!("parsing flow file {}", path.display()))?;
-    merge_project_apps(&mut flow, project_apps);
+    let profile_notes = resolve_app_profiles(&mut flow, project_apps, active_profile)
+        .with_context(|| format!("resolving app profiles in {}", path.display()))?;
 
     let flow_dir = path.parent().unwrap_or(Path::new("."));
     for block in &mut flow.block {
@@ -235,7 +237,7 @@ fn parse_one(
             .with_context(|| format!("expanding mixins in {}", path.display()))?;
     }
 
-    Ok(flow)
+    Ok((flow, profile_notes))
 }
 
 /// Soft lints — warnings but not failures. A future `--validate` mode
@@ -468,25 +470,195 @@ async fn device_snapshot() -> Vec<DeviceInfo> {
     all
 }
 
+/// Copy any field the flow app left unset from a project entry. Flow values
+/// always win; the project fills gaps only. Shared by [`merge_project_apps`]
+/// (matches by `name`) and [`resolve_app_profiles`] (matches by
+/// `(name, profile)`).
+fn fill_app_from_project(flow_app: &mut AppConfig, proj: &ProjectAppConfig) {
+    if flow_app.bundle.is_none() {
+        flow_app.bundle = proj.bundle.clone();
+    }
+    if flow_app.install_script.is_none() {
+        flow_app.install_script = proj.install_script.clone();
+    }
+    if flow_app.install_timeout_ms.is_none() {
+        flow_app.install_timeout_ms = proj.install_timeout_ms;
+    }
+    if flow_app.devices.is_empty() {
+        flow_app.devices = proj.devices.clone();
+    }
+    if flow_app.install_env.is_none() {
+        flow_app.install_env = proj.install_env.clone();
+    }
+}
+
+/// Synthesize a flow `AppConfig` from a project-only entry (an app defined in
+/// `golem.toml [[apps]]` but not restated in the flow).
+fn app_from_project(proj: &ProjectAppConfig) -> AppConfig {
+    AppConfig {
+        name: proj.name.clone(),
+        bundle: proj.bundle.clone(),
+        devices: proj.devices.clone(),
+        install_script: proj.install_script.clone(),
+        install_timeout_ms: proj.install_timeout_ms,
+        install_env: proj.install_env.clone(),
+        profile: proj.profile.clone(),
+    }
+}
+
 /// Fill in missing flow-level app fields from the matching project-level
 /// `[[apps]]` entry by name. Flow values always win; project fills gaps only.
 pub fn merge_project_apps(flow: &mut FlowFile, project_apps: &[ProjectAppConfig]) {
     for flow_app in &mut flow.flow.apps {
         if let Some(proj) = project_apps.iter().find(|p| p.name == flow_app.name) {
-            if flow_app.bundle.is_none() {
-                flow_app.bundle = proj.bundle.clone();
-            }
-            if flow_app.install_script.is_none() {
-                flow_app.install_script = proj.install_script.clone();
-            }
-            if flow_app.install_timeout_ms.is_none() {
-                flow_app.install_timeout_ms = proj.install_timeout_ms;
-            }
-            if flow_app.devices.is_empty() {
-                flow_app.devices = proj.devices.clone();
-            }
+            fill_app_from_project(flow_app, proj);
         }
     }
+}
+
+/// Does any flow or project entry exist for this exact `(name, profile)` key?
+fn key_exists(
+    flow_apps: &[AppConfig],
+    project_apps: &[ProjectAppConfig],
+    name: &str,
+    profile: Option<&str>,
+) -> bool {
+    flow_apps
+        .iter()
+        .any(|a| a.name == name && a.profile.as_deref() == profile)
+        || project_apps
+            .iter()
+            .any(|p| p.name == name && p.profile.as_deref() == profile)
+}
+
+/// Error if the same `(name, profile)` key appears more than once in one
+/// source — an ambiguous definition.
+fn check_no_dup_keys<'a>(
+    entries: impl Iterator<Item = (&'a str, Option<&'a str>)>,
+    source: &str,
+) -> Result<()> {
+    let mut seen: std::collections::HashSet<(String, Option<String>)> =
+        std::collections::HashSet::new();
+    for (name, profile) in entries {
+        let key = (name.to_string(), profile.map(str::to_string));
+        if !seen.insert(key) {
+            let which = profile
+                .map(|p| format!("profile \"{p}\""))
+                .unwrap_or_else(|| "the default (profile-less) entry".to_string());
+            return Err(anyhow::anyhow!(
+                "duplicate app definition in {source}: \"{name}\" with {which} appears more than once"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Resolve profile-scoped app definitions for `active_profile`, rewriting
+/// `flow.flow.apps` to exactly one merged entry per referenced app name.
+///
+/// Two independent steps (see the plan's "merge then select"):
+/// - **Merge (by key).** Entries are keyed by `(name, profile)`. For the
+///   selected key, a flow entry field-merges over the project entry of the
+///   *same key* (flow wins); different profile keys never merge into each
+///   other.
+/// - **Select (by active profile).** Per referenced name, prefer the
+///   `(name, active_profile)` entry; if absent, fall back to the catch-all
+///   `(name, ∅)` — by design, so this only emits an *info* note. Hard-errors
+///   only when a name has neither the active-profile entry nor a catch-all.
+///
+/// Returns info notes (fallbacks, likely-typo) for the caller to surface.
+pub fn resolve_app_profiles(
+    flow: &mut FlowFile,
+    project_apps: &[ProjectAppConfig],
+    active_profile: Option<&str>,
+) -> Result<Vec<String>> {
+    check_no_dup_keys(
+        flow.flow
+            .apps
+            .iter()
+            .map(|a| (a.name.as_str(), a.profile.as_deref())),
+        "flow [[flow.apps]]",
+    )?;
+    check_no_dup_keys(
+        project_apps
+            .iter()
+            .map(|p| (p.name.as_str(), p.profile.as_deref())),
+        "golem.toml [[apps]]",
+    )?;
+
+    // Referenced names in first-appearance order, deduped.
+    let mut names: Vec<String> = Vec::new();
+    for a in &flow.flow.apps {
+        if !names.iter().any(|n| n == &a.name) {
+            names.push(a.name.clone());
+        }
+    }
+
+    let mut resolved: Vec<AppConfig> = Vec::with_capacity(names.len());
+    let mut notes: Vec<String> = Vec::new();
+    let mut any_profile_hit = false;
+
+    for name in &names {
+        // Select the key to use for this name.
+        let use_profile: Option<&str> = match active_profile {
+            Some(p) if key_exists(&flow.flow.apps, project_apps, name, Some(p)) => {
+                any_profile_hit = true;
+                Some(p)
+            }
+            Some(p) if key_exists(&flow.flow.apps, project_apps, name, None) => {
+                notes.push(format!(
+                    "info: app \"{name}\" has no \"{p}\" profile entry — using its default (profile-less) definition"
+                ));
+                None
+            }
+            Some(p) => {
+                return Err(anyhow::anyhow!(
+                    "app \"{name}\" has no \"{p}\" profile entry and no default (profile-less) entry to fall back to; \
+                     add a `profile = \"{p}\"` entry for it or a profile-less one"
+                ));
+            }
+            None if key_exists(&flow.flow.apps, project_apps, name, None) => None,
+            None => {
+                return Err(anyhow::anyhow!(
+                    "app \"{name}\" has only profile-scoped definitions and no default (profile-less) entry; \
+                     select one with `--profile <name>`"
+                ));
+            }
+        };
+
+        // Merge: flow entry for the chosen key, gaps filled from the project
+        // entry of the same key. Project-only key → synthesize from project.
+        let flow_entry = flow
+            .flow
+            .apps
+            .iter()
+            .find(|a| a.name == *name && a.profile.as_deref() == use_profile)
+            .cloned();
+        let proj_entry = project_apps
+            .iter()
+            .find(|p| p.name == *name && p.profile.as_deref() == use_profile);
+        let mut merged = match flow_entry {
+            Some(fe) => fe,
+            None => app_from_project(
+                proj_entry.expect("key_exists guarantees a flow or project entry"),
+            ),
+        };
+        if let Some(proj) = proj_entry {
+            fill_app_from_project(&mut merged, proj);
+        }
+        resolved.push(merged);
+    }
+
+    if let Some(p) = active_profile {
+        if !any_profile_hit && !names.is_empty() {
+            notes.push(format!(
+                "info: profile \"{p}\" matched no app definition — every app used its default. Is \"{p}\" a typo?"
+            ));
+        }
+    }
+
+    flow.flow.apps = resolved;
+    Ok(notes)
 }
 
 mod expand;
@@ -520,6 +692,8 @@ mod tests {
             devices: Vec::new(),
             install_script: script.map(|s| golem_parser::InstallScriptValue::Single(s.into())),
             install_timeout_ms: None,
+            install_env: None,
+            profile: None,
         }
     }
 
@@ -551,6 +725,7 @@ mod tests {
             None,
             None,
             1,
+            None,
         )
         .await
         .expect("async operation SHALL succeed");
@@ -560,7 +735,7 @@ mod tests {
             "preflight: single-run plan SHALL emit at least one FlowRun"
         );
 
-        let repeated = plan(&[flow], &apps, tmp.path(), None, None, 3)
+        let repeated = plan(&[flow], &apps, tmp.path(), None, None, 3, None)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(
@@ -605,6 +780,7 @@ mod tests {
             None,
             None,
             1,
+            None,
         )
         .await
         .expect("async operation SHALL succeed");
@@ -615,7 +791,7 @@ mod tests {
             return;
         }
 
-        let repeated = plan(&[flow], &apps, tmp.path(), None, None, 3)
+        let repeated = plan(&[flow], &apps, tmp.path(), None, None, 3, None)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(
@@ -657,7 +833,7 @@ mod tests {
         "#,
         );
         let apps = vec![project_app("app", "com.app", Some("scripts/i.sh"))];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(suite.flow_runs.len(), 1);
@@ -686,7 +862,7 @@ mod tests {
         "#,
         );
         let apps = vec![project_app("app", "com.app", None)];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(suite.flow_runs.len(), 1);
@@ -716,7 +892,7 @@ mod tests {
         "#,
         );
         let apps = vec![project_app("app", "com.app", None)];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(
@@ -743,7 +919,7 @@ mod tests {
         "#,
         );
         let apps = vec![project_app("app", "com.app", None)];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(suite.flow_runs.len(), 2);
@@ -779,7 +955,7 @@ mod tests {
             project_app("a", "com.a", None),
             project_app("b", "com.b", None),
         ];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(suite.flow_runs.len(), 1);
@@ -816,7 +992,7 @@ mod tests {
             project_app("client", "com.c", None),
             project_app("supplier", "com.s", None),
         ];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(
@@ -854,7 +1030,7 @@ mod tests {
             project_app("client", "com.c", None),
             project_app("supplier", "com.s", None),
         ];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(
@@ -889,7 +1065,7 @@ mod tests {
         "#,
         );
         let apps = vec![project_app("app", "com.app", None)];
-        let suite = plan(&[flow], &apps, tmp.path(), Some(Platform::Android), None, 1)
+        let suite = plan(&[flow], &apps, tmp.path(), Some(Platform::Android), None, 1, None)
             .await
             .expect("async operation SHALL succeed");
         for run in &suite.flow_runs {
@@ -919,7 +1095,7 @@ mod tests {
         "#,
         );
         let apps = vec![project_app("a", "com.project.a", Some("scripts/a.sh"))];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
             .await
             .expect("async operation SHALL succeed");
         let app = &suite.flows[0].flow.flow.apps[0];
@@ -945,7 +1121,7 @@ mod tests {
             project_app("a", "com.a", Some("scripts/a.sh")),
             project_app("b", "com.b", Some("scripts/b.sh")),
         ];
-        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1)
+        let suite = plan(&[flow], &apps, tmp.path(), None, None, 1, None)
             .await
             .expect("async operation SHALL succeed");
         let bundles: Vec<_> = suite
@@ -981,6 +1157,7 @@ mod tests {
             None,
             None,
             1,
+            None,
         )
         .await
         .expect("plan SHALL succeed even when some files fail to parse");
@@ -1016,7 +1193,7 @@ mod tests {
             os = "ios"
         "#,
         );
-        let suite = plan(&[flow], &[], tmp.path(), None, None, 1)
+        let suite = plan(&[flow], &[], tmp.path(), None, None, 1, None)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(suite.install_matrix.len(), 1);
@@ -1071,6 +1248,8 @@ mod tests {
             bundle: Some(format!("com.{name}")),
             install_script: None,
             install_timeout_ms: None,
+            install_env: None,
+            profile: None,
             devices,
         }
     }
@@ -2130,6 +2309,47 @@ mod tests {
         );
     }
 
+    // 16b. Absent flow install_env is gap-filled from the project entry;
+    // a flow that sets its own wins wholesale.
+    #[test]
+    fn merge_project_apps_fills_and_respects_install_env() {
+        use std::collections::HashMap;
+        let proj_env: HashMap<String, String> =
+            [("APP_ENV".to_string(), "staging".to_string())]
+                .into_iter()
+                .collect();
+
+        // Gap-fill: flow has no install_env → inherits project's.
+        let mut app = mk_app_with_devices("a", vec![]);
+        app.install_env = None;
+        let mut flow = flow_with_app(app);
+        let mut proj = project_app("a", "com.a", None);
+        proj.install_env = Some(proj_env.clone());
+        merge_project_apps(&mut flow, &[proj]);
+        assert_eq!(
+            flow.flow.apps[0].install_env, Some(proj_env),
+            "absent flow install_env SHALL be filled from project"
+        );
+
+        // Flow wins: a flow-set install_env is not overwritten.
+        let flow_env: HashMap<String, String> =
+            [("APP_ENV".to_string(), "prod".to_string())]
+                .into_iter()
+                .collect();
+        let mut app2 = mk_app_with_devices("a", vec![]);
+        app2.install_env = Some(flow_env.clone());
+        let mut flow2 = flow_with_app(app2);
+        let mut proj2 = project_app("a", "com.a", None);
+        proj2.install_env =
+            Some([("APP_ENV".to_string(), "staging".to_string())].into_iter().collect());
+        merge_project_apps(&mut flow2, &[proj2]);
+        assert_eq!(
+            flow2.flow.apps[0].install_env,
+            Some(flow_env),
+            "a flow-set install_env SHALL win over the project entry"
+        );
+    }
+
     // 17. An app with no matching project entry is left untouched.
     #[test]
     fn merge_project_apps_no_matching_name_no_change() {
@@ -2141,6 +2361,167 @@ mod tests {
             flow.flow.apps[0].bundle, before,
             "an app with no project match SHALL be unchanged"
         );
+    }
+
+    // ── resolve_app_profiles (A2) ────────────────────────────────────
+
+    fn app_p(name: &str, bundle: Option<&str>, profile: Option<&str>) -> AppConfig {
+        AppConfig {
+            name: name.into(),
+            bundle: bundle.map(Into::into),
+            devices: Vec::new(),
+            install_script: None,
+            install_timeout_ms: None,
+            install_env: None,
+            profile: profile.map(Into::into),
+        }
+    }
+
+    fn papp_p(
+        name: &str,
+        bundle: &str,
+        script: Option<&str>,
+        profile: Option<&str>,
+    ) -> ProjectAppConfig {
+        let mut p = project_app(name, bundle, script);
+        p.profile = profile.map(Into::into);
+        p
+    }
+
+    fn flow_with_apps(apps: Vec<AppConfig>) -> FlowFile {
+        let mut flow = parse_flow("[flow]\nname = \"f\"\n").expect("base flow SHALL parse");
+        flow.flow.apps = apps;
+        flow
+    }
+
+    // Bare run selects the catch-all; a profiled entry is ignored.
+    #[test]
+    fn resolve_no_profile_uses_catch_all() {
+        let mut flow = flow_with_apps(vec![app_p("app", None, None)]);
+        let proj = vec![
+            papp_p("app", "com.default", Some("s.sh"), None),
+            papp_p("app", "com.eas", Some("e.sh"), Some("eas")),
+        ];
+        let notes = resolve_app_profiles(&mut flow, &proj, None).expect("SHALL resolve");
+        assert_eq!(flow.flow.apps.len(), 1);
+        assert_eq!(flow.flow.apps[0].bundle.as_deref(), Some("com.default"));
+        assert!(notes.is_empty(), "bare run SHALL be quiet");
+    }
+
+    // --profile selects the matching entry; catch-all is not merged in.
+    #[test]
+    fn resolve_profile_selects_entry_no_cross_bleed() {
+        let mut flow = flow_with_apps(vec![app_p("app", None, None)]);
+        let proj = vec![
+            papp_p("app", "com.default", Some("s.sh"), None),
+            papp_p("app", "com.eas", Some("e.sh"), Some("eas")),
+        ];
+        let notes = resolve_app_profiles(&mut flow, &proj, Some("eas")).expect("SHALL resolve");
+        assert_eq!(flow.flow.apps[0].bundle.as_deref(), Some("com.eas"));
+        assert!(
+            matches!(&flow.flow.apps[0].install_script,
+                Some(golem_parser::InstallScriptValue::Single(s)) if s == "e.sh"),
+            "profile entry's own install_script SHALL win, not the catch-all's"
+        );
+        assert!(notes.is_empty(), "a matched profile SHALL not warn");
+    }
+
+    // Per-key merge: a flow entry field-merges over the project entry of the
+    // SAME (name, profile) key; flow wins, project fills gaps.
+    #[test]
+    fn resolve_merges_within_key_flow_wins() {
+        let mut flow = flow_with_apps(vec![app_p("app", Some("com.flow"), Some("eas"))]);
+        let proj = vec![papp_p("app", "com.proj", Some("e.sh"), Some("eas"))];
+        resolve_app_profiles(&mut flow, &proj, Some("eas")).expect("SHALL resolve");
+        assert_eq!(
+            flow.flow.apps[0].bundle.as_deref(),
+            Some("com.flow"),
+            "flow bundle SHALL win"
+        );
+        assert!(
+            flow.flow.apps[0].install_script.is_some(),
+            "absent flow install_script SHALL be filled from the same-key project entry"
+        );
+    }
+
+    // Unknown profile falls back to the catch-all — by design, an info note.
+    #[test]
+    fn resolve_unknown_profile_falls_back_with_info() {
+        let mut flow = flow_with_apps(vec![app_p("app", None, None)]);
+        let proj = vec![papp_p("app", "com.default", Some("s.sh"), None)];
+        let notes = resolve_app_profiles(&mut flow, &proj, Some("ci")).expect("SHALL resolve");
+        assert_eq!(flow.flow.apps[0].bundle.as_deref(), Some("com.default"));
+        assert!(
+            notes.iter().any(|n| n.starts_with("info:") && n.contains("ci")),
+            "fallback SHALL emit an info note, got: {notes:?}"
+        );
+        assert!(
+            notes.iter().any(|n| n.contains("typo")),
+            "a profile matching nothing SHALL note a likely typo"
+        );
+    }
+
+    // Mixed flow: one profile-varying app + one always-fixed app.
+    #[test]
+    fn resolve_mixed_flow() {
+        let mut flow = flow_with_apps(vec![app_p("varies", None, None), app_p("fixed", None, None)]);
+        let proj = vec![
+            papp_p("varies", "com.varies.default", None, None),
+            papp_p("varies", "com.varies.eas", None, Some("eas")),
+            papp_p("fixed", "com.fixed", None, None),
+        ];
+        resolve_app_profiles(&mut flow, &proj, Some("eas")).expect("SHALL resolve");
+        let varies = flow
+            .flow
+            .apps
+            .iter()
+            .find(|a| a.name == "varies")
+            .expect("varies SHALL resolve");
+        let fixed = flow
+            .flow
+            .apps
+            .iter()
+            .find(|a| a.name == "fixed")
+            .expect("fixed SHALL resolve");
+        assert_eq!(varies.bundle.as_deref(), Some("com.varies.eas"));
+        assert_eq!(fixed.bundle.as_deref(), Some("com.fixed"));
+    }
+
+    // A duplicate (name, profile) in one source is ambiguous → error.
+    #[test]
+    fn resolve_duplicate_key_errors() {
+        let mut flow = flow_with_apps(vec![app_p("app", None, None)]);
+        let proj = vec![
+            papp_p("app", "com.a", None, Some("eas")),
+            papp_p("app", "com.b", None, Some("eas")),
+        ];
+        let err = resolve_app_profiles(&mut flow, &proj, Some("eas"))
+            .expect_err("duplicate (name, profile) SHALL error");
+        assert!(format!("{err}").contains("duplicate"));
+    }
+
+    // No (name, P) entry AND no catch-all → hard error naming the app.
+    // The flow entry is profile-tagged (not a catch-all), and no profile-less
+    // entry exists anywhere, so there is nothing to fall back to.
+    #[test]
+    fn resolve_no_catch_all_hard_errors() {
+        let mut flow = flow_with_apps(vec![app_p("app", None, Some("eas"))]);
+        let proj = vec![papp_p("app", "com.eas", None, Some("eas"))];
+        let err = resolve_app_profiles(&mut flow, &proj, Some("ci"))
+            .expect_err("no matching profile and no catch-all SHALL hard error");
+        let msg = format!("{err}");
+        assert!(msg.contains("app") && msg.contains("ci"), "got: {msg}");
+    }
+
+    // Bare run against an app that only has profile-scoped entries → error
+    // pointing at --profile.
+    #[test]
+    fn resolve_bare_run_requires_catch_all() {
+        let mut flow = flow_with_apps(vec![app_p("app", None, Some("eas"))]);
+        let proj = vec![papp_p("app", "com.eas", None, Some("eas"))];
+        let err = resolve_app_profiles(&mut flow, &proj, None)
+            .expect_err("bare run with only profiled entries SHALL error");
+        assert!(format!("{err}").contains("--profile"));
     }
 
     // ── union_requirements / slot_compatible_with ───────────────────

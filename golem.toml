@@ -12,6 +12,24 @@ name = "app-b"
 bundle = "fail.golem.testb"
 install_script = { ios = "scripts/install-app-b-ios.sh", android = "scripts/install-app-b-android.sh" }
 
+# Expo / React Native app. One cross-platform install script that branches
+# on platform ($1) and build mode (EXPO_BUILD_MODE). The bare entry below is
+# the default (local `expo prebuild` + Release build); the `profile = "eas"`
+# sibling selects the EAS cloud build via `golem run --profile eas`, injecting
+# the build-mode env. `--profile` picks the entry; the script only ever reads
+# the env var, never the profile name.
+[[apps]]
+name = "app-e"
+bundle = "fail.golem.teste"
+install_script = "scripts/install-app-e.sh"
+
+[[apps]]
+name = "app-e"
+profile = "eas"
+bundle = "fail.golem.teste"
+install_script = "scripts/install-app-e.sh"
+install_env = { EXPO_BUILD_MODE = "eas", EAS_PROFILE = "preview" }
+
 # Per-platform OS-level tweaks applied once per device session before
 # any flow runs. Suppresses defaults that bias test results across
 # emulator wipes / fresh sim images.

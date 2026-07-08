@@ -27,6 +27,10 @@ pub struct InstallEntry {
     pub script_path: PathBuf,
     pub timeout_ms: u64,
     pub device_constraints: Vec<DeviceConstraint>,
+    /// App-declared `install_env`, key-sorted for a stable spawn env. Values
+    /// are still raw (`${var}` un-interpolated) — the runner resolves them at
+    /// install time against the vars available then.
+    pub install_env: Vec<(String, String)>,
 }
 
 /// Walk every `FlowRun.slots[*].apps` and emit one `InstallEntry` per
@@ -80,6 +84,16 @@ pub fn build_install_matrix(
                         continue;
                     };
                     let timeout_ms = app.install_timeout_ms.unwrap_or(DEFAULT_INSTALL_TIMEOUT_MS);
+                    let install_env = app
+                        .install_env
+                        .as_ref()
+                        .map(|m| {
+                            let mut v: Vec<(String, String)> =
+                                m.iter().map(|(k, val)| (k.clone(), val.clone())).collect();
+                            v.sort_by(|a, b| a.0.cmp(&b.0));
+                            v
+                        })
+                        .unwrap_or_default();
                     entries.push(InstallEntry {
                         platform: *platform,
                         app_name: app_name.clone(),
@@ -87,6 +101,7 @@ pub fn build_install_matrix(
                         script_path: project_root.join(script),
                         timeout_ms,
                         device_constraints: app.devices.clone(),
+                        install_env,
                     });
                     seen.insert(key);
                 }
@@ -146,8 +161,10 @@ mod tests {
             devices: Vec::new(),
             install_script: Some(InstallScriptValue::Single("scripts/i.sh".into())),
             install_timeout_ms: None,
+            install_env: None,
+            profile: None,
         }];
-        let suite = plan(&[a, b], &apps, tmp.path(), None, None, 1)
+        let suite = plan(&[a, b], &apps, tmp.path(), None, None, 1, None)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(
@@ -183,6 +200,8 @@ mod tests {
                 devices: Vec::new(),
                 install_script: Some(InstallScriptValue::Single("scripts/c.sh".into())),
                 install_timeout_ms: None,
+                install_env: None,
+                profile: None,
             },
             ProjectAppConfig {
                 name: "supplier".into(),
@@ -190,9 +209,11 @@ mod tests {
                 devices: Vec::new(),
                 install_script: Some(InstallScriptValue::Single("scripts/s.sh".into())),
                 install_timeout_ms: None,
+                install_env: None,
+                profile: None,
             },
         ];
-        let suite = plan(&[f], &apps, tmp.path(), None, None, 1)
+        let suite = plan(&[f], &apps, tmp.path(), None, None, 1, None)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(
@@ -218,7 +239,7 @@ mod tests {
             os = "ios"
         "#,
         );
-        let suite = plan(&[f], &[], tmp.path(), None, None, 1)
+        let suite = plan(&[f], &[], tmp.path(), None, None, 1, None)
             .await
             .expect("async operation SHALL succeed");
         assert!(
@@ -245,7 +266,7 @@ mod tests {
             type = "tablet"
         "#,
         );
-        let suite = plan(&[f], &[], tmp.path(), None, None, 1)
+        let suite = plan(&[f], &[], tmp.path(), None, None, 1, None)
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(suite.install_matrix.len(), 1);

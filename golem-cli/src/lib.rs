@@ -187,6 +187,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                     .as_deref()
                     .and_then(golem_runner::executor::parse_duration),
                 stub_fail_on_runs,
+                profile: args.profile.clone(),
             };
 
             // Parse `--max-wait` into milliseconds for the wire. An
@@ -494,6 +495,7 @@ fn build_config_json(
         "trace": config.trace,
         "repeat": config.repeat,
         "max_device_wait_ms": max_device_wait_ms,
+        "profile": config.profile,
         "include_junit": include_junit,
         // Stub mode (in-process integration tests): an array (possibly
         // empty) activates it; null/absent = real devices. Always null in a

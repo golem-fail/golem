@@ -131,6 +131,7 @@ pub enum InstallFramework {
     NativeIos,
     NativeAndroid,
     Tauri,
+    Expo,
 }
 
 impl InstallFramework {
@@ -139,6 +140,7 @@ impl InstallFramework {
             InstallFramework::NativeIos => "native-ios",
             InstallFramework::NativeAndroid => "native-android",
             InstallFramework::Tauri => "tauri",
+            InstallFramework::Expo => "expo",
         }
     }
 
@@ -151,6 +153,7 @@ impl InstallFramework {
                 include_str!("../templates/install-scripts/native-android.sh")
             }
             InstallFramework::Tauri => include_str!("../templates/install-scripts/tauri.sh"),
+            InstallFramework::Expo => include_str!("../templates/install-scripts/expo.sh"),
         }
     }
 }
@@ -678,6 +681,7 @@ install_script = { ios = "scripts/ios.sh" }
         assert_eq!(InstallFramework::NativeIos.label(), "native-ios");
         assert_eq!(InstallFramework::NativeAndroid.label(), "native-android");
         assert_eq!(InstallFramework::Tauri.label(), "tauri");
+        assert_eq!(InstallFramework::Expo.label(), "expo");
     }
 
     // 14. render_template leaves text untouched when no placeholder matches.
@@ -743,6 +747,47 @@ install_script = { ios = "scripts/ios.sh" }
             "TAURI_CMD SHALL be substituted, got:\n{content}"
         );
         // 17b. No placeholder tokens SHALL remain in the rendered Tauri script.
+        assert!(
+            !content.contains("{{"),
+            "no placeholders SHALL remain, got:\n{content}"
+        );
+    }
+
+    // 17c. write_install_script renders the Expo template, substituting every
+    //      Expo-specific placeholder.
+    #[test]
+    fn write_install_script_renders_expo_placeholders() {
+        let tmp = TempDir::new().expect("tempdir");
+        let out = tmp.path().join("install.sh");
+        write_install_script(
+            &out,
+            InstallFramework::Expo,
+            &[
+                ("EXPO_DIR", "./mobile"),
+                ("PM_RUNNER", "pnpm expo"),
+                ("PM_INSTALL", "pnpm install"),
+                ("IOS_SCHEME", "MyApp"),
+            ],
+        )
+        .expect("write");
+
+        let content = fs::read_to_string(&out).expect("read");
+        assert!(
+            content.contains(r#"EXPO_DIR="./mobile""#),
+            "EXPO_DIR SHALL be substituted, got:\n{content}"
+        );
+        assert!(
+            content.contains(r#"PM_RUNNER="pnpm expo""#),
+            "PM_RUNNER SHALL be substituted, got:\n{content}"
+        );
+        assert!(
+            content.contains(r#"PM_INSTALL="pnpm install""#),
+            "PM_INSTALL SHALL be substituted, got:\n{content}"
+        );
+        assert!(
+            content.contains(r#"IOS_SCHEME="MyApp""#),
+            "IOS_SCHEME SHALL be substituted, got:\n{content}"
+        );
         assert!(
             !content.contains("{{"),
             "no placeholders SHALL remain, got:\n{content}"
@@ -880,11 +925,15 @@ install_script = "scripts/old.sh"
             ("TAURI_DIR", "."),
             ("IOS_SCHEME", "X_iOS"),
             ("TAURI_CMD", "npx tauri"),
+            ("EXPO_DIR", "."),
+            ("PM_RUNNER", "npx expo"),
+            ("PM_INSTALL", "npm install"),
         ];
         for fw in [
             InstallFramework::NativeIos,
             InstallFramework::NativeAndroid,
             InstallFramework::Tauri,
+            InstallFramework::Expo,
         ] {
             let out = tmp.path().join(format!("{}.sh", fw.label()));
             write_install_script(&out, fw, &placeholders).expect("write");

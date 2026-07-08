@@ -1,0 +1,19 @@
+[flow]
+name = "Expo lifecycle test"
+tags = ["cross-platform", "expo", "lifecycle"]
+
+# Minimal Expo (test-app-e) flow. Its job is to prove the Expo install
+# script builds, installs, launches, and drives — not to test app logic.
+[[flow.apps]]
+name = "app-e"
+[[flow.apps.devices]]
+os = ["ios:latest", "android:latest"]
+type = "phone"
+
+[[block]]
+name = "counter"
+steps = [
+  { action = "assert_visible", on_text = "Counter" },
+  { action = "tap", on_text = "+" },
+  { action = "assert_visible", on_text = "1", on_below = "Counter" },
+]

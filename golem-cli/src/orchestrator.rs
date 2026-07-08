@@ -318,6 +318,7 @@ struct SubmitConfigFields {
     repeat: u32,
     max_device_wait: Option<std::time::Duration>,
     stub_fail_on_runs: Option<Vec<u32>>,
+    profile: Option<String>,
 }
 
 /// Parse the submit message's `config` JSON object into the
@@ -394,6 +395,7 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
             .filter_map(|v| v.as_u64().map(|n| n as u32))
             .collect()
     });
+    let profile = cfg["profile"].as_str().map(str::to_string);
 
     SubmitConfigFields {
         platform_override,
@@ -420,6 +422,7 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
         repeat,
         max_device_wait,
         stub_fail_on_runs,
+        profile,
     }
 }
 
@@ -472,6 +475,7 @@ async fn handle_submit(
         repeat,
         max_device_wait,
         stub_fail_on_runs,
+        profile,
     } = parse_submit_config(cfg);
 
     // Re-read the project's golem.toml from the client's project_root so
@@ -540,6 +544,7 @@ async fn handle_submit(
         repeat,
         max_device_wait,
         stub_fail_on_runs,
+        profile,
         // Server doesn't do its own human streaming — client handles output.
         stream_human: false,
     };

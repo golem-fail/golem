@@ -264,6 +264,10 @@ pub struct SuiteConfig {
     /// shipped binary. A plain `Vec<u32>` (not the driver's `StubScript`)
     /// so this always-compiled struct stays free of the debug-only type.
     pub stub_fail_on_runs: Option<Vec<u32>>,
+    /// `--profile <name>`: selects profile-scoped app definitions. Per app,
+    /// the plan picks the `(name, profile)` entry, falling back to the
+    /// profile-less catch-all. `None` = catch-all only.
+    pub profile: Option<String>,
 }
 
 impl Default for SuiteConfig {
@@ -297,6 +301,7 @@ impl Default for SuiteConfig {
             repeat: 1,
             max_device_wait: None,
             stub_fail_on_runs: None,
+            profile: None,
         }
     }
 }
@@ -424,6 +429,7 @@ impl SuiteRunner {
             self.config.platform,
             self.config.coverage_override,
             self.config.repeat,
+            self.config.profile.as_deref(),
         )
         .await?;
 
@@ -1222,6 +1228,7 @@ async fn execute_flow_run(
                 no_build: cfg.no_build,
                 device_settings: &cfg.device_settings,
                 max_device_wait: cfg.max_device_wait,
+                cli_vars: &cfg.cli_vars,
             },
             cfg.stub_fail_on_runs.is_some(),
             cfg.repeat_ctx.map(|r| r.index).unwrap_or(0),
@@ -1316,6 +1323,7 @@ async fn execute_flow_run(
         let project_root_c = cfg.project_root.clone();
         let seed = cfg.seed;
         let start_block = cfg.start_block.clone();
+        let rebuild = cfg.rebuild;
         let cli_vars = cfg.cli_vars.clone();
         let output_dir = cfg.output_dir.clone();
         let no_results = cfg.no_results;
@@ -1349,6 +1357,7 @@ async fn execute_flow_run(
                 FlowRunPolicy {
                     seed,
                     start_block,
+                    rebuild,
                     cli_vars,
                     output_dir,
                     no_results,
@@ -1620,6 +1629,9 @@ struct SlotBuildConfig<'a> {
     no_build: bool,
     device_settings: &'a crate::project::DeviceSettings,
     max_device_wait: Option<std::time::Duration>,
+    /// CLI `--var` overrides, for interpolating apps' `install_env` at the
+    /// device site (where `_platform`/`_udid`/`_app` builtins are known).
+    cli_vars: &'a [(String, String)],
 }
 
 /// Prepare one slot for flow execution:
@@ -1657,6 +1669,7 @@ async fn setup_slot(
         no_build,
         device_settings,
         max_device_wait,
+        cli_vars,
     } = *build;
     // Stub mode: no real device exists. Return a synthetic device and a
     // placeholder port, skipping discovery, allocation, boot, install, and
@@ -1729,6 +1742,7 @@ async fn setup_slot(
             fingerprint,
             rebuild,
             no_build,
+            cli_vars,
         },
     )
     .await;
@@ -1906,6 +1920,8 @@ struct PreinstallCtx<'a> {
     fingerprint: &'a golem_runner::fingerprint::Fingerprint,
     rebuild: bool,
     no_build: bool,
+    /// CLI `--var` overrides, for interpolating `install_env`.
+    cli_vars: &'a [(String, String)],
 }
 
 /// Install every `InstallEntry` from the suite's install matrix that is
@@ -1935,6 +1951,7 @@ async fn preinstall_for_device_scoped(
         fingerprint,
         rebuild,
         no_build,
+        cli_vars,
     } = *ctx;
     let platform_str = platform.to_string();
     // Use the same device_label format as per-flow emission so
@@ -2026,6 +2043,34 @@ async fn preinstall_for_device_scoped(
             }
         }
 
+        // Resolve the app's install_env against install-time vars before the
+        // script runs. A bad `${...}` (e.g. a flow/device var) fails the
+        // install loudly rather than silently building a wrong artifact.
+        let resolved_env = match resolve_install_env(
+            &entry.install_env,
+            cli_vars,
+            &platform_str,
+            &device.udid,
+            &entry.app_name,
+        ) {
+            Ok(env) => env,
+            Err(e) => {
+                let key = (device.udid.clone(), entry.bundle_id.clone());
+                let msg = format!("{e}");
+                emitter.emit(golem_events::EventKind::InstallOutput {
+                    app_name: entry.app_name.clone(),
+                    line: msg.clone(),
+                });
+                install_cache
+                    .set(
+                        key,
+                        golem_runner::installer::InstallOutcome::FailedScript(msg),
+                    )
+                    .await;
+                continue;
+            }
+        };
+
         // Cache miss (or --rebuild): run the install script through the
         // build-once coordinator, then record the new persistent entry.
         let install_result = run_install_with_build_coord(
@@ -2034,6 +2079,8 @@ async fn preinstall_for_device_scoped(
                 bundle_id: &entry.bundle_id,
                 app_name: &entry.app_name,
                 timeout_ms: entry.timeout_ms,
+                env: &resolved_env,
+                rebuild,
             },
             &InstallRunCtx {
                 project_root,
@@ -2079,6 +2126,70 @@ struct InstallTarget<'a> {
     bundle_id: &'a str,
     app_name: &'a str,
     timeout_ms: u64,
+    /// Resolved (`${var}`-interpolated) `install_env`, injected into the
+    /// script process. Borrowed from a caller-owned Vec.
+    env: &'a [(String, String)],
+    /// The run's `--rebuild` flag, surfaced to the script as `GOLEM_REBUILD`.
+    rebuild: bool,
+}
+
+/// Resolve an app's `install_env` (raw `${var}` templates) into concrete
+/// `KEY=VALUE` pairs for the install script's process.
+///
+/// Interpolation runs at **install time**, which is before any flow step, so
+/// only install-time scopes exist: CLI `--var` overrides plus the builtins
+/// known at the device site (`_platform`, `_udid`, `_app`). A `${...}`
+/// referencing a flow-step, device-, or `each`-scoped var is unresolvable
+/// here and **fails loudly** naming the offending key — never silently
+/// interpolating to empty (a blank value building the wrong artifact is the
+/// class of bug the Tauri stale-bundle guard exists to catch).
+fn resolve_install_env(
+    raw: &[(String, String)],
+    cli_vars: &[(String, String)],
+    platform_str: &str,
+    udid: &str,
+    app_name: &str,
+) -> anyhow::Result<Vec<(String, String)>> {
+    if raw.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut store = golem_vars::VariableStore::new();
+    if !cli_vars.is_empty() {
+        let mut scope = golem_vars::Scope::new(golem_vars::ScopeLevel::Cli);
+        for (k, v) in cli_vars {
+            scope.set(k.clone(), golem_vars::VarValue::String(v.clone()));
+        }
+        store.push_scope(scope);
+    }
+    let builtins: std::collections::HashMap<String, String> = [
+        ("_platform".to_string(), platform_str.to_string()),
+        ("_udid".to_string(), udid.to_string()),
+        ("_app".to_string(), app_name.to_string()),
+    ]
+    .into_iter()
+    .collect();
+    let ctx = golem_vars::interpolation::InterpolationContext {
+        store: &store,
+        device: None,
+        device_stores: None,
+        global_store: None,
+        each_vars: None,
+        builtins: Some(&builtins),
+        generator: None,
+    };
+    let mut out = Vec::with_capacity(raw.len());
+    for (k, v) in raw {
+        let resolved = golem_vars::interpolation::interpolate(v, &ctx).map_err(|e| {
+            anyhow::anyhow!(
+                "install_env `{k} = \"{v}\"` could not be resolved at install time: {e}. \
+                 Only install-time vars are available here — CLI `--var` and the builtins \
+                 `_platform`/`_udid`/`_app`. Flow-step, device-, and per-row `each` vars do \
+                 not exist yet when the install script runs.",
+            )
+        })?;
+        out.push((k.clone(), resolved));
+    }
+    Ok(out)
 }
 
 /// Where/how to run the install: project + device context, cache, and the
@@ -2110,6 +2221,8 @@ async fn run_install_with_build_coord(
         bundle_id,
         app_name,
         timeout_ms,
+        env,
+        rebuild,
     } = *install_target;
     let InstallRunCtx {
         project_root,
@@ -2193,6 +2306,8 @@ async fn run_install_with_build_coord(
         script_path,
         working_dir: project_root,
         install_only,
+        env,
+        rebuild,
     };
     let install_target = golem_runner::installer::InstallDeviceTarget {
         platform: platform_str,
@@ -2240,6 +2355,8 @@ async fn run_install_with_build_coord(
                         script_path,
                         working_dir: project_root,
                         install_only: true, // reuse the already-built artifact
+                        env,
+                        rebuild,
                     },
                     &golem_runner::installer::InstallDeviceTarget {
                         platform: platform_str,
@@ -3035,6 +3152,7 @@ struct FlowRunHandles {
 struct FlowRunPolicy {
     seed: Option<u64>,
     start_block: Option<String>,
+    rebuild: bool,
     cli_vars: Vec<(String, String)>,
     output_dir: PathBuf,
     no_results: bool,
@@ -3077,6 +3195,7 @@ async fn run_flow_on_device(
     let FlowRunPolicy {
         seed,
         start_block,
+        rebuild,
         cli_vars,
         output_dir,
         no_results,
@@ -3370,22 +3489,48 @@ async fn run_flow_on_device(
 
         if let Some(rel) = script_rel {
             let script_path = project_root.join(&rel);
-            let result = run_install_with_build_coord(
-                &InstallTarget {
-                    script_path: &script_path,
-                    bundle_id: &bundle_for_install,
-                    app_name: &app.name,
-                    timeout_ms,
-                },
-                &InstallRunCtx {
-                    project_root: &project_root,
-                    platform_str,
-                    device: &device,
-                    install_cache: &install_cache,
-                    emitter: device_emitter.as_ref(),
-                },
-            )
-            .await;
+            // install_env, key-sorted then `${var}`-interpolated. A resolve
+            // error becomes the install error (handled below), so a bad
+            // `${...}` fails the flow loudly instead of silently.
+            let raw_env: Vec<(String, String)> = app
+                .install_env
+                .as_ref()
+                .map(|m| {
+                    let mut v: Vec<(String, String)> =
+                        m.iter().map(|(k, val)| (k.clone(), val.clone())).collect();
+                    v.sort_by(|a, b| a.0.cmp(&b.0));
+                    v
+                })
+                .unwrap_or_default();
+            let result = match resolve_install_env(
+                &raw_env,
+                &cli_vars,
+                platform_str,
+                &device.udid,
+                &app.name,
+            ) {
+                Ok(resolved_env) => {
+                    run_install_with_build_coord(
+                        &InstallTarget {
+                            script_path: &script_path,
+                            bundle_id: &bundle_for_install,
+                            app_name: &app.name,
+                            timeout_ms,
+                            env: &resolved_env,
+                            rebuild,
+                        },
+                        &InstallRunCtx {
+                            project_root: &project_root,
+                            platform_str,
+                            device: &device,
+                            install_cache: &install_cache,
+                            emitter: device_emitter.as_ref(),
+                        },
+                    )
+                    .await
+                }
+                Err(e) => Err(e),
+            };
             if let Err(e) = result {
                 let err_str = format!("{e}");
                 let reason = format!(
@@ -3893,6 +4038,67 @@ pub fn suite_stats(report: &SuiteReport) -> SuiteStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- install_env interpolation (A1) ----------------------------------
+    mod install_env {
+        use super::super::resolve_install_env;
+
+        #[test]
+        fn interpolates_cli_var() {
+            let raw = vec![("SANDBOX_ID".to_string(), "${sandbox_id}".to_string())];
+            let cli = vec![("sandbox_id".to_string(), "12345".to_string())];
+            let out = resolve_install_env(&raw, &cli, "ios", "udid-1", "app")
+                .expect("SHALL resolve from --var");
+            assert_eq!(out, vec![("SANDBOX_ID".to_string(), "12345".to_string())]);
+        }
+
+        #[test]
+        fn interpolates_builtins() {
+            let raw = vec![("TARGET".to_string(), "${_platform}:${_udid}".to_string())];
+            let out = resolve_install_env(&raw, &[], "android", "emulator-5554", "app")
+                .expect("SHALL resolve builtins");
+            assert_eq!(
+                out,
+                vec![("TARGET".to_string(), "android:emulator-5554".to_string())]
+            );
+        }
+
+        #[test]
+        fn static_value_passes_through() {
+            let raw = vec![("APP_ENV".to_string(), "staging".to_string())];
+            let out = resolve_install_env(&raw, &[], "ios", "udid-1", "app")
+                .expect("SHALL pass a literal through");
+            assert_eq!(out, vec![("APP_ENV".to_string(), "staging".to_string())]);
+        }
+
+        #[test]
+        fn empty_is_empty() {
+            let out = resolve_install_env(&[], &[], "ios", "udid-1", "app").expect("SHALL be ok");
+            assert!(out.is_empty());
+        }
+
+        #[test]
+        fn undefined_var_errors_loudly() {
+            let raw = vec![("SANDBOX_ID".to_string(), "${sandbox_id}".to_string())];
+            let err = resolve_install_env(&raw, &[], "ios", "udid-1", "app")
+                .expect_err("undefined var SHALL error, not interpolate to empty");
+            let msg = format!("{err}");
+            assert!(
+                msg.contains("SANDBOX_ID") && msg.contains("install time"),
+                "error SHALL name the key and the install-time constraint, got: {msg}"
+            );
+        }
+
+        #[test]
+        fn runtime_scoped_ref_errors() {
+            // A device/each-scoped var doesn't exist at install time — must
+            // fail loudly rather than build the wrong artifact.
+            let raw = vec![("ROW".to_string(), "${_each.id}".to_string())];
+            let err = resolve_install_env(&raw, &[], "ios", "udid-1", "app")
+                .expect_err("runtime-scoped ref SHALL error at install time");
+            assert!(format!("{err}").contains("ROW"));
+        }
+    }
 
     // --- Device recovery orchestration (hermetic via the command seam) ----
     // start_paused advances the reboot/wait timeouts instantly.
@@ -4859,6 +5065,7 @@ mod tests {
             script_path: PathBuf::from("install.sh"),
             timeout_ms: 1000,
             device_constraints: constraints,
+            install_env: Vec::new(),
         }
     }
 
@@ -5046,6 +5253,7 @@ mod tests {
                 script_path: PathBuf::from("i.sh"),
                 timeout_ms: 1000,
                 device_constraints: Vec::new(),
+                install_env: Vec::new(),
             }],
             device_availability: vec!["ios/v26/phone: 1 booted".to_string()],
             parse_failures: Vec::new(),

@@ -45,7 +45,7 @@ golem init
 # Create a flow template at flows/login.test.toml
 golem create login
 
-# (optional) scaffold an install script for your app — native-ios, native-android, or tauri
+# (optional) scaffold an install script for your app — native-ios, native-android, tauri, or expo
 golem install-script
 
 # See connected simulators, emulators, and devices
@@ -109,7 +109,7 @@ golem tree
 | [Selectors](docs/selectors.md) | The full selector reference: text/label/index/state, traits, relational + geometric `contains`/`inside`, nesting, and resolution order. |
 | [Actions Reference](docs/actions-reference.md) | The complete action vocabulary, grouped by category. |
 | [Accessibility](docs/accessibility.md) | The automatic a11y audit: levels, checks, thresholds, confidence, and how to read the annotated screenshot. |
-| [App Install](docs/app-install.md) | Install scripts, the install cache, `--rebuild` / `--no-build`, supported frameworks. |
+| [App Install](docs/app-install.md) | Install scripts, the install cache, `--rebuild` / `--no-build`, `install_env` + `--profile`, supported frameworks. |
 | [Output Formats](docs/output-formats.md) | `human`, `json`, `junit`, `toon`. |
 | [Error Codes](docs/error-codes.md) | The `EF408`-style code system and full registry. |
 | [Unsupported](docs/unsupported.md) | Known limitations. |

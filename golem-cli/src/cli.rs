@@ -164,6 +164,12 @@ pub struct RunArgs {
     #[arg(long)]
     pub platform: Option<String>,
 
+    /// Select profile-scoped app definitions. Apps may declare the same
+    /// `name` more than once, disambiguated by a `profile` field; this picks
+    /// the matching entry per app (falling back to the profile-less default).
+    #[arg(long)]
+    pub profile: Option<String>,
+
     /// Override every flow's coverage strategy (one | min | smart | full).
     /// Handy for `--coverage one` to run a suite as a quick smoke with a
     /// single FlowRun per flow.

@@ -438,6 +438,7 @@ mod tests {
             script_path: PathBuf::from("/tmp/noop.sh"),
             timeout_ms: 1000,
             device_constraints: Vec::new(),
+            install_env: Vec::new(),
         }
     }
 
@@ -647,6 +648,7 @@ mod tests {
             script_path: PathBuf::from("/tmp/noop.sh"),
             timeout_ms: 1000,
             device_constraints: Vec::new(),
+            install_env: Vec::new(),
         };
         let matrix = vec![android_entry];
 
@@ -693,6 +695,7 @@ mod tests {
                 script_path: PathBuf::from("/tmp/noop.sh"),
                 timeout_ms: 1000,
                 device_constraints: Vec::new(),
+                install_env: Vec::new(),
             },
         ];
 
