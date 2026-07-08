@@ -15,7 +15,7 @@ pub struct EtherealAccount {
 
 /// Raw response from the Ethereal / Nodemailer API.
 #[derive(Debug, Deserialize)]
-pub struct EtherealApiResponse {
+pub(crate) struct EtherealApiResponse {
     pub user: String,
     pub pass: String,
     pub smtp: EtherealSmtp,
@@ -23,19 +23,15 @@ pub struct EtherealApiResponse {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct EtherealSmtp {
+pub(crate) struct EtherealSmtp {
     pub host: String,
     pub port: u16,
-    #[allow(dead_code)]
-    pub secure: bool,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct EtherealImap {
+pub(crate) struct EtherealImap {
     pub host: String,
     pub port: u16,
-    #[allow(dead_code)]
-    pub secure: bool,
 }
 
 impl EtherealAccount {
@@ -66,12 +62,12 @@ pub trait HttpClient: Send + Sync {
 }
 
 /// Production HTTP client backed by `reqwest`.
-pub struct ReqwestHttpClient {
+pub(crate) struct ReqwestHttpClient {
     client: reqwest::Client,
 }
 
 impl ReqwestHttpClient {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             client: reqwest::Client::new(),
         }

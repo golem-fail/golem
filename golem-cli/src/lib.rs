@@ -98,15 +98,14 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                 }
             };
 
-            let a11y_min_confidence_override = match validate_a11y_min_confidence(
-                args.a11y_min_confidence,
-            ) {
-                Ok(c) => c,
-                Err(msg) => {
-                    eprintln!("{msg}");
-                    return Ok(1);
-                }
-            };
+            let a11y_min_confidence_override =
+                match validate_a11y_min_confidence(args.a11y_min_confidence) {
+                    Ok(c) => c,
+                    Err(msg) => {
+                        eprintln!("{msg}");
+                        return Ok(1);
+                    }
+                };
 
             // Stream human output unless user explicitly chose non-human format.
             // Default (no --output) = human, so stream is on.
@@ -1165,8 +1164,14 @@ mod tests {
             project_root: std::path::PathBuf::from("/proj"),
             ..SuiteConfig::default()
         };
-        let json =
-            build_config_json(&config, Some("ios"), Some("smart"), Some("strict"), Some(1800000), true);
+        let json = build_config_json(
+            &config,
+            Some("ios"),
+            Some("smart"),
+            Some("strict"),
+            Some(1800000),
+            true,
+        );
 
         // 1. Raw flag strings SHALL pass through verbatim.
         assert_eq!(json["platform"], "ios", "platform SHALL be the raw string");

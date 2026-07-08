@@ -1,4 +1,15 @@
-// golem-devices: device management
+//! Device discovery, lifecycle, and resolution for golem's iOS and Android targets.
+//!
+//! This crate knows how to enumerate simulators/emulators and physical devices
+//! (`android`, `ios`), boot/shutdown/install/create them (`lifecycle`), apply
+//! per-platform settings before a flow run (`settings`), and pick which
+//! concrete devices satisfy the `[[devices]]` constraints in a flow file
+//! (`resolver`). `concurrency` and `resource_manager` cap how many devices can
+//! be launched at once and track companion port assignments, so callers stay
+//! within host RAM/disk limits. The core data types below — [`DeviceInfo`],
+//! [`Platform`], [`DeviceState`], and [`OsVersionSpec`] — flow through all of
+//! those modules and are what `golem-driver`/the CLI orchestrator consume to
+//! turn a flow's device requirements into booted, ready-to-drive devices.
 
 pub mod android;
 pub mod concurrency;

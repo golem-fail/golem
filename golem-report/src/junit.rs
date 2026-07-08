@@ -528,11 +528,7 @@ pub fn format_suite_junit(report: &SuiteReport) -> String {
             );
             if inst.skipped {
                 let reason = inst.skip_reason.as_deref().unwrap_or("install skipped");
-                let _ = writeln!(
-                    out,
-                    "      <skipped message=\"{}\"/>",
-                    xml_escape(reason)
-                );
+                let _ = writeln!(out, "      <skipped message=\"{}\"/>", xml_escape(reason));
             } else if !inst.success {
                 let msg = inst.error.as_deref().unwrap_or("install failed");
                 let type_attr = inst

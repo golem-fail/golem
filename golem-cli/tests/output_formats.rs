@@ -40,7 +40,10 @@ fn json_output_parses_as_json_on_stdout() {
     let r = run_stub("", &["--output", "json"]);
     assert_eq!(r.code, 0, "stderr={}", r.stderr);
     let v: serde_json::Value = serde_json::from_str(r.stdout.trim()).unwrap_or_else(|e| {
-        panic!("--output json SHALL emit valid JSON on stdout: {e}; stdout={:?}", r.stdout)
+        panic!(
+            "--output json SHALL emit valid JSON on stdout: {e}; stdout={:?}",
+            r.stdout
+        )
     });
     assert_eq!(v["suite"]["passed"], 1, "one flow SHALL pass; json={v}");
     assert_eq!(v["suite"]["failed"], 0, "no flow SHALL fail; json={v}");

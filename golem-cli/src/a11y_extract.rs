@@ -78,8 +78,8 @@ struct Audit {
 }
 
 pub fn run(args: &A11yExtractArgs) -> Result<()> {
-    let bytes = std::fs::read(&args.png)
-        .with_context(|| format!("reading {}", args.png.display()))?;
+    let bytes =
+        std::fs::read(&args.png).with_context(|| format!("reading {}", args.png.display()))?;
 
     // Refuse anything not stamped by golem (the "if software wasn't golem,
     // error" rule). The reader validates `Software = Golem` first.
@@ -92,8 +92,8 @@ pub fn run(args: &A11yExtractArgs) -> Result<()> {
         return Ok(());
     }
 
-    let audit: Audit = serde_json::from_str(&audit_json)
-        .context("the embedded Golem-Audit JSON is malformed")?;
+    let audit: Audit =
+        serde_json::from_str(&audit_json).context("the embedded Golem-Audit JSON is malformed")?;
 
     println!("{}", render(&audit));
     println!();
@@ -184,7 +184,10 @@ fn replay_command(audit: &Audit) -> String {
             cmd.push_str(&format!(" --platform {p}"));
         }
     }
-    cmd.push_str(&format!(" --seed {} --a11y {}", audit.seed, audit.a11y_level));
+    cmd.push_str(&format!(
+        " --seed {} --a11y {}",
+        audit.seed, audit.a11y_level
+    ));
     cmd
 }
 
@@ -260,7 +263,12 @@ mod tests {
                     message: "button — no accessible name".into(),
                     detail: None,
                     confidence: 1.0,
-                    bounds: Some(Rect { x: 96, y: 1863, w: 44, h: 44 }),
+                    bounds: Some(Rect {
+                        x: 96,
+                        y: 1863,
+                        w: 44,
+                        h: 44,
+                    }),
                     related: vec![],
                 },
                 Issue {
@@ -270,7 +278,12 @@ mod tests {
                     message: "text 2.1:1 — below 4.5:1 (AA)".into(),
                     detail: Some("2.1:1".into()),
                     confidence: 0.48,
-                    bounds: Some(Rect { x: 10, y: 20, w: 100, h: 30 }),
+                    bounds: Some(Rect {
+                        x: 10,
+                        y: 20,
+                        w: 100,
+                        h: 30,
+                    }),
                     related: vec![],
                 },
             ],
@@ -281,7 +294,10 @@ mod tests {
     #[test]
     fn replay_command_includes_platform_seed_level() {
         let cmd = replay_command(&audit("No Such Flow Name 123", Some("ios")));
-        assert!(cmd.contains("--platform ios"), "platform SHALL be exact: {cmd}");
+        assert!(
+            cmd.contains("--platform ios"),
+            "platform SHALL be exact: {cmd}"
+        );
         assert!(cmd.contains("--seed 12345"), "seed SHALL be exact: {cmd}");
         assert!(cmd.contains("--a11y strict"), "level SHALL be exact: {cmd}");
         // Unknown flow → placeholder, not a real path.
@@ -295,9 +311,15 @@ mod tests {
     #[test]
     fn replay_command_omits_platform_when_unknown() {
         let cmd = replay_command(&audit("X", None));
-        assert!(!cmd.contains("--platform"), "absent platform SHALL be omitted: {cmd}");
+        assert!(
+            !cmd.contains("--platform"),
+            "absent platform SHALL be omitted: {cmd}"
+        );
         let cmd2 = replay_command(&audit("X", Some("unknown")));
-        assert!(!cmd2.contains("--platform"), "\"unknown\" platform SHALL be omitted: {cmd2}");
+        assert!(
+            !cmd2.contains("--platform"),
+            "\"unknown\" platform SHALL be omitted: {cmd2}"
+        );
     }
 
     // Human render: header context, both findings, confidence shown only <1.0.
@@ -311,8 +333,14 @@ mod tests {
         assert!(out.contains("[ERR] missing_label"));
         assert!(out.contains("[WRN] low_contrast"));
         // 0.48 finding shows confidence; the 1.0 finding does not.
-        assert!(out.contains("(confidence 0.48)"), "low-conf SHALL show: {out}");
-        let err_line = out.lines().find(|l| l.contains("missing_label")).unwrap_or("");
+        assert!(
+            out.contains("(confidence 0.48)"),
+            "low-conf SHALL show: {out}"
+        );
+        let err_line = out
+            .lines()
+            .find(|l| l.contains("missing_label"))
+            .unwrap_or("");
         assert!(
             !err_line.contains("confidence"),
             "a 1.0 finding SHALL NOT show confidence: {err_line}"

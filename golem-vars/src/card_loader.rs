@@ -119,10 +119,6 @@ static RAW_ENTRIES: &[(&str, &str)] = &[
 
 #[derive(Deserialize)]
 pub(crate) struct ProviderFile {
-    #[allow(dead_code)]
-    pub(crate) id: String,
-    #[allow(dead_code)]
-    pub(crate) name: String,
     pub(crate) defaults: CardDefaults,
     pub(crate) statuses: HashMap<String, Vec<CardConfig>>,
 }

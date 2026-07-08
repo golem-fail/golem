@@ -10,12 +10,14 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use golem_devices::version::{parse_os_version, resolve_latest};
-use golem_devices::{DeviceInfo, DeviceState, DeviceType, OsVersionSpec, Platform};
+#[cfg(test)]
+use golem_devices::DeviceState;
+use golem_devices::{DeviceInfo, DeviceType, OsVersionSpec, Platform};
 use golem_parser::mixin::expand_mixins;
-use golem_parser::{parse_flow, AppConfig, CoverageStrategy, FlowFile, ProjectAppConfig};
+#[cfg(test)]
+use golem_parser::AppConfig;
+use golem_parser::{parse_flow, CoverageStrategy, FlowFile, ProjectAppConfig};
 
-use crate::coverage::set_cover_greedy;
 use crate::install_matrix::{build_install_matrix, InstallEntry};
 
 /// A parsed flow after project-level `[[apps]]` merge and mixin expansion.
@@ -487,724 +489,15 @@ pub fn merge_project_apps(flow: &mut FlowFile, project_apps: &[ProjectAppConfig]
     }
 }
 
-/// A single flattened requirement tuple for one app — one concrete
-/// coverage point that scheduler can match a device against.
-#[derive(Debug, Clone)]
-struct AppRequirement {
-    platform: Option<Platform>,
-    os_version: Option<OsVersionSpec>,
-    device_type: Option<DeviceType>,
-    physical: Option<bool>,
-    name: Option<String>,
-    playstore: Option<bool>,
-    accessibility_label: Option<String>,
-    booted: Option<bool>,
-}
+mod expand;
 
-/// Expand a flow into one or more `FlowRun`s. Each FlowRun holds slots
-/// that run simultaneously. Coverage fan-out produces multiple FlowRuns;
-/// multi-device coordination produces multiple slots within one FlowRun.
-fn expand_flow(
-    flow_idx: usize,
-    flow: &FlowFile,
-    snapshot: &[DeviceInfo],
-    platform_override: Option<Platform>,
-    coverage_override: Option<CoverageStrategy>,
-    coverage_groups: &mut Vec<CoverageGroup>,
-) -> Result<Vec<FlowRun>> {
-    // Precedence: CLI --coverage > [flow.options].coverage > default (Smart).
-    let strategy = coverage_override
-        .or_else(|| flow.flow.options.as_ref().and_then(|o| o.coverage))
-        .unwrap_or(CoverageStrategy::Smart);
-
-    // Step 1: per-app, expand [[flow.apps.devices]] into concrete
-    // AppRequirements. Strategy is passed so each app can emit partial
-    // (axis-independent) boxes for Min/Smart/One or Cartesian for Full.
-    let app_reqs: Vec<(String, Vec<AppRequirement>)> = flow
-        .flow
-        .apps
-        .iter()
-        .map(|app| {
-            let reqs = expand_app_requirements(app, snapshot, platform_override, strategy)?;
-            Ok::<_, anyhow::Error>((app.name.clone(), reqs))
-        })
-        .collect::<Result<Vec<_>>>()?;
-
-    if app_reqs.is_empty() || app_reqs.iter().all(|(_, r)| r.is_empty()) {
-        return Ok(Vec::new());
-    }
-
-    match strategy {
-        CoverageStrategy::Full => expand_full(flow_idx, &app_reqs),
-        CoverageStrategy::Min => expand_min(flow_idx, &app_reqs, snapshot),
-        CoverageStrategy::Smart => expand_jit(
-            flow_idx,
-            &app_reqs,
-            snapshot,
-            coverage_groups,
-            CoverageStrategy::Smart,
-            None,
-        ),
-        CoverageStrategy::One => expand_jit(
-            flow_idx,
-            &app_reqs,
-            snapshot,
-            coverage_groups,
-            CoverageStrategy::One,
-            Some(1),
-        ),
-    }
-}
-
-/// Full (Cartesian): one FlowRun per coverage combo, cycled across apps
-/// by index. Preserves pre-tick-box behaviour for users who opt in.
-fn expand_full(
-    flow_idx: usize,
-    app_reqs: &[(String, Vec<AppRequirement>)],
-) -> Result<Vec<FlowRun>> {
-    // Step 2: determine fan-out count = max coverage length across apps.
-    // An app with 1 req cycles through (same single req used for every run);
-    // an app with N reqs contributes one req per run.
-    let run_count = app_reqs
-        .iter()
-        .map(|(_, r)| r.len())
-        .max()
-        .unwrap_or(1)
-        .max(1);
-
-    let mut runs = Vec::with_capacity(run_count);
-    for i in 0..run_count {
-        let mut slots: Vec<DeviceSlot> = Vec::new();
-
-        for (app_name, reqs) in app_reqs {
-            if reqs.is_empty() {
-                continue;
-            }
-            let req = &reqs[i % reqs.len()];
-            if let Some(slot) = slots.iter_mut().find(|s| slot_compatible_with(s, req)) {
-                slot.apps.push(app_name.clone());
-            } else {
-                slots.push(DeviceSlot {
-                    platform: req.platform,
-                    os_version: req.os_version.clone(),
-                    device_type: req.device_type,
-                    physical: req.physical,
-                    name: req.name.clone(),
-                    playstore: req.playstore,
-                    accessibility_label: req.accessibility_label.clone(),
-                    booted: req.booted,
-                    apps: vec![app_name.clone()],
-                });
-            }
-        }
-
-        if !slots.is_empty() {
-            runs.push(FlowRun {
-                flow_idx,
-                slots,
-                coverage_group: None,
-                covers_boxes: Vec::new(),
-                // Default 0 — `plan()` rewrites this when --repeat > 1.
-                repeat_index: 0,
-            });
-        }
-    }
-
-    Ok(runs)
-}
-
-/// Min: per-app greedy set-cover reduces each app's tick-box pool to
-/// the minimum device set ticking every box, then the per-app picked-
-/// slot lists are cycled to form FlowRuns (same cycling + packing as
-/// Full, just over the reduced set). No coverage group registered —
-/// every FlowRun runs unconditionally.
-///
-/// Two apps on different platforms → separate slots in one FlowRun
-/// (chat-test coordination preserved). Coverage fan-out within one app
-/// → multiple FlowRuns (run per picked device).
-///
-/// Empty snapshot: skip set-cover entirely and emit boxes as abstract
-/// FlowRuns — the scheduler gets a chance at execute time (auto-boot,
-/// create-if-missing, waiting). Matches pre-tick-box fallback for
-/// abstract `Latest` specs.
-fn expand_min(
-    flow_idx: usize,
-    app_reqs: &[(String, Vec<AppRequirement>)],
-    snapshot: &[DeviceInfo],
-) -> Result<Vec<FlowRun>> {
-    let reduced: Vec<(String, Vec<AppRequirement>)> = app_reqs
-        .iter()
-        .map(|(name, reqs)| {
-            let picked = reduce_app_reqs_via_cover(reqs, snapshot)
-                .with_context(|| format!("app \"{name}\""))?;
-            Ok::<_, anyhow::Error>((name.clone(), picked))
-        })
-        .collect::<Result<_>>()?;
-    // Delegate run-cycling + slot-packing to the Full emitter; it already
-    // handles coordination (multi-slot FlowRuns when apps' platforms
-    // differ) and multi-app packing.
-    expand_full(flow_idx, &reduced)
-}
-
-/// Apply greedy set-cover to one app's requirements. Returns either:
-/// - Snapshot empty: the reqs unchanged (scheduler resolves at execute).
-/// - Snapshot non-empty: one requirement per picked device, with axes
-///   unioned across the boxes that device ticks.
-///
-/// Errors if snapshot has devices but some boxes go unticked — this is
-/// the `Min` / `Smart` underspec check. `One` uses
-/// [`reduce_app_reqs_via_cover_lenient`] which ignores uncovered boxes.
-fn reduce_app_reqs_via_cover(
-    reqs: &[AppRequirement],
-    snapshot: &[DeviceInfo],
-) -> Result<Vec<AppRequirement>> {
-    let (reduced, uncovered) = cover_and_union(reqs, snapshot);
-    if !uncovered.is_empty() {
-        return Err(golem_events::coded(
-            golem_events::FailureCode::ParseDeviceConstraint,
-            anyhow::anyhow!(
-                "coverage = \"min\" cannot be satisfied — no devices match: {}",
-                uncovered.join(", ")
-            ),
-        ));
-    }
-    Ok(reduced)
-}
-
-/// Union a group of `AppRequirement`s — each field takes its first
-/// `Some(_)` in iteration order. Conflicts are impossible by
-/// construction (the picked device satisfies every input box, so their
-/// `Some(_)` axes must be mutually compatible).
-fn union_requirements(reqs: &[&AppRequirement]) -> AppRequirement {
-    AppRequirement {
-        platform: reqs.iter().find_map(|r| r.platform),
-        os_version: reqs.iter().find_map(|r| r.os_version.clone()),
-        device_type: reqs.iter().find_map(|r| r.device_type),
-        physical: reqs.iter().find_map(|r| r.physical),
-        name: reqs.iter().find_map(|r| r.name.clone()),
-        playstore: reqs.iter().find_map(|r| r.playstore),
-        accessibility_label: reqs.iter().find_map(|r| r.accessibility_label.clone()),
-        booted: reqs.iter().find_map(|r| r.booted),
-    }
-}
-
-/// JIT generator shared by `One` and `Smart`. Emits FlowRuns derived
-/// from the same greedy set-cover that `Min` uses — so slots come out
-/// fully-pinned and the scheduler doesn't face partial-axis (platform-
-/// None) slot requirements it can't act on. What makes this JIT rather
-/// than plan-only: each FlowRun carries a shared
-/// [`CoverageGroup`] index + `covers_boxes`, and the scheduler gates
-/// every spawn on live group progress.
-///
-/// The group stops dispatching members once either
-/// - `max_runs` successful runs have completed (`One` → 1), OR
-/// - every box in the pool has been ticked (`Smart` → `max_runs = None`).
-///
-/// The pool is the post-cover reduced per-app requirement list —
-/// identical to what `expand_min` emits — concatenated across apps. A
-/// picked device matching multiple pool entries credits bonus ticks to
-/// the tracker, so e.g. `os = ["ios:latest", "android:latest"]` +
-/// `type = ["phone", "tablet"]` on a single iPad-26 + Pixel-tab setup
-/// can terminate `Smart` after 2 runs (one per picked device).
-fn expand_jit(
-    flow_idx: usize,
-    app_reqs: &[(String, Vec<AppRequirement>)],
-    snapshot: &[DeviceInfo],
-    coverage_groups: &mut Vec<CoverageGroup>,
-    strategy: CoverageStrategy,
-    max_runs: Option<u32>,
-) -> Result<Vec<FlowRun>> {
-    // Reduce each app's tick-box list the same way Min does: greedy
-    // set-cover against the snapshot, then union the covered boxes per
-    // picked device into concrete `AppRequirement`s. Slots end up
-    // fully-pinned — no platform-None leaks into the scheduler.
-    //
-    // For `One` we tolerate uncovered boxes (underspec), since any
-    // single success satisfies the strategy. For `Smart` we let
-    // `reduce_app_reqs_via_cover` error on uncovered boxes, matching
-    // `Min`'s semantics.
-    let reduced: Vec<(String, Vec<AppRequirement>)> = app_reqs
-        .iter()
-        .map(|(name, reqs)| {
-            let picked = match strategy {
-                CoverageStrategy::One => reduce_app_reqs_via_cover_lenient(reqs, snapshot),
-                _ => reduce_app_reqs_via_cover(reqs, snapshot)
-                    .with_context(|| format!("app \"{name}\""))?,
-            };
-            Ok::<_, anyhow::Error>((name.clone(), picked))
-        })
-        .collect::<Result<_>>()?;
-
-    if reduced.iter().all(|(_, r)| r.is_empty()) {
-        return Err(golem_events::coded(
-            golem_events::FailureCode::ParseDeviceConstraint,
-            anyhow::anyhow!(
-                "coverage = \"{}\" found no device matching any tick box for this flow",
-                match strategy {
-                    CoverageStrategy::One => "one",
-                    CoverageStrategy::Smart => "smart",
-                    _ => "jit",
-                }
-            ),
-        ));
-    }
-
-    // Pool = flat concat of each app's reduced AppRequirements as tick
-    // boxes. Each FlowRun's covers_boxes then follows the cycling
-    // `expand_full` uses: app_a's req at index `i % reqs.len()`, etc.
-    let mut pool: Vec<DeviceSlot> = Vec::new();
-    let mut per_app_pool_base: Vec<usize> = Vec::with_capacity(reduced.len());
-    for (_, reqs) in &reduced {
-        per_app_pool_base.push(pool.len());
-        pool.extend(reqs.iter().map(req_to_tick_box));
-    }
-
-    let group_idx = coverage_groups.len();
-    coverage_groups.push(CoverageGroup {
-        flow_idx,
-        strategy,
-        boxes: pool,
-        max_runs,
-    });
-
-    let mut runs = expand_full(flow_idx, &reduced)?;
-    for (i, run) in runs.iter_mut().enumerate() {
-        run.coverage_group = Some(group_idx);
-        let mut covers = Vec::with_capacity(reduced.len());
-        for (app_idx, (_, reqs)) in reduced.iter().enumerate() {
-            if reqs.is_empty() {
-                continue;
-            }
-            let pool_idx = per_app_pool_base[app_idx] + (i % reqs.len());
-            covers.push(pool_idx);
-        }
-        run.covers_boxes = covers;
-    }
-    Ok(runs)
-}
-
-/// Lenient variant of [`reduce_app_reqs_via_cover`] for `coverage = "one"`.
-/// Uncovered boxes are silently dropped: a smoke run doesn't need every
-/// axis represented, just one successful run. If no box is ever
-/// reachable (empty picked set + non-empty snapshot), returns an empty
-/// Vec so the caller can bail with a friendly error.
-fn reduce_app_reqs_via_cover_lenient(
-    reqs: &[AppRequirement],
-    snapshot: &[DeviceInfo],
-) -> Vec<AppRequirement> {
-    cover_and_union(reqs, snapshot).0
-}
-
-/// Shared set-cover + union core. Returns `(reduced, uncovered_labels)`:
-///
-/// - `reduced` — one `AppRequirement` per picked device, with every
-///   `Some(_)` axis from the boxes that device ticks unioned in.
-///   Example: partial `{ios, 26, ·}` + `{·, ·, tablet}` both ticked by
-///   one iPad-v26 → union `{ios, 26, tablet}`.
-/// - `uncovered_labels` — shape strings for boxes no picked device
-///   satisfies. Empty means full coverage; non-empty is the underspec
-///   error signal strict callers (`Min` / `Smart`) raise.
-///
-/// Empty `reqs` or empty `snapshot` short-circuits with full inputs
-/// preserved and no "uncovered" claim (the scheduler gets a chance at
-/// execute time to auto-boot, create-if-missing, or wait).
-fn cover_and_union(
-    reqs: &[AppRequirement],
-    snapshot: &[DeviceInfo],
-) -> (Vec<AppRequirement>, Vec<String>) {
-    if reqs.is_empty() {
-        return (Vec::new(), Vec::new());
-    }
-    if snapshot.is_empty() {
-        return (reqs.to_vec(), Vec::new());
-    }
-    let boxes: Vec<DeviceSlot> = reqs.iter().map(req_to_tick_box).collect();
-    let picked = set_cover_greedy(&boxes, snapshot);
-
-    let mut covered: std::collections::HashSet<usize> = std::collections::HashSet::new();
-    let reduced: Vec<AppRequirement> = picked
-        .into_iter()
-        .map(|d_idx| {
-            let mut ticks: Vec<&AppRequirement> = Vec::new();
-            for (b_idx, b) in boxes.iter().enumerate() {
-                if device_matches_slot(&snapshot[d_idx], b) {
-                    covered.insert(b_idx);
-                    ticks.push(&reqs[b_idx]);
-                }
-            }
-            union_requirements(&ticks)
-        })
-        .collect();
-
-    let uncovered: Vec<String> = (0..boxes.len())
-        .filter(|b| !covered.contains(b))
-        .map(|b| shape_label(&boxes[b]))
-        .collect();
-    (reduced, uncovered)
-}
-
-/// Convert an `AppRequirement` into a `DeviceSlot` tick box without
-/// apps. Used as the input to set-cover.
-fn req_to_tick_box(req: &AppRequirement) -> DeviceSlot {
-    DeviceSlot {
-        platform: req.platform,
-        os_version: req.os_version.clone(),
-        device_type: req.device_type,
-        physical: req.physical,
-        name: req.name.clone(),
-        playstore: req.playstore,
-        accessibility_label: req.accessibility_label.clone(),
-        booted: req.booted,
-        apps: Vec::new(),
-    }
-}
-
-/// An app's requirement can pack into an existing slot if every `Some(_)`
-/// field matches (or the slot is more general — has `None` where the req
-/// has `Some(_)`). For simplicity here: require exact match on each field.
-/// A looser "slot is a superset" check could pack more aggressively but
-/// we keep strict match to avoid surprising merges.
-fn slot_compatible_with(slot: &DeviceSlot, req: &AppRequirement) -> bool {
-    slot.platform == req.platform
-        && slot.os_version == req.os_version
-        && slot.device_type == req.device_type
-        && slot.physical == req.physical
-        && slot.name == req.name
-        && slot.playstore == req.playstore
-        && slot.accessibility_label == req.accessibility_label
-        && slot.booted == req.booted
-}
-
-/// Expand an `AppConfig`'s `[[flow.apps.devices]]` constraints into flat
-/// `AppRequirement`s (tick boxes for this app).
-///
-/// - Empty `devices` block: emit one partial box per currently-booted
-///   platform in the snapshot (with `booted=true`). Error if nothing is
-///   booted — no iOS bias.
-/// - `Full` strategy: Cartesian cross-product across axes — every combo
-///   is a distinct fully-pinned box.
-/// - `Min` / `Smart` / `One` strategy: partial-axis emission — when
-///   multiple axes are multi-valued in a block, emit one box per axis
-///   value (other multi-axes left `None`; single-valued axes pin
-///   alongside). When only one axis is multi, this collapses to the same
-///   as Full for that block.
-/// - `ios:latest:N` is resolved against the snapshot. Too few matching
-///   majors is a plan-time error (except under `One`).
-fn expand_app_requirements(
-    app: &AppConfig,
-    snapshot: &[DeviceInfo],
-    platform_override: Option<Platform>,
-    strategy: CoverageStrategy,
-) -> Result<Vec<AppRequirement>> {
-    if app.devices.is_empty() {
-        return default_any_booted_requirements(snapshot, platform_override);
-    }
-
-    let mut out: Vec<AppRequirement> = Vec::new();
-    for dc in &app.devices {
-        let os_pairs = expand_os_pairs(dc, snapshot, platform_override, strategy)?;
-        let type_entries = expand_type_entries(dc)?;
-        let hardware_entries = expand_hardware_entries(dc)?;
-
-        // Narrow to the forced platform override, if any.
-        let filtered_os: Vec<(Platform, Option<OsVersionSpec>)> = os_pairs
-            .into_iter()
-            .filter(|(p, _)| platform_override.map(|f| f == *p).unwrap_or(true))
-            .collect();
-        if filtered_os.is_empty() {
-            continue;
-        }
-
-        let os_multi = filtered_os.len() > 1;
-        let type_multi = type_entries.len() > 1;
-        let hw_multi = hardware_entries.len() > 1;
-        let multi_count = [os_multi, type_multi, hw_multi]
-            .iter()
-            .filter(|&&x| x)
-            .count();
-        let partial_strategy = matches!(
-            strategy,
-            CoverageStrategy::Min | CoverageStrategy::Smart | CoverageStrategy::One
-        );
-
-        if partial_strategy && multi_count >= 2 {
-            // Partial-axis emission — one box per value on each multi axis,
-            // other axes left as `None` so the picked device can satisfy
-            // multiple tick boxes at once. Single-valued axes pin on every
-            // box they show up in; only pass through if multi on its axis.
-            if os_multi {
-                for (platform, os_version) in &filtered_os {
-                    out.push(AppRequirement {
-                        platform: Some(*platform),
-                        os_version: os_version.clone(),
-                        device_type: None,
-                        physical: None,
-                        name: dc.name.clone(),
-                        playstore: dc.playstore,
-                        accessibility_label: dc.accessibility_label.clone(),
-                        booted: dc.booted,
-                    });
-                }
-            }
-            if type_multi {
-                for type_e in &type_entries {
-                    out.push(AppRequirement {
-                        platform: None,
-                        os_version: None,
-                        device_type: *type_e,
-                        physical: None,
-                        name: dc.name.clone(),
-                        playstore: dc.playstore,
-                        accessibility_label: dc.accessibility_label.clone(),
-                        booted: dc.booted,
-                    });
-                }
-            }
-            if hw_multi {
-                for phys in &hardware_entries {
-                    out.push(AppRequirement {
-                        platform: None,
-                        os_version: None,
-                        device_type: None,
-                        physical: *phys,
-                        name: dc.name.clone(),
-                        playstore: dc.playstore,
-                        accessibility_label: dc.accessibility_label.clone(),
-                        booted: dc.booted,
-                    });
-                }
-            }
-        } else {
-            // Full, OR partial strategies with ≤1 multi-axis: Cartesian.
-            for (platform, os_version) in &filtered_os {
-                for type_e in &type_entries {
-                    for phys in &hardware_entries {
-                        out.push(AppRequirement {
-                            platform: Some(*platform),
-                            os_version: os_version.clone(),
-                            device_type: *type_e,
-                            physical: *phys,
-                            name: dc.name.clone(),
-                            playstore: dc.playstore,
-                            accessibility_label: dc.accessibility_label.clone(),
-                            booted: dc.booted,
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    // Dedup — two blocks may emit the same box (e.g. redundant subset
-    // constraints). Order-preserving dedup via seen-set on signature.
-    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-    out.retain(|r| seen.insert(req_signature(r)));
-    Ok(out)
-}
-
-/// Emit a default box per currently-booted platform. If no platform has
-/// booted devices, error — we do not silently pick a platform.
-fn default_any_booted_requirements(
-    snapshot: &[DeviceInfo],
-    platform_override: Option<Platform>,
-) -> Result<Vec<AppRequirement>> {
-    let mut platforms: Vec<Platform> = [Platform::Ios, Platform::Android]
-        .into_iter()
-        .filter(|p| {
-            platform_override.map(|f| &f == p).unwrap_or(true)
-                && snapshot
-                    .iter()
-                    .any(|d| d.platform == *p && d.state == DeviceState::Booted)
-        })
-        .collect();
-    // Platforms don't implement Ord; iOS-first by construction. Dedup
-    // defensively — the filter iterates the static [Ios, Android] list.
-    platforms.dedup_by(|a, b| a == b);
-    if platforms.is_empty() {
-        return Err(golem_events::coded(
-            golem_events::FailureCode::ParseDeviceConstraint,
-            anyhow::anyhow!(
-                "No `[[flow.apps.devices]]` block and no booted device found. \
-                 Boot a simulator/emulator or add a device constraint."
-            ),
-        ));
-    }
-    Ok(platforms
-        .into_iter()
-        .map(|p| AppRequirement {
-            platform: Some(p),
-            os_version: None,
-            device_type: None,
-            physical: Some(false),
-            name: None,
-            playstore: None,
-            accessibility_label: None,
-            booted: Some(true),
-        })
-        .collect())
-}
-
-/// Expand the `os` field of one `[[flow.apps.devices]]` block into a
-/// list of (platform, version-spec) pairs. Handles `ios:latest:N` with
-/// strict underspec checking (except under `One`).
-fn expand_os_pairs(
-    dc: &golem_parser::DeviceConstraint,
-    snapshot: &[DeviceInfo],
-    platform_override: Option<Platform>,
-    strategy: CoverageStrategy,
-) -> Result<Vec<(Platform, Option<OsVersionSpec>)>> {
-    let Some(os_sv) = &dc.os else {
-        // No `os` → default to override platform when forced, else
-        // emit a box per platform (any version) so partial-axis covers.
-        return Ok(match platform_override {
-            Some(p) => vec![(p, None)],
-            None => vec![(Platform::Ios, None), (Platform::Android, None)],
-        });
-    };
-
-    let mut pairs: Vec<(Platform, Option<OsVersionSpec>)> = Vec::new();
-    for s in os_sv.to_vec() {
-        // `os = "any"` → platform-agnostic, any version. Emitted as a
-        // box with platform=None by letting the caller see no platform
-        // pair here; we synthesise a platform-less marker via both
-        // platforms-any-version AND a None-platform sentinel. Simpler:
-        // treat `any` as "every platform, any version" — set-cover will
-        // pick whatever has devices.
-        if s == "any" {
-            pairs.push((Platform::Ios, None));
-            pairs.push((Platform::Android, None));
-            continue;
-        }
-
-        match parse_os_version(&s) {
-            Ok(OsVersionSpec::Latest { platform, count }) => {
-                let majors: Vec<u32> = snapshot
-                    .iter()
-                    .filter(|d| d.platform == platform)
-                    .map(|d| d.os_major)
-                    .collect();
-                let tops = resolve_latest(platform, count, &majors);
-                if tops.is_empty() {
-                    // No matching platform devices in snapshot → fall back
-                    // to abstract Latest (scheduler re-tries at execute).
-                    pairs.push((platform, Some(OsVersionSpec::Latest { platform, count })));
-                } else if (tops.len() as u32) < count && strategy != CoverageStrategy::One {
-                    return Err(golem_events::coded(
-                        golem_events::FailureCode::ParseDeviceConstraint,
-                        anyhow::anyhow!(
-                            "`os = \"{s}\"` requested {count} versions but only {} \
-                             available in snapshot ({}). Boot another runtime or \
-                             use coverage = \"one\" for local smoke testing.",
-                            tops.len(),
-                            tops.iter()
-                                .map(|m| format!("v{m}"))
-                                .collect::<Vec<_>>()
-                                .join(", "),
-                        ),
-                    ));
-                } else {
-                    for m in tops {
-                        pairs.push((platform, Some(OsVersionSpec::Exact { platform, major: m })));
-                    }
-                }
-            }
-            Ok(spec) => {
-                let platform = match &spec {
-                    OsVersionSpec::Exact { platform, .. }
-                    | OsVersionSpec::Minimum { platform, .. }
-                    | OsVersionSpec::Latest { platform, .. } => *platform,
-                };
-                pairs.push((platform, Some(spec)));
-            }
-            Err(_) => {
-                // "ios" or "android" alone — any version of that platform.
-                let platform = if s.starts_with("android") {
-                    Platform::Android
-                } else if s.starts_with("ios") {
-                    Platform::Ios
-                } else {
-                    return Err(golem_events::coded(
-                        golem_events::FailureCode::ParseDeviceConstraint,
-                        anyhow::anyhow!("unrecognised os constraint: {s}"),
-                    ));
-                };
-                pairs.push((platform, None));
-            }
-        }
-    }
-    Ok(pairs)
-}
-
-/// Expand the `type` field. Absent → one entry `None` (any type).
-/// Unrecognised values are a hard error — catches `"Tablet"`, `"phone "`,
-/// typos, etc. before they silently map to "any type".
-fn expand_type_entries(dc: &golem_parser::DeviceConstraint) -> Result<Vec<Option<DeviceType>>> {
-    let Some(type_sv) = &dc.device_type else {
-        return Ok(vec![None]);
-    };
-    type_sv
-        .to_vec()
-        .iter()
-        .map(|s| match s.as_str() {
-            "phone" => Ok(Some(DeviceType::Phone)),
-            "tablet" => Ok(Some(DeviceType::Tablet)),
-            other => Err(golem_events::coded(
-                golem_events::FailureCode::ParseDeviceConstraint,
-                anyhow::anyhow!(
-                    "unrecognised `type` value: {other:?}. Expected \"phone\" or \"tablet\"."
-                ),
-            )),
-        })
-        .collect()
-}
-
-/// Expand the `hardware` field. Absent → `[Some(false)]` (virtual-only
-/// default — physical devices require explicit opt-in). Single string
-/// → one entry. Array → N entries (partial-axis expansion candidate).
-/// Unrecognised values error out with the allowed list.
-fn expand_hardware_entries(dc: &golem_parser::DeviceConstraint) -> Result<Vec<Option<bool>>> {
-    let Some(hw_sv) = &dc.hardware else {
-        return Ok(vec![Some(false)]);
-    };
-    let values = hw_sv.to_vec();
-    if values.is_empty() {
-        return Err(golem_events::coded(
-            golem_events::FailureCode::ParseDeviceConstraint,
-            anyhow::anyhow!(
-                "`hardware = []` matches no device — omit the field for the \
-                 virtual-only default, or list at least one value."
-            ),
-        ));
-    }
-    values
-        .iter()
-        .map(|s| match s.as_str() {
-            "virtual" => Ok(Some(false)),
-            "real" => Ok(Some(true)),
-            other => Err(golem_events::coded(
-                golem_events::FailureCode::ParseDeviceConstraint,
-                anyhow::anyhow!(
-                    "unrecognised `hardware` value: {other:?}. \
-                     Expected \"virtual\" (sim/emulator) or \"real\" (physical device)."
-                ),
-            )),
-        })
-        .collect()
-}
-
-fn req_signature(r: &AppRequirement) -> String {
-    format!(
-        "{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
-        r.platform,
-        r.os_version,
-        r.device_type,
-        r.physical,
-        r.name,
-        r.playstore,
-        r.accessibility_label,
-        r.booted,
-    )
-}
+use expand::expand_flow;
+#[cfg(test)]
+use expand::{
+    cover_and_union, default_any_booted_requirements, expand_app_requirements,
+    expand_hardware_entries, expand_jit, expand_os_pairs, expand_type_entries,
+    reduce_app_reqs_via_cover, slot_compatible_with, union_requirements, AppRequirement,
+};
 
 #[cfg(test)]
 mod tests {
@@ -1215,7 +508,8 @@ mod tests {
     fn write_flow(dir: &Path, name: &str, contents: &str) -> PathBuf {
         let path = dir.join(name);
         let mut f = std::fs::File::create(&path).expect("create() SHALL succeed");
-        f.write_all(contents.as_bytes()).expect("value SHALL be present");
+        f.write_all(contents.as_bytes())
+            .expect("value SHALL be present");
         path
     }
 
@@ -1250,9 +544,16 @@ mod tests {
         );
         let apps = vec![project_app("app", "com.app", Some("scripts/i.sh"))];
 
-        let single = plan(&[flow.clone()], &apps, tmp.path(), None, None, 1)
-            .await
-            .expect("async operation SHALL succeed");
+        let single = plan(
+            std::slice::from_ref(&flow),
+            &apps,
+            tmp.path(),
+            None,
+            None,
+            1,
+        )
+        .await
+        .expect("async operation SHALL succeed");
         let base_runs = single.flow_runs.len();
         assert!(
             base_runs > 0,
@@ -1297,9 +598,16 @@ mod tests {
         );
         let apps = vec![project_app("app", "com.app", Some("scripts/i.sh"))];
 
-        let single = plan(&[flow.clone()], &apps, tmp.path(), None, None, 1)
-            .await
-            .expect("async operation SHALL succeed");
+        let single = plan(
+            std::slice::from_ref(&flow),
+            &apps,
+            tmp.path(),
+            None,
+            None,
+            1,
+        )
+        .await
+        .expect("async operation SHALL succeed");
         let base_groups = single.coverage_groups.len();
         if base_groups == 0 {
             // Device snapshot may not have an ios device at plan-time —
@@ -1382,7 +690,10 @@ mod tests {
             .await
             .expect("async operation SHALL succeed");
         assert_eq!(suite.flow_runs.len(), 1);
-        let spec = suite.flow_runs[0].slots[0].os_version.as_ref().expect("as_ref() SHALL succeed");
+        let spec = suite.flow_runs[0].slots[0]
+            .os_version
+            .as_ref()
+            .expect("as_ref() SHALL succeed");
         assert!(
             matches!(spec, OsVersionSpec::Exact { major: 18, .. }),
             "os = \"ios:18\" SHALL populate os_version with Exact(18)"
@@ -1705,7 +1016,9 @@ mod tests {
             os = "ios"
         "#,
         );
-        let suite = plan(&[flow], &[], tmp.path(), None, None, 1).await.expect("async operation SHALL succeed");
+        let suite = plan(&[flow], &[], tmp.path(), None, None, 1)
+            .await
+            .expect("async operation SHALL succeed");
         assert_eq!(suite.install_matrix.len(), 1);
         assert!(suite.install_matrix[0]
             .script_path
@@ -1799,7 +1112,8 @@ mod tests {
             )],
         );
         let snap: Vec<DeviceInfo> = Vec::new();
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Full).expect("expand_app_requirements() SHALL succeed");
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Full)
+            .expect("expand_app_requirements() SHALL succeed");
         assert_eq!(
             reqs.len(),
             4,
@@ -1824,7 +1138,8 @@ mod tests {
             )],
         );
         let snap: Vec<DeviceInfo> = Vec::new();
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).expect("expand_app_requirements() SHALL succeed");
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min)
+            .expect("expand_app_requirements() SHALL succeed");
         assert_eq!(reqs.len(), 4);
         // 2 os-only boxes (device_type=None) + 2 type-only boxes (os_version=None).
         let os_only = reqs
@@ -1857,7 +1172,8 @@ mod tests {
             DeviceType::Tablet,
             true,
         )];
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).expect("expand_app_requirements() SHALL succeed");
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min)
+            .expect("expand_app_requirements() SHALL succeed");
         assert_eq!(
             reqs.len(),
             2,
@@ -1891,8 +1207,10 @@ mod tests {
                 true,
             ),
         ];
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).expect("expand_app_requirements() SHALL succeed");
-        let reduced = reduce_app_reqs_via_cover(&reqs, &snap).expect("reduce_app_reqs_via_cover() SHALL succeed");
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min)
+            .expect("expand_app_requirements() SHALL succeed");
+        let reduced = reduce_app_reqs_via_cover(&reqs, &snap)
+            .expect("reduce_app_reqs_via_cover() SHALL succeed");
         assert_eq!(
             reduced.len(),
             2,
@@ -1956,7 +1274,8 @@ mod tests {
             DeviceType::Phone,
             true,
         )];
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).expect("expand_app_requirements() SHALL succeed");
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min)
+            .expect("expand_app_requirements() SHALL succeed");
         assert_eq!(reqs.len(), 1, "one booted platform → one default box");
         assert_eq!(reqs[0].platform, Some(Platform::Ios));
         assert_eq!(
@@ -1981,7 +1300,8 @@ mod tests {
                 true,
             ),
         ];
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).expect("expand_app_requirements() SHALL succeed");
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min)
+            .expect("expand_app_requirements() SHALL succeed");
         assert_eq!(reqs.len(), 2, "both platforms booted → 2 default boxes");
         let platforms: std::collections::HashSet<_> =
             reqs.iter().filter_map(|r| r.platform).collect();
@@ -2019,7 +1339,8 @@ mod tests {
             ],
         );
         let snap: Vec<DeviceInfo> = Vec::new();
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min).expect("expand_app_requirements() SHALL succeed");
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Min)
+            .expect("expand_app_requirements() SHALL succeed");
         assert_eq!(
             reqs.len(),
             1,
@@ -2064,7 +1385,8 @@ mod tests {
             DeviceType::Tablet,
             true,
         )];
-        let reduced = reduce_app_reqs_via_cover(&reqs, &snap).expect("reduce_app_reqs_via_cover() SHALL succeed");
+        let reduced = reduce_app_reqs_via_cover(&reqs, &snap)
+            .expect("reduce_app_reqs_via_cover() SHALL succeed");
         assert_eq!(
             reduced.len(),
             1,
@@ -2212,8 +1534,10 @@ mod tests {
                 true,
             ),
         ];
-        let a_reqs = expand_app_requirements(&app_a, &snap, None, CoverageStrategy::One).expect("expand_app_requirements() SHALL succeed");
-        let b_reqs = expand_app_requirements(&app_b, &snap, None, CoverageStrategy::One).expect("expand_app_requirements() SHALL succeed");
+        let a_reqs = expand_app_requirements(&app_a, &snap, None, CoverageStrategy::One)
+            .expect("expand_app_requirements() SHALL succeed");
+        let b_reqs = expand_app_requirements(&app_b, &snap, None, CoverageStrategy::One)
+            .expect("expand_app_requirements() SHALL succeed");
         let mut groups: Vec<CoverageGroup> = Vec::new();
         let runs = expand_jit(
             0,
@@ -2272,7 +1596,8 @@ mod tests {
                 true,
             ),
         ];
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::One).expect("expand_app_requirements() SHALL succeed");
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::One)
+            .expect("expand_app_requirements() SHALL succeed");
         let mut groups: Vec<CoverageGroup> = Vec::new();
         let runs = expand_jit(
             0,
@@ -2317,7 +1642,8 @@ mod tests {
                 true,
             ),
         ];
-        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Smart).expect("expand_app_requirements() SHALL succeed");
+        let reqs = expand_app_requirements(&app, &snap, None, CoverageStrategy::Smart)
+            .expect("expand_app_requirements() SHALL succeed");
         let mut groups: Vec<CoverageGroup> = Vec::new();
         let runs = expand_jit(
             0,

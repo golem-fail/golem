@@ -1,4 +1,21 @@
-// golem-vars: variable and data generation
+//! Variable resolution, `${...}` interpolation, and deterministic fake-data
+//! generation for golem test flows.
+//!
+//! Flow authors write `${var}`, `${self:var}`, `${fake:email}`,
+//! `${fake:person(country=JP)}` and similar references in `.test.toml` steps;
+//! this crate resolves them against a priority-ordered [`VariableStore`] of
+//! [`Scope`]s (see [`interpolation`] for the resolution/templating logic and
+//! [`evaluate::evaluate_generators`] for turning a flow's variable
+//! declarations into resolved [`VarValue`]s). Fake data (email, uuid, person,
+//! address, credit card, phone, …) is produced by [`generators`] and
+//! [`structured`], seeded through [`seed::FakeRng`] so a recorded `--seed`
+//! reproduces a run bit-for-bit. [`geo`]/[`geo_loader`] and
+//! [`sentence_loader`]/[`card_loader`] back those generators with locale- and
+//! provider-specific reference data.
+//!
+//! The golem runner owns a [`seed::FakeRng`] and a [`VariableStore`] built up
+//! from CLI/flow/fixture/project scopes, and calls into this crate wherever a
+//! step or assertion contains a `${...}` reference.
 
 mod card_loader;
 pub mod evaluate;
@@ -20,14 +37,21 @@ use thiserror::Error;
 /// Errors that can occur during variable resolution and interpolation.
 #[derive(Error, Debug)]
 pub enum VarError {
+    /// No scope holds a value for this variable name.
     #[error("undefined variable: {0}")]
     Undefined(String),
+    /// A dot-path segment named `property` doesn't exist on the object
+    /// reached by resolving `object` (the traversed path so far).
     #[error("property \"{property}\" not found on \"{object}\"")]
     PropertyNotFound { object: String, property: String },
+    /// A dot-path tried to descend into a `VarValue::String`, or a whole
+    /// object was interpolated directly into a string context.
     #[error("\"{0}\" is not a structured object")]
     NotAnObject(String),
+    /// A `${...}` reference was opened but never closed.
     #[error("unclosed variable reference")]
     UnclosedReference,
+    /// Catch-all for generator/parsing failures with a pre-formatted message.
     #[error("{0}")]
     Other(String),
 }
@@ -36,7 +60,9 @@ pub enum VarError {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum VarValue {
+    /// A scalar (already-stringified) value.
     String(String),
+    /// A nested map, e.g. the fields of a `fake:person`/`fake:address` result.
     Object(HashMap<String, VarValue>),
 }
 
@@ -87,10 +113,16 @@ impl VarValue {
 /// Priority levels for variable scopes, ordered from highest to lowest priority.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ScopeLevel {
+    /// `--var` values passed on the command line; wins over everything else.
     Cli,
+    /// Variables declared in the running `.test.toml` flow.
     Flow,
+    /// Variables contributed by a fixture the flow depends on.
     Fixture,
+    /// Project-wide defaults (e.g. from the golem project config).
     Project,
+    /// Values already produced by `${fake:...}` generators, kept so later
+    /// declarations in the same flow can cross-reference earlier ones.
     Generator,
 }
 
@@ -111,8 +143,12 @@ impl ScopeLevel {
 /// A named scope containing variables at a given priority level.
 #[derive(Debug, Clone)]
 pub struct Scope {
+    /// Priority level this scope resolves at (see [`ScopeLevel`]).
     pub level: ScopeLevel,
+    /// Optional label (e.g. a fixture's name) for diagnostics; purely
+    /// informational, not used in resolution.
     pub name: Option<String>,
+    /// The variables held by this scope.
     pub vars: HashMap<String, VarValue>,
 }
 
@@ -275,7 +311,9 @@ impl Default for VariableStore {
 /// A parsed generator definition in the form "fake:name(param=value,...)".
 #[derive(Debug, Clone, PartialEq)]
 pub struct GeneratorDef {
+    /// The generator name, e.g. `"email"` or `"person"` (the part after `fake:`).
     pub name: String,
+    /// `key=value` arguments, e.g. `{"country": "JP"}` for `fake:address(country=JP)`.
     pub params: HashMap<String, String>,
     /// Positional args — comma-separated arguments with no `key=`, e.g. the
     /// choices in `one_of(free|pro|enterprise)`. (`key=value` args go to

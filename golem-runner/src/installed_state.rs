@@ -445,7 +445,11 @@ mod tests {
 
         let info = query(&android_device("emulator-5554"), "com.x").await;
         assert_eq!(info, DeviceInstallInfo::not_installed());
-        assert_eq!(fake.call_count(), 1, "dumpsys SHALL NOT run when pm path fails");
+        assert_eq!(
+            fake.call_count(),
+            1,
+            "dumpsys SHALL NOT run when pm path fails"
+        );
     }
 
     // 18. Android: `pm path` succeeds but prints no `package:` => not installed.
@@ -471,7 +475,15 @@ mod tests {
             Canned::ok_stdout("package:/data/app/com.x-1/base.apk\n"),
         );
         fake.expect(
-            &["adb", "-s", "emulator-5554", "shell", "dumpsys", "package", "com.x"],
+            &[
+                "adb",
+                "-s",
+                "emulator-5554",
+                "shell",
+                "dumpsys",
+                "package",
+                "com.x",
+            ],
             Canned::ok_stdout("    versionName=1.2.3\n    lastUpdateTime=2026-04-27 09:12:45\n"),
         );
         let _g = set_test_runner(fake);
@@ -498,7 +510,15 @@ mod tests {
             Canned::ok_stdout("package:/data/app/com.x/base.apk\n"),
         );
         fake.expect(
-            &["adb", "-s", "emulator-5554", "shell", "dumpsys", "package", "com.x"],
+            &[
+                "adb",
+                "-s",
+                "emulator-5554",
+                "shell",
+                "dumpsys",
+                "package",
+                "com.x",
+            ],
             Canned::exit(1, "", "dumpsys busy"),
         );
         let _g = set_test_runner(fake);
@@ -527,7 +547,14 @@ mod tests {
     async fn query_ios_sim_container_missing_is_not_installed() {
         let fake = Arc::new(FakeCommandRunner::new());
         fake.expect(
-            &["xcrun", "simctl", "get_app_container", "SIM-UDID", "com.x", "app"],
+            &[
+                "xcrun",
+                "simctl",
+                "get_app_container",
+                "SIM-UDID",
+                "com.x",
+                "app",
+            ],
             Canned::exit(2, "", "No such app"),
         );
         let _g = set_test_runner(fake);

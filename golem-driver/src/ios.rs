@@ -48,6 +48,27 @@ fn normalize_ios_permission(permission: &str) -> Result<&str> {
 /// grace — the HTTP response already waits for DOM render.)
 const IOS_POST_STOP_GRACE: std::time::Duration = std::time::Duration::from_millis(500);
 
+/// Bounded window to await an in-flight WebKit Inspector setup before giving
+/// up on enriching this hierarchy fetch. Without it, every fetch during setup
+/// returns `Skip` and the caller's retry budget (typically 10s / ~4 fetches)
+/// often expired before the inspector handshake completed on cold boot.
+const IOS_WEBKIT_SETUP_AWAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Default gesture duration (ms) for a coordinate-to-coordinate swipe.
+const IOS_DEFAULT_SWIPE_DURATION_MS: u64 = 300;
+
+/// Post-grant/revoke TCC settle window. `simctl privacy` returns as soon as
+/// the TCC change is written; iOS still needs a moment to settle it across
+/// the privacy daemons. Without this sleep an immediately-following `launch`
+/// races and the app is killed mid-startup when the entitlement check
+/// resolves the stale state. ~750ms is the smallest value that survived a
+/// repeated-run flake hunt on iPhone 17 sim.
+const IOS_PERMISSION_TCC_SETTLE_GRACE: std::time::Duration = std::time::Duration::from_millis(750);
+
+/// Grace period for `simctl recordVideo` to flush the mp4 moov atom after
+/// its process exits.
+const IOS_RECORDING_FLUSH_GRACE: std::time::Duration = std::time::Duration::from_millis(300);
+
 /// iOS driver that communicates with an XCUITest companion server via HTTP.
 ///
 /// The companion server runs inside the iOS simulator and exposes
@@ -403,7 +424,7 @@ impl PlatformDriver for IosDriver {
             // caller's retry budget (typically 10s / ~4 fetches) often
             // expired before the inspector handshake completed on cold boot.
             let webkit_action = if let WebKitAction::AwaitSetup(mut rx) = webkit_action {
-                match tokio::time::timeout(std::time::Duration::from_secs(3), &mut rx).await {
+                match tokio::time::timeout(IOS_WEBKIT_SETUP_AWAIT_TIMEOUT, &mut rx).await {
                     Ok(Ok(Some(state))) => WebKitAction::Enrich(state),
                     Ok(Ok(None)) | Ok(Err(_)) => {
                         let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
@@ -432,7 +453,9 @@ impl PlatformDriver for IosDriver {
                 } else {
                     // Inspector failed — reconnect immediately
                     if let Some(new_state) = setup_webkit(&self.device_id).await {
-                        if let Some(new_state) = try_enrich(&mut raw, new_state, wv_x, wv_y, safe_area_top).await {
+                        if let Some(new_state) =
+                            try_enrich(&mut raw, new_state, wv_x, wv_y, safe_area_top).await
+                        {
                             let mut wk = self.webkit.lock().expect("webkit mutex poisoned");
                             *wk = WebKitLifecycle::Ready(new_state);
                         } else {
@@ -492,7 +515,7 @@ impl PlatformDriver for IosDriver {
     }
 
     async fn swipe_coords(&self, from_x: i32, from_y: i32, to_x: i32, to_y: i32) -> Result<()> {
-        let body = build_swipe_body(from_x, from_y, to_x, to_y, 300)?;
+        let body = build_swipe_body(from_x, from_y, to_x, to_y, IOS_DEFAULT_SWIPE_DURATION_MS)?;
         self.client.post_json("/swipe", &body).await?;
         Ok(())
     }
@@ -526,11 +549,12 @@ impl PlatformDriver for IosDriver {
         // WebView lands on whatever HTML is at that point, which may be
         // the status bar inset (no effect) or another focusable element
         // (refocuses instead of blurring).
-        if let Some(_) = self
+        if self
             .eval_in_webview(
                 "(()=>{const a=document.activeElement;if(a&&a.blur)a.blur();return ''})()",
             )
             .await
+            .is_some()
         {
             return Ok(());
         }
@@ -702,13 +726,8 @@ impl PlatformDriver for IosDriver {
         let token = normalize_ios_permission(permission)?;
         self.simctl(&["privacy", &self.device_id, "grant", token, bundle_id])
             .await?;
-        // simctl returns as soon as the TCC change is written; iOS still
-        // needs a moment to settle it across the privacy daemons. Without
-        // this sleep an immediately-following `launch` races and the app
-        // is killed mid-startup when the entitlement check resolves the
-        // stale state. ~750ms is the smallest value that survived a
-        // repeated-run flake hunt on iPhone 17 sim.
-        tokio::time::sleep(std::time::Duration::from_millis(750)).await;
+        // See IOS_PERMISSION_TCC_SETTLE_GRACE for rationale.
+        tokio::time::sleep(IOS_PERMISSION_TCC_SETTLE_GRACE).await;
         Ok(())
     }
 
@@ -718,7 +737,7 @@ impl PlatformDriver for IosDriver {
             .await?;
         // Same TCC settle window as `grant_permission` — a `launch`
         // immediately after revoke would otherwise race the same way.
-        tokio::time::sleep(std::time::Duration::from_millis(750)).await;
+        tokio::time::sleep(IOS_PERMISSION_TCC_SETTLE_GRACE).await;
         Ok(())
     }
 
@@ -777,7 +796,7 @@ impl PlatformDriver for IosDriver {
         // Wait for simctl to finish writing. `wait` reaps the child.
         let _ = state.child.wait().await;
         // simctl can take a moment to flush the moov atom after exit.
-        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        tokio::time::sleep(IOS_RECORDING_FLUSH_GRACE).await;
         if !std::path::Path::new(&state.host_path).exists() {
             anyhow::bail!(
                 "simctl recordVideo exited but {} is missing",

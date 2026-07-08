@@ -1,8 +1,33 @@
+//! The element tree: golem's shared model of a device UI screen.
+//!
+//! A companion (iOS/Android agent) walks the on-device accessibility tree (or,
+//! for webviews, the merged DOM) and serializes it into [`Element`] nodes,
+//! which the host deserializes over the wire. From there, [`selector`] resolves
+//! `.test.toml` element selectors against the tree, [`glob`] backs the
+//! text/label glob matching those selectors use, and [`filter_viewport`]
+//! reduces a tree to only what's currently on screen — the visible tree that,
+//! per golem's core invariant, is the only thing a test may judge against.
+//! [`Element::compute_native_hit_points`] and [`Element::tap_point`] add
+//! occlusion-aware tap routing on top of the raw geometry so a tap lands on
+//! what a human would actually hit.
+
+/// Glob-style (`*`/`?`) pattern matching used by selector `text`/
+/// `accessibility_label` matching.
 pub mod glob;
+/// Resolving `.test.toml` element selectors — including relational anchors
+/// (`below`, `contains`, ...) and observable traits — against an [`Element`] tree.
 pub mod selector;
 
 use serde::{Deserialize, Serialize};
 
+/// A single node in a device UI tree, as reported by a companion.
+///
+/// This is golem's wire format and in-memory model for both native
+/// accessibility trees (iOS/Android) and webview DOM subtrees (merged in by
+/// the companion so a page's content appears as ordinary `Element` children).
+/// Fields are deliberately permissive (most are `#[serde(default)]`) since
+/// companions send sparse payloads and native/webview sources don't populate
+/// every field.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Element {
     pub element_type: String,
@@ -45,6 +70,10 @@ pub struct HitPoint {
     pub hit: bool,
 }
 
+/// An axis-aligned rectangle in device coordinates: top-left origin `(x, y)`
+/// plus `width`/`height`. Used throughout for both an element's raw `bounds`
+/// and its ancestor-clipped `visible_bounds`, and for the [`Viewport`] a tree
+/// is filtered against.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub struct Bounds {
     pub x: i32,
@@ -338,6 +367,10 @@ fn write_hit_points(el: &mut Element, idx: &mut usize, computed: &[Option<Vec<Hi
     }
 }
 
+/// A selector match: the matched [`Element`] plus the device-coordinate point
+/// golem will actually tap, per [`Element::tap_point`] (occlusion-aware, with
+/// a plain centre-of-bounds fallback). This is the return type of
+/// [`selector::find_elements`] and what the runner acts on.
 #[derive(Debug, Clone)]
 pub struct FindResult {
     pub element: Element,
@@ -357,6 +390,8 @@ pub struct Viewport {
 }
 
 impl Viewport {
+    /// A viewport at the origin `(0, 0)` with the given dimensions — the
+    /// common case for a full-screen root with no offset window.
     pub fn new(width: i32, height: i32) -> Self {
         Self {
             x: 0,
@@ -631,7 +666,13 @@ mod tests {
             "SHALL route to the first clear sample"
         );
         assert_eq!(e.center_hittable(), Some(false));
-        assert!((e.hittable_fraction().expect("hittable_fraction() SHALL succeed") - 1.0 / 3.0).abs() < 1e-6);
+        assert!(
+            (e.hittable_fraction()
+                .expect("hittable_fraction() SHALL succeed")
+                - 1.0 / 3.0)
+                .abs()
+                < 1e-6
+        );
     }
 
     #[test]

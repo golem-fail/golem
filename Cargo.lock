@@ -658,7 +658,6 @@ dependencies = [
  "golem-devices",
  "golem-driver",
  "golem-element",
- "golem-email",
  "golem-events",
  "golem-orchestrator",
  "golem-parser",
@@ -666,8 +665,6 @@ dependencies = [
  "golem-runner",
  "golem-vars",
  "libc",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
  "serde",
  "serde_json",
  "tempfile",
@@ -694,7 +691,6 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
- "thiserror 2.0.18",
  "tokio",
 ]
 
@@ -713,7 +709,6 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite",
  "toml",
@@ -726,7 +721,6 @@ version = "0.7.0"
 dependencies = [
  "serde",
  "serde_json",
- "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -741,7 +735,6 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
- "thiserror 2.0.18",
  "tokio",
  "webpki-roots",
 ]
@@ -765,7 +758,6 @@ dependencies = [
  "golem-events",
  "golem-parser",
  "golem-runner",
- "serde",
  "tempfile",
  "tokio",
 ]
@@ -778,7 +770,6 @@ dependencies = [
  "indexmap",
  "serde",
  "tempfile",
- "thiserror 2.0.18",
  "toml",
 ]
 
@@ -815,8 +806,6 @@ dependencies = [
  "image",
  "imageproc",
  "png",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
  "regex",
  "reqwest",
  "serde",
@@ -840,7 +829,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
- "toml",
  "unicode-normalization",
  "uuid",
 ]

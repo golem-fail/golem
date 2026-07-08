@@ -170,11 +170,18 @@ pub fn get_available_disk_mb() -> Result<u64> {
     let path = CString::new(".").expect("CString::new failed");
     let mut stat = MaybeUninit::<libc::statvfs>::uninit();
 
+    // SAFETY: `path` is a valid, NUL-terminated `CString` pointer that lives
+    // for the duration of this call, and `stat` is a properly aligned
+    // `MaybeUninit<libc::statvfs>` whose backing memory is writable for the
+    // whole call, satisfying `statvfs`'s pointer-validity requirements.
     let result = unsafe { libc::statvfs(path.as_ptr(), stat.as_mut_ptr()) };
     if result != 0 {
         anyhow::bail!("statvfs failed: {}", std::io::Error::last_os_error());
     }
 
+    // SAFETY: `result == 0` above confirms `statvfs` returned success, which
+    // per POSIX means it fully populated `stat`, so treating it as
+    // initialized is sound.
     let stat = unsafe { stat.assume_init() };
     let available_bytes = stat.f_bavail as u64 * stat.f_frsize;
     Ok(available_bytes / (1024 * 1024))

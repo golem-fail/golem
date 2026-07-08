@@ -13,7 +13,6 @@ rand = { workspace = true }
 rand_chacha = "0.3"
 uuid = { workspace = true }
 chrono = { workspace = true }
-toml = { workspace = true }
 # Used only to derive the JIS X 0208 kanji repertoire exactly from the EUC-JP
 # code table (see structured::repertoire), rather than embedding a hand-curated
 # — and inevitably drifting — kanji list.

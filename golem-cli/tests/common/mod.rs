@@ -179,8 +179,8 @@ pub fn read_results_json(res: &RunResult, subdir: &str) -> serde_json::Value {
         path = path.join(subdir);
     }
     path = path.join("results.json");
-    let text = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let text =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     serde_json::from_str(&text).expect("results.json SHALL be valid JSON")
 }
 

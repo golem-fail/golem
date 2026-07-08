@@ -518,7 +518,11 @@ mod tests {
         );
 
         let flows = discover_flows(tmp.path(), &[]).expect("discover");
-        assert_eq!(flows.len(), 1, "explicit_only flow SHALL be skipped by the bare sweep");
+        assert_eq!(
+            flows.len(),
+            1,
+            "explicit_only flow SHALL be skipped by the bare sweep"
+        );
         assert_eq!(flows[0].name, "real");
     }
 
@@ -536,7 +540,11 @@ mod tests {
 
         let filters = [TagFilter::parse("login")];
         let flows = discover_flows(tmp.path(), &filters).expect("discover");
-        assert_eq!(flows.len(), 1, "matching --tag SHALL include an explicit_only flow");
+        assert_eq!(
+            flows.len(),
+            1,
+            "matching --tag SHALL include an explicit_only flow"
+        );
         assert_eq!(flows[0].name, "login subflow");
     }
 
@@ -554,7 +562,10 @@ mod tests {
 
         let filters = [TagFilter::parse("smoke")];
         let flows = discover_flows(tmp.path(), &filters).expect("discover");
-        assert!(flows.is_empty(), "non-matching --tag SHALL NOT include the flow");
+        assert!(
+            flows.is_empty(),
+            "non-matching --tag SHALL NOT include the flow"
+        );
     }
 
     // ---------------------------------------------------------------
@@ -567,7 +578,10 @@ mod tests {
 
         let flows = discover_flows(tmp.path(), &[]).expect("discover");
         assert_eq!(flows.len(), 1);
-        assert!(!flows[0].explicit_only, "absent field SHALL default to false");
+        assert!(
+            !flows[0].explicit_only,
+            "absent field SHALL default to false"
+        );
     }
 
     // ---------------------------------------------------------------

@@ -541,7 +541,13 @@ pub async fn extract_recording_frame(
     }
     let before = secs_before_end.max(0.0);
     let output = tokio::process::Command::new("ffmpeg")
-        .args(["-nostdin", "-loglevel", "error", "-sseof", &format!("-{before:.3}")])
+        .args([
+            "-nostdin",
+            "-loglevel",
+            "error",
+            "-sseof",
+            &format!("-{before:.3}"),
+        ])
         .arg("-i")
         .arg(mp4)
         .args(["-frames:v", "1", "-f", "image2pipe", "-c:v", "png", "-"])
@@ -909,7 +915,11 @@ mod tests {
 
         assert!(path.exists(), "screenshot file SHALL exist on disk");
         // The returned bytes match what was written (reused by the a11y audit).
-        assert_eq!(&bytes[..4], &[0x89, 0x50, 0x4E, 0x47], "returned PNG magic bytes");
+        assert_eq!(
+            &bytes[..4],
+            &[0x89, 0x50, 0x4E, 0x47],
+            "returned PNG magic bytes"
+        );
         let data = std::fs::read(&path).expect("should read file");
         // MockPlatformDriver returns PNG magic bytes
         assert_eq!(&data[..4], &[0x89, 0x50, 0x4E, 0x47]);
@@ -1121,7 +1131,10 @@ mod tests {
             .expect("tree dump should succeed");
 
         assert!(path.exists(), "tree json file SHALL exist on disk");
-        assert_eq!(tree.element_type, "View", "returned tree SHALL be the hierarchy");
+        assert_eq!(
+            tree.element_type, "View",
+            "returned tree SHALL be the hierarchy"
+        );
         assert_eq!(
             path.extension().and_then(|e| e.to_str()),
             Some("json"),
@@ -1278,10 +1291,17 @@ mod tests {
         let cap = capture_trace_boundary(&driver, &config, 2, "after", meta, true)
             .await
             .expect("deferred trace boundary SHALL succeed");
-        assert!(!cap.png_path.exists(), "deferred PNG SHALL NOT be written live");
+        assert!(
+            !cap.png_path.exists(),
+            "deferred PNG SHALL NOT be written live"
+        );
         assert!(cap.json_path.exists(), "tree JSON SHALL still be written");
         let calls = driver.get_calls();
-        assert_eq!(calls.len(), 1, "only the hierarchy is fetched when deferred");
+        assert_eq!(
+            calls.len(),
+            1,
+            "only the hierarchy is fetched when deferred"
+        );
         assert_eq!(calls[0].0, "get_hierarchy");
     }
 

@@ -181,7 +181,9 @@ pub fn merge_config(project: &ProjectConfig, flow: &FlowFile) -> FlowFile {
         a11y: flow_opts.a11y.or(proj_opts.a11y),
         a11y_max_errors: flow_opts.a11y_max_errors.or(proj_opts.a11y_max_errors),
         a11y_max_warnings: flow_opts.a11y_max_warnings.or(proj_opts.a11y_max_warnings),
-        a11y_min_confidence: flow_opts.a11y_min_confidence.or(proj_opts.a11y_min_confidence),
+        a11y_min_confidence: flow_opts
+            .a11y_min_confidence
+            .or(proj_opts.a11y_min_confidence),
     };
 
     // Only set options if at least one field is Some

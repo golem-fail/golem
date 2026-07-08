@@ -1,3 +1,14 @@
+//! Small, process-global primitives shared across the golem workspace.
+//!
+//! This is the crate every other golem crate sits on top of, so it stays
+//! deliberately tiny: a global debug flag ([`set_debug`]/[`is_debug`]) that
+//! gates verbose diagnostic output, [`command`]'s hermetic subprocess seam
+//! ([`command::CommandRunner`], swapped for a [`command::FakeCommandRunner`]
+//! in tests), and [`host_queue`]'s per-class semaphore registry that
+//! serializes ops contending on a single host-wide resource (the `adb`
+//! server, `CoreSimulatorService`) while leaving unrelated device ops to run
+//! concurrently.
+
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub mod command;
@@ -5,10 +16,13 @@ pub mod host_queue;
 
 static DEBUG: AtomicBool = AtomicBool::new(false);
 
+/// Enable or disable the process-wide debug-output flag (e.g. `--debug` on
+/// the CLI), checked via [`is_debug`] at call sites that emit extra diagnostics.
 pub fn set_debug(enabled: bool) {
     DEBUG.store(enabled, Ordering::Relaxed);
 }
 
+/// Whether debug output is currently enabled; see [`set_debug`].
 pub fn is_debug() -> bool {
     DEBUG.load(Ordering::Relaxed)
 }

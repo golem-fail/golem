@@ -588,7 +588,8 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir() SHALL succeed");
         let root = tmp.path();
         let script = root.join("scripts").join("install.sh");
-        std::fs::create_dir_all(script.parent().expect("parent() SHALL succeed")).expect("value SHALL be present");
+        std::fs::create_dir_all(script.parent().expect("parent() SHALL succeed"))
+            .expect("value SHALL be present");
         std::fs::write(&script, "").expect("write() SHALL succeed");
         let rel = pathdiff_relative(&script, root).expect("pathdiff_relative() SHALL succeed");
         assert_eq!(rel, PathBuf::from("scripts/install.sh"));
@@ -599,8 +600,10 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir() SHALL succeed");
         let root = tmp.path();
         std::fs::create_dir_all(root.join("ios/MyApp.xcodeproj")).expect("value SHALL be present");
-        std::fs::create_dir_all(root.join("other/Sub.xcworkspace")).expect("value SHALL be present");
-        std::fs::create_dir_all(root.join("node_modules/bogus.xcodeproj")).expect("value SHALL be present");
+        std::fs::create_dir_all(root.join("other/Sub.xcworkspace"))
+            .expect("value SHALL be present");
+        std::fs::create_dir_all(root.join("node_modules/bogus.xcodeproj"))
+            .expect("value SHALL be present");
         let found = discover_xcode_projects(root, 5);
         assert_eq!(found.len(), 2, "SHALL skip node_modules; got {:?}", found);
         // .xcworkspace preferred first
@@ -613,7 +616,8 @@ mod tests {
         // That's Xcode internals and SHALL NOT be surfaced to the user.
         let tmp = tempfile::tempdir().expect("tempdir() SHALL succeed");
         let root = tmp.path();
-        std::fs::create_dir_all(root.join("ios/MyApp.xcodeproj/project.xcworkspace")).expect("value SHALL be present");
+        std::fs::create_dir_all(root.join("ios/MyApp.xcodeproj/project.xcworkspace"))
+            .expect("value SHALL be present");
         let found = discover_xcode_projects(root, 5);
         assert_eq!(
             found.len(),
@@ -632,10 +636,12 @@ mod tests {
         std::fs::create_dir_all(root.join("project-a/app")).expect("value SHALL be present");
         std::fs::write(root.join("project-a/settings.gradle"), "").expect("value SHALL be present");
         std::fs::write(root.join("project-a/build.gradle"), "").expect("value SHALL be present");
-        std::fs::write(root.join("project-a/app/build.gradle"), "").expect("value SHALL be present");
+        std::fs::write(root.join("project-a/app/build.gradle"), "")
+            .expect("value SHALL be present");
         // project-b uses .kts
         std::fs::create_dir_all(root.join("project-b")).expect("value SHALL be present");
-        std::fs::write(root.join("project-b/settings.gradle.kts"), "").expect("value SHALL be present");
+        std::fs::write(root.join("project-b/settings.gradle.kts"), "")
+            .expect("value SHALL be present");
         let found = discover_android_roots(root, 5);
         assert_eq!(
             found,

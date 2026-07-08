@@ -1,4 +1,18 @@
-// golem-events: structured event stream for test execution
+//! Shared vocabulary for golem's live event stream: the `Event`/`EventKind`
+//! hierarchy emitted as a suite runs (suite/flow/block/step/substep progress,
+//! install lifecycle, device recovery, accessibility audits) plus the
+//! `FailureCode`/`Domain`/`Severity` coded-error scheme used to classify
+//! failures. `channel::event_channel` wires up the broadcast channel
+//! (`EventSender` for producers, `EventSubscriptions` for consumers) that
+//! carries these events from the runner to live renderers (human/JSON/TOON/
+//! JUnit) and the orchestrator's remote-client forwarder; `emitter::DeviceEmitter`
+//! is the per-device handle action code uses to emit them. Also defines
+//! `WireEvent`, the serializable form of `Event` sent over sockets/IPC, and
+//! the geometry (`Point`/`Rect`) and outcome (`StepOutcome`, `TreeStats`)
+//! types events carry. This crate depends on nothing else in the workspace,
+//! so producers (`golem-runner`, `golem-driver`) and consumers
+//! (`golem-report`, `golem-orchestrator`, `golem-cli`) can all depend on it
+//! without a cycle.
 #![deny(clippy::unwrap_used)]
 
 pub mod channel;
@@ -361,7 +375,9 @@ pub enum EventKind {
     },
     /// Accessibility audit results for a completed block — emitted after
     /// `BlockFinished` so the live renderer can surface findings inline.
-    A11yAudit { audit: A11yAudit },
+    A11yAudit {
+        audit: A11yAudit,
+    },
 
     // Step level
     StepStarted {

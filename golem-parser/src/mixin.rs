@@ -1231,6 +1231,224 @@ app = "${app_id}"
     }
 
     // ---------------------------------------------------------------
+    // 32b. remap covers above/left_of/inside and a text-form `contains`
+    // ---------------------------------------------------------------
+    #[test]
+    fn remap_selector_group_above_left_of_inside_and_contains_text() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        write_mixin(
+            tmp.path(),
+            "extra_anchors",
+            r#"
+[[step]]
+action = "tap"
+
+[step.on]
+above = "${above_text}"
+left_of = "${left_text}"
+inside = "${inside_text}"
+contains = "${contains_text}"
+"#,
+        );
+
+        let mut vars = HashMap::new();
+        vars.insert("above_text".to_string(), "Banner".to_string());
+        vars.insert("left_text".to_string(), "Icon".to_string());
+        vars.insert("inside_text".to_string(), "Card".to_string());
+        vars.insert("contains_text".to_string(), "Row".to_string());
+
+        let steps = vec![load_mixin_step("extra_anchors", Some(vars))];
+        let expanded =
+            expand_mixins(&steps, tmp.path(), tmp.path()).expect("expansion should succeed");
+
+        let group = expanded[0].on.as_ref().expect("on group SHALL be present");
+        match group.above.as_ref().expect("above SHALL be present") {
+            crate::Anchor::Text(s) => assert_eq!(s, "Banner"),
+            other => panic!("above SHALL be a Text anchor, got: {other:?}"),
+        }
+        match group.left_of.as_ref().expect("left_of SHALL be present") {
+            crate::Anchor::Text(s) => assert_eq!(s, "Icon"),
+            other => panic!("left_of SHALL be a Text anchor, got: {other:?}"),
+        }
+        match group.inside.as_ref().expect("inside SHALL be present") {
+            crate::Anchor::Text(s) => assert_eq!(s, "Card"),
+            other => panic!("inside SHALL be a Text anchor, got: {other:?}"),
+        }
+        match group.contains.as_ref().expect("contains SHALL be present") {
+            crate::ContainsAnchor::Text(s) => assert_eq!(s, "Row"),
+            other => panic!("contains SHALL be a Text anchor, got: {other:?}"),
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // 32c. remap_contains_anchor Spec variant: nested group remapped,
+    // min_matches preserved untouched
+    // ---------------------------------------------------------------
+    #[test]
+    fn remap_contains_anchor_spec_variant_remaps_group_and_keeps_min_matches() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        write_mixin(
+            tmp.path(),
+            "contains_spec",
+            r#"
+[[step]]
+action = "tap"
+
+[step.on.contains]
+text = "${row_text}"
+min_matches = 3
+"#,
+        );
+
+        let mut vars = HashMap::new();
+        vars.insert("row_text".to_string(), "Item".to_string());
+
+        let steps = vec![load_mixin_step("contains_spec", Some(vars))];
+        let expanded =
+            expand_mixins(&steps, tmp.path(), tmp.path()).expect("expansion should succeed");
+
+        let group = expanded[0].on.as_ref().expect("on group SHALL be present");
+        match group.contains.as_ref().expect("contains SHALL be present") {
+            crate::ContainsAnchor::Spec(spec) => {
+                assert_eq!(
+                    spec.group.text.as_deref(),
+                    Some("Item"),
+                    "nested group text SHALL be remapped"
+                );
+                assert_eq!(
+                    spec.min_matches,
+                    Some(3),
+                    "min_matches SHALL be preserved untouched"
+                );
+            }
+            other => panic!("contains SHALL be a Spec anchor, got: {other:?}"),
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // 32d. remap_step_vars covers flat on_right_of / on_left_of fields
+    // ---------------------------------------------------------------
+    #[test]
+    fn remap_flat_on_right_of_and_on_left_of() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        write_mixin(
+            tmp.path(),
+            "flat_lr",
+            r#"
+[[step]]
+action = "tap"
+on_right_of = "${right_anchor}"
+on_left_of = "${left_anchor}"
+"#,
+        );
+
+        let mut vars = HashMap::new();
+        vars.insert("right_anchor".to_string(), "Label".to_string());
+        vars.insert("left_anchor".to_string(), "Icon".to_string());
+
+        let steps = vec![load_mixin_step("flat_lr", Some(vars))];
+        let expanded =
+            expand_mixins(&steps, tmp.path(), tmp.path()).expect("expansion should succeed");
+
+        assert_eq!(expanded[0].on_right_of.as_deref(), Some("Label"));
+        assert_eq!(expanded[0].on_left_of.as_deref(), Some("Icon"));
+    }
+
+    // ---------------------------------------------------------------
+    // 32e. resolve_mixin_path: nonexistent flow_dir/project_root fall
+    // back to the raw (non-canonicalized) path and the walk-up loop
+    // terminates at the filesystem root (None => break) instead of
+    // looping forever.
+    // ---------------------------------------------------------------
+    #[test]
+    fn resolve_mixin_path_nonexistent_dirs_walk_to_filesystem_root() {
+        let flow_dir = Path::new("/nonexistent_flow_dir_abc_999_golem_test");
+        let project_root = Path::new("/nonexistent_root_xyz_999_golem_test");
+
+        let result = resolve_mixin_path("thing", flow_dir, project_root);
+
+        assert!(
+            result.is_err(),
+            "SHALL error rather than loop forever when neither dir exists"
+        );
+        let err_msg = format!("{}", result.expect_err("SHALL be an error"));
+        assert!(
+            err_msg.contains("not found"),
+            "SHALL report not found once the filesystem root is reached, got: {err_msg}"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 32f. expand_mixins propagates a rejected mixin (contains [[block]])
+    // as an error, not a panic
+    // ---------------------------------------------------------------
+    #[test]
+    fn expand_mixins_propagates_invalid_mixin_content_error() {
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        write_mixin(
+            tmp.path(),
+            "invalid",
+            r#"
+[[block]]
+name = "forbidden"
+
+[[step]]
+action = "tap"
+"#,
+        );
+
+        let steps = vec![load_mixin_step("invalid", None)];
+        let result = expand_mixins(&steps, tmp.path(), tmp.path());
+
+        assert!(
+            result.is_err(),
+            "SHALL propagate the mixin-content validation error"
+        );
+        let err_msg = format!("{}", result.expect_err("SHALL be an error"));
+        assert!(
+            err_msg.contains("block"),
+            "error SHALL mention block, got: {err_msg}"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // 32g. load_mixin resolves the file but a read failure (unreadable
+    // permissions) is reported with context, not a raw io::Error
+    // ---------------------------------------------------------------
+    #[cfg(unix)]
+    #[test]
+    fn load_mixin_unreadable_file_errors_with_context() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        write_mixin(tmp.path(), "locked", "[[step]]\naction = \"tap\"\n");
+
+        let locked_path = tmp.path().join("__mixins__").join("locked.toml");
+        let mut perms = fs::metadata(&locked_path)
+            .expect("SHALL stat file")
+            .permissions();
+        perms.set_mode(0o000);
+        fs::set_permissions(&locked_path, perms).expect("SHALL chmod file");
+
+        let steps = vec![load_mixin_step("locked", None)];
+        let result = expand_mixins(&steps, tmp.path(), tmp.path());
+
+        // Restore permissions so TempDir cleanup can remove the file.
+        let mut restore = fs::metadata(&locked_path)
+            .expect("SHALL stat file")
+            .permissions();
+        restore.set_mode(0o644);
+        let _ = fs::set_permissions(&locked_path, restore);
+
+        assert!(result.is_err(), "unreadable mixin file SHALL error");
+        let err_msg = format!("{}", result.expect_err("SHALL be an error"));
+        assert!(
+            err_msg.contains("Failed to read mixin file"),
+            "error SHALL give read-failure context, got: {err_msg}"
+        );
+    }
+
+    // ---------------------------------------------------------------
     // 32. parse_mixin defaults to empty steps for empty input
     // ---------------------------------------------------------------
     #[test]

@@ -509,7 +509,8 @@ mod tests {
             )],
         );
         let ctx = simple_ctx(&store);
-        let result = interpolate("${config.db.host}:${config.db.port}", &ctx).expect("interpolate() SHALL succeed");
+        let result = interpolate("${config.db.host}:${config.db.port}", &ctx)
+            .expect("interpolate() SHALL succeed");
         assert_eq!(result, "localhost:5432");
     }
 
@@ -641,7 +642,8 @@ mod tests {
             builtins: None,
             generator: None,
         };
-        let result = interpolate("${iphone_17:quote_ref}", &ctx).expect("interpolate() SHALL succeed");
+        let result =
+            interpolate("${iphone_17:quote_ref}", &ctx).expect("interpolate() SHALL succeed");
         assert_eq!(result, "QR-12345");
     }
 
@@ -1341,5 +1343,193 @@ mod tests {
         let v = evaluate_value("id-${fake:uuid}", &ctx).expect("embedded");
         let s = v.as_str().expect("embedded SHALL be a string");
         assert!(s.starts_with("id-") && s.len() > 3);
+    }
+
+    // ── evaluate_value / resolve_reference_value error and boundary paths ─
+
+    // 52. A whole-value bare dot-path that hits a missing property SHALL
+    // surface PropertyNotFound with the traversed-so-far object name --
+    // exercises navigate_value's error arm (only reachable through the
+    // value-preserving resolver used by variable declarations).
+    #[test]
+    fn evaluate_value_bare_dot_path_property_not_found() {
+        let store = store_with(
+            ScopeLevel::Project,
+            vec![(
+                "person",
+                VarValue::object(vec![("first", VarValue::string("Sarah"))]),
+            )],
+        );
+        let ctx = simple_ctx(&store);
+        let err = evaluate_value("${person.missing}", &ctx)
+            .expect_err("missing property on a declared whole-value ref SHALL error");
+        assert!(
+            matches!(err, VarError::PropertyNotFound { ref object, ref property }
+                     if object == "person" && property == "missing"),
+            "expected PropertyNotFound, got: {err}"
+        );
+    }
+
+    // 53. A whole-value bare dot-path that descends past a string leaf SHALL
+    // surface NotAnObject naming the path traversed so far -- the other
+    // navigate_value error arm.
+    #[test]
+    fn evaluate_value_bare_dot_path_through_string_is_not_an_object() {
+        let store = store_with(
+            ScopeLevel::Project,
+            vec![(
+                "person",
+                VarValue::object(vec![("first", VarValue::string("Sarah"))]),
+            )],
+        );
+        let ctx = simple_ctx(&store);
+        let err = evaluate_value("${person.first.nope}", &ctx)
+            .expect_err("descending into a string leaf SHALL error");
+        assert!(
+            matches!(err, VarError::NotAnObject(ref s) if s == "person.first"),
+            "expected NotAnObject(person.first), got: {err}"
+        );
+    }
+
+    // 54. A whole-value `${fake:...}` declaration with no generator resolver
+    // available SHALL error (the value-preserving path has its own
+    // generator-availability check, distinct from the string path's).
+    #[test]
+    fn evaluate_value_fake_without_generator_errors() {
+        let store = VariableStore::new();
+        let ctx = InterpolationContext::new(&store); // generator: None
+        let err = evaluate_value("${fake:email}", &ctx)
+            .expect_err("whole-value fake ref with no generator SHALL error");
+        assert!(
+            matches!(err, VarError::Other(ref m) if m.contains("not available")),
+            "got: {err}"
+        );
+    }
+
+    // 55. A whole-value reference that is itself nested (`${${key}}`, not a
+    // generator) SHALL be rejected as unsupported nested interpolation --
+    // the value-preserving resolver's own nested guard, distinct from
+    // interpolate()'s template-level guard.
+    #[test]
+    fn evaluate_value_nested_non_fake_reference_errors() {
+        let store = store_with(
+            ScopeLevel::Project,
+            vec![("key", VarValue::string("value"))],
+        );
+        let ctx = simple_ctx(&store);
+        let err = evaluate_value("${${key}}", &ctx)
+            .expect_err("nested non-generator whole-value ref SHALL error");
+        assert!(
+            matches!(err, VarError::Other(ref m) if m.contains("nested interpolation")),
+            "got: {err}"
+        );
+    }
+
+    // 56. A whole-value declaration using a prefixed reference (`self:`)
+    // falls back to the string resolver wrapped in VarValue::String --
+    // covers the `is_prefixed` branch of resolve_reference_value.
+    #[test]
+    fn evaluate_value_prefixed_reference_falls_back_to_string() {
+        let main_store = VariableStore::new();
+        let device_store = store_with(
+            ScopeLevel::Project,
+            vec![("email", VarValue::string("device@example.com"))],
+        );
+        let mut device_stores = HashMap::new();
+        device_stores.insert("pixel_9".to_string(), device_store);
+        let ctx = InterpolationContext {
+            store: &main_store,
+            device: Some("pixel_9"),
+            device_stores: Some(&device_stores),
+            global_store: None,
+            each_vars: None,
+            builtins: None,
+            generator: None,
+        };
+        let v = evaluate_value("${self:email}", &ctx).expect("self: whole-value SHALL resolve");
+        assert_eq!(v, VarValue::string("device@example.com"));
+    }
+
+    // 57. A whole-value declaration naming a builtin also falls back to the
+    // string resolver (builtins are always strings) -- covers the
+    // `is_builtin` short-circuit of resolve_reference_value's bare-var path.
+    #[test]
+    fn evaluate_value_builtin_falls_back_to_string() {
+        let store = VariableStore::new();
+        let mut builtins = HashMap::new();
+        builtins.insert("_device".to_string(), "Pixel 9".to_string());
+        let ctx = InterpolationContext {
+            store: &store,
+            device: None,
+            device_stores: None,
+            global_store: None,
+            each_vars: None,
+            builtins: Some(&builtins),
+            generator: None,
+        };
+        let v = evaluate_value("${_device}", &ctx).expect("builtin whole-value SHALL resolve");
+        assert_eq!(v, VarValue::string("Pixel 9"));
+    }
+
+    // 58. A whole-value bare var absent from the main store still resolves
+    // via the full resolution order (device store) when the direct
+    // `ctx.store.resolve` probe misses -- covers the fallthrough of
+    // resolve_reference_value's `if let Ok(value) = ctx.store.resolve(...)`.
+    #[test]
+    fn evaluate_value_bare_var_missing_from_main_falls_through_to_device() {
+        let main_store = VariableStore::new();
+        let device_store = store_with(
+            ScopeLevel::Project,
+            vec![("shared", VarValue::string("dev-value"))],
+        );
+        let mut device_stores = HashMap::new();
+        device_stores.insert("pixel_9".to_string(), device_store);
+        let ctx = InterpolationContext {
+            store: &main_store,
+            device: Some("pixel_9"),
+            device_stores: Some(&device_stores),
+            global_store: None,
+            each_vars: None,
+            builtins: None,
+            generator: None,
+        };
+        let v = evaluate_value("${shared}", &ctx)
+            .expect("bare var missing from main store SHALL fall through to device store");
+        assert_eq!(v, VarValue::string("dev-value"));
+    }
+
+    // 59. Two adjacent references are a template, not a whole-value ref --
+    // covers whole_value_reference's "closes before end of string" branch
+    // (the brace-depth scan returning None mid-string).
+    #[test]
+    fn evaluate_value_adjacent_references_is_a_template() {
+        let store = store_with(
+            ScopeLevel::Project,
+            vec![
+                ("a", VarValue::string("hello")),
+                ("b", VarValue::string("world")),
+            ],
+        );
+        let ctx = simple_ctx(&store);
+        let v = evaluate_value("${a}${b}", &ctx).expect("template SHALL interpolate");
+        assert_eq!(v, VarValue::string("helloworld"));
+    }
+
+    // 60. resolve_reference's own nested-`${` guard is defensive: every
+    // public entry point (interpolate's brace scanner, and
+    // resolve_reference_value's own nested check) already screens out a
+    // reference containing "${" before it would reach resolve_reference.
+    // Call the private helper directly to prove the guard still fails safe
+    // if that ever changes.
+    #[test]
+    fn resolve_reference_rejects_a_raw_nested_argument() {
+        let store = VariableStore::new();
+        let ctx = simple_ctx(&store);
+        let err =
+            resolve_reference("${key}", &ctx).expect_err("a raw nested argument SHALL be rejected");
+        assert!(
+            matches!(err, VarError::Other(ref m) if m.contains("nested interpolation")),
+            "got: {err}"
+        );
     }
 }

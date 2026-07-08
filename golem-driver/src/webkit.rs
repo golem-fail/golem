@@ -165,27 +165,6 @@ async fn pid_owns_udid(pid: u32, udid: &str) -> bool {
     text.contains(&format!("Devices/{udid}"))
 }
 
-/// Return the PID of the process holding the given Unix socket open, if any.
-/// Currently unused — `enumerate_live_inspector_sockets` does the bulk lsof
-/// in one shot — but kept as a small helper that may be useful for other
-/// per-socket lookups. Annotated to silence dead-code warnings.
-#[allow(dead_code)]
-async fn lsof_socket_owner(path: &std::path::Path) -> Option<u32> {
-    let output = tokio::process::Command::new("lsof")
-        .args(["-t", path.to_str()?])
-        .output()
-        .await
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let text = String::from_utf8_lossy(&output.stdout);
-    // `lsof -t` emits one PID per line. Take the first valid one —
-    // additional PIDs would be peers connected to the listener, but
-    // the launchd_sim listener is what we want.
-    text.lines().find_map(|l| l.trim().parse().ok())
-}
-
 // ---------------------------------------------------------------------------
 // Transport: framed binary plist over Unix socket
 // ---------------------------------------------------------------------------
@@ -1050,7 +1029,10 @@ mod tests {
     fn webview_offset_cover_cancels_native_inset_not_css() {
         // native inset 54 folded into webview_bounds_top; CSS env reports 62.
         let (_, dy) = webview_screen_offset(0, 54, 0, 62, 54, 0, 0);
-        assert_eq!(dy, 0, "cover cancels the native 54, not the CSS 62 (was -8)");
+        assert_eq!(
+            dy, 0,
+            "cover cancels the native 54, not the CSS 62 (was -8)"
+        );
     }
 
     #[test]

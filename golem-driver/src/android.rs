@@ -25,7 +25,7 @@ pub struct AndroidDriver {
     cdp: std::sync::Mutex<CdpLifecycle>,
     /// Active screenrecord state. `start_recording` spawns a detached
     /// `adb shell screenrecord` child and stashes the device-side path
-    /// + child handle; `stop_recording` signals the child, waits for
+    /// and child handle; `stop_recording` signals the child, waits for
     /// flush, and pulls the .mp4 to host tmp.
     recording: tokio::sync::Mutex<Option<RecordingState>>,
     /// Host instant of the last recording's SIGINT (≈ true video end), stamped
@@ -52,6 +52,45 @@ struct RecordingState {
 /// geometrically wrong. 2560 is the emulator's observed ceiling and a safe
 /// floor for real hardware (which usually encodes native).
 const MAX_REC_AXIS: u32 = 2560;
+
+/// SDK level for Android 13 ("Tiramisu"). Below this, photo access needs
+/// the legacy `READ_EXTERNAL_STORAGE` permission; at and above it,
+/// `READ_MEDIA_IMAGES` takes over.
+const SDK_ANDROID_13: u32 = 33;
+
+/// SDK level for Android 14 ("Upside Down Cake"). At and above this,
+/// photo access additionally needs `READ_MEDIA_VISUAL_USER_SELECTED`
+/// for the user-curated subset.
+const SDK_ANDROID_14: u32 = 34;
+
+/// Swipe gesture duration (ms) for dominantly-horizontal swipes — slower
+/// so gesture velocity stays below Chromium's fling threshold, avoiding
+/// overshoot past intermediate `scroll-snap` points.
+const SWIPE_DURATION_HORIZONTAL_MS: u64 = 700;
+
+/// Swipe gesture duration (ms) for dominantly-vertical swipes — snappier,
+/// since vertical scrolling is deterministic by gesture distance.
+const SWIPE_DURATION_VERTICAL_MS: u64 = 300;
+
+/// How long `eval_in_webview` blocks waiting for an in-flight CDP setup
+/// to land before giving up and returning `None` for this call.
+const CDP_SETUP_WAIT_TIMEOUT_SECS: u64 = 3;
+
+/// Max attempts for `/hide-keyboard` when the companion reports itself
+/// wedged — one retry after a short backoff before treating a
+/// persistent wedge as a soft success.
+const HIDE_KEYBOARD_MAX_ATTEMPTS: i32 = 2;
+
+/// Backoff (seconds) between `/hide-keyboard` retry attempts.
+const HIDE_KEYBOARD_RETRY_BACKOFF_SECS: u64 = 1;
+
+/// Backoff (ms) before retrying `am start -W` after a `Status: timeout`
+/// response, giving dexopt/GC/JIT warm-up time to land.
+const LAUNCH_APP_TIMEOUT_RETRY_DELAY_MS: u64 = 500;
+
+/// Delay (ms) after SIGINT-ing `screenrecord` to let the device finalise
+/// the mp4 (moov atom write) before the file is pulled.
+const RECORDING_FLUSH_DELAY_MS: u64 = 800;
 
 /// Parse `wm size` output into `(width, height)`. Prefers an `Override size`
 /// line (a forced display size) over the `Physical size` line. `None` when no
@@ -117,9 +156,9 @@ fn swipe_duration_ms(from_x: i32, from_y: i32, to_x: i32, to_y: i32) -> u64 {
     let dx_abs = (to_x - from_x).abs();
     let dy_abs = (to_y - from_y).abs();
     if dx_abs > dy_abs {
-        700
+        SWIPE_DURATION_HORIZONTAL_MS
     } else {
-        300
+        SWIPE_DURATION_VERTICAL_MS
     }
 }
 
@@ -157,12 +196,12 @@ fn normalize_android_permission(permission: &str, sdk_int: u32) -> Result<Vec<St
         //   • Android 14+ (SDK ≥ 34):           also
         //     READ_MEDIA_VISUAL_USER_SELECTED for the user-curated subset
         "photos" => {
-            if sdk_int >= 34 {
+            if sdk_int >= SDK_ANDROID_14 {
                 vec![
                     "android.permission.READ_MEDIA_IMAGES",
                     "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
                 ]
-            } else if sdk_int >= 33 {
+            } else if sdk_int >= SDK_ANDROID_13 {
                 vec!["android.permission.READ_MEDIA_IMAGES"]
             } else {
                 vec!["android.permission.READ_EXTERNAL_STORAGE"]
@@ -315,7 +354,11 @@ impl AndroidDriver {
         let (port, page_id) = match initial {
             Initial::Ready(p, pid) => (p, pid),
             Initial::Setup(mut rx) => {
-                let res = tokio::time::timeout(std::time::Duration::from_secs(3), &mut rx).await;
+                let res = tokio::time::timeout(
+                    std::time::Duration::from_secs(CDP_SETUP_WAIT_TIMEOUT_SECS),
+                    &mut rx,
+                )
+                .await;
                 let mut cdp = self.cdp.lock().expect("cdp mutex poisoned");
                 match res {
                     Ok(Ok(Some(state))) => {
@@ -713,9 +756,12 @@ impl PlatformDriver for AndroidDriver {
         // hiding the keyboard is best-effort, and a genuinely wedged
         // companion is caught by the next hierarchy fetch's wedge path.
         let mut last_err = None;
-        for attempt in 0..2 {
+        for attempt in 0..HIDE_KEYBOARD_MAX_ATTEMPTS {
             if attempt > 0 {
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                tokio::time::sleep(std::time::Duration::from_secs(
+                    HIDE_KEYBOARD_RETRY_BACKOFF_SECS,
+                ))
+                .await;
             }
             match self.client.post_json("/hide-keyboard", "{}").await {
                 Ok(resp) => {
@@ -782,7 +828,10 @@ impl PlatformDriver for AndroidDriver {
         // (e.g. "Unable to resolve activity") since those are
         // deterministic.
         if out.contains("Status: timeout") {
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(
+                LAUNCH_APP_TIMEOUT_RETRY_DELAY_MS,
+            ))
+            .await;
             out = am_start().await?;
         }
         if !out.contains("Status: ok") {
@@ -1023,7 +1072,7 @@ impl PlatformDriver for AndroidDriver {
         }
         // Give the device a moment to finalise the file (mp4 moov
         // atom is written on SIGINT receipt).
-        tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(RECORDING_FLUSH_DELAY_MS)).await;
         // Reap the local adb shell so the child handle doesn't leak.
         let _ = state.child.kill().await;
         let _ = state.child.wait().await;
@@ -1040,7 +1089,13 @@ impl PlatformDriver for AndroidDriver {
             golem_common::host_queue::OpClass::AdbHostIo,
             golem_common::command::output_argv(
                 "adb",
-                &["-s", &self.device_serial, "pull", &state.device_path, &tmp_str],
+                &[
+                    "-s",
+                    &self.device_serial,
+                    "pull",
+                    &state.device_path,
+                    &tmp_str,
+                ],
             ),
         )
         .await
@@ -1089,7 +1144,10 @@ mod tests {
 
     #[test]
     fn parse_wm_size_physical_and_override() {
-        assert_eq!(parse_wm_size("Physical size: 1344x2992"), Some((1344, 2992)));
+        assert_eq!(
+            parse_wm_size("Physical size: 1344x2992"),
+            Some((1344, 2992))
+        );
         // Override line takes precedence over Physical.
         let out = "Physical size: 1344x2992\nOverride size: 1080x2400";
         assert_eq!(parse_wm_size(out), Some((1080, 2400)));
@@ -1116,7 +1174,11 @@ mod tests {
         assert!(w <= MAX_REC_AXIS && h <= MAX_REC_AXIS);
         // A device that reports a larger ceiling records native (fits → None);
         // a smaller reported cap scales further down.
-        assert_eq!(fit_recording_size(1344, 2992, 4096), None, "fits a bigger cap");
+        assert_eq!(
+            fit_recording_size(1344, 2992, 4096),
+            None,
+            "fits a bigger cap"
+        );
         let (_, h) = fit_recording_size(1344, 2992, 2000).expect("scale to smaller cap");
         assert_eq!(h, 2000, "honours a smaller reported cap");
     }

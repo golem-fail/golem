@@ -1,12 +1,19 @@
 use crate::{BranchCondition, FlowFile};
 use std::collections::HashSet;
 
+/// One structural problem found by [`validate_flow`]: a human-readable
+/// `message` plus a `kind` a caller can match on to decide severity or
+/// filter known-acceptable cases.
 #[derive(Debug, Clone)]
 pub struct ValidationError {
     pub message: String,
     pub kind: ValidationErrorKind,
 }
 
+/// Category of a [`ValidationError`], covering the structural checks
+/// `validate_flow` runs: dangling references (unknown action, bad `goto`/
+/// start block, duplicate block names), malformed branch conditions, and
+/// invalid option values.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValidationErrorKind {
     MissingDevices,
@@ -250,10 +257,9 @@ pub fn validate_flow(flow: &FlowFile) -> Vec<ValidationError> {
             //     caret; there's no cross-platform move-to-end), so reject it.
             if step.action == "backspace" && step.has_element_selector() {
                 errors.push(ValidationError {
-                    message:
-                        "backspace does not take a selector — it deletes from the \
+                    message: "backspace does not take a selector — it deletes from the \
                          currently focused field; type or tap the field first"
-                            .to_string(),
+                        .to_string(),
                     kind: ValidationErrorKind::SelectorNotAllowed,
                 });
             }

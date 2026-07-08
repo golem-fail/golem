@@ -20,8 +20,11 @@ pub enum AnchorSelector {
 // trait thresholds change.
 #[derive(Debug, Clone, Default)]
 pub struct Selector {
+    /// Glob pattern the element's `text` must match (elements with no text never match).
     pub text: Option<String>,
+    /// Glob pattern the element's `accessibility_label` must match.
     pub accessibility_label: Option<String>,
+    /// Keep only the Nth match (0-based) after all other filters and sorting are applied.
     pub index: Option<usize>,
     pub enabled: Option<bool>,
     pub checked: Option<bool>,

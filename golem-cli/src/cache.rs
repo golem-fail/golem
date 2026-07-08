@@ -9,8 +9,6 @@ const CACHE_PATH: &str = ".golem/install-cache.json";
 
 #[derive(Deserialize)]
 struct CacheFileView {
-    #[allow(dead_code)]
-    version: u32,
     entries: HashMap<String, PersistedInstall>,
 }
 
@@ -175,11 +173,11 @@ mod tests {
         assert_eq!(view.entries.len(), 0, "empty cache SHALL yield no entries");
     }
 
-    // 3. The `version` field is deserialized but unused — a differing version
-    //    number SHALL NOT gate or corrupt the entries info() consumes. Proven
-    //    by serializing with an arbitrary future version and confirming the
-    //    entry's real fields (the data info() reads: installed_at,
-    //    device_install_time) survive intact.
+    // 3. `CacheFileView` has no `version` field, so serde silently ignores the
+    //    on-disk `version` key — a differing version number SHALL NOT gate or
+    //    corrupt the entries info() consumes. Proven by serializing with an
+    //    arbitrary future version and confirming the entry's real fields (the
+    //    data info() reads: installed_at, device_install_time) survive intact.
     #[test]
     fn cache_file_view_ignores_version_value() {
         let mut entries = HashMap::new();
@@ -216,10 +214,7 @@ mod tests {
     }
 
     fn view(entries: HashMap<String, PersistedInstall>) -> CacheFileView {
-        CacheFileView {
-            version: 1,
-            entries,
-        }
+        CacheFileView { entries }
     }
 
     // 6. An empty cache summarizes to zero totals with no oldest/newest — the

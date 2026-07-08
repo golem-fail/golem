@@ -1,4 +1,20 @@
-// golem-parser: test file parser
+//! Parses golem's `.test.toml` flow files (and the `golem.toml` project
+//! config, `__fixtures__/*.toml` fixtures, and `__mixins__/*.toml` mixins
+//! that go with them) into the typed structures the rest of golem executes.
+//!
+//! The entry point is [`parse_flow`], which deserializes a TOML string into
+//! a [`FlowFile`] — a tree of [`Block`]s, each a list of [`Step`]s (the
+//! atomic tap/type/assert/scroll/... unit) plus optional branching. Element
+//! targeting on a step goes through [`SelectorGroup`] — text/attribute
+//! filters plus relational anchors (`below`, `right_of`, `contains`, ...).
+//!
+//! Sibling modules extend the format without touching this core model:
+//! [`config`] loads and merges the project-level `golem.toml`, [`fixture`]
+//! and [`mixin`] resolve and parse the `__fixtures__`/`__mixins__` file
+//! conventions, and [`validation`] runs structural lints (unknown actions,
+//! dangling `goto`s, ...) over an already-parsed [`FlowFile`]. This crate
+//! only parses and validates — it has no knowledge of how a flow actually
+//! runs; that lives in the runner/driver crates.
 
 pub mod config;
 pub mod fixture;
@@ -14,6 +30,12 @@ pub fn parse_flow(toml_str: &str) -> anyhow::Result<FlowFile> {
     Ok(flow_file)
 }
 
+/// The top-level result of [`parse_flow`] — everything in one `.test.toml`
+/// file. `block` holds the flow's execution graph (blocks link to each
+/// other via `next`/`branch`/`goto`), `data` supplies data-driven rows
+/// (each row's key/value pairs are substituted per-iteration), and
+/// `teardown` is a "finally"-style block list run after the flow regardless
+/// of pass/fail.
 #[derive(Deserialize, Debug, Clone)]
 pub struct FlowFile {
     pub flow: FlowMeta,
@@ -25,12 +47,16 @@ pub struct FlowFile {
     pub teardown: Vec<TeardownBlock>,
 }
 
+/// A list of steps run after the flow finishes (success or failure), e.g.
+/// to clean up state. See `FlowFile::teardown` and the project-level
+/// equivalent in [`config::ProjectConfig::teardown`].
 #[derive(Deserialize, Debug, Clone)]
 pub struct TeardownBlock {
     #[serde(default)]
     pub steps: Vec<Step>,
 }
 
+/// The `[flow]` section: name, entry point, and flow-wide settings.
 #[derive(Deserialize, Debug, Clone)]
 pub struct FlowMeta {
     pub name: String,
@@ -52,6 +78,10 @@ pub struct FlowMeta {
     pub options: Option<FlowOptions>,
 }
 
+/// A flow-level `[[flow.apps]]` entry: one app under test, its bundle id,
+/// device constraints, and how to install it. Merges with a matching
+/// project-level [`ProjectAppConfig`](crate::ProjectAppConfig) by `name`
+/// (flow-level fields win) so common apps only need to be declared once.
 #[derive(Deserialize, Debug, Clone)]
 pub struct AppConfig {
     pub name: String,
@@ -172,6 +202,11 @@ impl StringOrVec {
     }
 }
 
+/// A named node in the flow's execution graph: a list of [`Step`]s plus
+/// how control moves on from here — `next` (unconditional), `branch`
+/// (conditional `goto`s), or `run_flow` (delegate to a child flow file
+/// instead of running steps directly). `for_each` repeats the block once
+/// per row of a named data set, binding each row's columns as vars.
 #[derive(Deserialize, Debug, Clone)]
 pub struct Block {
     pub name: Option<String>,
@@ -195,6 +230,10 @@ pub struct Block {
     pub record: Option<bool>,
 }
 
+/// A block's `[block.where]` guard — skip this block unless the device it's
+/// running on matches. Distinct from [`DeviceConstraint`] (which selects
+/// *which* devices a flow runs on); this filters block execution *within*
+/// an already-selected device.
 #[derive(Deserialize, Debug, Clone)]
 pub struct DeviceFilter {
     #[serde(rename = "type")]
@@ -203,6 +242,10 @@ pub struct DeviceFilter {
     pub physical: Option<bool>,
 }
 
+/// One entry in a block's `[[block.branch]]` list: an optional condition
+/// (visibility check or `if_var` comparison) and where to jump if it holds.
+/// A branch with no condition fields set is an unconditional `goto` —
+/// typically the last entry, acting as a default/else case.
 #[derive(Deserialize, Debug, Clone)]
 pub struct BranchCondition {
     pub if_visible: Option<String>,
@@ -288,12 +331,9 @@ impl ContainsAnchor {
     }
 }
 
-/// Grouped selector for `on = { ... }` / `to = { ... }` syntax.
-///
-/// All fields match the flat `on_*` fields on Step but without the prefix.
-/// Relational fields (below, above, right_of, left_of) accept either a
-/// text pattern or a nested selector group.
-/// A coordinate value: either an absolute pixel or a percentage string.
+/// A coordinate value: either an absolute pixel offset or a percentage
+/// string (e.g. `"50%"`, resolved against screen or element bounds at
+/// match time).
 #[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum CoordValue {
@@ -301,6 +341,11 @@ pub enum CoordValue {
     Percent(String), // e.g. "50%"
 }
 
+/// Grouped selector for `on = { ... }` / `to = { ... }` syntax.
+///
+/// All fields match the flat `on_*` fields on [`Step`] but without the
+/// prefix. Relational fields (`below`, `above`, `right_of`, `left_of`)
+/// accept either a text pattern or a nested selector group.
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct SelectorGroup {
     pub text: Option<String>,
@@ -329,6 +374,13 @@ pub struct SelectorGroup {
     pub y: Option<CoordValue>,
 }
 
+/// A single flow instruction: an `action` (e.g. `"tap"`, `"type_text"`,
+/// `"assert_visible"`, `"scroll"` — validated against golem's known-action
+/// list at [`validation::validate_flow`] time, not at parse time) plus
+/// whichever of the many optional fields that action uses. Element
+/// targeting is either the flat `on_*` fields or the grouped `on`/`to`
+/// [`SelectorGroup`]; action-specific parameters not modeled as a named
+/// field land in `params` via `#[serde(flatten)]`.
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct Step {
     #[serde(default)]
@@ -412,6 +464,11 @@ pub struct Finger {
     pub points: Vec<SelectorGroup>,
 }
 
+/// The `[flow.options]` table: per-flow tunables for concurrency,
+/// resource gating, timeouts, recording, and accessibility auditing. Every
+/// field is optional here; [`config::merge_config`] fills gaps from the
+/// project-level `golem.toml` `[options]` table, with flow-level values
+/// always winning.
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct FlowOptions {
     pub max_concurrency: Option<u32>,
@@ -921,12 +978,24 @@ steps = [
         let steps = &flow.block[0].steps;
 
         // Bare string → Text, default min_matches 1.
-        let c0 = steps[0].on.as_ref().expect("as_ref() SHALL succeed").contains.as_ref().expect("as_ref() SHALL succeed");
+        let c0 = steps[0]
+            .on
+            .as_ref()
+            .expect("as_ref() SHALL succeed")
+            .contains
+            .as_ref()
+            .expect("as_ref() SHALL succeed");
         assert!(matches!(c0, ContainsAnchor::Text(s) if s == "Row 0"));
         assert_eq!(c0.min_matches(), 1, "bare text contains SHALL default to 1");
 
         // Group without min_matches → Spec, default min_matches 1, flatten keeps `text`.
-        let c1 = steps[1].on.as_ref().expect("as_ref() SHALL succeed").contains.as_ref().expect("as_ref() SHALL succeed");
+        let c1 = steps[1]
+            .on
+            .as_ref()
+            .expect("as_ref() SHALL succeed")
+            .contains
+            .as_ref()
+            .expect("as_ref() SHALL succeed");
         match c1 {
             ContainsAnchor::Spec(s) => {
                 assert_eq!(
@@ -944,7 +1013,13 @@ steps = [
         }
 
         // Group with min_matches → parsed.
-        let c2 = steps[2].within.as_ref().expect("as_ref() SHALL succeed").contains.as_ref().expect("as_ref() SHALL succeed");
+        let c2 = steps[2]
+            .within
+            .as_ref()
+            .expect("as_ref() SHALL succeed")
+            .contains
+            .as_ref()
+            .expect("as_ref() SHALL succeed");
         match c2 {
             ContainsAnchor::Spec(s) => {
                 assert_eq!(s.group.text.as_deref(), Some("Row *"));
@@ -1289,7 +1364,10 @@ explicit_only = true
 name = "normal"
 "#;
         let flow = parse_flow(toml_str).expect("should parse");
-        assert!(!flow.flow.explicit_only, "absent explicit_only SHALL default to false");
+        assert!(
+            !flow.flow.explicit_only,
+            "absent explicit_only SHALL default to false"
+        );
     }
 
     // ---------------------------------------------------------------

@@ -9,7 +9,6 @@ golem-devices = { path = "../golem-devices" }
 golem-runner = { path = "../golem-runner" }
 golem-events = { path = "../golem-events" }
 anyhow = { workspace = true }
-serde = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

@@ -88,9 +88,9 @@ fn action_multiplier(step: &Step) -> u64 {
     match step.action.as_str() {
         // 1x — instant actions and capture-only steps that don't go
         // through the element resolver / settle path.
-        "screenshot" | "add_media" | "fail" | "load_fixture" | "push_notification"
-        | "log" | "clear_data" | "press" | "set_dark_mode" | "set_location"
-        | "grant_permission" | "revoke_permission" | "hide_keyboard" => 1,
+        "screenshot" | "add_media" | "fail" | "load_fixture" | "push_notification" | "log"
+        | "clear_data" | "press" | "set_dark_mode" | "set_location" | "grant_permission"
+        | "revoke_permission" | "hide_keyboard" => 1,
 
         // 2x — interactions that include element resolution + post-action
         // settle (the first tap after a fresh app launch on iOS 26 spends
@@ -314,8 +314,7 @@ pub async fn execute_step_with_policy(
                     // extended) — an elapsed close to that means it gave up
                     // waiting for the UI to stop animating.
                     let settle_budget_ms: u64 = if extended { 3000 } else { 1500 };
-                    let stable =
-                        elapsed < std::time::Duration::from_millis(settle_budget_ms - 200);
+                    let stable = elapsed < std::time::Duration::from_millis(settle_budget_ms - 200);
                     ctx.substep(golem_events::SubstepEvent::PostSettle {
                         action: step.action.clone(),
                         duration_ms: elapsed.as_millis() as u64,

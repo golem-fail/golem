@@ -14,7 +14,7 @@ use crate::context::ExecutionContext;
 /// - A bundle ID directly (e.g. `"fail.golem.test"`) — used as-is.
 ///
 /// If `apps` is empty or the name doesn't match, the value is treated as a bundle ID.
-pub fn resolve_app_bundle<'a>(step: &'a Step, apps: &'a [AppConfig]) -> Result<&'a str> {
+pub(super) fn resolve_app_bundle<'a>(step: &'a Step, apps: &'a [AppConfig]) -> Result<&'a str> {
     let app_ref = step.app.as_deref().ok_or_else(|| {
         golem_events::coded(
             golem_events::FailureCode::ParseMissingParam,

@@ -197,18 +197,16 @@ impl ReportAccumulator {
             EventKind::BlockFinished {
                 block_name,
                 iteration,
-                recording_path,
+                recording_path: Some(path),
                 ..
             } => {
-                if let Some(path) = recording_path {
-                    if let Some(&idx) = self.current_flow_by_device.get(&dev_key) {
-                        if let Some(flow) = self.flows.get_mut(idx) {
-                            flow.recordings.push(crate::RecordingEntry {
-                                block: block_name.clone(),
-                                iteration: *iteration,
-                                path: path.clone(),
-                            });
-                        }
+                if let Some(&idx) = self.current_flow_by_device.get(&dev_key) {
+                    if let Some(flow) = self.flows.get_mut(idx) {
+                        flow.recordings.push(crate::RecordingEntry {
+                            block: block_name.clone(),
+                            iteration: *iteration,
+                            path: path.clone(),
+                        });
                     }
                 }
             }

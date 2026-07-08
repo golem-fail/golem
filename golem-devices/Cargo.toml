@@ -9,7 +9,6 @@ golem-common = { path = "../golem-common" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
-thiserror = { workspace = true }
 tokio = { workspace = true }
 libc = "0.2"
 

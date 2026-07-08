@@ -135,10 +135,8 @@ const N_CLASSES: usize = 6;
 // (≈0 when uncontended); `WAIT_COUNT` counts only acquires that actually
 // blocked (>1ms), so the reported count reflects real contention, not the
 // microsecond noise of an instant uncontended acquire.
-#[allow(clippy::declare_interior_mutable_const)]
-const ZERO: AtomicU64 = AtomicU64::new(0);
-static WAIT_MICROS: [AtomicU64; N_CLASSES] = [ZERO; N_CLASSES];
-static WAIT_COUNT: [AtomicU64; N_CLASSES] = [ZERO; N_CLASSES];
+static WAIT_MICROS: [AtomicU64; N_CLASSES] = [const { AtomicU64::new(0) }; N_CLASSES];
+static WAIT_COUNT: [AtomicU64; N_CLASSES] = [const { AtomicU64::new(0) }; N_CLASSES];
 
 /// Per-class permit-wait accrued since the last [`reset_queue_wait_stats`].
 #[derive(Debug, Clone)]
@@ -319,7 +317,11 @@ mod tests {
     async fn permit_released_after_completion() {
         let first = acquire_then_run(OpClass::AdbHostIo, async { 1u32 }).await;
         let second = acquire_then_run(OpClass::AdbHostIo, async { 2u32 }).await;
-        assert_eq!((first, second), (1, 2), "sequential reuse SHALL not deadlock");
+        assert_eq!(
+            (first, second),
+            (1, 2),
+            "sequential reuse SHALL not deadlock"
+        );
     }
 
     // 4. A permit taken by an op that returns an `Err` is still released — the
@@ -327,8 +329,7 @@ mod tests {
     //    same-class op runs.
     #[tokio::test]
     async fn permit_released_after_err_output() {
-        let e: Result<(), &str> =
-            acquire_then_run(OpClass::Dumpsys, async { Err("boom") }).await;
+        let e: Result<(), &str> = acquire_then_run(OpClass::Dumpsys, async { Err("boom") }).await;
         assert!(e.is_err(), "error output SHALL pass through");
         let ok: Result<u8, &str> = acquire_then_run(OpClass::Dumpsys, async { Ok(7) }).await;
         assert_eq!(ok, Ok(7), "permit SHALL be free after an Err-returning op");
@@ -367,7 +368,11 @@ mod tests {
         tokio::join!(holder, waiter);
 
         let stats = queue_wait_stats();
-        assert_eq!(stats.per_class.len(), 1, "only Screenshot SHALL show a wait");
+        assert_eq!(
+            stats.per_class.len(),
+            1,
+            "only Screenshot SHALL show a wait"
+        );
         let sw = &stats.per_class[0];
         assert_eq!(sw.class, OpClass::Screenshot);
         assert_eq!(sw.count, 1, "exactly one acquire SHALL have blocked");
@@ -392,7 +397,10 @@ mod tests {
         reset_queue_wait_stats();
         let stats = queue_wait_stats();
         assert!(stats.is_zero(), "reset SHALL zero the counters");
-        assert!(stats.per_class.is_empty(), "reset SHALL clear per-class rows");
+        assert!(
+            stats.per_class.is_empty(),
+            "reset SHALL clear per-class rows"
+        );
     }
 
     // 8. The slow-wait tripwire fires only at/above the 2s threshold — brief

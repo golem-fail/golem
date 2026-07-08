@@ -66,6 +66,7 @@ fn is_transient_install_error(err: &str) -> bool {
 /// - `cmd: Can't find service: package` (package manager not yet
 ///   registered against `system_server`).
 /// - `adb: device offline` (emu in transition).
+///
 /// Both clear within seconds; without this probe they poison the
 /// install cache as `FailedScript` for the rest of the suite.
 async fn wait_for_android_package_service(udid: &str) -> anyhow::Result<()> {
@@ -84,7 +85,9 @@ async fn wait_for_android_package_service(udid: &str) -> anyhow::Result<()> {
             // string that would otherwise poison install_script.
             let pm = golem_common::command::output_argv(
                 "adb",
-                &["-s", udid, "shell", "pm", "list", "packages", "-f", "android"],
+                &[
+                    "-s", udid, "shell", "pm", "list", "packages", "-f", "android",
+                ],
             )
             .await;
             if let Ok(o) = pm {
@@ -679,15 +682,17 @@ impl SuiteRunner {
 
             handles.push(tokio::spawn(async move {
                 let reports = execute_flow_run(
-                    path,
-                    flow,
-                    slots,
-                    rm,
-                    install_cache,
-                    install_matrix,
-                    tx,
-                    reg_port,
-                    reg_state,
+                    FlowRunTarget { path, flow, slots },
+                    FlowRunProvisioning {
+                        resource_mgr: rm,
+                        install_cache,
+                        install_matrix,
+                    },
+                    FlowRunChannels {
+                        event_tx: tx,
+                        reg_port,
+                        reg_state,
+                    },
                     FlowRunConfig {
                         seed,
                         start_block,
@@ -1098,6 +1103,28 @@ fn anr_recovery_decision(
     }
 }
 
+/// Identity of the flow being executed: file path, parsed flow, and the
+/// target device slots.
+struct FlowRunTarget {
+    path: PathBuf,
+    flow: FlowFile,
+    slots: Vec<DeviceSlot>,
+}
+
+/// Shared provisioning resources used to acquire/prepare devices for this run.
+struct FlowRunProvisioning {
+    resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
+    install_cache: golem_runner::installer::InstallCache,
+    install_matrix: Arc<Vec<InstallEntry>>,
+}
+
+/// Event stream + companion registration handles shared across slots.
+struct FlowRunChannels {
+    event_tx: golem_events::channel::EventSender,
+    reg_port: u16,
+    reg_state: crate::registration::RegistrationState,
+}
+
 /// Execute a single `FlowRun`: set up each slot (device + preinstall +
 /// companion + allocation), then spawn per-slot runners sharing a
 /// `FailureBarrier`. Releases every device back to the `ResourceManager`
@@ -1108,20 +1135,24 @@ fn anr_recovery_decision(
 /// directly on its assigned FlowRun; no further platform inference is
 /// needed because the slots already carry platform + os_version +
 /// device_type + other requirements from the Plan phase.
-#[allow(clippy::too_many_arguments)]
 async fn execute_flow_run(
-    path: PathBuf,
-    flow: FlowFile,
-    slots: Vec<DeviceSlot>,
-    resource_mgr: std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
-    install_cache: golem_runner::installer::InstallCache,
-    install_matrix: Arc<Vec<InstallEntry>>,
-    event_tx: golem_events::channel::EventSender,
-    reg_port: u16,
-    reg_state: crate::registration::RegistrationState,
+    target: FlowRunTarget,
+    provisioning: FlowRunProvisioning,
+    channels: FlowRunChannels,
     cfg: FlowRunConfig,
     coverage: CoverageCtx,
 ) -> Vec<FlowReport> {
+    let FlowRunTarget { path, flow, slots } = target;
+    let FlowRunProvisioning {
+        resource_mgr,
+        install_cache,
+        install_matrix,
+    } = provisioning;
+    let FlowRunChannels {
+        event_tx,
+        reg_port,
+        reg_state,
+    } = channels;
     let start = Instant::now();
     let flow_name = path
         .file_stem()
@@ -1174,20 +1205,24 @@ async fn execute_flow_run(
     for slot in &slots {
         match setup_slot(
             slot,
-            &resource_mgr,
-            &install_cache,
-            &install_matrix,
-            &event_tx,
-            reg_port,
-            &reg_state,
-            create_if_missing,
-            &cfg.project_root,
-            cfg.debug,
-            &cfg.fingerprint,
-            cfg.rebuild,
-            cfg.no_build,
-            &cfg.device_settings,
-            cfg.max_device_wait,
+            &SlotHandles {
+                resource_mgr: &resource_mgr,
+                install_cache: &install_cache,
+                install_matrix: &install_matrix,
+                event_tx: &event_tx,
+                reg_port,
+                reg_state: &reg_state,
+            },
+            &SlotBuildConfig {
+                create_if_missing,
+                project_root: &cfg.project_root,
+                debug: cfg.debug,
+                fingerprint: &cfg.fingerprint,
+                rebuild: cfg.rebuild,
+                no_build: cfg.no_build,
+                device_settings: &cfg.device_settings,
+                max_device_wait: cfg.max_device_wait,
+            },
             cfg.stub_fail_on_runs.is_some(),
             cfg.repeat_ctx.map(|r| r.index).unwrap_or(0),
         )
@@ -1295,30 +1330,38 @@ async fn execute_flow_run(
         let stub_fail_on_runs_c = cfg.stub_fail_on_runs.clone();
         handles.push(tokio::spawn(async move {
             run_flow_on_device(
-                flow_c,
-                flow_name_c,
-                flow_dir_c,
-                device,
-                platform,
-                port,
-                seed,
-                start_block,
-                cli_vars,
-                output_dir,
-                no_results,
-                install_cache_c,
-                project_root_c,
-                barrier_c,
-                no_perf,
-                Some(tx_c),
-                record,
-                no_record,
-                project_record,
-                trace,
-                repeat_ctx,
-                a11y_override,
-                a11y_min_confidence_override,
-                stub_fail_on_runs_c,
+                FlowDeviceRun {
+                    flow: flow_c,
+                    flow_name: flow_name_c,
+                    flow_dir: flow_dir_c,
+                },
+                DeviceTarget {
+                    device,
+                    platform,
+                    port,
+                },
+                FlowRunHandles {
+                    install_cache: install_cache_c,
+                    project_root: project_root_c,
+                    barrier: barrier_c,
+                    event_sender: Some(tx_c),
+                },
+                FlowRunPolicy {
+                    seed,
+                    start_block,
+                    cli_vars,
+                    output_dir,
+                    no_results,
+                    no_perf,
+                    record,
+                    no_record,
+                    project_record,
+                    trace,
+                    repeat_ctx,
+                    a11y_override,
+                    a11y_min_confidence_override,
+                    stub_fail_on_runs: stub_fail_on_runs_c,
+                },
             )
             .await
         }));
@@ -1553,6 +1596,32 @@ async fn coverage_group_done(coverage: &CoverageCtx) -> bool {
     }
 }
 
+/// Shared handles `setup_slot` uses to discover a device, install apps, and
+/// register/health-check its companion.
+#[derive(Clone, Copy)]
+struct SlotHandles<'a> {
+    resource_mgr: &'a std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
+    install_cache: &'a golem_runner::installer::InstallCache,
+    install_matrix: &'a [InstallEntry],
+    event_tx: &'a golem_events::channel::EventSender,
+    reg_port: u16,
+    reg_state: &'a crate::registration::RegistrationState,
+}
+
+/// Per-slot build/install policy knobs threaded through preinstall +
+/// companion setup.
+#[derive(Clone, Copy)]
+struct SlotBuildConfig<'a> {
+    create_if_missing: bool,
+    project_root: &'a Path,
+    debug: bool,
+    fingerprint: &'a golem_runner::fingerprint::Fingerprint,
+    rebuild: bool,
+    no_build: bool,
+    device_settings: &'a crate::project::DeviceSettings,
+    max_device_wait: Option<std::time::Duration>,
+}
+
 /// Prepare one slot for flow execution:
 /// 1. Pick a matching free device (auto-boot a shutdown one if the slot
 ///    has no booted match — single-shot, not boot-on-demand).
@@ -1564,26 +1633,31 @@ async fn coverage_group_done(coverage: &CoverageCtx) -> bool {
 ///
 /// On any step's failure, releases anything we allocated and returns the
 /// error so the caller can skip the slot.
-#[allow(clippy::too_many_arguments)]
 async fn setup_slot(
     slot: &DeviceSlot,
-    resource_mgr: &std::sync::Arc<golem_devices::resource_manager::ResourceManager>,
-    install_cache: &golem_runner::installer::InstallCache,
-    install_matrix: &[InstallEntry],
-    event_tx: &golem_events::channel::EventSender,
-    reg_port: u16,
-    reg_state: &crate::registration::RegistrationState,
-    create_if_missing: bool,
-    project_root: &Path,
-    debug: bool,
-    fingerprint: &golem_runner::fingerprint::Fingerprint,
-    rebuild: bool,
-    no_build: bool,
-    device_settings: &crate::project::DeviceSettings,
-    max_device_wait: Option<std::time::Duration>,
+    handles: &SlotHandles<'_>,
+    build: &SlotBuildConfig<'_>,
     stub: bool,
     stub_suffix: u32,
 ) -> Result<(DeviceInfo, u16)> {
+    let SlotHandles {
+        resource_mgr,
+        install_cache,
+        install_matrix,
+        event_tx,
+        reg_port,
+        reg_state,
+    } = *handles;
+    let SlotBuildConfig {
+        create_if_missing,
+        project_root,
+        debug,
+        fingerprint,
+        rebuild,
+        no_build,
+        device_settings,
+        max_device_wait,
+    } = *build;
     // Stub mode: no real device exists. Return a synthetic device and a
     // placeholder port, skipping discovery, allocation, boot, install, and
     // companion registration entirely — the StubDriver answers everything
@@ -1610,11 +1684,13 @@ async fn setup_slot(
         let candidate = find_available_device(
             slot.platform,
             Some(slot),
-            resource_mgr,
             create_if_missing,
             event_tx,
-            Some(install_cache),
-            install_matrix,
+            &DeviceLookupCtx {
+                resource_mgr,
+                install_cache: Some(install_cache),
+                install_matrix,
+            },
             max_device_wait,
         )
         .await?;
@@ -1646,12 +1722,14 @@ async fn setup_slot(
         &device,
         platform,
         install_matrix,
-        install_cache,
-        event_tx,
-        project_root,
-        fingerprint,
-        rebuild,
-        no_build,
+        &PreinstallCtx {
+            install_cache,
+            event_tx,
+            project_root,
+            fingerprint,
+            rebuild,
+            no_build,
+        },
     )
     .await;
 
@@ -1803,7 +1881,7 @@ async fn setup_slot(
                     platform,
                     reg_port,
                     reg_state,
-                    &event_tx,
+                    event_tx,
                     RELAUNCH_REG_DEADLINE,
                 )
                 .await
@@ -1817,6 +1895,17 @@ async fn setup_slot(
             }
         }
     }
+}
+
+/// Shared config for installing matrix entries onto one device.
+#[derive(Clone, Copy)]
+struct PreinstallCtx<'a> {
+    install_cache: &'a golem_runner::installer::InstallCache,
+    event_tx: &'a golem_events::channel::EventSender,
+    project_root: &'a Path,
+    fingerprint: &'a golem_runner::fingerprint::Fingerprint,
+    rebuild: bool,
+    no_build: bool,
 }
 
 /// Install every `InstallEntry` from the suite's install matrix that is
@@ -1833,18 +1922,20 @@ async fn setup_slot(
 /// Outcomes are written to `install_cache`; a later per-flow install
 /// check sees `Succeeded` / `FailedScript` and skips re-running or skips
 /// the flow respectively.
-#[allow(clippy::too_many_arguments)]
 async fn preinstall_for_device_scoped(
     device: &DeviceInfo,
     platform: Platform,
     install_matrix: &[InstallEntry],
-    install_cache: &golem_runner::installer::InstallCache,
-    event_tx: &golem_events::channel::EventSender,
-    project_root: &Path,
-    fingerprint: &golem_runner::fingerprint::Fingerprint,
-    rebuild: bool,
-    no_build: bool,
+    ctx: &PreinstallCtx<'_>,
 ) {
+    let PreinstallCtx {
+        install_cache,
+        event_tx,
+        project_root,
+        fingerprint,
+        rebuild,
+        no_build,
+    } = *ctx;
     let platform_str = platform.to_string();
     // Use the same device_label format as per-flow emission so
     // stream_human's circled-number mapping stays stable across
@@ -1938,15 +2029,19 @@ async fn preinstall_for_device_scoped(
         // Cache miss (or --rebuild): run the install script through the
         // build-once coordinator, then record the new persistent entry.
         let install_result = run_install_with_build_coord(
-            &entry.script_path,
-            project_root,
-            &platform_str,
-            device,
-            &entry.bundle_id,
-            &entry.app_name,
-            entry.timeout_ms,
-            install_cache,
-            Some(&emitter),
+            &InstallTarget {
+                script_path: &entry.script_path,
+                bundle_id: &entry.bundle_id,
+                app_name: &entry.app_name,
+                timeout_ms: entry.timeout_ms,
+            },
+            &InstallRunCtx {
+                project_root,
+                platform_str: &platform_str,
+                device,
+                install_cache,
+                emitter: Some(&emitter),
+            },
         )
         .await;
 
@@ -1977,6 +2072,26 @@ async fn preinstall_for_device_scoped(
     }
 }
 
+/// What to install: the script and the app identity it installs.
+#[derive(Clone, Copy)]
+struct InstallTarget<'a> {
+    script_path: &'a Path,
+    bundle_id: &'a str,
+    app_name: &'a str,
+    timeout_ms: u64,
+}
+
+/// Where/how to run the install: project + device context, cache, and the
+/// optional event emitter.
+#[derive(Clone, Copy)]
+struct InstallRunCtx<'a> {
+    project_root: &'a Path,
+    platform_str: &'a str,
+    device: &'a DeviceInfo,
+    install_cache: &'a golem_runner::installer::InstallCache,
+    emitter: Option<&'a golem_events::emitter::DeviceEmitter>,
+}
+
 /// Run the install script for one `(device, bundle)`, using a
 /// per-`(platform, bundle)` build coordinator so only the first device
 /// does a full build — subsequent devices pass `install-only` and reuse
@@ -1984,19 +2099,25 @@ async fn preinstall_for_device_scoped(
 /// outcome. Returns `Err` when the script fails, a prior build for the
 /// same `(platform, bundle)` already failed, or when a prior per-device
 /// install is cached as failed.
-#[allow(clippy::too_many_arguments)]
 async fn run_install_with_build_coord(
-    script_path: &Path,
-    project_root: &Path,
-    platform_str: &str,
-    device: &DeviceInfo,
-    bundle_id: &str,
-    app_name: &str,
-    timeout_ms: u64,
-    install_cache: &golem_runner::installer::InstallCache,
-    emitter: Option<&golem_events::emitter::DeviceEmitter>,
+    install_target: &InstallTarget<'_>,
+    ctx: &InstallRunCtx<'_>,
 ) -> anyhow::Result<()> {
     use golem_runner::installer::{BuildOutcome, BuildRole, InstallOutcome};
+
+    let InstallTarget {
+        script_path,
+        bundle_id,
+        app_name,
+        timeout_ms,
+    } = *install_target;
+    let InstallRunCtx {
+        project_root,
+        platform_str,
+        device,
+        install_cache,
+        emitter,
+    } = *ctx;
 
     let target = format_install_target(device, platform_str);
     let key = (device.udid.clone(), bundle_id.to_string());
@@ -2068,17 +2189,23 @@ async fn run_install_with_build_coord(
     // devices install at once. The builder (`install_only == false`) is excluded
     // — it's the sole builder under `project_lock`, and its multi-minute build
     // must not hold the install permit.
-    let install_fut = golem_runner::installer::run_install_script(
+    let install_spec = golem_runner::installer::InstallScriptSpec {
         script_path,
-        project_root,
-        platform_str,
-        &device.udid,
+        working_dir: project_root,
+        install_only,
+    };
+    let install_target = golem_runner::installer::InstallDeviceTarget {
+        platform: platform_str,
+        device_udid: &device.udid,
         bundle_id,
         app_name,
+        target: &target,
+        os_major: device.os_major,
+    };
+    let install_fut = golem_runner::installer::run_install_script(
+        &install_spec,
+        &install_target,
         timeout_ms,
-        &target,
-        device.os_major,
-        install_only,
         emitter,
     );
     let mut result = if install_only {
@@ -2109,16 +2236,20 @@ async fn run_install_with_build_coord(
             let retry = golem_common::host_queue::acquire_then_run(
                 golem_common::host_queue::OpClass::Install,
                 golem_runner::installer::run_install_script(
-                    script_path,
-                    project_root,
-                    platform_str,
-                    &device.udid,
-                    bundle_id,
-                    app_name,
+                    &golem_runner::installer::InstallScriptSpec {
+                        script_path,
+                        working_dir: project_root,
+                        install_only: true, // reuse the already-built artifact
+                    },
+                    &golem_runner::installer::InstallDeviceTarget {
+                        platform: platform_str,
+                        device_udid: &device.udid,
+                        bundle_id,
+                        app_name,
+                        target: &target,
+                        os_major: device.os_major,
+                    },
                     timeout_ms,
-                    &target,
-                    device.os_major,
-                    true, // install_only — reuse the already-built artifact
                     emitter,
                 ),
             )
@@ -2243,9 +2374,11 @@ async fn reboot_android_device(udid: &str) -> anyhow::Result<()> {
         if tokio::time::Instant::now() > deadline {
             anyhow::bail!("reboot timeout: {udid} did not finish booting in 180s");
         }
-        let out =
-            golem_common::command::output_argv("adb", &["-s", udid, "shell", "getprop", "sys.boot_completed"])
-                .await;
+        let out = golem_common::command::output_argv(
+            "adb",
+            &["-s", udid, "shell", "getprop", "sys.boot_completed"],
+        )
+        .await;
         if let Ok(o) = out {
             if String::from_utf8_lossy(&o.stdout).trim() == "1" {
                 // Post-reboot validation: don't declare the device healthy
@@ -2645,7 +2778,14 @@ async fn ensure_companion_with_reg(
             golem_common::host_queue::OpClass::CompanionLaunch,
             tokio::time::timeout(
                 launch_deadline,
-                bring_up_companion(device, platform, reg_port, reg_state, &companion_path, reg_deadline),
+                bring_up_companion(
+                    device,
+                    platform,
+                    reg_port,
+                    reg_state,
+                    &companion_path,
+                    reg_deadline,
+                ),
             ),
         )
         .await;
@@ -2661,7 +2801,15 @@ async fn ensure_companion_with_reg(
             )),
         };
     }
-    bring_up_companion(device, platform, reg_port, reg_state, &companion_path, reg_deadline).await
+    bring_up_companion(
+        device,
+        platform,
+        reg_port,
+        reg_state,
+        &companion_path,
+        reg_deadline,
+    )
+    .await
 }
 
 /// Install/build the companion for `device`, launch it, and wait until it
@@ -2791,10 +2939,6 @@ async fn bring_up_companion(
     }
 }
 
-/// Execute a flow on a single device. This is a free function (not a method)
-/// so it can be used with `tokio::spawn` which requires `'static` futures.
-/// All parameters are owned values.
-#[allow(clippy::too_many_arguments)]
 /// Map the parser's TOML-level `A11yLevel` onto the runner's audit
 /// `A11yLevel` (which carries the threshold behaviour).
 fn map_a11y_level(level: golem_parser::A11yLevel) -> golem_runner::accessibility::A11yLevel {
@@ -2865,23 +3009,36 @@ fn make_driver(
     }
 }
 
-async fn run_flow_on_device(
+/// Which flow to run.
+struct FlowDeviceRun {
     flow: FlowFile,
     flow_name: String,
     flow_dir: PathBuf,
+}
+
+/// Where to run it.
+struct DeviceTarget {
     device: DeviceInfo,
     platform: Platform,
     port: u16,
+}
+
+/// Shared handles threaded through install-checking + execution + cleanup.
+struct FlowRunHandles {
+    install_cache: golem_runner::installer::InstallCache,
+    project_root: PathBuf,
+    barrier: golem_runner::barrier::FailureBarrier,
+    event_sender: Option<golem_events::channel::EventSender>,
+}
+
+/// Per-run config/policy knobs (CLI flags + flow-run bookkeeping).
+struct FlowRunPolicy {
     seed: Option<u64>,
     start_block: Option<String>,
     cli_vars: Vec<(String, String)>,
     output_dir: PathBuf,
     no_results: bool,
-    install_cache: golem_runner::installer::InstallCache,
-    project_root: PathBuf,
-    barrier: golem_runner::barrier::FailureBarrier,
     no_perf: bool,
-    event_sender: Option<golem_events::channel::EventSender>,
     record: bool,
     no_record: bool,
     project_record: Option<bool>,
@@ -2890,7 +3047,49 @@ async fn run_flow_on_device(
     a11y_override: Option<golem_parser::A11yLevel>,
     a11y_min_confidence_override: Option<f32>,
     stub_fail_on_runs: Option<Vec<u32>>,
+}
+
+/// Execute a flow on a single device. This is a free function (not a method)
+/// so it can be used with `tokio::spawn` which requires `'static` futures.
+/// All parameters are owned values.
+async fn run_flow_on_device(
+    run: FlowDeviceRun,
+    target: DeviceTarget,
+    handles: FlowRunHandles,
+    policy: FlowRunPolicy,
 ) -> FlowReport {
+    let FlowDeviceRun {
+        flow,
+        flow_name,
+        flow_dir,
+    } = run;
+    let DeviceTarget {
+        device,
+        platform,
+        port,
+    } = target;
+    let FlowRunHandles {
+        install_cache,
+        project_root,
+        barrier,
+        event_sender,
+    } = handles;
+    let FlowRunPolicy {
+        seed,
+        start_block,
+        cli_vars,
+        output_dir,
+        no_results,
+        no_perf,
+        record,
+        no_record,
+        project_record,
+        trace,
+        repeat_ctx,
+        a11y_override,
+        a11y_min_confidence_override,
+        stub_fail_on_runs,
+    } = policy;
     let start = Instant::now();
     let device_name = device.name.clone();
     let device_label = format!("{platform}/{device_name}");
@@ -3037,7 +3236,7 @@ async fn run_flow_on_device(
         emitter: device_emitter.as_ref(),
         step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
         last_settled_tree: std::sync::Mutex::new(None),
-            trace_pair: std::sync::Mutex::new(None),
+        trace_pair: std::sync::Mutex::new(None),
         a11y_level,
         a11y_min_confidence: a11y_min_confidence_override,
         rng: std::sync::Mutex::new(rng),
@@ -3172,15 +3371,19 @@ async fn run_flow_on_device(
         if let Some(rel) = script_rel {
             let script_path = project_root.join(&rel);
             let result = run_install_with_build_coord(
-                &script_path,
-                &project_root,
-                platform_str,
-                &device,
-                &bundle_for_install,
-                &app.name,
-                timeout_ms,
-                &install_cache,
-                device_emitter.as_ref(),
+                &InstallTarget {
+                    script_path: &script_path,
+                    bundle_id: &bundle_for_install,
+                    app_name: &app.name,
+                    timeout_ms,
+                },
+                &InstallRunCtx {
+                    project_root: &project_root,
+                    platform_str,
+                    device: &device,
+                    install_cache: &install_cache,
+                    emitter: device_emitter.as_ref(),
+                },
             )
             .await;
             if let Err(e) = result {
@@ -3371,19 +3574,31 @@ async fn discover_all_devices(platform: Option<Platform>) -> Result<Vec<DeviceIn
     Ok(out)
 }
 
+/// Shared device-discovery context: the resource allocator plus the
+/// install-cache/matrix used to rank candidates by cache hits. Passed by
+/// reference through `try_pick_free` and `find_available_device`.
+#[derive(Clone, Copy)]
+struct DeviceLookupCtx<'a> {
+    resource_mgr: &'a golem_devices::resource_manager::ResourceManager,
+    install_cache: Option<&'a golem_runner::installer::InstallCache>,
+    install_matrix: &'a [InstallEntry],
+}
+
 /// Filter `booted` to those currently unallocated (per `ResourceManager`),
 /// then rank the survivors by install-cache hits and return the best.
 /// Returns `None` when every booted candidate is busy — caller decides
 /// whether to wait, auto-boot a shutdown device, or fail.
-#[allow(clippy::too_many_arguments)]
 async fn try_pick_free(
     booted: &[&DeviceInfo],
     platform: Option<Platform>,
     slot: Option<&DeviceSlot>,
-    resource_mgr: &golem_devices::resource_manager::ResourceManager,
-    install_cache: Option<&golem_runner::installer::InstallCache>,
-    install_matrix: &[InstallEntry],
+    lookup: &DeviceLookupCtx<'_>,
 ) -> Option<DeviceInfo> {
+    let DeviceLookupCtx {
+        resource_mgr,
+        install_cache,
+        install_matrix,
+    } = *lookup;
     let free: Vec<&DeviceInfo> = booted
         .iter()
         .copied()
@@ -3413,17 +3628,19 @@ async fn try_pick_free(
 ///
 /// When `slot` is `None` (direct test harness, no plan phase) we fall
 /// back to the pre-slot behaviour: match by platform only.
-#[allow(clippy::too_many_arguments)]
 async fn find_available_device(
     platform: Option<Platform>,
     slot: Option<&DeviceSlot>,
-    resource_mgr: &golem_devices::resource_manager::ResourceManager,
     create_if_missing: bool,
     event_tx: &golem_events::channel::EventSender,
-    install_cache: Option<&golem_runner::installer::InstallCache>,
-    install_matrix: &[InstallEntry],
+    lookup: &DeviceLookupCtx<'_>,
     max_wait: Option<std::time::Duration>,
 ) -> Result<DeviceInfo> {
+    let DeviceLookupCtx {
+        resource_mgr,
+        install_cache,
+        install_matrix,
+    } = *lookup;
     let all_devices = discover_all_devices(platform).await?;
 
     let compatible: Vec<&DeviceInfo> = all_devices
@@ -3459,9 +3676,11 @@ async fn find_available_device(
             &booted,
             platform,
             slot,
-            resource_mgr,
-            install_cache,
-            install_matrix,
+            &DeviceLookupCtx {
+                resource_mgr,
+                install_cache,
+                install_matrix,
+            },
         )
         .await
         {
@@ -3603,9 +3822,11 @@ async fn find_available_device(
             &booted_refs,
             platform,
             slot,
-            resource_mgr,
-            install_cache,
-            install_matrix,
+            &DeviceLookupCtx {
+                resource_mgr,
+                install_cache,
+                install_matrix,
+            },
         )
         .await
         {
@@ -3685,8 +3906,18 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn reboot_android_succeeds_once_boot_completed_and_package_ready() {
             let fake = Arc::new(FakeCommandRunner::new());
-            fake.expect(&["adb", "-s", "emulator-5554", "reboot"], Canned::ok_stdout(""));
-            let getprop = ["adb", "-s", "emulator-5554", "shell", "getprop", "sys.boot_completed"];
+            fake.expect(
+                &["adb", "-s", "emulator-5554", "reboot"],
+                Canned::ok_stdout(""),
+            );
+            let getprop = [
+                "adb",
+                "-s",
+                "emulator-5554",
+                "shell",
+                "getprop",
+                "sys.boot_completed",
+            ];
             fake.expect(&getprop, Canned::ok_stdout("0\n"));
             fake.expect(&getprop, Canned::ok_stdout("1\n"));
             // Post-reboot validation: reboot now gates on the package
@@ -3694,7 +3925,17 @@ mod tests {
             // getprop's last response repeats, so the probe's boot check
             // sees "1"; the pm query must answer cleanly.
             fake.expect(
-                &["adb", "-s", "emulator-5554", "shell", "pm", "list", "packages", "-f", "android"],
+                &[
+                    "adb",
+                    "-s",
+                    "emulator-5554",
+                    "shell",
+                    "pm",
+                    "list",
+                    "packages",
+                    "-f",
+                    "android",
+                ],
                 Canned::ok_stdout("package:/system/framework/framework-res.apk=android\n"),
             );
             let _g = set_test_runner(fake);
@@ -3707,10 +3948,20 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn reboot_android_times_out_if_never_boots() {
             let fake = Arc::new(FakeCommandRunner::new());
-            fake.expect(&["adb", "-s", "emulator-5554", "reboot"], Canned::ok_stdout(""));
+            fake.expect(
+                &["adb", "-s", "emulator-5554", "reboot"],
+                Canned::ok_stdout(""),
+            );
             // getprop never flips to "1" — the last response repeats forever.
             fake.expect(
-                &["adb", "-s", "emulator-5554", "shell", "getprop", "sys.boot_completed"],
+                &[
+                    "adb",
+                    "-s",
+                    "emulator-5554",
+                    "shell",
+                    "getprop",
+                    "sys.boot_completed",
+                ],
                 Canned::ok_stdout("0\n"),
             );
             let _g = set_test_runner(fake);
@@ -3754,12 +4005,20 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn reboot_ios_shuts_down_boots_and_confirms_bootstatus() {
             let fake = Arc::new(FakeCommandRunner::new());
-            fake.expect(&["xcrun", "simctl", "shutdown", "SIM"], Canned::ok_stdout(""));
+            fake.expect(
+                &["xcrun", "simctl", "shutdown", "SIM"],
+                Canned::ok_stdout(""),
+            );
             fake.expect(&["xcrun", "simctl", "boot", "SIM"], Canned::ok_stdout(""));
-            fake.expect(&["xcrun", "simctl", "bootstatus", "SIM", "-b"], Canned::ok_stdout(""));
+            fake.expect(
+                &["xcrun", "simctl", "bootstatus", "SIM", "-b"],
+                Canned::ok_stdout(""),
+            );
             let _g = set_test_runner(fake.clone());
 
-            reboot_ios_device("SIM").await.expect("ios reboot SHALL succeed");
+            reboot_ios_device("SIM")
+                .await
+                .expect("ios reboot SHALL succeed");
             assert_eq!(
                 fake.recorded().len(),
                 3,
@@ -3770,7 +4029,10 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn reboot_ios_bootstatus_failure_errors() {
             let fake = Arc::new(FakeCommandRunner::new());
-            fake.expect(&["xcrun", "simctl", "shutdown", "SIM"], Canned::ok_stdout(""));
+            fake.expect(
+                &["xcrun", "simctl", "shutdown", "SIM"],
+                Canned::ok_stdout(""),
+            );
             fake.expect(&["xcrun", "simctl", "boot", "SIM"], Canned::ok_stdout(""));
             fake.expect(
                 &["xcrun", "simctl", "bootstatus", "SIM", "-b"],
@@ -3781,18 +4043,38 @@ mod tests {
             let err = reboot_ios_device("SIM")
                 .await
                 .expect_err("a failing bootstatus SHALL surface as an error");
-            assert!(format!("{err:#}").contains("bootstatus failed"), "got: {err:#}");
+            assert!(
+                format!("{err:#}").contains("bootstatus failed"),
+                "got: {err:#}"
+            );
         }
 
         #[tokio::test(start_paused = true)]
         async fn package_service_ready_when_booted_and_pm_responds() {
             let fake = Arc::new(FakeCommandRunner::new());
             fake.expect(
-                &["adb", "-s", "emulator-5554", "shell", "getprop", "sys.boot_completed"],
+                &[
+                    "adb",
+                    "-s",
+                    "emulator-5554",
+                    "shell",
+                    "getprop",
+                    "sys.boot_completed",
+                ],
                 Canned::ok_stdout("1\n"),
             );
             fake.expect(
-                &["adb", "-s", "emulator-5554", "shell", "pm", "list", "packages", "-f", "android"],
+                &[
+                    "adb",
+                    "-s",
+                    "emulator-5554",
+                    "shell",
+                    "pm",
+                    "list",
+                    "packages",
+                    "-f",
+                    "android",
+                ],
                 Canned::ok_stdout("package:/system/framework/framework-res.apk=android\n"),
             );
             let _g = set_test_runner(fake);
@@ -3806,19 +4088,38 @@ mod tests {
         async fn package_service_times_out_when_service_unbound() {
             let fake = Arc::new(FakeCommandRunner::new());
             fake.expect(
-                &["adb", "-s", "emulator-5554", "shell", "getprop", "sys.boot_completed"],
+                &[
+                    "adb",
+                    "-s",
+                    "emulator-5554",
+                    "shell",
+                    "getprop",
+                    "sys.boot_completed",
+                ],
                 Canned::ok_stdout("1\n"),
             );
             // pm reports the service isn't bound yet — the poisoning string.
             fake.expect(
-                &["adb", "-s", "emulator-5554", "shell", "pm", "list", "packages", "-f", "android"],
+                &[
+                    "adb",
+                    "-s",
+                    "emulator-5554",
+                    "shell",
+                    "pm",
+                    "list",
+                    "packages",
+                    "-f",
+                    "android",
+                ],
                 Canned::exit(1, "", "Can't find service: package"),
             );
             let _g = set_test_runner(fake);
 
             let err = wait_for_android_package_service("emulator-5554")
                 .await
-                .expect_err("an unbound package service SHALL time out rather than poison the cache");
+                .expect_err(
+                    "an unbound package service SHALL time out rather than poison the cache",
+                );
             assert!(format!("{err:#}").contains("not ready"), "got: {err:#}");
         }
     }

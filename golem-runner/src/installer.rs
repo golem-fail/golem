@@ -28,6 +28,10 @@ use crate::fingerprint::Fingerprint;
 /// Default install script timeout if none is configured.
 pub const DEFAULT_INSTALL_TIMEOUT_MS: u64 = 600_000; // 10 min
 
+/// Max stderr lines retained for the error-message tail when an install
+/// script fails or times out.
+const STDERR_TAIL_MAX_LINES: usize = 100;
+
 /// Cache key: `(device_udid, bundle_id)`.
 pub type InstallKey = (String, String);
 
@@ -46,6 +50,14 @@ pub enum InstallOutcome {
 /// the first device for a given (platform, bundle) drives the build; later
 /// devices skip straight to install-only.
 pub type BuildKey = (String, String);
+
+/// Shared map of project root + script path locks. Key is `(project_root, script_path)`;
+/// value is a mutex that serialises concurrent installs sharing the same build tree.
+pub type ProjectLockMap = Arc<Mutex<HashMap<(PathBuf, PathBuf), Arc<Mutex<()>>>>>;
+
+/// Shared map of per-build locks. Key is `(platform, bundle)`;
+/// value is a mutex that serialises build-winner selection under concurrency.
+pub type BuildLockMap = Arc<Mutex<HashMap<BuildKey, Arc<tokio::sync::Mutex<()>>>>>;
 
 /// Outcome of the one-time build performed by the first device for a
 /// given `(platform, bundle)` pair.
@@ -142,16 +154,14 @@ pub struct InstallCache {
     /// Keying by script path too means unrelated apps under one monorepo
     /// project root don't serialise with each other — only runs that share
     /// both root AND script collide.
-    #[allow(clippy::type_complexity)]
-    project_locks: Arc<Mutex<HashMap<(PathBuf, PathBuf), Arc<Mutex<()>>>>>,
+    project_locks: ProjectLockMap,
     /// Per-(platform, bundle) build outcomes. Populated by the winning
     /// builder; read by waiters.
     build_outcomes: Arc<Mutex<HashMap<BuildKey, BuildOutcome>>>,
     /// Per-(platform, bundle) mutex that serialises build-winner selection.
     /// Held by the Builder across the full script run; waiters queue on it
     /// and re-check `build_outcomes` once they acquire.
-    #[allow(clippy::type_complexity)]
-    build_locks: Arc<Mutex<HashMap<BuildKey, Arc<tokio::sync::Mutex<()>>>>>,
+    build_locks: BuildLockMap,
     /// In-memory snapshot of the on-disk persistent cache. Loaded from
     /// `persistent_path` at suite start, written back after each
     /// successful install. `None` until [`InstallCache::load_persistent`]
@@ -334,6 +344,26 @@ impl InstallCache {
     }
 }
 
+/// The script to run and how to invoke it.
+#[derive(Clone, Copy)]
+pub struct InstallScriptSpec<'a> {
+    pub script_path: &'a Path,
+    pub working_dir: &'a Path,
+    pub install_only: bool,
+}
+
+/// The device + app identity the script installs onto, plus event-labelling
+/// fields (`target`, `os_major`).
+#[derive(Clone, Copy)]
+pub struct InstallDeviceTarget<'a> {
+    pub platform: &'a str,
+    pub device_udid: &'a str,
+    pub bundle_id: &'a str,
+    pub app_name: &'a str,
+    pub target: &'a str,
+    pub os_major: u32,
+}
+
 /// Run an install script. Emits `InstallStarted`, `InstallOutput` (per stderr line),
 /// and `InstallFinished` events via the provided emitter (when present).
 ///
@@ -341,20 +371,25 @@ impl InstallCache {
 ///
 /// Returns `Ok(())` on exit 0, `Err(...)` on nonzero exit, timeout, or spawn error.
 /// The error's `Display` contains exit info + stderr tail (last ~100 lines).
-#[allow(clippy::too_many_arguments)]
 pub async fn run_install_script(
-    script_path: &Path,
-    working_dir: &Path,
-    platform: &str,
-    device_udid: &str,
-    bundle_id: &str,
-    app_name: &str,
+    script: &InstallScriptSpec<'_>,
+    device_target: &InstallDeviceTarget<'_>,
     timeout_ms: u64,
-    target: &str,
-    os_major: u32,
-    install_only: bool,
     emitter: Option<&DeviceEmitter>,
 ) -> Result<()> {
+    let InstallScriptSpec {
+        script_path,
+        working_dir,
+        install_only,
+    } = *script;
+    let InstallDeviceTarget {
+        platform,
+        device_udid,
+        bundle_id,
+        app_name,
+        target,
+        os_major,
+    } = *device_target;
     let start = Instant::now();
     if let Some(e) = emitter {
         e.emit(EventKind::InstallStarted {
@@ -426,7 +461,7 @@ pub async fn run_install_script(
                 });
             }
             tail.push(line);
-            if tail.len() > 100 {
+            if tail.len() > STDERR_TAIL_MAX_LINES {
                 tail.remove(0);
             }
         }
@@ -520,7 +555,9 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&path).expect("metadata() SHALL succeed").permissions();
+            let mut perms = std::fs::metadata(&path)
+                .expect("metadata() SHALL succeed")
+                .permissions();
             perms.set_mode(0o755);
             std::fs::set_permissions(&path, perms).expect("set_permissions() SHALL succeed");
         }
@@ -595,7 +632,10 @@ mod tests {
         let tmp = tempdir().expect("tempdir() SHALL succeed");
         let path = tmp.path().join("install-cache.json");
         let cache = InstallCache::new();
-        cache.load_persistent(path).await.expect("async operation SHALL succeed");
+        cache
+            .load_persistent(path)
+            .await
+            .expect("async operation SHALL succeed");
         assert!(cache.get_persistent("u-1", "com.x").await.is_none());
     }
 
@@ -604,7 +644,10 @@ mod tests {
         let tmp = tempdir().expect("tempdir() SHALL succeed");
         let path = tmp.path().join("install-cache.json");
         let cache = InstallCache::new();
-        cache.load_persistent(path.clone()).await.expect("async operation SHALL succeed");
+        cache
+            .load_persistent(path.clone())
+            .await
+            .expect("async operation SHALL succeed");
         let entry = PersistedInstall {
             fingerprint: Fingerprint::Git {
                 rev: "abc".into(),
@@ -618,7 +661,10 @@ mod tests {
             .set_persistent("u-1", "com.x", entry.clone())
             .await
             .expect("async operation SHALL succeed");
-        let got = cache.get_persistent("u-1", "com.x").await.expect("async operation SHALL succeed");
+        let got = cache
+            .get_persistent("u-1", "com.x")
+            .await
+            .expect("async operation SHALL succeed");
         assert_eq!(got, entry);
         // The file SHALL exist after a set.
         assert!(path.exists(), "set_persistent SHALL write the file");
@@ -637,15 +683,24 @@ mod tests {
         };
 
         let cache_a = InstallCache::new();
-        cache_a.load_persistent(path.clone()).await.expect("async operation SHALL succeed");
+        cache_a
+            .load_persistent(path.clone())
+            .await
+            .expect("async operation SHALL succeed");
         cache_a
             .set_persistent("u-9", "com.y", entry.clone())
             .await
             .expect("async operation SHALL succeed");
 
         let cache_b = InstallCache::new();
-        cache_b.load_persistent(path).await.expect("async operation SHALL succeed");
-        let got = cache_b.get_persistent("u-9", "com.y").await.expect("async operation SHALL succeed");
+        cache_b
+            .load_persistent(path)
+            .await
+            .expect("async operation SHALL succeed");
+        let got = cache_b
+            .get_persistent("u-9", "com.y")
+            .await
+            .expect("async operation SHALL succeed");
         assert_eq!(
             got, entry,
             "fresh cache SHALL load entries written by another"
@@ -658,7 +713,10 @@ mod tests {
         let path = tmp.path().join("install-cache.json");
         std::fs::write(&path, "{not json").expect("write() SHALL succeed");
         let cache = InstallCache::new();
-        cache.load_persistent(path).await.expect("async operation SHALL succeed");
+        cache
+            .load_persistent(path)
+            .await
+            .expect("async operation SHALL succeed");
         assert!(
             cache.get_persistent("u-1", "com.x").await.is_none(),
             "corrupt cache SHALL not block startup"
@@ -671,7 +729,10 @@ mod tests {
         let path = tmp.path().join("install-cache.json");
         std::fs::write(&path, r#"{"version": 99, "entries": {}}"#).expect("write() SHALL succeed");
         let cache = InstallCache::new();
-        cache.load_persistent(path).await.expect("async operation SHALL succeed");
+        cache
+            .load_persistent(path)
+            .await
+            .expect("async operation SHALL succeed");
         assert!(cache.get_persistent("u-1", "com.x").await.is_none());
     }
 
@@ -685,7 +746,10 @@ mod tests {
             installed_at: chrono::Utc::now(),
         };
         // Should not error, just nothing happens.
-        cache.set_persistent("u-1", "com.x", entry).await.expect("async operation SHALL succeed");
+        cache
+            .set_persistent("u-1", "com.x", entry)
+            .await
+            .expect("async operation SHALL succeed");
         // get returns None because the in-memory map remains empty.
         assert!(cache.get_persistent("u-1", "com.x").await.is_none());
     }
@@ -695,15 +759,24 @@ mod tests {
         let tmp = tempdir().expect("tempdir() SHALL succeed");
         let path = tmp.path().join("install-cache.json");
         let cache = InstallCache::new();
-        cache.load_persistent(path).await.expect("async operation SHALL succeed");
+        cache
+            .load_persistent(path)
+            .await
+            .expect("async operation SHALL succeed");
         let entry = PersistedInstall {
             fingerprint: Fingerprint::None,
             device_install_time: None,
             installed_version: None,
             installed_at: chrono::Utc::now(),
         };
-        cache.set_persistent("u-1", "com.x", entry).await.expect("async operation SHALL succeed");
-        cache.forget_persistent("u-1", "com.x").await.expect("async operation SHALL succeed");
+        cache
+            .set_persistent("u-1", "com.x", entry)
+            .await
+            .expect("async operation SHALL succeed");
+        cache
+            .forget_persistent("u-1", "com.x")
+            .await
+            .expect("async operation SHALL succeed");
         assert!(cache.get_persistent("u-1", "com.x").await.is_none());
     }
 
@@ -724,16 +797,20 @@ mod tests {
         let tmp = tempdir().expect("tempdir() SHALL succeed");
         let script = write_script(tmp.path(), "#!/bin/sh\necho running >&2\nexit 0\n");
         let result = run_install_script(
-            &script,
-            tmp.path(),
-            "ios",
-            "udid-1",
-            "com.x",
-            "app",
+            &InstallScriptSpec {
+                script_path: &script,
+                working_dir: tmp.path(),
+                install_only: false,
+            },
+            &InstallDeviceTarget {
+                platform: "ios",
+                device_udid: "udid-1",
+                bundle_id: "com.x",
+                app_name: "app",
+                target: "test target",
+                os_major: 0,
+            },
             5_000,
-            "test target",
-            0,
-            false,
             None,
         )
         .await;
@@ -748,16 +825,20 @@ mod tests {
             "#!/bin/sh\necho 'build failed: missing signing' >&2\nexit 1\n",
         );
         let result = run_install_script(
-            &script,
-            tmp.path(),
-            "ios",
-            "udid-1",
-            "com.x",
-            "app",
+            &InstallScriptSpec {
+                script_path: &script,
+                working_dir: tmp.path(),
+                install_only: false,
+            },
+            &InstallDeviceTarget {
+                platform: "ios",
+                device_udid: "udid-1",
+                bundle_id: "com.x",
+                app_name: "app",
+                target: "test target",
+                os_major: 0,
+            },
             5_000,
-            "test target",
-            0,
-            false,
             None,
         )
         .await;
@@ -778,16 +859,20 @@ mod tests {
         let tmp = tempdir().expect("tempdir() SHALL succeed");
         let script = write_script(tmp.path(), "#!/bin/sh\nsleep 10\n");
         let result = run_install_script(
-            &script,
-            tmp.path(),
-            "ios",
-            "udid-1",
-            "com.x",
-            "app",
+            &InstallScriptSpec {
+                script_path: &script,
+                working_dir: tmp.path(),
+                install_only: false,
+            },
+            &InstallDeviceTarget {
+                platform: "ios",
+                device_udid: "udid-1",
+                bundle_id: "com.x",
+                app_name: "app",
+                target: "test target",
+                os_major: 0,
+            },
             200,
-            "test target",
-            0,
-            false,
             None,
         )
         .await;
@@ -805,16 +890,20 @@ mod tests {
         );
         let script = write_script(tmp.path(), &script_body);
         let result = run_install_script(
-            &script,
-            tmp.path(),
-            "android",
-            "emulator-5554",
-            "com.example.app",
-            "app",
+            &InstallScriptSpec {
+                script_path: &script,
+                working_dir: tmp.path(),
+                install_only: false,
+            },
+            &InstallDeviceTarget {
+                platform: "android",
+                device_udid: "emulator-5554",
+                bundle_id: "com.example.app",
+                app_name: "app",
+                target: "test target",
+                os_major: 0,
+            },
             5_000,
-            "test target",
-            0,
-            false,
             None,
         )
         .await;
@@ -834,16 +923,20 @@ mod tests {
             "#!/bin/sh\ntest -f ./marker.txt || { echo missing >&2; exit 1; }\n",
         );
         let result = run_install_script(
-            &script,
-            tmp.path(),
-            "ios",
-            "udid-1",
-            "com.x",
-            "app",
+            &InstallScriptSpec {
+                script_path: &script,
+                working_dir: tmp.path(),
+                install_only: false,
+            },
+            &InstallDeviceTarget {
+                platform: "ios",
+                device_udid: "udid-1",
+                bundle_id: "com.x",
+                app_name: "app",
+                target: "test target",
+                os_major: 0,
+            },
             5_000,
-            "test target",
-            0,
-            false,
             None,
         )
         .await;
@@ -864,16 +957,20 @@ mod tests {
         );
         let script = write_script(tmp.path(), &script_body);
         let result = run_install_script(
-            &script,
-            tmp.path(),
-            "ios",
-            "udid-1",
-            "com.x",
-            "app",
+            &InstallScriptSpec {
+                script_path: &script,
+                working_dir: tmp.path(),
+                install_only: true,
+            },
+            &InstallDeviceTarget {
+                platform: "ios",
+                device_udid: "udid-1",
+                bundle_id: "com.x",
+                app_name: "app",
+                target: "test target",
+                os_major: 0,
+            },
             5_000,
-            "test target",
-            0,
-            true,
             None,
         )
         .await;
@@ -897,16 +994,20 @@ mod tests {
         );
         let script = write_script(tmp.path(), &script_body);
         let result = run_install_script(
-            &script,
-            tmp.path(),
-            "ios",
-            "udid-1",
-            "com.x",
-            "app",
+            &InstallScriptSpec {
+                script_path: &script,
+                working_dir: tmp.path(),
+                install_only: false,
+            },
+            &InstallDeviceTarget {
+                platform: "ios",
+                device_udid: "udid-1",
+                bundle_id: "com.x",
+                app_name: "app",
+                target: "test target",
+                os_major: 0,
+            },
             5_000,
-            "test target",
-            0,
-            false,
             None,
         )
         .await;
@@ -1013,16 +1114,20 @@ mod tests {
         let tmp = tempdir().expect("tempdir");
         let missing = tmp.path().join("does-not-exist.sh");
         let result = run_install_script(
-            &missing,
-            tmp.path(),
-            "ios",
-            "udid-1",
-            "com.x",
-            "app",
+            &InstallScriptSpec {
+                script_path: &missing,
+                working_dir: tmp.path(),
+                install_only: false,
+            },
+            &InstallDeviceTarget {
+                platform: "ios",
+                device_udid: "udid-1",
+                bundle_id: "com.x",
+                app_name: "app",
+                target: "test target",
+                os_major: 0,
+            },
             5_000,
-            "test target",
-            0,
-            false,
             None,
         )
         .await;
@@ -1044,16 +1149,20 @@ mod tests {
         let tmp = tempdir().expect("tempdir");
         let script = write_script(tmp.path(), "#!/bin/sh\nexit 3\n");
         let result = run_install_script(
-            &script,
-            tmp.path(),
-            "ios",
-            "udid-1",
-            "com.x",
-            "app",
+            &InstallScriptSpec {
+                script_path: &script,
+                working_dir: tmp.path(),
+                install_only: false,
+            },
+            &InstallDeviceTarget {
+                platform: "ios",
+                device_udid: "udid-1",
+                bundle_id: "com.x",
+                app_name: "app",
+                target: "test target",
+                os_major: 0,
+            },
             5_000,
-            "test target",
-            0,
-            false,
             None,
         )
         .await;
@@ -1072,16 +1181,20 @@ mod tests {
         let tmp = tempdir().expect("tempdir");
         let script = write_script(tmp.path(), "#!/bin/sh\nsleep 10\n");
         let result = run_install_script(
-            &script,
-            tmp.path(),
-            "ios",
-            "udid-1",
-            "com.x",
-            "app",
+            &InstallScriptSpec {
+                script_path: &script,
+                working_dir: tmp.path(),
+                install_only: false,
+            },
+            &InstallDeviceTarget {
+                platform: "ios",
+                device_udid: "udid-1",
+                bundle_id: "com.x",
+                app_name: "app",
+                target: "test target",
+                os_major: 0,
+            },
             200,
-            "test target",
-            0,
-            false,
             None,
         )
         .await;
@@ -1107,16 +1220,20 @@ mod tests {
         let tmp = tempdir().expect("tempdir");
         let script = write_script(tmp.path(), "#!/bin/sh\nexit 0\n");
         let result = run_install_script(
-            &script,
-            tmp.path(),
-            "ios",
-            "udid-1",
-            "com.x",
-            "app",
+            &InstallScriptSpec {
+                script_path: &script,
+                working_dir: tmp.path(),
+                install_only: false,
+            },
+            &InstallDeviceTarget {
+                platform: "ios",
+                device_udid: "udid-1",
+                bundle_id: "com.x",
+                app_name: "app",
+                target: "iPhone 16e (ios/v18/phone)",
+                os_major: 18,
+            },
             5_000,
-            "iPhone 16e (ios/v18/phone)",
-            18,
-            false,
             Some(&emitter),
         )
         .await;
@@ -1180,16 +1297,20 @@ mod tests {
             "#!/bin/sh\necho line-one >&2\necho line-two >&2\nexit 0\n",
         );
         let result = run_install_script(
-            &script,
-            tmp.path(),
-            "ios",
-            "udid-1",
-            "com.x",
-            "myapp",
+            &InstallScriptSpec {
+                script_path: &script,
+                working_dir: tmp.path(),
+                install_only: false,
+            },
+            &InstallDeviceTarget {
+                platform: "ios",
+                device_udid: "udid-1",
+                bundle_id: "com.x",
+                app_name: "myapp",
+                target: "test target",
+                os_major: 0,
+            },
             5_000,
-            "test target",
-            0,
-            false,
             Some(&emitter),
         )
         .await;
@@ -1224,16 +1345,20 @@ mod tests {
         let tmp = tempdir().expect("tempdir");
         let script = write_script(tmp.path(), "#!/bin/sh\necho boom >&2\nexit 7\n");
         let result = run_install_script(
-            &script,
-            tmp.path(),
-            "ios",
-            "udid-1",
-            "com.x",
-            "app",
+            &InstallScriptSpec {
+                script_path: &script,
+                working_dir: tmp.path(),
+                install_only: false,
+            },
+            &InstallDeviceTarget {
+                platform: "ios",
+                device_udid: "udid-1",
+                bundle_id: "com.x",
+                app_name: "app",
+                target: "test target",
+                os_major: 0,
+            },
             5_000,
-            "test target",
-            0,
-            false,
             Some(&emitter),
         )
         .await;

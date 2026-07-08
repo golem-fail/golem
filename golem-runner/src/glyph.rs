@@ -124,7 +124,14 @@ fn blend_pixel(img: &mut RgbaImage, px: i32, py: i32, color: Rgba<u8>) {
 /// Draw `text` with its top-left at (x, y), each bitmap pixel expanded to a
 /// `scale`×`scale` block, alpha-blended in `color`. Returns the advance width
 /// in pixels (`text_width`). Unknown glyphs render blank but still advance.
-pub fn draw_str(img: &mut RgbaImage, x: i32, y: i32, scale: u32, color: Rgba<u8>, text: &str) -> u32 {
+pub fn draw_str(
+    img: &mut RgbaImage,
+    x: i32,
+    y: i32,
+    scale: u32,
+    color: Rgba<u8>,
+    text: &str,
+) -> u32 {
     let scale = scale.max(1);
     let mut cx = x;
     for c in text.chars() {
@@ -183,7 +190,10 @@ mod tests {
         let mut img = blank(40, 16);
         let white = Rgba([255, 255, 255, 255]);
         draw_str(&mut img, 0, 0, 1, white, "?");
-        assert!(img.pixels().any(|p| p.0[0] == 255), "'?' should light pixels");
+        assert!(
+            img.pixels().any(|p| p.0[0] == 255),
+            "'?' should light pixels"
+        );
     }
 
     #[test]
@@ -191,7 +201,10 @@ mod tests {
         let mut img = blank(40, 16);
         let white = Rgba([255, 255, 255, 255]);
         let adv = draw_str(&mut img, 0, 0, 1, white, " ~");
-        assert!(img.pixels().all(|p| p.0[0] == 0), "blank glyphs leave no ink");
+        assert!(
+            img.pixels().all(|p| p.0[0] == 0),
+            "blank glyphs leave no ink"
+        );
         // both glyphs still advance.
         assert_eq!(adv, text_width(" ~", 1));
     }

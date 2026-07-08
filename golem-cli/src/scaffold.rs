@@ -529,7 +529,10 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mode = fs::metadata(&out).expect("metadata() SHALL succeed").permissions().mode();
+            let mode = fs::metadata(&out)
+                .expect("metadata() SHALL succeed")
+                .permissions()
+                .mode();
             assert_eq!(mode & 0o755, 0o755, "SHALL be executable: {:o}", mode);
         }
     }

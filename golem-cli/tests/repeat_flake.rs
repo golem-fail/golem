@@ -28,7 +28,10 @@ fn repeat_fans_out_and_reports_each_outcome() {
     // The aggregate results file carries all three repeat runs as flows:
     // two passed, one failed.
     let v = read_results_json(&r, "");
-    assert_eq!(v["suite"]["total"], 3, "3 repeats SHALL produce 3 flows; json={v}");
+    assert_eq!(
+        v["suite"]["total"], 3,
+        "3 repeats SHALL produce 3 flows; json={v}"
+    );
     assert_eq!(v["suite"]["passed"], 2, "2 runs SHALL pass; json={v}");
     assert_eq!(v["suite"]["failed"], 1, "1 run SHALL fail; json={v}");
 }
@@ -36,7 +39,11 @@ fn repeat_fans_out_and_reports_each_outcome() {
 #[test]
 fn repeat_all_pass_exits_zero() {
     let r = run_stub("", &["--repeat", "3"]);
-    assert_eq!(r.code, 0, "all-passing repeats SHALL exit 0; stderr={}", r.stderr);
+    assert_eq!(
+        r.code, 0,
+        "all-passing repeats SHALL exit 0; stderr={}",
+        r.stderr
+    );
     let v = read_results_json(&r, "");
     assert_eq!(v["suite"]["total"], 3, "json={v}");
     assert_eq!(v["suite"]["passed"], 3, "all 3 runs SHALL pass; json={v}");

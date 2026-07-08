@@ -20,7 +20,7 @@ use app_lifecycle::{handle_clear_data, handle_launch, handle_stop};
 use assertion::{handle_assert_alert, handle_assert_not_visible, handle_assert_visible};
 use capture::handle_read;
 use device::{
-    handle_set_dark_mode, handle_grant_permission, handle_press, handle_revoke_permission,
+    handle_grant_permission, handle_press, handle_revoke_permission, handle_set_dark_mode,
     handle_set_location,
 };
 use external::{
@@ -163,6 +163,12 @@ mod tests {
                 in_doc.insert(tok);
             }
         }
+
+        // `load_mixin` is a parse-time action: golem-parser expands it into the
+        // referenced mixin's steps before runtime dispatch, so it never appears
+        // in the `match action` above. It is a real, documented user action, just
+        // not a runtime dispatch arm — exclude it from the sync check.
+        in_doc.remove("load_mixin");
 
         let code_only: Vec<_> = in_code.difference(&in_doc).collect();
         let doc_only: Vec<_> = in_doc.difference(&in_code).collect();

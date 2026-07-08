@@ -188,7 +188,9 @@ pub fn set_test_runner(r: Arc<dyn CommandRunner>) -> TestRunnerGuard {
 
 /// Run a command with default options via the active runner.
 pub async fn output(program: &str, args: &[String]) -> std::io::Result<Output> {
-    runner().output(program, args, &CommandOpts::default()).await
+    runner()
+        .output(program, args, &CommandOpts::default())
+        .await
 }
 
 /// Run a command with explicit options via the active runner.
@@ -414,7 +416,10 @@ mod tests {
     #[tokio::test]
     async fn fake_matches_on_program_and_args() {
         let fake = FakeCommandRunner::new();
-        fake.expect(&["adb", "devices"], Canned::ok_stdout("emulator-5554\tdevice"));
+        fake.expect(
+            &["adb", "devices"],
+            Canned::ok_stdout("emulator-5554\tdevice"),
+        );
 
         let out = fake
             .output("adb", &argv(&["devices"]), &CommandOpts::default())

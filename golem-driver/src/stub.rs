@@ -153,7 +153,12 @@ fn stub_el(
 /// its multi-second deadline — keeping stub runs fast.
 fn padded_root() -> Element {
     const FILLER: usize = 24;
-    let mut root = stub_el("View", None, None, Bounds::new(0, 0, VIEWPORT.0, VIEWPORT.1));
+    let mut root = stub_el(
+        "View",
+        None,
+        None,
+        Bounds::new(0, 0, VIEWPORT.0, VIEWPORT.1),
+    );
     root.children.push(stub_el(
         "TextField",
         None,
@@ -382,7 +387,10 @@ mod tests {
     async fn passing_run_serves_tree_with_target() {
         let driver = StubDriver::new(1, StubScript::default());
         let (tree, meta) = driver.get_hierarchy().await.expect("get_hierarchy");
-        assert!(has_target(&tree), "passing run SHALL serve the fixture target");
+        assert!(
+            has_target(&tree),
+            "passing run SHALL serve the fixture target"
+        );
         assert_eq!(meta.node_count, tree.node_count() as u32);
     }
 
@@ -394,10 +402,23 @@ mod tests {
         use crate::AWAIT_FIRST_FRAME_MIN_NODES as MIN;
         let pass = StubDriver::new(1, StubScript::default());
         let (pt, _) = pass.get_hierarchy().await.expect("get_hierarchy");
-        let fail = StubDriver::new(1, StubScript { fail_on_runs: vec![1] });
+        let fail = StubDriver::new(
+            1,
+            StubScript {
+                fail_on_runs: vec![1],
+            },
+        );
         let (ft, _) = fail.get_hierarchy().await.expect("get_hierarchy");
-        assert!(pt.node_count() > MIN, "pass tree {} SHALL exceed {MIN}", pt.node_count());
-        assert!(ft.node_count() > MIN, "fail tree {} SHALL exceed {MIN}", ft.node_count());
+        assert!(
+            pt.node_count() > MIN,
+            "pass tree {} SHALL exceed {MIN}",
+            pt.node_count()
+        );
+        assert!(
+            ft.node_count() > MIN,
+            "fail tree {} SHALL exceed {MIN}",
+            ft.node_count()
+        );
     }
 
     #[tokio::test]
@@ -417,7 +438,10 @@ mod tests {
         for run in [1, 3] {
             let ok = StubDriver::new(run, script.clone());
             let (tree, _) = ok.get_hierarchy().await.expect("get_hierarchy");
-            assert!(has_target(&tree), "run {run} SHALL pass with the target present");
+            assert!(
+                has_target(&tree),
+                "run {run} SHALL pass with the target present"
+            );
         }
     }
 
@@ -431,8 +455,14 @@ mod tests {
         assert_eq!(calls.len(), 3);
         assert_eq!(calls[0].0, "launch_app");
         assert_eq!(calls[0].1, vec![STUB_BUNDLE_ID]);
-        assert_eq!(calls[1], ("tap".to_string(), vec!["10".to_string(), "20".to_string()]));
-        assert_eq!(calls[2], ("type_text".to_string(), vec!["hello".to_string()]));
+        assert_eq!(
+            calls[1],
+            ("tap".to_string(), vec!["10".to_string(), "20".to_string()])
+        );
+        assert_eq!(
+            calls[2],
+            ("type_text".to_string(), vec!["hello".to_string()])
+        );
     }
 
     #[test]

@@ -69,11 +69,7 @@ pub(crate) struct GeoCountry {
     #[serde(default)]
     pub(crate) name_ascii: String,
     pub(crate) iso_code: String,
-    #[allow(dead_code)]
-    pub(crate) phone_prefix: String,
     pub(crate) phone_formats: Vec<String>,
-    #[allow(dead_code)]
-    pub(crate) postcode_format: String,
     /// Per-country person-name preset: the `name`/`reading` resolution chains
     /// and the `local` accepted repertoire, as repertoire/representation token
     /// names (see `structured::repertoire` / `structured::person`). Empty when
@@ -228,9 +224,7 @@ impl GeoCountry {
             name: "Testland".to_string(),
             name_ascii: String::new(),
             iso_code: iso_code.to_string(),
-            phone_prefix: String::new(),
             phone_formats,
-            postcode_format: String::new(),
             person: PersonPreset::default(),
             markers: HashMap::new(),
         }
@@ -314,6 +308,8 @@ impl GeoDatabase {
     }
 
     /// Return a sorted list of all loaded country ISO codes.
+    // allow: only called from #[cfg(test)] code (here and in structured::address
+    // tests), so it's genuinely dead in non-test builds.
     #[allow(dead_code)]
     pub(crate) fn countries(&self) -> Vec<&str> {
         let mut codes: Vec<&str> = self.map.keys().map(|s| s.as_str()).collect();

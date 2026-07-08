@@ -1,3 +1,9 @@
+//! iOS simulator, runtime, and device-type discovery.
+//!
+//! Parses `xcrun simctl` JSON output into golem's [`crate::DeviceInfo`] and
+//! picks the best installed runtime / device type for a requested OS version
+//! and form factor when a new simulator needs creating.
+
 use crate::{DeviceInfo, DeviceState, DeviceType, Platform};
 use serde::Deserialize;
 

@@ -45,8 +45,10 @@ fn test_ctx() -> ExecutionContext<'static> {
         emitter: None,
         a11y_level: golem_runner::accessibility::A11yLevel::Off,
         a11y_min_confidence: None,
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),
-            trace_pair: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+        last_settled_tree: std::sync::Mutex::new(None),
+        trace_pair: std::sync::Mutex::new(None),
+        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
         inherited_record_default: false,
         extend_next_settle: std::sync::atomic::AtomicBool::new(false),
     }
@@ -1046,8 +1048,10 @@ steps = [
         emitter: None,
         a11y_level: golem_runner::accessibility::A11yLevel::Off,
         a11y_min_confidence: None,
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),
-            trace_pair: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+        last_settled_tree: std::sync::Mutex::new(None),
+        trace_pair: std::sync::Mutex::new(None),
+        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
         inherited_record_default: false,
         extend_next_settle: std::sync::atomic::AtomicBool::new(false),
     };
@@ -1118,8 +1122,10 @@ steps = [
         emitter: None,
         a11y_level: golem_runner::accessibility::A11yLevel::Off,
         a11y_min_confidence: None,
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),
-            trace_pair: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+        last_settled_tree: std::sync::Mutex::new(None),
+        trace_pair: std::sync::Mutex::new(None),
+        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
         inherited_record_default: false,
         extend_next_settle: std::sync::atomic::AtomicBool::new(false),
     };
@@ -1190,8 +1196,10 @@ steps = [
         emitter: None,
         a11y_level: golem_runner::accessibility::A11yLevel::Off,
         a11y_min_confidence: None,
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),
-            trace_pair: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+        last_settled_tree: std::sync::Mutex::new(None),
+        trace_pair: std::sync::Mutex::new(None),
+        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
         inherited_record_default: false,
         extend_next_settle: std::sync::atomic::AtomicBool::new(false),
     };
@@ -1260,8 +1268,10 @@ steps = [
         emitter: None,
         a11y_level: golem_runner::accessibility::A11yLevel::Off,
         a11y_min_confidence: None,
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),
-            trace_pair: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+        last_settled_tree: std::sync::Mutex::new(None),
+        trace_pair: std::sync::Mutex::new(None),
+        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
         inherited_record_default: false,
         extend_next_settle: std::sync::atomic::AtomicBool::new(false),
     };
@@ -1336,8 +1346,10 @@ steps = [
         emitter: None,
         a11y_level: golem_runner::accessibility::A11yLevel::Off,
         a11y_min_confidence: None,
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),
-            trace_pair: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+        last_settled_tree: std::sync::Mutex::new(None),
+        trace_pair: std::sync::Mutex::new(None),
+        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
         inherited_record_default: false,
         extend_next_settle: std::sync::atomic::AtomicBool::new(false),
     };
@@ -1364,7 +1376,11 @@ steps = [
         }
     }
     let png_path = found_png.expect("SHALL write a screenshot .png file");
-    let filename = png_path.file_name().expect("file_name() SHALL succeed").to_str().expect("to_str() SHALL succeed");
+    let filename = png_path
+        .file_name()
+        .expect("file_name() SHALL succeed")
+        .to_str()
+        .expect("to_str() SHALL succeed");
     assert!(filename.ends_with(".png"), "SHALL have .png extension");
     assert!(filename.contains("disk_block"), "SHALL contain block name");
 
@@ -1415,8 +1431,10 @@ steps = [
         emitter: None,
         a11y_level: golem_runner::accessibility::A11yLevel::Off,
         a11y_min_confidence: None,
-        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),        last_settled_tree: std::sync::Mutex::new(None),
-            trace_pair: std::sync::Mutex::new(None),        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
+        step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+        last_settled_tree: std::sync::Mutex::new(None),
+        trace_pair: std::sync::Mutex::new(None),
+        rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_seed(0)),
         inherited_record_default: false,
         extend_next_settle: std::sync::atomic::AtomicBool::new(false),
     };

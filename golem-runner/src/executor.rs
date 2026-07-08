@@ -13,6 +13,19 @@ use crate::context::ExecutionContext;
 use crate::perf::RawPerfData;
 use crate::policy::{execute_step_with_policy, StepOutcome};
 
+/// App-lifecycle (stop/launch) timeout is `default_timeout_ms × this`. A cold
+/// iOS 26 launch's worst-case probe sequence runs ~15s; `×5` over the default
+/// per-step timeout gives headroom for request-routing latency, the off-main
+/// watchdog dispatch, and first-launch slowdowns without uncapping forever.
+const LIFECYCLE_TIMEOUT_MULTIPLIER: u64 = 5;
+
+/// Fallback step-count ceiling for a flow when `[flow.options].max_steps` is unset.
+const DEFAULT_MAX_STEPS: u64 = 10_000;
+
+/// Fallback wall-clock ceiling, in seconds, for a flow when
+/// `[flow.options].max_runtime` is unset.
+const DEFAULT_MAX_RUNTIME_SECS: u64 = 3600;
+
 /// Build a target label for a step (excludes action name).
 /// E.g. `on_text="Submit"` or `app="app"`.
 fn step_target(step: &golem_parser::Step) -> String {
@@ -143,7 +156,8 @@ pub async fn execute_flow<'a>(
     // still finishing its third probe. `× 5` gives headroom for
     // request-routing latency, the off-main watchdog dispatch, and
     // small first-launch slowdowns without uncapping forever.
-    let lifecycle_timeout = std::time::Duration::from_millis(default_timeout_ms * 5);
+    let lifecycle_timeout =
+        std::time::Duration::from_millis(default_timeout_ms * LIFECYCLE_TIMEOUT_MULTIPLIER);
     match lifecycle {
         golem_parser::AppLifecycle::Reset => {
             for app in apps {
@@ -204,14 +218,14 @@ pub async fn execute_flow<'a>(
         .options
         .as_ref()
         .and_then(|o| o.max_steps)
-        .unwrap_or(10_000);
+        .unwrap_or(DEFAULT_MAX_STEPS);
     let max_runtime = flow
         .flow
         .options
         .as_ref()
         .and_then(|o| o.max_runtime.as_deref())
         .and_then(parse_duration)
-        .unwrap_or(Duration::from_secs(3600));
+        .unwrap_or(Duration::from_secs(DEFAULT_MAX_RUNTIME_SECS));
     let start_time = Instant::now();
     let mut step_count: u64 = 0;
 
@@ -310,11 +324,7 @@ pub async fn execute_flow<'a>(
             // Derive child RNG from parent for deterministic sub-flow
             // generation. `child()` carries the parent's date anchor — the run
             // has one "now" shared by every (sub-)flow.
-            let child_rng = ctx
-                .rng
-                .lock()
-                .expect("parent rng mutex poisoned")
-                .child();
+            let child_rng = ctx.rng.lock().expect("parent rng mutex poisoned").child();
             let mut child_ctx = ExecutionContext {
                 flow_dir: child_flow_dir,
                 project_root: ctx.project_root,
@@ -330,8 +340,9 @@ pub async fn execute_flow<'a>(
                 emitter: ctx.emitter,
                 a11y_level: crate::accessibility::A11yLevel::Off,
                 a11y_min_confidence: ctx.a11y_min_confidence,
-                step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),            last_settled_tree: std::sync::Mutex::new(None),
-            trace_pair: std::sync::Mutex::new(None),
+                step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+                last_settled_tree: std::sync::Mutex::new(None),
+                trace_pair: std::sync::Mutex::new(None),
                 rng: std::sync::Mutex::new(child_rng),
                 // Carry parent's effective default in as the child's
                 // starting point — `execute_flow` will refine it from
@@ -720,17 +731,17 @@ pub async fn execute_flow<'a>(
                             let density = ctx.device.and_then(a11y_density).unwrap_or(1.0);
                             let config =
                                 crate::accessibility::A11yConfig::new(ctx.a11y_level, density);
-                            let audit = compute_a11y_audit(
+                            let audit = compute_a11y_audit(A11yAuditParams {
                                 ctx,
                                 flow,
                                 block,
-                                current_idx,
-                                block_iter_for_recording,
-                                &config,
-                                &tree,
-                                Some(&shot),
-                                1.0, // failure shot is a real live screenshot
-                            );
+                                block_index: current_idx,
+                                block_iteration: block_iter_for_recording,
+                                config: &config,
+                                tree: &tree,
+                                shot: Some(&shot),
+                                confidence_derate: 1.0, // failure shot is a real live screenshot
+                            });
                             record_a11y_audit(ctx, &mut warnings, &mut a11y_audits, audit);
                         }
                     }
@@ -885,14 +896,16 @@ pub async fn execute_flow<'a>(
                             (Some((tree, captured_at)), Some(stopped)) => {
                                 let before =
                                     stopped.saturating_duration_since(captured_at).as_secs_f64();
-                                let frame =
-                                    crate::capture::extract_recording_frame(mp4, before, device_dims)
-                                        .await;
+                                let frame = crate::capture::extract_recording_frame(
+                                    mp4,
+                                    before,
+                                    device_dims,
+                                )
+                                .await;
                                 (Some(tree), frame)
                             }
                             _ => {
-                                let tree =
-                                    driver.get_hierarchy().await.ok().map(|(t, _meta)| t);
+                                let tree = driver.get_hierarchy().await.ok().map(|(t, _meta)| t);
                                 let frame = if tree.is_some() {
                                     crate::capture::extract_recording_frame(mp4, 0.3, device_dims)
                                         .await
@@ -964,22 +977,23 @@ pub async fn execute_flow<'a>(
                     (tree, None, 1.0)
                 };
             if let Some(tree) = tree {
-                let audit = compute_a11y_audit(
+                let audit = compute_a11y_audit(A11yAuditParams {
                     ctx,
                     flow,
                     block,
-                    current_idx,
-                    block_iter_for_recording,
-                    &config,
-                    &tree,
-                    shot.as_deref(),
-                    derate,
-                );
+                    block_index: current_idx,
+                    block_iteration: block_iter_for_recording,
+                    config: &config,
+                    tree: &tree,
+                    shot: shot.as_deref(),
+                    confidence_derate: derate,
+                });
                 record_a11y_audit(ctx, &mut warnings, &mut a11y_audits, audit);
 
                 // Threshold gate: fail the flow when cumulative errors/warnings
                 // exceed the configured maxima.
-                if let Some(reason) = a11y_threshold_breach(&a11y_audits, flow.flow.options.as_ref())
+                if let Some(reason) =
+                    a11y_threshold_breach(&a11y_audits, flow.flow.options.as_ref())
                 {
                     warnings.push(reason.clone());
                     return Ok(FlowResult {
@@ -1136,22 +1150,38 @@ fn record_a11y_audit(
             audit.warning_count()
         ));
     }
-    ctx.emit(golem_events::EventKind::A11yAudit { audit: audit.clone() });
+    ctx.emit(golem_events::EventKind::A11yAudit {
+        audit: audit.clone(),
+    });
     a11y_audits.push(audit);
 }
 
-#[allow(clippy::too_many_arguments)]
-fn compute_a11y_audit(
-    ctx: &ExecutionContext,
-    flow: &FlowFile,
-    block: &Block,
+/// Bundled inputs for [`compute_a11y_audit`]: the run context/flow/block
+/// location, the a11y config, and the tree/screenshot pair to audit.
+struct A11yAuditParams<'a> {
+    ctx: &'a ExecutionContext<'a>,
+    flow: &'a FlowFile,
+    block: &'a Block,
     block_index: usize,
     block_iteration: u32,
-    config: &crate::accessibility::A11yConfig,
-    tree: &golem_element::Element,
-    shot: Option<&[u8]>,
+    config: &'a crate::accessibility::A11yConfig,
+    tree: &'a golem_element::Element,
+    shot: Option<&'a [u8]>,
     confidence_derate: f32,
-) -> golem_report::A11yAudit {
+}
+
+fn compute_a11y_audit(params: A11yAuditParams) -> golem_report::A11yAudit {
+    let A11yAuditParams {
+        ctx,
+        flow,
+        block,
+        block_index,
+        block_iteration,
+        config,
+        tree,
+        shot,
+        confidence_derate,
+    } = params;
     let viewport = golem_element::Viewport::from_root(tree);
     let mut issues = crate::accessibility::audit_hierarchy(tree, &viewport, config);
 
@@ -1161,7 +1191,9 @@ fn compute_a11y_audit(
         // annotator below (avoids decoding the same PNG twice per audit).
         let decoded = image::load_from_memory(shot).ok();
         if let Some(img) = &decoded {
-            issues.extend(crate::accessibility::check_contrast_img(img, tree, &viewport, config));
+            issues.extend(crate::accessibility::check_contrast_img(
+                img, tree, &viewport, config,
+            ));
         }
         // A frame pulled from the (lossy, possibly downscaled) recording is
         // less trustworthy than a clean live screenshot — de-rate the
@@ -1173,7 +1205,12 @@ fn compute_a11y_audit(
         // `[flow.options]` > the level default.
         let min_conf = ctx
             .a11y_min_confidence
-            .or_else(|| flow.flow.options.as_ref().and_then(|o| o.a11y_min_confidence))
+            .or_else(|| {
+                flow.flow
+                    .options
+                    .as_ref()
+                    .and_then(|o| o.a11y_min_confidence)
+            })
             .unwrap_or(config.min_confidence);
         issues.retain(|i| i.confidence >= min_conf);
         if !issues.is_empty() {
@@ -1196,10 +1233,9 @@ fn compute_a11y_audit(
                 seed: ctx.rng.lock().map(|r| r.seed()).unwrap_or(0),
                 level: ctx.a11y_level.as_str().to_string(),
             };
-            if let Some(png) = decoded
-                .as_ref()
-                .and_then(|img| crate::accessibility::annotate_image(img, &issues, &viewport, &meta).ok())
-            {
+            if let Some(png) = decoded.as_ref().and_then(|img| {
+                crate::accessibility::annotate_image(img, &issues, &viewport, &meta).ok()
+            }) {
                 let path = crate::capture::build_a11y_screenshot_path(
                     ctx.capture_config,
                     block,
@@ -1234,7 +1270,10 @@ fn a11y_threshold_breach(
     options: Option<&golem_parser::FlowOptions>,
 ) -> Option<String> {
     let opts = options?;
-    let errors: usize = audits.iter().map(golem_report::A11yAudit::error_count).sum();
+    let errors: usize = audits
+        .iter()
+        .map(golem_report::A11yAudit::error_count)
+        .sum();
     let warnings: usize = audits
         .iter()
         .map(golem_report::A11yAudit::warning_count)
@@ -1548,7 +1587,7 @@ pub async fn execute_flow_with_data<'a>(
         barrier_aborted: false,
         perf_snapshots: vec![],
         recordings: Vec::new(),
-    a11y_audits: Vec::new(),
+        a11y_audits: Vec::new(),
     }))
 }
 
@@ -1622,7 +1661,10 @@ mod tests {
         };
         let mut issues = vec![mk(1.0), mk(0.8), mk(0.5)];
         derate_confidence(&mut issues, 0.9);
-        assert_eq!(issues[0].confidence, 1.0, "deterministic 1.0 SHALL be untouched");
+        assert_eq!(
+            issues[0].confidence, 1.0,
+            "deterministic 1.0 SHALL be untouched"
+        );
         assert!((issues[1].confidence - 0.72).abs() < 1e-6, "0.8 → 0.72");
         assert!((issues[2].confidence - 0.45).abs() < 1e-6, "0.5 → 0.45");
         // factor 1.0 (clean live shot) leaves everything alone.
@@ -1644,7 +1686,10 @@ mod tests {
         // Convex: dropping 0.6→0.5 costs more than 1.0→0.9 (same Δr).
         let low = f(0.6) - f(0.5);
         let high = f(1.0) - f(0.9);
-        assert!(low > high, "low-res Δ ({low}) SHALL exceed near-full Δ ({high})");
+        assert!(
+            low > high,
+            "low-res Δ ({low}) SHALL exceed near-full Δ ({high})"
+        );
         // Clamped at the bottom.
         assert!(f(0.0) >= 0.0);
     }
@@ -1725,7 +1770,10 @@ mod tests {
         assert!(a11y_threshold_breach(&audits, Some(&opts)).is_none());
     }
 
-    fn device_info(platform: golem_devices::Platform, scale: Option<f64>) -> golem_devices::DeviceInfo {
+    fn device_info(
+        platform: golem_devices::Platform,
+        scale: Option<f64>,
+    ) -> golem_devices::DeviceInfo {
         golem_devices::DeviceInfo {
             name: "dev".into(),
             udid: "x".into(),
@@ -3491,7 +3539,8 @@ action = "screenshot"
             emitter: None,
             a11y_level: crate::accessibility::A11yLevel::Off,
             a11y_min_confidence: None,
-            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),            last_settled_tree: std::sync::Mutex::new(None),
+            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+            last_settled_tree: std::sync::Mutex::new(None),
             trace_pair: std::sync::Mutex::new(None),
             rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
@@ -3561,7 +3610,8 @@ action = "screenshot"
             emitter: None,
             a11y_level: crate::accessibility::A11yLevel::Off,
             a11y_min_confidence: None,
-            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),            last_settled_tree: std::sync::Mutex::new(None),
+            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+            last_settled_tree: std::sync::Mutex::new(None),
             trace_pair: std::sync::Mutex::new(None),
             rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,
@@ -3640,7 +3690,8 @@ action = "screenshot"
             emitter: None,
             a11y_level: crate::accessibility::A11yLevel::Off,
             a11y_min_confidence: None,
-            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),            last_settled_tree: std::sync::Mutex::new(None),
+            step_tree_stats: std::sync::Mutex::new(golem_events::TreeStats::default()),
+            last_settled_tree: std::sync::Mutex::new(None),
             trace_pair: std::sync::Mutex::new(None),
             rng: std::sync::Mutex::new(golem_vars::seed::FakeRng::from_optional_seed(None)),
             inherited_record_default: false,

@@ -287,7 +287,8 @@ mod tests {
         std::fs::write(dir.path().join("a.txt"), "hello").expect("value SHALL be present");
         let a = Fingerprint::compute(dir.path());
         std::fs::create_dir(dir.path().join("target")).expect("value SHALL be present");
-        std::fs::write(dir.path().join("target/blob.bin"), vec![0u8; 1024]).expect("value SHALL be present");
+        std::fs::write(dir.path().join("target/blob.bin"), vec![0u8; 1024])
+            .expect("value SHALL be present");
         let b = Fingerprint::compute(dir.path());
         assert_eq!(a, b, "target/ SHALL NOT contribute to fingerprint");
     }
@@ -296,9 +297,11 @@ mod tests {
     fn content_fingerprint_honours_gitignore() {
         let dir = tempdir().expect("tempdir() SHALL succeed");
         std::fs::write(dir.path().join("a.txt"), "hello").expect("value SHALL be present");
-        std::fs::write(dir.path().join(".gitignore"), "ignored.bin\n").expect("value SHALL be present");
+        std::fs::write(dir.path().join(".gitignore"), "ignored.bin\n")
+            .expect("value SHALL be present");
         let a = Fingerprint::compute(dir.path());
-        std::fs::write(dir.path().join("ignored.bin"), vec![0u8; 1024]).expect("value SHALL be present");
+        std::fs::write(dir.path().join("ignored.bin"), vec![0u8; 1024])
+            .expect("value SHALL be present");
         let b = Fingerprint::compute(dir.path());
         assert_eq!(a, b, "gitignored file SHALL NOT contribute to fingerprint");
     }
@@ -312,8 +315,10 @@ mod tests {
         let s = serde_json::to_string(&g).expect("to_string() SHALL succeed");
         let back: Fingerprint = serde_json::from_str(&s).expect("from_str() SHALL succeed");
         assert_eq!(g, back);
-        let n: Fingerprint =
-            serde_json::from_str(&serde_json::to_string(&Fingerprint::None).expect("to_string() SHALL succeed")).expect("value SHALL be present");
+        let n: Fingerprint = serde_json::from_str(
+            &serde_json::to_string(&Fingerprint::None).expect("to_string() SHALL succeed"),
+        )
+        .expect("value SHALL be present");
         assert_eq!(n, Fingerprint::None);
     }
 

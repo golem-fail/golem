@@ -820,7 +820,11 @@ mod tests {
         #[tokio::test]
         async fn non_2xx_status_fails_the_step() {
             let fake = Arc::new(FakeHttpTransport::new());
-            fake.expect("GET", "https://api/x", CannedHttp::status(503, "unavailable"));
+            fake.expect(
+                "GET",
+                "https://api/x",
+                CannedHttp::status(503, "unavailable"),
+            );
             let _g = set_test_transport(fake);
 
             let mut vars = make_vars();
@@ -834,7 +838,10 @@ mod tests {
                 .await
                 .expect_err("a 5xx status SHALL fail the step");
             let msg = format!("{err:#}");
-            assert!(msg.contains("503") && msg.contains("unavailable"), "got: {msg}");
+            assert!(
+                msg.contains("503") && msg.contains("unavailable"),
+                "got: {msg}"
+            );
         }
 
         #[tokio::test]
@@ -1116,9 +1123,8 @@ mod tests {
             handle_dismiss_alert(&step, &driver, &ctx),
         )
         .await;
-        match result {
-            Ok(Ok(_)) => panic!("dismiss_alert SHALL NOT succeed when no alert is displayed"),
-            Ok(Err(_)) | Err(_) => {}
+        if let Ok(Ok(_)) = result {
+            panic!("dismiss_alert SHALL NOT succeed when no alert is displayed")
         }
     }
 

@@ -11,6 +11,9 @@ pub struct Cli {
     pub command: Commands,
 }
 
+// allow: top-level CLI dispatch enum, constructed once at startup; boxing the
+// largest variant would complicate the clap derive for no runtime benefit.
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// Run test flows

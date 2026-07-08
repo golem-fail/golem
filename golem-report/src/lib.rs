@@ -1,4 +1,18 @@
-// golem-report: test reporting
+//! Test-report data model and output formatters for golem.
+//!
+//! A running suite emits a stream of `golem_events::Event`s from the
+//! CLI/driver layer; [`accumulator::ReportAccumulator`] folds that stream
+//! into the hierarchical [`SuiteReport`] → [`FlowReport`] → [`StepReport`]
+//! types defined in this crate root, which are the source of truth for
+//! everything downstream. The `human`, `json`, `junit`, and `toon` modules
+//! each render a [`FlowReport`]/[`SuiteReport`] to a different output
+//! format (terminal text, structured JSON, JUnit XML for CI, and a
+//! compact LLM-oriented notation respectively); [`output`] picks the
+//! right formatter for `--output` and writes results to disk, while
+//! [`stream`] renders events live as they arrive rather than after the
+//! fact. [`flake`] tallies pass/fail counts across `--repeat` runs, and
+//! [`SubstepDetail`] is the serializable form of `golem_events::SubstepEvent`
+//! used inside a [`StepReport`]'s substep log.
 #![deny(clippy::unwrap_used)]
 
 pub mod accumulator;
@@ -497,14 +511,21 @@ impl FlowReport {
 /// Install script result (per `(device, bundle)` across the whole suite).
 #[derive(Debug, Clone)]
 pub struct InstallReport {
+    /// Human-readable app name being installed.
     pub app_name: String,
+    /// Package/bundle identifier installed onto the device.
     pub bundle_id: String,
+    /// Name of the device the install ran against.
     pub device_name: String,
     /// OS major version of the device (e.g. 18, 26, 34).
     pub os_major: Option<u32>,
+    /// Whether the install script exited successfully.
     pub success: bool,
+    /// How long the install took, in milliseconds.
     pub duration_ms: u64,
+    /// Process exit code of the install script, if it ran.
     pub exit_code: Option<i32>,
+    /// Error message captured on failure.
     pub error: Option<String>,
     /// Failure code when the install failed (A-domain). `None` on success.
     pub code: Option<golem_events::FailureCode>,
@@ -611,7 +632,10 @@ mod tests {
 
         let human = crate::human::format_flow(&report);
         assert!(human.contains("Accessibility:"), "human header");
-        assert!(human.contains("[ERR]") && human.contains("[WRN]"), "human tags");
+        assert!(
+            human.contains("[ERR]") && human.contains("[WRN]"),
+            "human tags"
+        );
         assert!(human.contains("clean"), "human clean line");
         // Markers are 1-based by issue order, right-padded to 2 cols.
         assert!(human.contains("[ 1] [ERR]"), "human marker 1");
@@ -630,11 +654,17 @@ mod tests {
 
         let junit = crate::junit::format_flow_junit(&report);
         assert!(junit.contains("Accessibility:"), "junit system-out");
-        assert!(junit.contains("1 [ERR] missing_label"), "junit numbered issue");
+        assert!(
+            junit.contains("1 [ERR] missing_label"),
+            "junit numbered issue"
+        );
 
         let toon = crate::toon::format_flow_toon(&report);
         assert!(toon.contains("A login:dev:0 e:1 w:1"), "toon audit line");
-        assert!(toon.contains("1!missing_label"), "toon numbered error marker");
+        assert!(
+            toon.contains("1!missing_label"),
+            "toon numbered error marker"
+        );
         assert!(toon.contains("2~low_contrast"), "toon numbered warn marker");
 
         // Confidence is surfaced for the heuristic finding (0.70) across formats,
@@ -653,9 +683,15 @@ mod tests {
             .find(|i| i["check"] == "low_contrast")
             .and_then(|i| i["confidence"].as_f64())
             .expect("low_contrast confidence");
-        assert!((conf - 0.70).abs() < 1e-4, "json confidence ~0.70, got {conf}");
+        assert!(
+            (conf - 0.70).abs() < 1e-4,
+            "json confidence ~0.70, got {conf}"
+        );
         // The 1.0 missing_label line carries no confidence annotation.
-        assert!(!human.contains("[ 1] [ERR] missing_label            m  (confidence"), "no conf on certain");
+        assert!(
+            !human.contains("[ 1] [ERR] missing_label            m  (confidence"),
+            "no conf on certain"
+        );
     }
 
     fn flow_with(success: bool, skipped_reason: Option<String>) -> FlowReport {

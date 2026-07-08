@@ -1,4 +1,20 @@
-// golem-runner: test execution orchestrator
+//! Flow execution orchestrator: runs a parsed `.test.toml` flow to completion.
+//!
+//! [`executor::execute_flow`] (and its data-driven wrapper
+//! [`executor::execute_flow_with_data`]) is the top-level entry point golem-cli
+//! calls per device: it walks a flow's blocks and steps, dispatches each step
+//! through [`policy::execute_step_with_policy`] (which in turn calls into
+//! [`actions`] for the actual driver interaction), resolves selectors via
+//! [`resolution`], and threads a per-flow [`context::ExecutionContext`]
+//! carrying variables, capture config, and perf collectors. Supporting modules
+//! cover cross-cutting concerns used along that path: [`branch`] and
+//! [`for_each`]/[`data_driven`] for control flow and iteration, [`subflow`] for
+//! nested flow invocation, [`teardown`] and [`cleanup`] for end-of-flow
+//! handling, [`barrier`] for multi-device synchronization, [`installer`] and
+//! [`installed_state`]/[`fingerprint`] for the app-install cache, and
+//! [`accessibility`] for visible-tree a11y auditing. This crate sits between
+//! `golem-parser` (which produces the `FlowFile` it consumes) and `golem-cli`
+//! (which owns the suite-level loop and reports results via `golem-report`).
 
 use std::sync::atomic::{AtomicU32, Ordering};
 

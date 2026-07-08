@@ -98,7 +98,7 @@ impl RegistrationState {
                 .or_insert_with(|| Arc::new(tokio::sync::OnceCell::new()))
                 .clone()
         };
-        cell.get_or_try_init(init).await.map(|p| *p)
+        cell.get_or_try_init(init).await.copied()
     }
 
     /// Clear the cached companion port for a UDID. Used when a previously

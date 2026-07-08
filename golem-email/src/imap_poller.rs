@@ -61,7 +61,7 @@ impl EmailMessage {
 ///
 /// The pattern supports simple glob-style wildcards (`*`).
 /// `*` matches any sequence of characters (including empty).
-pub fn subject_matches(subject: &str, pattern: &str) -> bool {
+pub(crate) fn subject_matches(subject: &str, pattern: &str) -> bool {
     // Convert the glob pattern to a regex.
     let mut re_str = String::from("^");
     for ch in pattern.chars() {

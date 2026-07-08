@@ -1,3 +1,9 @@
+//! Android device, system image, and device-profile discovery.
+//!
+//! Parses `avdmanager`/`adb`/emulator console output into golem's
+//! [`crate::DeviceInfo`] and picks the best system image / device profile
+//! for a requested OS version and form factor when a new AVD needs creating.
+
 use crate::{DeviceInfo, DeviceState, DeviceType, Platform};
 use std::collections::HashMap;
 
@@ -443,7 +449,7 @@ fn parse_device_profiles(text: &str) -> Vec<DeviceProfileInfo> {
 /// - `preferred_api == 0` → any API level
 /// - `want_playstore = Some(true)` → require `google_apis_playstore` target
 /// - `want_playstore = Some(false)` → require `google_apis` target (excludes
-///    playstore images — useful when flows need unrestricted system access)
+///   playstore images — useful when flows need unrestricted system access)
 /// - `want_playstore = None` → prefer `google_apis` (sorted first), fall
 ///   back to any matching target
 ///

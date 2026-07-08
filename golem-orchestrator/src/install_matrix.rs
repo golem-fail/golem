@@ -108,7 +108,8 @@ mod tests {
     fn write_flow(dir: &std::path::Path, name: &str, contents: &str) -> PathBuf {
         let path = dir.join(name);
         let mut f = std::fs::File::create(&path).expect("create() SHALL succeed");
-        f.write_all(contents.as_bytes()).expect("value SHALL be present");
+        f.write_all(contents.as_bytes())
+            .expect("value SHALL be present");
         path
     }
 
@@ -191,7 +192,9 @@ mod tests {
                 install_timeout_ms: None,
             },
         ];
-        let suite = plan(&[f], &apps, tmp.path(), None, None, 1).await.expect("async operation SHALL succeed");
+        let suite = plan(&[f], &apps, tmp.path(), None, None, 1)
+            .await
+            .expect("async operation SHALL succeed");
         assert_eq!(
             suite.install_matrix.len(),
             2,
@@ -215,7 +218,9 @@ mod tests {
             os = "ios"
         "#,
         );
-        let suite = plan(&[f], &[], tmp.path(), None, None, 1).await.expect("async operation SHALL succeed");
+        let suite = plan(&[f], &[], tmp.path(), None, None, 1)
+            .await
+            .expect("async operation SHALL succeed");
         assert!(
             suite.install_matrix.is_empty(),
             "apps without install_script SHALL NOT appear in install_matrix"
@@ -240,11 +245,16 @@ mod tests {
             type = "tablet"
         "#,
         );
-        let suite = plan(&[f], &[], tmp.path(), None, None, 1).await.expect("async operation SHALL succeed");
+        let suite = plan(&[f], &[], tmp.path(), None, None, 1)
+            .await
+            .expect("async operation SHALL succeed");
         assert_eq!(suite.install_matrix.len(), 1);
         let entry = &suite.install_matrix[0];
         assert_eq!(entry.device_constraints.len(), 1);
-        let dt = entry.device_constraints[0].device_type.as_ref().expect("as_ref() SHALL succeed");
+        let dt = entry.device_constraints[0]
+            .device_type
+            .as_ref()
+            .expect("as_ref() SHALL succeed");
         assert_eq!(dt.to_vec(), vec!["tablet".to_string()]);
     }
 

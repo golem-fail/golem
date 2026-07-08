@@ -374,9 +374,7 @@ fn parse_submit_config(cfg: &serde_json::Value) -> SubmitConfigFields {
         "strict" => Some(golem_parser::A11yLevel::Strict),
         _ => None,
     });
-    let a11y_min_confidence_override = cfg["a11y_min_confidence"]
-        .as_f64()
-        .map(|v| v as f32);
+    let a11y_min_confidence_override = cfg["a11y_min_confidence"].as_f64().map(|v| v as f32);
     let rebuild = cfg["rebuild"].as_bool().unwrap_or(false);
     let no_build = cfg["no_build"].as_bool().unwrap_or(false);
     let record = cfg["record"].as_bool().unwrap_or(false);
