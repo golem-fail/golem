@@ -72,5 +72,5 @@ git commit --amend --signoff          # the most recent commit
 git rebase --signoff origin/main      # every commit since main
 ```
 
-A DCO status check on pull requests flags any unsigned commit (enabled when the repo goes public; until then maintainers verify at review), so a missing sign-off is caught before merge, not silently accepted.
+A [DCO status check](../.github/workflows/dco.yml) runs on every pull request and **fails** if any non-merge commit lacks a `Signed-off-by` matching its author — so a missing sign-off is caught before merge, never silently accepted.
 
