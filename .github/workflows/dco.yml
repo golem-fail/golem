@@ -32,6 +32,12 @@ jobs:
 
           fail=0
           for sha in $(git rev-list --no-merges "$BASE..$HEAD"); do
+            # Exempt bot authors (dependabot[bot], github-actions[bot], …): they
+            # can't sign off, and their PRs are generated, not human contributions.
+            authorname="$(git show -s --format='%an' "$sha")"
+            case "$authorname" in
+              *'[bot]') echo "skipping bot commit $sha ($authorname)"; continue ;;
+            esac
             author="$(git show -s --format='%an <%ae>' "$sha")"
             signoffs="$(git show -s --format='%(trailers:key=Signed-off-by,valueonly)' "$sha")"
             if printf '%s\n' "$signoffs" | grep -qxF "$author"; then
