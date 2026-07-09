@@ -36,7 +36,7 @@ jobs:
     # either embeds empty. This job also CREATES the release; Linux uploads to it.
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build, package, and publish the macOS release
         env:
@@ -53,7 +53,7 @@ jobs:
     needs: release-macos
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # binfmt/QEMU so build-linux.sh's aarch64 preflight (which runs the built
       # binary in an arm64 alpine to confirm the Android companion embedded) can
