@@ -42,6 +42,11 @@ sed -i '' "s/\"version\": \"[0-9]*\.[0-9]*\.[0-9]*\"/\"version\": \"$NEW_VERSION
     "$ROOT/test-app/package.json" \
     "$ROOT/test-app/src-tauri/tauri.conf.json"
 
+# npm wrapper package (@golem-fail/golem) — its version selects the release
+# asset its postinstall downloads, so it MUST track the release version.
+sed -i '' "s/\"version\": \"[0-9]*\.[0-9]*\.[0-9]*\"/\"version\": \"$NEW_VERSION\"/" \
+    "$ROOT/npm/package.json"
+
 sed -i '' "s|<string>[0-9]*\.[0-9]*\.[0-9]*</string>|<string>$NEW_VERSION</string>|" \
     "$ROOT/test-app/src-tauri/gen/apple/golem-test-app_iOS/Info.plist"
 
@@ -67,6 +72,7 @@ FILES=(
     "$ROOT/test-app/src-tauri/Cargo.toml"
     "$ROOT/test-app/package.json"
     "$ROOT/test-app/src-tauri/tauri.conf.json"
+    "$ROOT/npm/package.json"
     "$ROOT/test-app/src-tauri/gen/apple/golem-test-app_iOS/Info.plist"
     "$ROOT/companions/ios/GolemRunnerUITests/RequestRouter.swift"
     "$ROOT/companions/ios/GolemRunnerUITests/GolemRunnerUITests.swift"
