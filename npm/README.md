@@ -24,8 +24,9 @@ npx golem run e2e/flow.test.toml
 baked in) matched to your platform and verifies its sha256. Driving devices
 still needs host tooling (`adb`, Xcode/simulators) — `golem doctor` checks it.
 
-macOS arm64 only for now (Linux is planned). The pinned version is downloaded by
-default; set `GOLEM_VERSION` to override.
+Supported: macOS arm64, and Linux x86_64 + arm64 (static musl). iOS is
+macOS-only — Linux drives Android. The pinned version is downloaded by default;
+set `GOLEM_VERSION` to override.
 
 ## pnpm / bun
 
