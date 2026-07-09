@@ -15,3 +15,16 @@ companions/android/app/build/
 # Host-specific / irrelevant
 *.tar.gz
 *.bundle
+
+# Not needed to compile golem-cli + the Android companion (keeps the cargo layer
+# cache stable across edits to scripts/docs/CI/tests):
+scripts/
+docs/
+.github/
+e2e/
+test-app/
+test-app-b/
+test-app-e/
+*.md
+setup-golem/
+docker/
