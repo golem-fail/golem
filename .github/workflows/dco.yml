@@ -15,8 +15,8 @@ permissions:
 
 jobs:
   dco:
-    runs-on: ubuntu-latest # lightest hosted tier (2-core Linux, 1x billing)
-    timeout-minutes: 5 # cap runaway (e.g. a hung fetch); default is 360
+    runs-on: ubuntu-slim # 1 vCPU / 5 GB — cheapest built-in tier; ample for a ref walk
+    timeout-minutes: 5 # cap runaway (e.g. a hung fetch); well under ubuntu-slim's 15-min hard cap
     steps:
       - uses: actions/checkout@v4
         with:
