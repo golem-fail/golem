@@ -29,15 +29,20 @@ Tests are plain TOML — readable in review, diffable, no DSL to learn beyond a 
 
 ## Quick Start
 
-**Prerequisites:**
-
-- **A Rust toolchain** — only to build golem from source, which is the only distribution path today (no prebuilt binaries are published yet).
-- **Platform toolchains** — building from source also compiles the on-device [companions](docs/companions.md): Xcode for the iOS companion, the Android SDK + Gradle for the Android one. A missing toolchain is skipped with a warning rather than failing the build — you just won't be able to target that platform until it's present.
-- **At runtime**, driving a platform needs its CLI tools (`xcrun simctl` for iOS, `adb` for Android) plus a booted simulator/emulator or a connected device.
+**Install** — golem ships a self-contained prebuilt binary (the on-device [companions](docs/companions.md) are baked in), so installing needs no Rust, Xcode, or Android SDK:
 
 ```bash
-# Build + install the `golem` binary from source
-cargo install --path golem-cli
+brew install golem-fail/golem/golem            # macOS (recommended)
+npm install -D @golem-fail/golem               # per-project dev dep (also pnpm/bun/yarn)
+curl -fsSL https://raw.githubusercontent.com/golem-fail/golem/main/scripts/install.sh | sh   # fallback
+```
+
+See [Installing golem](docs/distribution.md) for every channel, CI usage, and version pinning. macOS arm64 today; Linux is planned.
+
+**At runtime**, driving a platform needs its device CLI (`xcrun simctl` for iOS, `adb` for Android) plus an available simulator/emulator or a connected device. `golem doctor` checks every prerequisite and prints a copy-paste fix for each miss.
+
+```bash
+golem doctor                     # check your device toolchain + environment
 
 # Scaffold a project (golem.toml, flows/, __fixtures__/, __mixins__/, .golem/)
 golem init
@@ -104,7 +109,8 @@ golem tree
 
 | Doc | What's in it |
 |-----|--------------|
-| [CLI Reference](docs/cli-reference.md) | Every command and flag — `run`, `tree`, `devices`, `init`, `create`, `install-script`. |
+| [Installing golem](docs/distribution.md) | Install channels (brew, npm, curl, GitHub Action), runtime prerequisites, `golem doctor`. |
+| [CLI Reference](docs/cli-reference.md) | Every command and flag — `run`, `tree`, `devices`, `init`, `create`, `install-script`, `doctor`. |
 | [Test Structure](docs/test-structure.md) | Flow anatomy: blocks, steps, selectors, coverage strategies, subflows, data-driven tests, variables, fake-data generators, multi-app flows. |
 | [Selectors](docs/selectors.md) | The full selector reference: text/label/index/state, traits, relational + geometric `contains`/`inside`, nesting, and resolution order. |
 | [Actions Reference](docs/actions-reference.md) | The complete action vocabulary, grouped by category. |
@@ -117,5 +123,7 @@ golem tree
 **Contributing & internals:** [Architecture](docs/architecture.md) · [Companions](docs/companions.md) · [Contributing](docs/contributing.md) · [Versioning](docs/versioning.md)
 
 ## Contributing
+
+Building from source (`cargo install --path golem-cli`) is the **contributor** path — it needs a Rust toolchain plus the platform toolchains to compile the companions (Xcode for iOS, Android SDK + Gradle for Android; a missing one is skipped with a warning). End users should prefer a prebuilt channel above.
 
 See [Contributing](docs/contributing.md) for the build, test, and e2e workflow. In short: `cargo t` for unit tests (nextest), `cargo clippy --workspace --all-targets` to lint, and run an e2e flow live on a sim/emulator per the change matrix.
