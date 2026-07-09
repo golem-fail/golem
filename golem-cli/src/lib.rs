@@ -74,8 +74,19 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
                 return Ok(1);
             }
 
-            // Build suite config
-            let platform_override = match parse_platform_override(args.platform.as_deref()) {
+            // Build suite config. On a non-macOS host golem can't drive iOS
+            // (no simctl, no embedded iOS companion), so default a bare run to
+            // Android rather than planning iOS legs that can't run. An explicit
+            // --platform is always respected (an explicit --platform ios then
+            // fails loudly, which is the right signal on Linux).
+            let (effective_platform, platform_defaulted) =
+                resolve_platform_default(args.platform.as_deref(), cfg!(target_os = "macos"));
+            if platform_defaulted {
+                eprintln!(
+                    "note: non-macOS host — defaulting to `--platform android` (iOS is unsupported here; pass --platform to override)."
+                );
+            }
+            let platform_override = match parse_platform_override(effective_platform.as_deref()) {
                 Ok(p) => p,
                 Err(msg) => {
                     eprintln!("{msg}");
@@ -210,7 +221,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
             // `project_root`.
             let config_json = build_config_json(
                 &config,
-                args.platform.as_deref(),
+                effective_platform.as_deref(),
                 args.coverage.as_deref(),
                 args.a11y.as_deref(),
                 max_device_wait_ms,
@@ -400,6 +411,19 @@ fn parse_platform_override(
         Some(other) => Err(format!(
             "Unknown platform: {other}. Use 'ios' or 'android'."
         )),
+    }
+}
+
+/// Resolve the effective `--platform` for a run. On a non-macOS host, an unset
+/// platform defaults to `android` (golem can't drive iOS there — no simctl, no
+/// embedded iOS companion), avoiding iOS legs that can't run. An explicit value
+/// always passes through unchanged. Returns `(effective, defaulted?)` so the
+/// caller can print a one-line notice only when it actually defaulted.
+fn resolve_platform_default(explicit: Option<&str>, is_macos: bool) -> (Option<String>, bool) {
+    match explicit {
+        Some(p) => (Some(p.to_string()), false),
+        None if !is_macos => (Some("android".to_string()), true),
+        None => (None, false),
     }
 }
 
@@ -1039,6 +1063,30 @@ mod tests {
         assert!(
             err.contains("Unknown platform: IOS") && err.contains("'ios' or 'android'"),
             "error SHALL name the bad value and the valid options, got: {err}",
+        );
+    }
+
+    // 7b. resolve_platform_default: non-macOS defaults an unset platform to
+    //     android (and flags it), macOS leaves it None, and an explicit value
+    //     always passes through unchanged (even --platform ios on Linux).
+    #[test]
+    fn resolve_platform_default_defaults_android_off_macos() {
+        // Unset on Linux → android, defaulted.
+        assert_eq!(
+            resolve_platform_default(None, false),
+            (Some("android".to_string()), true)
+        );
+        // Unset on macOS → no override, not defaulted.
+        assert_eq!(resolve_platform_default(None, true), (None, false));
+        // Explicit always passes through, never flagged as defaulted.
+        assert_eq!(
+            resolve_platform_default(Some("ios"), false),
+            (Some("ios".to_string()), false),
+            "explicit --platform ios SHALL pass through on Linux (fails loudly later)"
+        );
+        assert_eq!(
+            resolve_platform_default(Some("android"), true),
+            (Some("android".to_string()), false)
         );
     }
 
