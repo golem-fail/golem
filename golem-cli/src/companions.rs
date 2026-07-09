@@ -84,6 +84,18 @@ pub fn has_android_companion() -> bool {
     android_available(!ANDROID_TEST_APK.is_empty(), !ANDROID_MAIN_APK.is_empty())
 }
 
+/// Embedded size (bytes) of the iOS companion archive (the gzipped XCTest
+/// tarball). A sanity signal — a plausible size confirms the embed isn't empty
+/// or truncated.
+pub fn ios_companion_size() -> usize {
+    IOS_COMPANION.len()
+}
+
+/// Embedded size (bytes) of the Android companion — both APKs (test + main).
+pub fn android_companion_size() -> usize {
+    ANDROID_TEST_APK.len() + ANDROID_MAIN_APK.len()
+}
+
 /// Both Android APKs (instrumentation test + main) must be present for the
 /// Android companion to be usable.
 fn android_available(test_present: bool, main_present: bool) -> bool {

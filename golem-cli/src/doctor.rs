@@ -96,8 +96,9 @@ struct Facts {
     android_avds: usize,
     /// Bootable iOS simulators available on the host.
     ios_sims: usize,
-    ios_companion: bool,
-    android_companion: bool,
+    /// Embedded companion size in bytes, or `None` if not embedded.
+    ios_companion: Option<usize>,
+    android_companion: Option<usize>,
     /// `Ok` if `~/.golem` is writable, else a human-readable reason.
     golem_writable: Option<std::result::Result<(), String>>,
     // build
@@ -123,12 +124,26 @@ fn found(v: &Option<String>) -> String {
 /// Can golem drive Android on this host? (device CLI present *and* companion
 /// embedded).
 fn android_drivable(f: &Facts) -> bool {
-    f.adb.is_some() && f.android_companion
+    f.adb.is_some() && f.android_companion.is_some()
 }
 
 /// Can golem drive iOS on this host? iOS is macOS-only.
 fn ios_drivable(f: &Facts) -> bool {
-    f.is_macos && f.xcrun.is_some() && f.simctl && f.ios_companion
+    f.is_macos && f.xcrun.is_some() && f.simctl && f.ios_companion.is_some()
+}
+
+/// Human-readable byte size in IEC binary units, e.g. `12.3 MiB` / `512 KiB`.
+fn human_size(bytes: usize) -> String {
+    const KIB: f64 = 1024.0;
+    const MIB: f64 = KIB * 1024.0;
+    let b = bytes as f64;
+    if b >= MIB {
+        format!("{:.1} MiB", b / MIB)
+    } else if b >= KIB {
+        format!("{:.0} KiB", b / KIB)
+    } else {
+        format!("{bytes} B")
+    }
 }
 
 /// Can this host build the Android companion? (JDK + Android SDK).
@@ -170,8 +185,11 @@ fn evaluate_runtime(f: &Facts) -> Vec<Check> {
             "install platform-tools: `brew install --cask android-platform-tools` (macOS) / `apt-get install android-tools-adb` (Linux)",
         ));
     }
-    if f.android_companion {
-        checks.push(Check::ok("Android companion", "embedded"));
+    if let Some(bytes) = f.android_companion {
+        checks.push(Check::ok(
+            "Android companion",
+            &format!("embedded ({})", human_size(bytes)),
+        ));
     } else {
         checks.push(Check::warn(
             "Android companion",
@@ -200,8 +218,11 @@ fn evaluate_runtime(f: &Facts) -> Vec<Check> {
                 "install full Xcode from the App Store (simctl ships with it)",
             ));
         }
-        if f.ios_companion {
-            checks.push(Check::ok("iOS companion", "embedded"));
+        if let Some(bytes) = f.ios_companion {
+            checks.push(Check::ok(
+                "iOS companion",
+                &format!("embedded ({})", human_size(bytes)),
+            ));
         } else {
             checks.push(Check::warn(
                 "iOS companion",
@@ -539,8 +560,10 @@ async fn probe(run_runtime: bool, run_build: bool) -> Facts {
         } else {
             0
         };
-        f.ios_companion = crate::companions::has_ios_companion();
-        f.android_companion = crate::companions::has_android_companion();
+        f.ios_companion =
+            crate::companions::has_ios_companion().then(crate::companions::ios_companion_size);
+        f.android_companion = crate::companions::has_android_companion()
+            .then(crate::companions::android_companion_size);
         f.golem_writable = Some(probe_golem_writable());
     }
 
@@ -633,8 +656,8 @@ mod tests {
             android_connected: 0,
             android_avds: 1,
             ios_sims: 2,
-            ios_companion: true,
-            android_companion: true,
+            ios_companion: Some(9_400_000),
+            android_companion: Some(12_000_000),
             golem_writable: Some(Ok(())),
             cargo: Some("1.83.0".to_string()),
             xcodebuild: Some("15.4".to_string()),
@@ -686,7 +709,7 @@ mod tests {
         let mut f = base_facts();
         f.xcrun = None;
         f.simctl = false;
-        f.ios_companion = false;
+        f.ios_companion = None;
         let checks = evaluate_runtime(&f);
         assert_eq!(exit_code(&checks), 0, "android-only host is still drivable");
     }
@@ -700,8 +723,8 @@ mod tests {
         f.is_macos = false;
         f.xcrun = None;
         f.simctl = false;
-        f.ios_companion = false;
-        f.android_companion = false; // adb present, but no companion
+        f.ios_companion = None;
+        f.android_companion = None; // adb present, but no companion
         let checks = evaluate_runtime(&f);
         assert_eq!(exit_code(&checks), 1);
     }
@@ -791,6 +814,17 @@ mod tests {
         // xcrun present but no parsed version → plain "found".
         let xc = checks.iter().find(|c| c.label == "xcrun (iOS)").expect("xcrun line");
         assert_eq!(xc.detail, "found");
+    }
+
+    // 9b. Embedded companion sizes surface in the detail (sanity signal).
+    #[test]
+    fn companion_sizes_render_in_detail() {
+        let checks = evaluate_runtime(&base_facts());
+        let a = checks.iter().find(|c| c.label == "Android companion").expect("android line");
+        assert_eq!(a.detail, "embedded (11.4 MiB)");
+        assert_eq!(human_size(0), "0 B");
+        assert_eq!(human_size(2048), "2 KiB");
+        assert_eq!(human_size(9_400_000), "9.0 MiB");
     }
 
     // 10. Build mode: a fully-provisioned host builds both companions, exit 0.
