@@ -127,3 +127,9 @@ golem tree
 Building from source (`cargo install --path golem-cli`) is the **contributor** path — it needs a Rust toolchain plus the platform toolchains to compile the companions (Xcode for iOS, Android SDK + Gradle for Android; a missing one is skipped with a warning). End users should prefer a prebuilt channel above.
 
 See [Contributing](docs/contributing.md) for the build, test, and e2e workflow. In short: `cargo t` for unit tests (nextest), `cargo clippy --workspace --all-targets` to lint, and run an e2e flow live on a sim/emulator per the change matrix.
+
+Contributions are accepted under a [Developer Certificate of Origin](docs/contributing.md#developer-certificate-of-origin) — sign off your commits with `git commit -s`.
+
+## License
+
+golem is **source-available** under the [Functional Source License, Version 1.1](LICENSE) (FSL-1.1, Apache-2.0 future license) — **not** open source. You may use, modify, and redistribute it for any purpose **except** a Competing Use (offering a product or service that substitutes for or substantially replicates golem). Each release **automatically converts to Apache-2.0 two years** after its publication, and the FSL grants the full Apache-2.0 patent license on conversion.

@@ -50,3 +50,27 @@ Investigate one thing at a time. Identify the cause, summarise it, and check whe
 ## Where things live
 
 See [Architecture](architecture.md) for the crate map and the end-to-end execution model, and [Companions](companions.md) for the on-device iOS/Android harnesses.
+
+## Developer Certificate of Origin
+
+golem is [source-available under FSL-1.1](../LICENSE) (Apache-2.0 future license). To keep the project's right to ship and eventually relicense under Apache-2.0, contributions are accepted under the [Developer Certificate of Origin](https://developercertificate.org/) — a lightweight sign-off (no CLA paperwork).
+
+Sign off every commit with `git commit -s`, which appends a line taken from your git identity:
+
+```
+Signed-off-by: Your Name <you@example.com>
+```
+
+By signing off you certify the DCO 1.1: that you wrote the contribution or have the right to submit it under the project's license, and that you understand it is public and recorded.
+
+**Keeping your email private.** The sign-off needs a stable, attributable identity — not necessarily a personal address. Use GitHub's private no-reply email (`ID+username@users.noreply.github.com`, from GitHub → Settings → Emails → *Keep my email addresses private*) as your `git config user.email`; `-s` will use it and your real address stays out of the history.
+
+**Forgot to sign off?** It's fixable — add it retroactively and force-push your branch:
+
+```bash
+git commit --amend --signoff          # the most recent commit
+git rebase --signoff origin/main      # every commit since main
+```
+
+A DCO status check on pull requests flags any unsigned commit (enabled when the repo goes public; until then maintainers verify at review), so a missing sign-off is caught before merge, not silently accepted.
+
