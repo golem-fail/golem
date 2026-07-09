@@ -1,0 +1,31 @@
+{
+  "name": "@golem-fail/golem",
+  "version": "0.7.0",
+  "description": "Mobile UI testing framework — prebuilt binary wrapper for npm/bun/yarn",
+  "homepage": "https://golem.fail",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/golem-fail/golem.git",
+    "directory": "npm"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "bin": {
+    "golem": "bin/cli.js"
+  },
+  "files": [
+    "bin/cli.js",
+    "install.js"
+  ],
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "engines": {
+    "node": ">=16"
+  }
+}

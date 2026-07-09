@@ -36,6 +36,9 @@ findings/
 node_modules/
 dist/
 
+# npm wrapper: native binary fetched at install time
+npm/vendor/
+
 # Tauri generated platform projects (machine-specific) — ignore
 # everything inside, then carve out the test app's Android manifest
 # below so its `uses-permission` declarations (CAMERA / RECORD_AUDIO /
