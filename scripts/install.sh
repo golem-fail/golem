@@ -71,12 +71,11 @@ case "$os" in
         esac
         ;;
     Linux)
-        # x86_64 Linux ships a static musl build (Android companion only — iOS is
-        # macOS-only). arm64 Linux is not published yet.
+        # Linux ships static musl builds (Android companion only — iOS is
+        # macOS-only), for both x86_64 and arm64.
         case "$arch" in
             x86_64) TARGET="x86_64-unknown-linux-musl" ;;
-            aarch64 | arm64)
-                err "Linux arm64 is not published yet (x86_64 only). Build from source: cargo install --path golem-cli" ;;
+            aarch64 | arm64) TARGET="aarch64-unknown-linux-musl" ;;
             *) err "unsupported Linux architecture: $arch" ;;
         esac
         ;;
