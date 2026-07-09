@@ -31,25 +31,30 @@ echo "→ building $IMAGE (linux/amd64)…"
 docker build --platform linux/amd64 -f docker/linux-build.Dockerfile \
     --build-arg TARGET="$TARGET" -t "$IMAGE" .
 
-# Preflight: refuse to ship a Linux binary that didn't embed the Android
-# companion (mirrors release.sh's embed gate). iOS is intentionally absent on
-# Linux, so only Android is required here.
-echo "→ preflight: Android companion must be embedded…"
-# `doctor` exits non-zero when nothing is drivable (no adb in this minimal
-# image) — that's expected here, so capture its output and gate only on the
-# embed line rather than the exit code.
-doctor_out="$(docker run --rm --platform linux/amd64 "$IMAGE" doctor 2>&1 || true)"
-if ! printf '%s\n' "$doctor_out" | grep -qE "Android companion.*embedded"; then
-    echo "error: Android companion did NOT embed — refusing to package a driverless Linux binary." >&2
-    exit 1
-fi
-
 echo "→ extracting binary…"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 cid="$(docker create --platform linux/amd64 "$IMAGE")"
 docker cp "$cid:/golem" "$tmp/golem"
 docker rm "$cid" >/dev/null
+
+# Preflight: refuse to ship a Linux binary that didn't embed the Android
+# companion (mirrors release.sh's embed gate; iOS is intentionally absent on
+# Linux). Run the *target* binary in an arch-matched alpine (musl): the build
+# image is amd64, but the binary may be aarch64. `doctor` exits non-zero when
+# nothing is drivable (no adb here) — expected, so gate on the embed line only.
+case "$TARGET" in
+    aarch64-*) RUNARCH=arm64 ;;
+    *) RUNARCH=amd64 ;;
+esac
+echo "→ preflight: Android companion must be embedded (running on linux/$RUNARCH)…"
+doctor_out="$(docker run --rm --platform "linux/$RUNARCH" \
+    -v "$tmp/golem:/golem:ro" alpine /golem doctor 2>&1 || true)"
+if ! printf '%s\n' "$doctor_out" | grep -qE "Android companion.*embedded"; then
+    echo "error: Android companion did NOT embed — refusing to package a driverless Linux binary." >&2
+    printf '%s\n' "$doctor_out" | head -5 >&2
+    exit 1
+fi
 
 echo "→ packaging…"
 tar czf "$DIST/$TARBALL" -C "$tmp" golem

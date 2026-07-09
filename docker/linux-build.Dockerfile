@@ -30,9 +30,17 @@ ARG TARGET=x86_64-unknown-linux-musl
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       musl-tools musl-dev pkg-config \
+      gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
       openjdk-17-jdk-headless curl unzip ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 RUN rustup target add "${TARGET}"
+
+# Cross-compiling to aarch64-musl from an amd64 build host: use the aarch64 GNU
+# cross toolchain as the linker + C compiler (ring & friends have C). These vars
+# only affect the aarch64 target, so the native x86_64 build is unchanged.
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc \
+    CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc \
+    CXX_aarch64_unknown_linux_musl=aarch64-linux-gnu-g++
 
 # Android SDK (companion needs compileSdk/build-tools 34, AGP 8.2.2 → JDK 17).
 # Cached layer: independent of the source, so it survives code changes.
