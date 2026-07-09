@@ -28,19 +28,46 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
+  release-macos:
     # Dormant until this repo variable is explicitly set to "true".
     if: ${{ vars.RELEASE_ENABLED == 'true' }}
     # arm64 macOS runner: the only host that embeds BOTH companions (Xcode for
     # iOS, the preinstalled Android SDK for Android) — release.sh hard-fails if
-    # either embeds empty.
+    # either embeds empty. This job also CREATES the release; Linux uploads to it.
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build, package, and publish the release
+      - name: Build, package, and publish the macOS release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
           scripts/release.sh --tag "$TAG"
+
+  release-linux:
+    # Same gate. Runs after the macOS job has created the release, so this only
+    # builds + uploads. ubuntu-latest is native amd64 → the Docker build is
+    # native (fast) and free on a public repo.
+    if: ${{ vars.RELEASE_ENABLED == 'true' }}
+    needs: release-macos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # binfmt/QEMU so build-linux.sh's aarch64 preflight (which runs the built
+      # binary in an arm64 alpine to confirm the Android companion embedded) can
+      # execute an arm64 container on this amd64 runner.
+      - uses: docker/setup-qemu-action@v3
+
+      - name: Build + upload the Linux musl artifacts (x86_64 + aarch64)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          scripts/build-linux.sh
+          GOLEM_LINUX_TARGET=aarch64-unknown-linux-musl scripts/build-linux.sh
+          gh release upload "$TAG" \
+            dist/golem-*-linux-musl.tar.gz \
+            dist/golem-*-linux-musl.tar.gz.sha256 \
+            --clobber
