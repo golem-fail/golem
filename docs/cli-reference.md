@@ -121,25 +121,35 @@ Errors (non-zero exit) if the PNG wasn't produced by golem — it requires the
 
 ## `golem doctor`
 
-Diagnose the runtime environment for driving devices. The `golem` binary is
-self-contained (the iOS/Android companions are baked in), so this checks only
-what a prebuilt binary *can't* carry: the host device CLIs, a booted device, a
-writable state dir, and that the expected companions actually embedded.
+Diagnose the environment. Two modes, combinable; where a tool exposes one, the
+detected version is shown (`found 6.1.1`).
 
-Checks, each with a copy-paste remedy on a miss:
+| Flag | Description |
+|------|-------------|
+| *(none)* | **Runtime** checks (default): what's needed to *drive* a device. |
+| `--build` | **Build** checks: what's needed to *build* golem from source. |
+| `--runtime` | Runtime checks explicitly; combine with `--build` to check everything. |
+
+**Runtime** — the `golem` binary is self-contained (companions baked in), so this
+checks only what a prebuilt binary *can't* carry, each with a copy-paste remedy:
 
 - `~/.golem` writable (companions extract here)
 - `adb` on PATH + the Android companion embedded
-- `xcrun` / `simctl` on PATH + the iOS companion embedded (macOS only; reported
-  as *n/a* elsewhere)
+- `xcrun` / `simctl` on PATH + the iOS companion embedded (macOS only; *n/a* elsewhere)
 - at least one emulator/simulator available to boot, or a connected device
   (informational — golem boots one on demand)
 - `ffmpeg` (optional — lets the a11y audit and `--trace` reuse a frame from an
-  existing recording instead of taking an extra live screenshot; recording
-  itself works without it)
+  existing recording instead of an extra live screenshot; recording works without it)
 
-**Exits non-zero** when the host can drive **no** platform (state dir unwritable,
-or no toolchain+companion pair complete for any platform), so CI can gate on it.
-A single missing CLI is a warning, not a failure, as long as the other platform
-is drivable. golem also prints the relevant doctor lines automatically when a
-run dead-ends on a missing device.
+Exits non-zero when the host can drive **no** platform. A single missing CLI is a
+warning, not a failure, as long as the other platform is drivable. golem also
+prints the relevant runtime lines automatically when a run dead-ends on a missing
+device.
+
+**Build** (`--build`) — the contributor / release-box path:
+
+- Rust toolchain (`cargo`)
+- JDK + Android SDK (`ANDROID_HOME`) — to build the Android companion
+- `xcodebuild` — to build the iOS companion (macOS only; *n/a* elsewhere)
+
+Exits non-zero without Rust, or when no companion is buildable.

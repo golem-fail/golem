@@ -9,9 +9,10 @@ binary.
 > simulators) and a booted device — things a binary can't carry. After
 > installing, run **`golem doctor`** to check your environment (see [below](#golem-doctor)).
 
-**Platform support:** macOS **arm64** only today. Linux (static musl) is planned;
-iOS is macOS-only. On an unsupported platform the installers fail with a clear
-message rather than a broken install.
+**Platform support:** macOS **arm64**, and Linux **x86_64** + **arm64** (static
+musl). **iOS is macOS-only** — Linux builds drive Android only (see
+[Linux](#linux) below). On an unsupported platform the installers fail with a
+clear message rather than a broken install.
 
 ## Which channel?
 
@@ -94,19 +95,42 @@ a copy-paste fix:
 $ golem doctor
 golem doctor
   ✓ ~/.golem writable — yes
-  ✓ adb (Android) — found
-  ✓ Android companion — embedded
+  ✓ adb (Android) — found 1.0.41
+  ✓ Android companion — embedded (1.3 MiB)
   ✓ xcrun (iOS) — found
   ✓ simctl (iOS) — found
-  ✓ iOS companion — embedded
+  ✓ iOS companion — embedded (7.6 MiB)
   ✓ device available — 3 (1 android, 2 ios)
-  ✓ ffmpeg (optional) — found
+  ✓ ffmpeg (optional) — found 6.1.1
   ✓ drivable platform — android, ios
 ```
 
 It exits non-zero when no platform is drivable, so CI can gate on it. A single
-missing CLI is a warning as long as the other platform still works. See
-[CLI Reference](cli-reference.md#golem-doctor).
+missing CLI is a warning as long as the other platform still works. Detected
+versions and embedded companion sizes are shown as a sanity check. `golem doctor
+--build` checks build-from-source prerequisites instead (Rust, Xcode, JDK +
+Android SDK). See [CLI Reference](cli-reference.md#golem-doctor).
+
+## Linux
+
+Linux builds (x86_64 + arm64, static musl) drive **Android only** — iOS needs
+macOS (`simctl` + Xcode), and the iOS companion isn't embedded in a Linux build.
+Consequently, on Linux:
+
+- A bare `golem run` **defaults to `--platform android`** (with a one-line note),
+  so you don't sprinkle `--platform` everywhere. An explicit `--platform ios` is
+  still honoured — and fails loudly, the right signal on Linux.
+- `golem doctor` reports iOS as *n/a — requires macOS*.
+
+Driving Android on Linux needs an emulator or a device, and the reach depends on
+the host arch — an environment prerequisite golem can't provide, only report:
+
+| Host | Reach |
+|---|---|
+| **x86_64 Linux** | `adb` + the Android emulator, but the emulator needs **KVM** for usable speed. Many CI / cloud / container environments lack nested virtualization; GitHub-hosted KVM is only on certain larger Linux runner classes, and Docker needs `--privileged` / `/dev/kvm`. |
+| **arm64 Linux** | **`adb` / physical (or remote) devices only** — Google ships no first-class arm64-Linux emulator, so arm64 Linux hosts drive real devices, not local AVDs. |
+
+`adb` works on both Linux arches (and macOS); `golem doctor` reports what's missing.
 
 ## Building from source (contributors)
 

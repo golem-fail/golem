@@ -33,9 +33,22 @@ pub enum Commands {
     /// Read the embedded audit out of an annotated a11y screenshot: list the
     /// findings and print the command to replay that run.
     A11yExtract(A11yExtractArgs),
-    /// Diagnose the runtime environment (device CLIs, booted devices, embedded
-    /// companions, writable state dir). Exits non-zero if no platform is drivable.
-    Doctor,
+    /// Diagnose the environment. Default (runtime) checks what's needed to
+    /// *drive* a device (device CLIs, available devices, embedded companions,
+    /// writable state dir). `--build` checks what's needed to *build* golem from
+    /// source (Rust, Xcode, JDK + Android SDK). Pass both for everything.
+    Doctor(DoctorArgs),
+}
+
+#[derive(clap::Args, Debug)]
+pub struct DoctorArgs {
+    /// Check build-from-source prerequisites (Rust, Xcode, JDK + Android SDK).
+    #[arg(long)]
+    pub build: bool,
+    /// Check runtime prerequisites (the default). Combine with `--build` to
+    /// check everything.
+    #[arg(long)]
+    pub runtime: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -725,13 +738,21 @@ mod tests {
         );
     }
 
-    // 40. `doctor` parses to the Doctor variant (no args).
+    // 40. `doctor` parses to the Doctor variant; flags default false (= runtime).
     #[test]
     fn doctor_no_args() {
-        let cli = parse(&["doctor"]);
-        assert!(
-            matches!(cli.command, Commands::Doctor),
-            "`golem doctor` SHALL parse to Commands::Doctor"
-        );
+        let Commands::Doctor(args) = parse(&["doctor"]).command else {
+            panic!("expected Doctor");
+        };
+        assert!(!args.build && !args.runtime, "no flags = default runtime");
+    }
+
+    // 41. `doctor --build --runtime` sets both flags (check everything).
+    #[test]
+    fn doctor_build_and_runtime() {
+        let Commands::Doctor(args) = parse(&["doctor", "--build", "--runtime"]).command else {
+            panic!("expected Doctor");
+        };
+        assert!(args.build && args.runtime);
     }
 }

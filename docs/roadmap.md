@@ -1019,26 +1019,15 @@ Tauri 2.x has no first-class config for Android `<uses-permission>`. Options:
 **Files:** `.gitignore`, `test-app/src-tauri/gen/android/app/src/main/AndroidManifest.xml`.
 
 
-## Distribution: Linux + Docker follow-up
+## Distribution: remaining work
 
-The prebuilt-binary distribution pipeline is shipped for **macOS arm64**:
-`scripts/release.sh` (build + both-companions-embedded gate + tarball + sha256 +
-GitHub Release), consumer channels (`scripts/install.sh` curl installer, the
-`golem-fail/homebrew-golem` tap, the `@golem-fail/golem` npm wrapper), the
-`setup-golem` composite Action, `golem doctor`, and [docs/distribution.md](distribution.md).
+The prebuilt-binary pipeline ships for macOS arm64 and Linux x86_64 + arm64
+(static musl) — see [distribution.md](distribution.md). What's left:
 
-Deferred (every decision above was made Linux-ready, so this is additive):
-
-- **Linux targets** `x86_64-unknown-linux-musl` + `aarch64-unknown-linux-musl`
-  (static musl, android-only embed — the iOS `cfg` gate already excludes iOS).
-- **Docker** — primarily a *build* image (musl cross-compile + Android companion
-  embed); an android-only *run* image is a possible bonus.
-- **Emulator reach on Linux** — x86_64 needs KVM for a usable emulator (many
-  CI/container envs lack it); aarch64 Linux is adb/physical-device only (no
-  first-class arm64-Linux AVD). Document, don't try to solve.
-- **Runtime platform default on Linux** — iOS targets are unsupported-on-host, so
-  a mixed flow runs Android + skips iOS with a distinct reason, and an iOS-only
-  flow skips-with-warning (opt-in strict mode errors for CI lanes that must
-  guarantee coverage). Reuse the existing skip machinery + device resolver.
-- Extend `install.sh` arch detection + the Action to Linux (both already written
-  with this in mind — a table addition, not a rewrite).
+- **Docker *run* image** (android-only: `adb` + SDK + emulator) beyond the build
+  image; document the KVM / `--privileged` requirement.
+- **`setup-golem` Action** — extend the binary download to the Linux tarballs.
+- **Real Linux device/emulator e2e** — can't run on the macOS dev host.
+- **Fuller Linux resolver** — per-flow iOS-leg skip + a `strict_coverage` error
+  mode (reusing the existing skip machinery), if the current `--platform android`
+  default's iOS-only-flow handling proves too blunt.

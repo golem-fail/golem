@@ -71,14 +71,13 @@ case "$os" in
         esac
         ;;
     Linux)
-        # Detection is ready; Linux artifacts are not published yet (deferred
-        # follow-up — see the distribution plan). Fail clearly rather than 404.
+        # Linux ships static musl builds (Android companion only — iOS is
+        # macOS-only), for both x86_64 and arm64.
         case "$arch" in
-            x86_64) t="x86_64-unknown-linux-musl" ;;
-            aarch64 | arm64) t="aarch64-unknown-linux-musl" ;;
-            *) t="(unknown)" ;;
+            x86_64) TARGET="x86_64-unknown-linux-musl" ;;
+            aarch64 | arm64) TARGET="aarch64-unknown-linux-musl" ;;
+            *) err "unsupported Linux architecture: $arch" ;;
         esac
-        err "Linux is not yet published ($t is planned). Build from source for now: cargo install --path golem-cli"
         ;;
     *)
         err "unsupported OS: $os"
