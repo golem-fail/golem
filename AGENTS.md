@@ -9,6 +9,7 @@
 - E2E per matrix, live on sim/emu.
 - New features SHALL add/amend Rust tests. Goal = full unit + e2e coverage.
 - New test >2s = nextest SLOW: justify, or find faster test with same coverage.
+- Sign off every commit: `git commit -s` (the DCO check fails unsigned commits — see `docs/contributing.md`). Author identity is the repo-local GitHub no-reply (auto); do NOT override it or reintroduce a personal/work email.
 
 ## Matrix — by change type
 | Change | unit+clippy | e2e | bump |

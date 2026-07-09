@@ -1,0 +1,46 @@
+name: Release
+
+# Optional CI wrapper over scripts/release.sh — the script stays the source of
+# truth, this just runs it on a tag push. Single-shot per tag.
+#
+# DORMANT BY DEFAULT: the job is gated on the `RELEASE_ENABLED` repository
+# variable, so pushing a `v*` tag while private is a no-op and bills zero runner
+# minutes (GitHub macOS runners cost 10x on private repos). At the public
+# cutover, set the variable to enable it:
+#   gh variable set RELEASE_ENABLED --body true
+# and unset it (or set to anything else) to disable again.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.7.0)"
+        required: true
+
+permissions:
+  contents: write # create the GitHub Release + upload assets
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # Dormant until this repo variable is explicitly set to "true".
+    if: ${{ vars.RELEASE_ENABLED == 'true' }}
+    # arm64 macOS runner: the only host that embeds BOTH companions (Xcode for
+    # iOS, the preinstalled Android SDK for Android) — release.sh hard-fails if
+    # either embeds empty.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build, package, and publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          scripts/release.sh --tag "$TAG"

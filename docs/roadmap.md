@@ -1018,3 +1018,27 @@ Tauri 2.x has no first-class config for Android `<uses-permission>`. Options:
 
 **Files:** `.gitignore`, `test-app/src-tauri/gen/android/app/src/main/AndroidManifest.xml`.
 
+
+## Distribution: Linux + Docker follow-up
+
+The prebuilt-binary distribution pipeline is shipped for **macOS arm64**:
+`scripts/release.sh` (build + both-companions-embedded gate + tarball + sha256 +
+GitHub Release), consumer channels (`scripts/install.sh` curl installer, the
+`golem-fail/homebrew-golem` tap, the `@golem-fail/golem` npm wrapper), the
+`setup-golem` composite Action, `golem doctor`, and [docs/distribution.md](distribution.md).
+
+Deferred (every decision above was made Linux-ready, so this is additive):
+
+- **Linux targets** `x86_64-unknown-linux-musl` + `aarch64-unknown-linux-musl`
+  (static musl, android-only embed — the iOS `cfg` gate already excludes iOS).
+- **Docker** — primarily a *build* image (musl cross-compile + Android companion
+  embed); an android-only *run* image is a possible bonus.
+- **Emulator reach on Linux** — x86_64 needs KVM for a usable emulator (many
+  CI/container envs lack it); aarch64 Linux is adb/physical-device only (no
+  first-class arm64-Linux AVD). Document, don't try to solve.
+- **Runtime platform default on Linux** — iOS targets are unsupported-on-host, so
+  a mixed flow runs Android + skips iOS with a distinct reason, and an iOS-only
+  flow skips-with-warning (opt-in strict mode errors for CI lanes that must
+  guarantee coverage). Reuse the existing skip machinery + device resolver.
+- Extend `install.sh` arch detection + the Action to Linux (both already written
+  with this in mind — a table addition, not a rewrite).

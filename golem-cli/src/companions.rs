@@ -7,8 +7,17 @@ use std::process::Command;
 use anyhow::{bail, Context, Result};
 
 /// Embedded iOS companion archive (tar.gz of XCTest build products).
-/// Empty if build was unavailable.
+///
+/// Gated on the target OS: iOS simulators exist only on macOS and the XCTest
+/// bundle is unusable elsewhere, so a non-macOS target embeds zero bytes at the
+/// type level — never dependent on whether `xcodebuild` happened to be present.
+/// Empty on macOS too when the build was unavailable (no Xcode).
+#[cfg(target_os = "macos")]
 const IOS_COMPANION: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/companion-ios.tar.gz"));
+
+/// iOS companion is never embedded off macOS (see the macOS variant above).
+#[cfg(not(target_os = "macos"))]
+const IOS_COMPANION: &[u8] = &[];
 
 /// Embedded Android companion test APK (instrumentation).
 /// Empty if build was unavailable.
@@ -209,6 +218,25 @@ mod tests {
             has_ios_companion(),
             extracted.is_some(),
             "has_ios_companion SHALL be true iff extract_ios yields an extracted dir"
+        );
+    }
+
+    // 3. iOS companion is gated to macOS at the type level: on any non-macOS
+    //    target the embedded slice SHALL be empty and has_ios_companion SHALL be
+    //    false, regardless of whether xcodebuild happened to run on the build
+    //    host. Load-bearing for the deferred Linux cross-build (a mac release box
+    //    with Xcode must never bake iOS into a Linux binary). Compiled out on
+    //    macOS, where the cfg gate is intentionally a no-op.
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn ios_companion_never_embedded_off_macos() {
+        assert!(
+            IOS_COMPANION.is_empty(),
+            "iOS companion SHALL embed zero bytes on non-macOS targets"
+        );
+        assert!(
+            !has_ios_companion(),
+            "has_ios_companion SHALL be false on non-macOS targets"
         );
     }
 

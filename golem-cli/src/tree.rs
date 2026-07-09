@@ -68,6 +68,9 @@ pub async fn run(args: &TreeArgs) -> Result<()> {
     }
 
     if companions.is_empty() {
+        // Auto-invoke doctor: explain *why* nothing was found (missing CLI, no
+        // booted device, absent companion) rather than a bare error.
+        crate::doctor::hint_no_device().await;
         bail!("No devices found. Start a simulator or emulator first.");
     }
 
