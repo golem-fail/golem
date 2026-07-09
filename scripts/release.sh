@@ -22,13 +22,15 @@ set -euo pipefail
 #
 # Usage:
 #   scripts/release.sh [--tag <tag>] [--draft] [--prerelease]
-#                      [--notes <text>] [--no-upload]
+#                      [--notes <text>] [--no-upload] [--formula <path>]
 #
-#   --tag <tag>    release tag to upload to (default: v<version-from-Cargo.toml>)
-#   --draft        create the release as a draft (only when creating it)
-#   --prerelease   mark the release as a prerelease (only when creating it)
-#   --notes <text> release notes body (only when creating the release)
-#   --no-upload    build + package + checksum only; skip all GitHub interaction
+#   --tag <tag>     release tag to upload to (default: v<version-from-Cargo.toml>)
+#   --draft         create the release as a draft (only when creating it)
+#   --prerelease    mark the release as a prerelease (only when creating it)
+#   --notes <text>  release notes body (only when creating the release)
+#   --no-upload     build + package + checksum only; skip all GitHub interaction
+#   --formula <path> rewrite the version/url/sha256 lines of a Homebrew formula
+#                    in place so the tap stays in sync with this release
 #
 # Idempotent: re-running rebuilds (cheaply, from cache), overwrites the local
 # dist/ artifacts, creates the release only if absent, and re-uploads assets with
@@ -42,6 +44,7 @@ PRERELEASE=""
 NOTES=""
 NO_UPLOAD=0
 TAG=""
+FORMULA=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -50,6 +53,7 @@ while [ $# -gt 0 ]; do
         --prerelease) PRERELEASE="--prerelease"; shift ;;
         --notes) NOTES="${2:?--notes needs a value}"; shift 2 ;;
         --no-upload) NO_UPLOAD=1; shift ;;
+        --formula) FORMULA="${2:?--formula needs a path}"; shift 2 ;;
         -h|--help) sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "error: unknown argument: $1" >&2; exit 2 ;;
     esac
@@ -64,6 +68,8 @@ if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 TARGET="$(rustc -vV | sed -n 's/^host: //p')"
 : "${TAG:=v$VERSION}"
+# owner/repo for the release-asset URL baked into the Homebrew formula.
+REPO_SLUG="${GOLEM_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo golem-fail/golem)}"
 
 case "$TARGET" in
     aarch64-apple-darwin) ;;  # the supported release target for this branch
@@ -137,6 +143,29 @@ sha256_of() {
 
 echo "✓ packaged $DIST/$TARBALL"
 echo "  $(cat "$DIST/$TARBALL.sha256")"
+
+# ── Homebrew formula sync ──────────────────────────────────────────────────────
+# Keep the tap in lock-step with the release: print the version/url/sha256 that
+# the formula must carry, and (with --formula) rewrite those three lines in place
+# so the tap never drifts from what was actually shipped. Single-target today
+# (one url/sha256 line); the deferred Linux work will revisit for per-platform
+# blocks.
+SHA="$(awk '{print $1; exit}' "$DIST/$TARBALL.sha256")"
+ASSET_URL="https://github.com/$REPO_SLUG/releases/download/$TAG/$TARBALL"
+echo "→ Homebrew formula fields:"
+echo "    version \"$VERSION\""
+echo "    url \"$ASSET_URL\""
+echo "    sha256 \"$SHA\""
+if [ -n "$FORMULA" ]; then
+    [ -f "$FORMULA" ] || { echo "error: formula not found: $FORMULA" >&2; exit 1; }
+    sed -i.bak -E \
+        -e "s|^([[:space:]]*)version \".*\"|\1version \"$VERSION\"|" \
+        -e "s|^([[:space:]]*)url \".*\"|\1url \"$ASSET_URL\"|" \
+        -e "s|^([[:space:]]*)sha256 \".*\"|\1sha256 \"$SHA\"|" \
+        "$FORMULA"
+    rm -f "$FORMULA.bak"
+    echo "✓ updated formula: $FORMULA"
+fi
 
 if [ "$NO_UPLOAD" -eq 1 ]; then
     echo "→ --no-upload: skipping GitHub Release."
