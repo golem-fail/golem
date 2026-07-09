@@ -18,6 +18,19 @@ fn build_ios_companion(workspace_root: &Path, out_dir: &Path) {
     println!("cargo:rerun-if-changed=../companions/ios/GolemRunnerApp");
     println!("cargo:rerun-if-changed=../companions/ios/GolemRunner.xcodeproj");
 
+    // Gate on the *target* OS, not the host. iOS simulators exist only on macOS
+    // and the XCTest bundle is unusable elsewhere, so a non-macOS target (e.g. a
+    // Linux cross-build from a mac host that has Xcode installed) must embed zero
+    // iOS bytes deterministically — never rely on "xcodebuild happened to be
+    // absent." CARGO_CFG_TARGET_OS is the target being compiled for; a build
+    // script's own cfg!(target_os) would be the host and get this wrong.
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if target_os != "macos" {
+        println!("cargo:warning=iOS companion skipped for non-macOS target ({target_os})");
+        write_empty_marker(out_dir, "companion-ios.tar.gz");
+        return;
+    }
+
     let project = workspace_root.join("companions/ios/GolemRunner.xcodeproj");
     let archive = out_dir.join("companion-ios.tar.gz");
 
