@@ -132,8 +132,8 @@ Checks, each with a copy-paste remedy on a miss:
 - `adb` on PATH + the Android companion embedded
 - `xcrun` / `simctl` on PATH + the iOS companion embedded (macOS only; reported
   as *n/a* elsewhere)
-- at least one booted simulator/emulator/device (informational — golem boots one
-  on demand)
+- at least one emulator/simulator available to boot, or a connected device
+  (informational — golem boots one on demand)
 - `ffmpeg` (optional — lets the a11y audit and `--trace` reuse a frame from an
   existing recording instead of taking an extra live screenshot; recording
   itself works without it)

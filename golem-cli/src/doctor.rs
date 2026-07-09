@@ -14,6 +14,7 @@
 //! the check/report behaviour is exhaustively unit-testable without real tools.
 
 use std::io::IsTerminal;
+use std::path::Path;
 
 use anyhow::Result;
 use golem_common::command;
@@ -72,8 +73,13 @@ struct Facts {
     xcrun: bool,
     simctl: bool,
     ffmpeg: bool,
-    booted_android: usize,
-    booted_ios: usize,
+    /// Physical Android devices currently connected (running emulators are AVDs,
+    /// counted separately, so they are excluded here to avoid double counting).
+    android_connected: usize,
+    /// Bootable Android AVDs defined on the host.
+    android_avds: usize,
+    /// Bootable iOS simulators available on the host.
+    ios_sims: usize,
     ios_companion: bool,
     android_companion: bool,
     /// `Ok` if `~/.golem` is writable, else a human-readable reason.
@@ -160,19 +166,22 @@ fn evaluate(f: &Facts) -> Vec<Check> {
         checks.push(Check::ok("iOS driving", "n/a — requires macOS"));
     }
 
-    // A booted device is *not* required — golem boots one on demand — but a
-    // pre-booted device speeds runs and CI lanes often want one ready.
-    let booted = f.booted_android + f.booted_ios;
-    if booted > 0 {
+    // golem boots a device on demand, so what matters is whether at least one is
+    // *available* to boot (an AVD / simulator) or already connected — not whether
+    // one happens to be booted right now.
+    let avail_android = f.android_avds + f.android_connected;
+    let avail_ios = if f.is_macos { f.ios_sims } else { 0 };
+    let avail = avail_android + avail_ios;
+    if avail > 0 {
         checks.push(Check::ok(
-            "booted device",
-            &format!("{booted} ({} android, {} ios)", f.booted_android, f.booted_ios),
+            "device available",
+            &format!("{avail} ({avail_android} android, {avail_ios} ios)"),
         ));
     } else {
         checks.push(Check::warn(
-            "booted device",
-            "none booted",
-            "golem boots one on demand; for CI pre-boot e.g. `xcrun simctl boot 'iPhone 16'` or `emulator -avd <name>`",
+            "device available",
+            "none",
+            "no emulator/simulator or connected device found — golem boots one on demand, so create one: Android `avdmanager create avd` (or Android Studio Device Manager); iOS via Xcode > Settings > Components",
         ));
     }
 
@@ -266,19 +275,44 @@ fn render_with_color(checks: &[Check], use_color: bool) -> String {
 // Parsers (pure)
 // ---------------------------------------------------------------------------
 
-/// Count online devices in `adb devices` output — lines ending in a `device`
-/// state (ignoring the header and `offline` / `unauthorized` entries).
-fn count_adb_devices(stdout: &str) -> usize {
+/// Count *physical* online devices in `adb devices` output — online (`device`
+/// state) entries whose serial is not an `emulator-*` (a running AVD, counted
+/// via the AVD list instead), ignoring the header and offline/unauthorized rows.
+fn count_adb_physical(stdout: &str) -> usize {
     stdout
         .lines()
         .filter_map(|l| l.split_once('\t'))
-        .filter(|(_, state)| state.trim() == "device")
+        .filter(|(serial, state)| state.trim() == "device" && !serial.starts_with("emulator-"))
         .count()
 }
 
-/// Count booted simulators in `xcrun simctl list devices booted` output.
-fn count_booted_sims(stdout: &str) -> usize {
-    stdout.lines().filter(|l| l.contains("(Booted)")).count()
+/// Count bootable simulators in `xcrun simctl list devices available` output —
+/// device lines carry a state, `(Booted)` or `(Shutdown)`.
+fn count_sim_devices(stdout: &str) -> usize {
+    stdout
+        .lines()
+        .filter(|l| l.contains("(Booted)") || l.contains("(Shutdown)"))
+        .count()
+}
+
+/// Count Android AVDs by their `<name>.ini` marker in the AVD home directory
+/// (needs no `emulator` binary on PATH, which often isn't).
+fn count_avds_in(avd_home: &Path) -> usize {
+    match std::fs::read_dir(avd_home) {
+        Ok(entries) => entries
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().is_some_and(|x| x == "ini"))
+            .count(),
+        Err(_) => 0,
+    }
+}
+
+/// The AVD home directory: `$ANDROID_AVD_HOME` if set, else `~/.android/avd`.
+fn avd_home() -> std::path::PathBuf {
+    if let Ok(dir) = std::env::var("ANDROID_AVD_HOME") {
+        return std::path::PathBuf::from(dir);
+    }
+    dirs::home_dir().unwrap_or_default().join(".android/avd")
 }
 
 // ---------------------------------------------------------------------------
@@ -335,13 +369,14 @@ async fn probe() -> Facts {
         (false, false)
     };
 
-    let booted_android = if adb {
-        count_adb_devices(&stdout_of("adb", &["devices"]).await)
+    let android_connected = if adb {
+        count_adb_physical(&stdout_of("adb", &["devices"]).await)
     } else {
         0
     };
-    let booted_ios = if simctl {
-        count_booted_sims(&stdout_of("xcrun", &["simctl", "list", "devices", "booted"]).await)
+    let android_avds = count_avds_in(&avd_home());
+    let ios_sims = if simctl {
+        count_sim_devices(&stdout_of("xcrun", &["simctl", "list", "devices", "available"]).await)
     } else {
         0
     };
@@ -352,8 +387,9 @@ async fn probe() -> Facts {
         xcrun,
         simctl,
         ffmpeg,
-        booted_android,
-        booted_ios,
+        android_connected,
+        android_avds,
+        ios_sims,
         ios_companion: crate::companions::has_ios_companion(),
         android_companion: crate::companions::has_android_companion(),
         golem_writable: probe_golem_writable(),
@@ -398,8 +434,9 @@ mod tests {
             xcrun: true,
             simctl: true,
             ffmpeg: true,
-            booted_android: 1,
-            booted_ios: 1,
+            android_connected: 0,
+            android_avds: 1,
+            ios_sims: 2,
             ios_companion: true,
             android_companion: true,
             golem_writable: Ok(()),
@@ -523,27 +560,58 @@ mod tests {
         assert!(colored.contains('\x1b'), "color output SHALL contain ANSI escapes");
     }
 
-    // 8. adb devices parser: counts only online `device` entries, ignoring the
-    //    header and offline/unauthorized rows.
+    // 8. No device available is a WARNING, not a gate failure — golem boots one
+    //    on demand, and the platform is still "drivable" (toolchain + companion).
     #[test]
-    fn adb_device_parser_counts_only_online() {
+    fn no_device_available_is_warning_not_failure() {
+        let mut f = base_facts();
+        f.android_connected = 0;
+        f.android_avds = 0;
+        f.ios_sims = 0;
+        let checks = evaluate(&f);
+        let dev = checks
+            .iter()
+            .find(|c| c.label == "device available")
+            .expect("device line");
+        assert_eq!(dev.status, Status::Warn, "no device SHALL warn, not fail");
+        assert_eq!(exit_code(&checks), 0, "device availability SHALL NOT gate the exit code");
+    }
+
+    // 9. adb parser counts only physical online devices — emulators (running
+    //    AVDs, counted via the AVD list) and offline/unauthorized rows excluded.
+    #[test]
+    fn adb_parser_counts_physical_only() {
         let out = "List of devices attached\n\
                    emulator-5554\tdevice\n\
                    R58N12345\tunauthorized\n\
                    emulator-5556\toffline\n\
                    192.168.0.2:5555\tdevice\n";
-        assert_eq!(count_adb_devices(out), 2);
-        assert_eq!(count_adb_devices("List of devices attached\n\n"), 0);
+        assert_eq!(count_adb_physical(out), 1, "only the physical device counts");
+        assert_eq!(count_adb_physical("List of devices attached\n\n"), 0);
     }
 
-    // 9. simctl booted parser: counts (Booted) lines only.
+    // 10. simctl available parser: counts every bootable device line (Booted or
+    //     Shutdown), ignoring headers.
     #[test]
-    fn simctl_booted_parser_counts_booted() {
+    fn simctl_parser_counts_available_devices() {
         let out = "== Devices ==\n\
                    -- iOS 26.5 --\n    \
                    iPhone 16 (UDID) (Booted) \n    \
                    iPhone 17 (UDID2) (Shutdown) \n";
-        assert_eq!(count_booted_sims(out), 1);
-        assert_eq!(count_booted_sims("== Devices ==\n-- iOS 26.5 --\n"), 0);
+        assert_eq!(count_sim_devices(out), 2);
+        assert_eq!(count_sim_devices("== Devices ==\n-- iOS 26.5 --\n"), 0);
+    }
+
+    // 11. AVD counter: counts `<name>.ini` markers in the AVD home, ignoring
+    //     the `.avd` payload dirs and other files.
+    #[test]
+    fn avd_counter_counts_ini_markers() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("Pixel_8.ini"), "").expect("write");
+        std::fs::write(dir.path().join("Pixel_Tablet.ini"), "").expect("write");
+        std::fs::create_dir(dir.path().join("Pixel_8.avd")).expect("mkdir");
+        std::fs::write(dir.path().join("README.txt"), "").expect("write");
+        assert_eq!(count_avds_in(dir.path()), 2);
+        assert_eq!(count_avds_in(&dir.path().join("does-not-exist")), 0);
     }
 }

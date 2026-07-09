@@ -99,7 +99,7 @@ golem doctor
   ✓ xcrun (iOS) — found
   ✓ simctl (iOS) — found
   ✓ iOS companion — embedded
-  ✓ booted device — 1 (1 android, 0 ios)
+  ✓ device available — 3 (1 android, 2 ios)
   ✓ ffmpeg (optional) — found
   ✓ drivable platform — android, ios
 ```
