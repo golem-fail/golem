@@ -354,10 +354,10 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
             a11y_extract::run(&args)?;
         }
 
-        Commands::Doctor => {
-            // doctor owns its own exit code (non-zero when no platform is
-            // drivable) so CI can gate on it — return it directly.
-            return doctor::run().await;
+        Commands::Doctor(args) => {
+            // doctor owns its own exit code (non-zero when a checked mode can't
+            // proceed) so CI can gate on it — return it directly.
+            return doctor::run(&args).await;
         }
     }
 
