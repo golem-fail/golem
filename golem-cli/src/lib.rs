@@ -4,6 +4,7 @@ pub mod cli;
 pub mod companion_paths;
 pub mod companions;
 pub mod devices;
+pub mod doctor;
 pub mod discovery;
 pub mod install_cache;
 pub mod install_script_cmd;
@@ -294,6 +295,21 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
             // skips are correctly tolerated.
             let any_failed = report.flows.iter().any(|f| f.is_failed());
             if any_failed {
+                // Auto-invoke doctor when the run never acquired a device (a
+                // missing-runtime-dep dead-end: no adb/simctl, no booted device),
+                // so the user sees *why* instead of a bare failure. Scoped to the
+                // never-ran no-device shape to avoid noise on real test failures.
+                if has_human_output
+                    && report.flows.iter().any(|f| {
+                        f.step_results.is_empty()
+                            && matches!(
+                                f.first_failure_code,
+                                Some(golem_events::FailureCode::DeviceNotFound)
+                            )
+                    })
+                {
+                    doctor::hint_no_device().await;
+                }
                 return Ok(1);
             }
             // Quiet the unused-binding warnings for variables now only
@@ -336,6 +352,12 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
 
         Commands::A11yExtract(args) => {
             a11y_extract::run(&args)?;
+        }
+
+        Commands::Doctor => {
+            // doctor owns its own exit code (non-zero when no platform is
+            // drivable) so CI can gate on it — return it directly.
+            return doctor::run().await;
         }
     }
 

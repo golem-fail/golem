@@ -33,6 +33,9 @@ pub enum Commands {
     /// Read the embedded audit out of an annotated a11y screenshot: list the
     /// findings and print the command to replay that run.
     A11yExtract(A11yExtractArgs),
+    /// Diagnose the runtime environment (device CLIs, booted devices, embedded
+    /// companions, writable state dir). Exits non-zero if no platform is drivable.
+    Doctor,
 }
 
 #[derive(clap::Args, Debug)]
@@ -719,6 +722,16 @@ mod tests {
         assert!(
             msg.contains("KEY=VALUE"),
             "error SHALL mention the expected KEY=VALUE format"
+        );
+    }
+
+    // 40. `doctor` parses to the Doctor variant (no args).
+    #[test]
+    fn doctor_no_args() {
+        let cli = parse(&["doctor"]);
+        assert!(
+            matches!(cli.command, Commands::Doctor),
+            "`golem doctor` SHALL parse to Commands::Doctor"
         );
     }
 }
