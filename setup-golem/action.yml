@@ -1,0 +1,37 @@
+name: "Setup golem"
+description: "Install the golem mobile UI testing CLI and verify the runtime environment"
+author: "golem-fail"
+branding:
+  icon: "smartphone"
+  color: "purple"
+
+inputs:
+  version:
+    description: "golem version to install (e.g. 0.7.0). Default: the latest release."
+    required: false
+    default: ""
+  doctor:
+    description: "Run `golem doctor` after install to gate on the runtime environment."
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install golem
+      shell: bash
+      env:
+        # Empty ⇒ install.sh resolves the latest release. Pin via `version:`.
+        GOLEM_VERSION: ${{ inputs.version }}
+        # Used only for the latest-version API lookup (helps with rate limits).
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        # Run the installer bundled with this action ref (not a re-fetch), so the
+        # installed CLI matches the action version the user pinned.
+        bash "$GITHUB_ACTION_PATH/../scripts/install.sh"
+        echo "$HOME/.golem/bin" >> "$GITHUB_PATH"
+
+    - name: Verify environment (golem doctor)
+      if: ${{ inputs.doctor == 'true' }}
+      shell: bash
+      run: golem doctor
