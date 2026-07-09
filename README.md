@@ -132,4 +132,6 @@ Contributions are accepted under a [Developer Certificate of Origin](docs/contri
 
 ## License
 
-golem is **source-available** under the [Functional Source License, Version 1.1](LICENSE) (FSL-1.1, Apache-2.0 future license) — **not** open source. You may use, modify, and redistribute it for any purpose **except** a Competing Use (offering a product or service that substitutes for or substantially replicates golem). Each release **automatically converts to Apache-2.0 two years** after its publication, and the FSL grants the full Apache-2.0 patent license on conversion.
+[FSL-1.1](LICENSE) — **source-available**: use, modify, and share golem freely for anything except building a competing product, and each release turns into open-source **Apache-2.0 two years** after it ships.
+
+<sub>Full terms in [LICENSE](LICENSE); "source-available", not open source.</sub>
