@@ -75,7 +75,7 @@ Idempotent — "updating" is just re-running it. Honours `GOLEM_VERSION` (pin) a
 ## GitHub Actions
 
 ```yaml
-- uses: golem-fail/golem/setup-golem@v1
+- uses: golem-fail/golem/setup-golem@v0.8.0
   with:
     version: "0.7.0"   # optional; default = latest
     doctor: "true"     # optional; gate on `golem doctor`
