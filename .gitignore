@@ -38,6 +38,9 @@ dist/
 
 # npm wrapper: native binary fetched at install time
 npm/vendor/
+# npm wrapper: LICENSE copied from repo root by the `prepack` script at pack time
+# (root LICENSE stays the single source of truth; this copy is a build artifact)
+npm/LICENSE
 
 # Tauri generated platform projects (machine-specific) — ignore
 # everything inside, then carve out the test app's Android manifest

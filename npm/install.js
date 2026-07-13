@@ -34,10 +34,12 @@ function target() {
   const p = process.platform;
   const a = process.arch;
   if (p === 'darwin' && a === 'arm64') return 'aarch64-apple-darwin';
-  // Linux triples are ready but no artifacts are published yet (deferred).
+  if (p === 'linux' && a === 'x64') return 'x86_64-unknown-linux-musl';
+  if (p === 'linux' && a === 'arm64') return 'aarch64-unknown-linux-musl';
+  // iOS is macOS-only; Linux drives Android. Windows has no prebuilt binary.
   fail(
-    `unsupported platform ${p}/${a} — golem ships a prebuilt binary for macOS ` +
-      `arm64 only for now (build from source: cargo install --path golem-cli)`
+    `unsupported platform ${p}/${a} — golem ships prebuilt binaries for macOS ` +
+      `arm64 and Linux x86_64/arm64 (build from source: cargo install --path golem-cli)`
   );
 }
 

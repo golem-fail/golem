@@ -8,7 +8,24 @@
     "url": "git+https://github.com/golem-fail/golem.git",
     "directory": "npm"
   },
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "FSL-1.1-ALv2",
+  "keywords": [
+    "mobile",
+    "testing",
+    "ui-testing",
+    "e2e",
+    "automation",
+    "ios",
+    "android",
+    "simulator",
+    "emulator",
+    "react-native",
+    "expo",
+    "tauri"
+  ],
+  "bugs": {
+    "url": "https://github.com/golem-fail/golem/issues"
+  },
   "bin": {
     "golem": "bin/cli.js"
   },
@@ -16,14 +33,20 @@
     "bin/cli.js",
     "install.js"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
+    "prepack": "cp ../LICENSE LICENSE",
     "postinstall": "node install.js"
   },
   "os": [
-    "darwin"
+    "darwin",
+    "linux"
   ],
   "cpu": [
-    "arm64"
+    "arm64",
+    "x64"
   ],
   "engines": {
     "node": ">=16"
