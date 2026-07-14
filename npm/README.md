@@ -1,5 +1,10 @@
 # @golem-fail/golem
 
+[![npm](https://img.shields.io/npm/v/%40golem-fail%2Fgolem?logo=npm)](https://www.npmjs.com/package/@golem-fail/golem)
+[![GitHub release](https://img.shields.io/github/v/release/golem-fail/golem?logo=github)](https://github.com/golem-fail/golem/releases/latest)
+[![GitHub stars](https://img.shields.io/github/stars/golem-fail/golem?logo=github)](https://github.com/golem-fail/golem/stargazers)
+[![license](https://img.shields.io/badge/license-FSL--1.1-blue)](https://github.com/golem-fail/golem/blob/main/LICENSE)
+
 Prebuilt-binary wrapper for [golem](https://github.com/golem-fail/golem), a
 mobile UI testing framework. Install it as a **per-project dev dependency** so
 the version is pinned in your lockfile — which dovetails with golem's
