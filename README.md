@@ -6,7 +6,7 @@
 
 [![npm](https://img.shields.io/npm/v/%40golem-fail%2Fgolem?logo=npm)](https://www.npmjs.com/package/@golem-fail/golem)
 [![npm downloads](https://img.shields.io/npm/dw/%40golem-fail%2Fgolem?logo=npm)](https://www.npmjs.com/package/@golem-fail/golem)
-[![binary downloads](https://img.shields.io/github/downloads/golem-fail/golem/total?logo=github&label=binary%20downloads)](https://github.com/golem-fail/golem/releases)
+[![installs](https://img.shields.io/github/downloads/golem-fail/golem/total?logo=github&label=installs)](https://github.com/golem-fail/golem/releases)
 [![license](https://img.shields.io/badge/license-FSL--1.1--Apache--2.0-blue)](LICENSE)
 
 ```toml
