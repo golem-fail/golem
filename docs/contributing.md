@@ -51,6 +51,24 @@ Investigate one thing at a time. Identify the cause, summarise it, and check whe
 
 See [Architecture](architecture.md) for the crate map and the end-to-end execution model, and [Companions](companions.md) for the on-device iOS/Android harnesses.
 
+## Release notes
+
+Release notes are generated from PRs by [`scripts/release-notes.sh`](../scripts/release-notes.sh) (run by `release.sh` at release time), so each PR describes its own changes in a marked block in the description — one line per change, each prefixed with a category:
+
+```
+<!-- release-notes -->
+- added: swipe_until scrolls until a target is visible
+- fixed: scroll overshoot no longer reverses on RTL
+- breaking: --platform is now required when both companions are embedded
+- security: bumped rustls to patch RUSTSEC-2026-xxxx
+- internal: release notes are now generated from PR blocks
+<!-- /release-notes -->
+```
+
+Categories (test-writer audience first): **`breaking`**, **`added`**, **`improved`**, **`fixed`**, **`security`**, **`deprecated`** are shown; **`internal`** (contributor-facing — tooling, refactors, CI, tests) renders collapsed, like dependencies. Synonyms are accepted (`feat`=added, `fix`=fixed, `changed`/`perf`=improved, `dev`/`chore`=internal). A PR may list several lines and mix categories.
+
+You can also write the note as a `Release-Note:` git trailer in a commit; a [sync action](../.github/workflows/release-note-sync.yml) lifts it into the PR block. The [PR template](../.github/pull_request_template.md) pre-fills the block, and a [Release note check](../.github/workflows/release-note-check.yml) fails any PR that omits it — unless labelled `no-release-note` (pure ci/docs) or opened by a bot. Dependency bumps need **no** line: the notes compute those from the lockfile diff (direct deps only; transitive churn collapses to a count).
+
 ## Developer Certificate of Origin
 
 golem is [source-available under FSL-1.1](../LICENSE) (Apache-2.0 future license). To keep the project's right to ship and eventually relicense under Apache-2.0, contributions are accepted under the [Developer Certificate of Origin](https://developercertificate.org/) — a lightweight sign-off (no CLA paperwork).
