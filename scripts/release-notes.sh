@@ -75,6 +75,22 @@ npm_lock_map() {
          | ((.key | sub("^.*node_modules/";"")) + "\t" + (.value.version // empty))' 2>/dev/null || true
 }
 
+# name<TAB>version for pinned Gradle coordinates in a build.gradle(.kts) on stdin.
+# Only `group:artifact:version` literals with a concrete (digit-led) version are
+# taken — BOM-managed (`group:artifact`, no version) and `$var` versions are
+# skipped. build.gradle lists DIRECT deps, so every match is a direct dep.
+gradle_dep_map() {
+  grep -oE "['\"][A-Za-z0-9._-]+:[A-Za-z0-9._-]+:[0-9][A-Za-z0-9._-]*['\"]" 2>/dev/null \
+    | tr -d "\"'" | awk -F: '{print $1":"$2"\t"$3}'
+}
+
+# name<TAB>version for SPM pins in a Package.resolved (v2/v3 JSON) on stdin.
+# (No-op today — test-app-b/ios has no SPM manifest — but ready when one lands.)
+spm_dep_map() {
+  jq -r '(.pins // .object.pins // [])[]
+         | ((.identity // .package) + "\t" + (.state.version // .state.revision // empty))' 2>/dev/null || true
+}
+
 # Emit "rt <key>" / "dev <key>" for each dependency key declared in the Cargo.toml
 # manifests passed as args (read from the $NEW tag). Section decides the class:
 #   [dependencies] / [workspace.dependencies] / [*.dependencies]            → rt
@@ -122,6 +138,23 @@ emit_note() {  # <type> <text-with-optional-(#N)>
 # Capitalise first letter; leave the rest (identifiers/backticks) untouched.
 sentence() { local s="$1"; printf '%s' "${s^}"; }
 
+# Strip trailing whitespace.
+trim_trail() { local s="$1"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
+
+# Remove HTML comments (single- and multi-line) from stdin, so leftover template
+# guidance in the block — even a stray `<!-- - feat: example -->` — is ignored
+# rather than emitted or counted.
+strip_comments() {
+  awk '
+    {
+      l=$0
+      if (incomment) { if (l ~ /-->/) { sub(/.*-->/,"",l); incomment=0 } else next }
+      gsub(/<!--.*-->/,"",l)
+      if (l ~ /<!--/) { sub(/<!--.*/,"",l); incomment=1 }
+      print l
+    }'
+}
+
 # Conventional-commit types that never produce a user-facing note.
 is_skippable_subject() {
   local re_skip='^(chore|ci|docs|test|refactor|style|build|revert)([(:])'
@@ -142,30 +175,39 @@ while IFS= read -r subject; do
     pr="${BASH_REMATCH[1]}"
   fi
 
-  block=""
+  block=""; pr_suffix=""
   if [[ -n "$pr" ]]; then
     body="$(gh pr view "$pr" --repo "$SLUG" --json body -q .body 2>/dev/null || true)"
     block="$(printf '%s\n' "$body" \
-      | awk '/<!-- *release-notes *-->/{f=1;next} /<!-- *\/release-notes *-->/{f=0} f')"
+      | awk '/<!-- *release-notes *-->/{f=1;next} /<!-- *\/release-notes *-->/{f=0} f' \
+      | strip_comments)"
+    # Issue links: GitHub closing keywords in the PR body → "closes #N".
+    closes="$(printf '%s\n' "$body" \
+      | grep -oiE '(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#[0-9]+' \
+      | grep -oE '#[0-9]+' | sort -uV | paste -sd' ' - 2>/dev/null || true)"
+    refs="#$pr"; [[ -n "$closes" ]] && refs="$refs, closes $closes"
+    pr_suffix=" ($refs)"
   fi
 
   if [[ -n "${block// /}" ]]; then
     # Authored block: one typed line each.
-    re_blockline='^[[:space:]]*-[[:space:]]*(breaking|feat|fix):[[:space:]]*(.+)$'
+    # Require a non-space char after the type (rejects empty / "- feat:   ");
+    # the leading [^space] also strips leading padding from the captured text.
+    re_blockline='^[[:space:]]*-[[:space:]]*(breaking|feat|fix):[[:space:]]*([^[:space:]].*)$'
     while IFS= read -r line; do
       [[ "$line" =~ $re_blockline ]] || continue
-      local_type="${BASH_REMATCH[1]}"; text="${BASH_REMATCH[2]}"
-      suffix=""; [[ -n "$pr" ]] && suffix=" (#$pr)"
+      local_type="${BASH_REMATCH[1]}"; text="$(trim_trail "${BASH_REMATCH[2]}")"
+      suffix="$pr_suffix"
       emit_note "$local_type" "$(sentence "$text")$suffix"
     done <<< "$block"
   else
     # No block → conventional-subject fallback (skip non-user-facing).
     is_skippable_subject "$subject" && continue
     clean="${subject%% (#*}"                       # drop trailing (#N)
-    re_conv='^([a-z]+)(\([^)]*\))?(!)?:[[:space:]]*(.+)$'
+    re_conv='^([a-z]+)(\([^)]*\))?(!)?:[[:space:]]*([^[:space:]].*)$'
     if [[ "$clean" =~ $re_conv ]]; then
-      t="${BASH_REMATCH[1]}"; bang="${BASH_REMATCH[3]}"; desc="${BASH_REMATCH[4]}"
-      suffix=""; [[ -n "$pr" ]] && suffix=" (#$pr)"
+      t="${BASH_REMATCH[1]}"; bang="${BASH_REMATCH[3]}"; desc="$(trim_trail "${BASH_REMATCH[4]}")"
+      suffix="$pr_suffix"
       if [[ -n "$bang" ]]; then emit_note breaking "$(sentence "$desc")$suffix"
       elif [[ "$t" == "feat" ]]; then emit_note feat "$(sentence "$desc")$suffix"
       elif [[ "$t" == "fix"  ]]; then emit_note fix  "$(sentence "$desc")$suffix"
@@ -224,19 +266,31 @@ if [[ -n "$PREV" ]]; then
              | grep -E '(^|/)Cargo\.lock$' | grep -v '/node_modules/' || true)
   mapfile -t NPM_LOCKS < <(git ls-tree -r --name-only "$NEW" 2>/dev/null \
              | grep -E '(^|/)package-lock\.json$' | grep -v '/node_modules/' || true)
+  mapfile -t GRADLE_FILES < <(git ls-tree -r --name-only "$NEW" 2>/dev/null \
+             | grep -E '(^|/)build\.gradle(\.kts)?$' | grep -v '/node_modules/' || true)
+  mapfile -t SPM_FILES < <(git ls-tree -r --name-only "$NEW" 2>/dev/null \
+             | grep -E '(^|/)Package\.resolved$' | grep -v '/node_modules/' || true)
 fi
 
 # Deduped change sets keyed by dep name (same bump across apps → one line).
 declare -A RT_CH=() DEV_CH=() TRANS_SEEN=()
 transitive=0
 
-diff_lockfile() {  # <ecosystem> <path>
-  local eco="$1" path="$2" oldmap newmap
+diff_lockfile() {  # <ecosystem> <path> [direct-class]
+  # direct-class (e.g. "dev"): treat every changed entry as a direct dep of that
+  # class — for ecosystems whose file lists only direct deps (gradle build.gradle)
+  # or has no separate manifest to intersect (spm); skips the DEPCLASS/transitive
+  # logic used for cargo/npm.
+  local eco="$1" path="$2" direct_force="${3:-}" oldmap newmap
   case "$eco" in
-    cargo) oldmap="$(git show "${PREV}:${path}" 2>/dev/null | cargo_lock_map || true)"
-           newmap="$(git show "${NEW}:${path}"  2>/dev/null | cargo_lock_map || true)" ;;
-    npm)   oldmap="$(git show "${PREV}:${path}" 2>/dev/null | npm_lock_map || true)"
-           newmap="$(git show "${NEW}:${path}"  2>/dev/null | npm_lock_map || true)" ;;
+    cargo)  oldmap="$(git show "${PREV}:${path}" 2>/dev/null | cargo_lock_map  || true)"
+            newmap="$(git show "${NEW}:${path}"  2>/dev/null | cargo_lock_map  || true)" ;;
+    npm)    oldmap="$(git show "${PREV}:${path}" 2>/dev/null | npm_lock_map    || true)"
+            newmap="$(git show "${NEW}:${path}"  2>/dev/null | npm_lock_map    || true)" ;;
+    gradle) oldmap="$(git show "${PREV}:${path}" 2>/dev/null | gradle_dep_map  || true)"
+            newmap="$(git show "${NEW}:${path}"  2>/dev/null | gradle_dep_map  || true)" ;;
+    spm)    oldmap="$(git show "${PREV}:${path}" 2>/dev/null | spm_dep_map     || true)"
+            newmap="$(git show "${NEW}:${path}"  2>/dev/null | spm_dep_map     || true)" ;;
   esac
   [[ -z "$oldmap$newmap" ]] && return 0
 
@@ -248,7 +302,7 @@ diff_lockfile() {  # <ecosystem> <path>
     ov="$(printf '%s\n' "$oldmap" | awk -F'\t' -v n="$name" '$1==n{print $2; exit}')"
     nv="$(printf '%s\n' "$newmap" | awk -F'\t' -v n="$name" '$1==n{print $2; exit}')"
     [[ "$ov" == "$nv" ]] && continue                     # unchanged
-    cls="${DEPCLASS[${eco}:${name}]:-}"
+    cls="${direct_force:-${DEPCLASS[${eco}:${name}]:-}}"
     if [[ -z "$cls" ]]; then                             # transitive → count once
       [[ -z "${TRANS_SEEN[${eco}:${name}]:-}" ]] && { TRANS_SEEN[${eco}:${name}]=1; transitive=$((transitive+1)); }
       continue
@@ -261,16 +315,19 @@ diff_lockfile() {  # <ecosystem> <path>
   done <<< "$names"
 }
 
-# NOTE(ecosystems not parsed — bumps here are currently INVISIBLE in the notes):
-#   • Gradle — test-app-b/android declares pinned deps as version strings in
-#     build.gradle (no lockfile). A Dependabot Gradle bump would need a
-#     build.gradle version-string differ (BOM/version-catalog aware). Not done.
-#   • Flutter (coming) — pubspec.lock (Dart/pub). Needs a pub parser.
-#   • iOS native (test-app-b/ios) — no third-party dep manifest (system
-#     frameworks only), so nothing to track there.
-# Cargo + npm (incl. capacitor, which is npm) are covered above.
-for f in "${CARGO_LOCKS[@]}"; do [[ -n "$f" ]] && diff_lockfile cargo "$f"; done
-for f in "${NPM_LOCKS[@]}";   do [[ -n "$f" ]] && diff_lockfile npm   "$f"; done
+# Ecosystems: Cargo + npm (incl. capacitor) diffed against their lockfiles with
+# manifest-based direct-only filtering; Gradle (build.gradle version strings, all
+# direct) and SPM (Package.resolved, ready — no manifest in test-app-b/ios yet)
+# forced direct-dev. NOT yet parsed → such bumps stay invisible:
+#   • Gradle version catalogs (libs.versions.toml) — string-literal coords only.
+#   • CocoaPods (Podfile.lock) — none in the repo.
+#   • Flutter/Dart (pubspec.lock) — for the coming flutter app.
+for f in "${CARGO_LOCKS[@]:-}";  do [[ -n "$f" ]] && diff_lockfile cargo  "$f"; done
+for f in "${NPM_LOCKS[@]:-}";    do [[ -n "$f" ]] && diff_lockfile npm    "$f"; done
+# gradle/spm files list DIRECT deps only (or have no manifest to intersect) and
+# live under test apps → force direct-dev.
+for f in "${GRADLE_FILES[@]:-}"; do [[ -n "$f" ]] && diff_lockfile gradle "$f" dev; done
+for f in "${SPM_FILES[@]:-}";    do [[ -n "$f" ]] && diff_lockfile spm    "$f" dev; done
 
 # ── render ──────────────────────────────────────────────────────────────────
 
