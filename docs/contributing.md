@@ -51,6 +51,20 @@ Investigate one thing at a time. Identify the cause, summarise it, and check whe
 
 See [Architecture](architecture.md) for the crate map and the end-to-end execution model, and [Companions](companions.md) for the on-device iOS/Android harnesses.
 
+## Release notes
+
+Release notes are generated from PRs by [`scripts/release-notes.sh`](../scripts/release-notes.sh) (run by `release.sh` at release time), so each PR describes its own user-facing changes in a marked block in the description — one line per change, typed:
+
+```
+<!-- release-notes -->
+- feat: swipe_until scrolls until a target is visible
+- fix: scroll overshoot no longer reverses on RTL
+- breaking: --platform is now required when both companions are embedded
+<!-- /release-notes -->
+```
+
+A PR may list several lines and mix types; each is bucketed under **Breaking / Features / Fixes**. The [PR template](../.github/pull_request_template.md) pre-fills the block, and a [Release note check](../.github/workflows/release-note-check.yml) fails any PR that omits it — unless the PR is labelled `no-release-note` (ci/docs/chore-only) or opened by a bot. Dependency bumps need **no** line: the notes compute those from the lockfile diff (direct deps only; transitive churn collapses to a count).
+
 ## Developer Certificate of Origin
 
 golem is [source-available under FSL-1.1](../LICENSE) (Apache-2.0 future license). To keep the project's right to ship and eventually relicense under Apache-2.0, contributions are accepted under the [Developer Certificate of Origin](https://developercertificate.org/) — a lightweight sign-off (no CLA paperwork).

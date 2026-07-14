@@ -1,0 +1,35 @@
+name: Release note
+
+# Ensure every human PR carries a release-notes block (feeds scripts/release-notes.sh).
+# Skipped for bot PRs (Dependabot etc. — deps come from the lockfile diff) and any
+# PR labelled `no-release-note` (ci/docs/chore-only). Advisory in spirit but a
+# required-status candidate; cheap (a body scan on ubuntu-slim).
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-slim
+    if: >-
+      !endsWith(github.event.pull_request.user.login, '[bot]') &&
+      !contains(github.event.pull_request.labels.*.name, 'no-release-note')
+    steps:
+      - name: Require a release-notes block
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          block="$(printf '%s\n' "$BODY" \
+            | awk '/<!-- *release-notes *-->/{f=1;next} /<!-- *\/release-notes *-->/{f=0} f')"
+          if printf '%s\n' "$block" | grep -qE '^[[:space:]]*-[[:space:]]*(feat|fix|breaking):[[:space:]]*[^[:space:]]'; then
+            echo "✓ release-notes block present."
+          else
+            echo "::error::No release-notes block with a '- feat:/fix:/breaking:' line was found in the PR description."
+            echo "Add one (see the PR template), or apply the 'no-release-note' label if this PR ships nothing user-facing."
+            exit 1
+          fi
