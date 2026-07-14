@@ -5,10 +5,9 @@
 **Cross-platform mobile UI testing.** Mold your tests once in TOML, animate them on iOS and Android — the same flow drives a simulator, an emulator, or a physical device.
 
 [![npm](https://img.shields.io/npm/v/%40golem-fail%2Fgolem?logo=npm)](https://www.npmjs.com/package/@golem-fail/golem)
-[![GitHub release](https://img.shields.io/github/v/release/golem-fail/golem?logo=github)](https://github.com/golem-fail/golem/releases/latest)
 [![npm downloads](https://img.shields.io/npm/dw/%40golem-fail%2Fgolem?logo=npm)](https://www.npmjs.com/package/@golem-fail/golem)
 [![binary downloads](https://img.shields.io/github/downloads/golem-fail/golem/total?logo=github&label=binary%20downloads)](https://github.com/golem-fail/golem/releases)
-[![license](https://img.shields.io/badge/license-FSL--1.1-blue)](LICENSE)
+[![license](https://img.shields.io/badge/license-FSL--1.1--Apache--2.0-blue)](LICENSE)
 
 ```toml
 [[block]]
