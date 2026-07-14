@@ -107,19 +107,28 @@ jobs:
     if: ${{ vars.RELEASE_ENABLED == 'true' }}
     needs: [release-macos, release-linux]
     runs-on: ubuntu-latest
+    # npm Trusted Publishing (OIDC): no long-lived NPM_TOKEN. id-token:write lets
+    # npm mint a short-lived credential from GitHub's OIDC provider, and it emits
+    # build provenance automatically. Configure the trusted publisher once on
+    # npmjs (package → Settings → Trusted Publisher → GitHub Actions: golem-fail/
+    # golem, workflow release.yml).
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          registry-url: "https://registry.npmjs.org"
+
+      # Trusted Publishing needs npm >= 11.5.1 — newer than the npm bundled with
+      # Node 20 — so upgrade before publishing.
+      - run: npm install -g npm@latest
 
       # npm/package.json version tracks the tag via bump-version.sh. npm publish
       # is NOT idempotent — republishing an existing version hard-fails, which is
       # the desired guard against accidental double-publish.
-      - name: Publish @golem-fail/golem to npm
+      - name: Publish @golem-fail/golem to npm (Trusted Publishing / OIDC)
         working-directory: npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public
