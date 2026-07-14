@@ -191,7 +191,7 @@ else
   RANGE="$NEW"  # first release: whole history
 fi
 
-while IFS= read -r subject; do
+while IFS=$'\x1f' read -r sha subject; do
   [[ -z "$subject" ]] && continue
   pr=""
   if [[ "$subject" =~ \(#([0-9]+)\)[[:space:]]*$ ]]; then
@@ -210,6 +210,10 @@ while IFS= read -r subject; do
       | grep -oE '#[0-9]+' | sort -uV | paste -sd' ' - 2>/dev/null || true)"
     refs="#$pr"; [[ -n "$closes" ]] && refs="$refs, closes $closes"
     pr_suffix=" ($refs)"
+  else
+    # Direct commit (no PR) — link the short SHA (GitHub auto-links it) so no note
+    # is orphaned. Once require-PR is on, every commit arrives via a PR anyway.
+    pr_suffix=" ($sha)"
   fi
 
   if [[ -n "${block// /}" ]]; then
@@ -236,7 +240,7 @@ while IFS= read -r subject; do
       [[ -n "$bucket" ]] && emit_note "$bucket" "$(sentence "$desc")$pr_suffix"
     fi
   fi
-done < <(git log --no-merges --format='%s' "$RANGE" 2>/dev/null || true)
+done < <(git log --no-merges --format='%h%x1f%s' "$RANGE" 2>/dev/null || true)
 
 # ── section 2: dependency updates (lockfile diff, direct-only) ──────────────
 
