@@ -1,0 +1,73 @@
+name: Sync release notes
+
+# Lift `Release-Note:` commit trailers into the PR's release-notes block, so an
+# author can write the note as they commit and it lands on the PR (the durable,
+# squash-safe record scripts/release-notes.sh reads at release time). Additive
+# and idempotent (scripts/sync-pr-notes.sh) — it never removes author lines;
+# drop a synced line by removing the commit trailer.
+#
+# Same-repo PRs only: fork PRs get a read-only token (can't edit the body); there
+# the author fills the block manually and the Release-note check enforces it.
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: rn-sync-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-slim
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # need the PR's commit range to read trailers
+
+      - name: Sync Release-Note trailers into the PR block
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --quiet origin "$BASE" "$HEAD" || true
+
+          lines="$(mktemp)"
+          {
+            while IFS= read -r sha; do
+              [[ -z "$sha" ]] && continue
+              subj="$(git show -s --format='%s' "$sha")"
+              itype=feat
+              if [[ "$subj" =~ ^[a-z]+(\([^\)]*\))?!: ]] || git show -s --format='%b' "$sha" | grep -q 'BREAKING CHANGE'; then
+                itype=breaking
+              elif [[ "$subj" =~ ^fix ]]; then itype=fix
+              elif [[ "$subj" =~ ^feat ]]; then itype=feat
+              fi
+              while IFS= read -r v; do
+                [[ -z "$v" ]] && continue
+                if [[ "$v" =~ ^(feat|fix|breaking): ]]; then printf -- '- %s\n' "$v"
+                else printf -- '- %s: %s\n' "$itype" "$v"; fi
+              done < <(git show -s --format='%(trailers:key=Release-Note,valueonly)' "$sha")
+            done < <(git log --no-merges --format='%H' "$BASE..$HEAD")
+          } > "$lines"
+
+          if [[ ! -s "$lines" ]]; then
+            echo "No Release-Note: trailers in range — nothing to sync."; exit 0
+          fi
+
+          gh pr view "$PR" --json body -q .body > body.txt
+          scripts/sync-pr-notes.sh "$lines" < body.txt > newbody.txt
+          if cmp -s body.txt newbody.txt; then
+            echo "PR block already up to date."
+          else
+            gh pr edit "$PR" --body-file newbody.txt
+            echo "Synced $(wc -l < "$lines") note line(s) into the PR block."
+          fi
