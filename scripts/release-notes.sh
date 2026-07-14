@@ -324,10 +324,11 @@ diff_lockfile() {  # <ecosystem> <path> [direct-class]
 #   • Flutter/Dart (pubspec.lock) — for the coming flutter app.
 for f in "${CARGO_LOCKS[@]:-}";  do [[ -n "$f" ]] && diff_lockfile cargo  "$f"; done
 for f in "${NPM_LOCKS[@]:-}";    do [[ -n "$f" ]] && diff_lockfile npm    "$f"; done
-# gradle/spm files list DIRECT deps only (or have no manifest to intersect) and
-# live under test apps → force direct-dev.
-for f in "${GRADLE_FILES[@]:-}"; do [[ -n "$f" ]] && diff_lockfile gradle "$f" dev; done
-for f in "${SPM_FILES[@]:-}";    do [[ -n "$f" ]] && diff_lockfile spm    "$f" dev; done
+# gradle/spm files list DIRECT deps only (or have no manifest to intersect), so
+# every entry is direct — but classify by location: companions/ ships embedded in
+# the binary (→ runtime), test-app* is a fixture (→ dev).
+for f in "${GRADLE_FILES[@]:-}"; do [[ -n "$f" ]] && diff_lockfile gradle "$f" "$(loc_class "$f")"; done
+for f in "${SPM_FILES[@]:-}";    do [[ -n "$f" ]] && diff_lockfile spm    "$f" "$(loc_class "$f")"; done
 
 # ── render ──────────────────────────────────────────────────────────────────
 
