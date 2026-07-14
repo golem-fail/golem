@@ -17,7 +17,7 @@ exclude = ["test-app/src-tauri"]
 resolver = "2"
 
 [workspace.package]
-version = "0.8.0"
+version = "0.8.1"
 # FSL-1.1 (Apache-2.0 future license) is source-available and not an SPDX
 # identifier, so declare it by file rather than the SPDX `license` field (which
 # would fail validation). Crates opt in with `license-file.workspace = true` if
