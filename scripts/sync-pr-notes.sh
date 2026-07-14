@@ -21,7 +21,7 @@ set -euo pipefail
 LINES_FILE="${1:?usage: sync-pr-notes.sh <lines-file> (body on stdin)}"
 body="$(cat)"
 
-typed_re='^[[:space:]]*-[[:space:]]*(feat|fix|breaking):[[:space:]]*[^[:space:]]'
+typed_re='^[[:space:]]*-[[:space:]]*(breaking|added|feat|improved|improve|changed|change|perf|fixed|fix|security|sec|deprecated|deprecate|internal|dev|chore):[[:space:]]*[^[:space:]]'
 
 # Remove HTML comments (single/multi-line) so leftover template guidance in the
 # block is never treated as a real note.

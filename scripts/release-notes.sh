@@ -123,15 +123,38 @@ npm_manifest_keys() {
     | jq -r '((.dependencies//{}) + (.devDependencies//{})) | keys[]' 2>/dev/null || true
 }
 
-# ── section 1: authored notes (Breaking / Features / Fixes) ─────────────────
+# ── section 1: authored notes ──────────────────────────────────────────────
+# Categories (Keep-a-Changelog + Breaking, tuned to golem's test-writer audience):
+#   shown:     breaking, added, improved, fixed, security, deprecated
+#   collapsed: internal (dev/contributor: tooling, refactors, CI, test harness)
+# Dependencies are a separate collapsed section from the lockfile diff.
 
-breaking=""; features=""; fixes=""
+breaking=""; added=""; improved=""; fixed=""; security=""; deprecated=""; internal=""
 
-emit_note() {  # <type> <text-with-optional-(#N)>
+# Map an author-written prefix (or a Conventional-Commit type) to a canonical
+# bucket; empty = not a note-worthy type.
+canon_type() {
   case "$1" in
-    breaking) breaking+="- $2"$'\n' ;;
-    feat)     features+="- $2"$'\n' ;;
-    fix)      fixes+="- $2"$'\n' ;;
+    breaking)                      echo breaking ;;
+    added|feat)                    echo added ;;
+    improved|improve|changed|change|perf) echo improved ;;
+    fixed|fix)                     echo fixed ;;
+    security|sec)                  echo security ;;
+    deprecated|deprecate)          echo deprecated ;;
+    internal|dev|chore)            echo internal ;;
+    *)                             echo "" ;;
+  esac
+}
+
+emit_note() {  # <canonical-bucket> <text-with-optional-(#N)>
+  case "$1" in
+    breaking)   breaking+="- $2"$'\n' ;;
+    added)      added+="- $2"$'\n' ;;
+    improved)   improved+="- $2"$'\n' ;;
+    fixed)      fixed+="- $2"$'\n' ;;
+    security)   security+="- $2"$'\n' ;;
+    deprecated) deprecated+="- $2"$'\n' ;;
+    internal)   internal+="- $2"$'\n' ;;
   esac
 }
 
@@ -190,28 +213,27 @@ while IFS= read -r subject; do
   fi
 
   if [[ -n "${block// /}" ]]; then
-    # Authored block: one typed line each.
-    # Require a non-space char after the type (rejects empty / "- feat:   ");
-    # the leading [^space] also strips leading padding from the captured text.
-    re_blockline='^[[:space:]]*-[[:space:]]*(breaking|feat|fix):[[:space:]]*([^[:space:]].*)$'
+    # Authored block: one typed line each. Require a non-space char after the
+    # type (rejects empty / "- feat:   "); the leading [^space] also strips
+    # leading padding from the captured text.
+    re_blockline='^[[:space:]]*-[[:space:]]*(breaking|added|feat|improved|improve|changed|change|perf|fixed|fix|security|sec|deprecated|deprecate|internal|dev|chore):[[:space:]]*([^[:space:]].*)$'
     while IFS= read -r line; do
       [[ "$line" =~ $re_blockline ]] || continue
-      local_type="${BASH_REMATCH[1]}"; text="$(trim_trail "${BASH_REMATCH[2]}")"
-      suffix="$pr_suffix"
-      emit_note "$local_type" "$(sentence "$text")$suffix"
+      bucket="$(canon_type "${BASH_REMATCH[1]}")"; [[ -z "$bucket" ]] && continue
+      text="$(trim_trail "${BASH_REMATCH[2]}")"
+      emit_note "$bucket" "$(sentence "$text")$pr_suffix"
     done <<< "$block"
   else
-    # No block → conventional-subject fallback (skip non-user-facing).
+    # No block → conventional-subject fallback. Only user-facing types map;
+    # internal is opt-in via the block (fallback never invents Internal noise).
     is_skippable_subject "$subject" && continue
     clean="${subject%% (#*}"                       # drop trailing (#N)
     re_conv='^([a-z]+)(\([^)]*\))?(!)?:[[:space:]]*([^[:space:]].*)$'
     if [[ "$clean" =~ $re_conv ]]; then
       t="${BASH_REMATCH[1]}"; bang="${BASH_REMATCH[3]}"; desc="$(trim_trail "${BASH_REMATCH[4]}")"
-      suffix="$pr_suffix"
-      if [[ -n "$bang" ]]; then emit_note breaking "$(sentence "$desc")$suffix"
-      elif [[ "$t" == "feat" ]]; then emit_note feat "$(sentence "$desc")$suffix"
-      elif [[ "$t" == "fix"  ]]; then emit_note fix  "$(sentence "$desc")$suffix"
-      fi
+      if [[ -n "$bang" ]]; then bucket=breaking
+      else case "$t" in feat) bucket=added ;; fix) bucket=fixed ;; perf) bucket=improved ;; *) bucket="" ;; esac; fi
+      [[ -n "$bucket" ]] && emit_note "$bucket" "$(sentence "$desc")$pr_suffix"
     fi
   fi
 done < <(git log --no-merges --format='%s' "$RANGE" 2>/dev/null || true)
@@ -333,9 +355,14 @@ for f in "${SPM_FILES[@]:-}";    do [[ -n "$f" ]] && diff_lockfile spm    "$f" "
 # ── render ──────────────────────────────────────────────────────────────────
 
 out=""
-[[ -n "$breaking" ]] && out+="## ⚠️ Breaking"$'\n'"$breaking"$'\n'
-[[ -n "$features" ]] && out+="## ✨ Features"$'\n'"$features"$'\n'
-[[ -n "$fixes"    ]] && out+="## 🐛 Fixes"$'\n'"$fixes"$'\n'
+[[ -n "$breaking"   ]] && out+="## ⚠️ Breaking"$'\n'"$breaking"$'\n'
+[[ -n "$added"      ]] && out+="## ✨ Added"$'\n'"$added"$'\n'
+[[ -n "$improved"   ]] && out+="## 🚀 Improved"$'\n'"$improved"$'\n'
+[[ -n "$fixed"      ]] && out+="## 🐛 Fixed"$'\n'"$fixed"$'\n'
+[[ -n "$security"   ]] && out+="## 🔒 Security"$'\n'"$security"$'\n'
+[[ -n "$deprecated" ]] && out+="## 🗑️ Deprecated"$'\n'"$deprecated"$'\n'
+# Internal = contributor-facing → collapsed, like deps.
+[[ -n "$internal"   ]] && out+="<details><summary>🛠 Internal</summary>"$'\n\n'"$internal"$'\n'"</details>"$'\n\n'
 
 render_set() {  # name of an assoc array → its values, sorted by key
   local -n _arr="$1"; local k

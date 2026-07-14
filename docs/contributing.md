@@ -53,17 +53,21 @@ See [Architecture](architecture.md) for the crate map and the end-to-end executi
 
 ## Release notes
 
-Release notes are generated from PRs by [`scripts/release-notes.sh`](../scripts/release-notes.sh) (run by `release.sh` at release time), so each PR describes its own user-facing changes in a marked block in the description — one line per change, typed:
+Release notes are generated from PRs by [`scripts/release-notes.sh`](../scripts/release-notes.sh) (run by `release.sh` at release time), so each PR describes its own changes in a marked block in the description — one line per change, each prefixed with a category:
 
 ```
 <!-- release-notes -->
-- feat: swipe_until scrolls until a target is visible
-- fix: scroll overshoot no longer reverses on RTL
+- added: swipe_until scrolls until a target is visible
+- fixed: scroll overshoot no longer reverses on RTL
 - breaking: --platform is now required when both companions are embedded
+- security: bumped rustls to patch RUSTSEC-2026-xxxx
+- internal: release notes are now generated from PR blocks
 <!-- /release-notes -->
 ```
 
-A PR may list several lines and mix types; each is bucketed under **Breaking / Features / Fixes**. The [PR template](../.github/pull_request_template.md) pre-fills the block, and a [Release note check](../.github/workflows/release-note-check.yml) fails any PR that omits it — unless the PR is labelled `no-release-note` (ci/docs/chore-only) or opened by a bot. Dependency bumps need **no** line: the notes compute those from the lockfile diff (direct deps only; transitive churn collapses to a count).
+Categories (test-writer audience first): **`breaking`**, **`added`**, **`improved`**, **`fixed`**, **`security`**, **`deprecated`** are shown; **`internal`** (contributor-facing — tooling, refactors, CI, tests) renders collapsed, like dependencies. Synonyms are accepted (`feat`=added, `fix`=fixed, `changed`/`perf`=improved, `dev`/`chore`=internal). A PR may list several lines and mix categories.
+
+You can also write the note as a `Release-Note:` git trailer in a commit; a [sync action](../.github/workflows/release-note-sync.yml) lifts it into the PR block. The [PR template](../.github/pull_request_template.md) pre-fills the block, and a [Release note check](../.github/workflows/release-note-check.yml) fails any PR that omits it — unless labelled `no-release-note` (pure ci/docs) or opened by a bot. Dependency bumps need **no** line: the notes compute those from the lockfile diff (direct deps only; transitive churn collapses to a count).
 
 ## Developer Certificate of Origin
 

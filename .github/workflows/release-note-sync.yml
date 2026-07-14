@@ -53,7 +53,10 @@ jobs:
               fi
               while IFS= read -r v; do
                 [[ -z "$v" ]] && continue
-                if [[ "$v" =~ ^(feat|fix|breaking): ]]; then printf -- '- %s\n' "$v"
+                # If the trailer already carries a known category prefix, keep it;
+                # otherwise prefix with the type inferred from the commit subject.
+                if [[ "$v" =~ ^(breaking|added|feat|improved|improve|changed|change|perf|fixed|fix|security|sec|deprecated|deprecate|internal|dev|chore): ]]; then
+                  printf -- '- %s\n' "$v"
                 else printf -- '- %s: %s\n' "$itype" "$v"; fi
               done < <(git show -s --format='%(trailers:key=Release-Note,valueonly)' "$sha")
             done < <(git log --no-merges --format='%H' "$BASE..$HEAD")

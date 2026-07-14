@@ -33,7 +33,7 @@ jobs:
                      gsub(/<!--.*-->/,"",l)
                      if (l ~ /<!--/) { sub(/<!--.*/,"",l); inc=1 }
                      print l }')"
-          if printf '%s\n' "$block" | grep -qE '^[[:space:]]*-[[:space:]]*(feat|fix|breaking):[[:space:]]*[^[:space:]]'; then
+          if printf '%s\n' "$block" | grep -qE '^[[:space:]]*-[[:space:]]*(breaking|added|feat|improved|improve|changed|change|perf|fixed|fix|security|sec|deprecated|deprecate|internal|dev|chore):[[:space:]]*[^[:space:]]'; then
             echo "✓ release-notes block present."
           else
             echo "::error::No release-notes block with a '- feat:/fix:/breaking:' line was found in the PR description."
