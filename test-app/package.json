@@ -1,7 +1,7 @@
 {
   "name": "golem-test-app",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.8.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,7 +14,7 @@
     "vite": "^8.1.4"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-deep-link": "^2.4.9",
     "@tauri-apps/plugin-dialog": "^2.7.0"
   }
