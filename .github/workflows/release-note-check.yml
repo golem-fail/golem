@@ -1,9 +1,10 @@
 name: Release note
 
 # Ensure every human PR carries a release-notes block (feeds scripts/release-notes.sh).
-# Skipped for bot PRs (Dependabot etc. — deps come from the lockfile diff) and any
-# PR labelled `no-release-note` (ci/docs/chore-only). Advisory in spirit but a
-# required-status candidate; cheap (a body scan on ubuntu-slim).
+# This is a REQUIRED status check, so the job must ALWAYS run and always report a
+# conclusion — a job skipped via a job-level `if:` leaves the required check
+# "expected" forever and blocks the PR. So the bot / `no-release-note` exemption
+# lives inside the step (exit 0), not in a job condition.
 
 on:
   pull_request:
@@ -15,15 +16,23 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-slim
-    if: >-
-      !endsWith(github.event.pull_request.user.login, '[bot]') &&
-      !contains(github.event.pull_request.labels.*.name, 'no-release-note')
     steps:
       - name: Require a release-notes block
         env:
           BODY: ${{ github.event.pull_request.body }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
           set -euo pipefail
+
+          # Exemptions (still report success so the required check is satisfied):
+          case "$AUTHOR" in
+            *'[bot]') echo "Bot PR ($AUTHOR) — deps come from the lockfile diff; exempt."; exit 0 ;;
+          esac
+          case ",$LABELS," in
+            *,no-release-note,*) echo "'no-release-note' label — exempt."; exit 0 ;;
+          esac
+
           # Extract the block interior, then strip HTML comments (single/multi-line)
           # so leftover template guidance never counts as a real note.
           block="$(printf '%s\n' "$BODY" \
@@ -36,7 +45,7 @@ jobs:
           if printf '%s\n' "$block" | grep -qE '^[[:space:]]*-[[:space:]]*(breaking|added|feat|improved|improve|changed|change|perf|fixed|fix|security|sec|deprecated|deprecate|internal|dev|chore):[[:space:]]*[^[:space:]]'; then
             echo "✓ release-notes block present."
           else
-            echo "::error::No release-notes block with a '- feat:/fix:/breaking:' line was found in the PR description."
+            echo "::error::No release-notes block with a category line (breaking/added/improved/fixed/security/deprecated/internal) was found in the PR description."
             echo "Add one (see the PR template), or apply the 'no-release-note' label if this PR ships nothing user-facing."
             exit 1
           fi
