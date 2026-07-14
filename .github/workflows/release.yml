@@ -38,12 +38,40 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Build, package, and publish the macOS release
+      # The Homebrew tap is a SEPARATE public repo, so the formula update must be
+      # committed + pushed there. github.token can't push cross-repo → use a
+      # fine-grained PAT (Contents:write on golem-fail/homebrew-golem) supplied as
+      # the HOMEBREW_TAP_TOKEN secret.
+      - name: Check out the Homebrew tap
+        uses: actions/checkout@v5
+        with:
+          repository: golem-fail/homebrew-golem
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-golem
+
+      - name: Build, package, and publish the macOS release + sync the tap formula
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          scripts/release.sh --tag "$TAG"
+          # One invocation: build + upload the mac asset + rewrite the tap
+          # formula's version/url/sha256 in place (the mac sha256 is local here).
+          scripts/release.sh --tag "$TAG" --formula homebrew-golem/Formula/golem.rb
+
+      - name: Commit + push the updated tap formula
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          cd homebrew-golem
+          if git diff --quiet; then
+            echo "→ formula already up to date; nothing to push."
+            exit 0
+          fi
+          # Bot identity — the GitHub Actions no-reply, so no personal/work email
+          # leaks into the public tap history.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "golem $TAG"
+          git push
 
   release-linux:
     # Same gate. Runs after the macOS job has created the release, so this only
@@ -71,3 +99,27 @@ jobs:
             dist/golem-*-linux-musl.tar.gz \
             dist/golem-*-linux-musl.tar.gz.sha256 \
             --clobber
+
+  publish-npm:
+    # Same gate. Runs only after BOTH platform jobs have uploaded their assets —
+    # the package's postinstall downloads the mac + linux binaries at install
+    # time, so publishing before every asset exists would ship a broken package.
+    if: ${{ vars.RELEASE_ENABLED == 'true' }}
+    needs: [release-macos, release-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      # npm/package.json version tracks the tag via bump-version.sh. npm publish
+      # is NOT idempotent — republishing an existing version hard-fails, which is
+      # the desired guard against accidental double-publish.
+      - name: Publish @golem-fail/golem to npm
+        working-directory: npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
