@@ -120,11 +120,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
-      # Trusted Publishing needs npm >= 11.5.1 — newer than the npm bundled with
-      # Node 20 — so upgrade before publishing.
-      - run: npm install -g npm@latest
+      # Trusted Publishing needs npm >= 11.5.1. Pin to the 11.x line: `npm@latest`
+      # is now 12.x, which requires Node >= 24.15 and would break on the runner's
+      # Node minor; 11.x satisfies Trusted Publishing and installs cleanly.
+      - run: npm install -g npm@^11.5.1
 
       # npm/package.json version tracks the tag via bump-version.sh. npm publish
       # is NOT idempotent — republishing an existing version hard-fails, which is
