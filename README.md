@@ -4,6 +4,11 @@
 
 **Cross-platform mobile UI testing.** Mold your tests once in TOML, animate them on iOS and Android — the same flow drives a simulator, an emulator, or a physical device.
 
+[![npm](https://img.shields.io/npm/v/%40golem-fail%2Fgolem?logo=npm)](https://www.npmjs.com/package/@golem-fail/golem)
+[![npm downloads](https://img.shields.io/npm/dw/%40golem-fail%2Fgolem?logo=npm)](https://www.npmjs.com/package/@golem-fail/golem)
+[![installs](https://img.shields.io/github/downloads/golem-fail/golem/total?logo=github&label=installs)](https://github.com/golem-fail/golem/releases)
+[![license](https://img.shields.io/badge/license-FSL--1.1--Apache--2.0-blue)](LICENSE)
+
 ```toml
 [[block]]
 name = "login"
@@ -37,7 +42,7 @@ npm install -D @golem-fail/golem               # per-project dev dep (also pnpm/
 curl -fsSL https://raw.githubusercontent.com/golem-fail/golem/main/scripts/install.sh | sh   # fallback
 ```
 
-See [Installing golem](docs/distribution.md) for every channel, CI usage, and version pinning. macOS arm64 today; Linux is planned.
+See [Installing golem](docs/distribution.md) for every channel, CI usage, and version pinning. Prebuilt for macOS arm64 and Linux x86_64/arm64 (iOS driving is macOS-only; Linux drives Android).
 
 **At runtime**, driving a platform needs its device CLI (`xcrun simctl` for iOS, `adb` for Android) plus an available simulator/emulator or a connected device. `golem doctor` checks every prerequisite and prints a copy-paste fix for each miss.
 
