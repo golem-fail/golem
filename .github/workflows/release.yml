@@ -37,6 +37,8 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # full history + tags: release-notes.sh diffs against the previous tag
 
       # The Homebrew tap is a SEPARATE public repo, so the formula update must be
       # committed + pushed there. github.token can't push cross-repo → use a

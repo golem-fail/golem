@@ -190,4 +190,21 @@ gh release upload "$TAG" \
     --clobber
 
 echo "✓ uploaded $TARBALL (+ .sha256) to release $TAG"
+
+# ── Release notes ────────────────────────────────────────────────────────────
+# Generate the body from what changed since the previous tag and set it on the
+# release. Done here (after create/upload) so the tag exists and a re-cut onto an
+# existing release refreshes the notes. An explicit --notes overrides generation.
+# Needs full history + tags (CI checkout must use fetch-depth: 0).
+if [ -z "$NOTES" ]; then
+    NOTES_FILE="$(mktemp)"
+    if "$ROOT/scripts/release-notes.sh" "$TAG" > "$NOTES_FILE" 2>/dev/null && [ -s "$NOTES_FILE" ]; then
+        gh release edit "$TAG" --notes-file "$NOTES_FILE" >/dev/null \
+            && echo "✓ release notes generated + applied"
+    else
+        echo "⚠ release-notes generation failed (shallow clone? first release?) — keeping default notes" >&2
+    fi
+    rm -f "$NOTES_FILE"
+fi
+
 gh release view "$TAG" --json url --jq '.url' 2>/dev/null || true
