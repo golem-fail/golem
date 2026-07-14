@@ -24,8 +24,15 @@ jobs:
           BODY: ${{ github.event.pull_request.body }}
         run: |
           set -euo pipefail
+          # Extract the block interior, then strip HTML comments (single/multi-line)
+          # so leftover template guidance never counts as a real note.
           block="$(printf '%s\n' "$BODY" \
-            | awk '/<!-- *release-notes *-->/{f=1;next} /<!-- *\/release-notes *-->/{f=0} f')"
+            | awk '/<!-- *release-notes *-->/{f=1;next} /<!-- *\/release-notes *-->/{f=0} f' \
+            | awk '{ l=$0
+                     if (inc) { if (l ~ /-->/) { sub(/.*-->/,"",l); inc=0 } else next }
+                     gsub(/<!--.*-->/,"",l)
+                     if (l ~ /<!--/) { sub(/<!--.*/,"",l); inc=1 }
+                     print l }')"
           if printf '%s\n' "$block" | grep -qE '^[[:space:]]*-[[:space:]]*(feat|fix|breaking):[[:space:]]*[^[:space:]]'; then
             echo "✓ release-notes block present."
           else
