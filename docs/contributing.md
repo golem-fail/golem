@@ -47,6 +47,12 @@ Versions only ever go forward — a final commit may skip numbers. See [Versioni
 
 Investigate one thing at a time. Identify the cause, summarise it, and check whether it's a known issue. A regression must be fixed before commit unless it's explicitly deferred. Don't add test workarounds that hide an engine bug — fix the engine.
 
+## Tracking work — issues vs roadmap
+
+Prefer **[GitHub Issues](https://github.com/golem-fail/golem/issues)** for any work with a clear problem, reproduction, and acceptance criteria. Set the issue **Type** (Bug / Feature / Task), scoped **labels** (`platform:`, `host:`, `lang:`, `framework:`, `area:`, `action:`), **Effort**, and mark **blocked by** where a dependency exists.
+
+[`docs/roadmap.md`](roadmap.md) is a **temporary** holding pen for still-vague ideas that don't yet have a crisp reproduction or acceptance criteria. We're gradually migrating those into issues, and the file will eventually be deleted. Rule of thumb: **if you can write Problem + Reproduction + Acceptance, open an issue — not a roadmap entry.**
+
 ## Where things live
 
 See [Architecture](architecture.md) for the crate map and the end-to-end execution model, and [Companions](companions.md) for the on-device iOS/Android harnesses.

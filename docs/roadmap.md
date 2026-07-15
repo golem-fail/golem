@@ -1,36 +1,6 @@
 # Roadmap
 
-## iOS embedded (non-full-screen) webview support
-
-Surfaced by the embedded-webview fixture in `test-app-b` (a small WKWebView/
-Android WebView at a known non-top offset). **Two coupled gaps, iOS-specific:**
-
-1. **golem detects an embedded WKWebView but never reads its DOM.**
-   `find_webview_bounds` locates the embedded webview (live run: native frame
-   `wv_y=174`), but the WebKit-Inspector enrichment never fires — the inner DOM
-   (`wv-alpha`/`wv-beta`/`wv-faint`) never enters the tree, so golem sees an
-   opaque native node and can't target/assert/audit anything inside it. Likely
-   cause (dig in `golem-driver/src/webkit.rs`): the inspector locks onto the
-   primary inspectable page, so a *secondary* embedded webview's page isn't
-   enriched. Detection works; enrichment/page-selection is the gap.
-2. **`ios.rs` adds `safe_area_top` to the webview y unconditionally** — correct
-   for a top-anchored full-screen webview (Tauri: `native_wv_y≈0`), but wrong
-   for an embedded webview whose native frame is already screen-absolute
-   (`native_wv_y=174` → would be shoved +54pt low). **Latent today** (only
-   manifests once #1 is fixed and embedded DOM is actually placed), so it's
-   coupled to #1 — fix together: make the inset conditional on the webview
-   being top-anchored/cover, else let the native frame carry placement.
-
-Real-world relevant (in-app browsers, OAuth, hybrid screens) but lower priority
-than full-screen webviews (handled). **Android embedded WebViews untested** —
-CDP enumerates targets, so it may behave differently; check when tackling.
-Validation vehicle: a `test-app-b` embedded-webview fixture (was prototyped
-this session — a small WKWebView/Android WebView at a known offset — then
-reverted; re-add when tackling this).
-
-(The related *full-screen* cover-webview offset — native safe-area inset 54 vs
-CSS env 62 → −8pt on every Tauri/full-screen webview — is already fixed:
-`webkit.rs` cancels the native inset `ios.rs` added, not the CSS env.)
+> **Being migrated to [GitHub Issues](https://github.com/golem-fail/golem/issues).** Anything with a clear **problem, reproduction, and acceptance criteria** belongs in an issue (with Type, scoped labels, Effort, and `blocked by`) — **not** here. This file is a **temporary** holding pen for still-vague ideas that don't yet have a crisp repro/acceptance. Entries graduate to issues as they sharpen, and this file will **eventually be deleted**. Don't add a new entry here if you can already write Problem + Reproduction + Acceptance — open an issue instead.
 
 ## Testability: I/O seam abstractions — remaining sites
 
@@ -55,69 +25,6 @@ raw `tokio::process`/`reqwest`, to wire when hermetic tests are wanted:
 (A clock/sleep seam proved unnecessary — `tokio` `start_paused` advances the reboot/wait
 timeouts deterministically.)
 
-## Scroll: `center` + `visibility_percentage` for edge/partial targets
-
-`e2e/cross/scroll_search.test.toml` `horizontal_carousel_scroll` fails (EF408)
-**on HEAD** (pre-existing, not a regression): the carousel sits at the bottom edge
-of the screen (swipe band ~y=2317). The horizontal swipe stalls — hierarchy node
-count doesn't change (`stall 2/2`), `boundary reached`, reverses, stalls again.
-Likely causes: the swipe lands in/near the Android system-gesture zone at the
-screen edge, and/or the target card is only partially visible so scroll either
-can't engage the carousel or prematurely treats a partially-visible match as the
-stop condition.
-
-Two scroll-until-visible refinements we lack:
-- **center-on-target** — keep scrolling until the target is centered, not merely
-  edge-visible. Fixes "found but unusably at the screen edge" and gives the swipe
-  a safe interaction band away from system-gesture insets.
-- **visibility threshold** — require N% of the target visible before declaring
-  it found, so a sliver peeking at the edge doesn't count as success.
-
-Proposed: add optional `center = true` and `visibility_percentage = N` to the
-`scroll` action. `center` scrolls until the matched element's center is within a
-tolerance of the container/viewport center; `visibility_percentage` gates the
-match. Both default off (current behavior preserved). Also consider insetting the
-swipe band away from the system-gesture zone for edge-adjacent containers. Add
-unit tests for the centering/visibility math and an e2e once implemented.
-
-**2026-07 — a second, high-value repro (part of the EF408 tail).** In the
-multi-device sweeps, `assert_visible on_text="Dark Mode" auto_scroll`
-(`assertions.test`) failed EF408 at a **40s** budget (generous — not a
-timeout-tightness issue) by never converging. Trace: `scroll_started
-direction=Down` → `inner scrollable consumed gesture` → `scroll_reversed →Up
-overshoot: target at bounds=(32,32,71,21)` (target is near the TOP, ~already
-visible) → `preset landed inside absorber bounds=(16,321,370,172)` → preset
-cycling 2→5 → `boundary hit again, cycling`. Two failure modes this item
-directly addresses: (1) the target at y=32 is edge/near-visible but auto_scroll
-fires anyway and thrashes — `visibility_percentage` (accept an adequately-visible
-match) would stop it firing at all; (2) when it must scroll, `center` avoids the
-oscillation around an inner-scrollable/absorber boundary. The remaining piece —
-the gesture being *absorbed by an inner scrollable* — is the inner-container
-convergence tracked in "Inner-container scroll". **Leverage note:** this is
-independent of host load; fixing convergence cuts the scroll-loop iteration
-count, which also shrinks the load-amplified EF408 tail (each iteration is a
-scroll+hierarchy round-trip that slows under saturation). Aggregate churn across
-the sweeps: 56 `scroll_preset_switch`, 15 `scroll_reversed`, 7 `boundary hit
-again, cycling` — non-convergence is common, not a one-off.
-
-## `clear_text` action — erase a whole field, cross-platform
-
-`backspace` is focus-only and deletes N chars from the caret (which sits at
-the end after a `type`). Clearing an entire field of unknown length has no
-clean primitive today — you'd `backspace` a guessed-large count. Add a
-`clear_text` action that empties the focused field in one step, hiding the
-per-platform mechanics:
-
-- **iOS:** select-all then delete — long-press the field → tap "Select All"
-  in the edit menu → one delete. (XCUITest has no direct "clear".)
-- **Android:** cheaper — the companion can `performAction(ACTION_SET_SELECTION,
-  {start:0, end:len})` on the focused node then delete, or send select-all +
-  DEL. No coordinate work.
-
-One action, focus-only (same contract as `backspace`), that just works on
-both. Companion grows a `/clear-text` (or the driver composes existing
-primitives); the runner exposes `{ action = "clear_text" }`.
-
 ## Companion `/hide-keyboard` reboot escalation on recurrence
 
 The `/hide-keyboard` wedge is already handled softly (companion caps the
@@ -133,136 +40,6 @@ insufficient.
 
 **Files:** `golem-driver/src/android.rs::hide_keyboard`; the wedge→reboot
 glue lives in `golem-cli/src/suite.rs` (see `[[project_pixel_7a_wedge.md]]`).
-
-## Inner-container scroll: status after 2026-06-17 investigation
-
-The original report here described a "33-attempt absorber thrash" locating a
-`within` container plus no forward progress inside it (`scroll to "Item 25"
-within {below "Scroll List"}`, Android EF408 120s timeout, iOS ~73s slow). That
-was **suspected, never confirmed**. A full investigation against
-`e2e/cross/scroll.test.toml` (`scroll_within_list`, Item 45) and a fresh
-off-screen repro (`scroll to "Item 25" within {below "Scroll List"}` with no
-warm-up) found:
-
-- **The thrash does NOT reproduce on current code** when the app DOM is loaded.
-  Phase-1 locate finds the container in **1 attempt**; phase-2 scrolls inside and
-  finds the deep item in **~4 swipes / ~13s**. The locate-loop hardening
-  (dwell-before-lift, overshoot guard, dynamic-start) already landed and absorbed
-  the common case. Coverage is real (target resolves in the *visible* tree — see
-  [Visibility model](architecture.md), the load-bearing invariant: visible tree
-  judges, full tree only hints).
-- **Container resolution works** on the test layouts. Ground-truth diagnostic:
-  `within = {below "Scroll List"}` returns the real `overflow-y:auto` `<div>`
-  (the items' container) as the first candidate — *NOT* an oversized wrapper.
-  (Earlier "wrong container" reads were a device-px vs CSS-px mistake: 480dpi =
-  3.0×, so the 787-device-px box = ~262 CSS px = the `max-height:300px` list.)
-- **The EF408 *did* reproduce** — but only when the Tauri **webview barely
-  rendered** (`{2 trees, ~8 nodes}` vs 211 when loaded): a sparse DOM made
-  `within` locate find nothing → `container=None` → page-scroll thrash →
-  timeout. The real Android EF408 was a **webview-readiness race**, not a
-  scroll-algorithm bug — **FIXED** (the post-launch settle gate is now
-  webview-aware: it waits for the webview DOM subtree to hydrate, on an
-  extended deadline, and surfaces a "webview DOM not ready" launch warning if
-  it never does, instead of proceeding on a sparse tree).
-
-**Done this session (committed):**
-- Renamed `scroll.rs` locals `*_fp` → `*_fingerprint` (full/horizon), pure local.
-- Fixed misleading scroll **labels**: human stream said `strategy N` (always
-  "1" for container scrolls, meaningless) and `inner scrollable → strategy {+2}`.
-  Added `container: bool` to `golem_events::SubstepEvent::ScrollAttempt` +
-  mirror `SubstepDetail` + a `ScrollAttemptResult::ContainerAdvanced` variant.
-  Now container scrolls log `[scroll] ↓ container (…)→(…) → container advanced`
-  and page scrolls log `preset N`. Renamed `scroll_strategy_switch` →
-  `scroll_preset_switch` in human output. junit shows `container` vs `preset=N`.
-  Touched: `golem-events/src/lib.rs`, `golem-runner/src/scroll.rs`,
-  `golem-report/src/{lib,stream,toon,junit}.rs`. Verified live on Android (phone)
-  + iOS (iPad).
-- Wrote the [Visibility model](architecture.md) section + an AGENTS.md pointer
-  (the visible-tree-judges / full-tree-hints invariant).
-
-**What actually remains** (the rest spun into the entries below):
-1. **Relational-selector fragility** — `within` picks `.first()` of *everything*
-   below the anchor; works here only by pre-order luck + geometric overlap. See
-   "Relational selector overhaul".
-2. **Inner-scrollable "absorber" non-convergence — reopened 2026-07.** The
-   2026-06 conclusion ("thrash doesn't reproduce on a loaded DOM") held for the
-   `within`-scoped case. But a *loaded-tree* thrash DID reproduce via plain
-   `auto_scroll` (not `within`) in the multi-device sweeps: `assert_visible
-   on_text="Dark Mode" auto_scroll` on iOS, 351-node tree, cycled presets 2→5
-   with `inner scrollable consumed gesture` + `preset landed inside absorber
-   bounds` and never converged (EF408 at 40s). So the gesture-aiming still lands
-   inside an inner scrollable that absorbs it instead of scrolling the intended
-   container. Distinct from the (fixed) webview-readiness race — this is the
-   absorber gesture-routing itself. Pairs with the `center` /
-   `visibility_percentage` work (see "Scroll: `center` + `visibility_percentage`")
-   which would avoid firing at all when the target is already adequately visible.
-
-**Files:** `golem-runner/src/scroll.rs`, `golem-runner/src/actions/interaction.rs`
-(`handle_scroll` `within` resolution), `golem-runner/src/resolution.rs`
-(`scroll_swipe_bounded`), `golem-element/src/selector.rs` (relational filters).
-
-## Relational selectors: remaining follow-ups
-
-Core shipped (`contains`/`inside` geometric predicates; directional filters
-require cross-axis overlap; survivors sorted containment-tightest →
-proximity-nearest → tree-pre-order; occlusion detection + tap-routing +
-`occluded_element` a11y severity). Rationale in `docs/selectors.md`; full
-coverage in `e2e/cross/selectors.test.toml` (green Android + iOS phone/tablet).
-Remaining:
-
-- **A2 (tap/swipe centroid redirect) — decided NOT to do.** Tapping the resolved
-  element's centre is the correct, predictable contract; a dead-space centre is
-  the author's cue to select the actual child (`contains`/`inside`/relational) or
-  use `x`/`y` offsets. Kept only to stop it being re-proposed.
-- **Install-cache may miss a test-app component edit.** Adding the DIS button +
-  checkbox to `SelectorGrid.svelte` didn't reinstall until `--rebuild` (a non-
-  rebuild run served the stale app — `on_text="DIS"` EF404, then `--rebuild`
-  resolved it at +3 nodes). Investigate whether the source-fingerprint covers all
-  test-app files / nested component edits. Low-frequency but causes confusing
-  ghost failures; analogous to the companion stale-build trap.
-- **`SelectorGroup` has no `deny_unknown_fields` (low priority, future).** A
-  typo'd or misplaced selector key (`contais = …`, a count on a non-`contains`
-  anchor, etc.) is **silently ignored** by serde rather than rejected, so the
-  step quietly does the wrong thing. Adding `#[serde(deny_unknown_fields)]` to
-  `SelectorGroup` (and peers) in `golem-parser` would turn typos into clear
-  parse errors. Surfaced while adding `contains.min_matches` (which sidesteps
-  the issue via a dedicated type). **Caveat:** `#[serde(deny_unknown_fields)]` is
-  incompatible with the `#[serde(flatten)]` on `SelectorGroup` — closing this
-  needs a manual deserializer or a restructure, not a one-line attribute. Not
-  urgent — no current breakage — but a real authoring footgun.
-
-## set_location: drop WebView JS hook, grant permission + real geolocation
-
-`golem-driver/src/android.rs::set_location` currently does two things:
-1. `adb emu geo fix lon lat` — sets OS-level emulator location.
-2. `eval_in_webview("window.__golemSetLocation(lat, lon)")` — pokes a
-   Svelte reactive var in the test app's `DeviceState.svelte` to drive
-   the rendered "Location:" row directly, bypassing the geolocation
-   permission flow entirely.
-
-The eval path is a WebView-only shortcut. It proves nothing about real
-geolocation plumbing (navigator.geolocation, runtime permission, OS
-LocationManager → app) and only works for Tauri-style WebView apps.
-For native apps the hook silently no-ops, so `set_location` falsely
-appears to succeed.
-
-Correct path:
-- Companion / driver grants `ACCESS_FINE_LOCATION` at install/launch
-  (depends on `AndroidManifest.xml` permission persistence — see the
-  separate roadmap entry on that).
-- Test app's `DeviceState.svelte` reads `navigator.geolocation.watchPosition`
-  (or equivalent) and renders the result.
-- Drop the `__golemSetLocation` hook entirely.
-- iOS: equivalent — set location via simctl, app reads CLLocationManager.
-
-Once those land, re-enable the `location_controls` block in
-`e2e/cross/device_controls.test.toml` (currently disabled with a
-pointer to this entry).
-
-**Files:** `golem-driver/src/android.rs::set_location`,
-`golem-driver/src/ios.rs::set_location`, `test-app/src/lib/DeviceState.svelte`
-(remove `window.__golemSetLocation` hook), `e2e/cross/device_controls.test.toml`
-(re-enable location_controls block).
 
 ## Suite summary rendering
 
@@ -291,71 +68,13 @@ when there's spare cycles. Not blocking.
 **Files:** `golem-report/src/stream.rs` (suite-summary block), maybe
 `golem-report/src/human.rs`.
 
-## Step interpolation: wire device/builtin prefixes (`${_device}`, `${self:…}`, cross-device)
+## Step interpolation: cross-device & `for_each` prefixes
 
-`${…}` interpolation is now wired into step execution (`golem-runner/src/interp.rs`,
-called per-step in the executor) over the variable store + `${fake:…}` generators,
-so `${var}`, `${obj.field}`, `${_loop}` (store-injected) and inline generators all
-resolve. But the step-time `InterpolationContext` only sets `store` + `generator` —
-it leaves `device`, `device_stores`, `global_store`, `each_vars`, `builtins` as
-`None`. So the prefixed/builtin forms `interpolation.rs` supports — `${_device}`,
-`${_os}`, `${_udid}`, `${self:var}`, `${global:var}`, `${iphone_17:var}`,
-`${_each.x}` — error if used in a step.
+The single-device builtins (`${_device}`/`${_os}`/`${_platform}`/`${_type}`/`${_udid}`/`${_app}`) are migrated to #40. Remaining: the prefixed **cross-device** forms `${self:var}` / `${global:var}` / `${<device>:var}` and `${_each.x}` still error at step time (the step `InterpolationContext` leaves `device_stores`/`global_store`/`each_vars` as `None`). These are gated on features that must exist first:
+- `${self:}` / `${global:}` / `${<device>:}` → **multi-device flow coordination** (planned; see "Multi-Device Flow Coordination").
+- `${_each.x}` → **`for_each` over devices** (future).
 
-Most are tied to features that are themselves roadmap (multi-device flow
-coordination, `for_each` over devices), so this wasn't needed for the core var
-work. To wire it: build the builtins map (`_device`/`_os`/`_platform`/`_type`/
-`_udid`/`_app` from `ctx.device` + the app) and pass `device`/`device_stores`/
-`each_vars` into the context the executor constructs in `interp.rs`. Add an e2e
-that types `${_device}` / `${_os}` into a field.
-
-## "Save on failure" for recordings + --trace screenshots
-
-Today `--no-record` is all-or-nothing and `--trace` always saves every
-per-step screenshot + tree, pass or fail. The block-end `adb pull
-video` and per-step trace file writes are the I/O bursts hurting
-concurrent-emu sweeps. A "save on failure" mode would keep
-instrumentation on (cheap on the device side) but only persist the
-artifacts that actually carry signal.
-
-**Partial infra exists:**
-- `capture_failure_screenshot` (per-step failure path, already
-  shipped) — only fires when a step fails.
-- `--trace` always saves every boundary regardless of outcome.
-- Recording: `stop_recording` always pulls; no discard path.
-
-**Proposed mode** (e.g. `--save-on-failure` or `--trace=on-fail`):
-- Record continuously per block (cheap; HW H.264 encoder).
-- At block end: if the block passed AND all its steps passed, **discard
-  the video on-device** without pulling (`adb shell rm`); else pull
-  as today.
-- For `--trace` screenshots + trees: keep the per-step capture path
-  but write to a ring buffer (last N steps in memory). On step fail,
-  flush the buffer + a few subsequent steps to disk. On block-pass,
-  discard.
-
-**Why it matters at scale:**
-- CI default usage = recording on, perf on per block, --trace off.
-  Today's `--trace` mode is debug-only; the next CI-readiness gap is
-  making non-trace runs lighter so they scale to 10+ emus.
-- The discard path eliminates the dominant I/O burst on the happy
-  path (>95% of blocks in a healthy suite). Bad-block bursts remain
-  for forensics — which is the only time you needed the data anyway.
-
-**Caveats:**
-- Ring buffer + delayed flush makes the "capture cost is per-step"
-  intuition fuzzier — pre-failure steps' captures still happen but
-  don't hit disk. CPU cost on device side stays; only host I/O is
-  saved.
-- For `--trace`-mode forensics where you DO want every step, keep an
-  opt-in flag (`--trace=always`) so the current behavior is still
-  available when needed.
-
-**Files:** `golem-runner/src/executor.rs` (boundary hook for
-discard-on-pass), `golem-runner/src/capture.rs` (ring buffer
-implementation), `golem-driver/src/{android,ios}.rs` (`discard_recording`
-verb that just `rm`s the device-side file).
-
+Wire them into the step `InterpolationContext` when those land. **Files:** `golem-runner/src/interp.rs`.
 ## Confirm host-queue benefit on a load-saturated host
 
 The selective host-wide queue is built and wired
@@ -446,101 +165,6 @@ actually observed surviving the shutdown + self-exit paths.
 **Files:** `golem-driver/src/android.rs` (detect persistent "no active
 window", trigger restart), `golem-cli/src/registration.rs` (re-register
 on companion restart).
-
-## Stub-device integration tests — remaining cases
-
-In-process integration coverage of the CLI→server→renderer→file→exit
-composition exists: `golem_driver::stub::StubDriver` (device-free,
-`cfg(debug_assertions)`), the hidden `--stub <script.toml>` flag, the
-`golem_cli::run_cli` lib entrypoint, and the fd-capture harness in
-`golem-cli/tests/` (output_formats, repeat fan-out, exit codes). Extend
-that harness with the still-uncovered composition surfaces:
-
-- **`--trace` boundary capture + sidecar JSON shape** — assert a traced
-  stub run writes the per-step screenshot/tree sidecars in the expected
-  layout under the run's `output_dir`.
-- **daemon vs in-process parity** — same input via an explicit daemon and
-  via the in-process orchestrator produce identical `results.json`.
-- **coverage strategy fan-out + adaptive stop** — a multi-axis stub flow
-  under `--coverage smart|one` fans/stops as expected (needs the stub to
-  present multiple device shapes per slot).
-- **flake-summary grouping across `--repeat` on one device** — exercises
-  the per-(flow, device) FLAKE grouping, which the current fan-out test
-  can't (its parallel runs present as distinct devices). Needs the stub
-  runs to serialise on a single device id.
-
-Scripted-outcome fidelity only; anything needing real device behaviour
-(HID latency, snapshot timing, OS overlays) stays on the real-device sweep.
-
-## Event-ify remaining server-side eprintlns
-
-**The problem.** Golem runs in two topologies:
-
-- **In-process** (default `golem run` with no daemon): the orchestrator
-  server runs inside the same process as the client CLI. Server-side
-  `eprintln!(...)` writes to that process's stderr, which IS the
-  user's terminal, so messages appear naturally.
-- **External daemon** (long-running daemon at `~/.golem/golem.sock`):
-  the server is a separate process. Its stderr goes wherever the
-  daemon was launched from (background shell, tmux pane, launchd
-  log file). The client process's terminal does NOT see those
-  messages — they're effectively lost.
-
-Today ~14 setup/diagnostic messages still use server-side `eprintln`,
-so external-daemon users silently miss them. Examples:
-- `[install] cache load failed ({e}) — continuing with empty cache`
-  (`golem-cli/src/suite.rs:360`)
-- `[device_settings] {w}` (`golem-cli/src/suite.rs:1217`)
-- `[install] failed to write cache: {e}` (`golem-cli/src/suite.rs:1449`)
-- `[companion] startup timed out for {platform}` (`golem-cli/src/suite.rs:1760`)
-- `[device] Cleanup: {w}` (`golem-cli/src/suite.rs:2337`)
-- `[devices] no {target_platform} device found — creating one...`
-  (`golem-cli/src/suite.rs:2549`)
-- `[registration] error: {e}` / `... registered on port {port}`
-  (`golem-cli/src/registration.rs:207, 263`)
-- `[install] cache file ... unknown version / unreadable`
-  (`golem-runner/src/installer.rs:194, 202, 212`)
-
-**The fix.** Replace each `eprintln!` with `ctx.emit(EventKind::XYZ {
-…})` against the suite event channel. Add a matching renderer arm
-in `golem-report/src/stream.rs` so the client's human stream prints
-the same string. Existing event flow already serialises over the
-unix socket to the client, so both topologies produce identical
-output.
-
-**Suggested event variants** (one per category, payload tailored):
-- `InstallCacheLoaded { ok: bool, message: Option<String> }`
-- `InstallCacheWriteFailed { error: String }`
-- `DeviceSettingsApplied { warnings: Vec<String> }`
-- `CompanionTimedOut { platform: String }`
-- `DeviceCleanupWarning { device_id: DeviceId, message: String }`
-- `DeviceBootRequested { platform: String, name: String }`
-- `RegistrationError { error: String }`
-- `RegistrationCompleted { device: String, platform: String, port: u16 }`
-- `InstallCacheFileBroken { path: String, reason: String }`
-
-**Exclude from this work** — these intentionally stay as server-side
-eprintln (logs visible only to daemon admin):
-- `[orchestrator] server — listening on ...` (startup banner)
-- `[orchestrator] accept error: ...` (rare server socket error)
-- `[orchestrator] read error: ...` (already gated behind `--debug`)
-- `[orchestrator] waiting for N active client(s)...` (drain spinner,
-  already suppressed for the in-process self-loopback case)
-
-**Files to touch:**
-- `golem-events/src/lib.rs` — add new `EventKind` variants.
-- `golem-report/src/stream.rs` — add match arms that format each
-  variant identical to the current eprintln text (preserve user-
-  visible string).
-- `golem-cli/src/suite.rs`, `golem-cli/src/registration.rs`,
-  `golem-runner/src/installer.rs` — replace each listed eprintln
-  with `ctx.emit(...)`. Many sites have an `ExecutionContext` or
-  `event_tx` already in scope; for those that don't, thread a
-  sender or use `golem_events::channel::EventSender` directly.
-
-**Out of scope:** turning the persistent flake-summary tally into an
-event — flake summary is purely client-side aggregation of
-already-streamed events.
 
 ## Loose-FIFO device queue (multi-tenant orchestrator)
 
@@ -683,69 +307,7 @@ recording at the matching sidecar-offset. Two impls considered:
 
 **Files:** `golem-cli/src/trace_extract.rs` (new subcommand).
 
-## Phase 2 and Phase 3 robustness sweep coverage
-
-Phase 1 covered single-test, single-device runs only (78 entries,
-64 at 5/5).
-
-**Phase 3 — suite-context**: substantially exercised in the
-2026-06-01 session. The 35-test sweep on Pixel 8 Pro API 36 ran
-many times during intermittent investigation. Current ceiling
-~98% per sweep (172/175 across 5×). Distinct intermittents that
-were chased and either fixed or characterised: alert delivery
-race, dialog dismiss race, accept/dismiss internal deadlines,
-stylus handwriting overlay corruption, tap-too-long → text
-selection, `assert_alert` not polling. Phase 3 isn't formally
-"done at 5/5 per test" but the suite-context infrastructure is
-proven stable enough to keep using.
-
-**Phase 2 — multi-device** (iPhone+iPad + iOS+Android
-simultaneous): run 2026-07 across 13 cross flows. Surfaced and
-FIXED a concurrent-startup wedge and a companion-death ED404
-cascade (infra under "iOS concurrent flows"): the 28-run
-cross-platform sweep went 7/28 (pre-fix, cascade) → 21/28.
-Remaining tail = cold-start EX000 drops + companion slowness
-(EF408) under 4–5 device host saturation, tracked there too. Also
-fixed several flow-authoring gaps (fields below the fold on phone
-viewports needed `auto_scroll`: `form_fill`, `type_text`,
-`multi_app_switching`, `screenshot`).
-
-Note: `android:tablet` coverage needs a tablet AVD provisioned
-(none by default) — create e.g. `Pixel_Tablet_API_36` before a
-phone+tablet Android sweep.
-
-Tracking files (`/tmp/golem_robust.{json,log}`) and the `robust.sh`
-driver script were transient — re-derivable from the sweep plan.
-
-## `hardware` default — accept both, prefer virtual
-
-`[[flow.apps.devices]] hardware` field today defaults to `[Some(false)]`
-(virtual-only) when absent. That means a flow without an explicit
-`hardware = "real"` line silently can't run on physical devices even
-when one is connected. Better default: accept both kinds (virtual +
-real) when absent, **prefer virtual** when both shapes are bootable
-(so CI runs that have a sim and a phys connected pick the sim by
-default for speed). Authors who need phys-only or virtual-only still
-spell it out explicitly.
-
-When this lands, the `push_notification` plan-time lint (added with
-the action's sim/emu-only contract) needs its trigger condition
-flipped: today it warns when `hardware` explicitly permits `real`;
-post-change it should warn whenever `hardware` is absent **or**
-explicitly permits real, since the absent case now also targets
-phys.
-
-**Files:** `golem-orchestrator/src/plan.rs::expand_hardware_entries`,
-device-prefer logic in the resolver, `lint_push_notification_phys` (or
-wherever the lint lives once added).
-
-## Architecture and DX follow-ups from May 2026 review
-
-Captured during the post-merge audit; none are blocking but each removes a sharp edge.
-
-- **`cssSafeAreaInset` invisible to callers.** Today the WebKit Inspector enrichment subtracts the inset locally and discards it. Adding `css_safe_area_top: i32` to `HierarchyMeta` (default 0) keeps the diagnostic record. Sets up Android once an equivalent surfaces.
-- **Resolver auto-hide-keyboard fires unconditionally.** Tests that intentionally exercise keyboard-up state will be perturbed. Consider an opt-out flag on the step or scope to specific actions. (Behaviour is now documented in `actions-reference.md`; this entry is only the opt-out feature.)
-- **Tests gap.** `find_webview_socket` PID filter, safe-area subtraction, BUTTON/A textContent fallback, `EventLog`, `find_or_allocate_port` Android-only fallback, `ensure_companion_with_reg` UDID cross-check — none have unit coverage.
+**Impl decision:** ffmpeg is currently used only for non-critical work (a11y), so a shell-ffmpeg `trace-extract` is acceptable if built for that. We will **not** adopt the pure-Rust stack *just* for `trace-extract` — pure-Rust is justified only if/when frame extraction becomes **test-critical** (extracting frames to actually drive/judge running tests, or an ffmpeg-less MCP server). Deferred until such a consumer exists.
 
 ## Stale-bundle defense (Tauri iOS build pipeline)
 
@@ -818,45 +380,6 @@ Already works via array syntax on a single `[[flow.apps.devices]]` block: `os = 
 | `smart` | Partial-axis | execute-time adaptive (CoverageGroup) | **Default.** Stops once every pool box is ticked |
 | `one` | Partial-axis | execute-time adaptive (CoverageGroup, `max_runs=1`) | Single successful run; local smoke / dev |
 
-## Partial Suite on Install Failure
-
-If pre-install fails for app `X` on device `D`, today's per-flow install check marks `FailedScript` in the cache and any flow referencing `X` on `D` is skipped. But UX could be sharper:
-
-- Dedicated `FlowSkipped` event with explicit cause (`InstallFailed(X, D)` vs other skip reasons)
-- Aggregated suite summary line distinguishing "install-dep-skip" from genuine flow failures
-- Flows that don't reference `X` proceed normally (already the case)
-
-**Foundation:** `InstallCache` already keyed on `(udid, bundle)`; per-flow skip logic already exists. This is polish.
-
-**Files:** `golem-events/src/lib.rs` (enrich `FlowSkipped` variant), `golem-report/src/stream.rs` + `accumulator.rs` (render distinct skip reasons).
-
-## Persistent Install Cache: Polish
-
-The persistent install cache is shipped (`.golem/install-cache.json`, three integrity gates, `--rebuild`, `--no-build`). Remaining polish:
-
-- **`golem cache clear` subcommand** — only if shared-CI long-running orchestrator surfaces a real workflow. Today `rm .golem/install-cache.json` is enough.
-
-## Migrate SuiteRunner + IPC into `golem-orchestrator`
-
-`SuiteRunner` lives in `golem-cli/src/suite.rs` and IPC logic in `golem-cli/src/orchestrator.rs`. Both belong in the orchestrator crate — cleanly separates glue (CLI arg parsing, output rendering) from core (suite execution, multi-process coordination).
-
-**Files:** move `golem-cli/src/suite.rs` → `golem-orchestrator/src/suite.rs`; move `golem-cli/src/orchestrator.rs` → `golem-orchestrator/src/ipc.rs`.
-
-## Force Separate Device per App (`share_device = false`)
-
-By default, `[[flow.apps]]` entries whose device constraints are jointly satisfiable pack into the same physical device to save host resources. For some flows this default is wrong — for example a deep-link test where two apps must be on different devices to exercise cross-device IPC, or an isolation test where sharing a device would contaminate state.
-
-**Proposed TOML:**
-```toml
-[[flow.apps]]
-name = "a"
-share_device = false     # opt out of packing — a gets its own device
-```
-
-**Implementation:** add `share_device: Option<bool>` (default = true) to `AppConfig` in golem-parser. The `golem-orchestrator` Plan generator honours it when building slot groupings — an app with `share_device = false` always gets its own `DeviceSlot`.
-
-**Where it lands:** the Plan generator already groups `[[flow.apps]]` into `DeviceSlot`s; `share_device = false` becomes an input to that grouping pass.
-
 ## Multi-Device Flow Coordination (Chat Tests)
 
 Some flows use two apps on two different devices that must run together (chat client + chat server). Today's suite model spawns a separate flow task per platform; two devices never coordinate inside one flow execution. The new `FlowRun { slots: Vec<DeviceSlot> }` structure supports 2+ slots, but the initial Plan implementation only emits single-slot FlowRuns.
@@ -879,54 +402,6 @@ Per design notes, some original-spec behaviour around `[[flow.apps]]` and step-l
 
 **Files:** `docs/reconciliation-flow-apps.md` (new), followed by targeted fixes in `golem-parser/src/lib.rs` or `golem-runner/src/executor.rs` depending on findings.
 
-## CLI Flags: Not Yet Functional
-
-Several CLI flags are defined but not yet wired through to execution.
-
-### `--no-teardown` — Skip teardown blocks
-
-Teardown blocks are parsed but never executed. The executor ignores the `teardown` field — no teardown logic runs after flows. The `no_teardown` config field is stored but there is nothing to skip. Today only device state is reset after a flow via `golem-runner::cleanup::auto_cleanup` (dark mode, mocked location, screen recording); user teardown steps and external-data cleanup do not run.
-
-Wiring plan — call `execute_teardown` from `execute_flow` (gated by `no_teardown`), with these decisions to make:
-- **Runs on failure.** Teardown MUST run even when the flow fails — its primary purpose is external-data cleanup (deleting test data / created users a failed run would leak) — and stays isolated from the test result.
-- **Subflows:** decide whether a `run_flow` child runs its own teardown (the recursive `execute_flow` design implies yes).
-- **Data-driven:** decide whether teardown runs per `[[data]]` row or once for the set.
-- **Install-failure path:** decide whether the early-return in `suite.rs` (install/`--no-build` failures) also runs teardown.
-- No `[[setup]]` block is planned — implicit lifecycle (build → install → `app_lifecycle`) plus normal steps/mixins cover setup.
-
-### `--no-clean` — Skip app data clear
-
-No app data cleaning logic exists in the execution path. The flag is accepted but there is nothing to skip.
-
-### `--max-concurrency <N>` — Parallel device limit
-
-Flag is defined but never read. `ResourceManager` uses default concurrency config regardless of this value.
-
-## TOON Timestamp Representation
-
-Human, JSON, and JUnit outputs already emit wall-clock timestamps (local `HH:MM:SS.mmm` prefix for human; ISO-8601 UTC on every report level for JSON/JUnit). TOON is intentionally left out — its compactness-first design would bloat meaningfully with full ISO-8601 strings (16+ chars) per entry.
-
-**Open proposal:** emit a single suite-level `start` unix-epoch timestamp once, then per-event `delta_ms` relative to suite start. A 30-minute suite = 7-digit delta; easy to reconstruct absolute time from `start + delta_ms`.
-
-Needs a concrete schema decision before implementing. Today TOON emits `duration_ms` only.
-
-**Files:** `golem-report/src/toon.rs` once schema is agreed.
-
-## Skipped Step Reasons Across All Outputs
-
-Skipped steps carry no reason today: a ` -tap:Cancel` line in TOON (or `<skipped/>` in JUnit, `"outcome": "skipped"` in JSON) tells the reader *that* a step was skipped, not *why*.
-
-**Fix:** add `skip_reason: Option<String>` to `StepReport`. Populate from flow execution when a step is conditionally skipped (e.g. `if:` predicate false, barrier-aborted, start-block cursor past this step). Surface per renderer:
-
-- Human stream: `─ tap:Cancel (skipped: barrier aborted)`
-- JSON: `"skip_reason": "barrier aborted"`
-- JUnit: `<skipped message="barrier aborted"/>`
-- TOON: ` -tap:Cancel :barrier_aborted` (short reason token; long reasons truncated)
-
-Also roadmap-adjacent: consider whether `golem_events::StepOutcome::Skipped` should become `Skipped(String)` symmetrically with `Warning(String)` / `Failed(String)`, or keep `Skipped` as-is and pass the reason via a sibling event/field. Second option keeps the common case small.
-
-**Files:** `golem-events/src/lib.rs` (StepOutcome shape), `golem-runner/src/executor.rs` (populate reasons at skip decision), `golem-report/src/{accumulator,human,json,junit,toon}.rs` (surface).
-
 ## Transient Install Errors: Retry Classifier Polish
 
 `golem-cli/src/suite.rs::is_transient_install_error` classifies a small set of known-recoverable install-script error patterns and retries the script once with `install_only=true` (reusing the already-built artifact). Currently matches:
@@ -937,31 +412,6 @@ Also roadmap-adjacent: consider whether `golem_events::StepOutcome::Skipped` sho
 **What's left:**
 - Add an iOS-side grace probe after `bootstatus -b` (e.g. `xcrun simctl getenv <udid> HOME` until fast) to potentially eliminate the Mach -308 case at source rather than retrying after.
 - Expand the classifier as new transient patterns surface in CI logs. Conservative — adding patterns that aren't actually recoverable just masks real errors behind a 3s delay.
-
-## iOS webview: tap on a field's value mis-aims under keyboard scroll
-
-Surfaced while diagnosing backspace on iOS (now sidestepped by making
-`backspace`/`type` focus-only). Resolving a **webview** element by its
-current text *value* and tapping it lands on the wrong element when the
-keyboard is up. Concrete trace (`--verbose`, iPhone 17, Tauri text field):
-
-- With the keyboard down, the empty field resolves at `bounds=(32,263,338,38)`.
-- After typing, with the keyboard up, that same field's *value* resolves at
-  `bounds=(32,170,338,38)` — a ~93px upward shift — and a tap at its centre
-  `(201,189)` lands ~93px too high, on the field above.
-
-The 93px matches the keyboard pushing the focused field up, so the open
-question is whether the resolved bounds are a stale snapshot (view moved
-between hierarchy fetch and tap) or a webview-DOM→screen coordinate
-translation that double-counts an inset under scroll (related to the iOS
-webview safe-area entries above). Native taps (menu/buttons) are unaffected.
-
-Low frequency — you rarely target an element by its dynamic value; labels /
-placeholders / accessibility labels are the norm, and text mutation is now
-focus-only. Next diagnostic: capture a screenshot at tap-time (keyboard up)
-plus the hierarchy the tap resolved against, to separate stale-snapshot from
-mis-translation. **Files:** `golem-driver/src/webkit.rs` / `ios.rs`
-(webview element bounds translation), `golem-runner/src/resolution.rs`.
 
 ## iOS concurrent flows: cross-flow focus / state corruption
 
@@ -979,9 +429,9 @@ Single-device runs are stable; iPhone + iPad in parallel is where the tail lives
   - *main-thread wedge* (`D503`, via the companion's `504`) — companion alive but a main-thread call stuck (HID/snapshot on a saturated host).
   Real levers: **cap concurrency to host headroom** (stop over-subscribing — the dominant driver) and mid-flow companion-death retry. Not the warm-up.
 - **EF408 under host saturation — two distinct causes, don't conflate.** Cross-platform (iOS *and* Android), and the sweep breakdown shows it's **not action-specific** (assert_visible 11 / type 7 / scroll 5 / tap 4 of 25 failing steps; SLOW steps split ~50/50 auto_scroll vs not) — so a per-action timeout bump is the wrong fix. Within a failing flow the cheap steps stay at baseline (~0.5s) right up to the failure — **no gradual per-flow ramp**, so the pressure is *cross-flow* (other flows saturating the host), not this flow degrading. The two causes:
-  1. *Scroll non-convergence* — `auto_scroll` loops (each iteration = scroll+hierarchy round-trip) thrash on inner-scrollable/edge targets and blow even a 40s budget. This is a real engine gap, **independent of load** (load only multiplies the iteration cost). Fix under "Scroll: `center` + `visibility_percentage`" + "Inner-container scroll". Highest-leverage for this half.
+  1. *Scroll non-convergence* — `auto_scroll` loops (each iteration = scroll+hierarchy round-trip) thrash on inner-scrollable/edge targets and blow even a 40s budget. This is a real engine gap, **independent of load** (load only multiplies the iteration cost). Fix under #18 + "Inner-container scroll". Highest-leverage for this half.
   2. *Genuine host slowness* — companion alive but serving slowly under 4–5 concurrent sims/emus; ordinary steps time out. Restart doesn't help (not dead).
-  Levers for (2): **cap concurrency to host headroom** (the dominant driver; note `--max-concurrency` is currently a no-op, roadmap:"CLI Flags"). golem only adapts to load at **device allocation** (`ResourceManager` RAM gate, coarse/upfront) — there is **no runtime throttle**. A principled runtime signal that isolates *host* slowness (not app-slow or http-endpoint-slow): **companion round-trip latency** (e.g. `/hierarchy` fetch time) rising across flows → grant a **bounded** adaptive grace on step deadlines and/or backpressure dispatch. Never open-ended.
+  Levers for (2): **cap concurrency to host headroom** (the dominant driver; note `--max-concurrency` is currently a no-op, #24). golem only adapts to load at **device allocation** (`ResourceManager` RAM gate, coarse/upfront) — there is **no runtime throttle**. A principled runtime signal that isolates *host* slowness (not app-slow or http-endpoint-slow): **companion round-trip latency** (e.g. `/hierarchy` fetch time) rising across flows → grant a **bounded** adaptive grace on step deadlines and/or backpressure dispatch. Never open-ended.
   Note: **ED505 (companion death) is the severe end of the same saturation** — a companion pushed past slow into OOM/kill. So headroom capping shrinks the whole EX000/EF408/ED505 tail, not just EF408. (Cheap future refinement: split ED505 into death-after-serving vs cold-start-before-serving by tracking whether the companion ever answered, to *measure* the load share.)
 - **Cross-flow state corruption (structural).** Wrong-field type (keystrokes for `Password` landed in `Search` — focus snapshot lagged a step) and a step-6 backspace stall, seen only under concurrent load. Root: XCUITest HID + accessibility-snapshot paths are process-global on the host. Real fix would be a new host-wide `OpClass` serializing the tap-synthesis / window-snapshot ops, OR one XCUITest process per sim. NOT attempted — no fresh evidence it is the active failure mode (recent sweeps were dominated by startup + saturation, now addressed). Gate any HID/snapshot serialization on actually reproducing wrong-field corruption first, since it taxes the per-step hot path.
 
@@ -989,43 +439,11 @@ Android multi-emu contention is the same *character* (host saturation → stocha
 
 **Files:** `companions/ios/GolemRunnerUITests/RequestRouter.swift`, `golem-driver/src/ios.rs`, `golem-cli/src/suite.rs` (companion restart + launch serialization).
 
-## Test App: Menu nav migration — remaining flows
-
-Menu nav (`tap on_accessibility_label="menu-toggle"` +
-`tap on_accessibility_label="goto-X"`) replaces `auto_scroll = true`
-for non-scroll-testing flows.
-
-Most flows are migrated. `device_controls` now uses menu nav for
-all navigation; one residual `auto_scroll = true` survives on the
-"after press(home) + relaunch, find Theme: again" step (the
-relaunch state means the menu may not be where it was). That's
-the correct use of auto_scroll, not pending migration.
-
-Intentionally on auto_scroll: `scroll.test`, `scroll_search.test`,
-`element_find.test` (Scroll List items are inside an inner
-overflow-y:auto container — auto_scroll is the only way to bring
-items 1-4 into the outer viewport).
-
-## Android: AndroidManifest permission persistence
-
-`pm grant` requires `<uses-permission>` declarations in `AndroidManifest.xml`. The test-app currently has CAMERA / RECORD_AUDIO / ACCESS_FINE_LOCATION / ACCESS_COARSE_LOCATION declared in `test-app/src-tauri/gen/android/app/src/main/AndroidManifest.xml`, but `gen/` is gitignored — fresh clones lose the declarations and `permissions_*.test` will fail at the grant step.
-
-Tauri 2.x has no first-class config for Android `<uses-permission>`. Options:
-
-- Commit `test-app/src-tauri/gen/android/` (standard for many Tauri 2.x projects)
-- Add a `build.rs` / pre-build script that patches the manifest
-- Wait for upstream Tauri to expose `tauri.conf.json` → `bundle.android.permissions`
-
-**Files:** `.gitignore`, `test-app/src-tauri/gen/android/app/src/main/AndroidManifest.xml`.
-
-
 ## Distribution: remaining work
 
 The prebuilt-binary pipeline ships for macOS arm64 and Linux x86_64 + arm64
 (static musl) — see [distribution.md](distribution.md). What's left:
 
-- **Docker *run* image** (android-only: `adb` + SDK + emulator) beyond the build
-  image; document the KVM / `--privileged` requirement.
 - **`setup-golem` Action** — extend the binary download to the Linux tarballs.
 - **Real Linux device/emulator e2e** — can't run on the macOS dev host.
 - **Fuller Linux resolver** — per-flow iOS-leg skip + a `strict_coverage` error

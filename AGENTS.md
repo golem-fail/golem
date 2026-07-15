@@ -1,6 +1,9 @@
 # golem — agent workflow
 
-`CLAUDE.md` symlinks here. CLI: `README.md` · versions: `docs/versioning.md` · todo: `docs/roadmap.md`.
+`CLAUDE.md` symlinks here. CLI: `README.md` · versions: `docs/versioning.md` · tracking: [GitHub Issues](https://github.com/golem-fail/golem/issues) (preferred) + `docs/roadmap.md` (being migrated — see [Tracking](#tracking-issues-vs-roadmap)).
+
+## Tracking (issues vs roadmap)
+Prefer **GitHub Issues** for any work with a clear problem, reproduction, and acceptance criteria — set the issue **Type** (Bug/Feature/Task), scoped **labels** (`platform:`/`host:`/`lang:`/`framework:`/`area:`/`action:`), **Effort**, and **blocked by** where relevant. `docs/roadmap.md` is a **temporary** home for still-vague items (no crisp repro/acceptance); we're gradually migrating them to issues and roadmap.md will eventually be deleted. Rule of thumb: if you can write Problem + Reproduction + Acceptance, file an issue, not a roadmap entry.
 
 ## Gate before every commit (after coding)
 - Unit: `cargo t` (nextest; NOT `cargo test --release`). Output shows only fail/retry/slow by default (no tailing needed); `--status-level pass` for full output.
@@ -40,5 +43,5 @@ cargo run -- run e2e/cross/<flow>.test.toml --platform android|ios
 Versions never go backwards; final commit may skip numbers.
 
 ## E2E failure
-Spawn subagent → report cause/summary → check `docs/roadmap.md` (known?).
-Regression = fix before commit unless user says roadmap it. Delete roadmap entry when done.
+Spawn subagent → report cause/summary → check [GitHub Issues](https://github.com/golem-fail/golem/issues) + `docs/roadmap.md` (known?).
+Regression = fix before commit unless user says track it. When done, close the issue (or delete the roadmap entry).
