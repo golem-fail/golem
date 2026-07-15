@@ -8,7 +8,8 @@
 //! [`ImapPoller::await_email`] until a message with a matching subject
 //! arrives, returning it as a parsed [`EmailMessage`]. Both the HTTP call
 //! ([`HttpClient`]) and the IMAP session ([`ImapConnection`]) are behind
-//! injectable traits so the crate's tests never hit the network. Consumers
+//! injectable traits so the crate's unit tests never hit the network (the
+//! ignored live integration test in `tests/live_ethereal.rs` does). Consumers
 //! such as `golem-runner`'s external actions wire the real backends
 //! together to implement `await_email`-style test steps.
 #![deny(clippy::unwrap_used)]
