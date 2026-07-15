@@ -359,6 +359,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<i32> {
 
         Commands::Cache(args) => match args.command {
             cli::CacheCommands::Info => cache::info()?,
+            cli::CacheCommands::Clear => cache::clear()?,
         },
 
         Commands::A11yExtract(args) => {

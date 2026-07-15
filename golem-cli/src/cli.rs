@@ -71,6 +71,9 @@ pub struct CacheArgs {
 pub enum CacheCommands {
     /// Show entry count, status breakdown, and recency stats
     Info,
+
+    /// Delete the install cache (`.golem/install-cache.json`)
+    Clear,
 }
 
 #[derive(clap::Args, Debug)]
@@ -662,6 +665,16 @@ mod tests {
             panic!("expected Cache");
         };
         assert!(matches!(cache.command, CacheCommands::Info));
+    }
+
+    // 31b. `cache clear` nested subcommand
+    #[test]
+    fn cache_clear_subcommand() {
+        let cli = parse(&["cache", "clear"]);
+        let Commands::Cache(cache) = cli.command else {
+            panic!("expected Cache");
+        };
+        assert!(matches!(cache.command, CacheCommands::Clear));
     }
 
     // 32. `cache` without a subcommand SHALL fail (subcommand is required)
