@@ -101,6 +101,30 @@ pub fn info() -> Result<()> {
     Ok(())
 }
 
+/// Delete the install cache file at `path`. Returns `true` if a file was
+/// removed, `false` if none existed. Pure I/O with no printing so it can be
+/// unit-tested against a temp path.
+fn remove_cache_at(path: &std::path::Path) -> Result<bool> {
+    if !path.exists() {
+        return Ok(false);
+    }
+    std::fs::remove_file(path).with_context(|| format!("removing {}", path.display()))?;
+    Ok(true)
+}
+
+pub fn clear() -> Result<()> {
+    let path = PathBuf::from(CACHE_PATH);
+    if remove_cache_at(&path)? {
+        println!("Removed install cache: {}", path.display());
+    } else {
+        println!(
+            "No install cache at {} (nothing to remove).",
+            path.display()
+        );
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -281,5 +305,29 @@ mod tests {
             summary.with_install_time, 2,
             "only entries with a device install-time SHALL be counted"
         );
+    }
+
+    // 9. `remove_cache_at` deletes an existing cache file and reports it removed.
+    #[test]
+    fn remove_cache_deletes_existing_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("install-cache.json");
+        std::fs::write(&path, "{}").expect("write cache");
+
+        let removed = remove_cache_at(&path).expect("remove");
+
+        assert!(removed, "an existing cache file SHALL report removed=true");
+        assert!(!path.exists(), "the file SHALL be gone after removal");
+    }
+
+    // 10. `remove_cache_at` is a no-op (removed=false) when no file exists.
+    #[test]
+    fn remove_cache_absent_is_noop() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("install-cache.json");
+
+        let removed = remove_cache_at(&path).expect("remove");
+
+        assert!(!removed, "a missing cache file SHALL report removed=false");
     }
 }
