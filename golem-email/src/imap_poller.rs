@@ -189,7 +189,7 @@ impl ImapPoller {
 }
 
 // ---------------------------------------------------------------------------
-// Real IMAP connection (rustls TLS + the blocking `imap` crate)
+// Real IMAP connection (rustls TLS + the async `async-imap` client)
 // ---------------------------------------------------------------------------
 
 struct RealImapConnection {
@@ -202,30 +202,26 @@ struct RealImapConnection {
 #[async_trait]
 impl ImapConnection for RealImapConnection {
     async fn fetch_inbox(&self) -> Result<Vec<EmailMessage>> {
-        // The `imap` crate is blocking and `rustls` here is the synchronous
-        // API, so run the whole connect→login→fetch cycle on a blocking
-        // thread to keep the async poll loop responsive.
-        let host = self.host.clone();
-        let port = self.port;
-        let user = self.user.clone();
-        let pass = self.pass.clone();
-        tokio::task::spawn_blocking(move || fetch_inbox_blocking(&host, port, &user, &pass))
-            .await
-            .context("IMAP fetch task failed to join")?
+        fetch_inbox_async(&self.host, self.port, &self.user, &self.pass).await
     }
 }
 
 /// Open a TLS IMAP connection, log in, EXAMINE INBOX (read-only, so messages
-/// stay unseen), FETCH every message, and parse each into an [`EmailMessage`].
+/// stay unseen), FETCH the most-recent window, and parse each into an
+/// [`EmailMessage`].
 ///
 /// One full connection per call: poll frequency is low (seconds) and test
 /// inboxes are tiny, so a persistent session isn't worth the added state.
-fn fetch_inbox_blocking(
+/// TLS goes through `tokio-rustls` (golem already uses rustls); `async-imap`
+/// (with the `runtime-tokio` feature) speaks tokio's I/O traits, so the TLS
+/// stream is handed to it directly.
+async fn fetch_inbox_async(
     host: &str,
     port: u16,
     user: &str,
     pass: &str,
 ) -> Result<Vec<EmailMessage>> {
+    use futures_util::TryStreamExt;
     use std::sync::Arc;
 
     let mut root_store = rustls::RootCertStore::empty();
@@ -235,22 +231,33 @@ fn fetch_inbox_blocking(
         .with_no_client_auth();
     let server_name = rustls::pki_types::ServerName::try_from(host.to_string())
         .with_context(|| format!("invalid IMAP host name {host:?}"))?;
-    let conn = rustls::ClientConnection::new(Arc::new(config), server_name)
-        .context("failed to initialise TLS client")?;
-    let tcp = std::net::TcpStream::connect((host, port))
-        .with_context(|| format!("failed to connect to IMAP {host}:{port}"))?;
-    let tls = rustls::StreamOwned::new(conn, tcp);
 
-    let mut client = imap::Client::new(tls);
+    let tcp = tokio::net::TcpStream::connect((host, port))
+        .await
+        .with_context(|| format!("failed to connect to IMAP {host}:{port}"))?;
+    let connector = tokio_rustls::TlsConnector::from(Arc::new(config));
+    let tls = connector
+        .connect(server_name, tcp)
+        .await
+        .context("IMAP TLS handshake failed")?;
+
+    // With the `runtime-tokio` feature, `async-imap` speaks tokio's I/O
+    // traits directly, so the tokio-rustls stream is passed through as-is.
+    let mut client = async_imap::Client::new(tls);
     client
-        .read_greeting()
-        .context("IMAP server greeting failed")?;
+        .read_response()
+        .await
+        .context("IMAP server greeting failed")?
+        .context("IMAP server closed before sending a greeting")?;
+
     let mut session = client
         .login(user, pass)
+        .await
         .map_err(|(e, _)| anyhow::anyhow!("IMAP login failed: {e}"))?;
 
     let mailbox = session
         .examine("INBOX")
+        .await
         .context("IMAP EXAMINE INBOX failed")?;
 
     let mut out = Vec::new();
@@ -263,8 +270,14 @@ fn fetch_inbox_blocking(
         const WINDOW: u32 = 30;
         let start = mailbox.exists.saturating_sub(WINDOW - 1).max(1);
         let seq = format!("{start}:*");
-        let fetches = session.fetch(&seq, "RFC822").context("IMAP FETCH failed")?;
-        for fetch in fetches.iter() {
+        let fetches: Vec<_> = session
+            .fetch(&seq, "RFC822")
+            .await
+            .context("IMAP FETCH failed")?
+            .try_collect()
+            .await
+            .context("IMAP FETCH stream failed")?;
+        for fetch in &fetches {
             if let Some(body) = fetch.body() {
                 let raw = String::from_utf8_lossy(body);
                 if let Ok(msg) = EmailMessage::from_raw(&raw) {
@@ -275,7 +288,7 @@ fn fetch_inbox_blocking(
     }
 
     // Best-effort logout; the result doesn't change what we fetched.
-    let _ = session.logout();
+    let _ = session.logout().await;
     Ok(out)
 }
 
@@ -708,7 +721,7 @@ mod tests {
         );
     }
 
-    // 13. The real IMAP backend is now wired (rustls + the `imap` crate).
+    // 13. The real IMAP backend is now wired (tokio-rustls + `async-imap`).
     //     Pointing it at a closed local port proves it actually attempts a
     //     TCP connection — the fetch error carries the connect context and is
     //     no longer the old "not yet implemented" stub — without touching the
@@ -741,33 +754,10 @@ mod tests {
         );
     }
 
-    // 14. Live smoke against a real IMAP server (Ethereal). Ignored by
-    //     default — it needs the network and real credentials. Run with:
-    //       GOLEM_IMAP_HOST=imap.ethereal.email GOLEM_IMAP_PORT=993 \
-    //       GOLEM_IMAP_USER=… GOLEM_IMAP_PASS=… \
-    //       cargo nextest run -p golem-email --run-ignored all live_receive
-    //     Provision via the Nodemailer API; a fresh Ethereal inbox already
-    //     contains a welcome message, so no SMTP send is needed (leave
-    //     GOLEM_IMAP_SUBJECT unset to match it with "*"). Asserts the real
-    //     rustls+IMAP path connects, authenticates, and fetches a parsed message.
-    #[tokio::test]
-    #[ignore = "live network + real IMAP credentials required"]
-    async fn live_receive() {
-        let host = std::env::var("GOLEM_IMAP_HOST").expect("GOLEM_IMAP_HOST");
-        let port: u16 = std::env::var("GOLEM_IMAP_PORT")
-            .expect("GOLEM_IMAP_PORT")
-            .parse()
-            .expect("port");
-        let user = std::env::var("GOLEM_IMAP_USER").expect("GOLEM_IMAP_USER");
-        let pass = std::env::var("GOLEM_IMAP_PASS").expect("GOLEM_IMAP_PASS");
-        let pattern = std::env::var("GOLEM_IMAP_SUBJECT").unwrap_or_else(|_| "*".into());
-
-        let poller = ImapPoller::new(host, port, user, pass);
-        let msg = poller
-            .await_email(&pattern, 30000, 2000)
-            .await
-            .expect("SHALL receive a live message");
-        println!("LIVE subject={:?}\nLIVE body={:?}", msg.subject, msg.body);
-        assert!(!msg.subject.is_empty(), "subject SHALL be populated");
-    }
+    // A live smoke test against a real IMAP server lives in
+    // `tests/live_ethereal.rs`: it self-provisions an Ethereal account, SMTP-
+    // sends a message, and receives it through this async-imap path — no env
+    // credentials needed. (The old env-driven `live_receive` here relied on a
+    // fresh inbox already holding a welcome message, which Ethereal no longer
+    // guarantees, so the send-then-receive integration test supersedes it.)
 }
