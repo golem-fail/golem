@@ -183,7 +183,11 @@ When a block has findings **and an image is available**, Golem saves an annotate
 PNG to the run's screenshot directory (path shown on the live `a11y:` line). That
 image is always present at `strict` (which forces a screenshot); at the other
 levels the annotated PNG is written whenever the block recording — or a failure
-capture — already supplied one. The visual language:
+capture — already supplied one.
+
+<img src="images/a11y/annotated-full.png" width="320" alt="A full annotated a11y screenshot of a demo screen: numbered red (error) and orange (warning) boxes over controls, with dp dimension lines, a '?' missing-label marker, contrast ratios, and an occlusion mini-map">
+
+The visual language (each marker below is circled in the shot above):
 
 - **Rectangle** around each flagged element — **red = error**, **orange =
   warning** (warnings are drawn first, so red always wins where they overlap).
@@ -192,21 +196,35 @@ capture — already supplied one. The visual language:
   chips cascade rightwards so every number stays visible.
 - **Touch target** → an industrial **dimension line on the right** (or below, if
   width is the limiting axis) measuring the failing dimension, e.g. `32dp`.
+
+  <img src="images/a11y/touch-target-dp.png" width="150" alt="A red element box with a vertical dimension line on its right labelled 32dp">
 - **Text too small** → a dimension line on the **left**, e.g. `11dp`.
+
+  <img src="images/a11y/text-too-small-dp.png" width="160" alt="An orange text box with a dimension line on its left labelled 11dp">
 - **Low contrast** → the measured ratio as a small semi-translucent token at the
   bottom-left, e.g. `3.5:1`.
+
+  <img src="images/a11y/contrast-token.png" width="150" alt="A red 'Contrast error line' tagged 2.1:1 above an orange 'Contrast warn line' tagged 4.9:1">
 - **Missing label** → a `?` at the bottom-right (the "what is this control?"
   marker), since there's nothing else to measure.
+
+  <img src="images/a11y/missing-label.png" width="80" alt="A red box with a '?' in its bottom-right corner">
 - **Duplicate labels** → a rectangle on **every** member of the group, joined by
   dashed connector lines, with the finding's number repeated on each segment.
+
+  <img src="images/a11y/duplicate-labels.png" width="240" alt="Three identical 'Save' buttons, each tagged with the same finding number">
 - **Overlapping** → a rectangle on both elements with one number centred over
   the pair.
+
+  <img src="images/a11y/overlapping.png" width="210" alt="Two overlapping controls, Alpha and Beta, sharing one centred finding number">
 - **Occluded element** → a small **3×3 mini-map at the bottom-right** showing the
   hit-test's sampled zones: **covered** cells **solid**, **reachable** cells a
   **faint outline**, and untested zones left **blank** (the hit-test samples only
   1/3/5/9 points by size, so blank means "not tested", never "reachable"). You
   see *which* part of the tap target is unreachable — top, a corner, the lower
   half — not just that some of it is.
+
+  <img src="images/a11y/occlusion-minimap.png" width="90" alt="A small 3x3 mini-map marking which sampled zones of a tap target are covered">
 
 When two findings apply to one element they use different channels and stay
 legible — e.g. a small low-contrast button shows a right-side dimension line
