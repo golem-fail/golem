@@ -225,7 +225,7 @@ The visual language (each marker below is circled in the shot above):
   see *which* part of the tap target is unreachable — top, a corner, the lower
   half — not just that some of it is.
 
-  <img src="images/a11y/occlusion-minimap.png" width="90" alt="A small 3x3 mini-map marking which sampled zones of a tap target are covered">
+  <img src="images/a11y/occlusion-minimap.png" width="150" alt="The 'Beta' control with a small mini-map at its bottom-right marking which sampled zones of the tap target are covered">
 
 When two findings apply to one element they use different channels and stay
 legible — e.g. a small low-contrast button shows a right-side dimension line
