@@ -1,13 +1,29 @@
 # Accessibility auditing
 
+*The mechanical a11y check on every run.*
+
+← [Back to README](../README.md) · See also [Test Structure](test-structure.md) · [CLI Reference](cli-reference.md)
+
 Golem audits every flow for accessibility issues automatically — zero config, on
 by default. After each block it inspects the **visible** UI tree (the same tree
 your assertions judge), reports findings in the live run and every report format,
-and at `strict` saves an **annotated screenshot** marking each issue.
+and — whenever it has an image to draw on (always at `strict`, and at other levels
+when a recording frame or failure capture supplied one) — saves an **annotated
+screenshot** marking each issue.
 
 It's a fast, build-time signal — not a replacement for a manual audit or a real
 assistive-technology pass — but it catches the common, mechanical problems
 (tiny tap targets, unlabeled controls, low-contrast text) on every run.
+
+## Contents
+
+- [Levels](#levels)
+- [What gets judged](#what-gets-judged)
+- [Checks](#checks)
+- [Confidence](#confidence)
+- [Output](#output)
+- [Reading the annotated screenshot](#reading-the-annotated-screenshot)
+- [Notes & limitations](#notes--limitations)
 
 ## Levels
 
@@ -54,7 +70,7 @@ a11y_max_warnings = 20     # optional: fail the flow if cumulative warnings exce
 a11y_min_confidence = 0.8  # optional: drop findings below this confidence (0–1)
 ```
 
-```
+```bash
 golem run flow.test.toml --a11y strict                  # override every flow's level
 golem run flow.test.toml --a11y strict --a11y-min-confidence 0   # …and surface every finding
 ```
@@ -163,8 +179,11 @@ the marker drawn on the annotated screenshot:
 
 ## Reading the annotated screenshot
 
-At `strict`, when a block has findings Golem saves an annotated PNG to the run's
-screenshot directory (path shown on the live `a11y:` line). The visual language:
+When a block has findings **and an image is available**, Golem saves an annotated
+PNG to the run's screenshot directory (path shown on the live `a11y:` line). That
+image is always present at `strict` (which forces a screenshot); at the other
+levels the annotated PNG is written whenever the block recording — or a failure
+capture — already supplied one. The visual language:
 
 - **Rectangle** around each flagged element — **red = error**, **orange =
   warning** (warnings are drawn first, so red always wins where they overlap).

@@ -13,7 +13,7 @@ requested.
 
 Real-time colored output streamed to stderr. Shows step-by-step progress with timing, pass/fail symbols, and a suite summary.
 
-```
+```text
 ▶ tap.test
   ── tap_interactions ──
   [1][tap_interactions][0] tap on_text="+"
@@ -29,7 +29,7 @@ Step labels read as `[global_step][block_name][step_within_block]`. With data-dr
 With `--verbose`, shows substeps and tree stats. The `{3 trees, 186~190 nodes}` suffix shows how many UI hierarchy fetches the step needed and the node count range across those fetches. Higher tree counts indicate retries or scroll iterations; changing node counts suggest the UI was updating.
 
 Scroll substeps show the strategy number (1-5 per direction), swipe coordinates, and outcome. Strategies vary the swipe distance and position to handle different scroll contexts — strategy 1 is a full-page swipe, higher numbers try shorter or offset swipes to handle inner scrollable containers.
-```
+```text
   [3][tap_interactions][2] tap on_text="+"
       ∙ element_resolved "+" bounds=(48,161,43,36) tap=(69,179)
       ∙ tap (69,179)
@@ -53,7 +53,7 @@ JUnit XML for CI systems (Jenkins, GitHub Actions, GitLab CI). Each flow maps to
 
 Token-optimized format for LLM analysis. ~40-60% smaller than human format.
 
-```
+```text
 S:tap_test d:450 seed:847291036
  +tap:+ 45 t:3/142
  +assert_visible:1 120

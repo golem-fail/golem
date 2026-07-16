@@ -61,7 +61,7 @@ See [Architecture](architecture.md) for the crate map and the end-to-end executi
 
 Release notes are generated from PRs by [`scripts/release-notes.sh`](../scripts/release-notes.sh) (run by `release.sh` at release time), so each PR describes its own changes in a marked block in the description — one line per change, each prefixed with a category:
 
-```
+```text
 <!-- release-notes -->
 - added: swipe_until scrolls until a target is visible
 - fixed: scroll overshoot no longer reverses on RTL
@@ -81,7 +81,7 @@ golem is [source-available under FSL-1.1](../LICENSE) (Apache-2.0 future license
 
 Sign off every commit with `git commit -s`, which appends a line taken from your git identity:
 
-```
+```text
 Signed-off-by: Your Name <you@example.com>
 ```
 

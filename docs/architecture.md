@@ -1,6 +1,6 @@
 # Architecture
 
-← [Back to README](../README.md) · See also [Companions](companions.md) · [Contributing](contributing.md)
+← [Back to README](../README.md) · See also [How golem sees the screen](how-golem-sees.md) · [Companions](companions.md) · [Contributing](contributing.md)
 
 golem is a Cargo workspace of focused crates. The CLI wires them together; a TOML flow flows through parsing → planning → execution → reporting, with platform work pushed down into the driver and its on-device [companions](companions.md).
 
@@ -99,6 +99,8 @@ flowchart TD
 
 Plan lives in `golem-orchestrator` (`plan`, `coverage`, `install_matrix`); per-flow and per-step execution lives in `golem-runner`; device acquisition in `golem-devices`; and the on-device step work goes through `golem-driver` to the [companions](companions.md). Throughout, `golem-events` carries the narrative that `golem-report` renders.
 
+For a concrete, step-by-step walk-through of a single flow — how a step learns what's on screen, the companion handshake, webview enrichment, recording, and the block-end a11y audit, as sequence diagrams — see [How golem sees the screen](how-golem-sees.md).
+
 ## Visibility model — the visible tree decides coverage, the full tree only hints
 
 A load-bearing invariant that is easy to forget when touching scrolling, selectors, or assertions:
@@ -110,6 +112,15 @@ A load-bearing invariant that is easy to forget when touching scrolling, selecto
 - **The full (unfiltered) tree is for *hints only* — it must never decide pass/fail or coverage.** Raw `bounds` for off-screen / clipped elements are legitimate input for *guesses* that make a test faster or smarter but don't change its outcome: e.g. inferring auto-scroll direction (is the target above or below?), the overshoot-reversal hint in `golem-runner/src/scroll.rs`, and settle/idle fingerprinting. If a code path reads the full tree to decide whether a step *succeeded*, that's a bug — it would pass on elements the user can't see.
 
 When in doubt: **resolve and assert on the visible tree; reach for the full tree only to speed up or steer, never to judge.**
+
+## Occlusion & hit-testing
+
+`filter_viewport` drops what's clipped or off-screen, but not what's *covered* by a later-painted sibling (a sticky header, a `z-index` overlay). golem hit-tests sample points within an element's visible bounds and routes a tap to the first clear one (centre → arms → corners), falling back to the centre if none is clear — a heuristic that never blocks the tap. The user-facing behaviour is in [Selectors → occlusion-aware tapping](selectors.md#occlusion-aware-tapping); the platform mechanics:
+
+- **Webview targets** use `document.elementFromPoint` (`golem-driver/src/dom_traversal.js`) — the browser's own paint-order hit-test.
+- **Native targets** use a host-side geometric hit-test against the tree's paint order: sibling `getDrawingOrder` on Android (captures Material elevation that raw tree order misses), tree order on iOS. Cross-hierarchy elevation and iOS `zPosition` aren't captured, so a reported occlusion means *"may be covered"*, not a certainty.
+
+Android's accessibility framework already prunes nodes whose bounds are fully occluded (a covered label disappears from the tree) and may trim an interactive's reachable region, so the host hit-test mostly adds value where the platform keeps a covered element at full bounds. The a11y audit's `occluded_element` check reuses these same hit-test samples (see [Accessibility audit](#accessibility-audit--frame-sourcing-and-the-check-pipeline)).
 
 ## Accessibility audit — frame sourcing and the check pipeline
 

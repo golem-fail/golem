@@ -1,5 +1,7 @@
 # Versioning
 
+← [Back to README](../README.md) · See also [Companions](companions.md) · [Contributing](contributing.md)
+
 All golem components share a single version number.
 
 Prefer the bump script for simplicity:
