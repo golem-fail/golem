@@ -10,6 +10,18 @@ ancestor containers; see the [visibility model](architecture.md#visibility-model
 The same selector grammar is used everywhere an element is named: `tap`,
 `assert_visible`, `read`, `scroll`'s `to`/`within`, swipe points, etc.
 
+## Contents
+
+- [Two syntaxes](#two-syntaxes)
+- [Core selectors](#core-selectors)
+- [State filters](#state-filters)
+- [Traits](#traits)
+- [Relational (positional) selectors](#relational-positional-selectors)
+- [Geometric containment: `contains` / `inside`](#geometric-containment-contains--inside)
+- [Nesting and chaining](#nesting-and-chaining)
+- [Occlusion-aware tapping](#occlusion-aware-tapping)
+- [`within` (scoping a scroll)](#within-scoping-a-scroll)
+
 ## Two syntaxes
 
 **Flat** (`on_*` fields) for simple cases:
@@ -85,8 +97,6 @@ cross-platform — they don't encode platform element types.
 | `square` | Width/height ratio between 0.8 and 1.2. |
 | `wide` | Width > 2 × height. |
 | `tall` | Height > 2 × width. |
-
-(`golem-element/src/selector.rs` is the source of truth for thresholds.)
 
 ## Relational (positional) selectors
 
@@ -193,37 +203,25 @@ extra predicate. The pre-order tie-break also keeps `--seed` replay deterministi
 
 ## Occlusion-aware tapping
 
-The visible tree (via IntersectionObserver) tells golem what's *clipped/off-screen*,
-but not what's *covered* by something painted on top (a `position: sticky` header,
-a `z-index` overlay). golem additionally **hit-tests** sample points within the
-visible bounds — `document.elementFromPoint` for webview targets, a host-side
-geometric hit-test against the tree's paint order for native ones (see below) — and:
+The visible tree tells golem what's *clipped or off-screen*, but not what's *covered*
+by something painted on top (a sticky header, a `z-index` overlay). So golem
+**hit-tests** the target before tapping and **routes around** an occluder: a plain
+`tap` lands on the first clear sample point (centre → arms → corners), so a button
+whose centre sits under a sticky header still gets hit on a clear edge. The routed
+coordinate shows in the `--verbose` `element_resolved` substep (`tap=(x,y)`).
 
-- **Routes around DOM occluders.** A plain `tap` lands on the first occlusion-clear
-  sample point (centre → arms → corners), so tapping a button whose centre is under
-  a sticky header still hits the button (a clear edge), not the header. The routed
-  coordinate shows in the `--verbose` `element_resolved` substep (`tap=(x,y)`).
-- **Never blocks.** Occlusion is a heuristic — golem always attempts the tap (if no
-  sampled point is clear it falls back to the centre).
+Two guarantees:
+
+- **It never blocks.** Occlusion is a heuristic — golem always attempts the tap; if
+  no sampled point is clear it falls back to the centre. Treat a reported occlusion
+  as *"may be covered"*, not a hard failure.
 - **Offsets stay centre-relative.** `x`/`y` offsets are always measured from the
-  element's geometric centre, never the occlusion-routed point — so they remain
-  predictable regardless of what's covering the element.
+  element's geometric centre, never the routed point — so they stay predictable
+  regardless of what's covering the element.
 
-**Native** targets get the same routing from a host-side hit-test: golem determines
-the topmost element at each sample point from the tree's **paint order** — sibling
-`getDrawingOrder` on Android (captures Material elevation that raw tree order misses),
-tree order on iOS — and routes around a later-painted, non-enclosing occluder. This
-is a **heuristic** (cross-hierarchy elevation / iOS `zPosition` aren't captured), so
-treat a reported occlusion as *"may be occluded"*; the tap still routes but never
-blocks. Note Android's own accessibility framework already prunes nodes whose bounds
-are fully occluded (e.g. a covered text label disappears) and may trim an interactive's
-reachable region — so the host hit-test mostly adds value where the platform keeps a
-covered element at full bounds.
-
-Notes: detects layout/paint occlusion only — an element under the OS status bar
-(system-level) is a separate concern. Surfacing occlusion as a *warning/error* (e.g.
-fully-covered or an offset on a covered target) is deferred to the planned
-accessibility audit, whose severity model is the right home for it — not a per-step tag.
+This detects layout/paint occlusion only — an element under the OS status bar is a
+separate, system-level concern. For *how* the hit-test computes paint order on each
+platform, see [Architecture → occlusion & hit-testing](architecture.md#occlusion--hit-testing).
 
 ## `within` (scoping a scroll)
 

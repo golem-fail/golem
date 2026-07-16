@@ -1,13 +1,29 @@
 # Accessibility auditing
 
+*The mechanical a11y check on every run.*
+
+← [Back to README](../README.md) · See also [Test Structure](test-structure.md) · [CLI Reference](cli-reference.md)
+
 Golem audits every flow for accessibility issues automatically — zero config, on
 by default. After each block it inspects the **visible** UI tree (the same tree
 your assertions judge), reports findings in the live run and every report format,
-and at `strict` saves an **annotated screenshot** marking each issue.
+and — whenever it has an image to draw on (always at `strict`, and at other levels
+when a recording frame or failure capture supplied one) — saves an **annotated
+screenshot** marking each issue.
 
 It's a fast, build-time signal — not a replacement for a manual audit or a real
 assistive-technology pass — but it catches the common, mechanical problems
 (tiny tap targets, unlabeled controls, low-contrast text) on every run.
+
+## Contents
+
+- [Levels](#levels)
+- [What gets judged](#what-gets-judged)
+- [Checks](#checks)
+- [Confidence](#confidence)
+- [Output](#output)
+- [Reading the annotated screenshot](#reading-the-annotated-screenshot)
+- [Notes & limitations](#notes--limitations)
 
 ## Levels
 
@@ -54,7 +70,7 @@ a11y_max_warnings = 20     # optional: fail the flow if cumulative warnings exce
 a11y_min_confidence = 0.8  # optional: drop findings below this confidence (0–1)
 ```
 
-```
+```bash
 golem run flow.test.toml --a11y strict                  # override every flow's level
 golem run flow.test.toml --a11y strict --a11y-min-confidence 0   # …and surface every finding
 ```
@@ -163,8 +179,15 @@ the marker drawn on the annotated screenshot:
 
 ## Reading the annotated screenshot
 
-At `strict`, when a block has findings Golem saves an annotated PNG to the run's
-screenshot directory (path shown on the live `a11y:` line). The visual language:
+When a block has findings **and an image is available**, Golem saves an annotated
+PNG to the run's screenshot directory (path shown on the live `a11y:` line). That
+image is always present at `strict` (which forces a screenshot); at the other
+levels the annotated PNG is written whenever the block recording — or a failure
+capture — already supplied one.
+
+<img src="images/a11y/annotated-full.png" width="320" alt="A full annotated a11y screenshot of a demo screen: numbered red (error) and orange (warning) boxes over controls, with dp dimension lines, a '?' missing-label marker, contrast ratios, and an occlusion mini-map">
+
+The visual language (each marker below is circled in the shot above):
 
 - **Rectangle** around each flagged element — **red = error**, **orange =
   warning** (warnings are drawn first, so red always wins where they overlap).
@@ -173,21 +196,36 @@ screenshot directory (path shown on the live `a11y:` line). The visual language:
   chips cascade rightwards so every number stays visible.
 - **Touch target** → an industrial **dimension line on the right** (or below, if
   width is the limiting axis) measuring the failing dimension, e.g. `32dp`.
-- **Text too small** → a dimension line on the **left**, e.g. `11dp`.
+
+  <img src="images/a11y/touch-target-dp.png" width="150" alt="A red element box with a vertical dimension line on its right labelled 32dp">
+- **Text too small** → a dimension line on the **left** — on single- and
+  multi-line boxes alike, e.g. `11dp` / `8dp`.
+
+  <img src="images/a11y/text-too-small-dp.png" width="150" alt="An orange single-line text box with a dimension line on its left labelled 11dp"> <img src="images/a11y/text-too-small-multiline.png" width="240" alt="An orange two-line wrapped text box with a dimension line on its left labelled 8dp">
 - **Low contrast** → the measured ratio as a small semi-translucent token at the
   bottom-left, e.g. `3.5:1`.
+
+  <img src="images/a11y/contrast-token.png" width="150" alt="A red 'Contrast error line' tagged 2.1:1 above an orange 'Contrast warn line' tagged 4.9:1">
 - **Missing label** → a `?` at the bottom-right (the "what is this control?"
   marker), since there's nothing else to measure.
+
+  <img src="images/a11y/missing-label.png" width="80" alt="A red box with a '?' in its bottom-right corner">
 - **Duplicate labels** → a rectangle on **every** member of the group, joined by
   dashed connector lines, with the finding's number repeated on each segment.
+
+  <img src="images/a11y/duplicate-labels.png" width="240" alt="Three identical 'Save' buttons, each tagged with the same finding number">
 - **Overlapping** → a rectangle on both elements with one number centred over
   the pair.
+
+  <img src="images/a11y/overlapping.png" width="210" alt="Two overlapping controls, Alpha and Beta, sharing one centred finding number">
 - **Occluded element** → a small **3×3 mini-map at the bottom-right** showing the
   hit-test's sampled zones: **covered** cells **solid**, **reachable** cells a
   **faint outline**, and untested zones left **blank** (the hit-test samples only
   1/3/5/9 points by size, so blank means "not tested", never "reachable"). You
   see *which* part of the tap target is unreachable — top, a corner, the lower
   half — not just that some of it is.
+
+  <img src="images/a11y/occlusion-minimap.png" width="150" alt="The 'Beta' control with a small mini-map at its bottom-right marking which sampled zones of the tap target are covered">
 
 When two findings apply to one element they use different channels and stay
 legible — e.g. a small low-contrast button shows a right-side dimension line

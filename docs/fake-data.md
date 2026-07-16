@@ -1,5 +1,9 @@
 # Fake Data Generators
 
+*Deterministic, seed-stable test data.*
+
+← [Back to README](../README.md) · See also [Test Structure](test-structure.md) · [Selectors](selectors.md)
+
 Generate realistic test data with `${fake:…}`. A generator works anywhere `${…}`
 interpolation does — in a variable declaration or inline in a step field:
 
@@ -139,7 +143,7 @@ comment / description fields. Default is **lorem ipsum**.
 
 | Param | Effect |
 |-------|--------|
-| `language` | ISO 639-1 code — generate in that language. **110+ languages** supported (every code with a file in `data/sentences/` — en, es, zh, hi, ar, fr, pt, ru, ja, de, ko, sw, …). Omitted → lorem ipsum. An unsupported code is an error. |
+| `language` | ISO 639-1 code — generate in that language. **110+ languages** supported (every code in the bundled sentence corpus — en, es, zh, hi, ar, fr, pt, ru, ja, de, ko, sw, …). Omitted → lorem ipsum. An unsupported code is an error. |
 
 `fake:sentence(language=ja)` → `古いゴーレムが石を砕く。`,
 `fake:sentence(language=fr)` → `Le gardien garde la pierre.` Sentences are
@@ -313,7 +317,7 @@ u = "${fake:person(local=[ascii, diacritics_fr, diacritics_pt]).given}"
 
 #### Per-country behaviour
 
-`country` presets live in the per-country `data/geo/*.json` files. The bracketed
+`country` presets live in the bundled locale data. The bracketed
 lists below are literal token lists — the same syntax you'd pass to `name=` /
 `reading=` / `local=`. A few:
 

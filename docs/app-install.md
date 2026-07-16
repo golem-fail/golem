@@ -2,9 +2,21 @@
 
 *Putting the clay on the device before the word reaches it.*
 
-← [Back to README](../README.md)
+← [Back to README](../README.md) · See also [CLI Reference](cli-reference.md) · [Test Structure](test-structure.md)
 
 By default golem assumes the app under test is already installed on the target device. For fresh simulators, CI pipelines, or teams that want per-test builds, you can supply an install script that golem runs before each flow.
+
+## Contents
+
+- [Quick start](#quick-start)
+- [Project-level `[[apps]]` registry](#project-level-apps-registry)
+- [`install_script` forms](#install_script-forms)
+- [Script contract](#script-contract)
+- [Parameterizing installs: `install_env` + profiles](#parameterizing-installs-install_env--profiles)
+- [Install cache](#install-cache)
+- [Cache flags: `--rebuild` and `--no-build`](#cache-flags---rebuild-and---no-build)
+- [When no `install_script` is configured](#when-no-install_script-is-configured)
+- [Frameworks the scaffold supports](#frameworks-the-scaffold-supports)
 
 ## Quick start
 
@@ -59,7 +71,7 @@ Golem picks the right entry for the target platform at run time.
 
 Golem invokes the script from the project root with three positional args:
 
-```
+```text
 script.sh <platform> <device_udid> <bundle_id>
 ```
 

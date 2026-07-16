@@ -1,5 +1,9 @@
 # Installing golem
 
+*Getting golem onto your machine.*
+
+← [Back to README](../README.md) · See also [CLI Reference](cli-reference.md) · [Contributing](contributing.md)
+
 The `golem` binary is **self-contained** — the on-device
 [companions](companions.md) are baked in, so installing golem needs no Rust,
 Xcode, or Android SDK. Pick a channel below; they all install the same prebuilt
@@ -13,6 +17,17 @@ binary.
 musl). **iOS is macOS-only** — Linux builds drive Android only (see
 [Linux](#linux) below). On an unsupported platform the installers fail with a
 clear message rather than a broken install.
+
+## Contents
+
+- [Which channel?](#which-channel)
+- [Homebrew](#homebrew)
+- [npm / pnpm / bun / yarn](#npm--pnpm--bun--yarn)
+- [curl | sh](#curl--sh)
+- [GitHub Actions](#github-actions)
+- [golem doctor](#golem-doctor)
+- [Linux](#linux)
+- [Building from source (contributors)](#building-from-source-contributors)
 
 ## Which channel?
 
@@ -91,7 +106,7 @@ for Android, or a macOS runner with a booted simulator for iOS. See
 `golem doctor` reports everything golem needs to drive a device, each miss with
 a copy-paste fix:
 
-```
+```text
 $ golem doctor
 golem doctor
   ✓ ~/.golem writable — yes
