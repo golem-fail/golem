@@ -198,9 +198,10 @@ The visual language (each marker below is circled in the shot above):
   width is the limiting axis) measuring the failing dimension, e.g. `32dp`.
 
   <img src="images/a11y/touch-target-dp.png" width="150" alt="A red element box with a vertical dimension line on its right labelled 32dp">
-- **Text too small** → a dimension line on the **left**, e.g. `11dp`.
+- **Text too small** → a dimension line on the **left** — on single- and
+  multi-line boxes alike, e.g. `11dp` / `8dp`.
 
-  <img src="images/a11y/text-too-small-dp.png" width="160" alt="An orange text box with a dimension line on its left labelled 11dp">
+  <img src="images/a11y/text-too-small-dp.png" width="150" alt="An orange single-line text box with a dimension line on its left labelled 11dp"> <img src="images/a11y/text-too-small-multiline.png" width="240" alt="An orange two-line wrapped text box with a dimension line on its left labelled 8dp">
 - **Low contrast** → the measured ratio as a small semi-translucent token at the
   bottom-left, e.g. `3.5:1`.
 
