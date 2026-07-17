@@ -73,7 +73,7 @@ jobs:
     # rustfmt only parses (no compile), but the runner still needs the toolchain,
     # so keep it on the standard image alongside the other Rust jobs.
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 6 # rustfmt only parses (~15s); headroom for toolchain install
     steps:
       - uses: actions/checkout@v5
       # rustup honours rust-toolchain.toml automatically; this installs the pinned
@@ -87,7 +87,7 @@ jobs:
     # clippy compiles the whole workspace, so this doubles as the typecheck — a
     # separate `cargo check` would be redundant.
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 12 # ~1min warm; headroom for a cold cache / slow runner
     steps:
       - uses: actions/checkout@v5
       - run: rustup show
@@ -104,7 +104,7 @@ jobs:
     # fires the tests but not fmt/clippy.
     if: ${{ needs.classify.outputs.code == 'true' || needs.classify.outputs.data == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15 # ~3min warm (compile-bound); headroom for cold cache / slow runner
     steps:
       - uses: actions/checkout@v5
       - run: rustup show
@@ -123,7 +123,7 @@ jobs:
     # Separate job because nextest does NOT run doctests — they execute only under
     # plain `cargo test --doc`.
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10 # ~2min warm; headroom for cold cache / slow runner
     steps:
       - uses: actions/checkout@v5
       - run: rustup show
