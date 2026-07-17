@@ -639,9 +639,9 @@ pub fn resolve_app_profiles(
             .find(|p| p.name == *name && p.profile.as_deref() == use_profile);
         let mut merged = match flow_entry {
             Some(fe) => fe,
-            None => app_from_project(
-                proj_entry.expect("key_exists guarantees a flow or project entry"),
-            ),
+            None => {
+                app_from_project(proj_entry.expect("key_exists guarantees a flow or project entry"))
+            }
         };
         if let Some(proj) = proj_entry {
             fill_app_from_project(&mut merged, proj);
@@ -1065,9 +1065,17 @@ mod tests {
         "#,
         );
         let apps = vec![project_app("app", "com.app", None)];
-        let suite = plan(&[flow], &apps, tmp.path(), Some(Platform::Android), None, 1, None)
-            .await
-            .expect("async operation SHALL succeed");
+        let suite = plan(
+            &[flow],
+            &apps,
+            tmp.path(),
+            Some(Platform::Android),
+            None,
+            1,
+            None,
+        )
+        .await
+        .expect("async operation SHALL succeed");
         for run in &suite.flow_runs {
             for slot in &run.slots {
                 assert_eq!(
@@ -2314,10 +2322,9 @@ mod tests {
     #[test]
     fn merge_project_apps_fills_and_respects_install_env() {
         use std::collections::HashMap;
-        let proj_env: HashMap<String, String> =
-            [("APP_ENV".to_string(), "staging".to_string())]
-                .into_iter()
-                .collect();
+        let proj_env: HashMap<String, String> = [("APP_ENV".to_string(), "staging".to_string())]
+            .into_iter()
+            .collect();
 
         // Gap-fill: flow has no install_env → inherits project's.
         let mut app = mk_app_with_devices("a", vec![]);
@@ -2327,21 +2334,24 @@ mod tests {
         proj.install_env = Some(proj_env.clone());
         merge_project_apps(&mut flow, &[proj]);
         assert_eq!(
-            flow.flow.apps[0].install_env, Some(proj_env),
+            flow.flow.apps[0].install_env,
+            Some(proj_env),
             "absent flow install_env SHALL be filled from project"
         );
 
         // Flow wins: a flow-set install_env is not overwritten.
-        let flow_env: HashMap<String, String> =
-            [("APP_ENV".to_string(), "prod".to_string())]
-                .into_iter()
-                .collect();
+        let flow_env: HashMap<String, String> = [("APP_ENV".to_string(), "prod".to_string())]
+            .into_iter()
+            .collect();
         let mut app2 = mk_app_with_devices("a", vec![]);
         app2.install_env = Some(flow_env.clone());
         let mut flow2 = flow_with_app(app2);
         let mut proj2 = project_app("a", "com.a", None);
-        proj2.install_env =
-            Some([("APP_ENV".to_string(), "staging".to_string())].into_iter().collect());
+        proj2.install_env = Some(
+            [("APP_ENV".to_string(), "staging".to_string())]
+                .into_iter()
+                .collect(),
+        );
         merge_project_apps(&mut flow2, &[proj2]);
         assert_eq!(
             flow2.flow.apps[0].install_env,
@@ -2452,7 +2462,9 @@ mod tests {
         let notes = resolve_app_profiles(&mut flow, &proj, Some("ci")).expect("SHALL resolve");
         assert_eq!(flow.flow.apps[0].bundle.as_deref(), Some("com.default"));
         assert!(
-            notes.iter().any(|n| n.starts_with("info:") && n.contains("ci")),
+            notes
+                .iter()
+                .any(|n| n.starts_with("info:") && n.contains("ci")),
             "fallback SHALL emit an info note, got: {notes:?}"
         );
         assert!(
@@ -2464,7 +2476,10 @@ mod tests {
     // Mixed flow: one profile-varying app + one always-fixed app.
     #[test]
     fn resolve_mixed_flow() {
-        let mut flow = flow_with_apps(vec![app_p("varies", None, None), app_p("fixed", None, None)]);
+        let mut flow = flow_with_apps(vec![
+            app_p("varies", None, None),
+            app_p("fixed", None, None),
+        ]);
         let proj = vec![
             papp_p("varies", "com.varies.default", None, None),
             papp_p("varies", "com.varies.eas", None, Some("eas")),

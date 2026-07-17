@@ -17,3 +17,13 @@ status-level = "slow"
 # noise from legitimately-slow integration-shaped tests (install-script
 # forks ~1s; scroll-cycle loops up to ~5s).
 slow-timeout = { period = "2s", terminate-after = 5 }
+
+# These two tests deliberately fork a `sleep 10` script to exercise the
+# install-script timeout/kill path. On macOS the kill reaps fast, but on Linux
+# the orphaned child holds the output pipe until it exits naturally (~10s),
+# which lands on the global 10s kill above and flakes in CI. Give just these
+# two room (2s marker × 15 = 30s); the tight global guard stays for everything
+# else, and the job-level `timeout-minutes` is the real runaway backstop.
+[[profile.default.overrides]]
+filter = 'test(/installer::tests::(script_timeout_kills_process|timeout_is_coded_install_timeout)/)'
+slow-timeout = { period = "2s", terminate-after = 15 }
